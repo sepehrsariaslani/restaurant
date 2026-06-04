@@ -99,6 +99,123 @@
       </ManagementSurfaceCard>
     </template>
 
+    <template v-else-if="activeTab === 'components'">
+      <ManagementSurfaceCard title="انتخاب کامپوننت‌های سایت" subtitle="مشخص کنید کدام بخش‌ها در صفحه اصلی سایت نمایش داده شوند.">
+        <div class="component-grid">
+          <article class="component-card" :class="{ active: Number(webSettings.hero_section_enabled) === 1 }">
+            <div class="component-card-head">
+              <div class="component-card-icon">🏔️</div>
+              <div>
+                <strong>هیرو سکشن تمام‌صفحه</strong>
+                <p class="muted">بنر بزرگ با تصویر پس‌زمینه که تمام صفحه را پوشش می‌دهد. هدر سایت روی آن نمایش می‌یابد و با اسکرول به هدر معمولی تبدیل می‌شود.</p>
+              </div>
+            </div>
+            <div class="component-card-footer">
+              <label class="toggle-label">
+                <input
+                  type="checkbox"
+                  class="toggle-input"
+                  :checked="Number(webSettings.hero_section_enabled) === 1"
+                  @change="webSettings.hero_section_enabled = $event.target.checked ? 1 : 0"
+                />
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+                <span>{{ Number(webSettings.hero_section_enabled) === 1 ? 'فعال' : 'غیرفعال' }}</span>
+              </label>
+              <button v-if="Number(webSettings.hero_section_enabled) === 1" type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوا ←</button>
+            </div>
+          </article>
+
+          <article class="component-card" :class="{ active: Number(webSettings.footer_enabled) !== 0 }">
+            <div class="component-card-head">
+              <div class="component-card-icon">🦶</div>
+              <div>
+                <strong>فوتر سایت</strong>
+                <p class="muted">پاورقی با نام برند بزرگ، اطلاعات تماس، لینک‌های شبکه اجتماعی و رنگ‌بندی پویا از تم انتخابی شما.</p>
+              </div>
+            </div>
+            <div class="component-card-footer">
+              <label class="toggle-label">
+                <input
+                  type="checkbox"
+                  class="toggle-input"
+                  :checked="Number(webSettings.footer_enabled) !== 0"
+                  @change="webSettings.footer_enabled = $event.target.checked ? 1 : 0"
+                />
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+                <span>{{ Number(webSettings.footer_enabled) !== 0 ? 'فعال' : 'غیرفعال' }}</span>
+              </label>
+              <button v-if="Number(webSettings.footer_enabled) !== 0" type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوا ←</button>
+            </div>
+          </article>
+        </div>
+      </ManagementSurfaceCard>
+    </template>
+
+    <template v-else-if="activeTab === 'content'">
+      <ManagementSurfaceCard title="اطلاعات هیرو سکشن" subtitle="محتوای بنر تمام‌صفحه را تنظیم کنید." v-if="Number(webSettings.hero_section_enabled) === 1">
+        <div class="form-grid">
+          <label class="span-2">
+            عنوان هیرو سکشن
+            <input class="input" v-model.trim="webSettings.hero_section_title" placeholder="مثال: بهترین غذا را سفارش دهید" />
+          </label>
+          <label class="span-2">
+            توضیحات هیرو سکشن
+            <textarea class="textarea" v-model.trim="webSettings.hero_section_description" placeholder="متن توضیحی که زیر عنوان نمایش داده می‌شود..." />
+          </label>
+          <label>
+            متن دکمه CTA
+            <input class="input" v-model.trim="webSettings.hero_section_cta" placeholder="مثال: مشاهده منو" />
+          </label>
+          <label>
+            تصویر پس‌زمینه
+            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
+            <img v-if="String(webSettings.hero_image || '').trim()" class="image-preview" :src="webSettings.hero_image" alt="Hero bg" />
+          </label>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="اطلاعات فوتر" subtitle="محتوایی که در پاورقی سایت نمایش داده می‌شود." v-if="Number(webSettings.footer_enabled) !== 0">
+        <div class="form-grid">
+          <label class="span-2">
+            توضیحات برند (زیر لوگو)
+            <textarea class="textarea" v-model.trim="webSettings.footer_description" placeholder="جمله معرفی کسب‌وکار..." />
+          </label>
+          <label>
+            شماره تماس
+            <input class="input" v-model.trim="webSettings.footer_phone" placeholder="مثال: 021-12345678" />
+          </label>
+          <label>
+            ایمیل
+            <input class="input" type="email" v-model.trim="webSettings.footer_email" placeholder="info@example.com" />
+          </label>
+          <label class="span-2">
+            آدرس
+            <input class="input" v-model.trim="webSettings.footer_address" placeholder="آدرس کامل..." />
+          </label>
+          <label>
+            لینک اینستاگرام
+            <input class="input" v-model.trim="webSettings.footer_instagram" placeholder="https://instagram.com/..." />
+          </label>
+          <label>
+            لینک تلگرام
+            <input class="input" v-model.trim="webSettings.footer_telegram" placeholder="https://t.me/..." />
+          </label>
+          <label class="span-2">
+            متن کپی‌رایت
+            <input class="input" v-model.trim="webSettings.footer_copyright" placeholder="مثال: تمامی حقوق محفوظ است." />
+          </label>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard v-if="Number(webSettings.hero_section_enabled) === 0 && Number(webSettings.footer_enabled) === 0">
+        <p class="muted">هیچ کامپوننتی فعال نیست. ابتدا از تب <strong>کامپوننت‌ها</strong> یک بخش را فعال کنید.</p>
+      </ManagementSurfaceCard>
+    </template>
+
     <template v-else-if="activeTab === 'hero'">
       <ManagementEditableTable
         v-model="heroSlides"
@@ -457,6 +574,8 @@ const activeTab = ref('general')
 
 const tabs = [
   { value: 'general', label: 'عمومی' },
+  { value: 'components', label: 'کامپوننت‌ها' },
+  { value: 'content', label: 'محتوای سایت' },
   { value: 'hero', label: 'اسلایدر هدر' },
   { value: 'about', label: 'درباره ما' },
   { value: 'loader', label: 'Loader' },
@@ -477,6 +596,18 @@ const webSettings = reactive({
   restaurant_menu_highlight_featured_limit: 10,
   restaurant_menu_highlight_show_best_seller: 1,
   restaurant_menu_highlight_best_seller_limit: 10,
+  hero_section_enabled: 0,
+  footer_enabled: 1,
+  hero_section_title: '',
+  hero_section_description: '',
+  hero_section_cta: '',
+  footer_description: '',
+  footer_phone: '',
+  footer_email: '',
+  footer_address: '',
+  footer_instagram: '',
+  footer_telegram: '',
+  footer_copyright: '',
   loader_enabled: defaultLoaderSettings.enabled,
   loader_mode: defaultLoaderSettings.mode,
   loader_preset: defaultLoaderSettings.preset,
@@ -847,6 +978,18 @@ async function loadSettings() {
     webSettings.restaurant_menu_highlight_featured_limit = Number(nextWeb.restaurant_menu_highlight_featured_limit || 10) || 10
     webSettings.restaurant_menu_highlight_show_best_seller = Number(nextWeb.restaurant_menu_highlight_show_best_seller || 0) ? 1 : 0
     webSettings.restaurant_menu_highlight_best_seller_limit = Number(nextWeb.restaurant_menu_highlight_best_seller_limit || 10) || 10
+    webSettings.hero_section_enabled = Number(nextWeb.hero_section_enabled || 0) ? 1 : 0
+    webSettings.footer_enabled = Number(nextWeb.footer_enabled ?? 1) ? 1 : 0
+    webSettings.hero_section_title = String(nextWeb.hero_section_title || '').trim()
+    webSettings.hero_section_description = String(nextWeb.hero_section_description || '').trim()
+    webSettings.hero_section_cta = String(nextWeb.hero_section_cta || '').trim()
+    webSettings.footer_description = String(nextWeb.footer_description || '').trim()
+    webSettings.footer_phone = String(nextWeb.footer_phone || '').trim()
+    webSettings.footer_email = String(nextWeb.footer_email || '').trim()
+    webSettings.footer_address = String(nextWeb.footer_address || '').trim()
+    webSettings.footer_instagram = String(nextWeb.footer_instagram || '').trim()
+    webSettings.footer_telegram = String(nextWeb.footer_telegram || '').trim()
+    webSettings.footer_copyright = String(nextWeb.footer_copyright || '').trim()
     assignLoaderSettingsToForm(nextWeb)
 
     heroSlides.value = (payload?.hero_slides || []).map((row) => normalizeHeroSlide(row))
@@ -889,6 +1032,18 @@ async function saveSettings() {
         restaurant_menu_highlight_featured_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_featured_limit || 10) || 10, 50)),
         restaurant_menu_highlight_show_best_seller: Number(webSettings.restaurant_menu_highlight_show_best_seller || 0) ? 1 : 0,
         restaurant_menu_highlight_best_seller_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_best_seller_limit || 10) || 10, 50)),
+        hero_section_enabled: Number(webSettings.hero_section_enabled || 0) ? 1 : 0,
+        footer_enabled: Number(webSettings.footer_enabled ?? 1) ? 1 : 0,
+        hero_section_title: String(webSettings.hero_section_title || '').trim(),
+        hero_section_description: String(webSettings.hero_section_description || '').trim(),
+        hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
+        footer_description: String(webSettings.footer_description || '').trim(),
+        footer_phone: String(webSettings.footer_phone || '').trim(),
+        footer_email: String(webSettings.footer_email || '').trim(),
+        footer_address: String(webSettings.footer_address || '').trim(),
+        footer_instagram: String(webSettings.footer_instagram || '').trim(),
+        footer_telegram: String(webSettings.footer_telegram || '').trim(),
+        footer_copyright: String(webSettings.footer_copyright || '').trim(),
         ...loaderPayload,
       },
       hero_slides: heroSlides.value.map((row, index) => ({ ...normalizeHeroSlide(row), sort_order: index })),
@@ -1089,5 +1244,110 @@ loadSettings()
   .span-2 {
     grid-column: span 1;
   }
+}
+
+/* Component selection grid */
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.component-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  border: 1.5px solid rgb(var(--palette-deep-sapphire-rgb) / 0.15);
+  border-radius: 14px;
+  padding: 1.1rem;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.component-card.active {
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.5);
+  box-shadow: 0 3px 18px 0 rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+  background: rgb(var(--palette-june-bud-rgb) / 0.06);
+}
+
+.component-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.component-card-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.component-card-head strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.component-card-head .muted {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.component-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+}
+
+/* Toggle switch */
+.toggle-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 2.5rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-input:checked + .toggle-track {
+  background: var(--palette-deep-sapphire, #6F4A31);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 0.18rem;
+  right: 0.18rem;
+  width: 1.04rem;
+  height: 1.04rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+  transition: transform 0.2s;
+}
+
+.toggle-input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(-1.1rem);
 }
 </style>

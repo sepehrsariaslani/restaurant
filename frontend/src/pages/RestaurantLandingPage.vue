@@ -1,100 +1,133 @@
 <template>
-  <GlassShell class="home-shell" :title="branding.name" :subtitle="'ارگانیک، تازه، قابل شخصی سازی'">
-    <FloatingFoodIcons />
+  <div class="home-page" dir="rtl">
+    <SiteHeader
+      :branding="branding"
+      :cart-count="0"
+      :has-hero="siteComponents.hero_section_enabled"
+      :hero-visible="heroVisible"
+    />
 
-    <section class="home-container section-hero hero-grid">
-      <ScrollReveal>
-        <div class="hero-main glass-card">
-          <span class="hero-chip">رستوران آنلاین مدرن</span>
-          <h1>{{ branding.hero_title }}</h1>
-          <p class="muted">
-            {{ branding.hero_subtitle }}
-          </p>
-          <div class="hero-actions">
-            <a class="primary-btn" href="/menu">{{ branding.primary_cta_label || 'ورود به منو' }}</a>
-            <a class="secondary-btn" href="/cart">مشاهده سبد سفارش</a>
+    <SiteHeroSection
+      v-if="siteComponents.hero_section_enabled"
+      :branding="branding"
+      :title="branding.hero_section_title"
+      :description="branding.hero_section_description"
+      :cta="branding.hero_section_cta"
+      :hero-image="branding.hero_image"
+      @visibility-change="heroVisible = $event"
+    />
+
+    <div id="content">
+      <GlassShell class="home-shell" :title="branding.name" :subtitle="'ارگانیک، تازه، قابل شخصی سازی'">
+        <FloatingFoodIcons />
+
+        <section class="home-container section-hero hero-grid">
+          <ScrollReveal>
+            <div class="hero-main glass-card">
+              <span class="hero-chip">رستوران آنلاین مدرن</span>
+              <h1>{{ branding.hero_title }}</h1>
+              <p class="muted">
+                {{ branding.hero_subtitle }}
+              </p>
+              <div class="hero-actions">
+                <a class="primary-btn" href="/menu">{{ branding.primary_cta_label || 'ورود به منو' }}</a>
+                <a class="secondary-btn" href="/cart">مشاهده سبد سفارش</a>
+              </div>
+              <div class="hero-stats">
+                <div class="stat-item">
+                  <strong><AnimatedCounter :target="categories.length || 8" suffix="+" /></strong>
+                  <small>دسته غذایی</small>
+                </div>
+                <div class="stat-item">
+                  <strong><AnimatedCounter :target="featured.length || 24" suffix="+" /></strong>
+                  <small>غذای پرطرفدار</small>
+                </div>
+                <div class="stat-item">
+                  <strong><AnimatedCounter :target="faqItems.length || 12" suffix="+" /></strong>
+                  <small>پاسخ سریع</small>
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+
+          <ScrollReveal :delay="120">
+            <HomeHeroSlider :slides="heroSlides" :fallback-items="featured" />
+          </ScrollReveal>
+        </section>
+
+        <section class="home-container section-features">
+          <ScrollReveal :delay="80">
+            <SectionHeader
+              eyebrow="چرا ما؟"
+              title="تجربه سفارش سریع، جذاب و قابل شخصی‌سازی"
+              subtitle="از انتخاب غذا تا پرداخت نهایی، همه چیز برای راحتی کاربر روی موبایل و دسکتاپ بهینه شده است."
+            />
+          </ScrollReveal>
+          <div class="features-grid">
+            <ScrollReveal v-for="(feature, idx) in featureCards" :key="feature.title" :delay="idx * 80">
+              <FeatureCard :icon="feature.icon" :title="feature.title" :description="feature.description" />
+            </ScrollReveal>
           </div>
-          <div class="hero-stats">
-            <div class="stat-item">
-              <strong><AnimatedCounter :target="categories.length || 8" suffix="+" /></strong>
-              <small>دسته غذایی</small>
-            </div>
-            <div class="stat-item">
-              <strong><AnimatedCounter :target="featured.length || 24" suffix="+" /></strong>
-              <small>غذای پرطرفدار</small>
-            </div>
-            <div class="stat-item">
-              <strong><AnimatedCounter :target="faqItems.length || 12" suffix="+" /></strong>
-              <small>پاسخ سریع</small>
-            </div>
+        </section>
+
+        <section class="home-container section-categories">
+          <ScrollReveal :delay="100">
+            <SectionHeader eyebrow="دسته‌بندی" title="منوی هوشمند بر اساس سلیقه شما" />
+          </ScrollReveal>
+          <ScrollReveal :delay="160">
+            <CategoryMasonry :categories="categories" />
+          </ScrollReveal>
+        </section>
+
+        <section class="home-container section-featured featured-wrap" v-if="featured.length">
+          <ScrollReveal :delay="100">
+            <SectionHeader eyebrow="پرفروش‌ترین‌ها" title="محبوب‌های امروز" subtitle="انتخاب‌های ویژه که بیشترین سفارش را داشته‌اند." />
+          </ScrollReveal>
+          <div class="featured-grid">
+            <ScrollReveal
+              v-for="(item, idx) in featured"
+              :key="item.slug"
+              :delay="Math.min(idx, 7) * 70"
+            >
+              <MenuItemCard
+                :item="item"
+                :currency="currency"
+                @quick-add="quickAdd"
+              />
+            </ScrollReveal>
           </div>
-        </div>
-      </ScrollReveal>
+        </section>
 
-      <ScrollReveal :delay="120">
-        <HomeHeroSlider :slides="heroSlides" :fallback-items="featured" />
-      </ScrollReveal>
-    </section>
+        <section class="home-container section-about">
+          <ScrollReveal :delay="90">
+            <HomeAboutSection :sections="aboutSections" />
+          </ScrollReveal>
+        </section>
 
-    <section class="home-container section-features">
-      <ScrollReveal :delay="80">
-        <SectionHeader
-          eyebrow="چرا ما؟"
-          title="تجربه سفارش سریع، جذاب و قابل شخصی‌سازی"
-          subtitle="از انتخاب غذا تا پرداخت نهایی، همه چیز برای راحتی کاربر روی موبایل و دسکتاپ بهینه شده است."
-        />
-      </ScrollReveal>
-      <div class="features-grid">
-        <ScrollReveal v-for="(feature, idx) in featureCards" :key="feature.title" :delay="idx * 80">
-          <FeatureCard :icon="feature.icon" :title="feature.title" :description="feature.description" />
-        </ScrollReveal>
-      </div>
-    </section>
+        <section class="home-container section-faq">
+          <ScrollReveal :delay="90">
+            <HomeFaqSection :faqs="faqItems" />
+          </ScrollReveal>
+        </section>
+      </GlassShell>
+    </div>
 
-    <section class="home-container section-categories">
-      <ScrollReveal :delay="100">
-        <SectionHeader eyebrow="دسته‌بندی" title="منوی هوشمند بر اساس سلیقه شما" />
-      </ScrollReveal>
-      <ScrollReveal :delay="160">
-        <CategoryMasonry :categories="categories" />
-      </ScrollReveal>
-    </section>
-
-    <section class="home-container section-featured featured-wrap" v-if="featured.length">
-      <ScrollReveal :delay="100">
-        <SectionHeader eyebrow="پرفروش‌ترین‌ها" title="محبوب‌های امروز" subtitle="انتخاب‌های ویژه که بیشترین سفارش را داشته‌اند." />
-      </ScrollReveal>
-      <div class="featured-grid">
-        <ScrollReveal
-          v-for="(item, idx) in featured"
-          :key="item.slug"
-          :delay="Math.min(idx, 7) * 70"
-        >
-          <MenuItemCard
-            :item="item"
-            :currency="currency"
-            @quick-add="quickAdd"
-          />
-        </ScrollReveal>
-      </div>
-    </section>
-
-    <section class="home-container section-about">
-      <ScrollReveal :delay="90">
-        <HomeAboutSection :sections="aboutSections" />
-      </ScrollReveal>
-    </section>
-
-    <section class="home-container section-faq">
-      <ScrollReveal :delay="90">
-        <HomeFaqSection :faqs="faqItems" />
-      </ScrollReveal>
-    </section>
-  </GlassShell>
+    <SiteFooter
+      v-if="siteComponents.footer_enabled"
+      :brand-name="branding.name"
+      :description="branding.footer_description"
+      :phone="branding.footer_phone"
+      :email="branding.footer_email"
+      :address="branding.footer_address"
+      :instagram="branding.footer_instagram"
+      :telegram="branding.footer_telegram"
+      :copyright="branding.footer_copyright"
+    />
+  </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import GlassShell from '@/components/GlassShell.vue'
 import MenuItemCard from '@/components/MenuItemCard.vue'
 import HomeHeroSlider from '@/components/HomeHeroSlider.vue'
@@ -107,6 +140,9 @@ import ScrollReveal from '@/components/ScrollReveal.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import FeatureCard from '@/components/FeatureCard.vue'
 import AnimatedCounter from '@/components/AnimatedCounter.vue'
+import SiteHeader from '@/components/SiteHeader.vue'
+import SiteHeroSection from '@/components/SiteHeroSection.vue'
+import SiteFooter from '@/components/SiteFooter.vue'
 
 const props = defineProps({
   boot: {
@@ -114,6 +150,8 @@ const props = defineProps({
     default: () => ({}),
   },
 })
+
+const heroVisible = ref(true)
 
 const categories = computed(() => props.boot.categories || [])
 const featured = computed(() => props.boot.featured_items || [])
@@ -131,6 +169,14 @@ const branding = computed(
       primary_cta_label: 'ورود به منو',
     },
 )
+
+const siteComponents = computed(() => {
+  const ws = props.boot.web_settings || props.boot.branding || {}
+  return {
+    hero_section_enabled: Number(ws.hero_section_enabled || 0) === 1,
+    footer_enabled: Number(ws.footer_enabled ?? 1) !== 0,
+  }
+})
 
 const featureCards = computed(() => [
   {
@@ -174,6 +220,12 @@ function quickAdd(item) {
 </script>
 
 <style scoped>
+.home-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
 .home-shell {
   --home-surface-rgb: var(--palette-eggshell-rgb);
   --home-soft-rgb: var(--palette-june-bud-rgb);
@@ -247,15 +299,15 @@ function quickAdd(item) {
 
 .hero-main h1 {
   margin: 0;
-  font-size: 2.1rem;
-  line-height: 1.3;
+  font-size: clamp(1.5rem, 3.5vw, 2.4rem);
+  line-height: 1.25;
   color: var(--ink-900);
 }
 
-.hero-main p {
+.hero-main .muted {
   margin: 0;
-  line-height: 1.9;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  line-height: 1.65;
 }
 
 .hero-actions {
@@ -265,110 +317,57 @@ function quickAdd(item) {
 }
 
 .hero-stats {
-  margin-top: 0.2rem;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
+  display: flex;
+  gap: 1.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed rgb(var(--home-primary-rgb) / 0.16);
 }
 
 .stat-item {
-  border-radius: 14px;
-  padding: 0.65rem;
-  background: rgb(var(--home-soft-rgb) / 0.2);
-  border: 1px solid rgb(var(--home-primary-rgb) / 0.18);
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .stat-item strong {
-  display: block;
-  font-size: 1.15rem;
-  color: var(--ink-900);
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--accent-green);
 }
 
 .stat-item small {
-  display: block;
-  margin-top: 0.2rem;
-  color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
+  color: var(--ink-700);
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.9rem;
-}
-
-.featured-wrap {
-  margin-top: 0.2rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.7rem;
+  margin-top: 1rem;
 }
 
 .featured-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.95rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
 }
 
-.home-shell :deep(.section-title),
-.home-shell :deep(.section-heading) {
-  color: var(--ink-900);
-}
-
-.home-shell :deep(.category-masonry),
-.home-shell :deep(.home-about),
-.home-shell :deep(.home-faq),
-.home-shell :deep(.menu-card),
-.home-shell :deep(.hero-slider) {
-  border-color: rgb(var(--home-primary-rgb) / 0.18);
-  background: rgb(var(--home-surface-rgb) / 0.94);
-  box-shadow: 0 14px 28px rgb(var(--home-primary-rgb) / 0.12);
-}
-
-@media (max-width: 1120px) {
-  .features-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .featured-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 920px) {
-  .home-container {
-    width: min(760px, calc(100% - 1rem));
-  }
-
-  .section-hero {
-    margin-bottom: 1rem;
-  }
-
-  .section-features {
-    margin-bottom: 0;
-  }
-
-  .section-categories,
-  .section-featured,
-  .section-about,
-  .section-faq {
-    margin-top: 0.8rem;
-    margin-bottom: 1rem;
-  }
-
+@media (max-width: 900px) {
   .hero-grid {
     grid-template-columns: 1fr;
   }
 
-  .hero-main h1 {
-    font-size: 1.45rem;
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .hero-stats {
+@media (max-width: 580px) {
+  .features-grid {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .features-grid,
-  .featured-grid {
-    grid-template-columns: 1fr;
+    gap: 0.5rem;
   }
 }
 </style>
