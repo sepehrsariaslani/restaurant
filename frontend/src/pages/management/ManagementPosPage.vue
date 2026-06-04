@@ -89,119 +89,121 @@
 
     <section class="pos-shell" dir="rtl">
       <aside class="left-col">
-        <section class="table-session-preview">
-          <header class="table-session-head" @click="tableExpanded = !tableExpanded">
-            <div class="table-head-title">
-              <strong>میزهای سالن</strong>
-              <span class="count-badge">{{ tableOptions.length }}</span>
-              <span class="occupied-badge" v-if="occupiedTableCount">{{ occupiedTableCount }} اشغال</span>
-            </div>
-            <div class="table-head-right">
-              <button type="button" class="icon-refresh-btn" @click.stop="loadPOSBoot" title="بروزرسانی">↻</button>
-              <span class="collapse-arrow">{{ tableExpanded ? '▲' : '▼' }}</span>
-            </div>
-          </header>
-          <template v-if="tableExpanded">
-            <div class="table-grid">
-              <article
-                v-for="table in tableOptions"
-                :key="table.name"
-                class="table-cell"
-                :class="[`status-${String(table.status || '').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
-                @click="selectDineInTable(table)"
-              >
-                <span class="table-cell-name">{{ table.label }}</span>
-                <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
-                <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
-                <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
-              </article>
-            </div>
-            <p class="muted" v-if="tablePreviewLoading">در حال دریافت...</p>
-            <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
-            <template v-else-if="selectedDineInTable">
-              <div class="table-detail-bar">
-                <div class="table-detail-info">
-                  <strong>{{ selectedDineInTable.label }}</strong>
-                  <span v-if="selectedTablePreview?.totals?.session_grand_total">
-                    {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
-                  </span>
-                  <span v-if="selectedTableCustomer.name">👤 {{ selectedTableCustomer.name }}</span>
-                  <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
-                </div>
-                <div class="table-detail-actions">
-                  <button type="button" class="tbl-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
-                  <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
-                  <template v-if="selectedTablePreview?.session?.name">
-                    <div class="tbl-action-row">
-                      <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." tone="dark" />
-                      <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
-                    </div>
-                    <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
-                      <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." tone="dark" />
-                      <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
-                    </div>
-                    <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
-                  </template>
-                </div>
+        <div class="left-col-tabs">
+          <button
+            type="button"
+            class="left-tab-btn"
+            :class="{ active: leftPanelTab === 'tables' }"
+            @click="leftPanelTab = 'tables'"
+          >
+            میزها
+            <span class="count-badge" v-if="tableOptions.length">{{ tableOptions.length }}</span>
+            <span class="occupied-badge" v-if="occupiedTableCount">{{ occupiedTableCount }} اشغال</span>
+          </button>
+          <button
+            type="button"
+            class="left-tab-btn"
+            :class="{ active: leftPanelTab === 'invoices' }"
+            @click="leftPanelTab = 'invoices'"
+          >
+            فاکتورهای باز
+            <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
+          </button>
+        </div>
+
+        <section v-if="leftPanelTab === 'tables'" class="table-session-preview">
+          <div class="tab-panel-toolbar">
+            <button type="button" class="icon-refresh-btn" @click="loadPOSBoot" title="بروزرسانی">↻</button>
+          </div>
+          <div class="table-grid">
+            <article
+              v-for="table in tableOptions"
+              :key="table.name"
+              class="table-cell"
+              :class="[`status-${String(table.status || '').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
+              @click="selectDineInTable(table)"
+            >
+              <span class="table-cell-name">{{ table.label }}</span>
+              <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
+              <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
+              <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
+            </article>
+          </div>
+          <p class="muted" v-if="tablePreviewLoading">در حال دریافت...</p>
+          <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
+          <template v-else-if="selectedDineInTable">
+            <div class="table-detail-bar">
+              <div class="table-detail-info">
+                <strong>{{ selectedDineInTable.label }}</strong>
+                <span v-if="selectedTablePreview?.totals?.session_grand_total">
+                  {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
+                </span>
+                <span v-if="selectedTableCustomer.name">👤 {{ selectedTableCustomer.name }}</span>
+                <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
               </div>
-            </template>
-            <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
+              <div class="table-detail-actions">
+                <button type="button" class="tbl-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
+                <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
+                <template v-if="selectedTablePreview?.session?.name">
+                  <div class="tbl-action-row">
+                    <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." tone="dark" />
+                    <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
+                  </div>
+                  <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
+                    <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." tone="dark" />
+                    <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
+                  </div>
+                  <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
+                </template>
+              </div>
+            </div>
           </template>
+          <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
         </section>
 
-        <section class="open-invoices-panel">
-          <header class="open-invoices-head" @click="openInvoicesExpanded = !openInvoicesExpanded">
-            <div class="open-invoices-title">
-              <strong>فاکتورهای باز</strong>
-              <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
-              <span class="count-badge empty" v-else-if="!openInvoicesLoading">صفر</span>
+        <section v-if="leftPanelTab === 'invoices'" class="open-invoices-panel">
+          <div class="tab-panel-toolbar">
+            <button type="button" class="icon-refresh-btn" @click="loadOpenInvoices" title="بروزرسانی">↻</button>
+          </div>
+          <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
+          <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
+          <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
+          <template v-else>
+            <div class="open-invoice-strip">
+              <article
+                v-for="invoice in openInvoices"
+                :key="invoice.invoice_key"
+                class="open-invoice-card"
+                :class="{ active: selectedOpenInvoice?.invoice_key === invoice.invoice_key }"
+                @click="selectOpenInvoice(invoice)"
+              >
+                <strong>{{ invoice.order_code }}</strong>
+                <small>{{ invoice.customer_name || 'POS Customer' }}</small>
+                <small>{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
+                <small>{{ formatInvoiceDateTime(invoice.created_at) }}</small>
+              </article>
             </div>
-            <div class="open-inv-head-right">
-              <button type="button" class="icon-refresh-btn" @click.stop="loadOpenInvoices" title="بروزرسانی">↻</button>
-              <span class="collapse-arrow">{{ openInvoicesExpanded ? '▲' : '▼' }}</span>
+            <div class="open-invoice-detail" v-if="selectedOpenInvoiceDetail?.order">
+              <header>
+                <div>
+                  <strong>{{ selectedOpenInvoiceDetail.order.order_code }}</strong>
+                  <small>{{ formatStatus(selectedOpenInvoiceDetail.order.status) }}</small>
+                </div>
+                <div class="open-invoice-actions">
+                  <button type="button" class="tbl-btn" @click="applySelectedOpenInvoiceProfile">انتخاب</button>
+                  <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click="settleSelectedOpenInvoice">
+                    {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
+                  </button>
+                </div>
+              </header>
+              <ul>
+                <li v-for="(item, idx) in selectedOpenInvoiceDetail.order.items || []" :key="`${idx}-${item.title}`">
+                  <span>{{ item.title }}</span>
+                  <span>{{ formatCompactNumber(item.qty, 2) }}</span>
+                  <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
+                </li>
+              </ul>
             </div>
-          </header>
-          <template v-if="openInvoicesExpanded">
-            <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
-            <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
-            <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
-            <template v-else>
-              <div class="open-invoice-strip">
-                <article
-                  v-for="invoice in openInvoices"
-                  :key="invoice.invoice_key"
-                  class="open-invoice-card"
-                  :class="{ active: selectedOpenInvoice?.invoice_key === invoice.invoice_key }"
-                  @click="selectOpenInvoice(invoice)"
-                >
-                  <strong>{{ invoice.order_code }}</strong>
-                  <small>{{ invoice.customer_name || 'POS Customer' }}</small>
-                  <small>{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
-                  <small>{{ formatInvoiceDateTime(invoice.created_at) }}</small>
-                </article>
-              </div>
-              <div class="open-invoice-detail" v-if="selectedOpenInvoiceDetail?.order">
-                <header>
-                  <div>
-                    <strong>{{ selectedOpenInvoiceDetail.order.order_code }}</strong>
-                    <small>{{ formatStatus(selectedOpenInvoiceDetail.order.status) }}</small>
-                  </div>
-                  <div class="open-invoice-actions">
-                    <button type="button" class="tbl-btn" @click="applySelectedOpenInvoiceProfile">انتخاب</button>
-                    <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click="settleSelectedOpenInvoice">
-                      {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
-                    </button>
-                  </div>
-                </header>
-                <ul>
-                  <li v-for="(item, idx) in selectedOpenInvoiceDetail.order.items || []" :key="`${idx}-${item.title}`">
-                    <span>{{ item.title }}</span>
-                    <span>{{ formatCompactNumber(item.qty, 2) }}</span>
-                    <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
-                  </li>
-                </ul>
-              </div>
-            </template>
           </template>
         </section>
       </aside>
@@ -487,6 +489,7 @@ const tableOptions = ref([])
 const posInfoExpanded = ref(false)
 const openInvoicesExpanded = ref(false)
 const tableExpanded = ref(false)
+const leftPanelTab = ref('tables')
 const posProfileSummary = reactive({
   name: '',
   title: '',
@@ -2994,37 +2997,6 @@ onBeforeUnmount(() => {
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.78);
 }
 
-.open-invoices-panel {
-  border: 1px solid var(--pos-border);
-  border-radius: 16px;
-  background: var(--pos-white);
-  padding: 0.62rem;
-  display: grid;
-  gap: 0.45rem;
-}
-
-.open-invoices-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  cursor: pointer;
-  user-select: none;
-}
-
-.open-invoices-title {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.84rem;
-  color: var(--pos-primary);
-}
-
-.open-inv-head-right {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
 
 .open-invoice-strip {
   display: flex;
@@ -3222,37 +3194,6 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
 }
 
-.table-session-preview {
-  border: 1px solid var(--pos-border);
-  border-radius: 16px;
-  background: var(--pos-white);
-  padding: 0.6rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.table-session-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  cursor: pointer;
-  user-select: none;
-}
-
-.table-head-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.84rem;
-  color: var(--pos-primary);
-}
-
-.table-head-right {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
 
 .count-badge {
   display: inline-flex;
@@ -3495,12 +3436,69 @@ onBeforeUnmount(() => {
 
 .left-col {
   display: grid;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto 1fr;
   align-content: start;
-  gap: 0.55rem;
+  gap: 0;
   overflow-y: auto;
   min-height: 0;
   scrollbar-width: thin;
+}
+
+.left-col-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 2px solid var(--pos-border);
+  background: var(--pos-white);
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.left-tab-btn {
+  border: 0;
+  background: transparent;
+  color: var(--pos-text);
+  padding: 0.55rem 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.79rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border-bottom: 3px solid transparent;
+  transition: all 0.15s;
+  margin-bottom: -2px;
+}
+
+.left-tab-btn.active {
+  color: var(--pos-primary);
+  border-bottom-color: var(--pos-primary);
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.05);
+}
+
+.left-tab-btn:hover:not(.active) {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+}
+
+.tab-panel-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.35rem 0.45rem 0;
+}
+
+.table-session-preview,
+.open-invoices-panel {
+  border: 1px solid var(--pos-border);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  padding: 0 0.55rem 0.55rem;
+  background: var(--pos-white);
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  overflow-y: auto;
 }
 
 .products-col,
