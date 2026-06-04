@@ -1,65 +1,98 @@
 <template>
   <section class="products-panel">
-    <header class="toolbar">
-      <div class="search-box">
-        <span class="icon">⌕</span>
+    <div class="panel-top">
+      <div class="toolbar">
+        <div class="search-box">
+          <span class="icon">⌕</span>
+          <input
+            class="input dark-input"
+            :value="searchTerm"
+            @input="$emit('update:searchTerm', $event.target.value)"
+            placeholder="نام یا کد محصول"
+          />
+          <button v-if="searchTerm" type="button" class="clear-search-btn" @click="$emit('update:searchTerm', '')">×</button>
+        </div>
+
+        <div class="view-toggle">
+          <button type="button" :class="{ active: productView === 'grid' }" @click="$emit('update:productView', 'grid')" title="شبکه‌ای با عکس">⊞</button>
+          <button type="button" :class="{ active: productView === 'compact' }" @click="$emit('update:productView', 'compact')" title="فشرده بدون عکس">≡</button>
+          <button type="button" :class="{ active: productView === 'list' }" @click="$emit('update:productView', 'list')" title="لیستی">☰</button>
+        </div>
+      </div>
+
+      <div class="scan-row">
         <input
           class="input dark-input"
-          :value="searchTerm"
-          @input="$emit('update:searchTerm', $event.target.value)"
-          placeholder="نام یا کد محصول"
+          :value="scannerInput"
+          @input="$emit('update:scannerInput', $event.target.value)"
+          @keyup.enter="$emit('scan-scale')"
+          placeholder="بارکد وزنی ترازو"
         />
-        <button v-if="searchTerm" type="button" class="clear-search-btn" @click="$emit('update:searchTerm', '')">×</button>
+        <button type="button" class="scan-btn" @click="$emit('scan-scale')">تحلیل بارکد</button>
       </div>
+      <p class="scan-feedback" v-if="scannerFeedback">{{ scannerFeedback }}</p>
 
-      <div class="view-toggle">
-        <button type="button" :class="{ active: productView === 'grid' }" @click="$emit('update:productView', 'grid')">
-          شبکه ای
-        </button>
-        <button type="button" :class="{ active: productView === 'list' }" @click="$emit('update:productView', 'list')">
-          لیستی
-        </button>
+      <div class="category-bar" v-if="categories.length">
+        <button
+          type="button"
+          class="cat-chip"
+          :class="{ active: selectedCategory === '' }"
+          @click="$emit('update:selectedCategory', '')"
+        >همه</button>
+        <button
+          v-for="cat in categories"
+          :key="cat.slug || cat.name"
+          type="button"
+          class="cat-chip"
+          :class="{ active: selectedCategory === (cat.slug || cat.name) }"
+          @click="$emit('update:selectedCategory', cat.slug || cat.name)"
+        >{{ cat.title || cat.name }}</button>
       </div>
-    </header>
-
-    <div class="scan-row">
-      <input
-        class="input dark-input"
-        :value="scannerInput"
-        @input="$emit('update:scannerInput', $event.target.value)"
-        @keyup.enter="$emit('scan-scale')"
-        placeholder="بارکد وزنی ترازو"
-      />
-      <button type="button" class="scan-btn" @click="$emit('scan-scale')">تحلیل بارکد</button>
     </div>
-    <p class="scan-feedback" v-if="scannerFeedback">{{ scannerFeedback }}</p>
 
     <p class="hint" v-if="loading">در حال دریافت محصولات...</p>
     <p class="error" v-else-if="error">{{ error }}</p>
 
-    <div class="products-grid" :class="`mode-${productView}`" v-else>
-      <article class="product-card" v-for="item in products" :key="item.slug || item.name">
-        <button type="button" class="image-btn" @click="$emit('increment-product', item)">
-          <img class="product-image" :src="item.image || fallbackImage" :alt="item.title || item.name" />
+    <div v-else class="products-grid" :class="`mode-${productView}`">
+      <template v-if="productView === 'compact'">
+        <button
+          v-for="item in products"
+          :key="item.slug || item.name"
+          type="button"
+          class="compact-card"
+          :class="{ 'has-qty': displayQty(item.slug) !== '0' }"
+          @click="$emit('increment-product', item)"
+        >
+          <span class="compact-name">{{ item.title || item.name }}</span>
+          <span class="compact-price">{{ formatMoney(item.base_price || item.standard_rate || 0, currency) }}</span>
+          <span class="compact-qty" v-if="displayQty(item.slug) !== '0'">× {{ displayQty(item.slug) }}</span>
         </button>
+      </template>
 
-        <div class="product-body">
-          <div>
-            <span class="stock-chip">موجود</span>
-            <h4>{{ item.title || item.name }}</h4>
-          </div>
-          <strong>{{ formatMoney(item.base_price || item.standard_rate || 0, currency) }}</strong>
-        </div>
+      <template v-else>
+        <article class="product-card" v-for="item in products" :key="item.slug || item.name">
+          <button type="button" class="image-btn" @click="$emit('increment-product', item)">
+            <img class="product-image" :src="item.image || fallbackImage" :alt="item.title || item.name" />
+          </button>
 
-        <div class="product-actions">
-          <div class="counter">
-            <button type="button" @click="$emit('decrement-product', item)">-</button>
-            <span>{{ displayQty(item.slug) }}</span>
-            <button type="button" @click="$emit('increment-product', item)">+</button>
+          <div class="product-body">
+            <div>
+              <span class="stock-chip">موجود</span>
+              <h4>{{ item.title || item.name }}</h4>
+            </div>
+            <strong>{{ formatMoney(item.base_price || item.standard_rate || 0, currency) }}</strong>
           </div>
-          <button type="button" class="bom-btn" @click="$emit('open-bom', item)">BOM</button>
-        </div>
-      </article>
+
+          <div class="product-actions">
+            <div class="counter">
+              <button type="button" @click="$emit('decrement-product', item)">-</button>
+              <span>{{ displayQty(item.slug) }}</span>
+              <button type="button" @click="$emit('increment-product', item)">+</button>
+            </div>
+            <button type="button" class="bom-btn" @click="$emit('open-bom', item)">BOM</button>
+          </div>
+        </article>
+      </template>
     </div>
   </section>
 </template>
@@ -68,51 +101,24 @@
 import { formatMoney } from '@/utils/format'
 
 const props = defineProps({
-  products: {
-    type: Array,
-    default: () => [],
-  },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
-  error: {
-    type: String,
-    default: '',
-  },
-  searchTerm: {
-    type: String,
-    default: '',
-  },
-  scannerInput: {
-    type: String,
-    default: '',
-  },
-  scannerFeedback: {
-    type: String,
-    default: '',
-  },
-  productView: {
-    type: String,
-    default: 'grid',
-  },
-  quantityMap: {
-    type: Object,
-    default: () => ({}),
-  },
-  fallbackImage: {
-    type: String,
-    default: '',
-  },
-  currency: {
-    type: String,
-    default: 'IRR',
-  },
+  products: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  error: { type: String, default: '' },
+  searchTerm: { type: String, default: '' },
+  scannerInput: { type: String, default: '' },
+  scannerFeedback: { type: String, default: '' },
+  productView: { type: String, default: 'grid' },
+  quantityMap: { type: Object, default: () => ({}) },
+  fallbackImage: { type: String, default: '' },
+  currency: { type: String, default: 'IRR' },
+  categories: { type: Array, default: () => [] },
+  selectedCategory: { type: String, default: '' },
 })
 
 defineEmits([
   'update:searchTerm',
   'update:productView',
+  'update:selectedCategory',
   'increment-product',
   'decrement-product',
   'open-bom',
@@ -131,9 +137,19 @@ function displayQty(slug) {
   border-radius: 18px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  padding: 0.75rem;
+  padding: 0.65rem;
   color: var(--pos-text);
-  min-height: 620px;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  gap: 0.4rem;
+}
+
+.panel-top {
+  display: grid;
+  gap: 0.45rem;
+  flex-shrink: 0;
 }
 
 .toolbar {
@@ -141,7 +157,6 @@ function displayQty(slug) {
   align-items: center;
   justify-content: space-between;
   gap: 0.65rem;
-  margin-bottom: 0.55rem;
 }
 
 .search-box {
@@ -187,14 +202,17 @@ function displayQty(slug) {
   border: 1px solid var(--pos-border);
   border-radius: 11px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .view-toggle button {
   border: 0;
   background: var(--pos-white);
   color: var(--pos-text);
-  padding: 0.4rem 0.65rem;
+  padding: 0.38rem 0.6rem;
   cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .view-toggle button.active {
@@ -206,7 +224,6 @@ function displayQty(slug) {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.45rem;
-  margin-bottom: 0.55rem;
 }
 
 .scan-btn {
@@ -216,28 +233,73 @@ function displayQty(slug) {
   color: var(--pos-white);
   padding: 0.4rem 0.8rem;
   cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
 }
 
 .scan-feedback {
-  margin: 0 0 0.55rem;
+  margin: 0;
   color: var(--pos-primary);
   font-size: 0.77rem;
 }
 
+.category-bar {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pos-border) transparent;
+}
+
+.category-bar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.category-bar::-webkit-scrollbar-thumb {
+  background: var(--pos-border);
+  border-radius: 99px;
+}
+
+.cat-chip {
+  border: 1px solid var(--pos-border);
+  border-radius: 999px;
+  padding: 0.26rem 0.7rem;
+  background: var(--pos-white);
+  color: var(--pos-text);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.77rem;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+
+.cat-chip.active {
+  background: var(--pos-primary);
+  color: var(--pos-white);
+  border-color: var(--pos-primary);
+  font-weight: 600;
+}
+
 .hint {
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  margin: 0;
 }
 
 .error {
   color: var(--pos-accent);
+  margin: 0;
 }
 
 .products-grid {
   display: grid;
-  gap: 0.55rem;
-  max-height: 66vh;
-  overflow: auto;
-  padding-left: 0.1rem;
+  gap: 0.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-content: start;
+  min-height: 0;
+  padding-inline-end: 0.1rem;
 }
 
 .products-grid.mode-grid {
@@ -246,6 +308,11 @@ function displayQty(slug) {
 
 .products-grid.mode-list {
   grid-template-columns: 1fr;
+}
+
+.products-grid.mode-compact {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.35rem;
 }
 
 .product-card {
@@ -266,19 +333,28 @@ function displayQty(slug) {
   display: block;
 }
 
+.products-grid.mode-list .image-btn {
+  display: none;
+}
+
 .product-image {
   width: 100%;
-  height: 132px;
+  height: 120px;
   object-fit: contain;
   object-position: center;
 }
 
 .product-body {
-  padding: 0.45rem 0.52rem 0.2rem;
+  padding: 0.42rem 0.5rem 0.18rem;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.4rem;
+}
+
+.products-grid.mode-list .product-body {
+  align-items: center;
+  padding: 0.5rem 0.65rem;
 }
 
 .stock-chip {
@@ -287,18 +363,25 @@ function displayQty(slug) {
   background: var(--pos-soft);
   color: var(--pos-primary);
   border: 1px solid var(--pos-border);
-  padding: 0.14rem 0.45rem;
-  font-size: 0.68rem;
+  padding: 0.12rem 0.4rem;
+  font-size: 0.66rem;
 }
 
 .product-body h4 {
-  margin: 0.28rem 0 0;
-  font-size: 0.81rem;
+  margin: 0.24rem 0 0;
+  font-size: 0.79rem;
+  line-height: 1.3;
+}
+
+.products-grid.mode-list .product-body h4 {
+  margin: 0;
+  font-size: 0.84rem;
 }
 
 .product-body strong {
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   color: var(--pos-accent);
+  flex-shrink: 0;
 }
 
 .product-actions {
@@ -306,13 +389,13 @@ function displayQty(slug) {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.45rem 0.52rem 0.55rem;
+  padding: 0.4rem 0.5rem 0.5rem;
 }
 
 .counter {
   display: inline-flex;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.25rem;
 }
 
 .counter button {
@@ -326,7 +409,7 @@ function displayQty(slug) {
 }
 
 .counter span {
-  min-width: 44px;
+  min-width: 38px;
   text-align: center;
   font-size: 0.8rem;
 }
@@ -336,8 +419,9 @@ function displayQty(slug) {
   background: var(--pos-accent);
   color: var(--pos-white);
   border-radius: 9px;
-  padding: 0.34rem 0.65rem;
+  padding: 0.3rem 0.6rem;
   cursor: pointer;
+  font-size: 0.76rem;
 }
 
 .dark-input {
@@ -350,20 +434,65 @@ function displayQty(slug) {
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
 }
 
-@media (max-width: 1100px) {
+.compact-card {
+  border: 1px solid var(--pos-border);
+  border-radius: 12px;
+  background: var(--pos-white);
+  padding: 0.5rem 0.55rem;
+  cursor: pointer;
+  text-align: right;
+  display: grid;
+  gap: 0.18rem;
+  transition: all 0.12s;
+  font-family: inherit;
+  position: relative;
+}
+
+.compact-card:hover {
+  border-color: var(--pos-primary);
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+}
+
+.compact-card.has-qty {
+  border-color: var(--pos-primary);
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
+}
+
+.compact-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--pos-primary);
+  line-height: 1.3;
+  display: block;
+}
+
+.compact-price {
+  font-size: 0.72rem;
+  color: var(--pos-accent);
+  display: block;
+}
+
+.compact-qty {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.35rem;
+  background: var(--pos-primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  padding: 0.08rem 0.35rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1200px) {
   .products-grid.mode-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 860px) {
   .products-grid.mode-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
