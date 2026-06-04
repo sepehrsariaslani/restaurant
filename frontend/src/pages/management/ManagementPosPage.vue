@@ -15,110 +15,128 @@
       <button type="button" class="ticket-tab new" @click="createNewTicketTab">+ فاکتور جدید</button>
     </section>
 
-    <section class="table-session-preview">
-      <header class="table-session-head">
-        <div>
-          <strong>میزهای فعال سالن</strong>
-          <small>همه عملیات میز از همینجا انجام می‌شود.</small>
-        </div>
-        <button type="button" class="secondary-btn" @click="loadPOSBoot">بروزرسانی میزها</button>
-      </header>
-
-      <div class="table-strip">
-        <article
-          v-for="table in tableOptions"
-          :key="table.name"
-          class="table-box"
-          :class="[
-            `status-${String(table.status || '').toLowerCase()}`,
-            { active: selectedDineInTable?.name === table.name },
-          ]"
-          @click="selectDineInTable(table)"
-        >
-          <strong>{{ table.label }}</strong>
-          <small>وضعیت: {{ formatStatus(table.status) }}</small>
-          <small>مدت حضور: {{ formatOccupiedMinutes(table.occupied_minutes) }}</small>
-          <small>سفارش باز: {{ toFaDigits(table.pending_orders || 0) }}</small>
-          <small v-if="table.customer_name">مشتری: {{ table.customer_name }}</small>
-          <div class="table-box-actions">
-            <button type="button" class="table-box-clear" @click.stop="clearTableSession(table)">خالی کردن میز</button>
-          </div>
-        </article>
+    <section class="pos-status-bar">
+      <div class="pos-status-left">
+        <span class="shift-dot" :class="posProfileSummary.has_open_shift ? 'shift-open' : 'shift-closed'"></span>
+        <strong class="pos-status-name">{{ posProfileSummary.title || posProfileSummary.name || 'POS' }}</strong>
+        <span class="pos-status-sep">|</span>
+        <span class="pos-status-shift">{{ posProfileSummary.has_open_shift ? 'شیفت باز' : 'شیفت بسته' }}</span>
+        <span class="pos-status-method">{{ payment.method === 'card' ? '💳 کارت' : '💵 نقد' }}</span>
       </div>
-
-      <p class="muted" v-if="tablePreviewLoading">در حال دریافت سفارش‌های میز...</p>
-      <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
-      <template v-else-if="selectedDineInTable">
-        <div class="table-session-totals">
-          <span>جمع میز: {{ formatMoney(selectedTablePreview?.totals?.session_grand_total || 0, currency) }}</span>
-          <span>قابل تسویه: {{ formatMoney(selectedTablePreview?.totals?.session_confirmed_total || 0, currency) }}</span>
-        </div>
-
-        <div class="table-customer-panel">
-          <div class="table-customer-copy">
-            <strong>مشتری میز:</strong>
-            <span>{{ selectedTableCustomer.name || 'ثبت نشده' }}</span>
-            <small v-if="selectedTableCustomer.mobile">موبایل: {{ selectedTableCustomer.mobile }}</small>
-            <small v-if="selectedTableCustomer.guest_count">تعداد نفرات: {{ toFaDigits(selectedTableCustomer.guest_count) }}</small>
-          </div>
-          <div class="table-customer-actions">
-            <button type="button" class="secondary-btn" @click="assignCustomerToSelectedTable">
-              ثبت مشتری فعلی روی میز
-            </button>
-            <button
-              type="button"
-              class="secondary-btn danger"
-              :disabled="!selectedTablePreview?.session?.name"
-              @click="clearSelectedTableSession"
-            >
-              خالی کردن این میز
-            </button>
-          </div>
-        </div>
-
-        <div class="table-move-panel" v-if="selectedTablePreview?.session?.name">
-          <label>
-            تغییر میز
-            <SearchableDropdown
-              v-model="moveTableTarget"
-              :options="movableTableDropdownOptions"
-              placeholder="انتخاب میز مقصد"
-              search-placeholder="جستجوی میز..."
-              include-empty-option
-              empty-label="انتخاب میز مقصد"
-              tone="dark"
-            />
-          </label>
-          <button type="button" class="primary-btn" :disabled="!moveTableTarget" @click="moveSelectedTableSession">
-            انتقال سفارش‌های میز
-          </button>
-        </div>
-      </template>
-      <p class="muted" v-else>برای افزودن به میز، یکی از میزها را انتخاب کنید.</p>
+      <div class="pos-status-right">
+        <button type="button" class="pos-info-toggle" @click="posInfoExpanded = !posInfoExpanded">
+          {{ posInfoExpanded ? '▲ بستن' : '▼ جزئیات POS' }}
+        </button>
+        <a class="pos-settings-link" href="/management/pos_profile">⚙</a>
+      </div>
     </section>
 
-    <section class="glass-card hero-card pos-device-hero">
-      <div class="pos-profile-copy">
-        <strong>POS فعال: {{ posProfileSummary.title || posProfileSummary.name || 'نامشخص' }}</strong>
-        <small v-if="posProfileSummary.company">شرکت: {{ posProfileSummary.company }}</small>
-        <small v-if="posProfileSummary.warehouse">انبار: {{ posProfileSummary.warehouse }}</small>
-        <small v-if="posProfileSummary.selling_price_list">لیست قیمت: {{ posProfileSummary.selling_price_list }}</small>
+    <section class="pos-info-panel" v-if="posInfoExpanded">
+      <div class="pos-info-item" v-if="posProfileSummary.company">
+        <span class="pos-info-label">شرکت</span>
+        <strong>{{ posProfileSummary.company }}</strong>
       </div>
-      <div class="pos-profile-copy">
-        <strong>دستگاه POS: {{ paymentBoot.terminal_id || 'تعریف نشده' }}</strong>
-        <small>درگاه پرداخت: {{ paymentBoot.provider_label }}</small>
-        <small>روش پیش فرض: {{ payment.method === 'card' ? 'کارت' : 'نقد' }}</small>
+      <div class="pos-info-item" v-if="posProfileSummary.warehouse">
+        <span class="pos-info-label">انبار</span>
+        <strong>{{ posProfileSummary.warehouse }}</strong>
       </div>
-      <div class="pos-profile-copy">
-        <strong>{{ posProfileSummary.has_open_shift ? 'شیفت POS باز است' : 'شیفت باز ندارید' }}</strong>
-        <small v-if="posProfileSummary.shift_name">کد شیفت: {{ posProfileSummary.shift_name }}</small>
-        <small v-if="posProfileSummary.shift_opened_at">
-          شروع شیفت: {{ formatInvoiceDateTime(posProfileSummary.shift_opened_at) }}
-        </small>
+      <div class="pos-info-item" v-if="posProfileSummary.selling_price_list">
+        <span class="pos-info-label">لیست قیمت</span>
+        <strong>{{ posProfileSummary.selling_price_list }}</strong>
       </div>
-      <div class="pos-profile-actions">
-        <a class="secondary-btn" href="/management/pos_profile">تنظیمات POS</a>
+      <div class="pos-info-item">
+        <span class="pos-info-label">درگاه</span>
+        <strong>{{ paymentBoot.provider_label }}</strong>
       </div>
+      <div class="pos-info-item" v-if="paymentBoot.terminal_id">
+        <span class="pos-info-label">دستگاه</span>
+        <strong>{{ paymentBoot.terminal_id }}</strong>
+      </div>
+      <div class="pos-info-item" v-if="posProfileSummary.shift_name">
+        <span class="pos-info-label">شیفت</span>
+        <strong>{{ posProfileSummary.shift_name }}</strong>
+      </div>
+      <div class="pos-info-item" v-if="posProfileSummary.shift_opened_at">
+        <span class="pos-info-label">شروع</span>
+        <strong>{{ formatInvoiceDateTime(posProfileSummary.shift_opened_at) }}</strong>
+      </div>
+    </section>
+
+    <section class="table-session-preview">
+      <header class="table-session-head" @click="tableExpanded = !tableExpanded">
+        <div class="table-head-title">
+          <strong>میزهای سالن</strong>
+          <span class="count-badge">{{ tableOptions.length }}</span>
+          <span class="occupied-badge" v-if="occupiedTableCount">{{ occupiedTableCount }} اشغال</span>
+        </div>
+        <div class="table-head-right">
+          <button type="button" class="icon-refresh-btn" @click.stop="loadPOSBoot" title="بروزرسانی">↻</button>
+          <span class="collapse-arrow">{{ tableExpanded ? '▲' : '▼' }}</span>
+        </div>
+      </header>
+
+      <template v-if="tableExpanded">
+        <div class="table-grid">
+          <article
+            v-for="table in tableOptions"
+            :key="table.name"
+            class="table-cell"
+            :class="[
+              `status-${String(table.status || '').toLowerCase()}`,
+              { active: selectedDineInTable?.name === table.name },
+            ]"
+            @click="selectDineInTable(table)"
+          >
+            <span class="table-cell-name">{{ table.label }}</span>
+            <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
+            <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
+            <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
+          </article>
+        </div>
+
+        <p class="muted" v-if="tablePreviewLoading">در حال دریافت سفارش‌های میز...</p>
+        <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
+        <template v-else-if="selectedDineInTable">
+          <div class="table-detail-bar">
+            <div class="table-detail-info">
+              <strong>{{ selectedDineInTable.label }}</strong>
+              <span v-if="selectedTablePreview?.totals?.session_grand_total">
+                جمع: {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
+              </span>
+              <span v-if="selectedTableCustomer.name">👤 {{ selectedTableCustomer.name }}</span>
+              <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
+            </div>
+            <div class="table-detail-actions">
+              <button type="button" class="secondary-btn" @click="assignCustomerToSelectedTable">
+                ثبت مشتری
+              </button>
+              <button
+                type="button"
+                class="secondary-btn danger"
+                :disabled="!selectedTablePreview?.session?.name"
+                @click="clearSelectedTableSession"
+              >
+                خالی کردن میز
+              </button>
+              <template v-if="selectedTablePreview?.session?.name">
+                <SearchableDropdown
+                  v-model="moveTableTarget"
+                  :options="movableTableDropdownOptions"
+                  placeholder="انتقال به میز..."
+                  search-placeholder="جستجوی میز..."
+                  include-empty-option
+                  empty-label="انتقال به میز..."
+                  tone="dark"
+                />
+                <button type="button" class="primary-btn" :disabled="!moveTableTarget" @click="moveSelectedTableSession">
+                  انتقال
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
+        <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
+      </template>
     </section>
 
     <PosHeaderBar
@@ -147,17 +165,22 @@
     <p class="success" v-if="successMessage">{{ successMessage }}</p>
 
     <section class="open-invoices-panel">
-      <header class="open-invoices-head">
-        <div>
+      <header class="open-invoices-head" @click="openInvoicesExpanded = !openInvoicesExpanded">
+        <div class="open-invoices-title">
           <strong>فاکتورهای باز</strong>
-          <small>فاکتورهای ثبت‌شده‌ای که هنوز پرداخت نشده‌اند.</small>
+          <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
+          <span class="count-badge empty" v-else-if="!openInvoicesLoading">صفر</span>
         </div>
-        <button type="button" class="secondary-btn" @click="loadOpenInvoices">بروزرسانی فاکتورهای باز</button>
+        <div class="open-inv-head-right">
+          <button type="button" class="icon-refresh-btn" @click.stop="loadOpenInvoices" title="بروزرسانی">↻</button>
+          <span class="collapse-arrow">{{ openInvoicesExpanded ? '▲' : '▼' }}</span>
+        </div>
       </header>
 
+      <template v-if="openInvoicesExpanded">
       <p class="muted" v-if="openInvoicesLoading">در حال دریافت فاکتورهای باز...</p>
       <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
-      <p class="muted" v-else-if="!openInvoices.length">در حال حاضر فاکتور بازی ندارید.</p>
+      <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
 
       <template v-else>
         <div class="open-invoice-strip">
@@ -202,6 +225,7 @@
             </li>
           </ul>
         </div>
+      </template>
       </template>
     </section>
 
@@ -480,6 +504,9 @@ const ticketSessions = reactive([{ id: 'ticket-1', snapshot: null }])
 const activeTicketId = ref('ticket-1')
 let ticketCounter = 1
 const tableOptions = ref([])
+const posInfoExpanded = ref(false)
+const openInvoicesExpanded = ref(false)
+const tableExpanded = ref(true)
 const posProfileSummary = reactive({
   name: '',
   title: '',
@@ -661,6 +688,10 @@ const productQtyMap = computed(() => {
     return acc
   }, {})
 })
+
+const occupiedTableCount = computed(() =>
+  tableOptions.value.filter((t) => t.status === 'occupied' || t.status === 'waiting').length,
+)
 
 const totals = computed(() =>
   calculatePosTotals({
@@ -2945,12 +2976,22 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
 }
 
-.open-invoices-head small {
-  display: block;
-  margin-top: 0.2rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+.open-invoices-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.84rem;
+  color: var(--pos-primary);
+}
+
+.open-inv-head-right {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .open-invoice-strip {
@@ -3031,40 +3072,131 @@ onBeforeUnmount(() => {
   font-size: 0.74rem;
 }
 
+.pos-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid var(--pos-border);
+  border-radius: 12px;
+  background: var(--pos-white);
+  padding: 0.5rem 0.75rem;
+}
+
+.pos-status-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--pos-text);
+}
+
+.pos-status-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.shift-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.shift-dot.shift-open {
+  background: var(--pos-success);
+  box-shadow: 0 0 0 3px rgb(var(--pos-success-rgb, 11 125 74) / 0.22);
+}
+
+.shift-dot.shift-closed {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.35);
+}
+
+.pos-status-name {
+  font-size: 0.84rem;
+  color: var(--pos-primary);
+}
+
+.pos-status-sep {
+  color: var(--pos-border);
+}
+
+.pos-status-shift {
+  font-size: 0.78rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+}
+
+.pos-status-method {
+  font-size: 0.76rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.65);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--pos-soft);
+}
+
+.pos-info-toggle {
+  border: 1px solid var(--pos-border);
+  background: transparent;
+  color: var(--pos-text);
+  border-radius: 8px;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.73rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pos-settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--pos-border);
+  background: var(--pos-soft);
+  color: var(--pos-text);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.pos-info-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.2rem;
+  border: 1px dashed var(--pos-border);
+  border-radius: 12px;
+  background: var(--pos-soft);
+  padding: 0.55rem 0.8rem;
+}
+
+.pos-info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.pos-info-label {
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.62);
+  font-size: 0.73rem;
+}
+
+.pos-info-item strong {
+  color: var(--pos-primary);
+  font-size: 0.8rem;
+}
+
 .table-session-preview {
   border: 1px solid var(--pos-border);
   border-radius: 16px;
   background: var(--pos-white);
-  padding: 0.65rem;
+  padding: 0.6rem;
   display: grid;
-  gap: 0.45rem;
-}
-
-.pos-device-hero {
-  padding: 0.55rem 0.65rem;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 0.55rem;
-  align-items: center;
-}
-
-.pos-profile-copy {
-  display: grid;
-  gap: 0.16rem;
-}
-
-.pos-profile-copy strong {
-  font-size: 0.83rem;
-  color: var(--pos-primary);
-}
-
-.pos-profile-copy small {
-  font-size: 0.73rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.8);
-}
-
-.pos-profile-actions {
-  justify-self: end;
+  gap: 0.5rem;
 }
 
 .table-session-head {
@@ -3072,113 +3204,175 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-}
-
-.table-session-head small {
-  display: block;
-  margin-top: 0.2rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
-}
-
-.table-strip {
-  display: flex;
-  gap: 0.55rem;
-  overflow-x: auto;
-  padding-bottom: 0.28rem;
-}
-
-.table-box {
-  min-width: 156px;
-  border: 1px solid var(--pos-border);
-  border-radius: 13px;
-  background: var(--pos-white);
-  padding: 0.48rem 0.58rem;
-  display: grid;
-  gap: 0.2rem;
   cursor: pointer;
-  transition: all 0.18s ease;
+  user-select: none;
 }
 
-.table-box strong {
+.table-head-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.84rem;
+  color: var(--pos-primary);
 }
 
-.table-box small {
-  font-size: 0.72rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.84);
-}
-
-.table-box-actions {
+.table-head-right {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
 }
 
-.table-box-clear {
-  border: 1px solid rgb(var(--pos-danger-rgb, 171 53 53) / 0.3);
-  background: #fff;
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--pos-primary);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.count-badge.empty {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.18);
+  color: var(--pos-text);
+}
+
+.occupied-badge {
+  font-size: 0.73rem;
   color: var(--pos-danger);
+  background: rgb(var(--pos-danger-rgb, 171 53 53) / 0.1);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+}
+
+.icon-refresh-btn {
+  border: 1px solid var(--pos-border);
+  background: transparent;
+  color: var(--pos-text);
   border-radius: 8px;
-  padding: 0.18rem 0.4rem;
-  font-size: 0.69rem;
+  width: 28px;
+  height: 28px;
+  font-size: 1rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.table-box.status-empty {
-  background: rgb(var(--pos-success-rgb, 11 125 74) / 0.08);
-  border-color: rgb(var(--pos-success-rgb, 11 125 74) / 0.35);
+.collapse-arrow {
+  font-size: 0.7rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  width: 18px;
+  text-align: center;
 }
 
-.table-box.status-occupied {
-  background: rgb(var(--pos-danger-rgb, 171 53 53) / 0.09);
-  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.3);
-}
-
-.table-box.status-waiting {
-  background: rgb(var(--pos-warning-rgb, 245 158 11) / 0.14);
-  border-color: rgb(var(--pos-warning-rgb, 245 158 11) / 0.44);
-}
-
-.table-box.active {
-  box-shadow: inset 0 0 0 1px var(--pos-primary);
-  transform: translateY(-1px);
-}
-
-.table-session-totals {
+.table-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.88);
-  font-size: 0.84rem;
+  gap: 0.5rem;
 }
 
-.table-customer-panel {
+.table-cell {
+  width: 90px;
+  height: 80px;
+  border: 2px solid var(--pos-border);
+  border-radius: 14px;
+  background: var(--pos-white);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0.35rem 0.25rem;
+  text-align: center;
+}
+
+.table-cell-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--pos-primary);
+  line-height: 1.1;
+}
+
+.table-cell-time {
+  font-size: 0.65rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.65);
+}
+
+.table-cell-orders {
+  font-size: 0.65rem;
+  background: var(--pos-accent-soft);
+  color: var(--pos-accent, #ff9836);
+  border-radius: 999px;
+  padding: 0.08rem 0.32rem;
+}
+
+.table-cell-empty {
+  font-size: 0.65rem;
+  color: var(--pos-success);
+}
+
+.table-cell.status-empty {
+  background: rgb(var(--pos-success-rgb, 11 125 74) / 0.07);
+  border-color: rgb(var(--pos-success-rgb, 11 125 74) / 0.3);
+}
+
+.table-cell.status-occupied {
+  background: rgb(var(--pos-danger-rgb, 171 53 53) / 0.08);
+  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.28);
+}
+
+.table-cell.status-waiting {
+  background: rgb(var(--pos-warning-rgb, 245 158 11) / 0.1);
+  border-color: rgb(var(--pos-warning-rgb, 245 158 11) / 0.4);
+}
+
+.table-cell.active {
+  border-color: var(--pos-primary);
+  box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb, 1 90 114) / 0.18);
+  transform: translateY(-2px);
+}
+
+.table-detail-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.55rem;
   border: 1px dashed var(--pos-border);
   border-radius: 12px;
-  padding: 0.48rem;
-  display: grid;
-  gap: 0.45rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--pos-soft);
 }
 
-.table-customer-copy {
+.table-detail-info {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  font-size: 0.77rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.92);
+  font-size: 0.8rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.88);
 }
 
-.table-customer-copy small {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.78);
+.table-detail-info strong {
+  color: var(--pos-primary);
+  font-size: 0.86rem;
 }
 
-.table-customer-actions {
-  display: inline-flex;
+.table-detail-actions {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.38rem;
 }
 
-.table-customer-actions .danger {
+.table-detail-actions .danger {
   border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.3);
   color: var(--pos-danger);
 }
