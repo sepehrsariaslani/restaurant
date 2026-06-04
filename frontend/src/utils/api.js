@@ -989,7 +989,7 @@ export function createManagementTableOrderFromPOS({
 } = {}) {
   return callRestaurantAPI('create_management_table_order_from_pos', {
     table_name,
-    items,
+    items: JSON.stringify(items),
     note,
   })
 }

@@ -187,9 +187,6 @@
     <section class="financial-box">
       <div class="financial-head">
         <h4 class="financial-title">متغیرهای مالی</h4>
-        <button type="button" class="toggle-advanced-btn" @click="showAdvancedFinancial = !showAdvancedFinancial">
-          {{ showAdvancedFinancial ? 'حالت ساده' : 'حالت پیشرفته' }}
-        </button>
       </div>
 
       <label class="wallet-row">
@@ -204,13 +201,13 @@
       <div class="discount-row">
         <span class="discount-label">تخفیف</span>
         <div class="discount-input-group">
-          <input
-            ref="discountInputRef"
-            class="input dark-input discount-input"
-            type="number"
-            min="0"
-            :value="financial.discountValue"
-            @input="patchFinancial({ discountValue: Number($event.target.value || 0) })"
+          <PersianNumberInput
+            :model-value="financial.discountValue"
+            input-class="dark-input discount-input"
+            placeholder="0"
+            :min="0"
+            style="flex: 1; min-width: 0;"
+            @update:model-value="patchFinancial({ discountValue: $event })"
           />
           <button type="button" class="discount-type-btn" @click="toggleDiscountType">
             {{ financial.discountType === 'percent' ? '%' : '﷼' }}
@@ -243,24 +240,24 @@
 
         <label class="field">
           <span>ارزش افزوده</span>
-          <input
-            class="input dark-input"
-            type="number"
-            min="0"
+          <PersianNumberInput
+            :model-value="financial.taxAmount"
+            input-class="dark-input"
+            placeholder="0"
+            :min="0"
             :disabled="Boolean(financial.taxExempt)"
-            :value="financial.taxAmount"
-            @input="patchFinancial({ taxAmount: Number($event.target.value || 0) })"
+            @update:model-value="patchFinancial({ taxAmount: $event })"
           />
         </label>
 
         <label class="field">
           <span>انعام</span>
-          <input
-            class="input dark-input"
-            type="number"
-            min="0"
-            :value="financial.tipAmount"
-            @input="patchFinancial({ tipAmount: Number($event.target.value || 0) })"
+          <PersianNumberInput
+            :model-value="financial.tipAmount"
+            input-class="dark-input"
+            placeholder="0"
+            :min="0"
+            @update:model-value="patchFinancial({ tipAmount: $event })"
           />
         </label>
 
@@ -287,12 +284,12 @@
             درصدی
           </label>
         </div>
-        <input
-          class="input dark-input"
-          type="number"
-          min="0"
-          :value="financial.serviceValue"
-          @input="patchFinancial({ serviceValue: Number($event.target.value || 0) })"
+        <PersianNumberInput
+          :model-value="financial.serviceValue"
+          input-class="dark-input"
+          placeholder="0"
+          :min="0"
+          @update:model-value="patchFinancial({ serviceValue: $event })"
         />
       </template>
 
@@ -404,12 +401,13 @@
             <option value="card" v-if="paymentBoot?.supports_card">💳 کارتخوان</option>
             <option value="wallet">👛 کیف پول</option>
           </select>
-          <input
-            class="dark-input pay-amount-input"
-            type="number"
-            min="0"
-            v-model.number="split.amount"
+          <PersianNumberInput
+            :model-value="split.amount"
+            input-class="pay-amount-input"
             placeholder="مبلغ"
+            :min="0"
+            show-words
+            @update:model-value="split.amount = $event"
           />
           <button
             v-if="paymentSplits.length > 1"
@@ -454,6 +452,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import PersianNumberInput from '@/components/PersianNumberInput.vue'
 import { formatMoney, formatStatus } from '@/utils/format'
 
 const props = defineProps({
@@ -555,8 +554,7 @@ const emit = defineEmits([
   'print-confirmed-table',
 ])
 
-const discountInputRef = ref(null)
-const showAdvancedFinancial = ref(false)
+const showAdvancedFinancial = ref(true)
 const showPaymentPopup = ref(false)
 const paymentSplits = ref([{ method: 'cash', amount: 0 }])
 
