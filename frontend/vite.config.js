@@ -2,8 +2,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-export default defineConfig({
-  base: '/assets/restaurant/frontend/',
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/assets/restaurant/frontend/' : '/',
   plugins: [vue()],
   server: {
     host: '0.0.0.0',
@@ -34,4 +34,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

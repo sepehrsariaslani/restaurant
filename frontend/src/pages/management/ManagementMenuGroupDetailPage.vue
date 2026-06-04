@@ -1,7 +1,7 @@
 <template>
   <ManagementPageScaffold :title="pageTitle" subtitle="جزئیات دسته‌بندی را به‌صورت کامل و بدون پاپ‌آپ مدیریت کنید.">
     <template #actions>
-      <a class="secondary-btn" href="/desk/menu-groups">بازگشت به دسته‌بندی‌ها</a>
+      <a class="secondary-btn" href="/management/menu-groups">بازگشت به دسته‌بندی‌ها</a>
     </template>
 
     <ManagementSurfaceCard tone="accent">
@@ -77,7 +77,7 @@
 
     <ManagementSurfaceCard>
       <div class="actions">
-        <a class="secondary-btn" href="/desk/menu-groups">انصراف</a>
+        <a class="secondary-btn" href="/management/menu-groups">انصراف</a>
         <button class="primary-btn" type="button" :disabled="saving || loading" @click="saveGroup">
           {{ saving ? 'در حال ذخیره...' : isEditMode ? 'ذخیره تغییرات' : 'ایجاد دسته' }}
         </button>
@@ -279,11 +279,11 @@ async function saveGroup() {
       const created = await createManagementMenuGroup(payload)
       const createdName = String(created?.name || '').trim()
       if (createdName) {
-        window.location.replace(`/desk/menu-group?name=${encodeURIComponent(createdName)}`)
+        window.location.replace(`/management/menu-group?name=${encodeURIComponent(createdName)}`)
         return
       }
       success.value = 'گروه جدید با موفقیت ایجاد شد.'
-      window.location.replace('/desk/menu-groups')
+      window.location.replace('/management/menu-groups')
       return
     }
   } catch (saveError) {

@@ -37,10 +37,10 @@ const pageSubtitle = computed(() => initialItemCode.value || '')
 
 const backUrl = computed(() => {
   if (!initialItemCode.value) {
-    return '/desk/boms'
+    return '/management/boms'
   }
   const params = new URLSearchParams({ item: initialItemCode.value })
-  return `/desk/boms?${params.toString()}`
+  return `/management/boms?${params.toString()}`
 })
 </script>
 

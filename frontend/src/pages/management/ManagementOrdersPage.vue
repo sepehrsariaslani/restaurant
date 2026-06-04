@@ -61,7 +61,7 @@
       subtitle="نمای کامل سفارش"
     >
       <div class="row-actions">
-        <a class="secondary-btn" href="/desk/orders">بازگشت به لیست سفارش‌ها</a>
+        <a class="secondary-btn" href="/management/orders">بازگشت به لیست سفارش‌ها</a>
       </div>
       <p class="muted">وضعیت: {{ formatStatus(selectedOrder.order.status) }} | کانال: {{ selectedOrder.order.channel }}</p>
       <p class="muted">
@@ -98,7 +98,7 @@
     <ManagementSurfaceCard v-else-if="isOrderDetailView && !loading" title="جزئیات سفارش">
       <p class="muted">جزئیات سفارش در دسترس نیست.</p>
       <div class="row-actions">
-        <a class="secondary-btn" href="/desk/orders">بازگشت به لیست سفارش‌ها</a>
+        <a class="secondary-btn" href="/management/orders">بازگشت به لیست سفارش‌ها</a>
       </div>
     </ManagementSurfaceCard>
 
@@ -375,7 +375,7 @@ function openOrderDetail(row) {
   if (source) {
     params.set('source', source)
   }
-  window.location.href = `/desk/orders?${params.toString()}`
+  window.location.href = `/management/orders?${params.toString()}`
 }
 
 async function markOrderPaid(order) {

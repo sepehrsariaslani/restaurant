@@ -2,7 +2,7 @@
   <ManagementPageScaffold :title="pageTitle" :subtitle="pageSubtitle">
     <template #actions>
       <span v-if="hasUnsavedChanges" class="unsaved-chip">تغییرات ذخیره نشده</span>
-      <a class="secondary-btn" href="/desk/products">بازگشت</a>
+      <a class="secondary-btn" href="/management/products">بازگشت</a>
       <button class="primary-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
         {{ savingSettings ? 'در حال ذخیره...' : hasUnsavedChanges ? 'ذخیره تغییرات' : 'بدون تغییر' }}
       </button>
@@ -572,7 +572,7 @@
               </span>
             </template>
             <template #cell-actions="{ row }">
-              <a class="secondary-btn mini-link-btn" :href="`/desk/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
+              <a class="secondary-btn mini-link-btn" :href="`/management/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
             </template>
           </ManagementDataTable>
           <div v-if="variantRows.length" class="variant-mobile-list">
@@ -586,7 +586,7 @@
               <p class="muted">کد: {{ row.item_code || '-' }}</p>
               <p class="muted">ویژگی‌ها: {{ formatVariantAttributes(row) }}</p>
               <p class="muted">اسلاگ: {{ row.slug || '-' }}</p>
-              <a class="secondary-btn mini-link-btn" :href="`/desk/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
+              <a class="secondary-btn mini-link-btn" :href="`/management/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
             </article>
           </div>
           <p v-else class="muted">هنوز وریانتی برای این تمپلیت ثبت نشده است. از بخش بالا ویژگی‌ها را انتخاب کنید و روی «ساخت Variantها» بزنید.</p>
@@ -1050,9 +1050,9 @@ const productBomItemCode = computed(() => {
 const productBomPageUrl = computed(() => {
   const itemCode = encodeURIComponent(String(productBomItemCode.value || '').trim())
   if (!itemCode) {
-    return '/desk/boms'
+    return '/management/boms'
   }
-  return `/desk/boms?item=${itemCode}`
+  return `/management/boms?item=${itemCode}`
 })
 const defaultBomName = computed(() => {
   const fromItem = String(detail.value?.item?.default_bom || '').trim()
@@ -1671,7 +1671,7 @@ async function deleteProduct() {
   try {
     await deleteManagementProduct(itemDocName, { allow_archive_on_link: 0, force_delete: 0 })
     window.alert(`✅ کالای «${itemLabel}» با موفقیت حذف شد.`)
-    window.location.href = '/desk/products'
+    window.location.href = '/management/products'
   } catch (errObj) {
     if (isLinkedDeleteError(errObj)) {
       const disableConfirmed = window.confirm(
@@ -1683,7 +1683,7 @@ async function deleteProduct() {
       try {
         await deleteManagementProduct(itemDocName, { allow_archive_on_link: 1, force_delete: 0 })
         window.alert(`✅ کالای «${itemLabel}» غیرفعال شد و دیگر در منو نمایش داده نمی‌شود.`)
-        window.location.href = '/desk/products'
+        window.location.href = '/management/products'
       } catch (archiveErr) {
         error.value = archiveErr.message || `❌ متأسفانه غیرفعال‌سازی کالای «${itemLabel}» ناموفق بود. لطفاً دوباره تلاش کنید.`
       }
@@ -2302,12 +2302,12 @@ function bomManagerUrl(row) {
   const itemCode = encodeURIComponent(String(productBomItemCode.value || '').trim())
   const bomName = encodeURIComponent(String(row?.name || '').trim())
   if (!itemCode) {
-    return '/desk/bom'
+    return '/management/bom'
   }
   if (!bomName) {
-    return `/desk/bom?item=${itemCode}`
+    return `/management/bom?item=${itemCode}`
   }
-  return `/desk/bom?item=${itemCode}&bom=${bomName}`
+  return `/management/bom?item=${itemCode}&bom=${bomName}`
 }
 
 function formatPersianDate(value, withTime = false) {

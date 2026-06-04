@@ -213,7 +213,7 @@
             <article v-for="item in loyaltyCards" :key="item.key">
               <small>{{ item.label }}</small>
               <strong>{{ item.value }} نفر</strong>
-              <a href="/desk/customers">مشاهده جزییات</a>
+              <a href="/management/customers">مشاهده جزییات</a>
             </article>
           </div>
           <p class="hint-line">
@@ -226,7 +226,7 @@
             <article v-for="item in valueCards" :key="item.key">
               <small>{{ item.label }}</small>
               <strong>{{ item.value }} نفر</strong>
-              <a href="/desk/customers">مشاهده جزییات</a>
+              <a href="/management/customers">مشاهده جزییات</a>
             </article>
           </div>
         </ManagementSurfaceCard>
@@ -271,22 +271,22 @@
             <article>
               <small>محبوبیت بالا و سودآوری بالا</small>
               <strong>{{ menuEngineering.matrix.stars }}</strong>
-              <a href="/desk/reports/top-products">مشاهده جزییات</a>
+              <a href="/management/reports/top-products">مشاهده جزییات</a>
             </article>
             <article>
               <small>محبوبیت پایین و سودآوری بالا</small>
               <strong>{{ menuEngineering.matrix.puzzles }}</strong>
-              <a href="/desk/reports/top-products">مشاهده جزییات</a>
+              <a href="/management/reports/top-products">مشاهده جزییات</a>
             </article>
             <article>
               <small>محبوبیت بالا و سودآوری پایین</small>
               <strong>{{ menuEngineering.matrix.plowhorses }}</strong>
-              <a href="/desk/reports/top-products">مشاهده جزییات</a>
+              <a href="/management/reports/top-products">مشاهده جزییات</a>
             </article>
             <article>
               <small>محبوبیت پایین و سودآوری پایین</small>
               <strong>{{ menuEngineering.matrix.dogs }}</strong>
-              <a href="/desk/reports/top-products">مشاهده جزییات</a>
+              <a href="/management/reports/top-products">مشاهده جزییات</a>
             </article>
           </div>
         </ManagementSurfaceCard>

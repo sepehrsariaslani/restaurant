@@ -255,7 +255,7 @@ async function loadGroups() {
 }
 
 function openCreatePage() {
-  window.location.href = '/desk/menu-group'
+  window.location.href = '/management/menu-group'
 }
 
 function openEditPage(row) {
@@ -263,7 +263,7 @@ function openEditPage(row) {
   if (!name) {
     return
   }
-  window.location.href = `/desk/menu-group?name=${encodeURIComponent(name)}`
+  window.location.href = `/management/menu-group?name=${encodeURIComponent(name)}`
 }
 
 function canOpenGroupNode(node) {

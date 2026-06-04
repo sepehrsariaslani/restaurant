@@ -42,7 +42,7 @@ aria-label="باز کردن منو"
 <MenuIcon class="icon-md" />
 </button>
 
-<a href="/desk" class="mobile-brand">
+<a href="/management" class="mobile-brand">
 <span class="brand-mark">
 <img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" />
 </span>
@@ -209,7 +209,7 @@ class="rail-mini-toggle"
 <PanelRightOpenIcon v-else class="icon-sm" />
 </button>
 
-<a class="rail-brand" href="/desk">
+<a class="rail-brand" href="/management">
 <span class="rail-brand-mark">
 <img class="brand-image brand-image-lg" src="/NooshYar%20Image.png" alt="NooshYar" />
 </span>
@@ -482,7 +482,7 @@ label: 'داشبورد',
 shortLabel: 'خانه',
 caption: 'نمای کلی',
 iconComponent: LayoutGridIcon,
-url: '/desk',
+url: '/management',
 group: 'overview',
   },
   {
@@ -491,7 +491,7 @@ label: 'POS',
 shortLabel: 'POS',
 caption: 'فروش حضوری',
 iconComponent: PosIcon,
-url: '/desk/pos',
+url: '/management/pos',
 group: 'sales',
   },
   {
@@ -500,7 +500,7 @@ label: 'پروفایل POS',
 shortLabel: 'پروفایل',
 caption: 'تنظیمات ترمینال',
 iconComponent: SlidersIcon,
-url: '/desk/pos_profile',
+url: '/management/pos-profile',
 group: 'sales',
   },
   {
@@ -509,7 +509,7 @@ label: 'سفارش‌ها',
 shortLabel: 'سفارش',
 caption: 'وضعیت و تحویل',
 iconComponent: OrdersIcon,
-url: '/desk/orders',
+url: '/management/orders',
 group: 'sales',
   },
   {
@@ -518,7 +518,7 @@ label: 'محصولات',
 shortLabel: 'محصول',
 caption: 'قیمت و موجودی',
 iconComponent: ProductsIcon,
-url: '/desk/products',
+url: '/management/products',
 group: 'menu',
   },
   {
@@ -527,7 +527,7 @@ label: 'صفت محصولات',
 shortLabel: 'صفت',
 caption: 'ویژگی‌ها و انواع',
 iconComponent: TagsIcon,
-url: '/desk/product?variant_studio=1',
+url: '/management/product?variant_studio=1',
 group: 'menu',
   },
   {
@@ -536,7 +536,7 @@ label: 'دسته‌بندی',
 shortLabel: 'دسته',
 caption: 'گروه‌ها و زیردسته',
 iconComponent: LayersIcon,
-url: '/desk/menu-groups',
+url: '/management/menu-groups',
 group: 'menu',
   },
   {
@@ -545,7 +545,7 @@ label: 'مواد اولیه',
 shortLabel: 'مواد',
 caption: 'فرمول و دستور ساخت',
 iconComponent: StoreIcon,
-url: '/desk/boms',
+url: '/management/boms',
 group: 'inventory',
   },
   {
@@ -554,7 +554,7 @@ label: 'مشتریان',
 shortLabel: 'مشتری',
 caption: 'اطلاعات مشتریان',
 iconComponent: UsersIcon,
-url: '/desk/customers',
+url: '/management/customers',
 group: 'crm',
   },
   {
@@ -563,7 +563,7 @@ label: 'گزارش عملکرد',
 shortLabel: 'گزارش',
 caption: 'آمار و تحلیل',
 iconComponent: ReportsIcon,
-url: '/desk/reports',
+url: '/management/reports',
 group: 'reports',
   },
   {
@@ -572,7 +572,7 @@ label: 'گزارش',
 shortLabel: 'گزارش',
 caption: 'نمایش گزارش تکی',
 iconComponent: FileTextIcon,
-url: '/desk/reports',
+url: '/management/reports',
 group: 'reports',
   },
   {
@@ -581,7 +581,7 @@ label: 'فرمت چاپ',
 shortLabel: 'چاپ',
 caption: 'قالب‌های چاپ',
 iconComponent: PrinterIcon,
-url: '/desk/print-formats',
+url: '/management/print-formats',
 group: 'reports',
   },
   {
@@ -590,7 +590,7 @@ label: 'تنظیمات سایت',
 shortLabel: 'سایت',
 caption: 'محتوا و تنظیمات',
 iconComponent: SettingsIcon,
-url: '/desk/site-settings',
+url: '/management/site-settings',
 group: 'settings',
   },
   {
@@ -599,7 +599,7 @@ label: 'تنظیمات پنل',
 shortLabel: 'تنظیمات',
 caption: 'رنگ‌بندی و ظاهر پنل',
 iconComponent: SlidersIcon,
-url: '/desk/settings',
+url: '/management/settings',
 group: 'settings',
   },
 ])
@@ -675,11 +675,11 @@ const isLoginPage = computed(() => props.page === 'management-login')
 const authGuest = computed(() => Boolean(authProfile.value?.is_guest))
 
 const moduleThemeVars = computed(() => ({
-  '--module-500': '#6366f1',
-  '--module-600': '#4f46e5',
-  '--module-50': '#eef2ff',
-  '--module-title-light': '#3730a3',
-  '--module-title-dark': '#c7d2fe',
+  '--module-500': '#6f4a31',
+  '--module-600': '#5a3a25',
+  '--module-50': '#f1e7db',
+  '--module-title-light': '#3f2a1d',
+  '--module-title-dark': '#e8dacd',
 }))
 
 function toggleGroup(key) {
@@ -703,15 +703,15 @@ function toggleRailMode() {
   railMode.value = isRailCollapsed.value ? 'expanded' : 'icons'
 }
 
-function normalizeManagementPath(path, fallback = '/desk') {
+function normalizeManagementPath(path, fallback = '/management') {
   const normalized = String(path || '').trim()
-  if (!normalized.startsWith('/desk')) return fallback
+  if (!normalized.startsWith('/management')) return fallback
   return normalized
 }
 
 const currentLocationPath = computed(() => {
-  if (typeof window === 'undefined') return '/desk'
-  const pathname = String(window.location.pathname || '/desk').trim() || '/desk'
+  if (typeof window === 'undefined') return '/management'
+  const pathname = String(window.location.pathname || '/management').trim() || '/management'
   const query = String(window.location.search || '')
   return `${pathname}${query}`
 })
@@ -719,8 +719,8 @@ const currentLocationPath = computed(() => {
 const redirectTarget = computed(() => {
   const fallbackFromBoot =
 typeof window !== 'undefined'
-? normalizeManagementPath(window._BOOT?.login_redirect_to, '/desk')
-: '/desk'
+? normalizeManagementPath(window._BOOT?.login_redirect_to, '/management')
+: '/management'
 
   if (typeof window === 'undefined') return fallbackFromBoot
 
@@ -731,7 +731,7 @@ typeof window !== 'undefined'
 
 const loginUrl = computed(() => {
   const loginTarget = isLoginPage.value ? redirectTarget.value : currentLocationPath.value
-  return `/desk/login?redirect_to=${encodeURIComponent(loginTarget)}`
+  return `/management/login?redirect_to=${encodeURIComponent(loginTarget)}`
 })
 
 function normalizeScale(scale) {
@@ -973,20 +973,20 @@ document.body.style.overflow = ''
 <style scoped>
 .management-layout,
 .management-auth-shell {
-  --bg-page: #f9fafb;
-  --bg-card: #ffffff;
-  --bg-soft: #f3f4f6;
-  --border: #e5e7eb;
-  --text: #111827;
-  --muted: #6b7280;
-  --muted-2: #9ca3af;
+  --bg-page: #f6f1ea;
+  --bg-card: #fdf8f1;
+  --bg-soft: #f1e7db;
+  --border: #d5c3af;
+  --text: #3f2a1d;
+  --muted: #846b58;
+  --muted-2: #9b8472;
   --danger: #dc2626;
-  --shadow: 0 20px 45px rgb(15 23 42 / 0.08);
-  --shadow-sm: 0 8px 20px rgb(15 23 42 / 0.06);
+  --shadow: 0 20px 45px rgb(63 42 29 / 0.09);
+  --shadow-sm: 0 8px 20px rgb(63 42 29 / 0.06);
   min-height: 100vh;
   background:
-radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--module-500) 14%, transparent), transparent 38%),
-radial-gradient(circle at 88% 84%, color-mix(in srgb, var(--module-500) 10%, transparent), transparent 42%),
+radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--module-500) 10%, transparent), transparent 38%),
+radial-gradient(circle at 88% 84%, color-mix(in srgb, #c98d42 8%, transparent), transparent 42%),
 var(--bg-page);
   color: var(--text);
 }

@@ -1,7 +1,7 @@
 <template>
   <ManagementPageScaffold :title="reportTitle" :subtitle="reportKey">
     <template #actions>
-      <a class="secondary-btn" href="/desk/reports">بازگشت به گزارش‌ها</a>
+      <a class="secondary-btn" href="/management/reports">بازگشت به گزارش‌ها</a>
       <button class="secondary-btn" type="button" @click="loadReport" :disabled="loading">
         {{ loading ? 'در حال بروزرسانی...' : 'بروزرسانی اطلاعات' }}
       </button>

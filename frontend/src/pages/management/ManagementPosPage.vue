@@ -117,7 +117,7 @@
         </small>
       </div>
       <div class="pos-profile-actions">
-        <a class="secondary-btn" href="/desk/pos_profile">تنظیمات POS</a>
+        <a class="secondary-btn" href="/management/pos_profile">تنظیمات POS</a>
       </div>
     </section>
 
@@ -1477,7 +1477,7 @@ function addQuickCustomer() {
 }
 
 function closePOS() {
-  window.location.href = '/desk'
+  window.location.href = '/management'
 }
 
 function normalizeCartCustomization(customization, ingredients = []) {
@@ -2576,7 +2576,7 @@ async function submitPOSOrder(payNow = true) {
       saveActiveTicketSnapshot()
     } else {
       saveActiveTicketSnapshot()
-      window.location.href = '/desk/orders'
+      window.location.href = '/management/orders'
     }
 
     await refreshHardwareStatus()

@@ -70,7 +70,7 @@
       </div>
 
       <div v-else class="detail-toolbar">
-        <a class="secondary-btn" href="/desk/customers">بازگشت به لیست مشتریان</a>
+        <a class="secondary-btn" href="/management/customers">بازگشت به لیست مشتریان</a>
 
         <div class="detail-toolbar-filters">
           <label class="field compact">
@@ -316,7 +316,7 @@
               <template #cell-actions="{ row }">
                 <a
                   class="secondary-btn mini-link-btn"
-                  :href="`/desk/orders?order_name=${encodeURIComponent(row.name)}&source=${encodeURIComponent(row.source || 'web')}`"
+                  :href="`/management/orders?order_name=${encodeURIComponent(row.name)}&source=${encodeURIComponent(row.source || 'web')}`"
                 >
                   جزئیات سفارش
                 </a>
@@ -370,7 +370,7 @@
 
       <ManagementSurfaceCard v-else title="جزئیات مشتری">
         <p class="muted">اطلاعاتی برای این مشتری پیدا نشد.</p>
-        <a class="secondary-btn" href="/desk/customers">بازگشت</a>
+        <a class="secondary-btn" href="/management/customers">بازگشت</a>
       </ManagementSurfaceCard>
     </template>
   </ManagementPageScaffold>
@@ -538,7 +538,7 @@ function openCustomerDetail(row) {
   params.set('date_to', filters.date_to)
   params.set('tab', 'main')
 
-  window.location.href = `/desk/customers?${params.toString()}`
+  window.location.href = `/management/customers?${params.toString()}`
 }
 
 function setDetailTab(nextTab) {

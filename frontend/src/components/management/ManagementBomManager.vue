@@ -884,7 +884,7 @@ function navigateToBomDetail({ item = '', bom = '' } = {}) {
     params.set('bom', normalizedBom)
   }
   const query = params.toString()
-  const nextUrl = query ? `/desk/bom?${query}` : '/desk/bom'
+  const nextUrl = query ? `/management/bom?${query}` : '/management/bom'
   window.location.href = nextUrl
 }
 

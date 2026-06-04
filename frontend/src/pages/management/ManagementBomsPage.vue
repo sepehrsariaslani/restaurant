@@ -1,7 +1,7 @@
 <template>
   <ManagementPageScaffold title="مدیریت مواد اولیه" subtitle="فرمول و دستور ساخت محصولات">
     <template #actions>
-      <a class="secondary-btn" href="/desk/products">بازگشت به محصولات</a>
+      <a class="secondary-btn" href="/management/products">بازگشت به محصولات</a>
     </template>
 
     <ManagementSurfaceCard tone="accent">
@@ -38,7 +38,7 @@ onMounted(() => {
     params.set('item', initialItemCode.value)
   }
   params.set('bom', initialBomName.value)
-  window.location.replace(`/desk/bom?${params.toString()}`)
+  window.location.replace(`/management/bom?${params.toString()}`)
 })
 </script>
 

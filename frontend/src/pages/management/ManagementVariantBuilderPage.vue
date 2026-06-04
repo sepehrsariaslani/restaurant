@@ -1,7 +1,7 @@
 <template>
   <ManagementPageScaffold :title="pageTitle" :subtitle="pageSubtitle">
     <template #actions>
-      <a v-if="currentItemName" class="secondary-btn" :href="`/desk/product?item_name=${encodeURIComponent(currentItemName)}`">
+      <a v-if="currentItemName" class="secondary-btn" :href="`/management/product?item_name=${encodeURIComponent(currentItemName)}`">
         جزئیات کالا
       </a>
       <a class="secondary-btn" href="/app/item-attribute" target="_blank" rel="noreferrer">
@@ -36,7 +36,7 @@
         <a
           v-if="resolvedTemplateName"
           class="secondary-btn"
-          :href="`/desk/product?item_name=${encodeURIComponent(resolvedTemplateName)}`"
+          :href="`/management/product?item_name=${encodeURIComponent(resolvedTemplateName)}`"
         >
           جزئیات تمپلیت
         </a>
@@ -481,7 +481,7 @@
         <template #cell-actions="{ row }">
           <div class="inline-actions">
             <button class="secondary-btn mini-link-btn" type="button" @click="openBuilderForItem(row.name)">مدیریت</button>
-            <a class="secondary-btn mini-link-btn" :href="`/desk/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
+            <a class="secondary-btn mini-link-btn" :href="`/management/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
           </div>
         </template>
       </ManagementDataTable>
@@ -499,7 +499,7 @@
           <p class="muted">اسلاگ: {{ row.slug || '-' }}</p>
           <div class="inline-actions">
             <button class="secondary-btn mini-link-btn" type="button" @click="openBuilderForItem(row.name)">مدیریت</button>
-            <a class="secondary-btn mini-link-btn" :href="`/desk/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
+            <a class="secondary-btn mini-link-btn" :href="`/management/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
           </div>
         </article>
       </div>
@@ -868,7 +868,7 @@ function updateURL(itemName = '') {
     return
   }
   const normalized = String(itemName || '').trim()
-  const base = '/desk/product'
+  const base = '/management/product'
   const nextUrl = normalized
     ? `${base}?item_name=${encodeURIComponent(normalized)}&variant_studio=1`
     : `${base}?variant_studio=1`

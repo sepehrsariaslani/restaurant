@@ -79,7 +79,7 @@ function isValidInternalLink(anchor) {
   try {
     const target = new URL(href, window.location.origin)
     const isSameOrigin = target.origin === window.location.origin
-    const isManagement = target.pathname.startsWith('/desk')
+    const isManagement = target.pathname.startsWith('/management')
     const isSameLocation = target.pathname === window.location.pathname && target.search === window.location.search
     return isSameOrigin && !isManagement && !isSameLocation
   } catch (error) {

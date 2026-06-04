@@ -821,7 +821,7 @@ function initials(value) {
 
 function productDetailUrl(row) {
   const itemName = encodeURIComponent(String(row?.name || ''))
-  return `/desk/product?item_name=${itemName}`
+  return `/management/product?item_name=${itemName}`
 }
 
 function toggleButtonClass(row) {
@@ -976,7 +976,7 @@ async function submitWizard() {
 
     await loadProducts()
     closeQuickStartWizard()
-    window.location.href = `/desk/product?item=${encodeURIComponent(itemName)}`
+    window.location.href = `/management/product?item=${encodeURIComponent(itemName)}`
   } catch (errObj) {
     createError.value = errObj.message || '❌ متأسفانه ایجاد محصول ناموفق بود. لطفاً اطلاعات را بررسی کنید.'
   } finally {
@@ -1017,7 +1017,7 @@ async function submitCreate(openFullDetail = false) {
     const createdName = String(created?.name || created?.item_code || payload.item_code).trim()
     createPopupOpen.value = false
     if (openFullDetail && createdName) {
-      window.location.href = `/desk/product?item_name=${encodeURIComponent(createdName)}`
+      window.location.href = `/management/product?item_name=${encodeURIComponent(createdName)}`
       return
     }
     await loadProducts()

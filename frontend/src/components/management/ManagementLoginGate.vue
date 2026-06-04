@@ -52,7 +52,7 @@ import { loginManagementUser } from '@/utils/api'
 const props = defineProps({
   redirectTo: {
     type: String,
-    default: '/desk',
+    default: '/management',
   },
 })
 
@@ -67,9 +67,9 @@ const submitting = ref(false)
 const error = ref('')
 
 function resolveRedirectPath() {
-  const redirect = String(props.redirectTo || '/desk').trim()
-  if (!redirect.startsWith('/desk')) {
-    return '/desk'
+  const redirect = String(props.redirectTo || '/management').trim()
+  if (!redirect.startsWith('/management')) {
+    return '/management'
   }
   return redirect
 }

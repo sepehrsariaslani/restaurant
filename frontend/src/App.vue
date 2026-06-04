@@ -95,24 +95,36 @@ function resolveInitialPage() {
     const pathname = String(window.location.pathname || '')
     const params = new URLSearchParams(String(window.location.search || ''))
     const variantStudioMode = ['1', 'true', 'yes'].includes(String(params.get('variant_studio') || '').toLowerCase())
-    if (pathname.startsWith('/management/login')) {
-      return 'management-login'
-    }
-    if ((pathname.startsWith('/management/product') || pathname.startsWith('/management/products/detail')) && variantStudioMode) {
-      return 'management-variant-builder'
-    }
-    if (pathname.startsWith('/management/menu-groups') || pathname.startsWith('/management/menu_groups')) {
-      return 'management-menu-groups'
-    }
-    if (pathname.startsWith('/management/menu-group') || pathname.startsWith('/management/menu_group')) {
-      return 'management-menu-group'
-    }
-    if (pathname.startsWith('/management/site-settings') || pathname.startsWith('/management/site_settings')) {
-      return 'management-site-settings'
-    }
-    if (pathname.startsWith('/management/variant-builder') || pathname.startsWith('/management/variant_builder')) {
-      return 'management-variant-builder'
-    }
+
+    if (pathname.startsWith('/management/login')) return 'management-login'
+    if (pathname === '/management' || pathname === '/management/') return 'management-dashboard'
+    if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
+    if (pathname.startsWith('/management/pos-profile') || pathname.startsWith('/management/pos_profile')) return 'management-pos-profile'
+    if (pathname.startsWith('/management/pos')) return 'management-pos'
+    if (pathname.startsWith('/management/orders')) return 'management-orders'
+    if (pathname.startsWith('/management/products/detail') && variantStudioMode) return 'management-variant-builder'
+    if (pathname.startsWith('/management/product') && variantStudioMode) return 'management-variant-builder'
+    if (pathname.startsWith('/management/products')) return 'management-products'
+    if (pathname.startsWith('/management/product')) return 'management-product'
+    if (pathname.startsWith('/management/menu-groups') || pathname.startsWith('/management/menu_groups')) return 'management-menu-groups'
+    if (pathname.startsWith('/management/menu-group') || pathname.startsWith('/management/menu_group')) return 'management-menu-group'
+    if (pathname.startsWith('/management/boms')) return 'management-boms'
+    if (pathname.startsWith('/management/bom')) return 'management-bom'
+    if (pathname.startsWith('/management/customers')) return 'management-customers'
+    if (pathname.startsWith('/management/reports/')) return 'management-report'
+    if (pathname.startsWith('/management/reports')) return 'management-reports'
+    if (pathname.startsWith('/management/print-formats') || pathname.startsWith('/management/print_formats')) return 'management-print-formats'
+    if (pathname.startsWith('/management/site-settings') || pathname.startsWith('/management/site_settings')) return 'management-site-settings'
+    if (pathname.startsWith('/management/variant-builder') || pathname.startsWith('/management/variant_builder')) return 'management-variant-builder'
+    if (pathname.startsWith('/management/settings')) return 'management-settings'
+
+    if (pathname === '/' || pathname === '') return 'landing'
+    if (pathname.startsWith('/menu')) return 'menu'
+    if (pathname.startsWith('/item')) return 'item'
+    if (pathname.startsWith('/cart')) return 'cart'
+    if (pathname.startsWith('/about-us') || pathname.startsWith('/about_us')) return 'about-us'
+    if (pathname.startsWith('/faq')) return 'faq'
+    if (pathname.startsWith('/order-success') || pathname.startsWith('/order_success')) return 'order-success'
   }
   return window._PAGE || 'landing'
 }

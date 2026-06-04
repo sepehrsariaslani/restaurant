@@ -1,7 +1,7 @@
 <template>
   <ManagementPageScaffold title="گزارش‌های مدیریتی" subtitle="انتخاب سریع نوع گزارش با کارت‌های یکپارچه">
     <section class="report-grid">
-      <a class="report-link" v-for="report in reports" :key="report.key" :href="`/desk/reports/${report.key}`">
+      <a class="report-link" v-for="report in reports" :key="report.key" :href="`/management/reports/${report.key}`">
         <ManagementSurfaceCard class="report-card" tone="soft">
           <strong>{{ report.title }}</strong>
           <small class="muted">{{ report.desc }}</small>
