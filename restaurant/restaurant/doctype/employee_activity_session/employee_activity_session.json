@@ -1,0 +1,139 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "hash",
+  "creation": "2026-04-09 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "user",
+    "site",
+    "session_id",
+    "status",
+    "session_start",
+    "last_heartbeat",
+    "session_end",
+    "online_seconds",
+    "last_route",
+    "last_doctype",
+    "last_docname",
+    "is_pos"
+  ],
+  "fields": [
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "User",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "site",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Site",
+      "read_only": 1
+    },
+    {
+      "fieldname": "session_id",
+      "fieldtype": "Data",
+      "label": "Session ID",
+      "read_only": 1
+    },
+    {
+      "default": "active",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "active\nclosed\ntimed_out",
+      "reqd": 1
+    },
+    {
+      "fieldname": "session_start",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Session Start",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "last_heartbeat",
+      "fieldtype": "Datetime",
+      "label": "Last Heartbeat",
+      "read_only": 1
+    },
+    {
+      "fieldname": "session_end",
+      "fieldtype": "Datetime",
+      "label": "Session End",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "online_seconds",
+      "fieldtype": "Int",
+      "label": "Online Seconds",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_route",
+      "fieldtype": "Data",
+      "label": "Last Route",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_doctype",
+      "fieldtype": "Link",
+      "label": "Last DocType",
+      "options": "DocType",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_docname",
+      "fieldtype": "Data",
+      "label": "Last DocName",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "is_pos",
+      "fieldtype": "Check",
+      "label": "Is POS",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-04-09 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Employee Activity Session",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "HR Manager"
+    }
+  ],
+  "search_fields": "user,status,session_id,last_route,last_doctype",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

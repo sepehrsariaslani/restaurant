@@ -1,0 +1,141 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "creation": "2026-04-08 00:00:00.000000",
+    "doctype": "DocType",
+    "editable_grid": 1,
+    "engine": "InnoDB",
+    "field_order": [
+        "brand_identity_section",
+        "brand_name",
+        "brand_subtitle",
+        "logo",
+        "show_brand_subtitle",
+        "colors_section",
+        "header_background_color",
+        "header_text_color",
+        "accent_color",
+        "table_header_background_color",
+        "border_color",
+        "footer_section",
+        "footer_text"
+    ],
+    "fields": [
+        {
+            "fieldname": "brand_identity_section",
+            "fieldtype": "Section Break",
+            "label": "هویت برند چاپ"
+        },
+        {
+            "fieldname": "brand_name",
+            "fieldtype": "Data",
+            "label": "نام برند",
+            "reqd": 1,
+            "default": "رستوران نمونه دن فلو"
+        },
+        {
+            "fieldname": "brand_subtitle",
+            "fieldtype": "Data",
+            "label": "زیرعنوان برند",
+            "default": "سامانه مدیریت رستوران"
+        },
+        {
+            "fieldname": "logo",
+            "fieldtype": "Attach Image",
+            "label": "لوگو برند"
+        },
+        {
+            "fieldname": "show_brand_subtitle",
+            "fieldtype": "Check",
+            "label": "نمایش زیرعنوان در هدر چاپ",
+            "default": "1"
+        },
+        {
+            "fieldname": "colors_section",
+            "fieldtype": "Section Break",
+            "label": "رنگ های برند"
+        },
+        {
+            "fieldname": "header_background_color",
+            "fieldtype": "Color",
+            "label": "رنگ پس زمینه هدر",
+            "default": "#4A2522"
+        },
+        {
+            "fieldname": "header_text_color",
+            "fieldtype": "Color",
+            "label": "رنگ متن هدر",
+            "default": "#FFFFFF"
+        },
+        {
+            "fieldname": "accent_color",
+            "fieldtype": "Color",
+            "label": "رنگ تاکیدی",
+            "default": "#C08A2A"
+        },
+        {
+            "fieldname": "table_header_background_color",
+            "fieldtype": "Color",
+            "label": "رنگ سرستون جدول",
+            "default": "#F7F2E3"
+        },
+        {
+            "fieldname": "border_color",
+            "fieldtype": "Color",
+            "label": "رنگ کادر",
+            "default": "#D8C8B3"
+        },
+        {
+            "fieldname": "footer_section",
+            "fieldtype": "Section Break",
+            "label": "پاورقی چاپ"
+        },
+        {
+            "fieldname": "footer_text",
+            "fieldtype": "Small Text",
+            "label": "متن پاورقی",
+            "default": "این نسخه برای چاپ داخلی مجموعه است."
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "is_submittable": 0,
+    "issingle": 1,
+    "istable": 0,
+    "links": [],
+    "modified": "2026-04-08 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Restaurant",
+    "name": "Restaurant Print Brand Settings",
+    "naming_rule": "By fieldname",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Desk User",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [],
+    "track_changes": 1
+}

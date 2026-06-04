@@ -1,0 +1,181 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RPT-{#####}",
+  "creation": "2026-02-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "sales_order",
+    "sales_order_item",
+    "order_code",
+    "company",
+    "branch",
+    "menu_item",
+    "menu_item_name",
+    "qty",
+    "recipe_multiplier",
+    "status",
+    "column_break_1",
+    "bom_template",
+    "work_order",
+    "source_warehouse",
+    "wip_warehouse",
+    "fg_warehouse",
+    "customization_json",
+    "pricing_breakdown_json",
+    "section_break_1",
+    "components"
+  ],
+  "fields": [
+    {
+      "fieldname": "sales_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Sales Order",
+      "options": "Sales Order",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sales_order_item",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Sales Order Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "order_code",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Order Code"
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "branch",
+      "fieldtype": "Data",
+      "label": "Branch"
+    },
+    {
+      "fieldname": "menu_item",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Menu Item",
+      "options": "Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "menu_item_name",
+      "fieldtype": "Data",
+      "label": "Menu Item Name",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "qty",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Qty",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "recipe_multiplier",
+      "fieldtype": "Float",
+      "label": "Recipe Multiplier"
+    },
+    {
+      "default": "planned",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "planned\nin_progress\ncompleted\nfailed",
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "bom_template",
+      "fieldtype": "Link",
+      "label": "BOM Template",
+      "options": "BOM",
+      "reqd": 1
+    },
+    {
+      "fieldname": "work_order",
+      "fieldtype": "Link",
+      "label": "Work Order",
+      "options": "Work Order"
+    },
+    {
+      "fieldname": "source_warehouse",
+      "fieldtype": "Link",
+      "label": "Source Warehouse",
+      "options": "Warehouse"
+    },
+    {
+      "fieldname": "wip_warehouse",
+      "fieldtype": "Link",
+      "label": "WIP Warehouse",
+      "options": "Warehouse"
+    },
+    {
+      "fieldname": "fg_warehouse",
+      "fieldtype": "Link",
+      "label": "Finished Goods Warehouse",
+      "options": "Warehouse"
+    },
+    {
+      "fieldname": "customization_json",
+      "fieldtype": "Long Text",
+      "label": "Customization JSON"
+    },
+    {
+      "fieldname": "pricing_breakdown_json",
+      "fieldtype": "Long Text",
+      "label": "Pricing Breakdown JSON"
+    },
+    {
+      "fieldname": "section_break_1",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "components",
+      "fieldtype": "Table",
+      "label": "Components",
+      "options": "Restaurant Production Component",
+      "reqd": 1
+    }
+  ],
+  "links": [],
+  "modified": "2026-02-22 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Production Ticket",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

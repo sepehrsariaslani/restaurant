@@ -1,0 +1,150 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "hash",
+  "creation": "2026-04-07 21:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "request_id",
+    "sales_order",
+    "order_code",
+    "amount",
+    "currency",
+    "provider",
+    "terminal_id",
+    "payment_method",
+    "status",
+    "rrn",
+    "trace_no",
+    "masked_pan",
+    "latency_ms",
+    "cashier",
+    "request_payload_json",
+    "response_payload_json",
+    "error_text"
+  ],
+  "fields": [
+    {
+      "fieldname": "request_id",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Request ID",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sales_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Sales Order",
+      "options": "Sales Order"
+    },
+    {
+      "fieldname": "order_code",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Order Code"
+    },
+    {
+      "default": "0",
+      "fieldname": "amount",
+      "fieldtype": "Currency",
+      "label": "Amount"
+    },
+    {
+      "fieldname": "currency",
+      "fieldtype": "Data",
+      "label": "Currency"
+    },
+    {
+      "fieldname": "provider",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Provider"
+    },
+    {
+      "fieldname": "terminal_id",
+      "fieldtype": "Data",
+      "label": "Terminal ID"
+    },
+    {
+      "fieldname": "payment_method",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Payment Method",
+      "options": "cash\ncard"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "pending\npaid\nfailed\ncancelled\napproved\ndeclined\ntimeout"
+    },
+    {
+      "fieldname": "rrn",
+      "fieldtype": "Data",
+      "label": "RRN"
+    },
+    {
+      "fieldname": "trace_no",
+      "fieldtype": "Data",
+      "label": "Trace No"
+    },
+    {
+      "fieldname": "masked_pan",
+      "fieldtype": "Data",
+      "label": "Masked PAN"
+    },
+    {
+      "default": "0",
+      "fieldname": "latency_ms",
+      "fieldtype": "Int",
+      "label": "Latency (ms)"
+    },
+    {
+      "fieldname": "cashier",
+      "fieldtype": "Link",
+      "label": "Cashier",
+      "options": "User"
+    },
+    {
+      "fieldname": "request_payload_json",
+      "fieldtype": "Long Text",
+      "label": "Request Payload JSON"
+    },
+    {
+      "fieldname": "response_payload_json",
+      "fieldtype": "Long Text",
+      "label": "Response Payload JSON"
+    },
+    {
+      "fieldname": "error_text",
+      "fieldtype": "Small Text",
+      "label": "Error Text"
+    }
+  ],
+  "links": [],
+  "modified": "2026-04-07 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant POS Payment Log",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "states": []
+}

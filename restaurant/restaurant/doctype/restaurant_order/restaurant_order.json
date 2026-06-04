@@ -1,0 +1,134 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RO-{#####}",
+  "creation": "2026-02-21 21:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "order_code",
+    "customer_name",
+    "mobile",
+    "order_type",
+    "address",
+    "note",
+    "status",
+    "placed_at",
+    "column_break_1",
+    "subtotal",
+    "grand_total",
+    "section_break_1",
+    "items"
+  ],
+  "fields": [
+    {
+      "fieldname": "order_code",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Order Code",
+      "read_only": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "customer_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Customer Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "mobile",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Mobile",
+      "reqd": 1
+    },
+    {
+      "default": "takeaway",
+      "fieldname": "order_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Order Type",
+      "options": "dine_in\ntakeaway\ndelivery",
+      "reqd": 1
+    },
+    {
+      "depends_on": "eval:doc.order_type=='delivery'",
+      "fieldname": "address",
+      "fieldtype": "Small Text",
+      "label": "Address"
+    },
+    {
+      "fieldname": "note",
+      "fieldtype": "Small Text",
+      "label": "Note"
+    },
+    {
+      "default": "new",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "new\nconfirmed\npreparing\nready\ndelivered\ncancelled",
+      "reqd": 1
+    },
+    {
+      "fieldname": "placed_at",
+      "fieldtype": "Datetime",
+      "label": "Placed At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "0",
+      "fieldname": "subtotal",
+      "fieldtype": "Currency",
+      "label": "Subtotal",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "grand_total",
+      "fieldtype": "Currency",
+      "label": "Grand Total",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_break_1",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Items",
+      "options": "Restaurant Order Item",
+      "reqd": 1
+    }
+  ],
+  "links": [],
+  "modified": "2026-02-21 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Order",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

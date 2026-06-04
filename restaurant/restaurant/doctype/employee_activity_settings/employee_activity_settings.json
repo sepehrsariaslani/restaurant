@@ -1,0 +1,122 @@
+{
+  "actions": [],
+  "creation": "2026-04-09 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "enabled",
+    "track_desk_routes",
+    "track_pos_routes",
+    "allow_guest",
+    "heartbeat_interval_seconds",
+    "active_window_minutes",
+    "idle_after_minutes",
+    "session_timeout_minutes",
+    "raw_retention_days",
+    "max_event_batch_size",
+    "tracked_roles"
+  ],
+  "fields": [
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "label": "Enabled"
+    },
+    {
+      "default": "1",
+      "fieldname": "track_desk_routes",
+      "fieldtype": "Check",
+      "label": "Track Desk Routes"
+    },
+    {
+      "default": "1",
+      "fieldname": "track_pos_routes",
+      "fieldtype": "Check",
+      "label": "Track POS Routes"
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_guest",
+      "fieldtype": "Check",
+      "label": "Allow Guest Tracking"
+    },
+    {
+      "default": "60",
+      "description": "Heartbeat interval in seconds.",
+      "fieldname": "heartbeat_interval_seconds",
+      "fieldtype": "Int",
+      "label": "Heartbeat Interval (Seconds)",
+      "reqd": 1
+    },
+    {
+      "default": "5",
+      "description": "Users are considered active if interaction is seen within this window.",
+      "fieldname": "active_window_minutes",
+      "fieldtype": "Int",
+      "label": "Active Window (Minutes)",
+      "reqd": 1
+    },
+    {
+      "default": "10",
+      "description": "Users are considered idle when inactivity exceeds this threshold.",
+      "fieldname": "idle_after_minutes",
+      "fieldtype": "Int",
+      "label": "Idle After (Minutes)",
+      "reqd": 1
+    },
+    {
+      "default": "15",
+      "fieldname": "session_timeout_minutes",
+      "fieldtype": "Int",
+      "label": "Session Timeout (Minutes)",
+      "reqd": 1
+    },
+    {
+      "default": "30",
+      "fieldname": "raw_retention_days",
+      "fieldtype": "Int",
+      "label": "Raw Data Retention (Days)",
+      "reqd": 1
+    },
+    {
+      "default": "100",
+      "fieldname": "max_event_batch_size",
+      "fieldtype": "Int",
+      "label": "Max Event Batch Size",
+      "reqd": 1
+    },
+    {
+      "default": "Desk User\nSystem Manager\nHR Manager",
+      "description": "One role per line. Users with at least one of these roles are tracked.",
+      "fieldname": "tracked_roles",
+      "fieldtype": "Long Text",
+      "label": "Tracked Roles"
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "issingle": 1,
+  "links": [],
+  "modified": "2026-04-09 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Employee Activity Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

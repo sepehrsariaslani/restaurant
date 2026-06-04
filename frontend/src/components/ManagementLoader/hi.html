@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fa">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Origami Bear Loader - Complete</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #F8F5EE;
+            /* رنگ پس‌زمینه مشابه عکس */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .loader-container {
+            width: 300px;
+            height: 300px;
+            position: relative;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        /* تنظیمات کلی انیمیشن قطعات */
+        .poly {
+            opacity: 0;
+            animation: assemble 3.5s cubic-bezier(0.25, 1, 0.5, 1) forwards infinite alternate;
+            transform-origin: center;
+        }
+
+        /* تعریف مسیرهای مختلف و تاخیر برای ورود هر قطعه */
+        .poly:nth-child(1) {
+            animation-name: assemble-top-left;
+            animation-delay: 0.1s;
+        }
+
+        .poly:nth-child(2) {
+            animation-name: assemble-top-right;
+            animation-delay: 0.15s;
+        }
+
+        .poly:nth-child(3) {
+            animation-name: assemble-top-left;
+            animation-delay: 0.2s;
+        }
+
+        .poly:nth-child(4) {
+            animation-name: assemble-top-right;
+            animation-delay: 0.25s;
+        }
+
+        .poly:nth-child(5) {
+            animation-name: assemble-top;
+            animation-delay: 0.3s;
+        }
+
+        .poly:nth-child(6) {
+            animation-name: assemble-top;
+            animation-delay: 0.35s;
+        }
+
+        .poly:nth-child(7) {
+            animation-name: assemble-left;
+            animation-delay: 0.4s;
+        }
+
+        .poly:nth-child(8) {
+            animation-name: assemble-right;
+            animation-delay: 0.45s;
+        }
+
+        .poly:nth-child(9) {
+            animation-name: assemble-bottom-left;
+            animation-delay: 0.5s;
+        }
+
+        .poly:nth-child(10) {
+            animation-name: assemble-bottom-right;
+            animation-delay: 0.55s;
+        }
+
+        .poly:nth-child(11) {
+            animation-name: assemble-bottom-left;
+            animation-delay: 0.6s;
+        }
+
+        .poly:nth-child(12) {
+            animation-name: assemble-bottom-right;
+            animation-delay: 0.65s;
+        }
+
+        .poly:nth-child(13) {
+            animation-name: assemble-center;
+            animation-delay: 0.7s;
+        }
+
+        .poly:nth-child(14) {
+            animation-name: assemble-center;
+            animation-delay: 0.75s;
+        }
+
+        .poly:nth-child(15) {
+            animation-name: assemble-bottom;
+            animation-delay: 0.8s;
+        }
+
+        .poly:nth-child(16) {
+            animation-name: assemble-bottom;
+            animation-delay: 0.85s;
+        }
+
+        .poly:nth-child(17) {
+            animation-name: assemble-center;
+            animation-delay: 0.9s;
+        }
+
+        /* چشم‌ها با تاخیر بیشتری ظاهر می‌شوند */
+        .poly:nth-child(18) {
+            animation-name: assemble-center;
+            animation-delay: 1.2s;
+        }
+
+        .poly:nth-child(19) {
+            animation-name: assemble-center;
+            animation-delay: 1.25s;
+        }
+
+
+        /* فریم‌های کلیدی برای ورود قطعات از جهات مختلف */
+        @keyframes assemble-top-left {
+            0% {
+                transform: translate(-100px, -100px) rotate(-45deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-top-right {
+            0% {
+                transform: translate(100px, -100px) rotate(45deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-left {
+            0% {
+                transform: translate(-150px, 0) rotate(-90deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-right {
+            0% {
+                transform: translate(150px, 0) rotate(90deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-bottom-left {
+            0% {
+                transform: translate(-100px, 100px) rotate(-135deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-bottom-right {
+            0% {
+                transform: translate(100px, 100px) rotate(135deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-top {
+            0% {
+                transform: translate(0, -150px) rotate(180deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-bottom {
+            0% {
+                transform: translate(0, 150px) rotate(180deg) scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(0, 0) rotate(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes assemble-center {
+            0% {
+                transform: scale(0.2) rotate(90deg);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1) rotate(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="loader-container">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- گوش‌ها -->
+            <polygon class="poly" points="15,65 40,60 30,95" fill="#8C5020" /> <!-- گوش چپ خارجی -->
+            <polygon class="poly" points="185,65 160,60 170,95" fill="#8C5020" /> <!-- گوش راست خارجی -->
+            <polygon class="poly" points="40,60 70,70 30,95" fill="#E6BF9A" /> <!-- گوش چپ داخلی -->
+            <polygon class="poly" points="160,60 130,70 170,95" fill="#E6BF9A" /> <!-- گوش راست داخلی -->
+
+            <!-- پیشانی -->
+            <polygon class="poly" points="70,70 100,65 100,105" fill="#D49A6A" /> <!-- پیشانی چپ -->
+            <polygon class="poly" points="130,70 100,65 100,105" fill="#C28755" /> <!-- پیشانی راست -->
+
+            <!-- ناحیه گونه‌ها -->
+            <polygon class="poly" points="30,95 70,70 80,100" fill="#A66B3F" /> <!-- گونه چپ بالا -->
+            <polygon class="poly" points="170,95 130,70 120,100" fill="#A66B3F" /> <!-- گونه راست بالا -->
+            <polygon class="poly" points="30,95 80,100 45,130" fill="#8C5020" /> <!-- گونه چپ پایین -->
+            <polygon class="poly" points="170,95 120,100 155,130" fill="#804318" /> <!-- گونه راست پایین -->
+
+            <!-- ناحیه فک و پوزه -->
+            <polygon class="poly" points="45,130 80,100 90,165" fill="#733B12" /> <!-- فک چپ -->
+            <polygon class="poly" points="155,130 120,100 110,165" fill="#66320D" /> <!-- فک راست -->
+            <polygon class="poly" points="100,105 80,100 90,165" fill="#D49A6A" /> <!-- پوزه چپ -->
+            <polygon class="poly" points="100,105 120,100 110,165" fill="#C28755" /> <!-- پوزه راست -->
+            <polygon class="poly" points="90,165 100,150 100,175" fill="#B3703B" /> <!-- چانه چپ -->
+            <polygon class="poly" points="110,165 100,150 100,175" fill="#A66B3F" /> <!-- چانه راست -->
+
+            <!-- بینی -->
+            <polygon class="poly" points="90,150 110,150 100,165" fill="#4D2C1B" />
+
+            <!-- چشم‌ها (اضافه شده) -->
+            <polygon class="poly" points="80,100 85,110 75,110" fill="#4D2C1B" /> <!-- چشم چپ -->
+            <polygon class="poly" points="120,100 125,110 115,110" fill="#4D2C1B" /> <!-- چشم راست -->
+        </svg>
+    </div>
+
+</body>
+
+</html>

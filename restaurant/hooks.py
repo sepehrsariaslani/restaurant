@@ -26,7 +26,10 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/restaurant/css/restaurant.css"
-# app_include_js = "/assets/restaurant/js/restaurant.js"
+app_include_js = [
+	"/assets/restaurant/js/desk_print_picker.js",
+	"/assets/restaurant/js/activity_tracker.js",
+]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/restaurant/css/restaurant.css"
@@ -48,6 +51,11 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
+doctype_js = {
+	"Auto Price List": "public/js/auto_price_list.js",
+	"Sales Order": "public/js/sales_order.js",
+}
+
 # Svg Icons
 # ------------------
 # include app icons in desk
@@ -57,7 +65,7 @@ app_license = "mit"
 # ----------
 
 # application home page (will override Website Settings)
-# home_page = "login"
+homepage = "restaurant"
 
 # website user home page (by Role)
 # role_home_page = {
@@ -69,6 +77,52 @@ app_license = "mit"
 
 # automatically create page for each record of this doctype
 # website_generators = ["Web Page"]
+
+website_route_rules = [
+	{"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
+	{"from_route": "/menu", "to_route": "restaurant/menu"},
+	{"from_route": "/item/<slug>", "to_route": "restaurant/item"},
+	{"from_route": "/about-us", "to_route": "restaurant/about_us"},
+	{"from_route": "/faq", "to_route": "restaurant/faq"},
+	{"from_route": "/cart", "to_route": "restaurant/cart"},
+	{"from_route": "/order-success", "to_route": "restaurant/order_success"},
+	{"from_route": "/order-success/<order_code>", "to_route": "restaurant/order_success"},
+	{"from_route": "/restaurant/item/<slug>", "to_route": "restaurant/item"},
+	{"from_route": "/restaurant/about-us", "to_route": "restaurant/about_us"},
+	{"from_route": "/restaurant/faq", "to_route": "restaurant/faq"},
+	{"from_route": "/restaurant/cart", "to_route": "restaurant/cart"},
+	{"from_route": "/restaurant/menu", "to_route": "restaurant/menu"},
+	{"from_route": "/restaurant/order-success", "to_route": "restaurant/order_success"},
+	{"from_route": "/restaurant/order-success/<order_code>", "to_route": "restaurant/order_success"},
+	{"from_route": "/desk", "to_route": "management"},
+	{"from_route": "/desk/login", "to_route": "management/login"},
+	{"from_route": "/desk/pos", "to_route": "management/pos"},
+	{"from_route": "/desk/orders", "to_route": "management/orders"},
+	{"from_route": "/desk/products", "to_route": "management/products"},
+	{"from_route": "/desk/product", "to_route": "management/product"},
+	{"from_route": "/desk/menu-groups", "to_route": "management/menu_groups"},
+	{"from_route": "/desk/menu-group", "to_route": "management/menu_group"},
+	{"from_route": "/desk/site-settings", "to_route": "management/site_settings"},
+	{"from_route": "/desk/boms", "to_route": "management/boms"},
+	{"from_route": "/desk/bom", "to_route": "management/bom"},
+	{"from_route": "/desk/customers", "to_route": "management/customers"},
+	{"from_route": "/desk/reports", "to_route": "management/reports"},
+	{"from_route": "/desk/reports/<report_key>", "to_route": "management/report"},
+	{"from_route": "/desk/print-formats", "to_route": "management/print_formats"},
+	{"from_route": "/desk/settings", "to_route": "management/settings"},
+	{"from_route": "/desk/pos-profile", "to_route": "management/pos_profile"},
+	{"from_route": "/desk/pos_profile", "to_route": "management/pos_profile"},
+	{"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
+	{"from_route": "/management/print-formats", "to_route": "management/print_formats"},
+	{"from_route": "/management/settings", "to_route": "management/settings"},
+	{"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
+	{"from_route": "/management/menu-group", "to_route": "management/menu_group"},
+	{"from_route": "/management/site-settings", "to_route": "management/site_settings"},
+	{"from_route": "/pos-profile", "to_route": "pos_profile"},
+	{"from_route": "/pos_profile", "to_route": "pos_profile"},
+	{"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
+	{"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
+]
 
 # Jinja
 # ----------
@@ -145,6 +199,26 @@ app_license = "mit"
 # 	}
 # }
 
+doc_events = {
+	"BOM": {
+		"on_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
+		"before_submit": "restaurant.api.refresh_item_nutrition_for_bom",
+		"validate": "restaurant.api.refresh_item_nutrition_for_bom",
+		"on_update_after_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
+		"on_trash": "restaurant.api.clear_item_default_bom_links_for_bom",
+	},
+	"Work Order": {
+		"after_insert": "restaurant.api.sync_work_order_required_items_from_ticket",
+		"on_update": "restaurant.api.sync_work_order_required_items_from_ticket",
+		"on_cancel": "restaurant.api.unlink_work_order_from_restaurant_ticket",
+		"on_trash": "restaurant.api.unlink_work_order_from_restaurant_ticket",
+	},
+	"Restaurant Production Ticket": {
+		"on_cancel": "restaurant.api.unlink_production_ticket_links",
+		"on_trash": "restaurant.api.unlink_production_ticket_links",
+	},
+}
+
 # Scheduled Tasks
 # ---------------
 
@@ -165,6 +239,22 @@ app_license = "mit"
 # 		"restaurant.tasks.monthly"
 # 	],
 # }
+
+scheduler_events = {
+	"daily": [
+		"restaurant.restaurant.doctype.auto_price_list.auto_price_list.run_due_restaurant_price_lists",
+		"restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
+		"restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
+	],
+	"cron": {
+		"* * * * *": [
+			"restaurant.snapp_sync.sync_snapp_orders",
+		],
+		"*/5 * * * *": [
+			"restaurant.activity_tracking.jobs.close_timed_out_activity_sessions",
+		],
+	}
+}
 
 # Testing
 # -------
@@ -198,6 +288,9 @@ app_license = "mit"
 # ----------------
 # before_request = ["restaurant.utils.before_request"]
 # after_request = ["restaurant.utils.after_request"]
+
+on_session_creation = "restaurant.activity_tracking.api.on_session_creation"
+on_logout = "restaurant.activity_tracking.api.on_logout"
 
 # Job Events
 # ----------
@@ -242,3 +335,10 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [["module", "=", "Restaurant"]],
+    }
+]

@@ -1,0 +1,127 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-21 21:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "ingredient_name",
+    "customer_label",
+    "ingredient_item",
+    "qty_uom",
+    "base_qty",
+    "is_included_by_default",
+    "can_remove",
+    "is_required",
+    "is_editable_qty",
+    "min_multiplier",
+    "max_multiplier",
+    "step_multiplier",
+    "extra_when_added",
+    "sort_order"
+  ],
+  "fields": [
+    {
+      "fieldname": "ingredient_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Ingredient Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer_label",
+      "fieldtype": "Data",
+      "label": "Customer Label"
+    },
+    {
+      "fieldname": "ingredient_item",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Ingredient Item",
+      "options": "Item"
+    },
+    {
+      "fieldname": "qty_uom",
+      "fieldtype": "Link",
+      "label": "Qty UOM",
+      "options": "UOM"
+    },
+    {
+      "default": "1",
+      "fieldname": "base_qty",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Base Qty"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_included_by_default",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Included By Default"
+    },
+    {
+      "default": "1",
+      "fieldname": "can_remove",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Can Remove"
+    },
+    {
+      "default": "0",
+      "fieldname": "is_required",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Required"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_editable_qty",
+      "fieldtype": "Check",
+      "label": "Is Editable Qty"
+    },
+    {
+      "default": "0",
+      "fieldname": "min_multiplier",
+      "fieldtype": "Float",
+      "label": "Min Multiplier"
+    },
+    {
+      "default": "3",
+      "fieldname": "max_multiplier",
+      "fieldtype": "Float",
+      "label": "Max Multiplier"
+    },
+    {
+      "default": "0.5",
+      "fieldname": "step_multiplier",
+      "fieldtype": "Float",
+      "label": "Step Multiplier"
+    },
+    {
+      "default": "0",
+      "fieldname": "extra_when_added",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Extra When Added"
+    },
+    {
+      "default": "0",
+      "fieldname": "sort_order",
+      "fieldtype": "Int",
+      "label": "Sort Order"
+    }
+  ],
+  "istable": 1,
+  "links": [],
+  "modified": "2026-02-21 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Item Ingredient",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "idx",
+  "sort_order": "ASC",
+  "states": []
+}

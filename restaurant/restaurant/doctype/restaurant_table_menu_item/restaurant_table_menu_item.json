@@ -1,0 +1,105 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RTMI-{#####}",
+  "creation": "2026-02-24 12:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "item_name",
+    "category",
+    "price",
+    "is_available",
+    "image",
+    "description",
+    "prep_time_mins",
+    "sort_order",
+    "erpnext_item"
+  ],
+  "fields": [
+    {
+      "fieldname": "item_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Item Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "category",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Category"
+    },
+    {
+      "fieldname": "price",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Price",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "is_available",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Available"
+    },
+    {
+      "fieldname": "image",
+      "fieldtype": "Attach Image",
+      "label": "Image"
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "default": "10",
+      "fieldname": "prep_time_mins",
+      "fieldtype": "Int",
+      "label": "Prep Time (Mins)"
+    },
+    {
+      "default": "0",
+      "fieldname": "sort_order",
+      "fieldtype": "Int",
+      "label": "Sort Order"
+    },
+    {
+      "fieldname": "erpnext_item",
+      "fieldtype": "Link",
+      "label": "ERPNext Item",
+      "options": "Item"
+    }
+  ],
+  "links": [],
+  "modified": "2026-02-24 12:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Table Menu Item",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Desk User",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}
