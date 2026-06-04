@@ -10112,6 +10112,133 @@ def get_management_order_detail(order_name, source=None):
     frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
 
+@frappe.whitelist()
+def update_management_order(order_name, payment_method=None, note=None, customer_name=None, mobile=None):
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name:
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+
+    updates = {}
+    if payment_method is not None:
+        normalized = _normalize_payment_method(payment_method)
+        if _has_column("Sales Order", "restaurant_payment_method"):
+            updates["restaurant_payment_method"] = normalized
+
+    if note is not None:
+        if _has_column("Sales Order", "restaurant_note"):
+            updates["restaurant_note"] = (note or "").strip()
+
+    if customer_name is not None:
+        customer_text = (customer_name or "").strip()
+        if customer_text:
+            updates["customer_name"] = customer_text
+
+    if mobile is not None:
+        mobile_text = (mobile or "").strip()
+        if _has_column("Sales Order", "restaurant_customer_mobile"):
+            updates["restaurant_customer_mobile"] = mobile_text
+
+    for field, value in updates.items():
+        frappe.db.set_value("Sales Order", so_name, field, value, update_modified=False)
+
+    _append_sales_order_note(so_name, "[EDIT] اطلاعات سفارش ویرایش شد")
+    frappe.db.commit()
+
+    return {
+        "status": "success",
+        "order_name": so_name,
+        "order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+    }
+
+
+@frappe.whitelist()
+def create_management_return_order(order_name, reason=None):
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name:
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+
+    doc = frappe.get_doc("Sales Order", so_name)
+    status = _core_order_status(doc)
+
+    if status not in ("paid", "delivered", "completed", "cancelled"):
+        frappe.throw(_("فقط سفارش‌های پرداخت‌شده یا تحویل‌شده قابل برگشت هستند."))
+
+    reason_text = (reason or "درخواست مشتری").strip()
+    original_code = doc.get("restaurant_order_code") or doc.name
+
+    return_doc = frappe.new_doc("Sales Order")
+    return_doc.customer = doc.customer
+    return_doc.company = doc.company
+    return_doc.currency = doc.currency
+    return_doc.selling_price_list = doc.selling_price_list
+    return_doc.transaction_date = frappe.utils.today()
+    return_doc.delivery_date = frappe.utils.today()
+
+    if _has_column("Sales Order", "restaurant_note"):
+        return_doc.restaurant_note = f"[RETURN] {reason_text} | برگشت از: {original_code}"
+    if _has_column("Sales Order", "restaurant_order_type"):
+        return_doc.restaurant_order_type = doc.get("restaurant_order_type") or "takeaway"
+    if _has_column("Sales Order", "restaurant_customer_mobile"):
+        return_doc.restaurant_customer_mobile = doc.get("restaurant_customer_mobile") or ""
+    if _has_column("Sales Order", "restaurant_payment_method"):
+        return_doc.restaurant_payment_method = doc.get("restaurant_payment_method") or "cash"
+    if _has_column("Sales Order", "restaurant_payment_status"):
+        return_doc.restaurant_payment_status = "paid"
+    if _has_column("Sales Order", "restaurant_status"):
+        return_doc.restaurant_status = "returned"
+
+    for row in (doc.items or []):
+        return_doc.append("items", {
+            "item_code": row.item_code,
+            "item_name": row.item_name,
+            "qty": flt(row.qty),
+            "rate": flt(row.rate),
+            "warehouse": row.warehouse,
+            "uom": row.uom,
+            "stock_uom": row.stock_uom,
+            "conversion_factor": flt(row.conversion_factor) or 1,
+            "delivery_date": frappe.utils.today(),
+        })
+
+    return_doc.flags.ignore_permissions = True
+    return_doc.flags.ignore_mandatory = True
+    return_doc.flags.ignore_validate = True
+
+    try:
+        return_doc.insert()
+    except Exception as insert_err:
+        frappe.log_error(frappe.get_traceback(), "Create Return Order Error")
+        frappe.throw(f"خطا در ساخت فاکتور برگشتی: {str(insert_err)}")
+
+    return_code = f"RET-{original_code}"
+    if _has_column("Sales Order", "restaurant_order_code"):
+        frappe.db.set_value("Sales Order", return_doc.name, "restaurant_order_code", return_code, update_modified=False)
+
+    if _has_column("Sales Order", "restaurant_status"):
+        frappe.db.set_value("Sales Order", so_name, "restaurant_status", "returned", update_modified=False)
+
+    _append_sales_order_note(so_name, f"[RETURN] فاکتور برگشتی ساخته شد: {return_doc.name} ({return_code})")
+    frappe.db.commit()
+
+    return {
+        "status": "success",
+        "return_order_name": return_doc.name,
+        "return_order_code": return_code,
+        "original_order_name": so_name,
+        "original_order_code": original_code,
+        "customer_name": doc.customer_name,
+        "grand_total": flt(doc.grand_total or doc.total or 0),
+    }
+
+
 def _management_resolve_item_name(item_name):
     raw_value = (item_name or "").strip()
     if not raw_value:

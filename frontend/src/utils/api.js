@@ -1082,6 +1082,19 @@ export function getManagementOrderDetail(order_name, source = '') {
   return callRestaurantAPI('get_management_order_detail', { order_name, source })
 }
 
+export function updateManagementOrder({ order_name = '', payment_method, note, customer_name, mobile } = {}) {
+  const args = { order_name }
+  if (payment_method !== undefined) args.payment_method = payment_method
+  if (note !== undefined) args.note = note
+  if (customer_name !== undefined) args.customer_name = customer_name
+  if (mobile !== undefined) args.mobile = mobile
+  return callRestaurantAPI('update_management_order', args)
+}
+
+export function createManagementReturnOrder({ order_name = '', reason = '' } = {}) {
+  return callRestaurantAPI('create_management_return_order', { order_name, reason })
+}
+
 export async function listManagementProducts({ search = '', category = '', active_only = 0, branch = '' } = {}) {
   if (preferManagementProductsFallback) {
     return listManagementProductsFallback({ search, category, active_only, branch })

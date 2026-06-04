@@ -4,6 +4,21 @@
     <p class="error pos-inline-error" v-if="error">{{ error }}</p>
     <p class="success pos-inline-success" v-if="successMessage">{{ successMessage }}</p>
 
+    <div class="ticket-tabs-bar">
+      <div class="ticket-tabs">
+        <div
+          v-for="(ticket, tIdx) in ticketSessions"
+          :key="ticket.id"
+          class="ticket-tab-group"
+          :class="{ active: ticket.id === activeTicketId }"
+        >
+          <button type="button" class="ticket-tab" @click="switchToTicket(ticket.id)">{{ ticketLabel(ticket, tIdx) }}</button>
+          <button type="button" class="ticket-tab-close" @click.stop="closeTicketTab(ticket.id)">×</button>
+        </div>
+        <button type="button" class="ticket-tab new" @click="createNewTicketTab">+ فاکتور جدید</button>
+      </div>
+    </div>
+
     <section class="pos-shell" dir="rtl">
       <aside class="left-col">
         <div class="left-col-tabs">
@@ -34,6 +49,15 @@
           >
             تراکنش‌های امروز
             <span class="count-badge" v-if="todayTransactions.length">{{ todayTransactions.length }}</span>
+          </button>
+          <button
+            type="button"
+            class="left-tab-btn"
+            :class="{ active: leftPanelTab === 'recent' }"
+            @click="leftPanelTab = 'recent'; loadRecentOrders()"
+          >
+            سفارش‌های اخیر
+            <span class="count-badge" v-if="recentOrders.length">{{ recentOrders.length }}</span>
           </button>
         </div>
 
@@ -95,7 +119,7 @@
           <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
           <p class="muted" v-else-if="!todayTransactions.length">هنوز تراکنشی امروز ثبت نشده.</p>
           <div v-else class="history-list">
-            <article v-for="tx in todayTransactions" :key="tx.name" class="history-card">
+            <article v-for="tx in todayTransactions" :key="tx.name" class="history-card history-card-interactive" @click="openOrderDetailModal(tx)">
               <div class="history-card-head">
                 <strong>{{ tx.order_code || tx.name }}</strong>
                 <span class="history-time">{{ formatInvoiceDateTime(tx.created_at) }}</span>
@@ -155,6 +179,54 @@
               </ul>
             </div>
           </template>
+        </section>
+
+        <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
+          <div class="tab-panel-toolbar">
+            <button type="button" class="icon-refresh-btn" @click="loadRecentOrders" title="بروزرسانی">↻</button>
+          </div>
+          <div class="recent-orders-filter">
+            <input
+              class="input dark-input recent-search-input"
+              v-model="recentOrdersSearch"
+              placeholder="جستجو... (کد سفارش، نام مشتری)"
+              type="search"
+            />
+            <input
+              class="input dark-input recent-date-input"
+              type="date"
+              v-model="recentOrdersDateFrom"
+              @change="loadRecentOrders"
+            />
+          </div>
+          <p class="muted" v-if="recentOrdersLoading">در حال دریافت...</p>
+          <p class="error" v-else-if="recentOrdersError">{{ recentOrdersError }}</p>
+          <p class="muted" v-else-if="!filteredRecentOrders.length">سفارشی یافت نشد.</p>
+          <div v-else class="history-list">
+            <article
+              v-for="order in filteredRecentOrders"
+              :key="order.name"
+              class="history-card history-card-interactive"
+              @click="openOrderDetailModal(order)"
+            >
+              <div class="history-card-head">
+                <strong>{{ order.order_code || order.name }}</strong>
+                <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
+              </div>
+              <div class="history-card-body">
+                <span>{{ order.customer_name || 'POS Customer' }}</span>
+                <span class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</span>
+              </div>
+              <div class="history-card-footer">
+                <span class="history-method-badge" v-if="order.payment_method">
+                  {{ order.payment_method === 'cash' ? '💵 نقدی' : order.payment_method === 'card' ? '💳 کارتخوان' : order.payment_method }}
+                </span>
+                <span class="order-status-badge" :class="`status-${order.status}`">
+                  {{ formatStatus(order.status) }}
+                </span>
+              </div>
+            </article>
+          </div>
         </section>
       </aside>
 
@@ -366,6 +438,100 @@
       :table-label="selectedDineInTable?.label || ''"
       @close="showSplitBill = false"
     />
+
+    <!-- Order Detail / Edit Modal -->
+    <div v-if="orderDetailModal.open" class="pos-modal-backdrop" @click.self="closeOrderDetailModal">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <div>
+            <h3>جزئیات سفارش</h3>
+            <small v-if="orderDetailModal.order">{{ orderDetailModal.order.order_code }}</small>
+          </div>
+          <button type="button" class="pos-modal-close" @click="closeOrderDetailModal">×</button>
+        </header>
+        <p class="muted pos-modal-loading" v-if="orderDetailModal.loading">در حال دریافت...</p>
+        <p class="error pos-modal-loading" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
+        <template v-else-if="orderDetailModal.order">
+          <div class="order-detail-meta">
+            <span>👤 {{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
+            <span>🕐 {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}</span>
+            <span class="history-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
+            <span class="history-method-badge" v-if="orderDetailModal.order.payment_method">
+              {{ orderDetailModal.order.payment_method === 'cash' ? '💵 نقدی' : '💳 کارتخوان' }}
+            </span>
+            <span class="order-status-badge" :class="`status-${orderDetailModal.order.status}`">
+              {{ formatStatus(orderDetailModal.order.status) }}
+            </span>
+          </div>
+          <ul class="order-detail-items">
+            <li v-for="(item, idx) in orderDetailModal.order.items || []" :key="idx">
+              <span>{{ item.title }}</span>
+              <span>× {{ formatCompactNumber(item.qty, 2) }}</span>
+              <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
+            </li>
+          </ul>
+          <div class="order-detail-edit-form">
+            <h4>ویرایش اطلاعات</h4>
+            <label>
+              نام مشتری
+              <input class="input dark-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
+            </label>
+            <label>
+              روش پرداخت
+              <select class="input dark-input" v-model="orderDetailModal.editForm.payment_method">
+                <option value="">انتخاب نشده</option>
+                <option value="cash">💵 نقدی</option>
+                <option value="card">💳 کارتخوان</option>
+              </select>
+            </label>
+            <label>
+              یادداشت
+              <textarea class="input dark-input" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت سفارش..."></textarea>
+            </label>
+          </div>
+          <p class="error pos-modal-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
+          <div class="pos-modal-actions">
+            <button
+              type="button"
+              class="tbl-btn danger"
+              @click="openReturnInvoiceModal"
+              v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())"
+            >
+              📄 فاکتور برگشتی
+            </button>
+            <button type="button" class="tbl-btn" @click="closeOrderDetailModal">انصراف</button>
+            <button type="button" class="tbl-btn primary" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
+              {{ orderDetailModal.saving ? '...' : 'ذخیره تغییرات' }}
+            </button>
+          </div>
+        </template>
+      </section>
+    </div>
+
+    <!-- Return Invoice Confirmation Modal -->
+    <div v-if="returnInvoiceModal.open" class="pos-modal-backdrop" @click.self="closeReturnInvoiceModal">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <h3>📄 ساخت فاکتور برگشتی</h3>
+          <button type="button" class="pos-modal-close" @click="closeReturnInvoiceModal">×</button>
+        </header>
+        <div class="return-modal-body">
+          <p>فاکتور برگشتی برای سفارش <strong>{{ orderDetailModal.order?.order_code }}</strong> ساخته خواهد شد.</p>
+          <p class="muted" v-if="orderDetailModal.order">مبلغ کل: {{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</p>
+          <label>
+            دلیل برگشت
+            <textarea class="input dark-input" v-model="returnInvoiceModal.reason" rows="2" placeholder="مثال: اشتباه در سفارش، درخواست مشتری..."></textarea>
+          </label>
+          <p class="error" v-if="returnInvoiceModal.error">{{ returnInvoiceModal.error }}</p>
+        </div>
+        <div class="pos-modal-actions">
+          <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal">انصراف</button>
+          <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.loading" @click="confirmCreateReturnInvoice">
+            {{ returnInvoiceModal.loading ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
+          </button>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -393,6 +559,8 @@ import {
   getManagementPOSHardwareStatus,
   reportManagementPOSHardwareEvent,
   updateTableOrderItem,
+  updateManagementOrder,
+  createManagementReturnOrder,
 } from '@/utils/api'
 import { formatMoney, formatStatus } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
@@ -476,6 +644,33 @@ const showKeyboardMap = ref(false)
 const todayTransactions = ref([])
 const todayTransactionsLoading = ref(false)
 const todayTransactionsError = ref('')
+const recentOrders = ref([])
+const recentOrdersLoading = ref(false)
+const recentOrdersError = ref('')
+const recentOrdersSearch = ref('')
+const recentOrdersDateFrom = ref(new Date().toISOString().split('T')[0])
+
+const orderDetailModal = reactive({
+  open: false,
+  loading: false,
+  saving: false,
+  loadError: '',
+  saveError: '',
+  order: null,
+  editForm: {
+    payment_method: '',
+    note: '',
+    customer_name: '',
+  },
+})
+
+const returnInvoiceModal = reactive({
+  open: false,
+  loading: false,
+  error: '',
+  reason: '',
+})
+
 const popularSlugsMap = ref({})
 const posProfileSummary = reactive({
   name: '',
@@ -673,6 +868,15 @@ const filteredProducts = computed(() => {
     })
   }
   return filtered
+})
+
+const filteredRecentOrders = computed(() => {
+  const q = recentOrdersSearch.value.trim().toLowerCase()
+  if (!q) return recentOrders.value
+  return recentOrders.value.filter((o) =>
+    String(o.order_code || o.name || '').toLowerCase().includes(q) ||
+    String(o.customer_name || '').toLowerCase().includes(q)
+  )
 })
 
 const productQtyMap = computed(() => {
@@ -1765,6 +1969,125 @@ async function loadTodayTransactions() {
     todayTransactionsError.value = err.message || 'خطا در بارگذاری تراکنش‌های امروز'
   } finally {
     todayTransactionsLoading.value = false
+  }
+}
+
+async function loadRecentOrders() {
+  if (recentOrdersLoading.value) return
+  recentOrdersLoading.value = true
+  recentOrdersError.value = ''
+  try {
+    const dateFrom = recentOrdersDateFrom.value || new Date().toISOString().split('T')[0]
+    const payload = await listManagementOrders({ date_from: dateFrom, date_to: dateFrom })
+    recentOrders.value = payload?.orders || []
+  } catch (err) {
+    recentOrdersError.value = err.message || 'خطا در بارگذاری سفارش‌های اخیر'
+  } finally {
+    recentOrdersLoading.value = false
+  }
+}
+
+async function openOrderDetailModal(tx) {
+  if (!tx) return
+  orderDetailModal.open = true
+  orderDetailModal.loading = true
+  orderDetailModal.loadError = ''
+  orderDetailModal.saveError = ''
+  orderDetailModal.order = null
+  orderDetailModal.editForm.payment_method = ''
+  orderDetailModal.editForm.note = ''
+  orderDetailModal.editForm.customer_name = ''
+
+  try {
+    const orderName = String(tx.name || tx.order_code || '').trim()
+    if (!orderName) throw new Error('شناسه سفارش معتبر نیست.')
+    const payload = await getManagementOrderDetail(orderName)
+    orderDetailModal.order = payload?.order || null
+    if (orderDetailModal.order) {
+      orderDetailModal.editForm.payment_method = orderDetailModal.order.payment_method || ''
+      orderDetailModal.editForm.note = orderDetailModal.order.note || ''
+      orderDetailModal.editForm.customer_name = orderDetailModal.order.customer_name || ''
+    }
+  } catch (err) {
+    orderDetailModal.loadError = err.message || 'خطا در بارگذاری جزئیات سفارش'
+  } finally {
+    orderDetailModal.loading = false
+  }
+}
+
+function closeOrderDetailModal() {
+  orderDetailModal.open = false
+  orderDetailModal.loading = false
+  orderDetailModal.saving = false
+  orderDetailModal.loadError = ''
+  orderDetailModal.saveError = ''
+  orderDetailModal.order = null
+}
+
+async function saveOrderDetailEdit() {
+  if (!orderDetailModal.order?.name) return
+  orderDetailModal.saving = true
+  orderDetailModal.saveError = ''
+  try {
+    await updateManagementOrder({
+      order_name: orderDetailModal.order.name,
+      payment_method: orderDetailModal.editForm.payment_method || undefined,
+      note: orderDetailModal.editForm.note,
+      customer_name: orderDetailModal.editForm.customer_name || undefined,
+    })
+    successMessage.value = 'سفارش با موفقیت ویرایش شد.'
+    orderDetailModal.order.payment_method = orderDetailModal.editForm.payment_method
+    orderDetailModal.order.note = orderDetailModal.editForm.note
+    orderDetailModal.order.customer_name = orderDetailModal.editForm.customer_name
+    closeOrderDetailModal()
+    if (leftPanelTab.value === 'history') {
+      await loadTodayTransactions()
+    } else if (leftPanelTab.value === 'recent') {
+      await loadRecentOrders()
+    }
+  } catch (err) {
+    orderDetailModal.saveError = err.message || 'ویرایش سفارش ناموفق بود.'
+  } finally {
+    orderDetailModal.saving = false
+  }
+}
+
+function openReturnInvoiceModal() {
+  if (!orderDetailModal.order?.name) return
+  returnInvoiceModal.open = true
+  returnInvoiceModal.loading = false
+  returnInvoiceModal.error = ''
+  returnInvoiceModal.reason = ''
+}
+
+function closeReturnInvoiceModal() {
+  returnInvoiceModal.open = false
+  returnInvoiceModal.loading = false
+  returnInvoiceModal.error = ''
+  returnInvoiceModal.reason = ''
+}
+
+async function confirmCreateReturnInvoice() {
+  if (!orderDetailModal.order?.name) return
+  returnInvoiceModal.loading = true
+  returnInvoiceModal.error = ''
+  try {
+    const result = await createManagementReturnOrder({
+      order_name: orderDetailModal.order.name,
+      reason: returnInvoiceModal.reason || 'درخواست مشتری',
+    })
+    successMessage.value = `فاکتور برگشتی ${result.return_order_code} برای سفارش ${result.original_order_code} ساخته شد.`
+    closeReturnInvoiceModal()
+    closeOrderDetailModal()
+    if (leftPanelTab.value === 'history') {
+      await loadTodayTransactions()
+    } else if (leftPanelTab.value === 'recent') {
+      await loadRecentOrders()
+    }
+  } catch (err) {
+    returnInvoiceModal.error = err.message || 'ساخت فاکتور برگشتی ناموفق بود.'
+  } finally {
+    returnInvoiceModal.loading = false
   }
 }
 
@@ -3562,7 +3885,7 @@ onBeforeUnmount(() => {
 
 .left-col-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   border-bottom: 2px solid var(--pos-border);
   background: var(--pos-white);
   border-radius: 14px 14px 0 0;
@@ -4088,5 +4411,256 @@ kbd {
   .pos-profile-actions {
     justify-self: start;
   }
+}
+
+/* Ticket Tabs Bar */
+.ticket-tabs-bar {
+  background: var(--pos-white);
+  border-bottom: 2px solid var(--pos-border);
+  padding: 0.45rem 1rem 0;
+  direction: rtl;
+}
+
+/* Recent orders panel */
+.recent-orders-panel {
+  padding: 0.5rem 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+
+.recent-orders-filter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem 0.6rem;
+}
+
+.recent-search-input,
+.recent-date-input {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--pos-border);
+  background: var(--pos-surface, #1e2433);
+  color: var(--pos-text, #e0e6f0);
+}
+
+/* Interactive history card */
+.history-card-interactive {
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+
+.history-card-interactive:hover {
+  background: var(--pos-surface, #1e2433);
+  box-shadow: 0 2px 12px 0 rgb(0 0 0 / 0.18);
+}
+
+.history-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.order-status-badge {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--pos-border);
+  color: var(--pos-text);
+}
+
+.order-status-badge.status-paid,
+.order-status-badge.status-completed,
+.order-status-badge.status-delivered {
+  background: #22c55e22;
+  color: #22c55e;
+}
+
+.order-status-badge.status-pending,
+.order-status-badge.status-new {
+  background: #f59e0b22;
+  color: #f59e0b;
+}
+
+.order-status-badge.status-cancelled,
+.order-status-badge.status-canceled {
+  background: #ef444422;
+  color: #ef4444;
+}
+
+/* Modals */
+.pos-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgb(0 0 0 / 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.pos-modal {
+  background: var(--pos-white, #fff);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 0 0 1rem;
+  box-shadow: 0 8px 40px 0 rgb(0 0 0 / 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem 1.2rem 0.75rem;
+  border-bottom: 1px solid var(--pos-border);
+  gap: 0.5rem;
+}
+
+.pos-modal-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.pos-modal-head small {
+  color: var(--pos-muted, #7b8ca6);
+  font-size: 0.8rem;
+}
+
+.pos-modal-close {
+  background: transparent;
+  border: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--pos-muted, #7b8ca6);
+  padding: 0 0.25rem;
+  margin-top: -0.2rem;
+}
+
+.pos-modal-close:hover {
+  color: var(--pos-text, #1a2233);
+}
+
+.pos-modal-loading {
+  padding: 1.5rem 1.2rem;
+  text-align: center;
+}
+
+.pos-modal-err {
+  padding: 0.4rem 1.2rem;
+  font-size: 0.85rem;
+}
+
+.pos-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0.8rem 1.2rem 0;
+  flex-wrap: wrap;
+}
+
+.order-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.2rem 0;
+  font-size: 0.84rem;
+}
+
+.order-detail-items {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.order-detail-items li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.83rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--pos-surface, #f4f6fa);
+  border-radius: 8px;
+  gap: 0.5rem;
+}
+
+.order-detail-edit-form {
+  padding: 0.75rem 1.2rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.order-detail-edit-form h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  color: var(--pos-muted, #7b8ca6);
+}
+
+.order-detail-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+}
+
+.order-detail-edit-form .input {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--pos-border);
+}
+
+.return-modal-body {
+  padding: 0.9rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  font-size: 0.88rem;
+}
+
+.return-modal-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.return-modal-body .input {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--pos-border);
+}
+
+.tbl-btn.danger {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+}
+
+.tbl-btn.danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
 }
 </style>
