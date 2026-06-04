@@ -17,7 +17,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import DatePicker from 'vue3-persian-datetime-picker'
 
 const props = defineProps({
@@ -54,26 +54,6 @@ const normalizedMin = computed(() => normalizeDateOnly(props.min))
 const normalizedMax = computed(() => normalizeDateOnly(props.max))
 const pickerColor = ref('#6F4A31')
 
-function syncPickerColor() {
-  if (typeof window === 'undefined') {
-    return
-  }
-  const nextColor = window.getComputedStyle(document.documentElement).getPropertyValue('--accent-green').trim()
-  pickerColor.value = nextColor || '#6F4A31'
-}
-
-onMounted(() => {
-  syncPickerColor()
-  if (typeof window !== 'undefined') {
-    window.addEventListener('restaurant-theme-updated', syncPickerColor)
-  }
-})
-
-onBeforeUnmount(() => {
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('restaurant-theme-updated', syncPickerColor)
-  }
-})
 
 watch(
   () => props.modelValue,
