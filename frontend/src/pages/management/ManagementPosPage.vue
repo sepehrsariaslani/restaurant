@@ -506,7 +506,7 @@ let ticketCounter = 1
 const tableOptions = ref([])
 const posInfoExpanded = ref(false)
 const openInvoicesExpanded = ref(false)
-const tableExpanded = ref(true)
+const tableExpanded = ref(false)
 const posProfileSummary = reactive({
   name: '',
   title: '',

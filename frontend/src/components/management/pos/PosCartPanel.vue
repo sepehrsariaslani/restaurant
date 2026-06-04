@@ -201,52 +201,24 @@
         />
       </label>
 
-      <div class="radio-group">
-        <span>تخفیف کلی</span>
-        <label>
+      <div class="discount-row">
+        <span class="discount-label">تخفیف</span>
+        <div class="discount-input-group">
           <input
-            type="radio"
-            name="discount-type"
-            value="fixed"
-            :checked="financial.discountType === 'fixed'"
-            @change="patchFinancial({ discountType: 'fixed' })"
+            ref="discountInputRef"
+            class="input dark-input discount-input"
+            type="number"
+            min="0"
+            :value="financial.discountValue"
+            @input="patchFinancial({ discountValue: Number($event.target.value || 0) })"
           />
-          مبلغی
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="discount-type"
-            value="percent"
-            :checked="financial.discountType === 'percent'"
-            @change="patchFinancial({ discountType: 'percent' })"
-          />
-          درصدی
-        </label>
+          <button type="button" class="discount-type-btn" @click="toggleDiscountType">
+            {{ financial.discountType === 'percent' ? '%' : '﷼' }}
+          </button>
+        </div>
       </div>
-      <input
-        ref="discountInputRef"
-        class="input dark-input"
-        type="number"
-        min="0"
-        :value="financial.discountValue"
-        @input="patchFinancial({ discountValue: Number($event.target.value || 0) })"
-      />
 
       <template v-if="showAdvancedFinancial">
-        <label class="field inline">
-          <span>کارت اعتباری</span>
-          <div class="code-row">
-            <input
-              class="input dark-input"
-              :value="financial.creditCardCode"
-              @input="patchFinancial({ creditCardCode: $event.target.value })"
-              placeholder="شماره 16 رقمی"
-            />
-            <button type="button" class="check-btn" @click="$emit('verify-credit')">بررسی</button>
-          </div>
-        </label>
-
         <label class="field inline">
           <span>کد تخفیف / معرف</span>
           <div class="code-row">
@@ -381,9 +353,9 @@
         type="button"
         class="pay-btn"
         :disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
-        @click="$emit('submit-and-pay')"
+        @click="openPaymentPopup"
       >
-        {{ submitting ? 'در حال پرداخت...' : orderMode === 'dine_in' ? 'تسویه از تب میزها' : 'ثبت و پرداخت' }}
+        {{ submitting ? 'در حال پرداخت...' : orderMode === 'dine_in' ? 'تسویه از تب میزها' : 'تسویه فاکتور' }}
       </button>
       <button
         type="button"
@@ -412,6 +384,71 @@
       </label>
     </footer>
   </section>
+
+  <div v-if="showPaymentPopup" class="pay-popup-backdrop" @click.self="showPaymentPopup = false">
+    <section class="pay-popup" dir="rtl">
+      <header class="pay-popup-head">
+        <h3>تسویه فاکتور</h3>
+        <button type="button" class="pay-popup-close" @click="showPaymentPopup = false">×</button>
+      </header>
+
+      <div class="pay-total-banner">
+        <span>مبلغ قابل پرداخت</span>
+        <strong>{{ formatMoney(totals.payableAmount || 0, currency) }}</strong>
+      </div>
+
+      <div class="pay-splits">
+        <div v-for="(split, idx) in paymentSplits" :key="idx" class="pay-split-row">
+          <select class="dark-input pay-method-select" v-model="split.method">
+            <option value="cash">💵 نقدی</option>
+            <option value="card" v-if="paymentBoot?.supports_card">💳 کارتخوان</option>
+            <option value="wallet">👛 کیف پول</option>
+          </select>
+          <input
+            class="dark-input pay-amount-input"
+            type="number"
+            min="0"
+            v-model.number="split.amount"
+            placeholder="مبلغ"
+          />
+          <button
+            v-if="paymentSplits.length > 1"
+            type="button"
+            class="pay-split-remove"
+            @click="removeSplit(idx)"
+          >×</button>
+        </div>
+      </div>
+
+      <button type="button" class="pay-add-split-btn" @click="addSplit">
+        + افزودن روش پرداخت دیگر
+      </button>
+
+      <div class="pay-remaining-row" :class="{ zero: splitRemaining <= 0, over: splitRemaining < 0 }">
+        <span>{{ splitRemaining < 0 ? 'مازاد پرداختی' : splitRemaining === 0 ? 'تسویه کامل ✓' : 'باقیمانده' }}</span>
+        <strong>{{ formatMoney(Math.abs(splitRemaining), currency) }}</strong>
+      </div>
+
+      <div class="pay-split-summary" v-if="paymentSplits.length > 1">
+        <div v-for="(split, idx) in paymentSplits" :key="`s-${idx}`" class="pay-split-summary-row">
+          <span>{{ splitMethodLabel(split.method) }}</span>
+          <span>{{ formatMoney(split.amount || 0, currency) }}</span>
+        </div>
+      </div>
+
+      <footer class="pay-popup-footer">
+        <button type="button" class="pay-cancel-btn" @click="showPaymentPopup = false">انصراف</button>
+        <button
+          type="button"
+          class="pay-confirm-btn"
+          :disabled="splitRemaining > 0.001 || submitting"
+          @click="confirmPayment"
+        >
+          {{ submitting ? 'در حال ثبت...' : 'تأیید و ثبت پرداخت' }}
+        </button>
+      </footer>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -520,6 +557,11 @@ const emit = defineEmits([
 
 const discountInputRef = ref(null)
 const showAdvancedFinancial = ref(false)
+const showPaymentPopup = ref(false)
+const paymentSplits = ref([{ method: 'cash', amount: 0 }])
+
+const splitTotal = computed(() => paymentSplits.value.reduce((sum, s) => sum + Number(s.amount || 0), 0))
+const splitRemaining = computed(() => Number(props.totals?.payableAmount || 0) - splitTotal.value)
 
 const orderModes = [
   { value: 'dine_in', label: 'سالن' },
@@ -562,6 +604,43 @@ watch(
 
 function patchFinancial(partial) {
   emit('patch-financial', partial)
+}
+
+function toggleDiscountType() {
+  const next = props.financial.discountType === 'fixed' ? 'percent' : 'fixed'
+  patchFinancial({ discountType: next })
+}
+
+function openPaymentPopup() {
+  const total = Number(props.totals?.payableAmount || 0)
+  paymentSplits.value = [{ method: props.paymentMethod || 'cash', amount: total }]
+  showPaymentPopup.value = true
+}
+
+function addSplit() {
+  const remaining = Math.max(splitRemaining.value, 0)
+  paymentSplits.value.push({ method: 'cash', amount: remaining })
+}
+
+function removeSplit(idx) {
+  paymentSplits.value.splice(idx, 1)
+}
+
+function splitMethodLabel(method) {
+  if (method === 'card') return '💳 کارتخوان'
+  if (method === 'wallet') return '👛 کیف پول'
+  return '💵 نقدی'
+}
+
+function confirmPayment() {
+  const validSplits = paymentSplits.value.filter((s) => Number(s.amount || 0) > 0)
+  const primary = validSplits.reduce(
+    (a, b) => (Number(b.amount || 0) > Number(a.amount || 0) ? b : a),
+    validSplits[0] || { method: 'cash', amount: 0 },
+  )
+  emit('update:paymentMethod', primary.method)
+  emit('submit-and-pay', { splits: validSplits })
+  showPaymentPopup.value = false
 }
 
 function rowTotal(line) {
@@ -1032,12 +1111,52 @@ defineExpose({
   padding: 0.36rem 0.55rem;
 }
 
-.radio-group {
-  display: inline-flex;
+.discount-row {
+  display: flex;
   align-items: center;
-  gap: 0.48rem;
-  font-size: 0.74rem;
-  margin: 0.35rem 0 0.2rem;
+  justify-content: space-between;
+  gap: 0.45rem;
+  font-size: 0.76rem;
+}
+
+.discount-label {
+  flex-shrink: 0;
+  color: var(--pos-primary);
+  font-weight: 600;
+}
+
+.discount-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  max-width: 180px;
+}
+
+.discount-input {
+  border-radius: 8px 0 0 8px !important;
+  border-left: none !important;
+  flex: 1;
+  min-width: 0;
+}
+
+.discount-type-btn {
+  height: 100%;
+  min-height: 32px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--pos-border);
+  border-radius: 0 8px 8px 0;
+  background: var(--pos-soft);
+  color: var(--pos-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.discount-type-btn:hover {
+  background: var(--pos-border);
 }
 
 .summary-box {
@@ -1124,5 +1243,203 @@ defineExpose({
   .checkout-actions {
     position: static;
   }
+}
+
+.pay-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgb(0 0 0 / 0.55);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.pay-popup {
+  background: #fff;
+  border-radius: 20px;
+  width: min(440px, 100%);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.22);
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.2rem;
+  color: var(--pos-text);
+}
+
+.pay-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pay-popup-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--pos-primary);
+}
+
+.pay-popup-close {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--pos-border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--pos-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pay-total-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--pos-soft);
+  border: 1px solid var(--pos-border);
+  border-radius: 12px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.pay-total-banner strong {
+  font-size: 1.05rem;
+  color: var(--pos-primary);
+}
+
+.pay-splits {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.pay-split-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pay-split-row:has(.pay-split-remove:not(.pay-split-remove)) {
+  grid-template-columns: auto 1fr;
+}
+
+.pay-method-select {
+  border-radius: 9px;
+  padding: 0.38rem 0.5rem;
+  font-size: 0.8rem;
+  min-width: 120px;
+}
+
+.pay-amount-input {
+  border-radius: 9px;
+  padding: 0.38rem 0.5rem;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.pay-split-remove {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--pos-accent);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--pos-accent);
+  font-size: 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pay-add-split-btn {
+  border: 1px dashed var(--pos-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--pos-primary);
+  font-size: 0.78rem;
+  padding: 0.4rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pay-add-split-btn:hover {
+  background: var(--pos-soft);
+}
+
+.pay-remaining-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: rgb(var(--pos-accent-rgb, 201 141 66) / 0.1);
+  border: 1px solid rgb(var(--pos-accent-rgb, 201 141 66) / 0.25);
+  font-size: 0.82rem;
+  color: var(--pos-accent);
+  transition: all 0.2s;
+}
+
+.pay-remaining-row.zero {
+  background: rgb(11 125 74 / 0.08);
+  border-color: rgb(11 125 74 / 0.25);
+  color: var(--pos-success-color, #0b7d4a);
+}
+
+.pay-remaining-row.over {
+  background: rgb(171 53 53 / 0.08);
+  border-color: rgb(171 53 53 / 0.25);
+  color: var(--pos-danger-color, #ab3535);
+}
+
+.pay-split-summary {
+  border: 1px solid var(--pos-border);
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.pay-split-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.85);
+}
+
+.pay-popup-footer {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+.pay-cancel-btn {
+  border: 1px solid var(--pos-border);
+  background: #fff;
+  color: var(--pos-text);
+  border-radius: 11px;
+  padding: 0.6rem;
+  cursor: pointer;
+  font-size: 0.84rem;
+}
+
+.pay-confirm-btn {
+  border: 0;
+  border-radius: 11px;
+  background: var(--pos-primary);
+  color: #fff;
+  padding: 0.6rem;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 700;
+  transition: opacity 0.15s;
+}
+
+.pay-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 </style>
