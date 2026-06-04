@@ -677,8 +677,8 @@ const authGuest = computed(() => Boolean(authProfile.value?.is_guest))
 const moduleThemeVars = computed(() => ({
   '--module-500': '#6f4a31',
   '--module-600': '#5a3a25',
-  '--module-50': '#f1e7db',
-  '--module-title-light': '#3f2a1d',
+  '--module-50': '#f3ede7',
+  '--module-title-light': '#1c1411',
   '--module-title-dark': '#e8dacd',
 }))
 
@@ -973,61 +973,61 @@ document.body.style.overflow = ''
 <style scoped>
 .management-layout,
 .management-auth-shell {
-  --bg-page: #f6f1ea;
-  --bg-card: #fdf8f1;
-  --bg-soft: #f1e7db;
-  --border: #d5c3af;
-  --text: #3f2a1d;
-  --muted: #846b58;
-  --muted-2: #9b8472;
+  --bg-page: #f5f6f8;
+  --bg-card: #ffffff;
+  --bg-soft: #f0ece7;
+  --border: #e8e3dd;
+  --text: #1c1411;
+  --muted: #7a6a60;
+  --muted-2: #9a8a80;
   --danger: #dc2626;
-  --shadow: 0 20px 45px rgb(63 42 29 / 0.09);
-  --shadow-sm: 0 8px 20px rgb(63 42 29 / 0.06);
+  --shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 4px 16px rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px rgb(0 0 0 / 0.04);
 
   --palette-deep-sapphire: #6f4a31;
   --palette-deep-sapphire-rgb: 111 74 49;
-  --palette-june-bud: #f1e7db;
-  --palette-june-bud-rgb: 241 231 219;
+  --palette-june-bud: #f0ece7;
+  --palette-june-bud-rgb: 240 236 231;
   --palette-deep-saffron: #c98d42;
   --palette-deep-saffron-rgb: 201 141 66;
-  --palette-eggshell: #fbf8f4;
-  --palette-eggshell-rgb: 251 248 244;
-  --theme-surface-alt: #f1e7db;
-  --theme-background: #f6f1ea;
-  --theme-border: #d5c3af;
-  --glass-bg: #fdf8f1;
-  --glass-border: #d5c3af;
-  --glass-highlight: rgb(255 255 255 / 0.9);
+  --palette-eggshell: #ffffff;
+  --palette-eggshell-rgb: 255 255 255;
+  --theme-surface-alt: #f0ece7;
+  --theme-background: #f5f6f8;
+  --theme-border: #e8e3dd;
+  --glass-bg: #ffffff;
+  --glass-border: #e8e3dd;
+  --glass-highlight: rgb(255 255 255 / 0.95);
   --accent-green: #6f4a31;
-  --accent-green80: rgb(111 74 49 / 0.9);
-  --accent-green60: rgb(111 74 49 / 0.7);
-  --accent-green40: rgb(111 74 49 / 0.14);
-  --accent-green20: rgb(111 74 49 / 0.08);
-  --accent-cream: #fbf8f4;
-  --accent-cream80: rgb(251 248 244 / 0.95);
-  --accent-cream50: rgb(251 248 244 / 0.82);
-  --accent-cream20: rgb(251 248 244 / 0.6);
+  --accent-green80: rgb(111 74 49 / 0.85);
+  --accent-green60: rgb(111 74 49 / 0.6);
+  --accent-green40: rgb(111 74 49 / 0.1);
+  --accent-green20: rgb(111 74 49 / 0.06);
+  --accent-cream: #f0ece7;
+  --accent-cream80: rgb(240 236 231 / 0.95);
+  --accent-cream50: rgb(240 236 231 / 0.7);
+  --accent-cream20: rgb(240 236 231 / 0.4);
   --accent-gold: #c98d42;
-  --accent-gold80: rgb(201 141 66 / 0.9);
-  --accent-gold50: rgb(201 141 66 / 0.6);
-  --accent-gold20: rgb(201 141 66 / 0.12);
+  --accent-gold80: rgb(201 141 66 / 0.85);
+  --accent-gold50: rgb(201 141 66 / 0.5);
+  --accent-gold20: rgb(201 141 66 / 0.1);
   --accent: #6f4a31;
-  --text-primary: #3f2a1d;
-  --text-secondary: #654a38;
-  --text-muted: #846b58;
-  --management-ink: #3f2a1d;
-  --ink-900: #3f2a1d;
-  --ink-800: #654a38;
-  --ink-700: #846b58;
-  --ink-600: #9b8472;
-  --ink-400: #bea694;
-  --ink-200: #e8dacd;
+  --text-primary: #1c1411;
+  --text-secondary: #3d2e26;
+  --text-muted: #7a6a60;
+  --management-ink: #1c1411;
+  --ink-900: #1c1411;
+  --ink-800: #3d2e26;
+  --ink-700: #7a6a60;
+  --ink-600: #9a8a80;
+  --ink-400: #c4b8b0;
+  --ink-200: #ece8e3;
   --success: #16a34a;
   --success-rgb: 22 163 74;
   --warning: #d97706;
   --warning-rgb: 217 119 6;
-  --shadow-deep: 0 18px 40px rgb(15 23 42 / 0.09);
-  --shadow-soft: 0 10px 24px rgb(15 23 42 / 0.06);
+  --shadow-deep: 0 4px 24px rgb(0 0 0 / 0.08);
+  --shadow-soft: 0 1px 6px rgb(0 0 0 / 0.05);
   --radius-xl: 28px;
   --radius-lg: 18px;
   --radius-md: 14px;
@@ -1045,9 +1045,8 @@ document.body.style.overflow = ''
 
   min-height: 100vh;
   background:
-radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--module-500) 10%, transparent), transparent 38%),
-radial-gradient(circle at 88% 84%, color-mix(in srgb, #c98d42 8%, transparent), transparent 42%),
-var(--bg-page);
+    radial-gradient(circle at 5% 0%, rgb(201 141 66 / 0.04) 0%, transparent 40%),
+    var(--bg-page);
   color: var(--text);
 }
 
