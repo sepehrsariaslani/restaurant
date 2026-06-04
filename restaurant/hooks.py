@@ -12,13 +12,13 @@ app_license = "mit"
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
-# 	{
-# 		"name": "restaurant",
-# 		"logo": "/assets/restaurant/logo.png",
-# 		"title": "Restaurant",
-# 		"route": "/restaurant",
-# 		"has_permission": "restaurant.api.permission.has_app_permission"
-# 	}
+#       {
+#               "name": "restaurant",
+#               "logo": "/assets/restaurant/logo.png",
+#               "title": "Restaurant",
+#               "route": "/restaurant",
+#               "has_permission": "restaurant.api.permission.has_app_permission"
+#       }
 # ]
 
 # Includes in <head>
@@ -27,8 +27,8 @@ app_license = "mit"
 # include js, css files in header of desk.html
 # app_include_css = "/assets/restaurant/css/restaurant.css"
 app_include_js = [
-	"/assets/restaurant/js/desk_print_picker.js",
-	"/assets/restaurant/js/activity_tracker.js",
+        "/assets/restaurant/js/desk_print_picker.js",
+        "/assets/restaurant/js/activity_tracker.js",
 ]
 
 # include js, css files in header of web template
@@ -52,8 +52,8 @@ app_include_js = [
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 doctype_js = {
-	"Auto Price List": "public/js/auto_price_list.js",
-	"Sales Order": "public/js/sales_order.js",
+        "Auto Price List": "public/js/auto_price_list.js",
+        "Sales Order": "public/js/sales_order.js",
 }
 
 # Svg Icons
@@ -69,7 +69,7 @@ homepage = "restaurant"
 
 # website user home page (by Role)
 # role_home_page = {
-# 	"Role": "home_page"
+#       "Role": "home_page"
 # }
 
 # Generators
@@ -79,49 +79,35 @@ homepage = "restaurant"
 # website_generators = ["Web Page"]
 
 website_route_rules = [
-	{"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
-	{"from_route": "/menu", "to_route": "restaurant/menu"},
-	{"from_route": "/item/<slug>", "to_route": "restaurant/item"},
-	{"from_route": "/about-us", "to_route": "restaurant/about_us"},
-	{"from_route": "/faq", "to_route": "restaurant/faq"},
-	{"from_route": "/cart", "to_route": "restaurant/cart"},
-	{"from_route": "/order-success", "to_route": "restaurant/order_success"},
-	{"from_route": "/order-success/<order_code>", "to_route": "restaurant/order_success"},
-	{"from_route": "/restaurant/item/<slug>", "to_route": "restaurant/item"},
-	{"from_route": "/restaurant/about-us", "to_route": "restaurant/about_us"},
-	{"from_route": "/restaurant/faq", "to_route": "restaurant/faq"},
-	{"from_route": "/restaurant/cart", "to_route": "restaurant/cart"},
-	{"from_route": "/restaurant/menu", "to_route": "restaurant/menu"},
-	{"from_route": "/restaurant/order-success", "to_route": "restaurant/order_success"},
-	{"from_route": "/restaurant/order-success/<order_code>", "to_route": "restaurant/order_success"},
-	{"from_route": "/desk", "to_route": "management"},
-	{"from_route": "/desk/login", "to_route": "management/login"},
-	{"from_route": "/desk/pos", "to_route": "management/pos"},
-	{"from_route": "/desk/orders", "to_route": "management/orders"},
-	{"from_route": "/desk/products", "to_route": "management/products"},
-	{"from_route": "/desk/product", "to_route": "management/product"},
-	{"from_route": "/desk/menu-groups", "to_route": "management/menu_groups"},
-	{"from_route": "/desk/menu-group", "to_route": "management/menu_group"},
-	{"from_route": "/desk/site-settings", "to_route": "management/site_settings"},
-	{"from_route": "/desk/boms", "to_route": "management/boms"},
-	{"from_route": "/desk/bom", "to_route": "management/bom"},
-	{"from_route": "/desk/customers", "to_route": "management/customers"},
-	{"from_route": "/desk/reports", "to_route": "management/reports"},
-	{"from_route": "/desk/reports/<report_key>", "to_route": "management/report"},
-	{"from_route": "/desk/print-formats", "to_route": "management/print_formats"},
-	{"from_route": "/desk/settings", "to_route": "management/settings"},
-	{"from_route": "/desk/pos-profile", "to_route": "management/pos_profile"},
-	{"from_route": "/desk/pos_profile", "to_route": "management/pos_profile"},
-	{"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
-	{"from_route": "/management/print-formats", "to_route": "management/print_formats"},
-	{"from_route": "/management/settings", "to_route": "management/settings"},
-	{"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
-	{"from_route": "/management/menu-group", "to_route": "management/menu_group"},
-	{"from_route": "/management/site-settings", "to_route": "management/site_settings"},
-	{"from_route": "/pos-profile", "to_route": "pos_profile"},
-	{"from_route": "/pos_profile", "to_route": "pos_profile"},
-	{"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
-	{"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
+        # Customer-facing routes (no prefix)
+        {"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
+        {"from_route": "/menu", "to_route": "restaurant/menu"},
+        {"from_route": "/item/<slug>", "to_route": "restaurant/item"},
+        {"from_route": "/about-us", "to_route": "restaurant/about_us"},
+        {"from_route": "/faq", "to_route": "restaurant/faq"},
+        {"from_route": "/cart", "to_route": "restaurant/cart"},
+        {"from_route": "/order-success", "to_route": "restaurant/order_success"},
+        {"from_route": "/order-success/<order_code>", "to_route": "restaurant/order_success"},
+        # Management routes
+        {"from_route": "/management", "to_route": "management"},
+        {"from_route": "/management/login", "to_route": "management/login"},
+        {"from_route": "/management/dashboard", "to_route": "management"},
+        {"from_route": "/management/pos", "to_route": "management/pos"},
+        {"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
+        {"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
+        {"from_route": "/management/orders", "to_route": "management/orders"},
+        {"from_route": "/management/products", "to_route": "management/products"},
+        {"from_route": "/management/product", "to_route": "management/product"},
+        {"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
+        {"from_route": "/management/menu-group", "to_route": "management/menu_group"},
+        {"from_route": "/management/site-settings", "to_route": "management/site_settings"},
+        {"from_route": "/management/boms", "to_route": "management/boms"},
+        {"from_route": "/management/bom", "to_route": "management/bom"},
+        {"from_route": "/management/customers", "to_route": "management/customers"},
+        {"from_route": "/management/reports", "to_route": "management/reports"},
+        {"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
+        {"from_route": "/management/print-formats", "to_route": "management/print_formats"},
+        {"from_route": "/management/settings", "to_route": "management/settings"},
 ]
 
 # Jinja
@@ -129,8 +115,8 @@ website_route_rules = [
 
 # add methods and filters to jinja environment
 # jinja = {
-# 	"methods": "restaurant.utils.jinja_methods",
-# 	"filters": "restaurant.utils.jinja_filters"
+#       "methods": "restaurant.utils.jinja_methods",
+#       "filters": "restaurant.utils.jinja_filters"
 # }
 
 # Installation
@@ -172,11 +158,11 @@ website_route_rules = [
 # Permissions evaluated in scripted ways
 
 # permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
+#       "Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
 # }
 #
 # has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
+#       "Event": "frappe.desk.doctype.event.event.has_permission",
 # }
 
 # DocType Class
@@ -184,7 +170,7 @@ website_route_rules = [
 # Override standard doctype classes
 
 # override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
+#       "ToDo": "custom_app.overrides.CustomToDo"
 # }
 
 # Document Events
@@ -192,68 +178,68 @@ website_route_rules = [
 # Hook on document methods and events
 
 # doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
+#       "*": {
+#               "on_update": "method",
+#               "on_cancel": "method",
+#               "on_trash": "method"
+#       }
 # }
 
 doc_events = {
-	"BOM": {
-		"on_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
-		"before_submit": "restaurant.api.refresh_item_nutrition_for_bom",
-		"validate": "restaurant.api.refresh_item_nutrition_for_bom",
-		"on_update_after_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
-		"on_trash": "restaurant.api.clear_item_default_bom_links_for_bom",
-	},
-	"Work Order": {
-		"after_insert": "restaurant.api.sync_work_order_required_items_from_ticket",
-		"on_update": "restaurant.api.sync_work_order_required_items_from_ticket",
-		"on_cancel": "restaurant.api.unlink_work_order_from_restaurant_ticket",
-		"on_trash": "restaurant.api.unlink_work_order_from_restaurant_ticket",
-	},
-	"Restaurant Production Ticket": {
-		"on_cancel": "restaurant.api.unlink_production_ticket_links",
-		"on_trash": "restaurant.api.unlink_production_ticket_links",
-	},
+        "BOM": {
+                "on_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
+                "before_submit": "restaurant.api.refresh_item_nutrition_for_bom",
+                "validate": "restaurant.api.refresh_item_nutrition_for_bom",
+                "on_update_after_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
+                "on_trash": "restaurant.api.clear_item_default_bom_links_for_bom",
+        },
+        "Work Order": {
+                "after_insert": "restaurant.api.sync_work_order_required_items_from_ticket",
+                "on_update": "restaurant.api.sync_work_order_required_items_from_ticket",
+                "on_cancel": "restaurant.api.unlink_work_order_from_restaurant_ticket",
+                "on_trash": "restaurant.api.unlink_work_order_from_restaurant_ticket",
+        },
+        "Restaurant Production Ticket": {
+                "on_cancel": "restaurant.api.unlink_production_ticket_links",
+                "on_trash": "restaurant.api.unlink_production_ticket_links",
+        },
 }
 
 # Scheduled Tasks
 # ---------------
 
 # scheduler_events = {
-# 	"all": [
-# 		"restaurant.tasks.all"
-# 	],
-# 	"daily": [
-# 		"restaurant.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"restaurant.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"restaurant.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"restaurant.tasks.monthly"
-# 	],
+#       "all": [
+#               "restaurant.tasks.all"
+#       ],
+#       "daily": [
+#               "restaurant.tasks.daily"
+#       ],
+#       "hourly": [
+#               "restaurant.tasks.hourly"
+#       ],
+#       "weekly": [
+#               "restaurant.tasks.weekly"
+#       ],
+#       "monthly": [
+#               "restaurant.tasks.monthly"
+#       ],
 # }
 
 scheduler_events = {
-	"daily": [
-		"restaurant.restaurant.doctype.auto_price_list.auto_price_list.run_due_restaurant_price_lists",
-		"restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
-		"restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
-	],
-	"cron": {
-		"* * * * *": [
-			"restaurant.snapp_sync.sync_snapp_orders",
-		],
-		"*/5 * * * *": [
-			"restaurant.activity_tracking.jobs.close_timed_out_activity_sessions",
-		],
-	}
+        "daily": [
+                "restaurant.restaurant.doctype.auto_price_list.auto_price_list.run_due_restaurant_price_lists",
+                "restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
+                "restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
+        ],
+        "cron": {
+                "* * * * *": [
+                        "restaurant.snapp_sync.sync_snapp_orders",
+                ],
+                "*/5 * * * *": [
+                        "restaurant.activity_tracking.jobs.close_timed_out_activity_sessions",
+                ],
+        }
 }
 
 # Testing
@@ -265,14 +251,14 @@ scheduler_events = {
 # ------------------------------
 #
 # override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "restaurant.event.get_events"
+#       "frappe.desk.doctype.event.event.get_events": "restaurant.event.get_events"
 # }
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
 # override_doctype_dashboards = {
-# 	"Task": "restaurant.task.get_dashboard_data"
+#       "Task": "restaurant.task.get_dashboard_data"
 # }
 
 # exempt linked doctypes from being automatically cancelled
@@ -301,38 +287,38 @@ on_logout = "restaurant.activity_tracking.api.on_logout"
 # --------------------
 
 # user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
+#       {
+#               "doctype": "{doctype_1}",
+#               "filter_by": "{filter_by}",
+#               "redact_fields": ["{field_1}", "{field_2}"],
+#               "partial": 1,
+#       },
+#       {
+#               "doctype": "{doctype_2}",
+#               "filter_by": "{filter_by}",
+#               "partial": 1,
+#       },
+#       {
+#               "doctype": "{doctype_3}",
+#               "strict": False,
+#       },
+#       {
+#               "doctype": "{doctype_4}"
+#       }
 # ]
 
 # Authentication and authorization
 # --------------------------------
 
 # auth_hooks = [
-# 	"restaurant.auth.validate"
+#       "restaurant.auth.validate"
 # ]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True
 
 # default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
+#       "Logging DocType Name": 30  # days to retain logs
 # }
 
 

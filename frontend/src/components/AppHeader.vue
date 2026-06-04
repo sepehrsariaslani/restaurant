@@ -28,7 +28,7 @@
           ورود مدیریت
         </a>
 
-        <a href="/restaurant/cart" class="cart-pill" aria-label="سبد سفارش">
+        <a href="/cart" class="cart-pill" aria-label="سبد سفارش">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
             <circle cx="8" cy="20" r="1" />
             <circle cx="18" cy="20" r="1" />
@@ -113,14 +113,14 @@ const currentPath = computed(() => {
 const links = computed(() => {
   const base = [
     { key: 'landing', label: 'خانه', url: '/restaurant', prefix: '/restaurant', exact: true },
-    { key: 'menu', label: 'منو', url: '/restaurant/menu', prefix: '/restaurant/menu' },
-    { key: 'about-us', label: 'درباره ما', url: '/restaurant/about-us', prefix: '/restaurant/about-us' },
-    { key: 'faq', label: 'سوالات', url: '/restaurant/faq', prefix: '/restaurant/faq' },
-    { key: 'cart', label: 'سبد سفارش', url: '/restaurant/cart', prefix: '/restaurant/cart', kind: 'cart' },
+    { key: 'menu', label: 'منو', url: '/menu', prefix: '/menu' },
+    { key: 'about-us', label: 'درباره ما', url: '/about-us', prefix: '/about-us' },
+    { key: 'faq', label: 'سوالات', url: '/faq', prefix: '/faq' },
+    { key: 'cart', label: 'سبد سفارش', url: '/cart', prefix: '/cart', kind: 'cart' },
   ]
 
   if (props.hasLastOrder && props.lastOrderUrl) {
-    base.push({ key: 'order-success', label: 'پیگیری سفارش', url: props.lastOrderUrl, prefix: '/restaurant/order-success' })
+    base.push({ key: 'order-success', label: 'پیگیری سفارش', url: props.lastOrderUrl, prefix: '/order-success' })
   }
 
   return base
