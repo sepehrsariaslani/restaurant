@@ -28,7 +28,16 @@
 
     <div class="cart-head">
       <h3>سبد خرید</h3>
-      <button type="button" class="clear-btn" @click="$emit('clear-cart')">حذف همه</button>
+      <div class="cart-head-actions">
+        <button
+          v-if="undoLine"
+          type="button"
+          class="undo-btn"
+          :title="`بازگردانی: ${undoLine.title}`"
+          @click="$emit('undo-last-line')"
+        >↩ {{ undoLine.title }}</button>
+        <button type="button" class="clear-btn" @click="$emit('clear-cart')">حذف همه</button>
+      </div>
     </div>
 
     <div class="cart-list" v-if="cartLines.length">
@@ -272,6 +281,25 @@
             class="pay-split-remove"
             @click="removeSplit(idx)"
           >×</button>
+          <div v-if="split.method === 'cash'" class="cash-calc-row">
+            <span class="cash-calc-label">دریافتی از مشتری:</span>
+            <PersianNumberInput
+              :model-value="splitReceivedAmounts[idx] || 0"
+              input-class="pay-amount-input cash-received-input"
+              placeholder="مبلغ دریافتی"
+              :min="0"
+              @update:model-value="splitReceivedAmounts[idx] = $event"
+            />
+            <span
+              v-if="(splitReceivedAmounts[idx] || 0) > 0"
+              class="cash-change-label"
+              :class="{ negative: (splitReceivedAmounts[idx] || 0) < Number(split.amount || 0) }"
+            >
+              {{ (splitReceivedAmounts[idx] || 0) >= Number(split.amount || 0)
+                ? `باقی پول: ${formatMoney((splitReceivedAmounts[idx] || 0) - Number(split.amount || 0), currency)}`
+                : `کم دارد: ${formatMoney(Number(split.amount || 0) - (splitReceivedAmounts[idx] || 0), currency)}` }}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -385,6 +413,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  undoLine: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits([
@@ -399,6 +431,7 @@ const emit = defineEmits([
   'increment-line',
   'decrement-line',
   'remove-line',
+  'undo-last-line',
   'edit-line-note',
   'edit-line-customization',
   'clear-cart',
@@ -414,6 +447,7 @@ const emit = defineEmits([
 const showAdvancedFinancial = ref(true)
 const showPaymentPopup = ref(false)
 const paymentSplits = ref([{ method: 'cash', amount: 0 }])
+const splitReceivedAmounts = ref([0])
 
 const splitTotal = computed(() => paymentSplits.value.reduce((sum, s) => sum + Number(s.amount || 0), 0))
 const splitRemaining = computed(() => Number(props.totals?.payableAmount || 0) - splitTotal.value)
@@ -466,19 +500,23 @@ function toggleDiscountType() {
   patchFinancial({ discountType: next })
 }
 
-function openPaymentPopup() {
+function openPaymentPopup(preferredMethod = null) {
   const total = Number(props.totals?.payableAmount || 0)
-  paymentSplits.value = [{ method: props.paymentMethod || 'cash', amount: total }]
+  const method = preferredMethod || props.paymentMethod || 'cash'
+  paymentSplits.value = [{ method, amount: total }]
+  splitReceivedAmounts.value = [0]
   showPaymentPopup.value = true
 }
 
 function addSplit() {
   const remaining = Math.max(splitRemaining.value, 0)
   paymentSplits.value.push({ method: 'cash', amount: remaining })
+  splitReceivedAmounts.value.push(0)
 }
 
 function removeSplit(idx) {
   paymentSplits.value.splice(idx, 1)
+  splitReceivedAmounts.value.splice(idx, 1)
 }
 
 function splitMethodLabel(method) {
@@ -630,6 +668,7 @@ function focusDiscountInput() {
 
 defineExpose({
   focusDiscountInput,
+  openPaymentPopup,
 })
 </script>
 
@@ -773,6 +812,67 @@ defineExpose({
   background: #fff;
   color: var(--pos-primary);
   cursor: pointer;
+}
+
+.cart-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.undo-btn {
+  background: var(--pos-accent-soft, rgb(255 152 54 / 0.12));
+  border: 1px solid var(--pos-accent, #ff9836);
+  color: var(--pos-accent, #ff9836);
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  padding: 0.22rem 0.6rem;
+  cursor: pointer;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  transition: background 0.12s;
+}
+
+.undo-btn:hover {
+  background: var(--pos-accent, #ff9836);
+  color: #fff;
+}
+
+.cash-calc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.55rem;
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+  border-radius: 8px;
+  border: 1px dashed var(--pos-border);
+}
+
+.cash-calc-label {
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.65);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cash-received-input {
+  max-width: 130px;
+}
+
+.cash-change-label {
+  font-weight: 700;
+  color: var(--pos-success, #0b7d4a);
+  white-space: nowrap;
+}
+
+.cash-change-label.negative {
+  color: var(--pos-danger, #ab3535);
 }
 
 .cart-head {

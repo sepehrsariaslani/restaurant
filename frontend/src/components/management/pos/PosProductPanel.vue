@@ -48,7 +48,7 @@
         <div class="search-box">
           <span class="icon">⌕</span>
           <input
-            class="input dark-input"
+            class="input dark-input product-search-input"
             :value="searchTerm"
             @input="$emit('update:searchTerm', $event.target.value)"
             placeholder="نام یا کد محصول"

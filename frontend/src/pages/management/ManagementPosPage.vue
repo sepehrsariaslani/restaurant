@@ -26,6 +26,15 @@
             فاکتورهای باز
             <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
           </button>
+          <button
+            type="button"
+            class="left-tab-btn"
+            :class="{ active: leftPanelTab === 'history' }"
+            @click="leftPanelTab = 'history'; loadTodayTransactions()"
+          >
+            تراکنش‌های امروز
+            <span class="count-badge" v-if="todayTransactions.length">{{ todayTransactions.length }}</span>
+          </button>
         </div>
 
         <section v-if="leftPanelTab === 'tables'" class="table-session-preview">
@@ -76,6 +85,30 @@
             </div>
           </template>
           <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
+        </section>
+
+        <section v-if="leftPanelTab === 'history'" class="history-panel">
+          <div class="tab-panel-toolbar">
+            <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions" title="بروزرسانی">↻</button>
+          </div>
+          <p class="muted" v-if="todayTransactionsLoading">در حال دریافت...</p>
+          <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
+          <p class="muted" v-else-if="!todayTransactions.length">هنوز تراکنشی امروز ثبت نشده.</p>
+          <div v-else class="history-list">
+            <article v-for="tx in todayTransactions" :key="tx.name" class="history-card">
+              <div class="history-card-head">
+                <strong>{{ tx.order_code || tx.name }}</strong>
+                <span class="history-time">{{ formatInvoiceDateTime(tx.created_at) }}</span>
+              </div>
+              <div class="history-card-body">
+                <span>{{ tx.customer_name || 'POS Customer' }}</span>
+                <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
+              </div>
+              <span class="history-method-badge" v-if="tx.payment_method">
+                {{ tx.payment_method === 'cash' ? '💵 نقدی' : tx.payment_method === 'card' ? '💳 کارتخوان' : tx.payment_method }}
+              </span>
+            </article>
+          </div>
         </section>
 
         <section v-if="leftPanelTab === 'invoices'" class="open-invoices-panel">
@@ -155,6 +188,31 @@
         @open-bom="openCustomizationSheet"
       />
 
+      <button type="button" class="kbd-help-btn" title="میانبرهای کیبورد (?)" @click="showKeyboardMap = true">⌨</button>
+
+      <div v-if="showKeyboardMap" class="kbd-map-backdrop" @click.self="showKeyboardMap = false">
+        <section class="kbd-map-modal" dir="rtl">
+          <header class="kbd-map-head">
+            <h3>⌨ میانبرهای کیبورد</h3>
+            <button type="button" class="kbd-map-close" @click="showKeyboardMap = false">×</button>
+          </header>
+          <table class="kbd-map-table">
+            <tbody>
+              <tr><td><kbd>F1</kbd></td><td>باز کردن پاپ‌آپ پرداخت نقدی</td></tr>
+              <tr><td><kbd>F2</kbd></td><td>باز کردن پاپ‌آپ پرداخت (کارتخوان)</td></tr>
+              <tr><td><kbd>F8</kbd></td><td>رفتن به فیلد تخفیف</td></tr>
+              <tr><td><kbd>F9</kbd></td><td>چاپ فاکتور</td></tr>
+              <tr><td><kbd>Delete</kbd></td><td>حذف آخرین آیتم سبد خرید</td></tr>
+              <tr><td><kbd>/</kbd></td><td>رفتن سریع به جستجوی محصول</td></tr>
+              <tr><td><kbd>Insert</kbd></td><td>ویرایش تعداد آیتم انتخابی</td></tr>
+              <tr><td><kbd>Escape</kbd></td><td>بستن سرچ / بستن پنجره‌ها</td></tr>
+              <tr><td><kbd>?</kbd></td><td>نمایش / پنهان کردن همین صفحه</td></tr>
+            </tbody>
+          </table>
+          <p class="kbd-map-note">میانبرها فقط زمانی که در فیلد تایپ نیستید فعال هستند.</p>
+        </section>
+      </div>
+
       <PosCartPanel
         ref="cartPanelRef"
         class="cart-col"
@@ -186,7 +244,9 @@
         @patch-financial="patchFinancial"
         @increment-line="setCartQty($event, Number($event.qty || 0) + 1)"
         @decrement-line="setCartQty($event, Number($event.qty || 0) - 1)"
+        :undo-line="lastRemovedLine"
         @remove-line="setCartQty($event, 0)"
+        @undo-last-line="undoLastRemoval"
         @edit-line-note="editLineNote"
         @edit-line-customization="openLineCustomizationEditor"
         @clear-cart="clearCart"
@@ -411,6 +471,12 @@ const posInfoExpanded = ref(false)
 const openInvoicesExpanded = ref(false)
 const tableExpanded = ref(false)
 const leftPanelTab = ref('tables')
+const lastRemovedLine = ref(null)
+const showKeyboardMap = ref(false)
+const todayTransactions = ref([])
+const todayTransactionsLoading = ref(false)
+const todayTransactionsError = ref('')
+const popularSlugsMap = ref({})
 const posProfileSummary = reactive({
   name: '',
   title: '',
@@ -578,7 +644,7 @@ const selectedOpenInvoice = computed(() =>
 
 const filteredProducts = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return products.value.filter((row) => {
+  const filtered = products.value.filter((row) => {
     if (selectedCategory.value && row.category_slug !== selectedCategory.value) {
       return false
     }
@@ -599,6 +665,14 @@ const filteredProducts = computed(() => {
       name.replace(/\s+/g, '').includes(normalizedQuery)
     )
   })
+  if (!query && Object.keys(popularSlugsMap.value).length) {
+    return [...filtered].sort((a, b) => {
+      const sA = String(a.slug || a.restaurant_slug || a.name || '')
+      const sB = String(b.slug || b.restaurant_slug || b.name || '')
+      return (popularSlugsMap.value[sB] || 0) - (popularSlugsMap.value[sA] || 0)
+    })
+  }
+  return filtered
 })
 
 const productQtyMap = computed(() => {
@@ -1539,6 +1613,7 @@ function setCartQty(line, qty) {
   if (safeQty === 0) {
     const idx = cart.findIndex((row) => row.line_id === line.line_id)
     if (idx >= 0) {
+      lastRemovedLine.value = { ...cart[idx] }
       cart.splice(idx, 1)
     }
     if (selectedCartLineId.value === line.line_id) {
@@ -1547,6 +1622,13 @@ function setCartQty(line, qty) {
     return
   }
   line.qty = Number(safeQty.toFixed(3))
+}
+
+function undoLastRemoval() {
+  if (!lastRemovedLine.value) return
+  cart.push({ ...lastRemovedLine.value })
+  selectedCartLineId.value = lastRemovedLine.value.line_id
+  lastRemovedLine.value = null
 }
 
 function addToCart(item, qty = 1, customizationPayload = null, hasCustomization = false, unitPrice = null, options = {}) {
@@ -1568,9 +1650,12 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
       existing.customization_ingredients = options.customizationIngredients
     }
     selectedCartLineId.value = existing.line_id
+    recordPopularItem(itemSlug, qty)
     return
   }
 
+  recordPopularItem(itemSlug, qty)
+  popularSlugsMap.value = buildPopularSlugsMapFromLocalStorage()
   const lineId = `line-${Math.random().toString(36).slice(2, 11)}`
   cart.push({
     line_id: lineId,
@@ -1626,6 +1711,61 @@ function clearCart() {
   }
   cart.splice(0, cart.length)
   selectedCartLineId.value = ''
+  lastRemovedLine.value = null
+}
+
+const POPULAR_ITEMS_KEY = 'pos-popular-items-v2'
+
+function buildPopularSlugsMapFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(POPULAR_ITEMS_KEY)
+    if (!raw) return {}
+    const stored = JSON.parse(raw)
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const result = {}
+    for (const [slug, entries] of Object.entries(stored)) {
+      const total = (entries || []).filter(e => e.ts >= cutoff).reduce((s, e) => s + e.qty, 0)
+      if (total > 0) result[slug] = total
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+function recordPopularItem(slug, qty) {
+  if (!slug) return
+  try {
+    const raw = localStorage.getItem(POPULAR_ITEMS_KEY)
+    const stored = raw ? JSON.parse(raw) : {}
+    if (!stored[slug]) stored[slug] = []
+    stored[slug].push({ ts: Date.now(), qty: Number(qty || 1) })
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    for (const key of Object.keys(stored)) {
+      stored[key] = (stored[key] || []).filter(e => e.ts >= cutoff)
+      if (!stored[key].length) delete stored[key]
+    }
+    localStorage.setItem(POPULAR_ITEMS_KEY, JSON.stringify(stored))
+  } catch {
+    // ignore
+  }
+}
+
+async function loadTodayTransactions() {
+  if (todayTransactionsLoading.value) return
+  todayTransactionsLoading.value = true
+  todayTransactionsError.value = ''
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const payload = await listManagementOrders({ date_from: today, date_to: today, source: 'web' })
+    todayTransactions.value = (payload?.orders || []).filter(o =>
+      ['paid', 'delivered', 'completed'].includes(String(o.status || '').toLowerCase()),
+    )
+  } catch (err) {
+    todayTransactionsError.value = err.message || 'خطا در بارگذاری تراکنش‌های امروز'
+  } finally {
+    todayTransactionsLoading.value = false
+  }
 }
 
 function closeCustomizationSheet() {
@@ -2624,6 +2764,7 @@ async function refreshHardwareStatus() {
 async function loadPOSBoot() {
   loading.value = true
   error.value = ''
+  popularSlugsMap.value = buildPopularSlugsMapFromLocalStorage()
   try {
     const payload = await getManagementPOSBoot()
     products.value = payload.items || []
@@ -2806,9 +2947,42 @@ function onWindowKeydown(event) {
     return
   }
 
+  if (key === '?') {
+    event.preventDefault()
+    showKeyboardMap.value = !showKeyboardMap.value
+    return
+  }
+
+  if (key === '/') {
+    event.preventDefault()
+    document.querySelector('.product-search-input')?.focus()
+    return
+  }
+
+  if (key === 'Delete' && !search.value) {
+    if (cart.length > 0) {
+      event.preventDefault()
+      const lastLine = cart[cart.length - 1]
+      setCartQty(lastLine, 0)
+    }
+    return
+  }
+
+  if (key === 'F1') {
+    event.preventDefault()
+    if (cart.length > 0 && form.order_mode !== 'dine_in') {
+      cartPanelRef.value?.openPaymentPopup('cash')
+    }
+    return
+  }
+
   if (key === 'F2') {
     event.preventDefault()
-    submitPOSOrder(true)
+    if (cart.length > 0 && form.order_mode !== 'dine_in') {
+      cartPanelRef.value?.openPaymentPopup('card')
+    } else {
+      submitPOSOrder(true)
+    }
     return
   }
 
@@ -3388,7 +3562,7 @@ onBeforeUnmount(() => {
 
 .left-col-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   border-bottom: 2px solid var(--pos-border);
   background: var(--pos-white);
   border-radius: 14px 14px 0 0;
@@ -3431,7 +3605,8 @@ onBeforeUnmount(() => {
 }
 
 .table-session-preview,
-.open-invoices-panel {
+.open-invoices-panel,
+.history-panel {
   border: 1px solid var(--pos-border);
   border-top: 0;
   border-radius: 0 0 14px 14px;
@@ -3441,6 +3616,162 @@ onBeforeUnmount(() => {
   gap: 0.45rem;
   align-content: start;
   overflow-y: auto;
+}
+
+.history-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.history-card {
+  border: 1px solid var(--pos-border);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+}
+
+.history-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-card-head strong {
+  font-size: 0.8rem;
+  color: var(--pos-primary);
+}
+
+.history-time {
+  font-size: 0.7rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+}
+
+.history-card-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-amount {
+  font-weight: 600;
+  color: var(--pos-success, #0b7d4a);
+}
+
+.history-method-badge {
+  font-size: 0.7rem;
+  background: var(--pos-soft);
+  border-radius: 6px;
+  padding: 0.1rem 0.4rem;
+  display: inline-block;
+  width: fit-content;
+}
+
+.kbd-help-btn {
+  position: fixed;
+  bottom: 1.2rem;
+  left: 1.2rem;
+  z-index: 200;
+  background: var(--pos-primary);
+  color: var(--pos-white);
+  border: none;
+  border-radius: 50%;
+  width: 2.4rem;
+  height: 2.4rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.18);
+  transition: opacity 0.15s;
+  opacity: 0.75;
+}
+
+.kbd-help-btn:hover {
+  opacity: 1;
+}
+
+.kbd-map-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kbd-map-modal {
+  background: var(--pos-white);
+  border-radius: 18px;
+  padding: 1.4rem;
+  min-width: 340px;
+  max-width: 92vw;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 0.22);
+  display: grid;
+  gap: 1rem;
+}
+
+.kbd-map-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kbd-map-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--pos-primary);
+}
+
+.kbd-map-close {
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--pos-text);
+  line-height: 1;
+  padding: 0 0.3rem;
+}
+
+.kbd-map-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.kbd-map-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--pos-border);
+  color: var(--pos-text);
+}
+
+.kbd-map-table td:first-child {
+  text-align: center;
+  width: 30%;
+}
+
+.kbd-map-table tr:last-child td {
+  border-bottom: none;
+}
+
+kbd {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
+  border: 1px solid var(--pos-border);
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--pos-primary);
+}
+
+.kbd-map-note {
+  font-size: 0.74rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.5);
+  margin: 0;
+  text-align: center;
 }
 
 .products-col,
