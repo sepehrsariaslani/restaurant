@@ -131,6 +131,28 @@
                 <button type="button" class="primary-btn" :disabled="!moveTableTarget" @click="moveSelectedTableSession">
                   انتقال
                 </button>
+                <template v-if="mergeableTableDropdownOptions.length">
+                  <SearchableDropdown
+                    v-model="mergeTableTarget"
+                    :options="mergeableTableDropdownOptions"
+                    placeholder="ترکیب با میز..."
+                    search-placeholder="جستجوی میز..."
+                    include-empty-option
+                    empty-label="ترکیب با میز..."
+                    tone="dark"
+                  />
+                  <button type="button" class="primary-btn merge-btn" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">
+                    ترکیب
+                  </button>
+                </template>
+                <button
+                  v-if="confirmedDineInOrders.length"
+                  type="button"
+                  class="secondary-btn split-bill-btn"
+                  @click="showSplitBill = true"
+                >
+                  تقسیم صورتحساب
+                </button>
               </template>
             </div>
           </div>
@@ -402,6 +424,14 @@
         </div>
       </section>
     </div>
+
+    <TableSplitBillSheet
+      :open="showSplitBill"
+      :orders="confirmedDineInOrders"
+      :currency="currency"
+      :table-label="selectedDineInTable?.label || ''"
+      @close="showSplitBill = false"
+    />
   </ManagementPageScaffold>
 </template>
 
@@ -414,6 +444,7 @@ import PosCategorySidebar from '@/components/management/pos/PosCategorySidebar.v
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
 import PosBomSheet from '@/components/management/pos/PosBomSheet.vue'
+import TableSplitBillSheet from '@/components/management/TableSplitBillSheet.vue'
 import {
   assignTableSessionCustomer,
   closeTableSession,
@@ -425,6 +456,7 @@ import {
   getItemDetail,
   listManagementOrders,
   markManagementOrderPaid,
+  mergeTableSessions,
   moveTableSession,
   getManagementPOSBoot,
   getManagementPOSHardwareStatus,
@@ -523,6 +555,8 @@ const selectedTablePreview = ref(null)
 const tablePreviewLoading = ref(false)
 const tablePreviewError = ref('')
 const moveTableTarget = ref('')
+const mergeTableTarget = ref('')
+const showSplitBill = ref(false)
 const openInvoices = ref([])
 const openInvoicesLoading = ref(false)
 const openInvoiceError = ref('')
@@ -637,6 +671,23 @@ const movableTableDropdownOptions = computed(() =>
   movableTableOptions.value.map((table) => ({
     value: table.name,
     label: table.label,
+  })),
+)
+const mergeableTableOptions = computed(() => {
+  if (!selectedDineInTable.value?.name) {
+    return []
+  }
+  return tableOptions.value.filter((table) => {
+    if (table.name === selectedDineInTable.value.name) {
+      return false
+    }
+    return !!table.active_session
+  })
+})
+const mergeableTableDropdownOptions = computed(() =>
+  mergeableTableOptions.value.map((table) => ({
+    value: table.name,
+    label: `${table.label} (اشغال)`,
   })),
 )
 const selectedTableCustomer = computed(() => {
@@ -988,6 +1039,8 @@ async function refreshSelectedDineInTableOrders() {
     tablePreviewError.value = ''
     tablePreviewLoading.value = false
     moveTableTarget.value = ''
+    mergeTableTarget.value = ''
+    showSplitBill.value = false
     return
   }
 
@@ -1151,6 +1204,35 @@ async function moveSelectedTableSession() {
     }
   } catch (moveErr) {
     error.value = moveErr.message || 'انتقال میز ناموفق بود.'
+  }
+}
+
+async function mergeSelectedTableSession() {
+  if (!selectedTablePreview.value?.session?.name) {
+    error.value = 'ابتدا یک میز فعال انتخاب کنید.'
+    return
+  }
+  if (!mergeTableTarget.value) {
+    error.value = 'میز مقصد برای ترکیب را انتخاب کنید.'
+    return
+  }
+
+  try {
+    await mergeTableSessions({
+      source_session: selectedTablePreview.value.session.name,
+      target_table: mergeTableTarget.value,
+    })
+    const targetTable = tableOptions.value.find((t) => t.name === mergeTableTarget.value)
+    successMessage.value = `میز با موفقیت با ${targetTable?.label || mergeTableTarget.value} ترکیب شد.`
+    mergeTableTarget.value = ''
+    await loadPOSBoot()
+    if (targetTable) {
+      form.order_mode = 'dine_in'
+      form.place = targetTable.label
+      await refreshSelectedDineInTableOrders()
+    }
+  } catch (mergeErr) {
+    error.value = mergeErr.message || 'ترکیب میز ناموفق بود.'
   }
 }
 
@@ -2901,6 +2983,8 @@ watch(
   () => selectedDineInTable.value?.name || '',
   () => {
     moveTableTarget.value = ''
+    mergeTableTarget.value = ''
+    showSplitBill.value = false
   },
 )
 

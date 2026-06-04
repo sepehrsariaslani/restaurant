@@ -13691,6 +13691,71 @@ def move_table_session(session_name, target_table):
 
 
 @frappe.whitelist()
+def merge_table_sessions(source_session, target_table):
+    """Move all orders/requests from source_session into the active session of target_table."""
+    _ensure_management_access()
+    _ensure_table_service_ready()
+
+    if not source_session or not target_table:
+        frappe.throw(_("Source session and target table are required."))
+
+    resolved_target = _resolve_table_name(target_table)
+    if not resolved_target:
+        frappe.throw(_("Target table was not found."), frappe.DoesNotExistError)
+
+    source_doc = frappe.get_doc("Restaurant Table Session", source_session)
+    if source_doc.status != "active":
+        frappe.throw(_("Only active sessions can be merged."))
+
+    source_table = source_doc.table
+    if source_table == resolved_target:
+        frappe.throw(_("Source and target tables cannot be the same."))
+
+    target_session_name = frappe.db.get_value(
+        "Restaurant Table Session",
+        {"table": resolved_target, "status": "active"},
+        "name",
+    )
+    if not target_session_name:
+        frappe.throw(_("Target table has no active session. Use 'Move' instead of 'Merge'."))
+
+    frappe.db.sql(
+        """
+        update `tabRestaurant Table Order`
+        set `session`=%s, `table`=%s
+        where `session`=%s
+        """,
+        (target_session_name, resolved_target, source_session),
+    )
+    frappe.db.sql(
+        """
+        update `tabRestaurant Table Request`
+        set `session`=%s, `table`=%s
+        where `session`=%s
+        """,
+        (target_session_name, resolved_target, source_session),
+    )
+
+    source_doc.status = "closed"
+    source_doc.save(ignore_permissions=True)
+
+    frappe.db.set_value(
+        "Restaurant Table",
+        source_table,
+        {"status": "empty", "active_session": ""},
+        update_modified=False,
+    )
+
+    refreshed_target = frappe.get_doc("Restaurant Table Session", target_session_name)
+    return {
+        "status": "success",
+        "merged_from_table": source_table,
+        "merged_into_session": target_session_name,
+        **_table_session_state_payload(refreshed_target),
+    }
+
+
+@frappe.whitelist()
 def resolve_table_request(request_name):
     if not request_name:
         frappe.throw(_("Request name is required."))

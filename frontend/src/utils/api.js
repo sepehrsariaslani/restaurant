@@ -1058,6 +1058,16 @@ export function moveTableSession({
   })
 }
 
+export function mergeTableSessions({
+  source_session = '',
+  target_table = '',
+} = {}) {
+  return callRestaurantAPI('merge_table_sessions', {
+    source_session,
+    target_table,
+  })
+}
+
 export function listManagementOrders({
   date_from = '',
   date_to = '',
