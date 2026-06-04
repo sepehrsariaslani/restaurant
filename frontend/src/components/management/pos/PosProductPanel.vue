@@ -1,5 +1,48 @@
 <template>
   <section class="products-panel">
+    <div class="customer-search-bar">
+      <div class="customer-search-wrap">
+        <span class="cust-icon">👤</span>
+        <input
+          ref="customerInputRef"
+          class="input dark-input cust-input"
+          :value="customerQuery"
+          @input="$emit('update:customerQuery', $event.target.value)"
+          @focus="openDropdown"
+          @click="openDropdown"
+          @blur="onBlur"
+          @keydown.down.prevent="moveActive(1)"
+          @keydown.up.prevent="moveActive(-1)"
+          @keydown.enter.prevent="selectActive"
+          placeholder="جستجوی مشتری..."
+        />
+        <button v-if="customerQuery" type="button" class="cust-clear" @mousedown.prevent="$emit('update:customerQuery', '')">×</button>
+        <div v-if="dropdownOpen && dropdownOptions.length" class="cust-dropdown">
+          <button
+            v-for="(customer, index) in dropdownOptions"
+            :key="customer.key || index"
+            type="button"
+            class="cust-option"
+            :class="{ active: index === activeIndex }"
+            @mousedown.prevent="pickCustomer(customer)"
+          >
+            <span class="cust-option-name">{{ customer.label }}</span>
+            <span class="cust-option-meta">
+              <span v-if="customer.is_new" class="cust-new-tag">مشتری جدید</span>
+              <template v-else>
+                <span v-if="customer.mobile">{{ customer.mobile }}</span>
+                <span>{{ customer.orders_count }} خرید</span>
+              </template>
+            </span>
+          </button>
+        </div>
+        <div v-else-if="dropdownOpen && customerQuery && !dropdownOptions.length" class="cust-dropdown">
+          <div class="cust-empty">مشتری‌ای پیدا نشد.</div>
+        </div>
+      </div>
+      <button type="button" class="cust-add-btn" @click="$emit('add-customer')" title="مشتری جدید">+</button>
+    </div>
+
     <div class="panel-top">
       <div class="toolbar">
         <div class="search-box">
@@ -98,6 +141,7 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import { formatMoney } from '@/utils/format'
 
 const props = defineProps({
@@ -113,9 +157,11 @@ const props = defineProps({
   currency: { type: String, default: 'IRR' },
   categories: { type: Array, default: () => [] },
   selectedCategory: { type: String, default: '' },
+  customerQuery: { type: String, default: '' },
+  customerOptions: { type: Array, default: () => [] },
 })
 
-defineEmits([
+const emit = defineEmits([
   'update:searchTerm',
   'update:productView',
   'update:selectedCategory',
@@ -124,7 +170,78 @@ defineEmits([
   'open-bom',
   'update:scannerInput',
   'scan-scale',
+  'update:customerQuery',
+  'select-customer',
+  'create-customer',
+  'add-customer',
 ])
+
+const customerInputRef = ref(null)
+const dropdownOpen = ref(false)
+const activeIndex = ref(-1)
+
+const filteredCustomers = computed(() => {
+  const all = Array.isArray(props.customerOptions) ? props.customerOptions : []
+  const q = String(props.customerQuery || '').trim().toLowerCase()
+  if (!q) return all.slice(0, 10)
+  const digits = q.replace(/\D/g, '')
+  return all.filter((c) => {
+    const label = String(c.label || '').toLowerCase()
+    const mobile = String(c.mobile || '')
+    if (label.includes(q)) return true
+    if (digits && mobile.replace(/\D/g, '').includes(digits)) return true
+    return false
+  }).slice(0, 10)
+})
+
+const createOption = computed(() => {
+  const q = String(props.customerQuery || '').trim()
+  if (!q) return null
+  const exact = filteredCustomers.value.some((c) =>
+    String(c.label || '').trim().toLowerCase() === q.toLowerCase()
+  )
+  if (exact) return null
+  return { key: `create-${q}`, label: `ایجاد: ${q}`, mobile: '', orders_count: 0, is_new: true, raw_query: q }
+})
+
+const dropdownOptions = computed(() => {
+  const opts = [...filteredCustomers.value]
+  if (createOption.value) opts.unshift(createOption.value)
+  return opts
+})
+
+function openDropdown() {
+  dropdownOpen.value = true
+  activeIndex.value = dropdownOptions.value.length ? 0 : -1
+}
+
+function onBlur() {
+  setTimeout(() => { dropdownOpen.value = false; activeIndex.value = -1 }, 130)
+}
+
+function moveActive(step) {
+  if (!dropdownOpen.value) { openDropdown(); return }
+  const len = dropdownOptions.value.length
+  if (!len) return
+  const cur = activeIndex.value < 0 ? 0 : activeIndex.value
+  activeIndex.value = (cur + step + len) % len
+}
+
+function selectActive() {
+  if (!dropdownOpen.value || !dropdownOptions.value.length) return
+  const idx = activeIndex.value < 0 ? 0 : activeIndex.value
+  pickCustomer(dropdownOptions.value[idx])
+}
+
+function pickCustomer(customer) {
+  if (customer?.is_new) {
+    emit('create-customer', customer)
+  } else {
+    emit('select-customer', customer)
+  }
+  dropdownOpen.value = false
+  activeIndex.value = -1
+}
 
 function displayQty(slug) {
   const raw = Number(props.quantityMap?.[slug] || 0)
@@ -141,9 +258,129 @@ function displayQty(slug) {
   color: var(--pos-text);
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   overflow: hidden;
   gap: 0.4rem;
+}
+
+.customer-search-bar {
+  display: grid;
+  grid-template-columns: 1fr 36px;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.customer-search-wrap {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid var(--pos-border);
+  background: var(--pos-white);
+  padding: 0 0.45rem;
+}
+
+.cust-icon {
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.cust-input {
+  border: 0;
+  background: transparent;
+  padding-right: 0;
+  font-size: 0.82rem;
+}
+
+.cust-clear {
+  border: 0;
+  background: transparent;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cust-dropdown {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  inset-inline: 0;
+  border-radius: 12px;
+  border: 1px solid var(--pos-border);
+  background: var(--pos-white);
+  box-shadow: 0 14px 24px rgb(var(--pos-primary-rgb, 1 90 114) / 0.14);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.cust-option {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.1);
+  background: transparent;
+  color: var(--pos-text);
+  padding: 0.38rem 0.55rem;
+  display: grid;
+  gap: 0.1rem;
+  text-align: right;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cust-option:last-of-type { border-bottom: 0; }
+
+.cust-option.active,
+.cust-option:hover {
+  background: var(--pos-soft);
+}
+
+.cust-option-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cust-option-meta {
+  display: inline-flex;
+  gap: 0.4rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
+  font-size: 0.69rem;
+}
+
+.cust-new-tag {
+  background: rgb(var(--pos-accent-rgb, 255 152 54) / 0.15);
+  color: var(--pos-accent);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
+.cust-empty {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
+  text-align: center;
+}
+
+.cust-add-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--pos-accent);
+  background: var(--pos-accent);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .panel-top {

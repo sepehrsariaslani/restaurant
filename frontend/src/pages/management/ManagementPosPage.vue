@@ -1,91 +1,8 @@
 <template>
-  <ManagementPageScaffold class="pos-theme" title="POS مدیریت" subtitle="فروشگاه ساده با BOM، بارکد وزنی و اتصال سخت افزار">
-    <section class="ticket-tabs">
-      <div
-        v-for="(ticket, index) in ticketSessions"
-        :key="ticket.id"
-        :class="{ active: activeTicketId === ticket.id }"
-        class="ticket-tab-group"
-      >
-        <button type="button" class="ticket-tab" @click="switchToTicket(ticket.id)">
-          {{ ticketLabel(ticket, index) }}
-        </button>
-        <button type="button" class="ticket-tab-close" title="بستن فاکتور" @click.stop="closeTicketTab(ticket.id)">×</button>
-      </div>
-      <button type="button" class="ticket-tab new" @click="createNewTicketTab">+ فاکتور جدید</button>
-    </section>
-
-    <section class="pos-status-bar">
-      <div class="pos-status-left">
-        <span class="shift-dot" :class="posProfileSummary.has_open_shift ? 'shift-open' : 'shift-closed'"></span>
-        <strong class="pos-status-name">{{ posProfileSummary.title || posProfileSummary.name || 'POS' }}</strong>
-        <span class="pos-status-sep">|</span>
-        <span class="pos-status-shift">{{ posProfileSummary.has_open_shift ? 'شیفت باز' : 'شیفت بسته' }}</span>
-        <span class="pos-status-method">{{ payment.method === 'card' ? '💳 کارت' : '💵 نقد' }}</span>
-      </div>
-      <div class="pos-status-right">
-        <button type="button" class="pos-info-toggle" @click="posInfoExpanded = !posInfoExpanded">
-          {{ posInfoExpanded ? '▲ بستن' : '▼ جزئیات POS' }}
-        </button>
-        <a class="pos-settings-link" href="/management/pos_profile">⚙</a>
-      </div>
-    </section>
-
-    <section class="pos-info-panel" v-if="posInfoExpanded">
-      <div class="pos-info-item" v-if="posProfileSummary.company">
-        <span class="pos-info-label">شرکت</span>
-        <strong>{{ posProfileSummary.company }}</strong>
-      </div>
-      <div class="pos-info-item" v-if="posProfileSummary.warehouse">
-        <span class="pos-info-label">انبار</span>
-        <strong>{{ posProfileSummary.warehouse }}</strong>
-      </div>
-      <div class="pos-info-item" v-if="posProfileSummary.selling_price_list">
-        <span class="pos-info-label">لیست قیمت</span>
-        <strong>{{ posProfileSummary.selling_price_list }}</strong>
-      </div>
-      <div class="pos-info-item">
-        <span class="pos-info-label">درگاه</span>
-        <strong>{{ paymentBoot.provider_label }}</strong>
-      </div>
-      <div class="pos-info-item" v-if="paymentBoot.terminal_id">
-        <span class="pos-info-label">دستگاه</span>
-        <strong>{{ paymentBoot.terminal_id }}</strong>
-      </div>
-      <div class="pos-info-item" v-if="posProfileSummary.shift_name">
-        <span class="pos-info-label">شیفت</span>
-        <strong>{{ posProfileSummary.shift_name }}</strong>
-      </div>
-      <div class="pos-info-item" v-if="posProfileSummary.shift_opened_at">
-        <span class="pos-info-label">شروع</span>
-        <strong>{{ formatInvoiceDateTime(posProfileSummary.shift_opened_at) }}</strong>
-      </div>
-    </section>
-
-    <PosHeaderBar
-      ref="headerBarRef"
-      :customer-query="form.customer_query"
-      :customer-type="form.customer_type"
-      :customer-options="customerOptions"
-      :guest-count="form.guest_count"
-      :date-label="dateLabel"
-      :hardware-status="hardwareStatus"
-      :hardware-loading="hardwareLoading"
-      :is-offline="isOffline"
-      @close="closePOS"
-      @add-customer="addQuickCustomer"
-      @update:customer-query="setCustomerQuery"
-      @select-customer="selectCustomerFromHistory"
-      @create-customer="createCustomerFromQuery"
-      @update:customer-type="form.customer_type = $event"
-      @update:guest-count="form.guest_count = $event"
-      @refresh-hardware="refreshHardwareStatus"
-    />
-
-    <p class="offline-banner" v-if="isOffline">اینترنت قطع است. بعد از وصل شدن اینترنت، همگام سازی را بررسی کنید.</p>
-    <p class="sync-banner" v-if="syncReminder">{{ syncReminder }}</p>
-    <p class="error" v-if="error">{{ error }}</p>
-    <p class="success" v-if="successMessage">{{ successMessage }}</p>
+  <section class="pos-theme pos-fullpage">
+    <p class="offline-banner" v-if="isOffline">اینترنت قطع است.</p>
+    <p class="error pos-inline-error" v-if="error">{{ error }}</p>
+    <p class="success pos-inline-success" v-if="successMessage">{{ successMessage }}</p>
 
     <section class="pos-shell" dir="rtl">
       <aside class="left-col">
@@ -223,6 +140,12 @@
         :quantity-map="productQtyMap"
         :fallback-image="fallbackImage"
         :currency="currency"
+        :customer-query="form.customer_query"
+        :customer-options="customerOptions"
+        @update:customer-query="setCustomerQuery"
+        @select-customer="selectCustomerFromHistory"
+        @create-customer="createCustomerFromQuery"
+        @add-customer="addQuickCustomer"
         @update:search-term="search = $event"
         @update:product-view="productView = $event"
         @update:scanner-input="scannerInput = $event"
@@ -383,14 +306,12 @@
       :table-label="selectedDineInTable?.label || ''"
       @close="showSplitBill = false"
     />
-  </ManagementPageScaffold>
+  </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
-import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
-import PosHeaderBar from '@/components/management/pos/PosHeaderBar.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
 import PosBomSheet from '@/components/management/pos/PosBomSheet.vue'
@@ -3425,11 +3346,32 @@ onBeforeUnmount(() => {
   color: var(--pos-white);
 }
 
+.pos-fullpage {
+  display: grid;
+  gap: 0;
+  padding: 0.6rem;
+  height: 100vh;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.pos-inline-error {
+  margin: 0 0 0.35rem;
+  color: var(--pos-accent);
+  font-size: 0.8rem;
+}
+
+.pos-inline-success {
+  margin: 0 0 0.35rem;
+  color: var(--pos-primary);
+  font-size: 0.8rem;
+}
+
 .pos-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 420px;
   gap: 0.65rem;
-  height: calc(100vh - 256px);
+  height: calc(100vh - 1.2rem);
   min-height: 520px;
   overflow: hidden;
 }
