@@ -2024,6 +2024,8 @@ export function setManagementThemeSettings(payload = {}) {
 
 const SITE_SETTINGS_STORAGE_KEY = 'restaurant_site_settings_local_v1'
 
+const DEFAULT_SITE_SETTINGS = { web_settings: {}, hero_slides: [], about_sections: [], faq_items: [] }
+
 export async function getManagementSiteSettings() {
   try {
     const result = await callRestaurantAPI('get_management_site_settings')
@@ -2031,7 +2033,7 @@ export async function getManagementSiteSettings() {
       try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(result)) } catch (_) {}
     }
     return result
-  } catch (error) {
+  } catch (_apiError) {
     try {
       const stored = localStorage.getItem(SITE_SETTINGS_STORAGE_KEY)
       if (stored) {
@@ -2039,7 +2041,7 @@ export async function getManagementSiteSettings() {
         if (parsed && typeof parsed === 'object') return parsed
       }
     } catch (_) {}
-    throw error
+    return { ...DEFAULT_SITE_SETTINGS }
   }
 }
 
@@ -2065,10 +2067,6 @@ export async function setManagementSiteSettings(payload = {}) {
   }
   try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(localPayload)) } catch (_) {}
 
-  if (apiError) {
-    console.warn('[SiteSettings] Backend unavailable — settings saved to local storage only.', apiError.message)
-    return localPayload
-  }
   return localPayload
 }
 

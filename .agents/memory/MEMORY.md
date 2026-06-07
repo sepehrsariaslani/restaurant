@@ -1,3 +1,6 @@
-- [Site Settings patterns](site-settings.md) — card_variant, hero_image_position fields added to webSettings, loadSettings, and save payload in ManagementSiteSettingsPage.vue
+- [Site Settings patterns](site-settings.md) — category_rail_variant, card_variant, hero_image_position all live in webSettings, loadSettings, saveSettings payload, and siteComponents.js
 - [Hero cover variant](hero-cover-variant.md) — 'cover' hero_section_variant uses SiteHeaderHero (full-page with built-in nav); must hide PublicHeader when active
 - [Card variants](card-variants.md) — MenuItemCard supports 'classic', 'dark', 'navy' via cardVariant prop; uses CSS vars for theme compliance
+- [API settings fallback](api-settings-fallback.md) — getManagementSiteSettings returns DEFAULT_SITE_SETTINGS (empty object) when both API and localStorage fail; never throws
+- [Reviews store](reviews-store.md) — localStorage reviews at REVIEWS_KEY='restaurant_item_reviews_v2'; getItemReviews/addItemReview/getAverageRating/getReviewCount in reviewsStore.js
+- [Item detail page sticky bar](item-detail-sticky.md) — MobileBottomNav hidden on 'item' page via v-if in App.vue; ItemDetailPage has own sticky-bottom-bar with wishlist + add to cart

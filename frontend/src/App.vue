@@ -66,6 +66,7 @@
     />
 
     <MobileBottomNav
+      v-if="page !== 'item'"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"

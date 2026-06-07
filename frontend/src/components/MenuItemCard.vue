@@ -12,6 +12,12 @@
         <p class="classic-cat">{{ item.category_title || 'منو' }}</p>
         <h3 class="classic-title">{{ item.title }}</h3>
         <p class="classic-desc muted">{{ item.short_desc || 'توضیحی برای این آیتم ثبت نشده است.' }}</p>
+        <div class="classic-rating" v-if="reviewCnt > 0">
+          <span class="cr-stars">
+            <span v-for="s in 5" :key="s" class="cr-star" :class="{ filled: s <= Math.round(avgRating) }">★</span>
+          </span>
+          <span class="cr-count">{{ avgRating }} ({{ reviewCnt }})</span>
+        </div>
         <div class="classic-footer">
           <div class="classic-tags">
             <span class="ctag" v-for="tag in itemTags" :key="tag">{{ tag }}</span>
@@ -68,6 +74,7 @@
 <script setup>
 import { computed } from 'vue'
 import { formatMoney } from '@/utils/format'
+import { getAverageRating, getReviewCount } from '@/utils/reviewsStore'
 
 const props = defineProps({
   item: {
@@ -104,6 +111,10 @@ const itemTags = computed(() => {
     .map((t) => (typeof t === 'string' ? t : String(t?.tag || t?.name || '')))
     .filter(Boolean)
 })
+
+const itemSlug = computed(() => String(props.item.slug || '').trim())
+const avgRating = computed(() => getAverageRating(itemSlug.value))
+const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 </script>
 
 <style scoped>
@@ -183,6 +194,17 @@ const itemTags = computed(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+.classic-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0;
+}
+.cr-stars { display: flex; gap: 0.05rem; }
+.cr-star { font-size: 0.78rem; color: #ddd; }
+.cr-star.filled { color: #f5a623; }
+.cr-count { font-size: 0.72rem; color: var(--text-muted, #846b58); }
 
 .classic-footer {
   margin-top: 0.75rem;

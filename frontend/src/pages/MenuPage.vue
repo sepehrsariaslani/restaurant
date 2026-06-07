@@ -13,7 +13,18 @@
       />
 
       <!-- دسته‌بندی‌ها -->
+      <CategoryImageRail
+        v-if="categoryRailVariant === 'image'"
+        :categories="categories"
+        :selected-category="selectedCategorySlug"
+        :subcategories="currentSubcategories"
+        :selected-subcategory="selectedSubcategorySlug"
+        :active-category-title="activeCategoryTitle"
+        @select-category="selectCategory"
+        @select-subcategory="selectSubcategory"
+      />
       <CategoryPillRail
+        v-else
         :categories="categories"
         :selected-category="selectedCategorySlug"
         :subcategories="currentSubcategories"
@@ -219,6 +230,7 @@ import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
 import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import CategoryPillRail from '@/components/CategoryPillRail.vue'
+import CategoryImageRail from '@/components/CategoryImageRail.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import { getMenuItems } from '@/utils/api'
@@ -290,6 +302,7 @@ const pagination = ref({
 const branding = computed(() => resolveBranding(props.boot))
 const siteComponents = computed(() => resolveSiteComponents(props.boot))
 const menuSearchVariant = computed(() => siteComponents.value.menu_search_variant)
+const categoryRailVariant = computed(() => siteComponents.value.category_rail_variant)
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 const cartTotal = computed(() => cartSubtotal())
 const isSearchMode = computed(() => Boolean(search.value.trim()))

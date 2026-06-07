@@ -42,7 +42,13 @@ export function resolveSiteComponents(boot = {}) {
     hero_section_variant: String(source.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off',
     footer_variant: String(source.footer_variant || (footerEnabled ? 'full' : 'off')).trim() || 'full',
     card_variant: normalizeCardVariant(source.card_variant),
+    category_rail_variant: normalizeCategoryRailVariant(source.category_rail_variant),
   }
+}
+
+export function normalizeCategoryRailVariant(value = '') {
+  const normalized = String(value || '').trim()
+  return normalized === 'image' ? 'image' : 'pill'
 }
 
 export function normalizeHeaderVariant(value = '') {

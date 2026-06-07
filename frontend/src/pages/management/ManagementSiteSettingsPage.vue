@@ -206,6 +206,58 @@
         </div>
       </ManagementSurfaceCard>
 
+      <ManagementSurfaceCard title="دسته‌بندی‌های منو" subtitle="نحوه نمایش دسته‌بندی‌ها را انتخاب کنید — تصویری یا متنی.">
+        <div class="variant-row">
+          <button
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.category_rail_variant === 'pill' }"
+            @click="webSettings.category_rail_variant = 'pill'"
+          >
+            <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
+              <div style="display: flex; gap: 6px; margin-top: 8px;">
+                <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
+                <div style="background: rgba(111,74,49,0.12); border: 1px solid rgba(111,74,49,0.4); border-radius: 10px; width: 56px; height: 38px;"></div>
+                <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
+              </div>
+            </div>
+            <div class="variant-meta">
+              <strong>دسته‌بندی متنی (Pill)</strong>
+              <small>دکمه‌های متنی با نام و تعداد آیتم — کلاسیک و خوانا</small>
+            </div>
+            <span class="variant-check" v-if="webSettings.category_rail_variant === 'pill'">✓</span>
+          </button>
+          <button
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.category_rail_variant === 'image' }"
+            @click="webSettings.category_rail_variant = 'image'"
+          >
+            <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
+              <div style="display: flex; gap: 8px; margin-top: 6px; justify-content: center;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent-green, #6f4a31);"></div>
+                  <div style="width: 34px; height: 6px; background: #ccc; border-radius: 3px;"></div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
+                  <div style="width: 34px; height: 6px; background: #ccc; border-radius: 3px;"></div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
+                  <div style="width: 34px; height: 6px; background: #ccc; border-radius: 3px;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="variant-meta">
+              <strong>دسته‌بندی تصویری (Image)</strong>
+              <small>دایره‌های تصویر/ایموجی با برچسب — بصری و مدرن</small>
+            </div>
+            <span class="variant-check" v-if="webSettings.category_rail_variant === 'image'">✓</span>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard title="کارت محصولات" subtitle="نمایش کارت‌های منو — یک استایل را انتخاب کنید.">
         <div class="variant-row">
           <button
@@ -776,6 +828,7 @@ const webSettings = reactive({
   loader_custom_code: defaultLoaderSettings.customCode,
   card_variant: 'classic',
   hero_image_position: 'center',
+  category_rail_variant: 'pill',
 })
 
 const heroSlides = ref([])
@@ -1444,6 +1497,7 @@ async function loadSettings() {
     webSettings.footer_copyright = String(nextWeb.footer_copyright || '').trim()
     webSettings.card_variant = String(nextWeb.card_variant || 'classic').trim() || 'classic'
     webSettings.hero_image_position = String(nextWeb.hero_image_position || 'center').trim() || 'center'
+    webSettings.category_rail_variant = nextWeb.category_rail_variant === 'image' ? 'image' : 'pill'
     assignLoaderSettingsToForm(nextWeb)
 
     heroSlides.value = (payload?.hero_slides || []).map((row) => normalizeHeroSlide(row))
@@ -1492,6 +1546,7 @@ async function saveSettings() {
         hero_section_variant: String(webSettings.hero_section_variant || 'off').trim() || 'off',
         card_variant: String(webSettings.card_variant || 'classic').trim() || 'classic',
         hero_image_position: String(webSettings.hero_image_position || 'center').trim() || 'center',
+        category_rail_variant: webSettings.category_rail_variant === 'image' ? 'image' : 'pill',
         footer_variant: String(webSettings.footer_variant || 'full').trim() || 'full',
         hero_section_enabled: webSettings.hero_section_variant !== 'off' ? 1 : 0,
         footer_enabled: webSettings.footer_variant !== 'off' ? 1 : 0,
