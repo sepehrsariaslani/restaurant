@@ -1,10 +1,25 @@
 ---
-name: API settings fallback
-description: getManagementSiteSettings never throws — returns empty defaults when both API and localStorage are unavailable
+name: API settings fallback + CSRF fix
+description: getManagementSiteSettings never throws; setManagementSiteSettings falls back to localStorage; CSRF token is auto-refreshed on 400/403
 ---
 
-When the Frappe backend is unavailable (Replit environment), `getManagementSiteSettings` catches the API error, tries localStorage, and if that also fails returns `{ ...DEFAULT_SITE_SETTINGS }` (empty object with web_settings, hero_slides, about_sections, faq_items). `setManagementSiteSettings` also never throws — it silently saves to localStorage when the API call fails.
+## Settings fallback
+When the Frappe backend is unavailable (Replit environment), `getManagementSiteSettings` catches the API error, tries localStorage, and if that also fails returns `{ ...DEFAULT_SITE_SETTINGS }` (empty object). `setManagementSiteSettings` also never throws — it silently saves to localStorage when the API call fails.
 
-**Why:** The backend doesn't run on Replit. Throwing caused the management settings page to show an error and refuse to load. Returning defaults lets the page initialize cleanly and the user can configure settings that persist in localStorage.
+## CSRF token fix (critical)
+In the Vite dev-server proxy setup, `window.csrf_token` and `window.frappe.csrf_token` are never set (Frappe only injects them in its own rendered HTML). This caused ALL POST requests to fail with 400 BAD REQUEST.
 
-**How to apply:** Any new "get" API that wraps a Frappe backend call should follow this pattern: try API → try localStorage → return safe default.
+**Fix layers in `getCSRFToken()`:**
+1. `window.csrf_token`
+2. `window.frappe.csrf_token`
+3. **Cookie fallback** — Frappe stores the CSRF token as a non-httpOnly cookie named `csrf_token`; read via `document.cookie.match(/csrf_token=([^;]+)/)`
+
+**Auto-refresh on 400/403:**
+`callMethodByPath` now catches 400 or 403, calls `refreshCsrfToken()` (GET `/api/method/frappe.utils.get_csrf_token`), and retries once with the fresh token.
+
+**After login:**
+`loginManagementUser` calls `refreshCsrfToken()` after successful login so all subsequent POST calls get a valid CSRF token immediately.
+
+**Why:** Vite serves the HTML, not Frappe, so Frappe's JS boot never runs, leaving `window.csrf_token` empty.
+
+**How to apply:** Any new POST API helpers should use `getCSRFToken()`. Do not bypass `callMethodByPath`. If seeing 400s on authenticated management routes, check CSRF token is resolving.

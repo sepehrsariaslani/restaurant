@@ -1,5 +1,38 @@
 function getCSRFToken() {
-  return window.csrf_token || (window.frappe && window.frappe.csrf_token) || ''
+  if (typeof window === 'undefined') return ''
+  if (window.csrf_token) return String(window.csrf_token)
+  if (window.frappe && window.frappe.csrf_token) return String(window.frappe.csrf_token)
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/)
+    if (match && match[1]) return decodeURIComponent(match[1])
+  } catch (_) {}
+  return ''
+}
+
+function storeCsrfToken(token) {
+  const t = String(token || '').trim()
+  if (!t) return
+  window.csrf_token = t
+  if (!window.frappe) window.frappe = {}
+  window.frappe.csrf_token = t
+}
+
+async function refreshCsrfToken() {
+  try {
+    const res = await fetch('/api/method/frappe.utils.get_csrf_token', {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}))
+      const token = String(data?.message || '').trim()
+      if (token && token !== 'unauthorized') {
+        storeCsrfToken(token)
+        return token
+      }
+    }
+  } catch (_) {}
+  return getCSRFToken()
 }
 
 function unpackServerMessages(payload) {
@@ -17,15 +50,25 @@ function unpackServerMessages(payload) {
 }
 
 async function callMethodByPath(methodPath, args = {}) {
-  const response = await fetch(`/api/method/${methodPath}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Frappe-CSRF-Token': getCSRFToken(),
-    },
-    credentials: 'include',
-    body: JSON.stringify(args),
-  })
+  const doFetch = (csrfToken) =>
+    fetch(`/api/method/${methodPath}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Frappe-CSRF-Token': csrfToken,
+      },
+      credentials: 'include',
+      body: JSON.stringify(args),
+    })
+
+  let response = await doFetch(getCSRFToken())
+
+  if (response.status === 400 || response.status === 403) {
+    const freshToken = await refreshCsrfToken()
+    if (freshToken) {
+      response = await doFetch(freshToken)
+    }
+  }
 
   const payload = await response.json().catch(() => ({}))
 
@@ -639,7 +682,12 @@ export async function loginManagementUser({ usr = '', pwd = '' } = {}) {
     const message = serverMessage || payload._error_message || payload.message || 'ورود ناموفق بود.'
     throw new Error(message)
   }
-  return payload.message || payload
+
+  const msg = payload.message || payload
+  if (msg?.csrf_token) storeCsrfToken(msg.csrf_token)
+  await refreshCsrfToken()
+
+  return msg
 }
 
 export async function logoutManagementUser() {
