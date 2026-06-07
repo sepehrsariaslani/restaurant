@@ -7738,6 +7738,26 @@ def _management_site_settings_payload():
             "hero_subtitle": settings_doc.get("hero_subtitle") or "",
             "hero_image": settings_doc.get("hero_image") or "",
             "primary_cta_label": settings_doc.get("primary_cta_label") or "",
+            "header_variant": "minimal" if settings_doc.get("header_variant") == "minimal" else "classic",
+            "menu_search_variant": "off" if settings_doc.get("menu_search_variant") == "off" else "search-card",
+            "hero_section_variant": settings_doc.get("hero_section_variant") or "off",
+            "footer_variant": settings_doc.get("footer_variant") or "full",
+            "hero_section_enabled": cint(settings_doc.get("hero_section_enabled") or 0),
+            "footer_enabled": cint(
+                settings_doc.get("footer_enabled")
+                if settings_doc.get("footer_enabled") not in (None, "")
+                else 1
+            ),
+            "hero_section_title": settings_doc.get("hero_section_title") or "",
+            "hero_section_description": settings_doc.get("hero_section_description") or "",
+            "hero_section_cta": settings_doc.get("hero_section_cta") or "",
+            "footer_description": settings_doc.get("footer_description") or "",
+            "footer_phone": settings_doc.get("footer_phone") or "",
+            "footer_email": settings_doc.get("footer_email") or "",
+            "footer_address": settings_doc.get("footer_address") or "",
+            "footer_instagram": settings_doc.get("footer_instagram") or "",
+            "footer_telegram": settings_doc.get("footer_telegram") or "",
+            "footer_copyright": settings_doc.get("footer_copyright") or "",
             "loader_enabled": cint(
                 settings_doc.get("loader_enabled")
                 if settings_doc.get("loader_enabled") not in (None, "")
@@ -7791,6 +7811,22 @@ def _management_site_settings_payload():
             "hero_subtitle": "",
             "hero_image": "",
             "primary_cta_label": "",
+            "header_variant": "classic",
+            "menu_search_variant": "search-card",
+            "hero_section_variant": "off",
+            "footer_variant": "full",
+            "hero_section_enabled": 0,
+            "footer_enabled": 1,
+            "hero_section_title": "",
+            "hero_section_description": "",
+            "hero_section_cta": "",
+            "footer_description": "",
+            "footer_phone": "",
+            "footer_email": "",
+            "footer_address": "",
+            "footer_instagram": "",
+            "footer_telegram": "",
+            "footer_copyright": "",
             "loader_enabled": 1,
             "loader_mode": "preset",
             "loader_preset": "steaming-bowl",
@@ -7999,6 +8035,7 @@ def get_management_site_settings():
 @frappe.whitelist()
 def set_management_site_settings(payload=None):
     _ensure_management_site_settings_access()
+    _ensure_menu_highlight_setting_fields()
     data = _parse_json(payload, {})
     if not isinstance(data, dict):
         frappe.throw(_("Invalid payload format."))
@@ -8024,6 +8061,20 @@ def set_management_site_settings(payload=None):
             "hero_subtitle",
             "hero_image",
             "primary_cta_label",
+            "header_variant",
+            "menu_search_variant",
+            "hero_section_variant",
+            "footer_variant",
+            "hero_section_title",
+            "hero_section_description",
+            "hero_section_cta",
+            "footer_description",
+            "footer_phone",
+            "footer_email",
+            "footer_address",
+            "footer_instagram",
+            "footer_telegram",
+            "footer_copyright",
             "loader_mode",
             "loader_preset",
             "loader_title",
@@ -8034,6 +8085,8 @@ def set_management_site_settings(payload=None):
             "restaurant_menu_highlight_title",
         ]
         int_fields = [
+            "hero_section_enabled",
+            "footer_enabled",
             "loader_enabled",
             "loader_min_duration_ms",
             "restaurant_menu_highlight_enabled",
@@ -8043,14 +8096,18 @@ def set_management_site_settings(payload=None):
             "restaurant_menu_highlight_best_seller_limit",
         ]
         for fieldname in scalar_fields:
-            if fieldname not in web_settings or not _has_column("Restaurant Web Settings", fieldname):
+            if fieldname not in web_settings or not _has_doctype_field("Restaurant Web Settings", fieldname):
                 continue
             value = (web_settings.get(fieldname) or "").strip()
+            if fieldname == "header_variant":
+                value = "minimal" if value == "minimal" else "classic"
+            if fieldname == "menu_search_variant":
+                value = "off" if value == "off" else "search-card"
             if fieldname == "brand_name" and not value:
                 value = (settings_doc.get("brand_name") or "").strip() or "Restaurant"
             settings_doc.set(fieldname, value)
         for fieldname in int_fields:
-            if fieldname not in web_settings or not _has_column("Restaurant Web Settings", fieldname):
+            if fieldname not in web_settings or not _has_doctype_field("Restaurant Web Settings", fieldname):
                 continue
             settings_doc.set(fieldname, cint(web_settings.get(fieldname) or 0))
         settings_doc.save(ignore_permissions=True)
