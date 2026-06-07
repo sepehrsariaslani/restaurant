@@ -1,0 +1,3 @@
+- [Site Settings patterns](site-settings.md) — card_variant, hero_image_position fields added to webSettings, loadSettings, and save payload in ManagementSiteSettingsPage.vue
+- [Hero cover variant](hero-cover-variant.md) — 'cover' hero_section_variant uses SiteHeaderHero (full-page with built-in nav); must hide PublicHeader when active
+- [Card variants](card-variants.md) — MenuItemCard supports 'classic', 'dark', 'navy' via cardVariant prop; uses CSS vars for theme compliance

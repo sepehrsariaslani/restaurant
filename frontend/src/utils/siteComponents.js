@@ -8,10 +8,12 @@ export function resolveBranding(boot = {}) {
     hero_subtitle: fromBoot.hero_subtitle || '',
     primary_cta_label: fromBoot.primary_cta_label || 'ورود به منو',
     hero_image: fromBoot.hero_image || '',
+    hero_image_position: fromBoot.hero_image_position || 'center',
     header_variant: fromBoot.header_variant || 'classic',
     menu_search_variant: fromBoot.menu_search_variant || 'search-card',
     hero_section_variant: fromBoot.hero_section_variant || 'off',
     footer_variant: fromBoot.footer_variant || 'full',
+    card_variant: fromBoot.card_variant || 'classic',
     hero_section_enabled: Number(fromBoot.hero_section_enabled || 0) ? 1 : 0,
     footer_enabled: Number(fromBoot.footer_enabled ?? 1) ? 1 : 0,
     hero_section_title: fromBoot.hero_section_title || '',
@@ -39,15 +41,20 @@ export function resolveSiteComponents(boot = {}) {
     menu_search_variant: normalizeMenuSearchVariant(source.menu_search_variant),
     hero_section_variant: String(source.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off',
     footer_variant: String(source.footer_variant || (footerEnabled ? 'full' : 'off')).trim() || 'full',
+    card_variant: normalizeCardVariant(source.card_variant),
   }
 }
 
 export function normalizeHeaderVariant(value = '') {
   const normalized = String(value || '').trim()
-  if (normalized === 'minimal') {
-    return 'minimal'
-  }
-  return 'classic'
+  const valid = ['classic', 'minimal', 'hero', 'glass']
+  return valid.includes(normalized) ? normalized : 'classic'
+}
+
+export function normalizeCardVariant(value = '') {
+  const normalized = String(value || '').trim()
+  const valid = ['classic', 'dark', 'navy']
+  return valid.includes(normalized) ? normalized : 'classic'
 }
 
 export function normalizeMenuSearchVariant(value = '') {

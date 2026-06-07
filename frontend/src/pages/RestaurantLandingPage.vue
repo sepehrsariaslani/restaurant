@@ -1,14 +1,22 @@
 <template>
   <div class="home-page" dir="rtl">
     <PublicHeader
+      v-if="siteComponents.hero_section_variant !== 'cover'"
       :branding="branding"
       :page="'landing'"
       :cart-count="cartCount"
       :header-variant="siteComponents.header_variant"
     />
 
+    <SiteHeaderHero
+      v-if="siteComponents.hero_section_variant === 'cover'"
+      :branding="branding"
+      :cart-count="cartCount"
+      :page="'landing'"
+      :preview="false"
+    />
     <SiteHeroSection
-      v-if="siteComponents.hero_section_variant === 'fullscreen'"
+      v-else-if="siteComponents.hero_section_variant === 'fullscreen'"
       :branding="branding"
       :title="branding.hero_section_title"
       :description="branding.hero_section_description"
@@ -101,6 +109,7 @@
               <MenuItemCard
                 :item="item"
                 :currency="currency"
+                :card-variant="siteComponents.card_variant"
                 @quick-add="quickAdd"
               />
             </ScrollReveal>
@@ -155,6 +164,7 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import FeatureCard from '@/components/FeatureCard.vue'
 import AnimatedCounter from '@/components/AnimatedCounter.vue'
 import PublicHeader from '@/components/PublicHeader.vue'
+import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteFooter from '@/components/SiteFooter.vue'

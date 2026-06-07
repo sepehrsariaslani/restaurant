@@ -1,54 +1,80 @@
 <template>
-  <LiquidGlassBackdrop>
-    <section class="detail-shell" v-if="item">
-      <LiquidGlassCard class="phone-frame">
-        <header class="top-bar">
-          <a class="icon-btn" href="/menu">&#x2039;</a>
-          <p class="category-pill">{{ item.subcategory || item.category || 'Menu Item' }}</p>
-          <a class="icon-btn" :href="`/item/${item.slug}`">&#x21E7;</a>
-        </header>
+  <div class="detail-page" dir="rtl">
+    <div class="state-shell" v-if="!item && (loading || error)">
+      <div class="state-content">
+        <p class="muted" v-if="loading">در حال دریافت جزئیات محصول...</p>
+        <p class="error-msg" v-else-if="error">{{ error }}</p>
+      </div>
+    </div>
 
-        <img :src="resolvedItemImage" :alt="item.title" class="hero-image" />
-
-        <section class="headline-row">
-          <div>
-            <h1>{{ item.title }}</h1>
-            <p class="muted">{{ item.short_desc || 'آیتم سفارشی با BOM Template' }}</p>
+    <div class="detail-wrap" v-if="item">
+      <div class="hero-area">
+        <img :src="resolvedItemImage" :alt="item.title" class="hero-img" />
+        <div class="hero-nav">
+          <a href="/menu" class="nav-circle back-btn" aria-label="بازگشت">‹</a>
+          <div class="nav-end-group">
+            <button class="nav-circle heart-btn" type="button" aria-label="علاقه‌مندی">♡</button>
+            <button class="nav-circle more-btn" type="button" aria-label="بیشتر">⋮</button>
           </div>
-          <strong class="price">{{ formatMoney(item.base_price, currency) }}</strong>
-        </section>
+        </div>
+      </div>
 
-        <section class="nutrition-row">
-          <div class="nutri-chip">
+      <div class="content-card">
+        <div class="title-row">
+          <div class="title-block">
+            <p class="item-category">{{ item.subcategory || item.category || 'منو' }}</p>
+            <h1 class="item-title">{{ item.title }}</h1>
+          </div>
+          <div class="prep-badge" v-if="prepTimeText">
+            <span class="prep-icon">⏱</span>
+            <span class="prep-text">{{ prepTimeText }}</span>
+          </div>
+        </div>
+
+        <p class="item-desc">{{ item.long_desc || item.short_desc || 'توضیح تکمیلی ثبت نشده است.' }}</p>
+
+        <div class="tags-row" v-if="allergens.length">
+          <span class="tag" v-for="a in allergens" :key="a">{{ a }}</span>
+        </div>
+
+        <div class="cta-bar">
+          <div class="price-block">
+            <small class="price-label">قیمت کل</small>
+            <strong class="price-val">{{ formatMoney(linePreview.lineTotal, currency) }}</strong>
+          </div>
+          <div class="cart-actions">
+            <div class="qty-control" v-if="hasIngredientCustomization || hasModifierCustomization">
+              <button class="qty-btn" type="button" @click="qty = Math.max(qty - 1, 1)">−</button>
+              <span class="qty-num">{{ qty }}</span>
+              <button class="qty-btn" type="button" @click="qty += 1">+</button>
+            </div>
+            <button class="add-to-cart-btn" type="button" @click="addToCart">
+              {{ isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+              <span class="cart-plus">+</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="nutri-row" v-if="nutritionKcal !== '--' || macroCards.length">
+          <div class="nutri-chip" v-if="nutritionKcal !== '--'">
             <small>کالری</small>
             <strong>{{ nutritionKcal }} kcal</strong>
           </div>
-          <div class="nutri-chip">
+          <div class="nutri-chip" v-if="nutritionProteinPercent !== '--'">
             <small>پروتئین</small>
-            <strong>{{ nutritionProteinPercent === '--' ? '--' : `${nutritionProteinPercent}%` }}</strong>
+            <strong>{{ nutritionProteinPercent }}%</strong>
           </div>
-          <div class="nutri-chip" v-if="prepTimeText">
-            <small>زمان مورد نیاز</small>
-            <strong>{{ prepTimeText }}</strong>
+          <div class="nutri-chip" v-for="m in macroCards" :key="m.key">
+            <small>{{ m.label }}</small>
+            <strong>{{ m.value }}</strong>
           </div>
-        </section>
+        </div>
 
-        <section class="description-card">
-          <h3>جزئیات</h3>
-          <p>{{ item.long_desc || item.short_desc || 'توضیح تکمیلی ثبت نشده است.' }}</p>
-          <div class="meta-tags" v-if="allergens.length">
-            <span class="badge" v-for="allergen in allergens" :key="allergen">{{ allergen }}</span>
+        <section class="detail-section" v-if="hasIngredientCustomization">
+          <div class="section-head">
+            <h3>مواد اولیه</h3>
+            <small class="muted">{{ ingredients.length }}/{{ ingredients.length }} انتخاب شده</small>
           </div>
-        </section>
-
-        <section class="nutrition-macro" v-if="macroCards.length">
-          <article class="macro-item" v-for="macro in macroCards" :key="macro.key">
-            <small>{{ macro.label }}</small>
-            <strong>{{ macro.value }}</strong>
-          </article>
-        </section>
-
-        <section id="ingredients" class="stack-card" v-if="hasIngredientCustomization">
           <IngredientQuantityEditor
             :ingredients="ingredients"
             :model-value="customization"
@@ -57,64 +83,48 @@
           />
         </section>
 
-        <section id="customize" class="stack-card" v-if="hasModifierCustomization">
+        <section class="detail-section" v-if="hasModifierCustomization">
+          <div class="section-head">
+            <h3>گزینه‌های سفارشی</h3>
+          </div>
           <div class="qty-header">
             <div>
               <small class="muted">تعداد سفارش</small>
               <strong>{{ qty }}</strong>
             </div>
-            <div class="qty-control">
-              <button class="icon-btn" type="button" @click="qty = Math.max(qty - 1, 1)">-</button>
-              <button class="icon-btn" type="button" @click="qty += 1">+</button>
+            <div class="qty-ctrl-row">
+              <button class="qty-btn" type="button" @click="qty = Math.max(qty - 1, 1)">−</button>
+              <button class="qty-btn" type="button" @click="qty += 1">+</button>
             </div>
           </div>
-
           <ModifierRecipeImpactSelector
             :groups="modifierGroups"
             :currency="currency"
             :model-value="customization.selected_modifiers"
             @update:model-value="setSelectedModifiers"
           />
-          <p class="error" v-if="selectionError">{{ selectionError }}</p>
+          <p class="error-msg" v-if="selectionError">{{ selectionError }}</p>
         </section>
 
-        <section class="stack-card">
+        <section class="detail-section">
           <LivePricingBreakdown :breakdown="linePreview.pricingBreakdown" :currency="currency" />
         </section>
+      </div>
+    </div>
 
-        <StickyAddToCartBar
-          :total="linePreview.lineTotal"
-          :currency="currency"
-          :button-text="isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد'"
-          hint="قیمت نهایی سفارش در سرور دوباره اعتبارسنجی می‌شود"
-          @action="addToCart"
-        />
-      </LiquidGlassCard>
-
-      <section class="print-product-card">
-        <header class="print-product-name">{{ item.title || '-' }}</header>
-        <main class="print-product-desc">{{ item.long_desc || item.short_desc || 'توضیحی ثبت نشده است.' }}</main>
-        <footer class="print-product-price">{{ formatMoney(item.base_price, currency) }}</footer>
-      </section>
+    <section class="print-product-card">
+      <header class="print-product-name">{{ item?.title || '-' }}</header>
+      <main class="print-product-desc">{{ item?.long_desc || item?.short_desc || 'توضیحی ثبت نشده است.' }}</main>
+      <footer class="print-product-price">{{ formatMoney(item?.base_price, currency) }}</footer>
     </section>
-
-    <section class="detail-shell" v-else>
-      <LiquidGlassCard class="phone-frame state-box">
-        <p class="muted" v-if="loading">در حال دریافت جزئیات محصول...</p>
-        <p class="error" v-else-if="error">{{ error }}</p>
-      </LiquidGlassCard>
-    </section>
-  </LiquidGlassBackdrop>
+  </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
-import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
 import IngredientQuantityEditor from '@/components/IngredientQuantityEditor.vue'
 import ModifierRecipeImpactSelector from '@/components/ModifierRecipeImpactSelector.vue'
 import LivePricingBreakdown from '@/components/LivePricingBreakdown.vue'
-import StickyAddToCartBar from '@/components/StickyAddToCartBar.vue'
 import { getItemDetail } from '@/utils/api'
 import { formatMoney, parseQuery } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
@@ -190,7 +200,7 @@ const prepTimeText = computed(() => {
   if (!Number.isFinite(mins) || mins <= 0) {
     return ''
   }
-  return `${mins} min`
+  return `${mins} دقیقه`
 })
 
 const macroCards = computed(() => {
@@ -484,176 +494,342 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.detail-shell {
-  width: min(560px, calc(100% - 1rem));
-  margin: 0.8rem auto 2.2rem;
+.detail-page {
+  min-height: 100svh;
+  background: var(--theme-background, #f6f1ea);
+  direction: rtl;
 }
 
-.phone-frame {
-  padding: 0.76rem;
-  display: grid;
-  gap: 0.68rem;
-  border-radius: 34px;
+.state-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60svh;
 }
 
-.state-box {
-  min-height: 200px;
-  align-content: center;
+.state-content {
   text-align: center;
+  padding: 2rem;
 }
 
-.top-bar {
+.detail-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding-bottom: 3rem;
+}
+
+/* ─── Hero Image ─── */
+.hero-area {
+  position: relative;
+  width: 100%;
+}
+
+.hero-img {
+  width: 100%;
+  height: min(420px, 60vw);
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  border-radius: 0 0 32px 32px;
+}
+
+@media (max-width: 480px) {
+  .hero-img {
+    height: 280px;
+  }
+}
+
+.hero-nav {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.nav-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(8px);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary, #3f2a1d);
+  font-size: 1.2rem;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: background 0.2s;
+}
+
+.nav-circle:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.back-btn {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.nav-end-group {
+  display: flex;
   gap: 0.5rem;
 }
 
-.icon-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.34);
-  background: rgba(255, 255, 255, 0.74);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-primary);
-  font-size: 1.05rem;
-  box-shadow: 0 8px 18px rgb(var(--palette-deep-saffron-rgb) / 0.16);
+/* ─── Content Card ─── */
+.content-card {
+  background: var(--glass-bg, #fdf8f1);
+  border-radius: 28px 28px 0 0;
+  margin-top: -24px;
+  position: relative;
+  padding: 1.4rem 1.2rem 1.5rem;
+  display: grid;
+  gap: 1rem;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.06);
 }
 
-.category-pill {
-  margin: 0;
-  color: var(--accent-gold);
-  font-size: 0.82rem;
-}
-
-.hero-image {
-  width: min(100%, 380px);
-  border-radius: 28px;
-  object-fit: contain;
-  object-position: center;
-  background: transparent;
-  justify-self: center;
-}
-
-.headline-row {
+/* ─── Title Row ─── */
+.title-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
 }
 
-.headline-row h1 {
+.title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-category {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  color: var(--accent-gold, #c98d42);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.item-title {
   margin: 0;
-  font-size: 1.7rem;
-  line-height: 1.08;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--text-primary, #3f2a1d);
+  line-height: 1.2;
 }
 
-.headline-row p {
-  margin: 0.24rem 0 0;
-  font-size: 0.82rem;
+.prep-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--accent-green40, rgba(111,74,49,0.1));
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  margin-top: 0.2rem;
 }
 
-.price {
-  font-size: 1.24rem;
-  color: var(--accent-gold);
+.prep-icon {
+  font-size: 0.9rem;
 }
 
-.nutrition-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.45rem;
+.prep-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #654a38);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.nutri-chip {
-  border-radius: 16px;
-  padding: 0.52rem;
-  color: var(--palette-eggshell);
-  background: var(--accent-green80);
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.32);
-  box-shadow: 0 12px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.24);
-  text-align: center;
-}
-
-.nutri-chip small {
-  display: block;
-  color: var(--glass-highlight);
-  font-size: 0.68rem;
-}
-
-.nutri-chip strong {
-  font-size: 0.84rem;
-}
-
-.description-card,
-.stack-card,
-.nutrition-macro {
-  border-radius: 22px;
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.24);
-  background: rgba(255, 255, 255, .56);
-  box-shadow: 0 14px 36px rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  padding: 0.72rem;
-}
-
-.description-card h3 {
+.item-desc {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.88rem;
+  color: var(--text-muted, #846b58);
+  line-height: 1.65;
 }
 
-.description-card p {
-  margin: 0.38rem 0 0;
-  color: var(--text-muted);
-  line-height: 1.7;
-  font-size: 0.84rem;
-}
-
-.meta-tags {
+/* ─── Tags ─── */
+.tags-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  margin-top: 0.45rem;
 }
 
-.nutrition-macro {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
+.tag {
+  background: var(--accent-gold20, rgba(201,141,66,0.14));
+  color: var(--text-secondary, #654a38);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.74rem;
+  font-weight: 500;
 }
 
-.macro-item {
-  border-radius: 14px;
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.1);
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.24);
-  text-align: center;
-  padding: 0.42rem;
-}
-
-.macro-item small {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.7rem;
-}
-
-.qty-header {
-  margin-bottom: 0.5rem;
+/* ─── CTA Bar ─── */
+.cta-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--theme-surface-alt, #f1e7db);
+  border-radius: 20px;
+  padding: 0.9rem 1rem;
+}
+
+.price-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.price-label {
+  font-size: 0.7rem;
+  color: var(--text-muted, #846b58);
+}
+
+.price-val {
+  font-size: 1.28rem;
+  color: var(--text-primary, #3f2a1d);
+  font-weight: 800;
+}
+
+.cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .qty-control {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  padding: 0.2rem 0.4rem;
 }
 
-.error {
-  margin: 0.45rem 0 0;
-  color: var(--danger);
+.qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-green, #6f4a31);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
 }
 
+.qty-num {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary, #3f2a1d);
+  min-width: 1.2rem;
+  text-align: center;
+}
+
+.add-to-cart-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--accent-green, #6f4a31);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgb(var(--palette-deep-sapphire-rgb) / 0.28);
+}
+
+.cart-plus {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+/* ─── Nutrition ─── */
+.nutri-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.nutri-chip {
+  flex: 1;
+  min-width: 70px;
+  border-radius: 14px;
+  padding: 0.5rem 0.6rem;
+  background: var(--accent-green80, rgba(111,74,49,0.9));
+  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.28);
+  text-align: center;
+  color: #fff;
+}
+
+.nutri-chip small {
+  display: block;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.nutri-chip strong {
+  font-size: 0.8rem;
+}
+
+/* ─── Sections ─── */
+.detail-section {
+  border-radius: 20px;
+  border: 1px solid var(--theme-border, #d5c3af);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary, #3f2a1d);
+}
+
+.qty-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qty-ctrl-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.error-msg {
+  margin: 0;
+  color: var(--danger, #dc2626);
+  font-size: 0.82rem;
+}
+
+/* ─── Print ─── */
 .print-product-card {
   display: none;
 }
@@ -669,12 +845,8 @@ onUnmounted(() => {
     background: #fff !important;
   }
 
-  .detail-shell {
-    width: 5cm !important;
-    margin: 0 !important;
-  }
-
-  .detail-shell > :not(.print-product-card) {
+  .detail-wrap,
+  .state-shell {
     display: none !important;
   }
 
@@ -695,7 +867,6 @@ onUnmounted(() => {
   .print-product-name {
     margin: 0;
     font-size: 14pt;
-    line-height: 1.3;
     font-weight: 700;
     text-align: center;
   }
@@ -716,13 +887,19 @@ onUnmounted(() => {
   }
 }
 
-@media (min-width: 900px) {
-  .detail-shell {
-    width: min(980px, calc(100% - 2rem));
+@media (min-width: 640px) {
+  .detail-wrap {
+    padding: 0 1rem 3rem;
   }
 
-  .phone-frame {
-    padding: 0.9rem;
+  .hero-img {
+    border-radius: 0 0 40px 40px;
+  }
+
+  .content-card {
+    border-radius: 32px;
+    margin: -2rem 0 0;
+    padding: 1.6rem 1.5rem 2rem;
   }
 }
 </style>

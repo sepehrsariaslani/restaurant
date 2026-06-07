@@ -206,6 +206,28 @@
         </div>
       </ManagementSurfaceCard>
 
+      <ManagementSurfaceCard title="کارت محصولات" subtitle="نمایش کارت‌های منو — یک استایل را انتخاب کنید.">
+        <div class="variant-row">
+          <button
+            v-for="opt in cardVariantOptions"
+            :key="opt.value"
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.card_variant === opt.value }"
+            @click="webSettings.card_variant = opt.value"
+          >
+            <div class="variant-preview" :style="opt.previewStyle">
+              <div class="vp-card-preview" :style="opt.cardStyle"></div>
+            </div>
+            <div class="variant-meta">
+              <strong>{{ opt.label }}</strong>
+              <small>{{ opt.desc }}</small>
+            </div>
+            <span class="variant-check" v-if="webSettings.card_variant === opt.value">✓</span>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard title="پیش‌نمایش زنده" subtitle="با تغییر هر گزینه، همین‌جا کامپوننت واقعی را می‌بینی.">
         <div class="site-preview-shell">
           <PublicHeader
@@ -273,8 +295,32 @@
           </label>
           <label>
             تصویر پس‌زمینه
-            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
-            <img v-if="String(webSettings.hero_image || '').trim()" class="image-preview" :src="webSettings.hero_image" alt="Hero bg" />
+            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg یا URL عکس" />
+            <div class="image-upload-row">
+              <button type="button" class="secondary-btn mini" @click="heroImageInput.click()">📁 انتخاب عکس از دستگاه</button>
+              <button type="button" class="secondary-btn mini danger" v-if="webSettings.hero_image" @click="webSettings.hero_image = ''">حذف عکس</button>
+            </div>
+            <input
+              ref="heroImageInput"
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+              style="display:none"
+              @change="handleHeroImageUpload"
+            />
+            <img
+              v-if="String(webSettings.hero_image || '').trim()"
+              class="image-preview"
+              :src="webSettings.hero_image"
+              alt="Hero bg"
+            />
+          </label>
+          <label>
+            موقعیت تصویر
+            <SearchableDropdown
+              v-model="webSettings.hero_image_position"
+              :options="imagePositionOptions"
+              placeholder="انتخاب موقعیت"
+            />
           </label>
         </div>
       </ManagementSurfaceCard>
@@ -728,6 +774,8 @@ const webSettings = reactive({
   loader_overlay_color: defaultLoaderSettings.overlayColor,
   loader_accent_color: defaultLoaderSettings.accentColor,
   loader_custom_code: defaultLoaderSettings.customCode,
+  card_variant: 'classic',
+  hero_image_position: 'center',
 })
 
 const heroSlides = ref([])
@@ -742,10 +790,53 @@ const faqEditorOpen = ref(false)
 const faqEditorIndex = ref(-1)
 const faqDraft = reactive(createEmptyFaqItem())
 
+const heroImageInput = ref(null)
+
+function handleHeroImageUpload(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    webSettings.hero_image = String(e.target?.result || '').trim()
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
+}
+
 const currencyOptions = [
   { value: 'IRR', label: 'IRR' },
   { value: 'USD', label: 'USD' },
   { value: 'EUR', label: 'EUR' },
+]
+
+const imagePositionOptions = [
+  { value: 'top', label: 'بالا' },
+  { value: 'center', label: 'وسط' },
+  { value: 'bottom', label: 'پایین' },
+]
+
+const cardVariantOptions = [
+  {
+    value: 'classic',
+    label: 'کارت کلاسیک',
+    desc: 'کارت سفید با تصویر بالا، بج قیمت، دسته‌بندی، توضیح و دکمه مشاهده',
+    previewStyle: { background: '#f5f0eb' },
+    cardStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '14px', height: '80%' },
+  },
+  {
+    value: 'dark',
+    label: 'کارت تاریک',
+    desc: 'کارت با تصویر پوشش‌دهنده، افکت تاریک و متن سفید روی آن',
+    previewStyle: { background: '#1c1411' },
+    cardStyle: { background: 'linear-gradient(135deg, #2d1a10, #1c1411)', borderRadius: '14px', height: '80%' },
+  },
+  {
+    value: 'navy',
+    label: 'کارت نیوی',
+    desc: 'کارت تیره با تصویر مرکزی، ستاره‌بندی، قیمت بزرگ و دکمه فلش',
+    previewStyle: { background: '#1e2035' },
+    cardStyle: { background: 'linear-gradient(145deg, rgba(111,74,49,0.7), rgba(30,32,53,0.9))', borderRadius: '14px', height: '80%' },
+  },
 ]
 
 const loaderModeOptions = [
@@ -813,13 +904,6 @@ const headerVariantOptions = [
     barStyle: { background: '#1c1411', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   },
   {
-    value: 'hero',
-    label: 'هیرو تمام‌صفحه',
-    desc: 'هدر بزرگ تمام‌صفحه با تصویر پس‌زمینه، متن روی تصویر و ناوبری شفاف',
-    previewStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)' },
-    barStyle: { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', backdropFilter: 'blur(8px)' },
-  },
-  {
     value: 'glass',
     label: 'شیشه‌ای (Glass)',
     desc: 'هدر شفاف با افکت شیشه‌ای و بلور مدرن؛ روی هر پس‌زمینه‌ای زیبا به نظر می‌رسد',
@@ -866,6 +950,13 @@ const heroVariantOptions = [
     desc: 'بنر افقی جمع‌وجور با ارتفاع کمتر، مناسب برای صفحات مینیمال',
     previewStyle: { background: '#1c1411' },
     heroStyle: { background: 'linear-gradient(135deg, #1c1411 60%, #3d2510)', height: '60%', marginTop: '20%' },
+  },
+  {
+    value: 'cover',
+    label: 'هیرو پوشش‌دهنده',
+    desc: 'هدر و هیرو در یک کامپوننت تمام‌صفحه با تصویر پس‌زمینه و ناوبری شفاف روی آن',
+    previewStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)' },
+    heroStyle: { background: 'linear-gradient(145deg, rgba(28,20,17,0.95), rgba(61,37,16,0.9))', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
 ]
 
@@ -936,7 +1027,9 @@ function assignLoaderSettingsToForm(source = {}) {
 }
 
 function normalizeHeaderSetting(value = '') {
-  return String(value || '').trim() === 'minimal' ? 'minimal' : 'classic'
+  const v = String(value || '').trim()
+  const valid = ['classic', 'minimal', 'hero', 'glass']
+  return valid.includes(v) ? v : 'classic'
 }
 
 function normalizeMenuSearchSetting(value = '') {
@@ -1342,6 +1435,8 @@ async function loadSettings() {
     webSettings.footer_instagram = String(nextWeb.footer_instagram || '').trim()
     webSettings.footer_telegram = String(nextWeb.footer_telegram || '').trim()
     webSettings.footer_copyright = String(nextWeb.footer_copyright || '').trim()
+    webSettings.card_variant = String(nextWeb.card_variant || 'classic').trim() || 'classic'
+    webSettings.hero_image_position = String(nextWeb.hero_image_position || 'center').trim() || 'center'
     assignLoaderSettingsToForm(nextWeb)
 
     heroSlides.value = (payload?.hero_slides || []).map((row) => normalizeHeroSlide(row))
@@ -1388,6 +1483,8 @@ async function saveSettings() {
         header_variant: normalizeHeaderSetting(webSettings.header_variant),
         menu_search_variant: normalizeMenuSearchSetting(webSettings.menu_search_variant),
         hero_section_variant: String(webSettings.hero_section_variant || 'off').trim() || 'off',
+        card_variant: String(webSettings.card_variant || 'classic').trim() || 'classic',
+        hero_image_position: String(webSettings.hero_image_position || 'center').trim() || 'center',
         footer_variant: String(webSettings.footer_variant || 'full').trim() || 'full',
         hero_section_enabled: webSettings.hero_section_variant !== 'off' ? 1 : 0,
         footer_enabled: webSettings.footer_variant !== 'off' ? 1 : 0,
@@ -1789,6 +1886,34 @@ loadSettings()
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.vp-card-preview {
+  width: 48%;
+  margin: auto;
+  border-radius: 10px;
+}
+
+.image-upload-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.secondary-btn.mini {
+  font-size: 0.76rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border, #d5c3af);
+  background: transparent;
+  color: var(--text-primary, #3f2a1d);
+  cursor: pointer;
+}
+
+.secondary-btn.mini.danger {
+  border-color: var(--danger, #dc2626);
+  color: var(--danger, #dc2626);
 }
 
 .variant-action-row {
