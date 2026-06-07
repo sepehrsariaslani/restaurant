@@ -25,6 +25,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <AppHeader
+      v-if="page !== 'landing'"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -32,7 +33,7 @@
       :last-order-url="lastOrderUrl"
     />
 
-    <main class="app-main">
+    <main class="app-main" :class="{ 'app-main--no-offset': page === 'landing' }">
       <RestaurantLandingPage v-if="page === 'landing'" :boot="boot" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
@@ -43,7 +44,7 @@
       <MenuPage v-else :boot="boot" />
     </main>
 
-    <AppFooter :branding="branding" :has-last-order="hasLastOrder" :last-order-url="lastOrderUrl" />
+    <AppFooter v-if="page !== 'landing'" :branding="branding" :has-last-order="hasLastOrder" :last-order-url="lastOrderUrl" />
 
     <MobileBottomNav
       :page="page"
@@ -167,6 +168,10 @@ const lastOrderUrl = computed(() => {
 .app-main {
   flex: 1;
   padding-top: 5.35rem;
+}
+
+.app-main--no-offset {
+  padding-top: 0;
 }
 
 .management-login-placeholder {

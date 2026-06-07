@@ -1,20 +1,34 @@
 <template>
   <div class="home-page" dir="rtl">
-    <SiteHeader
+    <SiteHeaderMinimal
+      v-if="siteComponents.header_variant === 'minimal'"
       :branding="branding"
       :cart-count="0"
-      :has-hero="siteComponents.hero_section_enabled"
+    />
+    <SiteHeader
+      v-else
+      :branding="branding"
+      :cart-count="0"
+      :has-hero="siteComponents.hero_section_variant === 'fullscreen'"
       :hero-visible="heroVisible"
     />
 
     <SiteHeroSection
-      v-if="siteComponents.hero_section_enabled"
+      v-if="siteComponents.hero_section_variant === 'fullscreen'"
       :branding="branding"
       :title="branding.hero_section_title"
       :description="branding.hero_section_description"
       :cta="branding.hero_section_cta"
       :hero-image="branding.hero_image"
       @visibility-change="heroVisible = $event"
+    />
+    <SiteHeroBanner
+      v-else-if="siteComponents.hero_section_variant === 'banner'"
+      :branding="branding"
+      :title="branding.hero_section_title"
+      :description="branding.hero_section_description"
+      :cta="branding.hero_section_cta"
+      :hero-image="branding.hero_image"
     />
 
     <div id="content">
@@ -113,7 +127,7 @@
     </div>
 
     <SiteFooter
-      v-if="siteComponents.footer_enabled"
+      v-if="siteComponents.footer_variant === 'full'"
       :brand-name="branding.name"
       :description="branding.footer_description"
       :phone="branding.footer_phone"
@@ -121,6 +135,11 @@
       :address="branding.footer_address"
       :instagram="branding.footer_instagram"
       :telegram="branding.footer_telegram"
+      :copyright="branding.footer_copyright"
+    />
+    <SiteFooterMinimal
+      v-else-if="siteComponents.footer_variant === 'minimal'"
+      :brand-name="branding.name"
       :copyright="branding.footer_copyright"
     />
   </div>
@@ -141,8 +160,11 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import FeatureCard from '@/components/FeatureCard.vue'
 import AnimatedCounter from '@/components/AnimatedCounter.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
+import SiteHeaderMinimal from '@/components/SiteHeaderMinimal.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
+import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
+import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 
 const props = defineProps({
   boot: {
@@ -172,9 +194,12 @@ const branding = computed(
 
 const siteComponents = computed(() => {
   const ws = props.boot.web_settings || props.boot.branding || {}
+  const heroEnabled = Number(ws.hero_section_enabled || 0) === 1
+  const footerEnabled = Number(ws.footer_enabled ?? 1) !== 0
   return {
-    hero_section_enabled: Number(ws.hero_section_enabled || 0) === 1,
-    footer_enabled: Number(ws.footer_enabled ?? 1) !== 0,
+    header_variant: String(ws.header_variant || 'classic').trim() || 'classic',
+    hero_section_variant: String(ws.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off',
+    footer_variant: String(ws.footer_variant || (footerEnabled ? 'full' : 'off')).trim() || 'full',
   }
 })
 

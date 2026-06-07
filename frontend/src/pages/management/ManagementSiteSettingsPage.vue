@@ -100,57 +100,84 @@
     </template>
 
     <template v-else-if="activeTab === 'components'">
-      <ManagementSurfaceCard title="انتخاب کامپوننت‌های سایت" subtitle="مشخص کنید کدام بخش‌ها در صفحه اصلی سایت نمایش داده شوند.">
-        <div class="component-grid">
-          <article class="component-card" :class="{ active: Number(webSettings.hero_section_enabled) === 1 }">
-            <div class="component-card-head">
-              <div class="component-card-icon">🏔️</div>
-              <div>
-                <strong>هیرو سکشن تمام‌صفحه</strong>
-                <p class="muted">بنر بزرگ با تصویر پس‌زمینه که تمام صفحه را پوشش می‌دهد. هدر سایت روی آن نمایش می‌یابد و با اسکرول به هدر معمولی تبدیل می‌شود.</p>
+      <ManagementSurfaceCard title="هدر سایت" subtitle="یک سبک هدر انتخاب کنید — این تنها هدری است که روی سایت نمایش داده می‌شود.">
+        <div class="variant-row">
+          <button
+            v-for="opt in headerVariantOptions"
+            :key="opt.value"
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.header_variant === opt.value }"
+            @click="webSettings.header_variant = opt.value"
+          >
+            <div class="variant-preview" :style="opt.previewStyle">
+              <div class="vp-bar" :style="opt.barStyle">
+                <span class="vp-brand"></span>
+                <span class="vp-links"></span>
               </div>
             </div>
-            <div class="component-card-footer">
-              <label class="toggle-label">
-                <input
-                  type="checkbox"
-                  class="toggle-input"
-                  :checked="Number(webSettings.hero_section_enabled) === 1"
-                  @change="webSettings.hero_section_enabled = $event.target.checked ? 1 : 0"
-                />
-                <span class="toggle-track">
-                  <span class="toggle-thumb"></span>
-                </span>
-                <span>{{ Number(webSettings.hero_section_enabled) === 1 ? 'فعال' : 'غیرفعال' }}</span>
-              </label>
-              <button v-if="Number(webSettings.hero_section_enabled) === 1" type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوا ←</button>
+            <div class="variant-meta">
+              <strong>{{ opt.label }}</strong>
+              <small>{{ opt.desc }}</small>
             </div>
-          </article>
+            <span class="variant-check" v-if="webSettings.header_variant === opt.value">✓</span>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
 
-          <article class="component-card" :class="{ active: Number(webSettings.footer_enabled) !== 0 }">
-            <div class="component-card-head">
-              <div class="component-card-icon">🦶</div>
-              <div>
-                <strong>فوتر سایت</strong>
-                <p class="muted">پاورقی با نام برند بزرگ، اطلاعات تماس، لینک‌های شبکه اجتماعی و رنگ‌بندی پویا از تم انتخابی شما.</p>
+      <ManagementSurfaceCard title="هیرو سکشن" subtitle="نحوه نمایش بنر اصلی صفحه خانه را مشخص کنید — فقط یک گزینه فعال می‌ماند.">
+        <div class="variant-row">
+          <button
+            v-for="opt in heroVariantOptions"
+            :key="opt.value"
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.hero_section_variant === opt.value }"
+            @click="webSettings.hero_section_variant = opt.value"
+          >
+            <div class="variant-preview" :style="opt.previewStyle">
+              <div class="vp-hero" :style="opt.heroStyle">
+                <span class="vp-title"></span>
+                <span class="vp-sub"></span>
               </div>
             </div>
-            <div class="component-card-footer">
-              <label class="toggle-label">
-                <input
-                  type="checkbox"
-                  class="toggle-input"
-                  :checked="Number(webSettings.footer_enabled) !== 0"
-                  @change="webSettings.footer_enabled = $event.target.checked ? 1 : 0"
-                />
-                <span class="toggle-track">
-                  <span class="toggle-thumb"></span>
-                </span>
-                <span>{{ Number(webSettings.footer_enabled) !== 0 ? 'فعال' : 'غیرفعال' }}</span>
-              </label>
-              <button v-if="Number(webSettings.footer_enabled) !== 0" type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوا ←</button>
+            <div class="variant-meta">
+              <strong>{{ opt.label }}</strong>
+              <small>{{ opt.desc }}</small>
             </div>
-          </article>
+            <span class="variant-check" v-if="webSettings.hero_section_variant === opt.value">✓</span>
+          </button>
+        </div>
+        <div class="variant-action-row" v-if="webSettings.hero_section_variant !== 'off'">
+          <button type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوای هیرو ←</button>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="فوتر سایت" subtitle="سبک پاورقی سایت را انتخاب کنید — فقط یک گزینه فعال می‌ماند.">
+        <div class="variant-row">
+          <button
+            v-for="opt in footerVariantOptions"
+            :key="opt.value"
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.footer_variant === opt.value }"
+            @click="webSettings.footer_variant = opt.value"
+          >
+            <div class="variant-preview" :style="opt.previewStyle">
+              <div class="vp-footer" :style="opt.footerStyle">
+                <span class="vp-footer-brand"></span>
+                <span class="vp-footer-links"></span>
+              </div>
+            </div>
+            <div class="variant-meta">
+              <strong>{{ opt.label }}</strong>
+              <small>{{ opt.desc }}</small>
+            </div>
+            <span class="variant-check" v-if="webSettings.footer_variant === opt.value">✓</span>
+          </button>
+        </div>
+        <div class="variant-action-row" v-if="webSettings.footer_variant !== 'off'">
+          <button type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوای فوتر ←</button>
         </div>
       </ManagementSurfaceCard>
     </template>
@@ -598,6 +625,9 @@ const webSettings = reactive({
   restaurant_menu_highlight_best_seller_limit: 10,
   hero_section_enabled: 0,
   footer_enabled: 1,
+  header_variant: 'classic',
+  hero_section_variant: 'off',
+  footer_variant: 'full',
   hero_section_title: '',
   hero_section_description: '',
   hero_section_cta: '',
@@ -684,6 +714,71 @@ const faqColumns = [
   { key: 'sort_order', label: 'ترتیب' },
   { key: 'is_active', label: 'وضعیت' },
   { key: 'actions', label: 'عملیات' },
+]
+
+const headerVariantOptions = [
+  {
+    value: 'classic',
+    label: 'کلاسیک',
+    desc: 'هدر روشن با پس‌زمینه شیری، پشتیبانی از حالت شفاف روی هیرو',
+    previewStyle: { background: '#f5f0eb' },
+    barStyle: { background: '#f5f0eb', borderBottom: '1px solid #e0d8cf' },
+  },
+  {
+    value: 'minimal',
+    label: 'مینیمال تاریک',
+    desc: 'هدر تاریک و مدرن با پس‌زمینه یکدست قهوه‌ای تیره',
+    previewStyle: { background: '#1c1411' },
+    barStyle: { background: '#1c1411', borderBottom: '1px solid rgba(255,255,255,0.08)' },
+  },
+]
+
+const heroVariantOptions = [
+  {
+    value: 'off',
+    label: 'بدون هیرو',
+    desc: 'هیرو سکشن نمایش داده نمی‌شود',
+    previewStyle: { background: '#f0ece7' },
+    heroStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  },
+  {
+    value: 'fullscreen',
+    label: 'تمام‌صفحه',
+    desc: 'بنر بزرگ تمام صفحه با تصویر پس‌زمینه و هدر شفاف روی آن',
+    previewStyle: { background: '#2a1a10' },
+    heroStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)', height: '100%' },
+  },
+  {
+    value: 'banner',
+    label: 'بنر کوتاه',
+    desc: 'بنر افقی جمع‌وجور با ارتفاع کمتر، مناسب برای صفحات مینیمال',
+    previewStyle: { background: '#1c1411' },
+    heroStyle: { background: 'linear-gradient(135deg, #1c1411 60%, #3d2510)', height: '60%', marginTop: '20%' },
+  },
+]
+
+const footerVariantOptions = [
+  {
+    value: 'off',
+    label: 'بدون فوتر',
+    desc: 'فوتر نمایش داده نمی‌شود',
+    previewStyle: { background: '#f0ece7' },
+    footerStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  },
+  {
+    value: 'full',
+    label: 'فوتر کامل',
+    desc: 'فوتر کامل با نام برند، اطلاعات تماس، لینک‌های اجتماعی و کپی‌رایت',
+    previewStyle: { background: '#1c1411' },
+    footerStyle: { background: '#1c1411', height: '100%' },
+  },
+  {
+    value: 'minimal',
+    label: 'فوتر مینیمال',
+    desc: 'فوتر ساده و کوچک فقط با نام برند و کپی‌رایت',
+    previewStyle: { background: '#f5f0eb' },
+    footerStyle: { background: '#f5f0eb', borderTop: '1px solid #e0d8cf', height: '45%', marginTop: '55%' },
+  },
 ]
 
 const loaderPreviewSettings = computed(() =>
@@ -980,6 +1075,11 @@ async function loadSettings() {
     webSettings.restaurant_menu_highlight_best_seller_limit = Number(nextWeb.restaurant_menu_highlight_best_seller_limit || 10) || 10
     webSettings.hero_section_enabled = Number(nextWeb.hero_section_enabled || 0) ? 1 : 0
     webSettings.footer_enabled = Number(nextWeb.footer_enabled ?? 1) ? 1 : 0
+    webSettings.header_variant = String(nextWeb.header_variant || 'classic').trim() || 'classic'
+    const heroEnabled = Number(nextWeb.hero_section_enabled || 0)
+    webSettings.hero_section_variant = String(nextWeb.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off'
+    const footerEnabled = Number(nextWeb.footer_enabled ?? 1)
+    webSettings.footer_variant = String(nextWeb.footer_variant || (footerEnabled ? 'full' : 'off')).trim() || 'full'
     webSettings.hero_section_title = String(nextWeb.hero_section_title || '').trim()
     webSettings.hero_section_description = String(nextWeb.hero_section_description || '').trim()
     webSettings.hero_section_cta = String(nextWeb.hero_section_cta || '').trim()
@@ -1032,8 +1132,11 @@ async function saveSettings() {
         restaurant_menu_highlight_featured_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_featured_limit || 10) || 10, 50)),
         restaurant_menu_highlight_show_best_seller: Number(webSettings.restaurant_menu_highlight_show_best_seller || 0) ? 1 : 0,
         restaurant_menu_highlight_best_seller_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_best_seller_limit || 10) || 10, 50)),
-        hero_section_enabled: Number(webSettings.hero_section_enabled || 0) ? 1 : 0,
-        footer_enabled: Number(webSettings.footer_enabled ?? 1) ? 1 : 0,
+        header_variant: String(webSettings.header_variant || 'classic').trim() || 'classic',
+        hero_section_variant: String(webSettings.hero_section_variant || 'off').trim() || 'off',
+        footer_variant: String(webSettings.footer_variant || 'full').trim() || 'full',
+        hero_section_enabled: webSettings.hero_section_variant !== 'off' ? 1 : 0,
+        footer_enabled: webSettings.footer_variant !== 'off' ? 1 : 0,
         hero_section_title: String(webSettings.hero_section_title || '').trim(),
         hero_section_description: String(webSettings.hero_section_description || '').trim(),
         hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
@@ -1246,108 +1349,180 @@ loadSettings()
   }
 }
 
-/* Component selection grid */
-.component-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
+/* Variant selector */
+.variant-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.component-card {
+.variant-card {
+  position: relative;
+  flex: 1 1 160px;
+  max-width: 220px;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  border: 1.5px solid rgb(var(--palette-deep-sapphire-rgb) / 0.15);
+  gap: 0.6rem;
+  border: 2px solid rgb(var(--palette-deep-sapphire-rgb) / 0.15);
   border-radius: 14px;
-  padding: 1.1rem;
+  padding: 0;
   background: #fff;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s;
+  text-align: right;
+  overflow: hidden;
+  font-family: inherit;
 }
 
-.component-card.active {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.5);
-  box-shadow: 0 3px 18px 0 rgb(var(--palette-deep-sapphire-rgb) / 0.10);
-  background: rgb(var(--palette-june-bud-rgb) / 0.06);
+.variant-card:hover {
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.08);
 }
 
-.component-card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.8rem;
+.variant-card.selected {
+  border-color: var(--palette-deep-sapphire, #6F4A31);
+  box-shadow: 0 4px 18px rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+  background: rgb(var(--palette-june-bud-rgb) / 0.04);
 }
 
-.component-card-icon {
-  font-size: 1.8rem;
-  line-height: 1;
-  flex-shrink: 0;
+.variant-preview {
+  width: 100%;
+  height: 80px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0;
 }
 
-.component-card-head strong {
-  display: block;
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
-}
-
-.component-card-head .muted {
-  font-size: 0.78rem;
-  line-height: 1.55;
-  margin: 0;
-}
-
-.component-card-footer {
+.vp-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+  padding: 0 10px;
+  gap: 6px;
 }
 
-/* Toggle switch */
-.toggle-label {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
+.vp-brand {
+  width: 36px;
+  height: 7px;
+  border-radius: 4px;
+  background: rgb(111 74 49 / 0.3);
+}
+
+.vp-links {
+  width: 48px;
+  height: 5px;
+  border-radius: 4px;
+  background: rgb(111 74 49 / 0.15);
+}
+
+.vp-hero {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+
+.vp-title {
+  display: block;
+  width: 60%;
+  height: 7px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.55);
+  position: absolute;
+  top: 38%;
+  right: 14px;
+}
+
+.vp-sub {
+  display: block;
+  width: 40%;
+  height: 4px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.3);
+  position: absolute;
+  top: 58%;
+  right: 14px;
+}
+
+.vp-footer {
+  position: absolute;
+  inset: 0;
+}
+
+.vp-footer-brand {
+  display: block;
+  width: 50px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgb(201 141 66 / 0.5);
+  position: absolute;
+  bottom: 28px;
+  right: 14px;
+}
+
+.vp-footer-links {
+  display: block;
+  width: 70px;
+  height: 4px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.18);
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+}
+
+.variant-meta {
+  padding: 0 0.8rem 0.7rem;
+  display: grid;
+  gap: 0.18rem;
+  text-align: right;
+}
+
+.variant-meta strong {
   font-size: 0.82rem;
-  font-weight: 600;
+  color: var(--ink-900, #1c1411);
 }
 
-.toggle-input {
+.variant-meta small {
+  font-size: 0.7rem;
+  color: var(--ink-700, #7a6a60);
+  line-height: 1.45;
+}
+
+.variant-check {
   position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-track {
-  position: relative;
-  display: inline-block;
-  width: 2.5rem;
-  height: 1.4rem;
-  border-radius: 999px;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.2);
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-.toggle-input:checked + .toggle-track {
-  background: var(--palette-deep-sapphire, #6F4A31);
-}
-
-.toggle-thumb {
-  position: absolute;
-  top: 0.18rem;
-  right: 0.18rem;
-  width: 1.04rem;
-  height: 1.04rem;
+  top: 0.45rem;
+  left: 0.45rem;
+  width: 1.3rem;
+  height: 1.3rem;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
-  transition: transform 0.2s;
+  background: var(--palette-deep-sapphire, #6F4A31);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.toggle-input:checked + .toggle-track .toggle-thumb {
-  transform: translateX(-1.1rem);
+.variant-action-row {
+  margin-top: 0.65rem;
+  display: flex;
+}
+
+@media (max-width: 640px) {
+  .variant-row {
+    gap: 0.55rem;
+  }
+
+  .variant-card {
+    flex: 1 1 130px;
+    max-width: 180px;
+  }
 }
 </style>

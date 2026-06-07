@@ -54,15 +54,30 @@ defineProps({
 }
 
 .hero-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 860px) {
   .hero-card {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .hero-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    flex-wrap: nowrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .hero-card h2 {
+    font-size: 0.95rem;
   }
 }
 </style>
