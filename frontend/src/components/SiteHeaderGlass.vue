@@ -29,6 +29,12 @@
 
       <div class="glass-actions">
         <a :href="managementLoginUrl" class="glass-mgmt-btn">ورود مدیریت</a>
+        <button class="glass-search-btn" type="button" @click="openSearch" aria-label="جستجو">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="18" height="18">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        </button>
         <a href="/cart" class="glass-cart-btn" aria-label="سبد سفارش">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
             <circle cx="8" cy="20" r="1" /><circle cx="18" cy="20" r="1" />
@@ -61,6 +67,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useSearchModal } from '@/composables/useSearchModal'
 
 const props = defineProps({
   branding: { type: Object, default: () => ({}) },
@@ -71,6 +78,7 @@ const props = defineProps({
   preview: { type: Boolean, default: false },
 })
 
+const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
 const managementLoginUrl = '/management/login?redirect_to=%2Fmanagement'
 
@@ -228,6 +236,25 @@ function isActive(link) {
 
 .glass-mgmt-btn:hover {
   background: rgb(var(--palette-june-bud-rgb, 201 223 144) / 0.45);
+}
+
+.glass-search-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 10px;
+  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.08);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.18);
+  color: var(--text-primary, #3f2a1d);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.glass-search-btn:hover {
+  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.16);
+  border-color: var(--accent-green, #6f4a31);
 }
 
 .glass-cart-btn {

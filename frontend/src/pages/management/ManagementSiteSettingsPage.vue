@@ -958,6 +958,13 @@ const heroVariantOptions = [
     previewStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)' },
     heroStyle: { background: 'linear-gradient(145deg, rgba(28,20,17,0.95), rgba(61,37,16,0.9))', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
+  {
+    value: 'foodbar',
+    label: 'فودبار (محصول محور)',
+    desc: 'هیرو با نمایش محصولات پرفروش، تصویر بزرگ محصول، چرخش خودکار و کارت‌های مینیاتوری',
+    previewStyle: { background: '#1c1411' },
+    heroStyle: { background: 'linear-gradient(180deg, #1c1411 40%, #fff 40%)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  },
 ]
 
 const footerVariantOptions = [

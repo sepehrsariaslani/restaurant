@@ -9,6 +9,12 @@
         <a href="/about-us" class="shm-link">درباره ما</a>
       </nav>
 
+      <button class="shm-search" type="button" @click="openSearch" aria-label="جستجو">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      </button>
       <a href="/cart" class="shm-cart" :aria-label="`سبد خرید${cartCount > 0 ? ` (${cartCount})` : ''}`">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="9" cy="20" r="1" />
@@ -22,6 +28,8 @@
 </template>
 
 <script setup>
+import { useSearchModal } from '@/composables/useSearchModal'
+const { openSearch } = useSearchModal()
 defineProps({
   branding: {
     type: Object,
@@ -93,6 +101,27 @@ defineProps({
 
 .shm-link:hover {
   background: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+
+.shm-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  color: rgb(255 255 255 / 0.8);
+  background: rgb(255 255 255 / 0.08);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.shm-search:hover {
+  background: rgb(255 255 255 / 0.16);
   color: #fff;
 }
 
