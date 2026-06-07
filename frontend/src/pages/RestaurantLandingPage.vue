@@ -1,7 +1,9 @@
 <template>
   <div class="home-page" dir="rtl">
+    <GlobalSearchModal />
+
     <PublicHeader
-      v-if="siteComponents.hero_section_variant !== 'cover'"
+      v-if="siteComponents.hero_section_variant !== 'cover' && siteComponents.hero_section_variant !== 'foodbar'"
       :branding="branding"
       :page="'landing'"
       :cart-count="cartCount"
@@ -14,6 +16,12 @@
       :cart-count="cartCount"
       :page="'landing'"
       :preview="false"
+    />
+    <SiteHeroFoodbar
+      v-else-if="siteComponents.hero_section_variant === 'foodbar'"
+      :items="featured"
+      :currency="currency"
+      @quick-add="quickAdd"
     />
     <SiteHeroSection
       v-else-if="siteComponents.hero_section_variant === 'fullscreen'"
@@ -82,7 +90,7 @@
           </ScrollReveal>
           <div class="features-grid">
             <ScrollReveal v-for="(feature, idx) in featureCards" :key="feature.title" :delay="idx * 80">
-              <FeatureCard :icon="feature.icon" :title="feature.title" :description="feature.description" />
+              <FeatureCard :icon="feature.icon" :title="feature.title" :description="feature.description" :bg-image="feature.bgImage" />
             </ScrollReveal>
           </div>
         </section>
@@ -167,6 +175,8 @@ import PublicHeader from '@/components/PublicHeader.vue'
 import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
+import SiteHeroFoodbar from '@/components/SiteHeroFoodbar.vue'
+import GlobalSearchModal from '@/components/GlobalSearchModal.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'
@@ -195,21 +205,25 @@ const featureCards = computed(() => [
     icon: '⚡',
     title: 'سفارش سریع',
     description: 'فرآیند سفارش با کمترین کلیک و بیشترین سرعت طراحی شده است.',
+    bgImage: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=60',
   },
   {
     icon: '🧩',
     title: 'شخصی‌سازی کامل',
     description: 'مواد اولیه هر غذا را متناسب با سلیقه خودتان تنظیم کنید.',
+    bgImage: 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=600&auto=format&fit=crop&q=60',
   },
   {
     icon: '🍃',
     title: 'مواد تازه',
     description: 'تمرکز اصلی روی کیفیت، تازگی و ترکیب سالم مواد اولیه است.',
+    bgImage: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&auto=format&fit=crop&q=60',
   },
   {
     icon: '💬',
     title: 'پشتیبانی شفاف',
     description: 'پاسخ سوالات متداول و مسیر ارتباطی روشن برای مشتریان.',
+    bgImage: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?w=600&auto=format&fit=crop&q=60',
   },
 ])
 

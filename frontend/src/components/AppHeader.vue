@@ -28,6 +28,13 @@
           ورود مدیریت
         </a>
 
+        <button class="search-pill" type="button" @click="openSearch" aria-label="جستجو">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        </button>
+
         <a href="/cart" class="cart-pill" aria-label="سبد سفارش">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
             <circle cx="8" cy="20" r="1" />
@@ -75,6 +82,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useSearchModal } from '@/composables/useSearchModal'
 
 const props = defineProps({
   branding: {
@@ -106,6 +114,7 @@ const props = defineProps({
   },
 })
 
+const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
 const managementLoginUrl = '/management/login?redirect_to=%2Fmanagement'
 
@@ -290,6 +299,28 @@ function isActive(link) {
   line-height: 1;
   padding: 0.5rem 0.72rem;
   white-space: nowrap;
+}
+
+.search-pill {
+  min-width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.24);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.35rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.search-pill svg { width: 16px; height: 16px; }
+
+.search-pill:hover {
+  background: var(--accent-green20, rgba(111,74,49,0.1));
+  border-color: var(--accent-green, #6f4a31);
 }
 
 .cart-pill {
