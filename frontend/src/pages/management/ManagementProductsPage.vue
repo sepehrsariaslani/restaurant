@@ -1509,10 +1509,30 @@ loadProducts()
 @media (max-width: 760px) {
   .toolbar {
     gap: 0.35rem;
+    width: 100%;
+    overflow: hidden;
   }
 
   .toolbar .input {
     width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .toolbar .primary-btn,
+  .toolbar .secondary-btn,
+  .toolbar .tertiary-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+    padding: 0.44rem 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .toolbar .check {
+    flex: 0 0 auto;
   }
 
   .create-form {

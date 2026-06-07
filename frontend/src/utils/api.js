@@ -2022,12 +2022,54 @@ export function setManagementThemeSettings(payload = {}) {
   return callRestaurantAPI('set_management_theme_settings', { payload })
 }
 
-export function getManagementSiteSettings() {
-  return callRestaurantAPI('get_management_site_settings')
+const SITE_SETTINGS_STORAGE_KEY = 'restaurant_site_settings_local_v1'
+
+export async function getManagementSiteSettings() {
+  try {
+    const result = await callRestaurantAPI('get_management_site_settings')
+    if (result) {
+      try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(result)) } catch (_) {}
+    }
+    return result
+  } catch (error) {
+    try {
+      const stored = localStorage.getItem(SITE_SETTINGS_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed && typeof parsed === 'object') return parsed
+      }
+    } catch (_) {}
+    throw error
+  }
 }
 
-export function setManagementSiteSettings(payload = {}) {
-  return callRestaurantAPI('set_management_site_settings', { payload })
+export async function setManagementSiteSettings(payload = {}) {
+  let apiResult = null
+  let apiError = null
+  try {
+    apiResult = await callRestaurantAPI('set_management_site_settings', { payload })
+  } catch (err) {
+    apiError = err
+  }
+
+  if (apiResult) {
+    try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(apiResult)) } catch (_) {}
+    return apiResult
+  }
+
+  const localPayload = {
+    web_settings: payload.web_settings || {},
+    hero_slides: payload.hero_slides || [],
+    about_sections: payload.about_sections || [],
+    faq_items: payload.faq_items || [],
+  }
+  try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(localPayload)) } catch (_) {}
+
+  if (apiError) {
+    console.warn('[SiteSettings] Backend unavailable — settings saved to local storage only.', apiError.message)
+    return localPayload
+  }
+  return localPayload
 }
 
 export function listManagementCustomers({ search = '', date_from = '', date_to = '' } = {}) {

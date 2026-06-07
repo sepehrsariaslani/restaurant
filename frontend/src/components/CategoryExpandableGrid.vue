@@ -25,7 +25,7 @@
     </div>
 
     <transition name="panel-slide">
-      <div v-if="selectedCategory" class="cat-panel">
+      <div v-if="selectedCategory" class="cat-panel" ref="panelRef">
         <div class="cat-panel-header">
           <div class="cat-panel-title">
             <h3>{{ selectedCategory.title }}</h3>
@@ -80,7 +80,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { getMenuItems } from '@/utils/api'
 
 const props = defineProps({
@@ -111,6 +111,8 @@ const resolvedCategories = computed(() =>
   })),
 )
 
+const panelRef = ref(null)
+
 async function toggleCategory(cat) {
   if (selectedSlug.value === cat.slug) {
     close()
@@ -122,6 +124,9 @@ async function toggleCategory(cat) {
   items.value = []
   loadingItems.value = true
 
+  await nextTick()
+  scrollToPanel()
+
   try {
     const result = await getMenuItems({ category_slug: cat.slug, page_size: 20 })
     items.value = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : []
@@ -130,6 +135,15 @@ async function toggleCategory(cat) {
   } finally {
     loadingItems.value = false
   }
+}
+
+function scrollToPanel() {
+  nextTick(() => {
+    const el = panelRef.value
+    if (!el) return
+    const y = el.getBoundingClientRect().top + window.scrollY - 96
+    window.scrollTo({ top: y, behavior: 'smooth' })
+  })
 }
 
 function close() {

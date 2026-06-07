@@ -11,6 +11,8 @@
 import { computed } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import SiteHeaderMinimal from '@/components/SiteHeaderMinimal.vue'
+import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
+import SiteHeaderGlass from '@/components/SiteHeaderGlass.vue'
 
 const props = defineProps({
   branding: {
@@ -46,9 +48,9 @@ const props = defineProps({
 const resolvedVariant = computed(() => String(props.headerVariant || 'classic').trim() || 'classic')
 
 const resolvedComponent = computed(() => {
-  if (resolvedVariant.value === 'minimal') {
-    return SiteHeaderMinimal
-  }
+  if (resolvedVariant.value === 'minimal') return SiteHeaderMinimal
+  if (resolvedVariant.value === 'hero') return SiteHeaderHero
+  if (resolvedVariant.value === 'glass') return SiteHeaderGlass
   return AppHeader
 })
 
@@ -62,7 +64,6 @@ const resolvedProps = computed(() => {
       preview: props.preview,
     }
   }
-
   return {
     branding: props.branding,
     cartCount: props.cartCount,

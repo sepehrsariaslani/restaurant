@@ -812,6 +812,20 @@ const headerVariantOptions = [
     previewStyle: { background: '#1c1411' },
     barStyle: { background: '#1c1411', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   },
+  {
+    value: 'hero',
+    label: 'هیرو تمام‌صفحه',
+    desc: 'هدر بزرگ تمام‌صفحه با تصویر پس‌زمینه، متن روی تصویر و ناوبری شفاف',
+    previewStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)' },
+    barStyle: { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', backdropFilter: 'blur(8px)' },
+  },
+  {
+    value: 'glass',
+    label: 'شیشه‌ای (Glass)',
+    desc: 'هدر شفاف با افکت شیشه‌ای و بلور مدرن؛ روی هر پس‌زمینه‌ای زیبا به نظر می‌رسد',
+    previewStyle: { background: 'linear-gradient(135deg, #f0ece7, #e8e0d8)' },
+    barStyle: { background: 'rgba(255,255,255,0.72)', borderBottom: '1px solid rgba(111,74,49,0.12)', backdropFilter: 'blur(18px)' },
+  },
 ]
 
 const menuSearchVariantOptions = [

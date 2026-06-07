@@ -26,7 +26,7 @@
       :hero-image="branding.hero_image"
     />
 
-    <div id="content">
+    <div id="content" :class="{ 'needs-header-offset': siteComponents.hero_section_variant !== 'fullscreen' && siteComponents.header_variant !== 'hero' }">
       <GlassShell class="home-shell" :title="branding.name" :subtitle="'ارگانیک، تازه، قابل شخصی سازی'">
         <FloatingFoodIcons />
 
@@ -237,6 +237,10 @@ function quickAdd(item) {
   overflow: hidden;
   isolation: isolate;
   background: var(--bg-soft);
+}
+
+.needs-header-offset {
+  padding-top: 5.4rem;
 }
 
 .home-container {
