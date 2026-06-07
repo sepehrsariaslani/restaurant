@@ -109,6 +109,57 @@
             </template>
           </ManagementTreeView>
         </template>
+
+        <template #sort>
+          <div class="sort-list-wrap">
+            <p class="sort-hint">با دکمه‌های بالا/پایین ترتیب دسته‌های اصلی را تغییر دهید، سپس ذخیره کنید.</p>
+            <p class="error" v-if="sortError">{{ sortError }}</p>
+            <div class="sort-list">
+              <div
+                v-for="(row, idx) in topLevelSortRows"
+                :key="row.name"
+                class="sort-row"
+              >
+                <span class="sort-index">{{ idx + 1 }}</span>
+                <div class="sort-row-img" v-if="row.image">
+                  <img :src="row.image" :alt="row.item_group_name" />
+                </div>
+                <div class="sort-row-img sort-row-no-img" v-else>
+                  <span>{{ (row.item_group_name || '؟').slice(0, 2) }}</span>
+                </div>
+                <div class="sort-row-info">
+                  <strong>{{ row.item_group_name }}</strong>
+                  <span class="sort-row-slug">{{ row.restaurant_slug || 'بدون اسلاگ' }}</span>
+                </div>
+                <div class="sort-row-btns">
+                  <button
+                    type="button"
+                    class="sort-btn"
+                    :disabled="idx === 0"
+                    @click="moveSortUp(idx)"
+                    title="بالاتر"
+                  >↑</button>
+                  <button
+                    type="button"
+                    class="sort-btn"
+                    :disabled="idx === topLevelSortRows.length - 1"
+                    @click="moveSortDown(idx)"
+                    title="پایین‌تر"
+                  >↓</button>
+                </div>
+                <span class="sort-row-status" :class="Number(row.restaurant_active) ? 'on' : 'off'">
+                  {{ Number(row.restaurant_active) ? 'فعال' : 'غیرفعال' }}
+                </span>
+              </div>
+            </div>
+            <div class="sort-actions">
+              <button class="primary-btn" type="button" :disabled="sortSaving" @click="saveSortOrder">
+                {{ sortSaving ? 'در حال ذخیره...' : 'ذخیره ترتیب' }}
+              </button>
+              <button class="secondary-btn" type="button" @click="resetSortRows">بازنشانی</button>
+            </div>
+          </div>
+        </template>
       </ManagementCollectionView>
     </ManagementSurfaceCard>
   </section>
@@ -124,6 +175,7 @@ import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard
 import ManagementTreeView from '@/components/management/ManagementTreeView.vue'
 import {
   listManagementMenuGroups,
+  reorderManagementMenuGroups,
   updateManagementMenuGroup,
 } from '@/utils/api'
 
@@ -160,7 +212,16 @@ const viewModes = [
   { value: 'list', label: 'لیست', icon: '≡' },
   { value: 'gallery', label: 'گالری', icon: '▦' },
   { value: 'tree', label: 'درخت', icon: '⋰' },
+  { value: 'sort', label: 'ترتیب‌بندی', icon: '↕' },
 ]
+
+const sortError = ref('')
+const sortSaving = ref(false)
+const sortRows = ref([])
+
+const topLevelSortRows = computed(() =>
+  (sortRows.value || []).filter((row) => Number(row?.restaurant_is_subcategory || 0) !== 1),
+)
 
 const visibleRows = computed(() => {
   let output = [...rows.value]
@@ -247,10 +308,58 @@ async function loadGroups() {
   try {
     const groups = await listManagementMenuGroups({})
     rows.value = Array.isArray(groups) ? groups : []
+    resetSortRows()
   } catch (err) {
     error.value = err.message || 'بارگذاری گروه‌ها ناموفق بود.'
   } finally {
     loading.value = false
+  }
+}
+
+function resetSortRows() {
+  const categories = (rows.value || [])
+    .filter((row) => Number(row?.restaurant_is_subcategory || 0) !== 1)
+    .slice()
+    .sort((a, b) => Number(a?.restaurant_sort_order || 0) - Number(b?.restaurant_sort_order || 0))
+  sortRows.value = categories.map((row, idx) => ({ ...row, restaurant_sort_order: idx }))
+}
+
+function moveSortUp(idx) {
+  if (idx <= 0) return
+  const cats = [...topLevelSortRows.value]
+  const fullRows = [...sortRows.value]
+
+  const catIdx = fullRows.findIndex((r) => r.name === cats[idx].name)
+  const prevCatIdx = fullRows.findIndex((r) => r.name === cats[idx - 1].name)
+
+  if (catIdx === -1 || prevCatIdx === -1) return
+
+  const temp = fullRows[catIdx]
+  fullRows[catIdx] = { ...fullRows[prevCatIdx], restaurant_sort_order: idx }
+  fullRows[prevCatIdx] = { ...temp, restaurant_sort_order: idx - 1 }
+  sortRows.value = fullRows
+}
+
+function moveSortDown(idx) {
+  const cats = topLevelSortRows.value
+  if (idx >= cats.length - 1) return
+  moveSortUp(idx + 1)
+}
+
+async function saveSortOrder() {
+  sortError.value = ''
+  sortSaving.value = true
+  try {
+    const items = topLevelSortRows.value.map((row, idx) => ({
+      name: row.name,
+      sort_order: idx,
+    }))
+    await reorderManagementMenuGroups(items)
+    await loadGroups()
+  } catch (err) {
+    sortError.value = err.message || 'ذخیره ترتیب ناموفق بود.'
+  } finally {
+    sortSaving.value = false
   }
 }
 
@@ -410,6 +519,143 @@ loadGroups()
 .error {
   margin: 0;
   color: var(--danger);
+}
+
+.sort-list-wrap {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sort-hint {
+  font-size: 0.78rem;
+  color: var(--ink-600, #9a8a80);
+  margin: 0;
+}
+
+.sort-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+  background: #fff;
+  transition: box-shadow 0.15s;
+}
+
+.sort-row:hover {
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.06);
+}
+
+.sort-index {
+  font-size: 0.72rem;
+  color: var(--ink-500, #b0a098);
+  font-weight: 700;
+  width: 1.4rem;
+  text-align: center;
+}
+
+.sort-row-img {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 7px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sort-row-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sort-row-no-img {
+  background: linear-gradient(135deg, #f5f0eb, #e8e0d6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--ink-700, #7a6a60);
+}
+
+.sort-row-info {
+  flex: 1;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.sort-row-info strong {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink-800, #3d2e26);
+}
+
+.sort-row-slug {
+  font-size: 0.68rem;
+  color: var(--ink-500, #b0a098);
+  direction: ltr;
+  text-align: right;
+}
+
+.sort-row-btns {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.sort-btn {
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-700, #7a6a60);
+  transition: background 0.15s;
+}
+
+.sort-btn:hover:not(:disabled) {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: var(--ink-900, #1c1411);
+}
+
+.sort-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.sort-row-status {
+  font-size: 0.68rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+
+.sort-row-status.on {
+  background: rgb(72 199 142 / 0.12);
+  color: #1a7a47;
+}
+
+.sort-row-status.off {
+  background: rgb(229 57 53 / 0.1);
+  color: #c62828;
+}
+
+.sort-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.3rem;
 }
 
 @media (max-width: 960px) {

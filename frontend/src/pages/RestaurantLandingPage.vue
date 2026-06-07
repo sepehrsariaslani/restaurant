@@ -20,6 +20,7 @@
       :description="branding.hero_section_description"
       :cta="branding.hero_section_cta"
       :hero-image="branding.hero_image"
+      :categories="categories"
       @visibility-change="heroVisible = $event"
     />
     <SiteHeroBanner
@@ -86,10 +87,10 @@
 
         <section class="home-container section-categories">
           <ScrollReveal :delay="100">
-            <SectionHeader eyebrow="دسته‌بندی" title="منوی هوشمند بر اساس سلیقه شما" />
+            <SectionHeader eyebrow="دسته‌بندی" title="انتخاب کنید، ببینید، سفارش دهید" subtitle="روی هر دسته کلیک کنید تا محصولات آن را ببینید." />
           </ScrollReveal>
           <ScrollReveal :delay="160">
-            <CategoryMasonry :categories="categories" />
+            <CategoryExpandableGrid :categories="categories" :currency="currency" @quick-add="quickAdd" />
           </ScrollReveal>
         </section>
 
@@ -153,7 +154,7 @@ import HomeHeroSlider from '@/components/HomeHeroSlider.vue'
 import HomeAboutSection from '@/components/HomeAboutSection.vue'
 import HomeFaqSection from '@/components/HomeFaqSection.vue'
 import { upsertLine } from '@/stores/cartStore'
-import CategoryMasonry from '@/components/CategoryMasonry.vue'
+import CategoryExpandableGrid from '@/components/CategoryExpandableGrid.vue'
 import FloatingFoodIcons from '@/components/FloatingFoodIcons.vue'
 import ScrollReveal from '@/components/ScrollReveal.vue'
 import SectionHeader from '@/components/SectionHeader.vue'

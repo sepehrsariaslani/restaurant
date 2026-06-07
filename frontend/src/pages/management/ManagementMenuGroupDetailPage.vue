@@ -68,6 +68,20 @@
       </div>
     </ManagementSurfaceCard>
 
+    <ManagementSurfaceCard title="تصویر دسته‌بندی" subtitle="آدرس تصویر این دسته برای نمایش در سایت">
+      <div class="image-field-wrap">
+        <label class="full">
+          آدرس تصویر (URL)
+          <input class="input" v-model.trim="form.image" placeholder="https://example.com/image.jpg" />
+        </label>
+        <div v-if="form.image" class="image-preview-wrap">
+          <img :src="form.image" :alt="form.item_group_name" class="image-preview" @error="onImgError" />
+          <button type="button" class="clear-img-btn" @click="form.image = ''">✕ حذف تصویر</button>
+        </div>
+        <p class="hint">می‌توانید از آدرس مستقیم تصویر یا مسیر فایل آپلودشده در Frappe استفاده کنید.</p>
+      </div>
+    </ManagementSurfaceCard>
+
     <ManagementSurfaceCard title="توضیحات">
       <label class="full">
         توضیح
@@ -156,7 +170,12 @@ function createEmptyForm() {
     restaurant_slug: '',
     restaurant_sort_order: 0,
     restaurant_description: '',
+    image: '',
   }
+}
+
+function onImgError(event) {
+  event.target.style.display = 'none'
 }
 
 function writeForm(payload = {}) {
@@ -174,6 +193,7 @@ function writeForm(payload = {}) {
   form.restaurant_slug = String(next.restaurant_slug || '').trim()
   form.restaurant_sort_order = Number(next.restaurant_sort_order || 0) || 0
   form.restaurant_description = String(next.restaurant_description || '').trim()
+  form.image = String(next.image || '').trim()
 }
 
 async function loadParentGroups() {
@@ -253,6 +273,7 @@ function normalizePayload() {
     restaurant_slug: form.restaurant_slug,
     restaurant_sort_order: Number(form.restaurant_sort_order || 0) || 0,
     restaurant_description: form.restaurant_description,
+    image: form.image,
   }
 }
 
@@ -345,6 +366,43 @@ bootstrap()
 .success {
   margin: 0;
   color: var(--accent-green);
+}
+
+/* Image field */
+.image-field-wrap {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.image-preview-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.image-preview {
+  width: 140px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+}
+
+.clear-img-btn {
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  background: none;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.76rem;
+  cursor: pointer;
+  color: var(--danger, #e53935);
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.clear-img-btn:hover {
+  background: rgb(229 57 53 / 0.08);
 }
 
 @media (max-width: 860px) {

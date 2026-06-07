@@ -12,6 +12,7 @@
     <slot v-if="internalMode === 'list'" name="list" />
     <slot v-else-if="internalMode === 'gallery'" name="gallery" />
     <slot v-else-if="internalMode === 'tree'" name="tree" />
+    <slot v-else-if="internalMode === 'sort'" name="sort" />
     <slot v-else />
   </section>
 </template>

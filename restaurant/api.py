@@ -14695,3 +14695,18 @@ def get_management_print_format_preview(print_format_name, doc_type=None):
         "is_blank": _management_is_blank_format_name(format_name),
         "html": rendered_html,
     }
+
+
+@frappe.whitelist()
+def reorder_management_menu_groups(items=None):
+    _ensure_management_access()
+    if isinstance(items, str):
+        items = frappe.parse_json(items)
+    items = items or []
+    for item in items:
+        name = (item.get("name") or "").strip()
+        sort_order = cint(item.get("sort_order") or 0)
+        if name and frappe.db.exists("Item Group", name):
+            frappe.db.set_value("Item Group", name, "restaurant_sort_order", sort_order)
+    frappe.db.commit()
+    return {"ok": True, "count": len(items)}

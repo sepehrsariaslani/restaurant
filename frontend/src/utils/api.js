@@ -1776,8 +1776,16 @@ export async function listManagementMenuGroups({ search = '' } = {}) {
       'item_group_name',
       'parent_item_group',
       'is_group',
+      'restaurant_is_menu_category',
+      'restaurant_is_subcategory',
+      'restaurant_active',
+      'restaurant_slug',
+      'restaurant_sort_order',
+      'restaurant_description',
+      'image',
+      'modified',
     ],
-    order_by: 'item_group_name asc',
+    order_by: 'restaurant_sort_order asc, item_group_name asc',
     limit_page_length: 1000,
   }
 
@@ -1792,15 +1800,40 @@ export async function listManagementMenuGroups({ search = '' } = {}) {
   const rows = await safeGetList(args)
   return rows.map((row) => ({
     ...row,
-    restaurant_is_menu_category: 1,
-    restaurant_is_subcategory: Number(row?.is_group || 0) ? 0 : 1,
-    restaurant_active: 1,
-    restaurant_slug: '',
-    restaurant_sort_order: 0,
-    restaurant_description: '',
-    image: '',
-    modified: '',
+    restaurant_is_menu_category: Number(row?.restaurant_is_menu_category ?? 1) ? 1 : 0,
+    restaurant_is_subcategory: Number(row?.restaurant_is_subcategory ?? (Number(row?.is_group || 0) ? 0 : 1)) ? 1 : 0,
+    restaurant_active: Number(row?.restaurant_active ?? 1) ? 1 : 0,
+    restaurant_slug: String(row?.restaurant_slug || '').trim(),
+    restaurant_sort_order: Number(row?.restaurant_sort_order || 0) || 0,
+    restaurant_description: String(row?.restaurant_description || '').trim(),
+    image: String(row?.image || '').trim(),
+    modified: String(row?.modified || '').trim(),
   }))
+}
+
+export async function reorderManagementMenuGroups(items = []) {
+  const normalized = (items || [])
+    .filter((item) => String(item?.name || '').trim())
+    .map((item, idx) => ({
+      name: String(item.name).trim(),
+      sort_order: Number(item.sort_order ?? idx) || idx,
+    }))
+
+  try {
+    return await callRestaurantAPI('reorder_management_menu_groups', { items: normalized })
+  } catch {
+    await Promise.all(
+      normalized.map(({ name, sort_order }) =>
+        callMethodByPath('frappe.client.set_value', {
+          doctype: 'Item Group',
+          name,
+          fieldname: 'restaurant_sort_order',
+          value: sort_order,
+        }).catch(() => null),
+      ),
+    )
+    return { ok: true, count: normalized.length }
+  }
 }
 
 export async function listManagementItemGroupParents({ search = '' } = {}) {
