@@ -25,7 +25,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <AppHeader
-      v-if="page !== 'landing'"
+      v-if="page !== 'landing' && !(headerVariant === 'search-card' && page === 'menu')"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -33,7 +33,7 @@
       :last-order-url="lastOrderUrl"
     />
 
-    <main class="app-main" :class="{ 'app-main--no-offset': page === 'landing' }">
+    <main class="app-main" :class="{ 'app-main--no-offset': page === 'landing' || (headerVariant === 'search-card' && page === 'menu') }">
       <RestaurantLandingPage v-if="page === 'landing'" :boot="boot" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
@@ -145,6 +145,11 @@ const branding = computed(() => {
 })
 
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
+
+const headerVariant = computed(() => {
+  const ws = boot.web_settings || boot.branding || {}
+  return String(ws.header_variant || 'classic')
+})
 
 const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && cartState.lastOrder?.mobile))
 

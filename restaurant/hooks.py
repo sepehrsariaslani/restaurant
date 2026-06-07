@@ -79,6 +79,8 @@ homepage = "restaurant"
 # website_generators = ["Web Page"]
 
 website_route_rules = [
+        # Root redirect → restaurant landing
+        {"from_route": "/", "to_route": "restaurant/index"},
         # Customer-facing routes (no prefix)
         {"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
         {"from_route": "/menu", "to_route": "restaurant/menu"},

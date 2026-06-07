@@ -731,6 +731,13 @@ const headerVariantOptions = [
     previewStyle: { background: '#1c1411' },
     barStyle: { background: '#1c1411', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   },
+  {
+    value: 'search-card',
+    label: 'کارت جستجو',
+    desc: 'هدر کارتی مثل صفحه منو — نام برند، جستجو و دکمه سبد در یک کارت زیبا',
+    previewStyle: { background: '#f0ece7', padding: '8px' },
+    barStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '10px', padding: '4px 8px' },
+  },
 ]
 
 const heroVariantOptions = [

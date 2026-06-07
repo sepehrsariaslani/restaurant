@@ -1770,6 +1770,67 @@ margin-inline: auto;
   font-size: 0.72rem;
 }
 
+/* Mobile responsive fixes for management pages */
+@media (max-width: 1023px) {
+  .mobile-main {
+    overflow-x: hidden;
+  }
+
+  .mobile-main :deep(.form-grid) {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobile-main :deep(.form-grid .span-2),
+  .mobile-main :deep(.form-grid .col-span-2) {
+    grid-column: 1 !important;
+  }
+
+  .mobile-main :deep(.checks-grid) {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .mobile-main :deep(.page-header),
+  .mobile-main :deep(.module-page-header) {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .mobile-main :deep(.page-header .page-actions),
+  .mobile-main :deep(.module-page-header .page-actions) {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .mobile-main :deep(.surface-card-inner),
+  .mobile-main :deep(.management-surface-card) {
+    overflow-x: auto;
+  }
+
+  .mobile-main :deep(table) {
+    min-width: 480px;
+  }
+
+  .mobile-main :deep(.table-scroll),
+  .mobile-main :deep(.table-wrap) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-main :deep(.variant-row) {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .mobile-main :deep(.stat-grid),
+  .mobile-main :deep(.stats-grid) {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .mobile-main :deep(.pos-grid),
+  .mobile-main :deep(.order-grid) {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* Scoped deep tweaks for child pages */
 .module-content :deep(.glass-card),
 .module-content :deep(.card),

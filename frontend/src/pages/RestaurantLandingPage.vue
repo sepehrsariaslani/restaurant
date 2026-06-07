@@ -1,7 +1,16 @@
 <template>
   <div class="home-page" dir="rtl">
+    <MenuHeroHeader
+      v-if="siteComponents.header_variant === 'search-card'"
+      :branding="branding"
+      :search="landingSearch"
+      :cart-count="cartCount"
+      class="landing-search-card"
+      @update:search="landingSearch = $event"
+      @search="onLandingSearch"
+    />
     <SiteHeaderMinimal
-      v-if="siteComponents.header_variant === 'minimal'"
+      v-else-if="siteComponents.header_variant === 'minimal'"
       :branding="branding"
       :cart-count="0"
     />
@@ -153,8 +162,9 @@ import MenuItemCard from '@/components/MenuItemCard.vue'
 import HomeHeroSlider from '@/components/HomeHeroSlider.vue'
 import HomeAboutSection from '@/components/HomeAboutSection.vue'
 import HomeFaqSection from '@/components/HomeFaqSection.vue'
-import { upsertLine } from '@/stores/cartStore'
+import { upsertLine, cartState } from '@/stores/cartStore'
 import CategoryExpandableGrid from '@/components/CategoryExpandableGrid.vue'
+import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import FloatingFoodIcons from '@/components/FloatingFoodIcons.vue'
 import ScrollReveal from '@/components/ScrollReveal.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -175,6 +185,17 @@ const props = defineProps({
 })
 
 const heroVisible = ref(true)
+const landingSearch = ref('')
+const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
+
+function onLandingSearch() {
+  const q = landingSearch.value.trim()
+  if (q) {
+    window.location.href = `/menu?search=${encodeURIComponent(q)}`
+  } else {
+    window.location.href = '/menu'
+  }
+}
 
 const categories = computed(() => props.boot.categories || [])
 const featured = computed(() => props.boot.featured_items || [])
