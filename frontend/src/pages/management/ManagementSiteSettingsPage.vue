@@ -180,6 +180,34 @@
           <button type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوای فوتر ←</button>
         </div>
       </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="پیش‌نمایش زنده" subtitle="با تغییر هر گزینه، همین‌جا کامپوننت واقعی را می‌بینی.">
+        <div class="site-preview-shell">
+          <PublicHeader
+            :key="`preview-${webSettings.header_variant}`"
+            :branding="previewBranding"
+            :page="'preview'"
+            :cart-count="3"
+            :has-last-order="false"
+            :last-order-url="'/menu'"
+            :header-variant="webSettings.header_variant"
+            :search="'جستجو در منو...'"
+          />
+
+          <component
+            :is="heroPreviewComponent"
+            v-if="heroPreviewComponent"
+            :key="`hero-${webSettings.hero_section_variant}`"
+            v-bind="heroPreviewProps"
+            class="site-preview-hero"
+          />
+
+          <div v-else class="site-preview-empty">
+            <strong>هیرو سکشن خاموش است</strong>
+            <p>برای دیدن پیش‌نمایش هیرو، یک حالت دیگر را از تب کامپوننت‌ها انتخاب کن.</p>
+          </div>
+        </div>
+      </ManagementSurfaceCard>
     </template>
 
     <template v-else-if="activeTab === 'content'">
@@ -580,7 +608,10 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import PublicHeader from '@/components/PublicHeader.vue'
 import SiteLoaderRenderer from '@/components/SiteLoaderRenderer.vue'
+import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
+import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
@@ -830,6 +861,52 @@ function assignLoaderSettingsToForm(source = {}) {
   webSettings.loader_custom_code = String(normalized.customCode || '')
 }
 
+function syncBootFromWebSettings(payload = {}) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const target = window._BOOT || {}
+  const nextWeb = deepCopy(payload?.web_settings || {})
+  const currentBranding = deepCopy(target.branding || {})
+  const nextBranding = {
+    ...currentBranding,
+    name: String(nextWeb.brand_name || currentBranding.name || 'Veederakht Restaurant').trim() || 'Veederakht Restaurant',
+    tagline: String(nextWeb.brand_tagline || currentBranding.tagline || '').trim(),
+    hero_title: String(nextWeb.hero_title || currentBranding.hero_title || '').trim(),
+    hero_subtitle: String(nextWeb.hero_subtitle || currentBranding.hero_subtitle || '').trim(),
+    primary_cta_label: String(nextWeb.primary_cta_label || currentBranding.primary_cta_label || '').trim(),
+    hero_image: String(nextWeb.hero_image || currentBranding.hero_image || '').trim(),
+  }
+
+  target.web_settings = {
+    ...(target.web_settings || {}),
+    ...nextWeb,
+  }
+  target.branding = nextBranding
+  target.currency = String(nextWeb.default_currency || target.currency || 'IRR').trim() || 'IRR'
+
+  if (Array.isArray(payload?.hero_slides)) {
+    target.hero_slides = deepCopy(payload.hero_slides)
+  }
+  if (Array.isArray(payload?.about_sections)) {
+    target.about_us_sections = deepCopy(payload.about_sections)
+  }
+  if (Array.isArray(payload?.faq_items)) {
+    target.faq_items = deepCopy(payload.faq_items)
+  }
+
+  window._BOOT = target
+
+  if (typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(
+      new CustomEvent('restaurant-site-settings-updated', {
+        detail: deepCopy(payload),
+      }),
+    )
+  }
+}
+
 function createEmptyHeroSlide() {
   return {
     title: '',
@@ -966,6 +1043,47 @@ function validateFaqItem(row) {
   }
   return ''
 }
+
+const previewBranding = computed(() => ({
+  name: String(webSettings.brand_name || 'Veederakht Restaurant').trim() || 'Veederakht Restaurant',
+  tagline: String(webSettings.brand_tagline || '').trim(),
+  hero_title: String(webSettings.hero_title || '').trim(),
+  hero_subtitle: String(webSettings.hero_subtitle || '').trim(),
+  primary_cta_label: String(webSettings.primary_cta_label || 'ورود به منو').trim() || 'ورود به منو',
+  hero_image: String(webSettings.hero_image || '').trim(),
+}))
+
+const previewHeroTitle = computed(() => String(webSettings.hero_section_title || previewBranding.value.hero_title || '').trim())
+const previewHeroDescription = computed(() => String(webSettings.hero_section_description || previewBranding.value.hero_subtitle || '').trim())
+const previewHeroCta = computed(() => String(webSettings.hero_section_cta || previewBranding.value.primary_cta_label || 'مشاهده منو').trim() || 'مشاهده منو')
+const previewHeroImage = computed(() => String(webSettings.hero_image || previewBranding.value.hero_image || '').trim())
+
+const heroPreviewComponent = computed(() => {
+  if (String(webSettings.hero_section_variant || 'off').trim() === 'fullscreen') {
+    return SiteHeroSection
+  }
+  if (String(webSettings.hero_section_variant || 'off').trim() === 'banner') {
+    return SiteHeroBanner
+  }
+  return null
+})
+
+const heroPreviewProps = computed(() => {
+  const base = {
+    branding: previewBranding.value,
+    title: previewHeroTitle.value,
+    description: previewHeroDescription.value,
+    cta: previewHeroCta.value,
+    heroImage: previewHeroImage.value,
+  }
+  if (heroPreviewComponent.value === SiteHeroSection) {
+    return {
+      ...base,
+      categories: [],
+    }
+  }
+  return base
+})
 
 function findRowIndex(rows, row) {
   const byRef = rows.indexOf(row)
@@ -1104,6 +1222,7 @@ async function loadSettings() {
     faqItems.value = (payload?.faq_items || []).map((row) => normalizeFaqItem(row))
     aboutEditorOpen.value = false
     faqEditorOpen.value = false
+    syncBootFromWebSettings(payload)
     statusText.value = 'تنظیمات سایت بارگذاری شد.'
   } catch (loadError) {
     error.value = loadError.message || 'بارگذاری تنظیمات سایت ناموفق بود.'
@@ -1177,6 +1296,7 @@ async function saveSettings() {
     aboutSections.value = (payload?.about_sections || []).map((row) => normalizeAboutSection(row))
     faqItems.value = (payload?.faq_items || []).map((row) => normalizeFaqItem(row))
     assignLoaderSettingsToForm(payload?.web_settings || {})
+    syncBootFromWebSettings(payload)
     statusText.value = 'تنظیمات سایت با موفقیت ذخیره شد.'
   } catch (saveError) {
     error.value = saveError.message || 'ذخیره تنظیمات سایت ناموفق بود.'
@@ -1520,6 +1640,52 @@ loadSettings()
 .variant-action-row {
   margin-top: 0.65rem;
   display: flex;
+}
+
+.site-preview-shell {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.site-preview-hero {
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 14px 26px rgb(15 23 42 / 0.1);
+}
+
+.site-preview-hero.site-hero {
+  min-height: 360px;
+}
+
+.site-preview-hero.site-hero .hero-content {
+  padding: 2rem 1rem 2.4rem;
+}
+
+.site-preview-hero.site-hero .hero-title {
+  font-size: clamp(1.8rem, 4vw, 3rem);
+}
+
+.site-preview-hero.site-hero .hero-description {
+  font-size: 0.98rem;
+}
+
+.site-preview-hero.site-hero .hero-food-icons,
+.site-preview-hero.site-hero .hero-scroll-hint {
+  display: none;
+}
+
+.site-preview-empty {
+  border-radius: 18px;
+  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.25);
+  background: rgb(var(--palette-eggshell-rgb) / 0.75);
+  padding: 1rem;
+  color: var(--text-muted);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.site-preview-empty strong {
+  color: var(--ink-900, #1c1411);
 }
 
 @media (max-width: 640px) {

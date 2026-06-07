@@ -24,16 +24,20 @@
   </div>
 
   <div class="app-layout" :class="`page-${page}`" v-else>
-    <AppHeader
+    <PublicHeader
       v-if="page !== 'landing' && !(headerVariant === 'search-card' && page === 'menu')"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
       :last-order-url="lastOrderUrl"
+      :header-variant="headerVariant"
+      :search="headerSearch"
+      @update:search="headerSearch = $event"
+      @search="onHeaderSearch"
     />
 
-    <main class="app-main" :class="{ 'app-main--no-offset': page === 'landing' || (headerVariant === 'search-card' && page === 'menu') }">
+    <main class="app-main" :class="{ 'app-main--no-offset': page === 'landing' || headerVariant !== 'classic' }">
       <RestaurantLandingPage v-if="page === 'landing'" :boot="boot" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
@@ -58,10 +62,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import AppHeader from './components/AppHeader.vue'
+import { computed, reactive, ref } from 'vue'
 import AppFooter from './components/AppFooter.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
+import PublicHeader from './components/PublicHeader.vue'
 import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'
 import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
@@ -131,9 +135,11 @@ function resolveInitialPage() {
 }
 
 const page = resolveInitialPage()
-const boot = window._BOOT || {}
+const boot = reactive(window._BOOT || {})
+window._BOOT = boot
 const isManagement = computed(() => String(page || '').startsWith('management-'))
 const loaderSettings = computed(() => resolveLoaderSettingsFromBoot(boot))
+const headerSearch = ref('')
 
 const branding = computed(() => {
   const fromBoot = boot.branding || {}
@@ -161,6 +167,11 @@ const lastOrderUrl = computed(() => {
   }
   return `/order-success/${encodeURIComponent(orderCode)}?mobile=${encodeURIComponent(mobile)}`
 })
+
+function onHeaderSearch() {
+  const q = String(headerSearch.value || '').trim()
+  window.location.href = q ? `/menu?search=${encodeURIComponent(q)}` : '/menu'
+}
 </script>
 
 <style scoped>
