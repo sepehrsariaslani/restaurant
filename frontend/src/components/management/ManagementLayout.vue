@@ -432,6 +432,7 @@ const ZOOM_STORAGE_KEY = 'restaurant.management.desktopScale'
 const RAIL_STORAGE_KEY = 'restaurant.management.desktopRailMode'
 const THEME_STORAGE_KEY = 'restaurant.management.theme'
 const ZOOM_BASE_FONT_SIZE = 16
+const MOBILE_BASE_FONT_SIZE = 15
 const ZOOM_MIN = 0.85
 const ZOOM_MAX = 1.2
 const ZOOM_STEP = 0.05
@@ -759,15 +760,20 @@ function clearDesktopScale() {
   document.documentElement.style.fontSize = ''
 }
 
+function applyMobileBaseScale() {
+  if (typeof window === 'undefined') return
+  document.documentElement.style.fontSize = `${MOBILE_BASE_FONT_SIZE}px`
+}
+
 function syncDesktopState() {
   if (!desktopMedia) return
 
   isDesktop.value = desktopMedia.matches
 
   if (isDesktop.value) {
-applyDesktopScale()
+    applyDesktopScale()
   } else {
-clearDesktopScale()
+    applyMobileBaseScale()
   }
 }
 
@@ -1776,6 +1782,18 @@ margin-inline: auto;
     overflow-x: hidden;
   }
 
+  .mobile-main :deep(.glass-card),
+  .mobile-main :deep(.hero-card),
+  .mobile-main :deep(.surface-card) {
+    border-radius: 18px;
+  }
+
+  .mobile-main :deep(.hero-card),
+  .mobile-main :deep(.surface-card),
+  .mobile-main :deep(.management-surface-card) {
+    padding: 0.75rem !important;
+  }
+
   .mobile-main :deep(.form-grid) {
     grid-template-columns: 1fr !important;
   }
@@ -1799,6 +1817,25 @@ margin-inline: auto;
   .mobile-main :deep(.module-page-header .page-actions) {
     flex-wrap: wrap;
     gap: 0.4rem;
+  }
+
+  .mobile-main :deep(.primary-btn),
+  .mobile-main :deep(.secondary-btn),
+  .mobile-main :deep(.tertiary-btn),
+  .mobile-main :deep(.header-auth-btn),
+  .mobile-main :deep(.sheet-management-btn) {
+    min-height: 2.35rem;
+    padding: 0.42rem 0.68rem;
+    font-size: 0.8rem;
+  }
+
+  .mobile-main :deep(.input),
+  .mobile-main :deep(.textarea),
+  .mobile-main :deep(select),
+  .mobile-main :deep(.searchable-dropdown),
+  .mobile-main :deep(.searchable-select) {
+    min-height: 2.3rem;
+    font-size: 0.82rem;
   }
 
   .mobile-main :deep(.surface-card-inner),

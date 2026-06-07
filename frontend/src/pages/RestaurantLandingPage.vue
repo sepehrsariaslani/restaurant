@@ -1,25 +1,10 @@
 <template>
   <div class="home-page" dir="rtl">
-    <MenuHeroHeader
-      v-if="siteComponents.header_variant === 'search-card'"
+    <PublicHeader
       :branding="branding"
-      :search="landingSearch"
+      :page="'landing'"
       :cart-count="cartCount"
-      class="landing-search-card"
-      @update:search="landingSearch = $event"
-      @search="onLandingSearch"
-    />
-    <SiteHeaderMinimal
-      v-else-if="siteComponents.header_variant === 'minimal'"
-      :branding="branding"
-      :cart-count="0"
-    />
-    <SiteHeader
-      v-else
-      :branding="branding"
-      :cart-count="0"
-      :has-hero="siteComponents.hero_section_variant === 'fullscreen'"
-      :hero-visible="heroVisible"
+      :header-variant="siteComponents.header_variant"
     />
 
     <SiteHeroSection
@@ -164,18 +149,17 @@ import HomeAboutSection from '@/components/HomeAboutSection.vue'
 import HomeFaqSection from '@/components/HomeFaqSection.vue'
 import { upsertLine, cartState } from '@/stores/cartStore'
 import CategoryExpandableGrid from '@/components/CategoryExpandableGrid.vue'
-import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import FloatingFoodIcons from '@/components/FloatingFoodIcons.vue'
 import ScrollReveal from '@/components/ScrollReveal.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import FeatureCard from '@/components/FeatureCard.vue'
 import AnimatedCounter from '@/components/AnimatedCounter.vue'
-import SiteHeader from '@/components/SiteHeader.vue'
-import SiteHeaderMinimal from '@/components/SiteHeaderMinimal.vue'
+import PublicHeader from '@/components/PublicHeader.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
+import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'
 
 const props = defineProps({
   boot: {
@@ -185,17 +169,7 @@ const props = defineProps({
 })
 
 const heroVisible = ref(true)
-const landingSearch = ref('')
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
-
-function onLandingSearch() {
-  const q = landingSearch.value.trim()
-  if (q) {
-    window.location.href = `/menu?search=${encodeURIComponent(q)}`
-  } else {
-    window.location.href = '/menu'
-  }
-}
 
 const categories = computed(() => props.boot.categories || [])
 const featured = computed(() => props.boot.featured_items || [])
@@ -203,27 +177,8 @@ const heroSlides = computed(() => props.boot.hero_slides || [])
 const aboutSections = computed(() => props.boot.about_us_sections || [])
 const faqItems = computed(() => props.boot.faq_items || [])
 const currency = computed(() => props.boot.currency || 'IRR')
-const branding = computed(
-  () =>
-    props.boot.branding || {
-      name: 'Veederakht Restaurant',
-      hero_title: 'منوی آنلاین با انتخاب کامل مواد داخل هر غذا',
-      hero_subtitle:
-        'مشتری می‌تواند آیتم‌ها را ببیند، ترکیبات را کم و زیاد کند، و سفارش مهمان را بدون ثبت نام نهایی کند.',
-      primary_cta_label: 'ورود به منو',
-    },
-)
-
-const siteComponents = computed(() => {
-  const ws = props.boot.web_settings || props.boot.branding || {}
-  const heroEnabled = Number(ws.hero_section_enabled || 0) === 1
-  const footerEnabled = Number(ws.footer_enabled ?? 1) !== 0
-  return {
-    header_variant: String(ws.header_variant || 'classic').trim() || 'classic',
-    hero_section_variant: String(ws.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off',
-    footer_variant: String(ws.footer_variant || (footerEnabled ? 'full' : 'off')).trim() || 'full',
-  }
-})
+const branding = computed(() => resolveBranding(props.boot))
+const siteComponents = computed(() => resolveSiteComponents(props.boot))
 
 const featureCards = computed(() => [
   {

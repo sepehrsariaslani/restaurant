@@ -4,6 +4,7 @@
 
       <!-- هدر جستجو و برندینگ -->
       <MenuHeroHeader
+        v-if="menuSearchVariant === 'search-card'"
         :branding="branding"
         :search="search"
         :cart-count="cartCount"
@@ -223,6 +224,7 @@ import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import { getMenuItems } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { cartState, cartSubtotal, upsertLine, removeLine } from '@/stores/cartStore'
+import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'
 
 const props = defineProps({
   boot: {
@@ -285,14 +287,9 @@ const pagination = ref({
 })
 
 // ─── computed ───────────────────────────────────────────────────────
-const branding = computed(
-  () =>
-    props.boot.branding || {
-      name: 'رستوران',
-      tagline: 'منوی آنلاین',
-      hero_subtitle: 'روی هر آیتم بزن، مواد را تنظیم کن، سفارش ثبت کن.',
-    },
-)
+const branding = computed(() => resolveBranding(props.boot))
+const siteComponents = computed(() => resolveSiteComponents(props.boot))
+const menuSearchVariant = computed(() => siteComponents.value.menu_search_variant)
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 const cartTotal = computed(() => cartSubtotal())
 const isSearchMode = computed(() => Boolean(search.value.trim()))

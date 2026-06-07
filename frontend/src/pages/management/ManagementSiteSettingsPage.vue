@@ -125,6 +125,31 @@
         </div>
       </ManagementSurfaceCard>
 
+      <ManagementSurfaceCard title="کامپوننت سرچ منو" subtitle="این کارت جدا از هدر است و در صفحه خانه/منو برای جستجوی سریع نمایش داده می‌شود.">
+        <div class="variant-row">
+          <button
+            v-for="opt in menuSearchVariantOptions"
+            :key="opt.value"
+            type="button"
+            class="variant-card"
+            :class="{ selected: webSettings.menu_search_variant === opt.value }"
+            @click="webSettings.menu_search_variant = opt.value"
+          >
+            <div class="variant-preview" :style="opt.previewStyle">
+              <div class="vp-search-card" :style="opt.searchStyle">
+                <span class="vp-search-title"></span>
+                <span class="vp-search-input"></span>
+              </div>
+            </div>
+            <div class="variant-meta">
+              <strong>{{ opt.label }}</strong>
+              <small>{{ opt.desc }}</small>
+            </div>
+            <span class="variant-check" v-if="webSettings.menu_search_variant === opt.value">✓</span>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard title="هیرو سکشن" subtitle="نحوه نمایش بنر اصلی صفحه خانه را مشخص کنید — فقط یک گزینه فعال می‌ماند.">
         <div class="variant-row">
           <button
@@ -191,7 +216,15 @@
             :has-last-order="false"
             :last-order-url="'/menu'"
             :header-variant="webSettings.header_variant"
+            :preview="true"
+          />
+
+          <MenuHeroHeader
+            v-if="webSettings.menu_search_variant === 'search-card'"
+            :key="`menu-search-${webSettings.menu_search_variant}`"
+            :branding="previewBranding"
             :search="'جستجو در منو...'"
+            :cart-count="3"
           />
 
           <component
@@ -206,12 +239,25 @@
             <strong>هیرو سکشن خاموش است</strong>
             <p>برای دیدن پیش‌نمایش هیرو، یک حالت دیگر را از تب کامپوننت‌ها انتخاب کن.</p>
           </div>
+
+          <component
+            :is="footerPreviewComponent"
+            v-if="footerPreviewComponent"
+            :key="`footer-${webSettings.footer_variant}`"
+            v-bind="footerPreviewProps"
+            class="site-preview-footer"
+          />
+
+          <div v-else class="site-preview-empty site-preview-empty--footer">
+            <strong>فوتر خاموش است</strong>
+            <p>با انتخاب فوتر کامل یا مینیمال، پاورقی سایت روی همه صفحات عمومی نمایش داده می‌شود.</p>
+          </div>
         </div>
       </ManagementSurfaceCard>
     </template>
 
     <template v-else-if="activeTab === 'content'">
-      <ManagementSurfaceCard title="اطلاعات هیرو سکشن" subtitle="محتوای بنر تمام‌صفحه را تنظیم کنید." v-if="Number(webSettings.hero_section_enabled) === 1">
+      <ManagementSurfaceCard title="اطلاعات هیرو سکشن" subtitle="محتوای بنر انتخابی صفحه خانه را تنظیم کنید." v-if="webSettings.hero_section_variant !== 'off'">
         <div class="form-grid">
           <label class="span-2">
             عنوان هیرو سکشن
@@ -233,7 +279,7 @@
         </div>
       </ManagementSurfaceCard>
 
-      <ManagementSurfaceCard title="اطلاعات فوتر" subtitle="محتوایی که در پاورقی سایت نمایش داده می‌شود." v-if="Number(webSettings.footer_enabled) !== 0">
+      <ManagementSurfaceCard title="اطلاعات فوتر" subtitle="محتوایی که در پاورقی سایت نمایش داده می‌شود." v-if="webSettings.footer_variant !== 'off'">
         <div class="form-grid">
           <label class="span-2">
             توضیحات برند (زیر لوگو)
@@ -266,7 +312,7 @@
         </div>
       </ManagementSurfaceCard>
 
-      <ManagementSurfaceCard v-if="Number(webSettings.hero_section_enabled) === 0 && Number(webSettings.footer_enabled) === 0">
+      <ManagementSurfaceCard v-if="webSettings.hero_section_variant === 'off' && webSettings.footer_variant === 'off'">
         <p class="muted">هیچ کامپوننتی فعال نیست. ابتدا از تب <strong>کامپوننت‌ها</strong> یک بخش را فعال کنید.</p>
       </ManagementSurfaceCard>
     </template>
@@ -608,8 +654,11 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import PublicHeader from '@/components/PublicHeader.vue'
 import SiteLoaderRenderer from '@/components/SiteLoaderRenderer.vue'
+import SiteFooter from '@/components/SiteFooter.vue'
+import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
@@ -657,6 +706,7 @@ const webSettings = reactive({
   hero_section_enabled: 0,
   footer_enabled: 1,
   header_variant: 'classic',
+  menu_search_variant: 'search-card',
   hero_section_variant: 'off',
   footer_variant: 'full',
   hero_section_title: '',
@@ -750,10 +800,10 @@ const faqColumns = [
 const headerVariantOptions = [
   {
     value: 'classic',
-    label: 'کلاسیک',
-    desc: 'هدر روشن با پس‌زمینه شیری، پشتیبانی از حالت شفاف روی هیرو',
+    label: 'هدر کارتی',
+    desc: 'هدر اصلی سایت با برند، ناوبری، سبد و ورود مدیریت؛ همان نوار بالای سایت',
     previewStyle: { background: '#f5f0eb' },
-    barStyle: { background: '#f5f0eb', borderBottom: '1px solid #e0d8cf' },
+    barStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '12px', boxShadow: '0 8px 18px rgba(76,33,45,0.08)' },
   },
   {
     value: 'minimal',
@@ -762,12 +812,22 @@ const headerVariantOptions = [
     previewStyle: { background: '#1c1411' },
     barStyle: { background: '#1c1411', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   },
+]
+
+const menuSearchVariantOptions = [
   {
     value: 'search-card',
-    label: 'کارت جستجو',
-    desc: 'هدر کارتی مثل صفحه منو — نام برند، جستجو و دکمه سبد در یک کارت زیبا',
+    label: 'کارت سرچ کامل',
+    desc: 'کامپوننت جداگانه برای جستجو در منو، با عنوان برند، input جستجو و دکمه سبد',
     previewStyle: { background: '#f0ece7', padding: '8px' },
-    barStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '10px', padding: '4px 8px' },
+    searchStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '14px', padding: '12px' },
+  },
+  {
+    value: 'off',
+    label: 'خاموش',
+    desc: 'کارت سرچ نمایش داده نمی‌شود و فقط دسته‌بندی‌ها/محتوا باقی می‌ماند',
+    previewStyle: { background: '#f0ece7' },
+    searchStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%' },
   },
 ]
 
@@ -861,6 +921,14 @@ function assignLoaderSettingsToForm(source = {}) {
   webSettings.loader_custom_code = String(normalized.customCode || '')
 }
 
+function normalizeHeaderSetting(value = '') {
+  return String(value || '').trim() === 'minimal' ? 'minimal' : 'classic'
+}
+
+function normalizeMenuSearchSetting(value = '') {
+  return String(value || '').trim() === 'off' ? 'off' : 'search-card'
+}
+
 function syncBootFromWebSettings(payload = {}) {
   if (typeof window === 'undefined') {
     return
@@ -877,6 +945,10 @@ function syncBootFromWebSettings(payload = {}) {
     hero_subtitle: String(nextWeb.hero_subtitle || currentBranding.hero_subtitle || '').trim(),
     primary_cta_label: String(nextWeb.primary_cta_label || currentBranding.primary_cta_label || '').trim(),
     hero_image: String(nextWeb.hero_image || currentBranding.hero_image || '').trim(),
+    header_variant: normalizeHeaderSetting(nextWeb.header_variant || currentBranding.header_variant),
+    menu_search_variant: normalizeMenuSearchSetting(nextWeb.menu_search_variant || currentBranding.menu_search_variant),
+    hero_section_variant: String(nextWeb.hero_section_variant || currentBranding.hero_section_variant || 'off').trim() || 'off',
+    footer_variant: String(nextWeb.footer_variant || currentBranding.footer_variant || 'full').trim() || 'full',
   }
 
   target.web_settings = {
@@ -1051,6 +1123,16 @@ const previewBranding = computed(() => ({
   hero_subtitle: String(webSettings.hero_subtitle || '').trim(),
   primary_cta_label: String(webSettings.primary_cta_label || 'ورود به منو').trim() || 'ورود به منو',
   hero_image: String(webSettings.hero_image || '').trim(),
+  hero_section_title: String(webSettings.hero_section_title || '').trim(),
+  hero_section_description: String(webSettings.hero_section_description || '').trim(),
+  hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
+  footer_description: String(webSettings.footer_description || '').trim(),
+  footer_phone: String(webSettings.footer_phone || '').trim(),
+  footer_email: String(webSettings.footer_email || '').trim(),
+  footer_address: String(webSettings.footer_address || '').trim(),
+  footer_instagram: String(webSettings.footer_instagram || '').trim(),
+  footer_telegram: String(webSettings.footer_telegram || '').trim(),
+  footer_copyright: String(webSettings.footer_copyright || '').trim(),
 }))
 
 const previewHeroTitle = computed(() => String(webSettings.hero_section_title || previewBranding.value.hero_title || '').trim())
@@ -1083,6 +1165,36 @@ const heroPreviewProps = computed(() => {
     }
   }
   return base
+})
+
+const footerPreviewComponent = computed(() => {
+  if (String(webSettings.footer_variant || 'off').trim() === 'full') {
+    return SiteFooter
+  }
+  if (String(webSettings.footer_variant || 'off').trim() === 'minimal') {
+    return SiteFooterMinimal
+  }
+  return null
+})
+
+const footerPreviewProps = computed(() => {
+  if (footerPreviewComponent.value === SiteFooter) {
+    return {
+      brandName: previewBranding.value.name,
+      description: previewBranding.value.footer_description || previewBranding.value.hero_subtitle,
+      phone: previewBranding.value.footer_phone,
+      email: previewBranding.value.footer_email,
+      address: previewBranding.value.footer_address,
+      instagram: previewBranding.value.footer_instagram,
+      telegram: previewBranding.value.footer_telegram,
+      copyright: previewBranding.value.footer_copyright,
+    }
+  }
+
+  return {
+    brandName: previewBranding.value.name,
+    copyright: previewBranding.value.footer_copyright,
+  }
 })
 
 function findRowIndex(rows, row) {
@@ -1200,7 +1312,8 @@ async function loadSettings() {
     webSettings.restaurant_menu_highlight_best_seller_limit = Number(nextWeb.restaurant_menu_highlight_best_seller_limit || 10) || 10
     webSettings.hero_section_enabled = Number(nextWeb.hero_section_enabled || 0) ? 1 : 0
     webSettings.footer_enabled = Number(nextWeb.footer_enabled ?? 1) ? 1 : 0
-    webSettings.header_variant = String(nextWeb.header_variant || 'classic').trim() || 'classic'
+    webSettings.header_variant = normalizeHeaderSetting(nextWeb.header_variant)
+    webSettings.menu_search_variant = normalizeMenuSearchSetting(nextWeb.menu_search_variant)
     const heroEnabled = Number(nextWeb.hero_section_enabled || 0)
     webSettings.hero_section_variant = String(nextWeb.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off'
     const footerEnabled = Number(nextWeb.footer_enabled ?? 1)
@@ -1258,7 +1371,8 @@ async function saveSettings() {
         restaurant_menu_highlight_featured_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_featured_limit || 10) || 10, 50)),
         restaurant_menu_highlight_show_best_seller: Number(webSettings.restaurant_menu_highlight_show_best_seller || 0) ? 1 : 0,
         restaurant_menu_highlight_best_seller_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_best_seller_limit || 10) || 10, 50)),
-        header_variant: String(webSettings.header_variant || 'classic').trim() || 'classic',
+        header_variant: normalizeHeaderSetting(webSettings.header_variant),
+        menu_search_variant: normalizeMenuSearchSetting(webSettings.menu_search_variant),
         hero_section_variant: String(webSettings.hero_section_variant || 'off').trim() || 'off',
         footer_variant: String(webSettings.footer_variant || 'full').trim() || 'full',
         hero_section_enabled: webSettings.hero_section_variant !== 'off' ? 1 : 0,
@@ -1603,6 +1717,32 @@ loadSettings()
   right: 14px;
 }
 
+.vp-search-card {
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  align-content: center;
+  gap: 9px;
+}
+
+.vp-search-title {
+  display: block;
+  width: 46%;
+  height: 9px;
+  border-radius: 999px;
+  background: #4c212d;
+  margin-right: auto;
+}
+
+.vp-search-input {
+  display: block;
+  width: 100%;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #e4cfd3;
+  background: #fff;
+}
+
 .variant-meta {
   padding: 0 0.8rem 0.7rem;
   display: grid;
@@ -1674,6 +1814,27 @@ loadSettings()
   display: none;
 }
 
+.site-preview-footer {
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 14px 26px rgb(15 23 42 / 0.08);
+}
+
+.site-preview-footer.site-footer :deep(.footer-inner) {
+  width: 100%;
+  padding: 1.4rem 1rem 0.8rem;
+}
+
+.site-preview-footer.site-footer :deep(.footer-grid) {
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.site-preview-footer.site-footer-minimal :deep(.sfm-inner) {
+  width: 100%;
+  padding: 0.9rem 1rem;
+}
+
 .site-preview-empty {
   border-radius: 18px;
   border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.25);
@@ -1686,6 +1847,10 @@ loadSettings()
 
 .site-preview-empty strong {
   color: var(--ink-900, #1c1411);
+}
+
+.site-preview-empty--footer {
+  min-height: 92px;
 }
 
 @media (max-width: 640px) {

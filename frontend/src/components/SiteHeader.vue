@@ -16,7 +16,7 @@
       <nav class="site-header-nav">
         <a href="/" class="nav-link">خانه</a>
         <a href="/menu" class="nav-link">منو</a>
-        <a href="/about" class="nav-link">درباره ما</a>
+        <a href="/about-us" class="nav-link">درباره ما</a>
       </nav>
 
       <div class="site-header-actions">

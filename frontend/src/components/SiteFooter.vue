@@ -30,7 +30,7 @@
             <a href="/" class="footer-link">خانه</a>
             <a href="/menu" class="footer-link">منو</a>
             <a href="/cart" class="footer-link">سبد خرید</a>
-            <a href="/about" class="footer-link">درباره ما</a>
+            <a href="/about-us" class="footer-link">درباره ما</a>
           </nav>
         </div>
 

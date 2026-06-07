@@ -1507,6 +1507,14 @@ loadProducts()
 }
 
 @media (max-width: 760px) {
+  .toolbar {
+    gap: 0.35rem;
+  }
+
+  .toolbar .input {
+    width: 100%;
+  }
+
   .create-form {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1521,6 +1529,64 @@ loadProducts()
 
   .mobile-cards {
     display: block;
+  }
+
+  .group-header-btn {
+    grid-template-columns: 1fr auto auto;
+    padding: 0.42rem 0.55rem;
+  }
+
+  .group-header-btn strong {
+    font-size: 0.78rem;
+  }
+
+  .group-header-btn span {
+    font-size: 0.7rem;
+  }
+
+  .product-card {
+    padding: 0.62rem;
+    gap: 0.45rem;
+  }
+
+  .product-card__head {
+    align-items: flex-start;
+    gap: 0.42rem;
+  }
+
+  .product-card__media {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .product-card__title {
+    font-size: 0.82rem;
+  }
+
+  .product-card__sub,
+  .product-card__totals {
+    font-size: 0.74rem;
+  }
+
+  .state-pill {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.46rem;
+  }
+
+  .actions,
+  .row-actions {
+    gap: 0.28rem;
+  }
+
+  .actions .status-toggle-btn,
+  .actions .delete-btn,
+  .row-actions .status-toggle-btn,
+  .row-actions .delete-btn {
+    min-width: 0;
+    flex: 1 1 0;
+    font-size: 0.74rem;
+    padding-inline: 0.5rem;
   }
 }
 </style>

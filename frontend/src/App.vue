@@ -25,19 +25,19 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <PublicHeader
-      v-if="page !== 'landing' && !(headerVariant === 'search-card' && page === 'menu')"
+      v-if="page !== 'landing'"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
       :last-order-url="lastOrderUrl"
       :header-variant="headerVariant"
-      :search="headerSearch"
-      @update:search="headerSearch = $event"
-      @search="onHeaderSearch"
     />
 
-    <main class="app-main" :class="{ 'app-main--no-offset': page === 'landing' || headerVariant !== 'classic' }">
+    <main
+      class="app-main"
+      :class="{ 'app-main--no-offset': useNoHeaderOffset }"
+    >
       <RestaurantLandingPage v-if="page === 'landing'" :boot="boot" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
@@ -48,7 +48,22 @@
       <MenuPage v-else :boot="boot" />
     </main>
 
-    <AppFooter v-if="page !== 'landing'" :branding="branding" :has-last-order="hasLastOrder" :last-order-url="lastOrderUrl" />
+    <SiteFooter
+      v-if="page !== 'landing' && siteComponents.footer_variant === 'full'"
+      :brand-name="branding.name"
+      :description="branding.footer_description || branding.hero_subtitle"
+      :phone="branding.footer_phone"
+      :email="branding.footer_email"
+      :address="branding.footer_address"
+      :instagram="branding.footer_instagram"
+      :telegram="branding.footer_telegram"
+      :copyright="branding.footer_copyright"
+    />
+    <SiteFooterMinimal
+      v-else-if="page !== 'landing' && siteComponents.footer_variant === 'minimal'"
+      :brand-name="branding.name"
+      :copyright="branding.footer_copyright"
+    />
 
     <MobileBottomNav
       :page="page"
@@ -62,10 +77,11 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
-import AppFooter from './components/AppFooter.vue'
+import { computed, reactive } from 'vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
 import PublicHeader from './components/PublicHeader.vue'
+import SiteFooter from './components/SiteFooter.vue'
+import SiteFooterMinimal from './components/SiteFooterMinimal.vue'
 import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'
 import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
@@ -94,6 +110,7 @@ import ManagementSettingsPage from './pages/management/ManagementSettingsPage.vu
 import SiteLoaderOverlay from './components/SiteLoaderOverlay.vue'
 import { cartState } from './stores/cartStore'
 import { resolveLoaderSettingsFromBoot } from './utils/loaderSettings'
+import { resolveBranding, resolveSiteComponents } from './utils/siteComponents'
 
 function resolveInitialPage() {
   if (typeof window !== 'undefined') {
@@ -139,25 +156,28 @@ const boot = reactive(window._BOOT || {})
 window._BOOT = boot
 const isManagement = computed(() => String(page || '').startsWith('management-'))
 const loaderSettings = computed(() => resolveLoaderSettingsFromBoot(boot))
-const headerSearch = ref('')
-
-const branding = computed(() => {
-  const fromBoot = boot.branding || {}
-  return {
-    name: fromBoot.name || 'Veederakht Restaurant',
-    tagline: fromBoot.tagline || 'منوی آنلاین تازه و قابل شخصی سازی',
-    hero_subtitle: fromBoot.hero_subtitle || '',
-  }
-})
+const branding = computed(() => resolveBranding(boot))
+const siteComponents = computed(() => resolveSiteComponents(boot))
 
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 
 const headerVariant = computed(() => {
-  const ws = boot.web_settings || boot.branding || {}
-  return String(ws.header_variant || 'classic')
+  return siteComponents.value.header_variant
 })
 
 const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && cartState.lastOrder?.mobile))
+
+const useNoHeaderOffset = computed(() => {
+  if (page === 'landing') {
+    return true
+  }
+
+  if (headerVariant.value === 'classic') {
+    return false
+  }
+
+  return true
+})
 
 const lastOrderUrl = computed(() => {
   const orderCode = cartState.lastOrder?.order_code || ''
@@ -168,10 +188,6 @@ const lastOrderUrl = computed(() => {
   return `/order-success/${encodeURIComponent(orderCode)}?mobile=${encodeURIComponent(mobile)}`
 })
 
-function onHeaderSearch() {
-  const q = String(headerSearch.value || '').trim()
-  window.location.href = q ? `/menu?search=${encodeURIComponent(q)}` : '/menu'
-}
 </script>
 
 <style scoped>

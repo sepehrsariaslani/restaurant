@@ -1,5 +1,5 @@
 <template>
-  <header class="site-header-minimal" dir="rtl">
+  <header class="site-header-minimal" :class="{ 'site-header-minimal--preview': preview }" dir="rtl">
     <div class="shm-inner">
       <a class="shm-brand" href="/">{{ branding.name }}</a>
 
@@ -31,6 +31,10 @@ defineProps({
     type: Number,
     default: 0,
   },
+  preview: {
+    type: Boolean,
+    default: false,
+  },
 })
 </script>
 
@@ -43,6 +47,14 @@ defineProps({
   background: #1c1411;
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
   direction: rtl;
+}
+
+.site-header-minimal--preview {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .shm-inner {

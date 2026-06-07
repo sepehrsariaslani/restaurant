@@ -1,8 +1,8 @@
 <template>
-  <header class="app-header" dir="rtl">
+  <header class="app-header" :class="{ 'app-header--preview': preview }" dir="rtl">
     <div class="header-surface"></div>
     <div class="header-inner">
-      <a href="/restaurant" class="brand-link">
+      <a href="/" class="brand-link">
         <span class="brand-dot"></span>
         <div class="brand-copy">
           <strong>{{ branding.name }}</strong>
@@ -98,7 +98,11 @@ const props = defineProps({
   },
   lastOrderUrl: {
     type: String,
-    default: '/restaurant',
+    default: '/menu',
+  },
+  preview: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -112,7 +116,7 @@ const currentPath = computed(() => {
 
 const links = computed(() => {
   const base = [
-    { key: 'landing', label: 'خانه', url: '/restaurant', prefix: '/restaurant', exact: true },
+    { key: 'landing', label: 'خانه', url: '/', prefix: '/', exact: true },
     { key: 'menu', label: 'منو', url: '/menu', prefix: '/menu' },
     { key: 'about-us', label: 'درباره ما', url: '/about-us', prefix: '/about-us' },
     { key: 'faq', label: 'سوالات', url: '/faq', prefix: '/faq' },
@@ -162,6 +166,17 @@ function isActive(link) {
   right: 0;
   z-index: 120;
   padding: 0.75rem 0.7rem 0;
+}
+
+.app-header--preview {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  padding: 0;
+}
+
+.app-header--preview .header-surface {
+  display: none;
 }
 
 .header-surface {

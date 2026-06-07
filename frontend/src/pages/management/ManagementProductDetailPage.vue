@@ -3248,6 +3248,31 @@ loadDetail()
 }
 
 @media (max-width: 640px) {
+  .tabs-shell,
+  .menu-preview-inline,
+  .variant-config-shell,
+  .variant-values-shell,
+  .image-shell,
+  .menu-preview-customer-view {
+    padding: 0.48rem;
+    border-radius: 12px;
+  }
+
+  .product-top-grid,
+  .product-settings-grid,
+  .charts-grid,
+  .tables-grid {
+    gap: 0.5rem;
+  }
+
+  .identity-grid {
+    gap: 0.35rem;
+  }
+
+  .checks-grid {
+    gap: 0.25rem;
+  }
+
   .tab-btn {
     font-size: 0.78rem;
     padding: 0.38rem 0.66rem;
@@ -3256,6 +3281,35 @@ loadDetail()
   .tab-hint {
     font-size: 0.78rem;
     line-height: 1.7;
+  }
+
+  .menu-preview-inline-head,
+  .variant-config-head,
+  .variant-values-head,
+  .menu-preview-customer-head {
+    gap: 0.35rem;
+  }
+
+  .menu-preview-row {
+    padding: 0.42rem;
+  }
+
+  .menu-preview-customer-iframe {
+    min-height: 360px;
+  }
+
+  .row-actions {
+    width: 100%;
+  }
+
+  .row-actions > button {
+    flex: 1 1 0;
+    font-size: 0.74rem;
+    padding-inline: 0.48rem;
+  }
+
+  .pill {
+    font-size: 0.64rem;
   }
 }
 </style>

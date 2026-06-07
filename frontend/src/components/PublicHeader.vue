@@ -10,7 +10,6 @@
 <script setup>
 import { computed } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
-import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import SiteHeaderMinimal from '@/components/SiteHeaderMinimal.vue'
 
 const props = defineProps({
@@ -38,20 +37,15 @@ const props = defineProps({
     type: String,
     default: 'classic',
   },
-  search: {
-    type: String,
-    default: '',
+  preview: {
+    type: Boolean,
+    default: false,
   },
 })
-
-const emit = defineEmits(['search', 'update:search'])
 
 const resolvedVariant = computed(() => String(props.headerVariant || 'classic').trim() || 'classic')
 
 const resolvedComponent = computed(() => {
-  if (resolvedVariant.value === 'search-card') {
-    return MenuHeroHeader
-  }
   if (resolvedVariant.value === 'minimal') {
     return SiteHeaderMinimal
   }
@@ -61,18 +55,11 @@ const resolvedComponent = computed(() => {
 const headerKey = computed(() => `${resolvedVariant.value}:${props.page || 'public'}`)
 
 const resolvedProps = computed(() => {
-  if (resolvedVariant.value === 'search-card') {
-    return {
-      branding: props.branding,
-      search: props.search,
-      cartCount: props.cartCount,
-    }
-  }
-
   if (resolvedVariant.value === 'minimal') {
     return {
       branding: props.branding,
       cartCount: props.cartCount,
+      preview: props.preview,
     }
   }
 
@@ -82,17 +69,8 @@ const resolvedProps = computed(() => {
     hasLastOrder: props.hasLastOrder,
     lastOrderUrl: props.lastOrderUrl,
     page: props.page,
+    preview: props.preview,
   }
 })
-
-const resolvedListeners = computed(() => {
-  if (resolvedVariant.value !== 'search-card') {
-    return {}
-  }
-
-  return {
-    'update:search': (value) => emit('update:search', value),
-    search: () => emit('search'),
-  }
-})
+const resolvedListeners = computed(() => ({}))
 </script>
