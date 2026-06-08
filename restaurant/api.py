@@ -2201,6 +2201,22 @@ def _has_column(doctype, fieldname):
         return False
 
 
+def _has_doctype_field(doctype, fieldname):
+    try:
+        meta = frappe.get_meta(doctype)
+        if meta.has_field(fieldname):
+            return True
+        return bool(
+            frappe.db.get_value(
+                "Custom Field",
+                {"dt": doctype, "fieldname": fieldname},
+                "name",
+            )
+        )
+    except Exception:
+        return False
+
+
 def _has_core_menu_support():
     return all(
         [
@@ -2452,6 +2468,60 @@ def _menu_item_customization_flags(item_names=None):
             continue
         flags[item_name] = 1 if (bom_has_modifier_map.get(bom_name) or bom_has_visible_ingredient_map.get(bom_name)) else 0
     return flags
+
+
+def _ensure_display_variant_setting_fields():
+    if not frappe.db.exists("DocType", "Restaurant Web Settings"):
+        return
+    field_defs = [
+        {
+            "fieldname": "card_variant",
+            "label": "Card Variant",
+            "fieldtype": "Data",
+            "default": "classic",
+            "insert_after": "hero_section_variant",
+        },
+        {
+            "fieldname": "hero_image_position",
+            "label": "Hero Image Position",
+            "fieldtype": "Data",
+            "default": "center",
+            "insert_after": "card_variant",
+        },
+        {
+            "fieldname": "category_rail_variant",
+            "label": "Category Rail Variant",
+            "fieldtype": "Data",
+            "default": "pill",
+            "insert_after": "hero_image_position",
+        },
+    ]
+    for field_def in field_defs:
+        existing = frappe.db.get_value(
+            "Custom Field",
+            {"dt": "Restaurant Web Settings", "fieldname": field_def["fieldname"]},
+            "name",
+        )
+        payload = {
+            "doctype": "Custom Field",
+            "dt": "Restaurant Web Settings",
+            "module": "Restaurant",
+            **field_def,
+        }
+        if existing:
+            doc = frappe.get_doc("Custom Field", existing)
+            changed = False
+            for key, value in payload.items():
+                if key == "doctype":
+                    continue
+                if doc.get(key) != value:
+                    doc.set(key, value)
+                    changed = True
+            if changed:
+                doc.save(ignore_permissions=True)
+        else:
+            frappe.get_doc(payload).insert(ignore_permissions=True)
+    frappe.clear_cache(doctype="Restaurant Web Settings")
 
 
 def _ensure_menu_highlight_setting_fields():
@@ -7719,6 +7789,7 @@ def _load_management_loader_settings():
 
 def _management_site_settings_payload():
     _ensure_menu_highlight_setting_fields()
+    _ensure_display_variant_setting_fields()
     loader_fallback = _load_management_loader_settings()
 
     def _to_int(value, default=0):
@@ -7801,6 +7872,9 @@ def _management_site_settings_payload():
                 if settings_doc.get("restaurant_menu_highlight_best_seller_limit") not in (None, "")
                 else 10
             ),
+            "card_variant": settings_doc.get("card_variant") or "classic",
+            "hero_image_position": settings_doc.get("hero_image_position") or "center",
+            "category_rail_variant": settings_doc.get("category_rail_variant") or "pill",
         }
     except Exception:
         web_settings = {
@@ -7842,6 +7916,9 @@ def _management_site_settings_payload():
             "restaurant_menu_highlight_featured_limit": 10,
             "restaurant_menu_highlight_show_best_seller": 1,
             "restaurant_menu_highlight_best_seller_limit": 10,
+            "card_variant": "classic",
+            "hero_image_position": "center",
+            "category_rail_variant": "pill",
         }
 
     web_settings.update(_sanitize_management_loader_settings({**loader_fallback, **web_settings}))
@@ -8036,6 +8113,7 @@ def get_management_site_settings():
 def set_management_site_settings(payload=None):
     _ensure_management_site_settings_access()
     _ensure_menu_highlight_setting_fields()
+    _ensure_display_variant_setting_fields()
     data = _parse_json(payload, {})
     if not isinstance(data, dict):
         frappe.throw(_("Invalid payload format."))
@@ -8083,6 +8161,9 @@ def set_management_site_settings(payload=None):
             "loader_accent_color",
             "loader_custom_code",
             "restaurant_menu_highlight_title",
+            "card_variant",
+            "hero_image_position",
+            "category_rail_variant",
         ]
         int_fields = [
             "hero_section_enabled",
