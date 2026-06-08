@@ -2497,31 +2497,36 @@ def _ensure_display_variant_setting_fields():
         },
     ]
     for field_def in field_defs:
-        existing = frappe.db.get_value(
-            "Custom Field",
-            {"dt": "Restaurant Web Settings", "fieldname": field_def["fieldname"]},
-            "name",
-        )
-        payload = {
-            "doctype": "Custom Field",
-            "dt": "Restaurant Web Settings",
-            "module": "Restaurant",
-            **field_def,
-        }
-        if existing:
-            doc = frappe.get_doc("Custom Field", existing)
-            changed = False
-            for key, value in payload.items():
-                if key == "doctype":
+        try:
+            if _has_doctype_field("Restaurant Web Settings", field_def["fieldname"]):
+                existing = frappe.db.get_value(
+                    "Custom Field",
+                    {"dt": "Restaurant Web Settings", "fieldname": field_def["fieldname"]},
+                    "name",
+                )
+                if not existing:
                     continue
-                if doc.get(key) != value:
-                    doc.set(key, value)
-                    changed = True
-            if changed:
-                doc.save(ignore_permissions=True)
-        else:
-            frappe.get_doc(payload).insert(ignore_permissions=True)
-    frappe.clear_cache(doctype="Restaurant Web Settings")
+                doc = frappe.get_doc("Custom Field", existing)
+                changed = False
+                for key, value in field_def.items():
+                    if doc.get(key) != value:
+                        doc.set(key, value)
+                        changed = True
+                if changed:
+                    doc.save(ignore_permissions=True)
+            else:
+                payload = {
+                    "doctype": "Custom Field",
+                    "dt": "Restaurant Web Settings",
+                    **field_def,
+                }
+                frappe.get_doc(payload).insert(ignore_permissions=True)
+        except Exception:
+            pass
+    try:
+        frappe.clear_cache(doctype="Restaurant Web Settings")
+    except Exception:
+        pass
 
 
 def _ensure_menu_highlight_setting_fields():
@@ -2578,32 +2583,37 @@ def _ensure_menu_highlight_setting_fields():
         ]
 
         for field_def in settings_field_defs:
-            existing_name = frappe.db.get_value(
-                "Custom Field",
-                {"dt": "Restaurant Web Settings", "fieldname": field_def["fieldname"]},
-                "name",
-            )
-            payload = {
-                "doctype": "Custom Field",
-                "dt": "Restaurant Web Settings",
-                "module": "Restaurant",
-                **field_def,
-            }
-            if existing_name:
-                doc = frappe.get_doc("Custom Field", existing_name)
-                changed = False
-                for key, value in payload.items():
-                    if key == "doctype":
+            try:
+                if _has_doctype_field("Restaurant Web Settings", field_def["fieldname"]):
+                    existing_name = frappe.db.get_value(
+                        "Custom Field",
+                        {"dt": "Restaurant Web Settings", "fieldname": field_def["fieldname"]},
+                        "name",
+                    )
+                    if not existing_name:
                         continue
-                    if doc.get(key) != value:
-                        doc.set(key, value)
-                        changed = True
-                if changed:
-                    doc.save(ignore_permissions=True)
-            else:
-                frappe.get_doc(payload).insert(ignore_permissions=True)
+                    doc = frappe.get_doc("Custom Field", existing_name)
+                    changed = False
+                    for key, value in field_def.items():
+                        if doc.get(key) != value:
+                            doc.set(key, value)
+                            changed = True
+                    if changed:
+                        doc.save(ignore_permissions=True)
+                else:
+                    payload = {
+                        "doctype": "Custom Field",
+                        "dt": "Restaurant Web Settings",
+                        **field_def,
+                    }
+                    frappe.get_doc(payload).insert(ignore_permissions=True)
+            except Exception:
+                pass
 
-        frappe.clear_cache(doctype="Restaurant Web Settings")
+        try:
+            frappe.clear_cache(doctype="Restaurant Web Settings")
+        except Exception:
+            pass
 
     if frappe.db.exists("DocType", "Item"):
         item_field_def = {
@@ -7788,8 +7798,14 @@ def _load_management_loader_settings():
 
 
 def _management_site_settings_payload():
-    _ensure_menu_highlight_setting_fields()
-    _ensure_display_variant_setting_fields()
+    try:
+        _ensure_menu_highlight_setting_fields()
+    except Exception:
+        pass
+    try:
+        _ensure_display_variant_setting_fields()
+    except Exception:
+        pass
     loader_fallback = _load_management_loader_settings()
 
     def _to_int(value, default=0):
@@ -8112,8 +8128,14 @@ def get_management_site_settings():
 @frappe.whitelist()
 def set_management_site_settings(payload=None):
     _ensure_management_site_settings_access()
-    _ensure_menu_highlight_setting_fields()
-    _ensure_display_variant_setting_fields()
+    try:
+        _ensure_menu_highlight_setting_fields()
+    except Exception:
+        pass
+    try:
+        _ensure_display_variant_setting_fields()
+    except Exception:
+        pass
     data = _parse_json(payload, {})
     if not isinstance(data, dict):
         frappe.throw(_("Invalid payload format."))
@@ -8191,7 +8213,11 @@ def set_management_site_settings(payload=None):
             if fieldname not in web_settings or not _has_doctype_field("Restaurant Web Settings", fieldname):
                 continue
             settings_doc.set(fieldname, cint(web_settings.get(fieldname) or 0))
-        settings_doc.save(ignore_permissions=True)
+        try:
+            settings_doc.save(ignore_permissions=True)
+        except Exception as save_err:
+            frappe.log_error(title="set_management_site_settings: save error", message=str(save_err))
+            frappe.throw(_("خطا در ذخیره تنظیمات سایت: {0}").format(str(save_err)))
 
     if "faq_items" in data:
         _sync_management_site_doctype_rows(
