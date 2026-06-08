@@ -49,6 +49,12 @@ DEFAULT_CHECKOUT_MAP_CONFIG = {
 }
 MANAGEMENT_THEME_GLOBAL_DEFAULT_KEY = "restaurant_management_theme_settings_v1"
 MANAGEMENT_SITE_LOADER_GLOBAL_DEFAULT_KEY = "restaurant_management_loader_settings_v1"
+MANAGEMENT_DISPLAY_VARIANT_KEY = "restaurant_management_display_variant_v1"
+MANAGEMENT_DISPLAY_VARIANT_DEFAULTS = {
+    "card_variant": "classic",
+    "hero_image_position": "center",
+    "category_rail_variant": "pill",
+}
 MANAGEMENT_THEME_LEGACY_DEFAULTS = {
     "primary": "#2563EB",
     "accent": "#DC2626",
@@ -7797,16 +7803,27 @@ def _load_management_loader_settings():
     return _sanitize_management_loader_settings(parsed)
 
 
+def _load_management_display_variant_settings():
+    try:
+        raw = frappe.defaults.get_global_default(MANAGEMENT_DISPLAY_VARIANT_KEY)
+        parsed = _parse_json(raw, {})
+        if not isinstance(parsed, dict):
+            parsed = {}
+        return {
+            key: str(parsed.get(key) or default).strip() or default
+            for key, default in MANAGEMENT_DISPLAY_VARIANT_DEFAULTS.items()
+        }
+    except Exception:
+        return dict(MANAGEMENT_DISPLAY_VARIANT_DEFAULTS)
+
+
 def _management_site_settings_payload():
     try:
         _ensure_menu_highlight_setting_fields()
     except Exception:
         pass
-    try:
-        _ensure_display_variant_setting_fields()
-    except Exception:
-        pass
     loader_fallback = _load_management_loader_settings()
+    display_variant = _load_management_display_variant_settings()
 
     def _to_int(value, default=0):
         try:
@@ -7888,9 +7905,6 @@ def _management_site_settings_payload():
                 if settings_doc.get("restaurant_menu_highlight_best_seller_limit") not in (None, "")
                 else 10
             ),
-            "card_variant": settings_doc.get("card_variant") or "classic",
-            "hero_image_position": settings_doc.get("hero_image_position") or "center",
-            "category_rail_variant": settings_doc.get("category_rail_variant") or "pill",
         }
     except Exception:
         web_settings = {
@@ -7932,12 +7946,10 @@ def _management_site_settings_payload():
             "restaurant_menu_highlight_featured_limit": 10,
             "restaurant_menu_highlight_show_best_seller": 1,
             "restaurant_menu_highlight_best_seller_limit": 10,
-            "card_variant": "classic",
-            "hero_image_position": "center",
-            "category_rail_variant": "pill",
         }
 
     web_settings.update(_sanitize_management_loader_settings({**loader_fallback, **web_settings}))
+    web_settings.update(display_variant)
 
     faq_items = []
     if frappe.db.exists("DocType", "Restaurant FAQ"):
@@ -8132,10 +8144,6 @@ def set_management_site_settings(payload=None):
         _ensure_menu_highlight_setting_fields()
     except Exception:
         pass
-    try:
-        _ensure_display_variant_setting_fields()
-    except Exception:
-        pass
     data = _parse_json(payload, {})
     if not isinstance(data, dict):
         frappe.throw(_("Invalid payload format."))
@@ -8151,8 +8159,25 @@ def set_management_site_settings(payload=None):
             json.dumps(normalized_loader),
         )
 
+    if web_settings:
+        display_variant_keys = set(MANAGEMENT_DISPLAY_VARIANT_DEFAULTS.keys())
+        display_variant_payload = {}
+        try:
+            raw = frappe.defaults.get_global_default(MANAGEMENT_DISPLAY_VARIANT_KEY)
+            display_variant_payload = _parse_json(raw, {})
+            if not isinstance(display_variant_payload, dict):
+                display_variant_payload = {}
+        except Exception:
+            display_variant_payload = {}
+        for key, default_val in MANAGEMENT_DISPLAY_VARIANT_DEFAULTS.items():
+            if key in web_settings:
+                display_variant_payload[key] = str(web_settings[key] or default_val).strip() or default_val
+        try:
+            frappe.defaults.set_global_default(MANAGEMENT_DISPLAY_VARIANT_KEY, json.dumps(display_variant_payload))
+        except Exception:
+            pass
+
     if web_settings and frappe.db.exists("DocType", "Restaurant Web Settings"):
-        settings_doc = frappe.get_doc("Restaurant Web Settings", "Restaurant Web Settings")
         scalar_fields = [
             "brand_name",
             "brand_tagline",
@@ -8183,9 +8208,6 @@ def set_management_site_settings(payload=None):
             "loader_accent_color",
             "loader_custom_code",
             "restaurant_menu_highlight_title",
-            "card_variant",
-            "hero_image_position",
-            "category_rail_variant",
         ]
         int_fields = [
             "hero_section_enabled",
@@ -8198,26 +8220,45 @@ def set_management_site_settings(payload=None):
             "restaurant_menu_highlight_show_best_seller",
             "restaurant_menu_highlight_best_seller_limit",
         ]
+        existing_brand = ""
+        try:
+            existing_brand = (frappe.db.get_value("Restaurant Web Settings", "Restaurant Web Settings", "brand_name") or "").strip()
+        except Exception:
+            pass
         for fieldname in scalar_fields:
             if fieldname not in web_settings or not _has_doctype_field("Restaurant Web Settings", fieldname):
                 continue
-            value = (web_settings.get(fieldname) or "").strip()
+            value = str(web_settings.get(fieldname) or "").strip()
             if fieldname == "header_variant":
                 value = "minimal" if value == "minimal" else "classic"
             if fieldname == "menu_search_variant":
                 value = "off" if value == "off" else "search-card"
             if fieldname == "brand_name" and not value:
-                value = (settings_doc.get("brand_name") or "").strip() or "Restaurant"
-            settings_doc.set(fieldname, value)
+                value = existing_brand or "Restaurant"
+            try:
+                frappe.db.set_value(
+                    "Restaurant Web Settings", "Restaurant Web Settings",
+                    fieldname, value, update_modified=False,
+                )
+            except Exception:
+                pass
         for fieldname in int_fields:
             if fieldname not in web_settings or not _has_doctype_field("Restaurant Web Settings", fieldname):
                 continue
-            settings_doc.set(fieldname, cint(web_settings.get(fieldname) or 0))
+            try:
+                frappe.db.set_value(
+                    "Restaurant Web Settings", "Restaurant Web Settings",
+                    fieldname, cint(web_settings.get(fieldname) or 0), update_modified=False,
+                )
+            except Exception:
+                pass
         try:
-            settings_doc.save(ignore_permissions=True)
-        except Exception as save_err:
-            frappe.log_error(title="set_management_site_settings: save error", message=str(save_err))
-            frappe.throw(_("خطا در ذخیره تنظیمات سایت: {0}").format(str(save_err)))
+            frappe.db.set_value(
+                "Restaurant Web Settings", "Restaurant Web Settings",
+                "modified", frappe.utils.now(), update_modified=False,
+            )
+        except Exception:
+            pass
 
     if "faq_items" in data:
         _sync_management_site_doctype_rows(
