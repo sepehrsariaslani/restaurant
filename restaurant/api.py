@@ -50,6 +50,7 @@ DEFAULT_CHECKOUT_MAP_CONFIG = {
 MANAGEMENT_THEME_GLOBAL_DEFAULT_KEY = "restaurant_management_theme_settings_v1"
 MANAGEMENT_SITE_LOADER_GLOBAL_DEFAULT_KEY = "restaurant_management_loader_settings_v1"
 MANAGEMENT_DISPLAY_VARIANT_KEY = "restaurant_management_display_variant_v1"
+MANAGEMENT_SITE_SETTINGS_BLOB_KEY = "restaurant_management_site_settings_v1"
 MANAGEMENT_DISPLAY_VARIANT_DEFAULTS = {
     "card_variant": "classic",
     "hero_image_position": "center",
@@ -7831,122 +7832,81 @@ def _management_site_settings_payload():
         except Exception:
             return default
 
-    web_settings = {}
+    # — layer 1: hard-coded defaults —
+    web_settings = {
+        "brand_name": "",
+        "brand_tagline": "",
+        "default_currency": "IRR",
+        "hero_title": "",
+        "hero_subtitle": "",
+        "hero_image": "",
+        "primary_cta_label": "",
+        "header_variant": "classic",
+        "menu_search_variant": "search-card",
+        "hero_section_variant": "off",
+        "footer_variant": "full",
+        "hero_section_enabled": 0,
+        "footer_enabled": 1,
+        "hero_section_title": "",
+        "hero_section_description": "",
+        "hero_section_cta": "",
+        "footer_description": "",
+        "footer_phone": "",
+        "footer_email": "",
+        "footer_address": "",
+        "footer_instagram": "",
+        "footer_telegram": "",
+        "footer_copyright": "",
+        "loader_enabled": 1,
+        "loader_mode": "preset",
+        "loader_preset": "steaming-bowl",
+        "loader_title": "در حال آماده سازی سفارش",
+        "loader_subtitle": "آشپزخانه مشغول آماده کردن سفارش شماست...",
+        "loader_min_duration_ms": 1400,
+        "loader_overlay_color": "#F6F4ED",
+        "loader_accent_color": "#6A9A6B",
+        "loader_custom_code": "",
+        "restaurant_menu_highlight_enabled": 1,
+        "restaurant_menu_highlight_title": "ویژه و پرفروش",
+        "restaurant_menu_highlight_show_featured": 1,
+        "restaurant_menu_highlight_featured_limit": 10,
+        "restaurant_menu_highlight_show_best_seller": 1,
+        "restaurant_menu_highlight_best_seller_limit": 10,
+    }
+
+    # — layer 2: primary storage — JSON blob from global defaults —
+    try:
+        raw_blob = frappe.defaults.get_global_default(MANAGEMENT_SITE_SETTINGS_BLOB_KEY)
+        blob = _parse_json(raw_blob, {})
+        if isinstance(blob, dict) and blob:
+            web_settings.update(blob)
+    except Exception:
+        pass
+
+    # — layer 3: DocType — wins only for basic fields that are known to exist there —
+    _doctype_basic_fields = (
+        "brand_name", "brand_tagline", "default_currency",
+        "hero_title", "hero_subtitle", "hero_image", "primary_cta_label",
+    )
     try:
         settings_doc = frappe.get_cached_doc("Restaurant Web Settings")
-        web_settings = {
-            "brand_name": settings_doc.get("brand_name") or "",
-            "brand_tagline": settings_doc.get("brand_tagline") or "",
-            "default_currency": settings_doc.get("default_currency") or "IRR",
-            "hero_title": settings_doc.get("hero_title") or "",
-            "hero_subtitle": settings_doc.get("hero_subtitle") or "",
-            "hero_image": settings_doc.get("hero_image") or "",
-            "primary_cta_label": settings_doc.get("primary_cta_label") or "",
-            "header_variant": "minimal" if settings_doc.get("header_variant") == "minimal" else "classic",
-            "menu_search_variant": "off" if settings_doc.get("menu_search_variant") == "off" else "search-card",
-            "hero_section_variant": settings_doc.get("hero_section_variant") or "off",
-            "footer_variant": settings_doc.get("footer_variant") or "full",
-            "hero_section_enabled": cint(settings_doc.get("hero_section_enabled") or 0),
-            "footer_enabled": cint(
-                settings_doc.get("footer_enabled")
-                if settings_doc.get("footer_enabled") not in (None, "")
-                else 1
-            ),
-            "hero_section_title": settings_doc.get("hero_section_title") or "",
-            "hero_section_description": settings_doc.get("hero_section_description") or "",
-            "hero_section_cta": settings_doc.get("hero_section_cta") or "",
-            "footer_description": settings_doc.get("footer_description") or "",
-            "footer_phone": settings_doc.get("footer_phone") or "",
-            "footer_email": settings_doc.get("footer_email") or "",
-            "footer_address": settings_doc.get("footer_address") or "",
-            "footer_instagram": settings_doc.get("footer_instagram") or "",
-            "footer_telegram": settings_doc.get("footer_telegram") or "",
-            "footer_copyright": settings_doc.get("footer_copyright") or "",
-            "loader_enabled": cint(
-                settings_doc.get("loader_enabled")
-                if settings_doc.get("loader_enabled") not in (None, "")
-                else 1
-            ),
-            "loader_mode": settings_doc.get("loader_mode") or "preset",
-            "loader_preset": settings_doc.get("loader_preset") or "steaming-bowl",
-            "loader_title": settings_doc.get("loader_title") or "در حال آماده سازی سفارش",
-            "loader_subtitle": settings_doc.get("loader_subtitle") or "آشپزخانه مشغول آماده کردن سفارش شماست...",
-            "loader_min_duration_ms": cint(
-                settings_doc.get("loader_min_duration_ms")
-                if settings_doc.get("loader_min_duration_ms") not in (None, "")
-                else 1400
-            ),
-            "loader_overlay_color": settings_doc.get("loader_overlay_color") or "#F6F4ED",
-            "loader_accent_color": settings_doc.get("loader_accent_color") or "#6A9A6B",
-            "loader_custom_code": settings_doc.get("loader_custom_code") or "",
-            "restaurant_menu_highlight_enabled": cint(
-                settings_doc.get("restaurant_menu_highlight_enabled")
-                if settings_doc.get("restaurant_menu_highlight_enabled") not in (None, "")
-                else 1
-            ),
-            "restaurant_menu_highlight_title": settings_doc.get("restaurant_menu_highlight_title") or "ویژه و پرفروش",
-            "restaurant_menu_highlight_show_featured": cint(
-                settings_doc.get("restaurant_menu_highlight_show_featured")
-                if settings_doc.get("restaurant_menu_highlight_show_featured") not in (None, "")
-                else 1
-            ),
-            "restaurant_menu_highlight_featured_limit": cint(
-                settings_doc.get("restaurant_menu_highlight_featured_limit")
-                if settings_doc.get("restaurant_menu_highlight_featured_limit") not in (None, "")
-                else 10
-            ),
-            "restaurant_menu_highlight_show_best_seller": cint(
-                settings_doc.get("restaurant_menu_highlight_show_best_seller")
-                if settings_doc.get("restaurant_menu_highlight_show_best_seller") not in (None, "")
-                else 1
-            ),
-            "restaurant_menu_highlight_best_seller_limit": cint(
-                settings_doc.get("restaurant_menu_highlight_best_seller_limit")
-                if settings_doc.get("restaurant_menu_highlight_best_seller_limit") not in (None, "")
-                else 10
-            ),
-        }
+        for _f in _doctype_basic_fields:
+            _v = settings_doc.get(_f)
+            if _v not in (None, ""):
+                web_settings[_f] = _v
+        # also sync integer highlight fields from DocType if they exist there
+        for _f, _default in (
+            ("restaurant_menu_highlight_enabled", 1),
+            ("restaurant_menu_highlight_show_featured", 1),
+            ("restaurant_menu_highlight_featured_limit", 10),
+            ("restaurant_menu_highlight_show_best_seller", 1),
+            ("restaurant_menu_highlight_best_seller_limit", 10),
+        ):
+            _v = settings_doc.get(_f)
+            if _v not in (None, ""):
+                web_settings[_f] = cint(_v)
     except Exception:
-        web_settings = {
-            "brand_name": "",
-            "brand_tagline": "",
-            "default_currency": "IRR",
-            "hero_title": "",
-            "hero_subtitle": "",
-            "hero_image": "",
-            "primary_cta_label": "",
-            "header_variant": "classic",
-            "menu_search_variant": "search-card",
-            "hero_section_variant": "off",
-            "footer_variant": "full",
-            "hero_section_enabled": 0,
-            "footer_enabled": 1,
-            "hero_section_title": "",
-            "hero_section_description": "",
-            "hero_section_cta": "",
-            "footer_description": "",
-            "footer_phone": "",
-            "footer_email": "",
-            "footer_address": "",
-            "footer_instagram": "",
-            "footer_telegram": "",
-            "footer_copyright": "",
-            "loader_enabled": 1,
-            "loader_mode": "preset",
-            "loader_preset": "steaming-bowl",
-            "loader_title": "در حال آماده سازی سفارش",
-            "loader_subtitle": "آشپزخانه مشغول آماده کردن سفارش شماست...",
-            "loader_min_duration_ms": 1400,
-            "loader_overlay_color": "#F6F4ED",
-            "loader_accent_color": "#6A9A6B",
-            "loader_custom_code": "",
-            "restaurant_menu_highlight_enabled": 1,
-            "restaurant_menu_highlight_title": "ویژه و پرفروش",
-            "restaurant_menu_highlight_show_featured": 1,
-            "restaurant_menu_highlight_featured_limit": 10,
-            "restaurant_menu_highlight_show_best_seller": 1,
-            "restaurant_menu_highlight_best_seller_limit": 10,
-        }
+        pass
 
     web_settings.update(_sanitize_management_loader_settings({**loader_fallback, **web_settings}))
     web_settings.update(display_variant)
@@ -8160,7 +8120,24 @@ def set_management_site_settings(payload=None):
         )
 
     if web_settings:
-        display_variant_keys = set(MANAGEMENT_DISPLAY_VARIANT_DEFAULTS.keys())
+        # — primary storage: save ALL web_settings as a JSON blob —
+        try:
+            existing_blob = {}
+            try:
+                raw = frappe.defaults.get_global_default(MANAGEMENT_SITE_SETTINGS_BLOB_KEY)
+                existing_blob = _parse_json(raw, {})
+                if not isinstance(existing_blob, dict):
+                    existing_blob = {}
+            except Exception:
+                pass
+            existing_blob.update(web_settings)
+            frappe.defaults.set_global_default(
+                MANAGEMENT_SITE_SETTINGS_BLOB_KEY, json.dumps(existing_blob)
+            )
+        except Exception:
+            pass
+
+        # — also persist display variant fields separately —
         display_variant_payload = {}
         try:
             raw = frappe.defaults.get_global_default(MANAGEMENT_DISPLAY_VARIANT_KEY)
