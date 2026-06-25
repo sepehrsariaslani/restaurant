@@ -72,7 +72,6 @@
             <h1 class="bom-product-title">{{ product.item_name }}</h1>
 
             <div class="bom-price-row">
-              <span class="bom-price-label">قیمت:</span>
               <span class="bom-price">{{ formatMoney(product.base_price, currency) }}</span>
             </div>
 
@@ -154,7 +153,6 @@
             <h1 class="bom-product-title">{{ product.item_name }}</h1>
 
             <div class="bom-price-row">
-              <span class="bom-price-label">قیمت:</span>
               <span class="bom-price">{{ formatMoney(product.base_price, currency) }}</span>
             </div>
 

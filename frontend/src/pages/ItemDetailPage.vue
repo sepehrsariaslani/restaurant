@@ -55,7 +55,9 @@
 
         <!-- Overlay nav buttons on the image -->
         <div class="hero-nav">
-          <a href="/menu" class="nav-circle back-btn" aria-label="بازگشت">‹</a>
+          <a href="/menu" class="nav-circle back-btn" aria-label="بازگشت">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </a>
           <div class="hero-nav-actions">
             <button
               class="nav-circle wishlist-circle"
@@ -1213,10 +1215,10 @@ onUnmounted(() => {
 }
 .item-title {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--text-primary, #3f2a1d);
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .prep-badge {

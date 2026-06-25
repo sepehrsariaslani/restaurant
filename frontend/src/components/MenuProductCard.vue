@@ -8,7 +8,7 @@
     <!-- ════ LAYOUT: compact (CSS Grid — 3-column desktop) ════ -->
     <template v-if="layout === 'compact'">
       <!-- Image Column (rightmost in RTL grid) -->
-      <div class="compact-image-col">
+      <a class="compact-image-col" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
         <img
           class="card-image"
           :src="resolvedImage"
@@ -18,7 +18,7 @@
         />
         <span v-if="isComingSoon" class="unavailable-badge">به‌زودی</span>
         <span v-if="isTemporarilyUnavailable && !isComingSoon" class="unavailable-badge">ناموجود</span>
-      </div>
+      </a>
 
       <!-- Content Column (center) -->
       <div class="compact-content">
@@ -26,7 +26,9 @@
           <span v-if="item.category_title" class="pill pill--category">{{ item.category_title }}</span>
           <span v-if="item.subcategory_title" class="pill pill--combo">{{ item.subcategory_title }}</span>
         </div>
-        <h3 class="card-title">{{ item.title }}</h3>
+        <a class="card-title-link" :href="`/item/${item.slug}`">
+          <h3 class="card-title">{{ item.title }}</h3>
+        </a>
         <p v-if="item.short_desc || item.description" class="card-description">{{ item.short_desc || item.description }}</p>
         <span v-if="nutritionText" class="card-nutrition">{{ nutritionText }}</span>
         <div class="card-price-row">
@@ -685,6 +687,13 @@ function handleCustomize() {
   justify-content: center;
   position: relative;
   min-width: 0;
+  text-decoration: none;
+}
+
+.card-title-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
 }
 
 .card-image {

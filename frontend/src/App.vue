@@ -30,7 +30,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <PublicHeader
-      v-if="page !== 'landing' && !(page === 'menu' && isMobile) && !(page === 'item' && isMobile)"
+      v-if="page !== 'landing' && !(page === 'menu' && isMobile) && !(page === 'item' && isMobile) && !page.startsWith('customer-') && page !== 'customer-delivery' && page !== 'customer-table-reservation' && page !== 'customer-table-select'"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -56,6 +56,12 @@
       <OrderSuccessPage v-else-if="page === 'order-success'" :boot="boot" />
       <CustomerLoginPage v-else-if="page === 'customer-login'" />
       <CustomerDashboardPage v-else-if="page === 'customer-dashboard'" />
+      <CustomerProfilePage v-else-if="page === 'customer-profile'" />
+      <CustomerAddressesPage v-else-if="page === 'customer-addresses'" />
+      <CustomerBranchesPage v-else-if="page === 'customer-branches'" />
+      <CustomerDeliveryPage v-else-if="page === 'customer-delivery'" />
+      <CustomerTableReservationPage v-else-if="page === 'customer-table-reservation'" />
+      <CustomerTableSelectPage v-else-if="page === 'customer-table-select'" />
       <MenuPage v-else :boot="boot" />
     </main>
 
@@ -84,7 +90,7 @@
     />
   </div>
 
-  <SiteLoaderOverlay v-if="!isManagement" :settings="loaderSettings" />
+  <SiteLoaderOverlay v-if="!isManagement && !isCustomerPage" :settings="loaderSettings" />
   <GlobalSearchModal />
 </template>
 
@@ -107,6 +113,12 @@ import PaymentCallback from './pages/PaymentCallback.vue'
 import OrderSuccessPage from './pages/OrderSuccessPage.vue'
 import CustomerLoginPage from './pages/CustomerLoginPage.vue'
 import CustomerDashboardPage from './pages/CustomerDashboardPage.vue'
+import CustomerProfilePage from './pages/CustomerProfilePage.vue'
+import CustomerAddressesPage from './pages/CustomerAddressesPage.vue'
+import CustomerBranchesPage from './pages/CustomerBranchesPage.vue'
+import CustomerDeliveryPage from './pages/CustomerDeliveryPage.vue'
+import CustomerTableReservationPage from './pages/CustomerTableReservationPage.vue'
+import CustomerTableSelectPage from './pages/CustomerTableSelectPage.vue'
 import ManagementLayout from './components/management/ManagementLayout.vue'
 import ManagementDashboardPage from './pages/management/ManagementDashboardPage.vue'
 import ManagementPosPage from './pages/management/ManagementPosPage.vue'
@@ -178,7 +190,12 @@ function resolveInitialPage() {
     if (pathname.startsWith('/customize/')) return 'customize'
     if (pathname.startsWith('/customer/login')) return 'customer-login'
     if (pathname.startsWith('/customer/dashboard')) return 'customer-dashboard'
-    if (pathname.startsWith('/customize/')) return 'customize'
+    if (pathname.startsWith('/customer/profile')) return 'customer-profile'
+    if (pathname.startsWith('/customer/addresses')) return 'customer-addresses'
+    if (pathname.startsWith('/customer/branches')) return 'customer-branches'
+    if (pathname.startsWith('/delivery')) return 'customer-delivery'
+    if (pathname.startsWith('/table-reservation')) return 'customer-table-reservation'
+    if (pathname.startsWith('/table-select')) return 'customer-table-select'
     if (pathname.startsWith('/payment/callback')) return 'payment-callback'
     if (pathname.startsWith('/payment/')) return 'payment'
     if (pathname.startsWith('/bom-preview/')) return 'bom-preview'
@@ -218,8 +235,10 @@ const isMobile = computed(() => {
 
 const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && cartState.lastOrder?.mobile))
 
+const isCustomerPage = page.startsWith('customer-') || page === 'customer-delivery' || page === 'customer-table-reservation' || page === 'customer-table-select'
+
 const useNoHeaderOffset = computed(() => {
-  if (page === 'landing') {
+  if (page === 'landing' || isCustomerPage) {
     return true
   }
 
