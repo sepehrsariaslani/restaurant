@@ -1253,10 +1253,17 @@ initDashboardPage()
   .global-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .nutrition-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 880px) {
-  .kpi-grid,
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .panel-grid,
   .crm-grid,
   .menu-grid,
@@ -1266,6 +1273,16 @@ initDashboardPage()
   .lost-kpis,
   .mini-matrix {
     grid-template-columns: 1fr;
+  }
+
+  .global-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

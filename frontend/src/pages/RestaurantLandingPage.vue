@@ -1,7 +1,5 @@
 <template>
   <div class="home-page" dir="rtl">
-    <GlobalSearchModal />
-
     <PublicHeader
       v-if="siteComponents.hero_section_variant !== 'cover' && siteComponents.hero_section_variant !== 'foodbar'"
       :branding="branding"
@@ -176,7 +174,6 @@ import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteHeroFoodbar from '@/components/SiteHeroFoodbar.vue'
-import GlobalSearchModal from '@/components/GlobalSearchModal.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'

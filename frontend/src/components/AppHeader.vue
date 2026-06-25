@@ -23,12 +23,20 @@
         </a>
       </nav>
 
+      <button class="center-search-btn" type="button" @click="openSearch" aria-label="جستجو">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+        <span class="center-search-label">جستجو</span>
+      </button>
+
       <div class="header-actions">
         <a :href="managementLoginUrl" class="management-login-pill" aria-label="ورود مدیریت">
           ورود مدیریت
         </a>
 
-        <button class="search-pill" type="button" @click="openSearch" aria-label="جستجو">
+        <button class="search-pill search-pill--desktop" type="button" @click="openSearch" aria-label="جستجو">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
@@ -472,6 +480,61 @@ function isActive(link) {
   }
 
   .hamburger {
+    display: none;
+  }
+}
+
+/* Centered search button in navbar */
+.center-search-btn {
+  display: none;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 14px;
+  padding: 0.45rem 0.95rem;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.22);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.center-search-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.center-search-btn:hover {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.4);
+  transform: translateY(-1px);
+}
+
+.center-search-btn:active {
+  transform: translateY(0);
+}
+
+/* Desktop (>=920px): show centered button, hide the old search-pill */
+@media (min-width: 920px) {
+  .center-search-btn {
+    display: inline-flex;
+  }
+  .search-pill--desktop {
+    display: none;
+  }
+}
+
+/* Mobile (<920px): show centered button prominently in navbar, hide old search-pill */
+@media (max-width: 919px) {
+  .center-search-btn {
+    display: inline-flex;
+    order: -1;
+  }
+  .search-pill--desktop {
     display: none;
   }
 }

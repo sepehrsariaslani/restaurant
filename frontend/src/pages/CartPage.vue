@@ -903,6 +903,7 @@ h1 span {
   padding: 0.8rem;
   display: grid;
   gap: 0.68rem;
+  box-sizing: border-box;
 }
 
 .checkout-head {
@@ -996,11 +997,14 @@ label {
   border-radius: 12px;
   border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.2);
   padding: 0.45rem;
+  min-width: 0;
 }
 
 .saved-address p,
 .saved-address small {
   margin: 0.2rem 0 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .new-address {
@@ -1058,6 +1062,85 @@ label {
   .delivery-mode-grid,
   .coord-grid {
     grid-template-columns: 1fr;
+  }
+
+  .checkout-overlay {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .checkout-panel {
+    width: 100%;
+    max-height: calc(100vh - 1.2rem - env(safe-area-inset-bottom, 0px));
+    border-radius: 20px 20px 0 0;
+    padding: 0.6rem 0.6rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .checkout-head h3 {
+    font-size: 1.1rem;
+  }
+
+  .fields {
+    gap: 0.5rem;
+  }
+
+  .delivery-box {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .saved-address {
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem;
+    padding: 0.35rem;
+    min-width: 0;
+  }
+
+  .mode-chip {
+    padding: 0.45rem;
+    font-size: 0.82rem;
+  }
+
+  .submit-btn {
+    padding: 0.64rem;
+    font-size: 0.9rem;
+  }
+
+  .input,
+  .textarea {
+    font-size: 0.86rem;
+    padding: 0.45rem 0.55rem;
+  }
+
+  .cart-shell {
+    width: 100%;
+    margin: 0.3rem auto 1rem;
+  }
+
+  .cart-frame {
+    border-radius: 24px;
+    padding: 0.5rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  .summary-panel {
+    padding: 0.75rem 0.6rem;
+    border-radius: 22px;
+  }
+
+  .sum-row {
+    font-size: 0.9rem;
+  }
+
+  .checkout-btn {
+    padding: 0.7rem;
+    font-size: 0.88rem;
   }
 }
 </style>

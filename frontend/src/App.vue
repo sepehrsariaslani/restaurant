@@ -6,6 +6,7 @@
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
+      <ManagementMenuDesignerPage v-else-if="page === 'management-menu-design'" />
       <ManagementMenuGroupsPage v-else-if="page === 'management-menu-groups'" />
       <ManagementMenuGroupDetailPage v-else-if="page === 'management-menu-group'" />
       <ManagementSiteSettingsPage v-else-if="page === 'management-site-settings'" />
@@ -13,11 +14,15 @@
       <ManagementBomDetailPage v-else-if="page === 'management-bom'" />
       <ManagementProductDetailPage v-else-if="page === 'management-product'" :boot="boot" />
       <ManagementVariantBuilderPage v-else-if="page === 'management-variant-builder'" />
+      <ManagementBuilderTemplatesPage v-else-if="page === 'management-builder-templates' && !isBuilderTemplateEdit" />
+      <ManagementBuilderTemplatePage v-else-if="page === 'management-builder-templates' && isBuilderTemplateEdit" :template-id="builderTemplateId" />
       <ManagementCustomersPage v-else-if="page === 'management-customers'" />
+      <ManagementTablesPage v-else-if="page === 'management-tables'" />
       <ManagementReportsIndexPage v-else-if="page === 'management-reports'" />
       <ManagementReportPage v-else-if="page === 'management-report'" :boot="boot" />
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
       <ManagementSettingsPage v-else-if="page === 'management-settings'" />
+      <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
       <section v-else-if="page === 'management-login'" class="management-login-placeholder"></section>
       <ManagementDashboardPage v-else />
     </ManagementLayout>
@@ -25,7 +30,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <PublicHeader
-      v-if="page !== 'landing'"
+      v-if="page !== 'landing' && !(page === 'menu' && isMobile) && !(page === 'item' && isMobile)"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -44,7 +49,13 @@
       <MenuPage v-else-if="page === 'menu'" :boot="boot" />
       <ItemDetailPage v-else-if="page === 'item'" :boot="boot" />
       <CartPage v-else-if="page === 'cart'" />
+      <CustomizePage v-else-if="page === 'customize'" :boot="boot" />
+      <BomPreviewPage v-else-if="page === 'bom-preview'" :boot="boot" />
+      <PaymentGatewayEntry v-else-if="page === 'payment'" :boot="boot" />
+      <PaymentCallback v-else-if="page === 'payment-callback'" :boot="boot" />
       <OrderSuccessPage v-else-if="page === 'order-success'" :boot="boot" />
+      <CustomerLoginPage v-else-if="page === 'customer-login'" />
+      <CustomerDashboardPage v-else-if="page === 'customer-dashboard'" />
       <MenuPage v-else :boot="boot" />
     </main>
 
@@ -66,7 +77,6 @@
     />
 
     <MobileBottomNav
-      v-if="page !== 'item'"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
@@ -75,6 +85,7 @@
   </div>
 
   <SiteLoaderOverlay v-if="!isManagement" :settings="loaderSettings" />
+  <GlobalSearchModal />
 </template>
 
 <script setup>
@@ -89,13 +100,20 @@ import FaqPage from './pages/FaqPage.vue'
 import MenuPage from './pages/MenuPage.vue'
 import ItemDetailPage from './pages/ItemDetailPage.vue'
 import CartPage from './pages/CartPage.vue'
+import CustomizePage from './pages/CustomizePage.vue'
+import BomPreviewPage from './pages/BomPreviewPage.vue'
+import PaymentGatewayEntry from './pages/PaymentGatewayEntry.vue'
+import PaymentCallback from './pages/PaymentCallback.vue'
 import OrderSuccessPage from './pages/OrderSuccessPage.vue'
+import CustomerLoginPage from './pages/CustomerLoginPage.vue'
+import CustomerDashboardPage from './pages/CustomerDashboardPage.vue'
 import ManagementLayout from './components/management/ManagementLayout.vue'
 import ManagementDashboardPage from './pages/management/ManagementDashboardPage.vue'
 import ManagementPosPage from './pages/management/ManagementPosPage.vue'
 import ManagementPosProfilePage from './pages/management/ManagementPosProfilePage.vue'
 import ManagementOrdersPage from './pages/management/ManagementOrdersPage.vue'
 import ManagementProductsPage from './pages/management/ManagementProductsPage.vue'
+import ManagementMenuDesignerPage from './pages/management/ManagementMenuDesignerPage.vue'
 import ManagementMenuGroupsPage from './pages/management/ManagementMenuGroupsPage.vue'
 import ManagementMenuGroupDetailPage from './pages/management/ManagementMenuGroupDetailPage.vue'
 import ManagementSiteSettingsPage from './pages/management/ManagementSiteSettingsPage.vue'
@@ -103,12 +121,17 @@ import ManagementBomsPage from './pages/management/ManagementBomsPage.vue'
 import ManagementBomDetailPage from './pages/management/ManagementBomDetailPage.vue'
 import ManagementProductDetailPage from './pages/management/ManagementProductDetailPage.vue'
 import ManagementVariantBuilderPage from './pages/management/ManagementVariantBuilderPage.vue'
+import ManagementBuilderTemplatesPage from './pages/management/ManagementBuilderTemplatesPage.vue'
+import ManagementBuilderTemplatePage from './pages/management/ManagementBuilderTemplatePage.vue'
 import ManagementCustomersPage from './pages/management/ManagementCustomersPage.vue'
+import ManagementTablesPage from './pages/management/ManagementTablesPage.vue'
 import ManagementReportsIndexPage from './pages/management/ManagementReportsIndexPage.vue'
 import ManagementReportPage from './pages/management/ManagementReportPage.vue'
 import ManagementPrintFormatsPage from './pages/management/ManagementPrintFormatsPage.vue'
 import ManagementSettingsPage from './pages/management/ManagementSettingsPage.vue'
+import ManagementZarinpalSettingsPage from './pages/management/ManagementZarinpalSettingsPage.vue'
 import SiteLoaderOverlay from './components/SiteLoaderOverlay.vue'
+import GlobalSearchModal from './components/GlobalSearchModal.vue'
 import { cartState } from './stores/cartStore'
 import { resolveLoaderSettingsFromBoot } from './utils/loaderSettings'
 import { resolveBranding, resolveSiteComponents } from './utils/siteComponents'
@@ -129,16 +152,20 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/product') && variantStudioMode) return 'management-variant-builder'
     if (pathname.startsWith('/management/products')) return 'management-products'
     if (pathname.startsWith('/management/product')) return 'management-product'
+    if (pathname.startsWith('/management/menu-design') || pathname.startsWith('/management/menu_design')) return 'management-menu-design'
     if (pathname.startsWith('/management/menu-groups') || pathname.startsWith('/management/menu_groups')) return 'management-menu-groups'
     if (pathname.startsWith('/management/menu-group') || pathname.startsWith('/management/menu_group')) return 'management-menu-group'
     if (pathname.startsWith('/management/boms')) return 'management-boms'
     if (pathname.startsWith('/management/bom')) return 'management-bom'
     if (pathname.startsWith('/management/customers')) return 'management-customers'
+    if (pathname.startsWith('/management/tables')) return 'management-tables'
     if (pathname.startsWith('/management/reports/')) return 'management-report'
     if (pathname.startsWith('/management/reports')) return 'management-reports'
     if (pathname.startsWith('/management/print-formats') || pathname.startsWith('/management/print_formats')) return 'management-print-formats'
     if (pathname.startsWith('/management/site-settings') || pathname.startsWith('/management/site_settings')) return 'management-site-settings'
     if (pathname.startsWith('/management/variant-builder') || pathname.startsWith('/management/variant_builder')) return 'management-variant-builder'
+    if (pathname.startsWith('/management/builder-template')) return 'management-builder-templates'
+    if (pathname.startsWith('/management/zarinpal-settings') || pathname.startsWith('/management/zarinpal_settings')) return 'management-zarinpal-settings'
     if (pathname.startsWith('/management/settings')) return 'management-settings'
 
     if (pathname === '/' || pathname === '') return 'landing'
@@ -148,6 +175,13 @@ function resolveInitialPage() {
     if (pathname.startsWith('/about-us') || pathname.startsWith('/about_us')) return 'about-us'
     if (pathname.startsWith('/faq')) return 'faq'
     if (pathname.startsWith('/order-success') || pathname.startsWith('/order_success')) return 'order-success'
+    if (pathname.startsWith('/customize/')) return 'customize'
+    if (pathname.startsWith('/customer/login')) return 'customer-login'
+    if (pathname.startsWith('/customer/dashboard')) return 'customer-dashboard'
+    if (pathname.startsWith('/customize/')) return 'customize'
+    if (pathname.startsWith('/payment/callback')) return 'payment-callback'
+    if (pathname.startsWith('/payment/')) return 'payment'
+    if (pathname.startsWith('/bom-preview/')) return 'bom-preview'
   }
   return window._PAGE || 'landing'
 }
@@ -156,6 +190,17 @@ const page = resolveInitialPage()
 const boot = reactive(window._BOOT || {})
 window._BOOT = boot
 const isManagement = computed(() => String(page || '').startsWith('management-'))
+const isBuilderTemplateEdit = computed(() => {
+  if (typeof window === 'undefined') return false
+  const pathname = String(window.location.pathname || '')
+  return pathname.startsWith('/management/builder-template/edit/') || pathname === '/management/builder-template/new'
+})
+const builderTemplateId = computed(() => {
+  if (typeof window === 'undefined') return ''
+  const pathname = String(window.location.pathname || '')
+  const match = pathname.match(/\/management\/builder-template\/edit\/(.+)/)
+  return match ? match[1] : ''
+})
 const loaderSettings = computed(() => resolveLoaderSettingsFromBoot(boot))
 const branding = computed(() => resolveBranding(boot))
 const siteComponents = computed(() => resolveSiteComponents(boot))
@@ -163,7 +208,12 @@ const siteComponents = computed(() => resolveSiteComponents(boot))
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 
 const headerVariant = computed(() => {
-  return siteComponents.value.header_variant
+  return siteComponents.value.headerVariant
+})
+
+const isMobile = computed(() => {
+  if (typeof window === 'undefined') return false
+  return window.innerWidth < 920
 })
 
 const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && cartState.lastOrder?.mobile))
@@ -173,11 +223,12 @@ const useNoHeaderOffset = computed(() => {
     return true
   }
 
-  if (headerVariant.value === 'classic') {
-    return false
+  if (isMobile.value && (page === 'menu' || page === 'item')) {
+    return true
   }
 
-  return true
+  // Desktop pages with a visible header always need the offset
+  return false
 })
 
 const lastOrderUrl = computed(() => {
@@ -200,7 +251,7 @@ const lastOrderUrl = computed(() => {
 
 .app-main {
   flex: 1;
-  padding-top: 5.35rem;
+  padding-top: 6.5rem;
 }
 
 .app-main--no-offset {

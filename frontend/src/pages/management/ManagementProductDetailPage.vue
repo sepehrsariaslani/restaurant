@@ -6,27 +6,26 @@
       <button class="primary-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
         {{ savingSettings ? 'در حال ذخیره...' : hasUnsavedChanges ? 'ذخیره تغییرات' : 'بدون تغییر' }}
       </button>
-      <button class="secondary-btn" type="button" @click="loadDetail" :disabled="loading">
-        {{ loading ? 'در حال بروزرسانی...' : 'بروزرسانی اطلاعات' }}
-      </button>
-      <button class="secondary-btn delete-btn" type="button" :disabled="deletingProduct || loading" @click="deleteProduct">
-        {{ deletingProduct ? 'در حال حذف...' : 'حذف / غیرفعال' }}
-      </button>
     </template>
 
-    <ManagementSurfaceCard tone="soft" class="tabs-shell">
-      <div class="tab-list" role="tablist" aria-label="مدیریت جزئیات محصول">
-        <button
-          v-for="tab in tabOptions"
-          :key="tab.value"
-          type="button"
-          class="tab-btn"
-          :class="{ active: activeTab === tab.value }"
-          role="tab"
-          :aria-selected="activeTab === tab.value"
-          @click="activeTab = tab.value"
-        >
-          {{ tab.label }}
+    <ManagementSurfaceCard tone="soft" class="section-picker-shell">
+      <div class="section-picker">
+        <div class="simple-tabs" role="tablist" aria-label="بخش‌های جزئیات محصول">
+          <button
+            v-for="tab in tabOptions"
+            :key="tab.value"
+            class="simple-tab"
+            :class="{ active: activeTab === tab.value }"
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === tab.value"
+            @click="activeTab = tab.value"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+        <button class="secondary-btn" type="button" @click="loadDetail" :disabled="loading">
+          {{ loading ? 'در حال بروزرسانی...' : 'تازه‌سازی' }}
         </button>
       </div>
       <p class="muted tab-hint">{{ activeTabHint }}</p>
@@ -58,11 +57,6 @@
               کد محصول
               <input class="input" v-model="settingsForm.item_code" />
               <small class="hint">کد یکتای محصول در سیستم</small>
-            </label>
-            <label>
-              کد اسنپ (custom_snapp_code)
-              <input class="input" v-model="settingsForm.custom_snapp_code" placeholder="مثال: SNP-F3FEECEF86" />
-              <small class="hint">کد محصول در سیستم اسنپ‌فود</small>
             </label>
             <label>
               نام محصول
@@ -209,33 +203,21 @@
               ترتیب نمایش
               <PersianNumberInput v-model="settingsForm.restaurant_sort_order" :min="0" />
             </label>
-            <label>
-              کالری
-              <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
-            </label>
-            <label>
-              پروتئین (g)
-              <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
-            </label>
-            <label>
-              کربوهیدرات (g)
-              <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
-            </label>
-            <label>
-              قند (g)
-              <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
-            </label>
-            <label>
-              چربی (g)
-              <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
-            </label>
-            <label>
-              تصویر اصلی
-              <input class="input" v-model="settingsForm.image" placeholder="/files/item.jpg" />
-            </label>
-            <label>
-              تصویر وب
-              <input class="input" v-model="settingsForm.website_image" placeholder="/files/item-web.jpg" />
+            <label class="tag-select-field">
+              تگ‌های محصول
+              <SearchableDropdown
+                v-model="tagList"
+                :options="allTagOptions"
+                placeholder="انتخاب یا ساخت تگ"
+                search-placeholder="جستجو یا ساخت تگ..."
+                no-results-text="تگی پیدا نشد"
+                :multiple="true"
+                clearable
+                allow-create
+                create-option-label="ساخت تگ"
+                @create-option="handleCreateTagOption"
+              />
+              <small class="hint">چند تگ انتخاب کنید یا همانجا تگ جدید بسازید.</small>
             </label>
             <label>
               مقدار افزودن خودکار
@@ -243,14 +225,76 @@
             </label>
           </div>
 
+          <section class="nutrition-box" aria-label="ارزش غذایی">
+            <header class="nutrition-head">
+              <strong>ارزش غذایی</strong>
+              <small>اعداد اختیاری هستند و در صفحه محصول مشتری نمایش داده می‌شوند.</small>
+            </header>
+            <div class="nutrition-grid">
+              <label>
+                کالری
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                پروتئین (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                کربوهیدرات (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                قند (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                چربی (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
+              </label>
+            </div>
+          </section>
+
           <div class="checks-grid">
-            <label class="check"><input type="checkbox" v-model="settingsForm.show_in_print" /> نمایش در پرینت</label>
-            <label class="check"><input type="checkbox" v-model="settingsForm.restaurant_enabled" /> فعال در منوی رستوران</label>
-            <label class="check"><input type="checkbox" v-model="settingsForm.restaurant_is_featured" /> محصول ویژه</label>
-            <label class="check"><input type="checkbox" v-model="settingsForm.restaurant_is_best_seller" /> محصول پرفروش</label>
-            <label class="check"><input type="checkbox" v-model="settingsForm.restaurant_requires_bom" /> نیازمند BOM</label>
-            <label class="check"><input type="checkbox" v-model="settingsForm.restaurant_auto_add_to_order" /> افزودن خودکار به سفارش</label>
-            <label class="check"><input type="checkbox" v-model="settingsForm.disabled" /> غیرفعال در ERPNext</label>
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_enabled"
+              label="نمایش در منوی سایت"
+              hint="مشتری محصول را در منو می‌بیند."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.show_in_print"
+              label="نمایش در پرینت"
+              hint="در رسیدها و چاپ‌ها نمایش داده شود."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_featured"
+              label="محصول ویژه"
+              hint="در بخش‌های برجسته سایت استفاده می‌شود."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_best_seller"
+              label="پرفروش"
+              hint="برای برچسب و مرتب‌سازی محصولات پرفروش."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_requires_bom"
+              label="نیازمند BOM"
+              hint="اگر مواد اولیه و فرمول ساخت دارد روشن باشد."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_coming_soon"
+              label="به‌زودی"
+              hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_auto_add_to_order"
+              label="افزودن خودکار"
+              hint="برای آیتم‌های مکمل یا اجباری سفارش."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.disabled"
+              label="غیرفعال در ERPNext"
+              hint="در کل سیستم ERP غیرفعال می‌شود."
+            />
           </div>
         </ManagementSurfaceCard>
 
@@ -465,19 +509,21 @@
                         </div>
                       </td>
                       <td>
-                        <input
-                          type="checkbox"
-                          :checked="Number(row.show_in_website || 0) === 1"
+                        <ManagementToggleSwitch
+                          :model-value="Number(row.show_in_website || 0) === 1"
+                          label="نمایش در سایت"
+                          compact
                           @click.stop
-                          @change.stop="updateAttributeToggle(row.name, 'show_in_website', $event.target.checked)"
+                          @update:modelValue="updateAttributeToggle(row.name, 'show_in_website', $event)"
                         />
                       </td>
                       <td>
-                        <input
-                          type="checkbox"
-                          :checked="Number(row.selection_only || 0) === 1"
+                        <ManagementToggleSwitch
+                          :model-value="Number(row.selection_only || 0) === 1"
+                          label="انتخابی مشتری"
+                          compact
                           @click.stop
-                          @change.stop="updateAttributeToggle(row.name, 'selection_only', $event.target.checked)"
+                          @update:modelValue="updateAttributeToggle(row.name, 'selection_only', $event)"
                         />
                       </td>
                       <td>
@@ -511,24 +557,18 @@
                     <small>{{ row.name }}</small>
                   </header>
                   <div class="checks-grid compact-checks">
-                    <label class="check">
-                      <input
-                        type="checkbox"
-                        :checked="Number(row.show_in_website || 0) === 1"
-                        @click.stop
-                        @change.stop="updateAttributeToggle(row.name, 'show_in_website', $event.target.checked)"
-                      />
-                      نمایش در سایت
-                    </label>
-                    <label class="check">
-                      <input
-                        type="checkbox"
-                        :checked="Number(row.selection_only || 0) === 1"
-                        @click.stop
-                        @change.stop="updateAttributeToggle(row.name, 'selection_only', $event.target.checked)"
-                      />
-                      انتخابی مشتری
-                    </label>
+                    <ManagementToggleSwitch
+                      :model-value="Number(row.show_in_website || 0) === 1"
+                      label="نمایش در سایت"
+                      @click.stop
+                      @update:modelValue="updateAttributeToggle(row.name, 'show_in_website', $event)"
+                    />
+                    <ManagementToggleSwitch
+                      :model-value="Number(row.selection_only || 0) === 1"
+                      label="انتخابی مشتری"
+                      @click.stop
+                      @update:modelValue="updateAttributeToggle(row.name, 'selection_only', $event)"
+                    />
                   </div>
                   <footer>
                     <span>مقادیر فعال: {{ countSelectedValues(row.name).toLocaleString('fa-IR') }} / {{ (row.values || []).length.toLocaleString('fa-IR') }}</span>
@@ -625,6 +665,111 @@
         <ReportInsightCards :insights="localizedReport.insights" />
       </section>
 
+      <section v-if="activeTab === 'builder'" class="builder-section">
+        <ManagementSurfaceCard title="سفارشی‌سازی محصول" subtitle="تنظیم ساختار سفارشی‌سازی برای مشتری" tone="accent">
+          <div class="builder-grid">
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_customizable"
+              label="قابل سفارشی‌سازی"
+              hint="با فعال‌سازی، مشتری می‌تواند این محصول را سفارشی کند."
+            />
+          </div>
+
+          <div v-if="settingsForm.restaurant_is_customizable" class="builder-fields">
+            <div class="builder-grid">
+              <label>
+                متن دکمه سفارشی‌سازی
+                <input class="input" v-model="settingsForm.restaurant_customize_button_label" />
+                <small class="hint">پیش‌فرض: سفارشی‌سازی</small>
+              </label>
+              <label>
+                نوع محصول سفارشی
+                <select class="input" v-model="settingsForm.restaurant_custom_product_type">
+                  <option value="">انتخاب کنید</option>
+                  <option value="Pizza">پیتزا</option>
+                  <option value="Salad">سالاد</option>
+                  <option value="Sandwich">ساندویچ</option>
+                  <option value="Custom">سفارشی</option>
+                </select>
+              </label>
+              <label>
+                قالب سفارشی‌سازی
+                <SearchableDropdown
+                  v-model="settingsForm.restaurant_builder_template"
+                  :options="builderTemplateOptions"
+                  placeholder="انتخاب قالب"
+                  search-placeholder="جستجوی قالب..."
+                  include-empty-option
+                  empty-label="بدون قالب"
+                />
+              </label>
+              <ManagementToggleSwitch
+                v-model="settingsForm.restaurant_builder_active"
+                label="سفارشی‌سازی فعال"
+                hint="سفارشی‌سازی در سایت مشتری فعال باشد"
+              />
+            </div>
+
+            <div class="builder-grid">
+              <ManagementToggleSwitch
+                v-model="settingsForm.restaurant_allow_direct_add"
+                label="اجازه افزودن مستقیم"
+                hint="مشتری می‌تواند محصول پایه را بدون سفارشی‌سازی سفارش دهد"
+              />
+              <ManagementToggleSwitch
+                v-model="settingsForm.restaurant_show_nutrition_summary"
+                label="نمایش ارزش غذایی"
+                hint="اطلاعات تغذیه‌ای در بخش سفارشی‌سازی نمایش داده شود"
+              />
+              <ManagementToggleSwitch
+                v-model="settingsForm.restaurant_show_allergen_warnings"
+                label="نمایش هشدار آلرژی"
+                hint="آلرژی‌های هر گزینه نشان داده شود"
+              />
+              <label>
+                حالت چاپ آشپزخانه
+                <select class="input" v-model="settingsForm.restaurant_kitchen_print_mode">
+                  <option value="">انتخاب کنید</option>
+                  <option value="Full Detail">جزئیات کامل</option>
+                  <option value="Step Only">فقط مراحل</option>
+                  <option value="Option Only">فقط گزینه‌ها</option>
+                </select>
+              </label>
+              <label>
+                حالت مصرف موجودی
+                <select class="input" v-model="settingsForm.restaurant_stock_consumption_mode">
+                  <option value="">انتخاب کنید</option>
+                  <option value="Per Option">به ازای هر گزینه</option>
+                  <option value="Per Step">به ازای هر مرحله</option>
+                  <option value="Fixed">ثابت</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="builder-link">
+              <a
+                v-if="settingsForm.restaurant_builder_template"
+                class="primary-pill-link"
+                :href="`/management/builder-template/edit/${settingsForm.restaurant_builder_template}`"
+              >
+                پیکربندی قالب سفارشی‌سازی ←
+              </a>
+              <a
+                v-else
+                class="secondary-btn"
+                href="/management/builder-template/new"
+              >
+                ایجاد قالب سفارشی‌سازی جدید
+              </a>
+            </div>
+          </div>
+
+          <p v-else class="muted builder-hint">
+            با فعال‌سازی سفارشی‌سازی، مشتری می‌تواند این محصول را مطابق سلیقه خود تنظیم کند.
+          </p>
+        </ManagementSurfaceCard>
+      </section>
+
       <ManagementPopup
         v-model:open="previewModalOpen"
         title="پیش‌نمایش کامل محصول در منو"
@@ -718,10 +863,11 @@
           <tbody>
             <tr v-for="valueRow in activeVariantAttributeRow.values" :key="`value-table-${activeVariantAttributeRow.name}-${valueRow.value}`">
               <td>
-                <input
-                  type="checkbox"
-                  :checked="activeAttributeSelectedValues.includes(valueRow.value)"
-                  @change="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
+                <ManagementToggleSwitch
+                  :model-value="activeAttributeSelectedValues.includes(valueRow.value)"
+                  label="تولید Variant"
+                  compact
+                  @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
                 />
               </td>
               <td>{{ valueRow.value }}</td>
@@ -753,14 +899,11 @@
           class="variant-value-mobile-card"
         >
           <strong>{{ valueRow.value }}</strong>
-          <label class="check">
-            <input
-              type="checkbox"
-              :checked="activeAttributeSelectedValues.includes(valueRow.value)"
-              @change="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
-            />
-            تولید Variant
-          </label>
+          <ManagementToggleSwitch
+            :model-value="activeAttributeSelectedValues.includes(valueRow.value)"
+            label="تولید Variant"
+            @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
+          />
           <label>
             abbr
             <input
@@ -803,10 +946,11 @@
         💡 در حالت «ساخت گروهی»، اگر مقداری برای یک ویژگی انتخاب نکنید، همه مقادیر آن ویژگی در نظر گرفته می‌شود.
       </p>
 
-      <label class="check">
-        <input type="checkbox" v-model="variantCreationForm.create_multiple" />
-        ساخت گروهی Variant
-      </label>
+      <ManagementToggleSwitch
+        v-model="variantCreationForm.create_multiple"
+        label="ساخت گروهی Variant"
+        hint="اگر روشن باشد چند مدل با هم ساخته می‌شود."
+      />
 
       <template v-if="!variantCreationForm.create_multiple">
         <div class="variant-attributes-grid">
@@ -908,6 +1052,7 @@ import ManagementDataTable from '@/components/management/ManagementDataTable.vue
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import ReportInsightCards from '@/components/management/bi/ReportInsightCards.vue'
 import ReportKpiGrid from '@/components/management/bi/ReportKpiGrid.vue'
@@ -991,7 +1136,6 @@ const selectedNewAttribute = ref('')
 const settingsForm = reactive({
   item_code: '',
   item_name: '',
-  custom_snapp_code: '',
   item_group: '',
   stock_uom: '',
   description: '',
@@ -1017,7 +1161,18 @@ const settingsForm = reactive({
   restaurant_is_best_seller: false,
   restaurant_requires_bom: false,
   restaurant_auto_add_to_order: false,
+  restaurant_coming_soon: false,
   disabled: false,
+  restaurant_is_customizable: false,
+  restaurant_customize_button_label: 'سفارشی‌سازی',
+  restaurant_custom_product_type: '',
+  restaurant_builder_template: '',
+  restaurant_builder_active: true,
+  restaurant_allow_direct_add: false,
+  restaurant_show_nutrition_summary: false,
+  restaurant_show_allergen_warnings: false,
+  restaurant_kitchen_print_mode: '',
+  restaurant_stock_consumption_mode: '',
 })
 
 const priceForm = reactive({
@@ -1027,10 +1182,11 @@ const priceForm = reactive({
 })
 
 const tabOptions = [
-  { value: 'overview', label: 'اطلاعات اولیه' },
-  { value: 'settings', label: 'تنظیمات و قیمت' },
-  { value: 'variants', label: 'ویژگی و وریانت' },
-  { value: 'reports', label: 'گزارش‌ها' },
+  { value: 'overview', label: 'کارت محصول' },
+  { value: 'settings', label: 'فروش و نمایش' },
+  { value: 'variants', label: 'مدل‌ها' },
+  { value: 'builder', label: 'سفارشی‌سازی' },
+  { value: 'reports', label: 'گزارش فروش' },
 ]
 
 const bomColumns = [
@@ -1083,17 +1239,21 @@ const latestPriceRate = computed(() => Number(detail.value?.pricing?.latest_pric
 const latestPriceDate = computed(() => detail.value?.pricing?.latest_price?.effective_at || '')
 const activeTabHint = computed(() => {
   if (activeTab.value === 'reports') {
-    return 'نمودارها، KPI و جدول تحلیل فروش این محصول در این تب نمایش داده می‌شود.'
+    return 'آمار فروش همین محصول را اینجا ببینید.'
   }
   if (activeTab.value === 'variants') {
-    return 'مدیریت Item Attribute، تعیین ویژگی‌های انتخابی مشتری و ساخت خودکار Variantها.'
+    return 'مدل‌ها مثل سایز، طعم یا ویژگی‌های انتخابی مشتری اینجا مدیریت می‌شوند.'
   }
   if (activeTab.value === 'settings') {
-    return 'تنظیمات رستورانی، وب‌سایت و قیمت‌گذاری را از این بخش مدیریت کنید.'
+    return 'قیمت، دسته، زمان آماده‌سازی و روشن/خاموش بودن محصول اینجا است.'
   }
-  return 'مشخصات پایه محصول و تصاویر را در این بخش ویرایش کنید.'
+  return 'نام، توضیح و عکس محصول را اینجا کامل کنید.'
 })
 const canSaveSettings = computed(() => !savingSettings.value && !loading.value && hasUnsavedChanges.value && !!detail.value?.item?.name)
+const builderTemplateOptions = computed(() => {
+  const templates = detail.value?.builder_templates || []
+  return templates.map((t) => ({ value: t.name, label: t.title || t.name }))
+})
 const hasReportData = computed(() => {
   const report = detail.value?.report || {}
   return (
@@ -1298,6 +1458,8 @@ const previewMenuCardRows = computed(() => {
       settingsForm.restaurant_subcategory ||
       '',
     prep_time_mins: Number(settingsForm.restaurant_prep_time_mins || item.restaurant_prep_time_mins || 0),
+    coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0,
+    restaurant_coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0,
     nutrition_kcal: Number(settingsForm.restaurant_nutrition_kcal || item.restaurant_nutrition_kcal || 0),
     nutrition_protein_g: Number(settingsForm.restaurant_nutrition_protein_g || item.restaurant_nutrition_protein_g || 0),
     nutrition_carb_g: Number(settingsForm.restaurant_nutrition_carb_g || item.restaurant_nutrition_carb_g || 0),
@@ -1406,7 +1568,6 @@ function syncForms(payload) {
   const item = payload?.item || {}
   settingsForm.item_code = item.item_code || ''
   settingsForm.item_name = item.item_name || ''
-  settingsForm.custom_snapp_code = item.custom_snapp_code || ''
   settingsForm.item_group = item.item_group || ''
   settingsForm.stock_uom = item.stock_uom || ''
   settingsForm.description = item.description || ''
@@ -1421,6 +1582,16 @@ function syncForms(payload) {
   settingsForm.restaurant_prep_time_mins = Number(item.restaurant_prep_time_mins || 0)
   settingsForm.restaurant_sort_order = Number(item.restaurant_sort_order || 0)
   settingsForm.restaurant_auto_add_qty = Number(item.restaurant_auto_add_qty || 0)
+  settingsForm.restaurant_item_tag_table = item.restaurant_item_tag_table || []
+  // Also populate _tag_title for each link for display
+  if (settingsForm.restaurant_item_tag_table.length) {
+    for (const link of settingsForm.restaurant_item_tag_table) {
+      if (link.tag && !link._tag_title) {
+        const tagOpt = allTagOptions.value.find(o => o.value === link.tag)
+        link._tag_title = tagOpt ? tagOpt.label : link.tag
+      }
+    }
+  }
   settingsForm.restaurant_nutrition_kcal = Number(item.restaurant_nutrition_kcal || item.nutrition?.kcal || 0)
   settingsForm.restaurant_nutrition_protein_g = Number(item.restaurant_nutrition_protein_g || item.nutrition?.protein_g || 0)
   settingsForm.restaurant_nutrition_carb_g = Number(item.restaurant_nutrition_carb_g || item.nutrition?.carb_g || 0)
@@ -1432,6 +1603,7 @@ function syncForms(payload) {
   settingsForm.restaurant_is_best_seller = Number(item.restaurant_is_best_seller || 0) === 1
   settingsForm.restaurant_requires_bom = Number(item.restaurant_requires_bom || 0) === 1
   settingsForm.restaurant_auto_add_to_order = Number(item.restaurant_auto_add_to_order || 0) === 1
+  settingsForm.restaurant_coming_soon = Number(item.restaurant_coming_soon || 0) === 1
   settingsForm.disabled = Number(item.disabled || 0) === 1
 
   selectedDefaultPriceList.value = payload?.pricing?.default_price_list || ''
@@ -1502,6 +1674,77 @@ function resetVariantBuilderState(payload) {
   const preferredActive = selectedAttributes[0] || ''
   activeVariantAttributeName.value = String(preferredActive || '').trim()
 }
+
+// ─── Tag management ──────────────────────────────────────────────────
+const TAG_FIELD = 'restaurant_item_tag_table'
+
+// Get all available tags for autocomplete
+const allTagOptions = ref([])
+
+const tagList = computed({
+  get() {
+    const links = settingsForm[TAG_FIELD] || []
+    return links.map(l => {
+      // l.tag is the link name, we need the title
+      return l._tag_title || l.tag_title || l.tag || ''
+    }).filter(Boolean)
+  },
+  set(val) {
+    // Rebuild child table rows
+    const current = settingsForm[TAG_FIELD] || []
+    const newTags = Array.isArray(val) ? val : []
+    
+    // Remove tags not in new list
+    const toRemove = current.filter(l => {
+      const title = l._tag_title || l.tag_title || l.tag || ''
+      return !newTags.includes(title)
+    })
+    for (const r of toRemove) {
+      const idx = current.indexOf(r)
+      if (idx >= 0) current.splice(idx, 1)
+    }
+    
+    // Add new tags
+    for (const t of newTags) {
+      const exists = current.some(l => (l._tag_title || l.tag_title || l.tag || '') === t)
+      if (!exists) {
+        // Find tag doc name from options
+        const opt = allTagOptions.value.find(o => o.label === t)
+        current.push({
+          tag: opt ? opt.value : t,
+          _tag_title: t,
+        })
+      }
+    }
+    settingsForm[TAG_FIELD] = [...current]
+  },
+})
+
+function handleCreateTagOption(rawValue) {
+  const title = String(rawValue || '').trim().replace(/,$/, '').trim()
+  if (!title) {
+    return
+  }
+  if (!allTagOptions.value.some((option) => String(option?.label || option?.value || '').trim() === title)) {
+    allTagOptions.value = [...allTagOptions.value, { value: title, label: title }]
+  }
+  if (!tagList.value.includes(title)) {
+    tagList.value = [...tagList.value, title]
+  }
+}
+
+// Load available tags on mount
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/method/frappe.client.get_list?doctype=Restaurant Item Tag&fields=["name","title"]&limit_page_length=500')
+    const data = await res.json()
+    if (data.message) {
+      allTagOptions.value = data.message.map(t => ({ value: t.name, label: t.title || t.name }))
+    }
+  } catch (e) {
+    console.warn('Could not load tags:', e)
+  }
+})
 
 async function loadVariantBuilder({ force = false } = {}) {
   const targetItem = String(detail.value?.item?.name || itemName.value || '').trim()
@@ -1675,17 +1918,20 @@ async function deleteProduct() {
   } catch (errObj) {
     if (isLinkedDeleteError(errObj)) {
       const disableConfirmed = window.confirm(
-        `❌ این کالا به اسناد فروش یا انبار متصل است و قابل حذف نیست.\n\n✅ پیشنهاد: می‌توانید آن را غیرفعال کنید تا در منو نمایش داده نشود.\n\nآیا می‌خواهید کالای «${itemLabel}» را غیرفعال کنید؟`,
+        `این کالا به اسناد فروش یا انبار متصل است و قابل حذف نیست.\n\nمی‌توانید فقط نمایش آن را در سایت خاموش کنید؛ خود کالا در ERPNext فعال می‌ماند.\n\nآیا می‌خواهید کالای «${itemLabel}» از سایت پنهان شود؟`,
       )
       if (!disableConfirmed) {
         return
       }
       try {
-        await deleteManagementProduct(itemDocName, { allow_archive_on_link: 1, force_delete: 0 })
-        window.alert(`✅ کالای «${itemLabel}» غیرفعال شد و دیگر در منو نمایش داده نمی‌شود.`)
+        await updateManagementProductSettings({
+          name: itemDocName,
+          restaurant_enabled: 0,
+        })
+        window.alert(`کالای «${itemLabel}» فقط از سایت پنهان شد و در ERPNext غیرفعال نشد.`)
         window.location.href = '/management/products'
       } catch (archiveErr) {
-        error.value = archiveErr.message || `❌ متأسفانه غیرفعال‌سازی کالای «${itemLabel}» ناموفق بود. لطفاً دوباره تلاش کنید.`
+        error.value = archiveErr.message || `پنهان کردن کالای «${itemLabel}» از سایت ناموفق بود. لطفاً دوباره تلاش کنید.`
       }
       return
     }
@@ -2206,7 +2452,6 @@ function serializeSettingsState() {
   return JSON.stringify({
     item_code: String(settingsForm.item_code || '').trim(),
     item_name: String(settingsForm.item_name || '').trim(),
-    custom_snapp_code: String(settingsForm.custom_snapp_code || '').trim(),
     item_group: String(settingsForm.item_group || '').trim(),
     stock_uom: String(settingsForm.stock_uom || '').trim(),
     description: String(settingsForm.description || '').trim(),
@@ -2221,6 +2466,10 @@ function serializeSettingsState() {
     restaurant_prep_time_mins: Number(settingsForm.restaurant_prep_time_mins || 0),
     restaurant_sort_order: Number(settingsForm.restaurant_sort_order || 0),
     restaurant_auto_add_qty: Number(settingsForm.restaurant_auto_add_qty || 0),
+    restaurant_item_tag_table: (settingsForm.restaurant_item_tag_table || []).map(l => ({
+      tag: l.tag,
+      _tag_title: l._tag_title || '',
+    })),
     restaurant_nutrition_kcal: Number(settingsForm.restaurant_nutrition_kcal || 0),
     restaurant_nutrition_protein_g: Number(settingsForm.restaurant_nutrition_protein_g || 0),
     restaurant_nutrition_carb_g: Number(settingsForm.restaurant_nutrition_carb_g || 0),
@@ -2232,7 +2481,18 @@ function serializeSettingsState() {
     restaurant_is_best_seller: settingsForm.restaurant_is_best_seller ? 1 : 0,
     restaurant_requires_bom: settingsForm.restaurant_requires_bom ? 1 : 0,
     restaurant_auto_add_to_order: settingsForm.restaurant_auto_add_to_order ? 1 : 0,
+    restaurant_coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0,
     disabled: settingsForm.disabled ? 1 : 0,
+    restaurant_is_customizable: settingsForm.restaurant_is_customizable ? 1 : 0,
+    restaurant_customize_button_label: String(settingsForm.restaurant_customize_button_label || '').trim(),
+    restaurant_custom_product_type: String(settingsForm.restaurant_custom_product_type || '').trim(),
+    restaurant_builder_template: String(settingsForm.restaurant_builder_template || '').trim(),
+    restaurant_builder_active: settingsForm.restaurant_builder_active ? 1 : 0,
+    restaurant_allow_direct_add: settingsForm.restaurant_allow_direct_add ? 1 : 0,
+    restaurant_show_nutrition_summary: settingsForm.restaurant_show_nutrition_summary ? 1 : 0,
+    restaurant_show_allergen_warnings: settingsForm.restaurant_show_allergen_warnings ? 1 : 0,
+    restaurant_kitchen_print_mode: String(settingsForm.restaurant_kitchen_print_mode || '').trim(),
+    restaurant_stock_consumption_mode: String(settingsForm.restaurant_stock_consumption_mode || '').trim(),
   })
 }
 
@@ -2570,39 +2830,53 @@ loadDetail()
 </script>
 
 <style scoped>
-.tabs-shell {
-  padding-bottom: 0.4rem;
-}
-
-.tab-list {
+.section-picker {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  overflow-x: auto;
-  padding-bottom: 0.2rem;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.tab-btn {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.22);
-  border-radius: 999px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.9);
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.42rem 0.74rem;
-  white-space: nowrap;
+.simple-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+
+.simple-tab {
+  min-height: 2.36rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #74685f;
+  padding: 0.34rem 0.68rem;
+  font-size: 0.78rem;
+  font-weight: 850;
   cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  touch-action: manipulation;
 }
 
-.tab-btn.active {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
-  color: #fff;
-  border-color: transparent;
+.simple-tab:hover {
+  background: #fbfaf8;
+  border-color: #e4ded6;
+  color: #2b211a;
+}
+
+.simple-tab.active {
+  background: #fff;
+  border-color: rgb(124 90 66 / 0.28);
+  color: #2b211a;
+  box-shadow: inset 0 -2px 0 #7c5a42;
 }
 
 .tab-hint {
-  margin: 0.45rem 0 0;
-  font-size: 0.8rem;
+  margin: 0.42rem 0 0;
+  color: #74685f;
+  font-size: 0.78rem;
+  line-height: 1.65;
 }
 
 .unsaved-note {
@@ -2650,7 +2924,7 @@ loadDetail()
 .tables-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
+  gap: 0.72rem;
   min-width: 0;
 }
 
@@ -2662,51 +2936,121 @@ loadDetail()
 .identity-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.45rem;
-  margin-bottom: 0.55rem;
+  gap: 0.5rem;
+  margin-bottom: 0.58rem;
 }
 
 .identity-grid label {
   display: grid;
-  gap: 0.18rem;
-  font-size: 0.82rem;
+  gap: 0.22rem;
+  color: #4a3b31;
+  font-size: 0.78rem;
+  font-weight: 700;
   min-width: 0;
 }
 
 .field-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #4a3b31;
 }
 
 .field-help {
-  font-size: 0.76rem;
-  line-height: 1.75;
+  font-size: 0.72rem;
+  line-height: 1.65;
   color: var(--text-muted);
 }
 
 .checks-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 0.42rem;
+  margin: 0.45rem 0 0.62rem;
+}
+
+.nutrition-box {
+  border: 1px solid #e4ded6;
+  border-radius: 8px;
+  background: #fbfaf8;
+  padding: 0.58rem;
+  margin-bottom: 0.58rem;
+}
+
+.nutrition-head {
+  display: grid;
+  gap: 0.15rem;
+  margin-bottom: 0.46rem;
+}
+
+.nutrition-head strong {
+  color: #2b211a;
+  font-size: 0.84rem;
+}
+
+.nutrition-head small {
+  color: #74685f;
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
   gap: 0.4rem;
-  margin: 0.45rem 0 0.7rem;
+}
+
+.nutrition-grid label {
+  display: grid;
+  gap: 0.22rem;
+  color: #4a3b31;
+  font-size: 0.76rem;
+  font-weight: 800;
+  min-width: 0;
 }
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.82rem;
+  min-height: 2.65rem;
+  gap: 0.4rem;
+  font-size: 0.84rem;
+}
+
+.check--highlight {
+  background: #f7f1ea;
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgb(124 90 66 / 0.14);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  margin-right: auto;
+}
+
+.status-dot.on {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgb(var(--success-rgb) / 0.2);
+}
+
+.status-dot.off {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgb(var(--danger-rgb) / 0.2);
 }
 
 .image-shell {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  border-radius: 12px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.56);
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
+  background: #fbfaf8;
   min-height: 200px;
   display: grid;
   place-items: center;
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
 }
 
 .main-image {
@@ -2716,7 +3060,7 @@ loadDetail()
   object-fit: contain;
   object-position: center;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .gallery {
@@ -2744,7 +3088,7 @@ loadDetail()
 }
 
 .inline-actions {
-  margin: 0.25rem 0 0.6rem;
+  margin: 0.35rem 0 0.75rem;
   display: flex;
   justify-content: flex-start;
   gap: 0.4rem;
@@ -2757,10 +3101,10 @@ loadDetail()
 }
 
 .variant-config-shell {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  border-radius: 14px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.5);
-  padding: 0.6rem;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
+  background: #fbfaf8;
+  padding: 0.75rem;
   display: grid;
   gap: 0.6rem;
 }
@@ -2777,8 +3121,8 @@ loadDetail()
 }
 
 .variant-editor-table-wrap {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  border-radius: 12px;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
   background: #fff;
   overflow-x: auto;
 }
@@ -2794,8 +3138,8 @@ loadDetail()
 .variant-editor-table td,
 .variant-values-table th,
 .variant-values-table td {
-  border-bottom: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
-  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid rgb(226 232 240 / 1);
+  padding: 0.58rem 0.6rem;
   text-align: right;
   font-size: 0.77rem;
   vertical-align: middle;
@@ -2803,13 +3147,13 @@ loadDetail()
 
 .variant-editor-table th,
 .variant-values-table th {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  color: var(--text-muted);
+  background: #fbfaf8;
+  color: #6f6258;
   font-size: 0.74rem;
 }
 
 .variant-editor-table tbody tr.active {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  background: #f7f1ea;
 }
 
 .variant-clickable-row {
@@ -2817,7 +3161,7 @@ loadDetail()
 }
 
 .variant-clickable-row:hover {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  background: #fbfaf8;
 }
 
 .variant-attr-meta {
@@ -2835,8 +3179,8 @@ loadDetail()
 }
 
 .variant-values-shell {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  border-radius: 12px;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
   background: #fff;
   padding: 0.55rem;
   display: grid;
@@ -2880,8 +3224,8 @@ loadDetail()
 .variant-attribute-mobile-card,
 .variant-value-mobile-card,
 .variant-mobile-card {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  border-radius: 12px;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
   background: #fff;
   padding: 0.55rem;
   display: grid;
@@ -2889,8 +3233,8 @@ loadDetail()
 }
 
 .variant-attribute-mobile-card.active {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.38);
-  box-shadow: 0 10px 20px rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+  border-color: rgb(124 90 66 / 0.32);
+  box-shadow: 0 14px 28px rgb(124 90 66 / 0.1);
 }
 
 .variant-attribute-mobile-card header,
@@ -2915,11 +3259,11 @@ loadDetail()
 }
 
 .menu-preview-inline {
-  margin-top: 0.6rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  border-radius: 14px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.56);
-  padding: 0.55rem;
+  margin-top: 0.8rem;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
+  background: #fbfaf8;
+  padding: 0.7rem;
   display: grid;
   gap: 0.5rem;
 }
@@ -2938,7 +3282,7 @@ loadDetail()
 
 .menu-preview-inline-meta strong {
   font-size: 0.84rem;
-  color: var(--text-primary);
+  color: #2b211a;
 }
 
 .menu-preview-inline-meta small {
@@ -2962,9 +3306,9 @@ loadDetail()
 }
 
 .menu-preview-row {
-  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.2);
-  border-radius: 12px;
-  padding: 0.52rem;
+  border: 1px dashed rgb(148 163 184 / 0.55);
+  border-radius: 8px;
+  padding: 0.6rem;
   display: grid;
   gap: 0.35rem;
   cursor: pointer;
@@ -2973,8 +3317,8 @@ loadDetail()
 
 .menu-preview-row:hover,
 .menu-preview-row:focus-visible {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.45);
-  box-shadow: 0 12px 30px rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+  border-color: rgb(124 90 66 / 0.45);
+  box-shadow: 0 16px 34px rgb(124 90 66 / 0.14);
   transform: translateY(-2px);
   outline: none;
 }
@@ -2987,10 +3331,10 @@ loadDetail()
 }
 
 .menu-preview-modal-details {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  border-radius: 14px;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
   padding: 0.6rem;
-  background: rgb(var(--palette-eggshell-rgb) / 0.6);
+  background: #fbfaf8;
   display: grid;
   gap: 0.45rem;
 }
@@ -3013,9 +3357,9 @@ loadDetail()
 }
 
 .menu-preview-customer-view {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  border-radius: 14px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.6);
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
+  background: #fbfaf8;
   padding: 0.6rem;
   display: grid;
   gap: 0.45rem;
@@ -3035,8 +3379,8 @@ loadDetail()
 .menu-preview-customer-iframe {
   width: 100%;
   min-height: 520px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  border-radius: 12px;
+  border: 1px solid rgb(226 232 240 / 1);
+  border-radius: 8px;
   background: #fff;
 }
 
@@ -3049,6 +3393,29 @@ loadDetail()
 .preview-static-card :deep(button) {
   pointer-events: none !important;
   cursor: default !important;
+}
+.builder-section {
+  margin-top: 1rem;
+}
+.builder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.builder-fields {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+.builder-link {
+  margin-top: 1.5rem;
+}
+.builder-hint {
+  margin-top: 1rem;
+  text-align: center;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
 }
 
 .preview-static-card :deep(.add-btn),
@@ -3090,33 +3457,34 @@ loadDetail()
 
 .pill {
   border-radius: 999px;
-  padding: 0.12rem 0.46rem;
+  padding: 0.18rem 0.54rem;
   font-size: 0.69rem;
+  font-weight: 800;
 }
 
 .pill.active {
-  background: rgb(var(--palette-june-bud-rgb) / 0.44);
-  color: var(--accent-green);
+  background: rgb(220 252 231 / 0.9);
+  color: #166534;
 }
 
 .pill.inactive {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.17);
-  color: var(--accent-gold);
+  background: rgb(254 243 199 / 0.95);
+  color: #92400e;
 }
 
 .pill.default {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 1);
+  background: #f2eee9;
+  color: #5f402d;
 }
 
 .pill.docstatus {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  color: var(--text-muted);
+  background: #f1f5f9;
+  color: #6f6258;
 }
 
 .pill.docstatus.submitted {
-  background: rgb(var(--palette-june-bud-rgb) / 0.24);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
+  background: #dcfce7;
+  color: #166534;
 }
 
 .row-actions {
@@ -3167,6 +3535,10 @@ loadDetail()
 
   .checks-grid {
     gap: 0.3rem;
+  }
+
+  .nutrition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .variant-config-head,
@@ -3236,10 +3608,10 @@ loadDetail()
   }
 
   .check {
-    border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-    border-radius: 10px;
-    padding: 0.35rem 0.45rem;
-    background: rgb(var(--palette-eggshell-rgb) / 0.62);
+    border: 1px solid rgb(226 232 240 / 1);
+    border-radius: 8px;
+    padding: 0.45rem 0.55rem;
+    background: #fff;
   }
 
   .main-image {
@@ -3248,14 +3620,14 @@ loadDetail()
 }
 
 @media (max-width: 640px) {
-  .tabs-shell,
+  .section-picker-shell,
   .menu-preview-inline,
   .variant-config-shell,
   .variant-values-shell,
   .image-shell,
   .menu-preview-customer-view {
-    padding: 0.48rem;
-    border-radius: 12px;
+    padding: 0.6rem;
+    border-radius: 8px;
   }
 
   .product-top-grid,
@@ -3273,9 +3645,23 @@ loadDetail()
     gap: 0.25rem;
   }
 
-  .tab-btn {
-    font-size: 0.78rem;
-    padding: 0.38rem 0.66rem;
+  .section-picker {
+    align-items: stretch;
+  }
+
+  .section-picker .secondary-btn {
+    width: 100%;
+  }
+
+  .simple-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .simple-tab {
+    width: 100%;
+    padding-inline: 0.45rem;
   }
 
   .tab-hint {
@@ -3306,10 +3692,20 @@ loadDetail()
     flex: 1 1 0;
     font-size: 0.74rem;
     padding-inline: 0.48rem;
+    min-height: 2.6rem;
   }
 
   .pill {
     font-size: 0.64rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-preview-row,
+  .menu-preview-row:hover,
+  .menu-preview-row:focus-visible {
+    transform: none;
+    transition-duration: 0.01ms;
   }
 }
 </style>
@@ -3379,5 +3775,76 @@ loadDetail()
 
 .delete-mini-btn:hover:not(:disabled) {
   background: rgb(220, 38, 38, 0.1) !important;
+}
+
+/* ─── Tag input ─── */
+.tag-input-wrap {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.tag-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+  border-radius: 12px;
+  padding: 0.45rem 0.55rem;
+  background: #fff;
+  min-height: 42px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  margin-inline-start: 0.15rem;
+  transition: all 0.15s;
+}
+
+.tag-remove:hover {
+  background: rgb(220, 38, 38, 0.15);
+  color: rgb(220, 38, 38);
+}
+
+.tag-input {
+  border: none;
+  outline: none;
+  font-size: 0.82rem;
+  font-family: inherit;
+  min-width: 120px;
+  flex: 1;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0.15rem 0;
+}
+
+.tag-input::placeholder {
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 </style>

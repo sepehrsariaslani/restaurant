@@ -9,7 +9,10 @@
         <span class="classic-price-badge">{{ formatMoney(item.base_price, currency) }}</span>
       </div>
       <div class="classic-body">
-        <p class="classic-cat">{{ item.category_title || 'منو' }}</p>
+        <div class="classic-tags-row" v-if="itemTags.length">
+          <span class="ctag" v-for="tag in itemTags" :key="tag">{{ tag }}</span>
+        </div>
+        <p class="classic-cat" v-else>{{ item.category_title || item.category || 'منو' }}</p>
         <h3 class="classic-title">{{ item.title }}</h3>
         <p class="classic-desc muted">{{ item.short_desc || 'توضیحی برای این آیتم ثبت نشده است.' }}</p>
         <div class="classic-rating" v-if="reviewCnt > 0">
@@ -56,7 +59,10 @@
         <img :src="resolvedImage" :alt="item.title" class="navy-img" />
       </div>
       <div class="navy-body">
-        <p class="navy-cat">{{ item.category_title || 'منو' }}</p>
+        <div class="navy-tags-row" v-if="itemTags.length">
+          <span class="ntag" v-for="tag in itemTags" :key="tag">{{ tag }}</span>
+        </div>
+        <p class="navy-cat" v-else>{{ item.category_title || item.category || 'منو' }}</p>
         <h3 class="navy-title">{{ item.title }}</h3>
         <div class="navy-rating">
           <span class="navy-star">★</span>
@@ -205,6 +211,28 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 .cr-star { font-size: 0.78rem; color: #ddd; }
 .cr-star.filled { color: #f5a623; }
 .cr-count { font-size: 0.72rem; color: var(--text-muted, #846b58); }
+
+.classic-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.35rem;
+}
+
+.navy-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.ntag {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.64rem;
+}
 
 .classic-footer {
   margin-top: 0.75rem;

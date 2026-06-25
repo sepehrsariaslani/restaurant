@@ -68,6 +68,35 @@ const EMOJI_MAP = {
   snack: '🍟', سنک: '🍟', fries: '🍟', fish: '🐟', ماهی: '🐟',
   sea: '🦐', میگو: '🦐', steak: '🥩', استیک: '🥩', wrap: '🌯',
   breakfast: '🥞', صبحانه: '🥞', waffle: '🧇',
+  // Additional Persian food terms (FIX #22)
+  'پیش غذا': '🥗', پیشغذا: '🥗', appetizer: '🥗',
+  خورشت: '🍛', stew: '🍛',
+  کوفته: '🧆', koofteh: '🧆',
+  آش: '🍲', ash: '🍲',
+  کوکو: '🥘', kookoo: '🥘',
+  زرشک: '🫐', zereshk: '🫐',
+  فسنجان: '🍲', fesenjan: '🍲',
+  قیمه: '🍛', gheimeh: '�ک',
+  بادمجان: '🍆', eggplant: '🍆',
+  کتلت: '🍖', cutlet: '🍖',
+  ناگت: '🍗', nugget: '🍗',
+  سالاد: '🥗',
+  ماست: '🥛', yogurt: '🥛',
+  دوغ: '🥛', dough: '🥛',
+  نان: '🍞', bread: '🍞',
+  پنیر: '🧀', cheese: '🧀',
+  خامه: '🧈', cream: '🧈',
+  عسل: '🍯', honey: '🍯',
+  شیرینی: '🍪', pastry: '🍪',
+  چای: '🍵',
+  دمنوش: '🍵', herbal: '🍵',
+  شکلات: '🍫', chocolate: '🍫',
+  کیک: '🎂',
+  پای: '🥧', pie: '🥧',
+  تیرامیسو: '🍰', tiramisu: '🍰',
+  کارامل: '🍮', caramel: '🍮',
+  فرنی: '🍮', fereni: '🍮',
+  شله‌زرد: '🍮', sholeh_zard: '🍮',
 }
 
 function getCategoryEmoji(category) {
@@ -106,6 +135,8 @@ function getCategoryEmoji(category) {
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 0.2rem;
 }
 .img-rail::-webkit-scrollbar { display: none; }
 
@@ -121,6 +152,9 @@ function getCategoryEmoji(category) {
   padding: 0.3rem;
   border-radius: 14px;
   transition: transform 0.18s ease;
+  scroll-snap-align: start;
+  min-width: 72px;
+  min-height: 44px;
 }
 .img-pill:hover { transform: translateY(-2px); }
 

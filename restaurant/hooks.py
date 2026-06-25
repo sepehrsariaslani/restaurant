@@ -100,6 +100,8 @@ website_route_rules = [
         {"from_route": "/management/orders", "to_route": "management/orders"},
         {"from_route": "/management/products", "to_route": "management/products"},
         {"from_route": "/management/product", "to_route": "management/product"},
+        {"from_route": "/management/menu-design", "to_route": "management"},
+        {"from_route": "/management/menu_design", "to_route": "management"},
         {"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
         {"from_route": "/management/menu-group", "to_route": "management/menu_group"},
         {"from_route": "/management/site-settings", "to_route": "management/site_settings"},
@@ -110,6 +112,9 @@ website_route_rules = [
         {"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
         {"from_route": "/management/print-formats", "to_route": "management/print_formats"},
         {"from_route": "/management/settings", "to_route": "management/settings"},
+        {"from_route": "/management/builder-templates", "to_route": "management/builder_templates"},
+        {"from_route": "/management/builder-template/edit/<template_id>", "to_route": "management/builder_template"},
+        {"from_route": "/management/builder-template/new", "to_route": "management/builder_template"},
 ]
 
 # Jinja
@@ -205,6 +210,20 @@ doc_events = {
                 "on_cancel": "restaurant.api.unlink_production_ticket_links",
                 "on_trash": "restaurant.api.unlink_production_ticket_links",
         },
+        "Item": {
+                "on_update": "restaurant.api.sync_item_image_from_attachment",
+                "on_insert": "restaurant.api.sync_item_image_from_attachment",
+        },
+        "File": {
+                "after_insert": "restaurant.api.sync_item_image_on_file_change",
+                "on_update": "restaurant.api.sync_item_image_on_file_change",
+        },
+        "*": {
+                "on_update": "restaurant.api.sync_item_image_on_file_change",
+        },
+        "Sales Order": {
+                "on_submit": "restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.on_sales_order_submit",
+        },
 }
 
 # Scheduled Tasks
@@ -233,6 +252,7 @@ scheduler_events = {
                 "restaurant.restaurant.doctype.auto_price_list.auto_price_list.run_due_restaurant_price_lists",
                 "restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
                 "restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
+                "restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.purge_orphaned_selections",
         ],
         "cron": {
                 "* * * * *": [
@@ -324,9 +344,17 @@ on_logout = "restaurant.activity_tracking.api.on_logout"
 # }
 
 
+app_include_js = [
+    "/assets/restaurant/js/item_image_sync.js",
+]
+
 fixtures = [
     {
         "dt": "Custom Field",
         "filters": [["module", "=", "Restaurant"]],
     }
+]
+
+patches = [
+    "restaurant.patches.v2_6.backfill_item_images_from_attachments",
 ]

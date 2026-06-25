@@ -12,7 +12,7 @@
   position: relative;
   min-height: 100dvh;
   isolation: isolate;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .blob {

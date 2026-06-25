@@ -1,17 +1,27 @@
 <template>
   <ManagementPageScaffold title="مدیریت محصولات" subtitle="کنترل وضعیت فعال/غیرفعال و قیمت‌گذاری سریع">
-    <ManagementSurfaceCard tone="accent">
+    <ManagementSurfaceCard tone="accent" class="products-filter-card">
       <div class="toolbar">
-        <input class="input" v-model="search" placeholder="جستجو محصول..." />
-        <label class="check">
-          <input type="checkbox" v-model="activeOnly" />
-          فقط فعال
-        </label>
+        <input class="input" v-model="search" placeholder="جستجو محصول..." @keydown.enter.prevent="loadProducts" />
+        <ManagementToggleSwitch
+          v-model="activeOnly"
+          class="toolbar-toggle"
+          label="فقط فعال"
+        />
+        <div class="filter-field">
+          <SearchableDropdown
+            v-model="selectedTag"
+            :options="availableTagOptions"
+            placeholder="فیلتر تگ..."
+            search-placeholder="جستجوی تگ..."
+            include-empty-option
+            empty-label="همه"
+          />
+        </div>
         <button class="primary-btn" type="button" @click="loadProducts">جستجو</button>
         <button class="secondary-btn" type="button" @click="openCreatePopup">کالای جدید</button>
-        <button class="secondary-btn" type="button" @click="openQuickStartWizard">شروع سریع</button>
         <button class="tertiary-btn" type="button" @click="toggleAdvancedMode">
-          {{ showAdvanced ? 'ساده' : 'پیشرفته' }}
+          {{ showAdvanced ? 'کمتر' : 'فیلتر بیشتر' }}
         </button>
       </div>
       <div v-if="showAdvanced" class="toolbar advanced-toolbar">
@@ -42,6 +52,7 @@
 
     <p class="muted" v-if="loading">در حال بارگذاری محصولات...</p>
     <p class="error" v-if="error">{{ error }}</p>
+    <p class="success-msg" v-if="successMessage">{{ successMessage }}</p>
 
     <ManagementSurfaceCard :title="activeViewTitle" :subtitle="activeViewSubtitle">
       <template v-if="viewMode === 'tree'">
@@ -54,7 +65,7 @@
           <template #actions="{ node }">
             <div v-if="canOpenProductTreeNode(node)" class="actions">
               <button :class="toggleButtonClass(node)" type="button" @click.stop="toggleActive(node)">
-                {{ node.is_active ? 'غیرفعال کن' : 'فعال کن' }}
+                {{ visibilityButtonLabel(node) }}
               </button>
               <button
                 class="secondary-btn delete-btn"
@@ -91,17 +102,21 @@
               @row-click="openProductDetail"
             >
               <template #cell-item_code="{ row }">{{ displayProductCode(row) }}</template>
+              <template #cell-tags="{ row }">
+                <span class="tag-pill" v-for="t in (row.tags || []).slice(0, 3)" :key="t">{{ t }}</span>
+                <span class="tag-pill more" v-if="(row.tags || []).length > 3">+{{ (row.tags || []).length - 3 }}</span>
+              </template>
               <template #cell-base_price="{ value }">{{ formatMoney(value, currency) }}</template>
               <template #cell-stock_qty="{ value }">{{ formatStock(value) }}</template>
               <template #cell-is_active="{ value }">
-                <span :class="['state-pill', value ? 'on' : 'off']">
-                  {{ value ? 'فعال' : 'غیرفعال' }}
+                <span :class="['state-pill', isActiveValue(value) ? 'on' : 'off']">
+                  {{ visibilityStateLabel(value) }}
                 </span>
               </template>
               <template #cell-actions="{ row }">
                 <div class="actions">
                   <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                    {{ row.is_active ? 'غیرفعال کن' : 'فعال کن' }}
+                    {{ visibilityButtonLabel(row) }}
                   </button>
                   <button
                     class="secondary-btn delete-btn"
@@ -127,17 +142,21 @@
           @row-click="openProductDetail"
         >
           <template #cell-item_code="{ row }">{{ displayProductCode(row) }}</template>
-          <template #cell-base_price="{ value }">{{ formatMoney(value, currency) }}</template>
+              <template #cell-tags="{ row }">
+                <span class="tag-pill" v-for="t in (row.tags || []).slice(0, 3)" :key="t">{{ t }}</span>
+                <span class="tag-pill more" v-if="(row.tags || []).length > 3">+{{ (row.tags || []).length - 3 }}</span>
+              </template>
+              <template #cell-base_price="{ value }">{{ formatMoney(value, currency) }}</template>
           <template #cell-stock_qty="{ value }">{{ formatStock(value) }}</template>
           <template #cell-is_active="{ value }">
-            <span :class="['state-pill', value ? 'on' : 'off']">
-              {{ value ? 'فعال' : 'غیرفعال' }}
+            <span :class="['state-pill', isActiveValue(value) ? 'on' : 'off']">
+              {{ visibilityStateLabel(value) }}
             </span>
           </template>
           <template #cell-actions="{ row }">
             <div class="actions">
               <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                {{ row.is_active ? 'غیرفعال کن' : 'فعال کن' }}
+                {{ visibilityButtonLabel(row) }}
               </button>
               <button
                 class="secondary-btn delete-btn"
@@ -182,9 +201,13 @@
                   <div class="product-card__meta">
                     <p class="product-card__title">{{ row.title || '-' }}</p>
                     <p class="product-card__sub">{{ row.category_title || 'بدون دسته' }} • {{ displayProductCode(row) }}</p>
+                    <div class="product-card__tags" v-if="row.tags && row.tags.length">
+                      <span class="tag-pill" v-for="t in row.tags.slice(0, 4)" :key="t">{{ t }}</span>
+                      <span class="tag-pill more" v-if="row.tags.length > 4">+{{ row.tags.length - 4 }}</span>
+                    </div>
                   </div>
-                  <span :class="['state-pill', row.is_active ? 'on' : 'off']">
-                    {{ row.is_active ? 'فعال' : 'غیرفعال' }}
+                  <span :class="['state-pill', isProductActive(row) ? 'on' : 'off']">
+                    {{ visibilityStateLabel(row) }}
                   </span>
                 </div>
 
@@ -195,7 +218,7 @@
 
                 <div class="row-actions">
                   <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                    {{ row.is_active ? 'غیرفعال کن' : 'فعال کن' }}
+                    {{ visibilityButtonLabel(row) }}
                   </button>
                   <button
                     class="secondary-btn delete-btn"
@@ -230,9 +253,13 @@
               <div class="product-card__meta">
                 <p class="product-card__title">{{ row.title || '-' }}</p>
                 <p class="product-card__sub">{{ row.category_title || 'بدون دسته' }} • {{ displayProductCode(row) }}</p>
+                <div class="product-card__tags" v-if="row.tags && row.tags.length">
+                  <span class="tag-pill" v-for="t in row.tags.slice(0, 4)" :key="t">{{ t }}</span>
+                  <span class="tag-pill more" v-if="row.tags.length > 4">+{{ row.tags.length - 4 }}</span>
+                </div>
               </div>
-              <span :class="['state-pill', row.is_active ? 'on' : 'off']">
-                {{ row.is_active ? 'فعال' : 'غیرفعال' }}
+              <span :class="['state-pill', isProductActive(row) ? 'on' : 'off']">
+                {{ visibilityStateLabel(row) }}
               </span>
             </div>
 
@@ -243,7 +270,7 @@
 
             <div class="row-actions">
               <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                {{ row.is_active ? 'غیرفعال کن' : 'فعال کن' }}
+                {{ visibilityButtonLabel(row) }}
               </button>
               <button
                 class="secondary-btn delete-btn"
@@ -273,14 +300,14 @@
           {{ formatMoney(row.base_price, currency) }} | موجودی {{ formatStock(row.stock_qty) }}
         </template>
         <template #overlay="{ row }">
-          <span class="gallery-status" :class="row.is_active ? 'on' : 'off'">
-            {{ row.is_active ? 'فعال' : 'غیرفعال' }}
+          <span class="gallery-status" :class="isProductActive(row) ? 'on' : 'off'">
+            {{ visibilityStateLabel(row) }}
           </span>
         </template>
         <template #actions="{ row }">
           <div class="actions" @click.stop>
             <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-              {{ row.is_active ? 'غیرفعال کن' : 'فعال کن' }}
+              {{ visibilityButtonLabel(row) }}
             </button>
             <button
               class="secondary-btn delete-btn"
@@ -361,8 +388,16 @@
           توضیح کوتاه
           <textarea class="textarea" v-model.trim="createForm.description" placeholder="توضیح کوتاه برای تیم و نمایش اولیه"></textarea>
         </label>
-        <label class="check"><input type="checkbox" v-model="createForm.restaurant_enabled" /> فعال در منوی رستوران</label>
-        <label class="check"><input type="checkbox" v-model="createForm.show_in_print" /> نمایش در پرینت</label>
+        <ManagementToggleSwitch
+          v-model="createForm.restaurant_enabled"
+          label="نمایش در منو"
+          hint="اگر روشن باشد مشتری محصول را می‌بیند."
+        />
+        <ManagementToggleSwitch
+          v-model="createForm.show_in_print"
+          label="نمایش در چاپ"
+          hint="برای رسید و گزارش چاپی استفاده می‌شود."
+        />
       </div>
       <p class="error" v-if="createError">{{ createError }}</p>
       <template #footer>
@@ -468,6 +503,7 @@ import ManagementGalleryView from '@/components/management/ManagementGalleryView
 import ManagementMobileCardList from '@/components/management/ManagementMobileCardList.vue'
 import ManagementTreeView from '@/components/management/ManagementTreeView.vue'
 import ManagementProductGrouping from '@/components/management/ManagementProductGrouping.vue'
+import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
 import NumericInput from '@/components/NumericInput.vue'
@@ -483,10 +519,13 @@ import { formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const error = ref('')
+const successMessage = ref('')
 const products = ref([])
 const currency = ref('IRR')
 const search = ref('')
 const activeOnly = ref(false)
+const selectedTag = ref('')
+const availableTagOptions = ref([])
 const showAdvanced = ref(false)
 const quickStartWizardOpen = ref(false)
 const wizardStep = ref(1)
@@ -518,11 +557,13 @@ const bootFieldOptions = ref({
 const createForm = ref(createDefaultForm())
 const MOBILE_BREAKPOINT = 760
 const isMobileView = ref(getInitialMobileView())
+const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'restaurant.management.productVisibilityOverrides'
 
 const columns = [
   { key: 'item_code', label: 'کد/نام' },
   { key: 'title', label: 'نام' },
   { key: 'category_title', label: 'دسته' },
+  { key: 'tags', label: 'تگ‌ها' },
   { key: 'base_price', label: 'قیمت' },
   { key: 'stock_qty', label: 'موجودی' },
   { key: 'is_active', label: 'وضعیت' },
@@ -595,12 +636,30 @@ const createSubcategoryOptions = computed(() => {
 const visibleProducts = computed(() => {
   let rows = [...products.value]
 
+  if (activeOnly.value) {
+    rows = rows.filter((row) => isProductActive(row))
+  }
+
+  const query = normalizeSearchText(search.value)
+  if (query) {
+    rows = rows.filter((row) => productMatchesSearch(row, query))
+  }
+
   const selectedGroups = Array.isArray(selectedCategorySlugs.value)
     ? selectedCategorySlugs.value.map((value) => String(value || '').trim()).filter(Boolean)
     : []
   if (selectedGroups.length) {
     const selectedSet = new Set(selectedGroups)
     rows = rows.filter((row) => selectedSet.has(String(row?.category_slug || '').trim()))
+  }
+
+  // Tag filter
+  const tag = String(selectedTag.value || '').trim()
+  if (tag) {
+    rows = rows.filter((row) => {
+      const tags = Array.isArray(row?.tags) ? row?.tags : []
+      return tags.some((t) => String(t).trim() === tag)
+    })
   }
 
   if (sortBy.value === 'title_asc') {
@@ -686,8 +745,8 @@ const productTreeNodes = computed(() => {
       caption: `${formatMoney(row?.base_price || 0, currency.value)} • موجودی ${formatStock(row?.stock_qty || 0)}`,
       badge: 'محصول',
       status: {
-        label: row?.is_active ? 'فعال' : 'غیرفعال',
-        tone: row?.is_active ? 'success' : 'warning',
+        label: visibilityStateLabel(row),
+        tone: isProductActive(row) ? 'success' : 'warning',
       },
       children: [],
     })
@@ -704,10 +763,24 @@ async function loadProducts() {
   error.value = ''
   try {
     const payload = await listManagementProducts({
-      search: search.value,
-      active_only: activeOnly.value ? 1 : 0,
+      search: '',
+      active_only: 0,
+      tag: '',
     })
-    products.value = payload.products || []
+    products.value = applyVisibilityOverrides(payload.products || [])
+
+    // Build available tag options from loaded products
+    const tagSet = new Set()
+    for (const p of products.value || []) {
+      for (const t of (p.tags || [])) {
+        const trimmed = String(t || '').trim()
+        if (trimmed) tagSet.add(trimmed)
+      }
+    }
+    availableTagOptions.value = Array.from(tagSet)
+      .sort((a, b) => a.localeCompare(b, 'fa'))
+      .map(t => ({ value: t, label: t }))
+
     if (!bootFieldOptions.value.uoms.length || !bootFieldOptions.value.item_groups.length) {
       await loadFieldOptionsForCreate()
     }
@@ -719,12 +792,30 @@ async function loadProducts() {
 }
 
 async function toggleActive(row) {
+  if (!row?.name) {
+    error.value = '❌ شناسه محصول یافت نشد.'
+    return
+  }
   error.value = ''
+  successMessage.value = ''
+  const previousState = isProductActive(row) ? 1 : 0
+  const next = previousState ? 0 : 1
   try {
-    const next = row.is_active ? 0 : 1
-    await setManagementProductActive(row.name, next)
     row.is_active = next
+    rememberVisibilityOverride(row.name, next)
+    products.value = products.value.map((product) =>
+      String(product?.name || '') === String(row.name || '') ? { ...product, is_active: next } : product,
+    )
+    await setManagementProductActive(row.name, next)
+    await loadProducts()
+    rememberVisibilityOverride(row.name, next)
+    products.value = products.value.map((product) =>
+      String(product?.name || '') === String(row.name || '') ? { ...product, is_active: next } : product,
+    )
+    successMessage.value = next ? 'محصول در سایت و منو نمایش داده می‌شود.' : 'محصول از سایت و منو پنهان شد.'
+    setTimeout(() => { successMessage.value = '' }, 3000)
   } catch (errObj) {
+    row.is_active = previousState
     error.value = errObj.message || '❌ متأسفانه تغییر وضعیت محصول ناموفق بود. لطفاً دوباره تلاش کنید.'
   }
 }
@@ -770,17 +861,21 @@ async function removeProduct(row) {
   } catch (errObj) {
     if (isLinkedDeleteError(errObj)) {
       const disableConfirmed = window.confirm(
-        `❌ این کالا به اسناد فروش یا انبار متصل است و قابل حذف نیست.\n\n✅ پیشنهاد: می‌توانید آن را غیرفعال کنید تا در منو نمایش داده نشود.\n\nآیا می‌خواهید کالای «${itemLabel}» را غیرفعال کنید؟`,
+        `این کالا به اسناد فروش یا انبار متصل است و قابل حذف نیست.\n\nمی‌توانید فقط نمایش آن را در سایت خاموش کنید؛ خود کالا در ERPNext فعال می‌ماند.\n\nآیا می‌خواهید کالای «${itemLabel}» از سایت پنهان شود؟`,
       )
       if (!disableConfirmed) {
         return
       }
       try {
-        await deleteManagementProduct(itemName, { allow_archive_on_link: 1, force_delete: 0 })
-        window.alert(`✅ کالای «${itemLabel}» غیرفعال شد و دیگر در منو نمایش داده نمی‌شود.`)
+        await setManagementProductActive(itemName, 0)
+        rememberVisibilityOverride(itemName, 0)
+        products.value = products.value.map((product) =>
+          String(product?.name || '') === itemName ? { ...product, is_active: 0 } : product,
+        )
+        window.alert(`کالای «${itemLabel}» فقط از سایت پنهان شد و در ERPNext غیرفعال نشد.`)
         await loadProducts()
       } catch (archiveErr) {
-        error.value = archiveErr.message || `❌ متأسفانه غیرفعال‌سازی کالای «${itemLabel}» ناموفق بود. لطفاً دوباره تلاش کنید.`
+        error.value = archiveErr.message || `پنهان کردن کالای «${itemLabel}» از سایت ناموفق بود. لطفاً دوباره تلاش کنید.`
       }
       return
     }
@@ -811,6 +906,99 @@ function resolveImage(row) {
   return String(row?.image || row?.website_image || '').trim()
 }
 
+function isActiveValue(value) {
+  return value === true || Number(value || 0) === 1 || String(value || '').trim() === '1'
+}
+
+function isProductActive(row) {
+  return isActiveValue(row?.is_active)
+}
+
+function visibilityStateLabel(source) {
+  const value = source && typeof source === 'object' ? source.is_active : source
+  return isActiveValue(value) ? 'نمایش در سایت' : 'پنهان از سایت'
+}
+
+function visibilityButtonLabel(row) {
+  return isProductActive(row) ? 'پنهان از سایت' : 'نمایش در سایت'
+}
+
+function readVisibilityOverrides() {
+  if (typeof window === 'undefined') {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(PRODUCT_VISIBILITY_OVERRIDES_KEY) || '{}')
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeVisibilityOverrides(overrides) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.localStorage.setItem(PRODUCT_VISIBILITY_OVERRIDES_KEY, JSON.stringify(overrides || {}))
+  } catch {
+    // Ignore local persistence failures.
+  }
+}
+
+function rememberVisibilityOverride(itemName, active) {
+  const name = String(itemName || '').trim()
+  if (!name) {
+    return
+  }
+  const overrides = readVisibilityOverrides()
+  overrides[name] = Number(active || 0) ? 1 : 0
+  writeVisibilityOverrides(overrides)
+}
+
+function applyVisibilityOverrides(rows = []) {
+  const overrides = readVisibilityOverrides()
+  return (rows || []).map((row) => {
+    const name = String(row?.name || '').trim()
+    if (name && Object.prototype.hasOwnProperty.call(overrides, name)) {
+      return { ...row, is_active: Number(overrides[name] || 0) ? 1 : 0 }
+    }
+    return row
+  })
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[ي]/g, 'ی')
+    .replace(/[ك]/g, 'ک')
+    .replace(/\u200c/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('fa-IR')
+}
+
+function productMatchesSearch(row, normalizedQuery) {
+  if (!normalizedQuery) {
+    return true
+  }
+  const tags = Array.isArray(row?.tags) ? row.tags : []
+  const haystack = [
+    row?.title,
+    row?.item_name,
+    row?.item_code,
+    row?.name,
+    row?.category_title,
+    row?.category,
+    row?.subcategory_title,
+    row?.short_desc,
+    ...tags,
+  ]
+    .map(normalizeSearchText)
+    .filter(Boolean)
+    .join(' ')
+  return haystack.includes(normalizedQuery)
+}
+
 function initials(value) {
   const chunks = String(value || '')
     .trim()
@@ -825,7 +1013,7 @@ function productDetailUrl(row) {
 }
 
 function toggleButtonClass(row) {
-  return row?.is_active ? 'primary-btn status-toggle-btn' : 'secondary-btn status-toggle-btn status-toggle-btn--inactive'
+  return isProductActive(row) ? 'primary-btn status-toggle-btn' : 'secondary-btn status-toggle-btn status-toggle-btn--inactive'
 }
 
 async function loadMenuCategories() {
@@ -1200,6 +1388,13 @@ watch(
 )
 
 watch(
+  () => selectedTag.value,
+  () => {
+    loadProducts()
+  },
+)
+
+watch(
   () => createForm.value.restaurant_category,
   () => {
     const current = String(createForm.value.restaurant_subcategory || '').trim()
@@ -1264,13 +1459,30 @@ loadProducts()
 <style scoped>
 .toolbar {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   align-items: center;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 20;
+  overflow: visible;
+}
+
+.products-filter-card {
+  position: relative;
+  z-index: 35;
+  overflow: visible !important;
 }
 
 .toolbar .input {
   width: min(420px, 100%);
+  min-height: 2.75rem;
+  border-radius: 8px;
+}
+
+.toolbar-toggle {
+  min-height: 2.75rem;
+  width: auto;
+  min-width: 8.25rem;
 }
 
 .view-switcher {
@@ -1292,16 +1504,17 @@ loadProducts()
 }
 
 .group-block {
-  border-radius: 18px;
+  border-radius: 8px;
 }
 
 .group-header-btn {
   width: 100%;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.07);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 0.95);
-  border-radius: 12px;
-  padding: 0.5rem 0.62rem;
+  min-height: 2.85rem;
+  border: 1px solid rgb(226 232 240 / 1);
+  background: #fbfaf8;
+  color: #2b211a;
+  border-radius: 8px;
+  padding: 0.58rem 0.7rem;
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
@@ -1333,23 +1546,31 @@ loadProducts()
 
 .state-pill {
   border-radius: 999px;
-  padding: 0.12rem 0.55rem;
+  padding: 0.2rem 0.65rem;
   font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .state-pill.on {
-  background: rgb(var(--palette-june-bud-rgb) / 0.36);
-  color: var(--accent-green);
+  background: rgb(220 252 231 / 0.9);
+  color: #166534;
 }
 
 .state-pill.off {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.18);
-  color: var(--accent-gold);
+  background: rgb(254 243 199 / 0.95);
+  color: #92400e;
 }
 
 .error {
   margin: 0;
   color: var(--danger);
+}
+
+.success-msg {
+  margin: 0;
+  color: var(--success);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .create-form {
@@ -1378,7 +1599,7 @@ loadProducts()
 .actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.45rem;
 }
 
 .status-toggle-btn {
@@ -1387,8 +1608,9 @@ loadProducts()
 
 .delete-btn {
   min-width: 70px;
-  border-color: rgb(220, 38, 38);
-  color: rgb(220, 38, 38);
+  border-color: rgb(220 38 38 / 0.34);
+  color: rgb(185 28 28);
+  background: rgb(254 242 242);
 }
 
 .delete-btn:hover:not(:disabled) {
@@ -1402,9 +1624,9 @@ loadProducts()
 }
 
 .status-toggle-btn--inactive {
-  border-color: rgb(var(--palette-deep-saffron-rgb) / 0.4);
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.12);
-  color: rgb(var(--palette-deep-saffron-rgb) / 1);
+  border-color: rgb(5 150 105 / 0.28);
+  background: rgb(236 253 245);
+  color: rgb(4 120 87);
 }
 
 .status-toggle-btn--inactive:hover {
@@ -1414,32 +1636,34 @@ loadProducts()
 
 .row-actions {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
 }
 
 .product-card.clickable {
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .product-card.clickable:hover {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.24);
-  box-shadow: 0 8px 22px rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-color: rgb(124 90 66 / 0.28);
+  box-shadow: 0 18px 40px rgb(15 23 42 / 0.1);
+  transform: translateY(-2px);
 }
 
 .product-card__head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .product-card__media {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+  border: 1px solid rgb(226 232 240 / 1);
+  background: #f7f1ea;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -1452,7 +1676,7 @@ loadProducts()
 }
 
 .product-card__fallback {
-  color: rgb(var(--palette-deep-sapphire-rgb) / 0.72);
+  color: #5f402d;
   font-size: 0.84rem;
   font-weight: 700;
 }
@@ -1464,22 +1688,28 @@ loadProducts()
 
 .product-card__title {
   margin: 0;
-  font-size: 0.88rem;
+  color: #2b211a;
+  font-size: 0.96rem;
   font-weight: 800;
+  line-height: 1.45;
 }
 
 .product-card__sub {
   margin: 0.18rem 0 0;
-  font-size: 0.78rem;
-  color: rgba(16, 24, 40, 0.74);
+  font-size: 0.82rem;
+  color: #74685f;
+  line-height: 1.6;
 }
 
 .product-card__totals {
   display: flex;
   justify-content: space-between;
   gap: 0.45rem;
-  font-size: 0.8rem;
-  color: rgba(16, 24, 40, 0.8);
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: #fbfaf8;
+  font-size: 0.84rem;
+  color: #4a3b31;
 }
 
 .product-card__totals p {
@@ -1497,20 +1727,20 @@ loadProducts()
 }
 
 .gallery-status.on {
-  background: rgb(var(--palette-june-bud-rgb) / 0.85);
-  color: var(--accent-green);
+  background: rgb(220 252 231 / 0.95);
+  color: #166534;
 }
 
 .gallery-status.off {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.2);
-  color: var(--accent-gold);
+  background: rgb(254 243 199 / 0.95);
+  color: #92400e;
 }
 
 @media (max-width: 760px) {
   .toolbar {
-    gap: 0.35rem;
+    gap: 0.45rem;
     width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .toolbar .input {
@@ -1525,7 +1755,8 @@ loadProducts()
     flex: 1 1 auto;
     min-width: 0;
     font-size: 0.8rem;
-    padding: 0.44rem 0.6rem;
+    min-height: 2.75rem;
+    padding: 0.52rem 0.65rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1533,6 +1764,11 @@ loadProducts()
 
   .toolbar .check {
     flex: 0 0 auto;
+  }
+
+  .toolbar-toggle {
+    flex: 1 1 100%;
+    width: 100%;
   }
 
   .create-form {
@@ -1565,8 +1801,8 @@ loadProducts()
   }
 
   .product-card {
-    padding: 0.62rem;
-    gap: 0.45rem;
+    padding: 0.75rem;
+    gap: 0.65rem;
   }
 
   .product-card__head {
@@ -1575,9 +1811,9 @@ loadProducts()
   }
 
   .product-card__media {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
   }
 
   .product-card__title {
@@ -1615,7 +1851,7 @@ loadProducts()
 .advanced-toolbar {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-top: 1px solid rgb(226 232 240 / 1);
 }
 
 .wizard-form {
@@ -1644,8 +1880,9 @@ loadProducts()
 
 .info-box {
   padding: 0.75rem 1rem;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
-  border-radius: 0.5rem;
+  background: #f7f1ea;
+  border: 1px solid rgb(124 90 66 / 0.14);
+  border-radius: 8px;
   font-size: 0.85rem;
   color: var(--text-secondary);
   line-height: 1.5;
@@ -1653,17 +1890,67 @@ loadProducts()
 
 .tertiary-btn {
   background: transparent;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  border: 1px solid rgb(226 232 240 / 1);
   color: var(--text-secondary);
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 0.85rem;
   transition: all 0.2s;
 }
 
 .tertiary-btn:hover {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.05);
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.3);
+  background: #f7f1ea;
+  border-color: rgb(124 90 66 / 0.22);
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0.18rem 0.52rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  margin-inline-end: 0.25rem;
+  margin-bottom: 0.15rem;
+}
+
+.tag-pill.more {
+  background: #e4ded6;
+  color: #4a3b31;
+  font-weight: 600;
+}
+
+.product-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 180px;
+  position: relative;
+  z-index: 25;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card.clickable,
+  .product-card.clickable:hover {
+    transform: none;
+  }
+}
+
+.filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 </style>

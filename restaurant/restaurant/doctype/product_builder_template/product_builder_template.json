@@ -1,0 +1,205 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:PBT-{#####}",
+  "creation": "2026-06-21 20:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "title",
+    "slug",
+    "description",
+    "section_break_steps",
+    "steps",
+    "section_break_display",
+    "layout_mode",
+    "show_summary_panel",
+    "show_price_live",
+    "column_break_1",
+    "primary_color",
+    "background_image",
+    "section_break_behavior",
+    "allow_skip_steps",
+    "allow_go_back",
+    "require_all_required",
+    "max_total_selections",
+    "section_break_status",
+    "is_active",
+    "version"
+  ],
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Template Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "slug",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "URL Slug",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "fieldname": "section_break_steps",
+      "fieldtype": "Section Break",
+      "label": "Steps Configuration"
+    },
+    {
+      "fieldname": "steps",
+      "fieldtype": "Table",
+      "label": "Steps",
+      "options": "Product Builder Step",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_break_display",
+      "fieldtype": "Section Break",
+      "label": "Display Settings"
+    },
+    {
+      "default": "vertical_steps",
+      "fieldname": "layout_mode",
+      "fieldtype": "Select",
+      "label": "Layout Mode",
+      "options": "vertical_steps\nhorizontal_tabs\naccordion\nwizard",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "show_summary_panel",
+      "fieldtype": "Check",
+      "label": "Show Summary Panel"
+    },
+    {
+      "default": "1",
+      "fieldname": "show_price_live",
+      "fieldtype": "Check",
+      "label": "Show Live Price"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "#1a73e8",
+      "fieldname": "primary_color",
+      "fieldtype": "Data",
+      "label": "Primary Color"
+    },
+    {
+      "fieldname": "background_image",
+      "fieldtype": "Attach Image",
+      "label": "Background Image"
+    },
+    {
+      "fieldname": "section_break_behavior",
+      "fieldtype": "Section Break",
+      "label": "Behavior Settings"
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_skip_steps",
+      "fieldtype": "Check",
+      "label": "Allow Skipping Optional Steps"
+    },
+    {
+      "default": "1",
+      "fieldname": "allow_go_back",
+      "fieldtype": "Check",
+      "label": "Allow Going Back"
+    },
+    {
+      "default": "1",
+      "fieldname": "require_all_required",
+      "fieldtype": "Check",
+      "label": "Require All Required Options"
+    },
+    {
+      "default": "0",
+      "fieldname": "max_total_selections",
+      "fieldtype": "Int",
+      "label": "Max Total Selections"
+    },
+    {
+      "fieldname": "section_break_status",
+      "fieldtype": "Section Break",
+      "label": "Status"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Active"
+    },
+    {
+      "default": "1.0.0",
+      "fieldname": "version",
+      "fieldtype": "Data",
+      "label": "Version"
+    }
+  ],
+  "links": [],
+  "modified": "2026-06-21 20:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Product Builder Template",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts User",
+      "select": 1
+    },
+    {
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "All",
+      "select": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

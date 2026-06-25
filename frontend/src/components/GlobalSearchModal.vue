@@ -3,12 +3,16 @@
     <Transition name="search-modal">
       <div
         v-if="searchOpen"
+        ref="overlayEl"
         class="search-overlay"
         dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="جستجوی سراسری"
         @click.self="closeSearch"
         @keydown.esc="closeSearch"
       >
-        <div class="search-box" role="dialog" aria-modal="true" aria-label="جستجوی سراسری">
+        <div class="search-box">
           <div class="search-input-row">
             <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
               <circle cx="11" cy="11" r="8" />
@@ -101,8 +105,28 @@ watch(searchOpen, async (val) => {
     results.value = []
     await nextTick()
     inputEl.value?.focus()
+    document.addEventListener('keydown', onKeyTrap)
+  } else {
+    document.removeEventListener('keydown', onKeyTrap)
   }
 })
+
+const overlayEl = ref(null)
+function onKeyTrap(e) {
+  if (e.key !== 'Tab' || !overlayEl.value) return
+  const focusables = overlayEl.value.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])')
+  const arr = Array.from(focusables)
+  if (!arr.length) return
+  const first = arr[0]
+  const last = arr[arr.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 
 watch(query, (val) => {
   clearTimeout(debounceTimer)

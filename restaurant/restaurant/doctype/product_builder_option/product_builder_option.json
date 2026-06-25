@@ -1,0 +1,150 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-06-21 20:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "option_label",
+    "option_key",
+    "option_description",
+    "sort_order",
+    "item",
+    "base_price_delta",
+    "price_type",
+    "price_percentage",
+    "column_break_1",
+    "is_default",
+    "is_available",
+    "max_qty",
+    "image",
+    "color_code",
+    "nutrition_json",
+    "allergen_tags",
+    "stock_impact_json",
+    "linked_step_key",
+    "disable_if"
+  ],
+  "fields": [
+    {
+      "fieldname": "option_label",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Option Label",
+      "reqd": 1
+    },
+    {
+      "fieldname": "option_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Option Key",
+      "reqd": 1
+    },
+    {
+      "fieldname": "option_description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "default": "0",
+      "fieldname": "sort_order",
+      "fieldtype": "Int",
+      "label": "Sort Order"
+    },
+    {
+      "fieldname": "item",
+      "fieldtype": "Link",
+      "label": "Linked Item",
+      "options": "Item"
+    },
+    {
+      "default": "0",
+      "fieldname": "base_price_delta",
+      "fieldtype": "Currency",
+      "label": "Base Price Delta"
+    },
+    {
+      "default": "fixed",
+      "fieldname": "price_type",
+      "fieldtype": "Select",
+      "label": "Price Type",
+      "options": "fixed\npercentage\nmultiply",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "price_percentage",
+      "fieldtype": "Percent",
+      "label": "Price Percentage"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "0",
+      "fieldname": "is_default",
+      "fieldtype": "Check",
+      "label": "Selected by Default"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_available",
+      "fieldtype": "Check",
+      "label": "Available"
+    },
+    {
+      "default": "1",
+      "fieldname": "max_qty",
+      "fieldtype": "Int",
+      "label": "Max Quantity"
+    },
+    {
+      "fieldname": "image",
+      "fieldtype": "Attach Image",
+      "label": "Option Image"
+    },
+    {
+      "fieldname": "color_code",
+      "fieldtype": "Data",
+      "label": "Color Code"
+    },
+    {
+      "fieldname": "nutrition_json",
+      "fieldtype": "JSON",
+      "label": "Nutrition Data"
+    },
+    {
+      "fieldname": "allergen_tags",
+      "fieldtype": "Small Text",
+      "label": "Allergen Tags"
+    },
+    {
+      "fieldname": "stock_impact_json",
+      "fieldtype": "JSON",
+      "label": "Stock Impact"
+    },
+    {
+      "fieldname": "linked_step_key",
+      "fieldtype": "Data",
+      "label": "Linked Step Key"
+    },
+    {
+      "fieldname": "disable_if",
+      "fieldtype": "JSON",
+      "label": "Disable If"
+    }
+  ],
+  "istable": 1,
+  "links": [],
+  "modified": "2026-06-21 20:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Product Builder Option",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "idx",
+  "sort_order": "ASC",
+  "states": []
+}

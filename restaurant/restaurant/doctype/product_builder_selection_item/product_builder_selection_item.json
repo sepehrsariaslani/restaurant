@@ -1,0 +1,82 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-06-21 20:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "step_key",
+    "step_title",
+    "option_key",
+    "option_label",
+    "qty",
+    "price_delta",
+    "item",
+    "sort_order"
+  ],
+  "fields": [
+    {
+      "fieldname": "step_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Step Key",
+      "reqd": 1
+    },
+    {
+      "fieldname": "step_title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Step Title"
+    },
+    {
+      "fieldname": "option_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Option Key",
+      "reqd": 1
+    },
+    {
+      "fieldname": "option_label",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Option Label",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "qty",
+      "fieldtype": "Int",
+      "label": "Quantity"
+    },
+    {
+      "default": "0",
+      "fieldname": "price_delta",
+      "fieldtype": "Currency",
+      "label": "Price Delta"
+    },
+    {
+      "fieldname": "item",
+      "fieldtype": "Link",
+      "label": "Linked Item",
+      "options": "Item"
+    },
+    {
+      "default": "0",
+      "fieldname": "sort_order",
+      "fieldtype": "Int",
+      "label": "Sort Order"
+    }
+  ],
+  "istable": 1,
+  "links": [],
+  "modified": "2026-06-21 20:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Product Builder Selection Item",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "idx",
+  "sort_order": "ASC",
+  "states": []
+}

@@ -114,27 +114,8 @@ const resolvedCategories = computed(() =>
 const panelRef = ref(null)
 
 async function toggleCategory(cat) {
-  if (selectedSlug.value === cat.slug) {
-    close()
-    return
-  }
-
-  selectedSlug.value = cat.slug
-  selectedCategory.value = cat
-  items.value = []
-  loadingItems.value = true
-
-  await nextTick()
-  scrollToPanel()
-
-  try {
-    const result = await getMenuItems({ category_slug: cat.slug, page_size: 20 })
-    items.value = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : []
-  } catch {
-    items.value = []
-  } finally {
-    loadingItems.value = false
-  }
+  // Navigate to menu page with category filter
+  window.location.href = `/menu?category=${encodeURIComponent(cat.slug)}`
 }
 
 function scrollToPanel() {

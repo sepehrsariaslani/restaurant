@@ -1,0 +1,140 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "allow_copy": 1,
+  "autoname": "format:SG-{#####}",
+  "creation": "2026-06-21 20:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "title",
+    "description",
+    "step_title",
+    "step_key",
+    "selection_mode",
+    "min_select",
+    "max_select",
+    "is_required",
+    "options",
+    "is_active"
+  ],
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Group Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "fieldname": "step_title",
+      "fieldtype": "Data",
+      "label": "Default Step Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "step_key",
+      "fieldtype": "Data",
+      "label": "Step Key",
+      "reqd": 1
+    },
+    {
+      "default": "single",
+      "fieldname": "selection_mode",
+      "fieldtype": "Select",
+      "label": "Selection Mode",
+      "options": "single\nmultiple\nquantity",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "min_select",
+      "fieldtype": "Int",
+      "label": "Min Selections"
+    },
+    {
+      "default": "0",
+      "fieldname": "max_select",
+      "fieldtype": "Int",
+      "label": "Max Selections"
+    },
+    {
+      "default": "0",
+      "fieldname": "is_required",
+      "fieldtype": "Check",
+      "label": "Required"
+    },
+    {
+      "fieldname": "options",
+      "fieldtype": "Table",
+      "label": "Default Options",
+      "options": "Product Builder Option"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Active"
+    }
+  ],
+  "links": [],
+  "modified": "2026-06-21 20:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Product Builder Step Group",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Accounts User",
+      "select": 1
+    },
+    {
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "All",
+      "select": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

@@ -4353,12 +4353,6 @@ kbd {
   }
 }
 
-@media (max-width: 1260px) {
-  .print-editor-grid {
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 1040px) {
   .pos-shell {
     grid-template-columns: 1fr;
@@ -4381,6 +4375,35 @@ kbd {
 }
 
 @media (max-width: 720px) {
+  .pos-fullpage {
+    padding: 0.3rem;
+    height: auto;
+    overflow: visible;
+    min-height: 100vh;
+  }
+
+  .pos-shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+    gap: 0.4rem;
+  }
+
+  .left-col {
+    grid-template-rows: auto auto;
+    overflow: visible;
+  }
+
+  .left-col-tabs {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .products-col,
+  .cart-col {
+    overflow: visible;
+    min-height: 300px;
+  }
+
   .open-invoices-head,
   .open-invoice-detail > header {
     flex-direction: column;
@@ -4410,6 +4433,14 @@ kbd {
 
   .pos-profile-actions {
     justify-self: start;
+  }
+
+  .ticket-tabs-bar {
+    padding: 0.3rem 0.4rem 0;
+  }
+
+  .recent-orders-filter {
+    grid-template-columns: 1fr;
   }
 }
 

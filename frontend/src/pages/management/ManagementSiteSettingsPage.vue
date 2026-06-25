@@ -280,6 +280,19 @@
         </div>
       </ManagementSurfaceCard>
 
+      <ManagementSurfaceCard title="پیش‌نمایش کارت محصول" subtitle="نمایش زنده کارت با استایل انتخابی">
+        <div class="card-preview-row">
+          <div class="card-preview-item">
+            <MenuItemCard
+              :key="`card-preview-${webSettings.card_variant}`"
+              :item="previewCardItem"
+              :card-variant="webSettings.card_variant"
+              :currency="'TOMAN'"
+            />
+          </div>
+        </div>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard title="پیش‌نمایش زنده" subtitle="با تغییر هر گزینه، همین‌جا کامپوننت واقعی را می‌بینی.">
         <div class="site-preview-shell">
           <PublicHeader
@@ -763,6 +776,7 @@ import ManagementEditableTable from '@/components/management/ManagementEditableT
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import MenuItemCard from '@/components/MenuItemCard.vue'
 import { getManagementSiteSettings, setManagementSiteSettings } from '@/utils/api'
 import { composeFaqAnswer, parseFaqAnswer } from '@/utils/faqMeta'
 import {
@@ -1116,6 +1130,17 @@ function syncBootFromWebSettings(payload = {}) {
     menu_search_variant: normalizeMenuSearchSetting(nextWeb.menu_search_variant || currentBranding.menu_search_variant),
     hero_section_variant: String(nextWeb.hero_section_variant || currentBranding.hero_section_variant || 'off').trim() || 'off',
     footer_variant: String(nextWeb.footer_variant || currentBranding.footer_variant || 'full').trim() || 'full',
+    card_variant: String(nextWeb.card_variant || currentBranding.card_variant || 'classic').trim() || 'classic',
+    hero_section_title: String(nextWeb.hero_section_title || currentBranding.hero_section_title || '').trim(),
+    hero_section_description: String(nextWeb.hero_section_description || currentBranding.hero_section_description || '').trim(),
+    hero_section_cta: String(nextWeb.hero_section_cta || currentBranding.hero_section_cta || '').trim(),
+    footer_description: String(nextWeb.footer_description || currentBranding.footer_description || '').trim(),
+    footer_phone: String(nextWeb.footer_phone || currentBranding.footer_phone || '').trim(),
+    footer_email: String(nextWeb.footer_email || currentBranding.footer_email || '').trim(),
+    footer_address: String(nextWeb.footer_address || currentBranding.footer_address || '').trim(),
+    footer_instagram: String(nextWeb.footer_instagram || currentBranding.footer_instagram || '').trim(),
+    footer_telegram: String(nextWeb.footer_telegram || currentBranding.footer_telegram || '').trim(),
+    footer_copyright: String(nextWeb.footer_copyright || currentBranding.footer_copyright || '').trim(),
   }
 
   target.web_settings = {
@@ -1133,6 +1158,33 @@ function syncBootFromWebSettings(payload = {}) {
   }
   if (Array.isArray(payload?.faq_items)) {
     target.faq_items = deepCopy(payload.faq_items)
+  }
+
+  // Sync loader_settings from payload or web_settings
+  if (payload?.loader_settings && typeof payload.loader_settings === 'object') {
+    target.loader_settings = {
+      ...(target.loader_settings || {}),
+      ...payload.loader_settings,
+    }
+  } else {
+    // Fallback: extract loader fields from web_settings
+    const loaderKeys = [
+      'loader_enabled', 'loader_mode', 'loader_preset', 'loader_title',
+      'loader_subtitle', 'loader_min_duration_ms', 'loader_overlay_color',
+      'loader_accent_color', 'loader_custom_code',
+    ]
+    const nextLoader = {}
+    for (const key of loaderKeys) {
+      if (key in nextWeb) {
+        nextLoader[key] = nextWeb[key]
+      }
+    }
+    if (Object.keys(nextLoader).length > 0) {
+      target.loader_settings = {
+        ...(target.loader_settings || {}),
+        ...nextLoader,
+      }
+    }
   }
 
   window._BOOT = target
@@ -1300,6 +1352,18 @@ const previewBranding = computed(() => ({
   footer_instagram: String(webSettings.footer_instagram || '').trim(),
   footer_telegram: String(webSettings.footer_telegram || '').trim(),
   footer_copyright: String(webSettings.footer_copyright || '').trim(),
+}))
+
+const previewCardItem = computed(() => ({
+  title: 'پیتزا پپرونی',
+  short_desc: 'پیتزا با پپرونی تازه و پنیر موزارلا خوشمزه',
+  category_title: 'غذای اصلی',
+  base_price: 280000,
+  image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=60',
+  slug: 'sample-item',
+  item_code: 'SAMPLE-001',
+  tags: ['پرفروش', 'پپرونی'],
+  restaurant_enabled: 1,
 }))
 
 const previewHeroTitle = computed(() => String(webSettings.hero_section_title || previewBranding.value.hero_title || '').trim())
@@ -1986,6 +2050,17 @@ loadSettings()
 .site-preview-shell {
   display: grid;
   gap: 0.85rem;
+}
+
+.card-preview-row {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.card-preview-item {
+  width: 100%;
+  max-width: 360px;
 }
 
 .site-preview-hero {

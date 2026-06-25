@@ -2,28 +2,39 @@
   <section class="image-manager">
     <label class="upload-drop">
       <input ref="fileInputRef" class="hidden-input" type="file" accept="image/*" multiple @change="onFileChange" />
+      <span class="upload-icon" aria-hidden="true">
+        <UploadCloudIcon :size="22" />
+      </span>
       <div class="upload-copy">
         <strong>{{ uploading ? 'در حال آپلود...' : 'افزودن تصویر جدید' }}</strong>
-        <small>فایل تصویر را انتخاب کنید یا روی این بخش بزنید.</small>
+        <small>عکس محصول را انتخاب کنید؛ می‌توانید چند تصویر را با هم بفرستید.</small>
       </div>
-      <button type="button" class="secondary-btn" :disabled="uploading" @click.prevent="openFilePicker">
+      <button type="button" class="secondary-btn upload-action" :disabled="uploading" @click.prevent="openFilePicker">
         {{ uploading ? 'در حال ارسال...' : 'انتخاب فایل' }}
       </button>
     </label>
 
     <div class="image-grid" v-if="items.length">
       <article v-for="item in items" :key="item.url" class="image-card">
-        <button type="button" class="thumb-btn" @click="$emit('select', item.url)">
-          <img :src="item.url" alt="gallery image" class="thumb" />
+        <button type="button" class="thumb-btn" aria-label="نمایش تصویر" @click="$emit('select', item.url)">
+          <img :src="item.url" alt="تصویر محصول" class="thumb" loading="lazy" />
         </button>
 
         <div class="badge-row">
-          <span class="badge cover" v-if="item.isCover">کاور</span>
-          <span class="badge secondary" v-if="item.isSecondary">عکس دوم</span>
+          <span class="badge cover" v-if="item.isCover">
+            <StarIcon :size="13" />
+            کاور
+          </span>
+          <span class="badge secondary" v-if="item.isSecondary">
+            <ImageIcon :size="13" />
+            عکس دوم
+          </span>
+          <span class="badge muted" v-if="!item.isCover && !item.isSecondary">گالری</span>
         </div>
 
         <div class="action-row">
           <button type="button" class="secondary-btn mini" :disabled="item.isCover || busy" @click="$emit('set-cover', item.url)">
+            <StarIcon :size="14" />
             کاور
           </button>
           <button
@@ -32,9 +43,11 @@
             :disabled="item.isSecondary || busy"
             @click="$emit('set-secondary', item.url)"
           >
+            <ImageIcon :size="14" />
             عکس دوم
           </button>
           <button type="button" class="secondary-btn mini danger" :disabled="busy" @click="confirmRemove(item.url)">
+            <TrashIcon :size="14" />
             حذف
           </button>
         </div>
@@ -47,6 +60,12 @@
 
 <script setup>
 import { ref } from 'vue'
+import {
+  Image as ImageIcon,
+  Star as StarIcon,
+  Trash2 as TrashIcon,
+  UploadCloud as UploadCloudIcon,
+} from 'lucide-vue-next'
 
 const props = defineProps({
   items: {
@@ -94,19 +113,42 @@ function confirmRemove(url) {
 <style scoped>
 .image-manager {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 
 .upload-drop {
-  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.35);
-  border-radius: 14px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.62);
-  padding: 0.6rem;
-  display: flex;
+  min-height: 5rem;
+  border: 1px dashed rgb(124 90 66 / 0.34);
+  border-radius: 8px;
+  background: #fbfaf8;
+  padding: 0.75rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.7rem;
   cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  touch-action: manipulation;
+}
+
+.upload-drop:hover,
+.upload-drop:focus-within {
+  border-color: rgb(124 90 66 / 0.58);
+  background: #f7f1ea;
+  box-shadow: 0 10px 22px rgb(43 33 26 / 0.07);
+}
+
+.upload-icon {
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e4ded6;
+  color: #7c5a42;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .hidden-input {
@@ -116,40 +158,55 @@ function confirmRemove(url) {
 .upload-copy {
   display: grid;
   gap: 0.15rem;
+  min-width: 0;
 }
 
 .upload-copy strong {
-  font-size: 0.88rem;
+  color: #2b211a;
+  font-size: 0.9rem;
 }
 
 .upload-copy small {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-size: 0.78rem;
+  color: #74685f;
+  line-height: 1.65;
+}
+
+.upload-action {
+  min-height: 2.45rem;
+  white-space: nowrap;
 }
 
 .image-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .image-card {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  border-radius: 12px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.7);
-  padding: 0.45rem;
+  border: 1px solid #e4ded6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.5rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .thumb-btn {
-  border: none;
+  border: 1px solid #f2eee9;
   padding: 0;
-  background: transparent;
-  border-radius: 10px;
+  background: #fbfaf8;
+  border-radius: 8px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
   cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.thumb-btn:hover {
+  border-color: rgb(124 90 66 / 0.35);
+  transform: translateY(-1px);
 }
 
 .thumb {
@@ -164,24 +221,32 @@ function confirmRemove(url) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.24rem;
-  min-height: 1.42rem;
+  min-height: 1.55rem;
 }
 
 .badge {
   border-radius: 999px;
-  font-size: 0.74rem;
-  padding: 0.12rem 0.45rem;
+  font-size: 0.72rem;
+  padding: 0.14rem 0.45rem;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .badge.cover {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 1);
+  background: #f7f1ea;
+  color: #5f402d;
 }
 
 .badge.secondary {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.17);
-  color: rgb(var(--palette-deep-saffron-rgb) / 1);
+  background: rgb(var(--palette-deep-saffron-rgb) / 0.15);
+  color: #6b4a24;
+}
+
+.badge.muted {
+  background: #f7f6f4;
+  color: #74685f;
 }
 
 .action-row {
@@ -191,8 +256,13 @@ function confirmRemove(url) {
 }
 
 .mini {
-  padding: 0.35rem 0.4rem;
-  font-size: 0.76rem;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.36rem;
+  font-size: 0.74rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
 }
 
 .mini.danger {
@@ -208,12 +278,12 @@ function confirmRemove(url) {
 
 @media (max-width: 640px) {
   .upload-drop {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .image-grid {
-    grid-template-columns: 1fr;
+  .upload-action {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }
 </style>

@@ -49,7 +49,7 @@ function unpackServerMessages(payload) {
   }
 }
 
-async function callMethodByPath(methodPath, args = {}) {
+export async function callMethodByPath(methodPath, args = {}) {
   const doFetch = (csrfToken) =>
     fetch(`/api/method/${methodPath}`, {
       method: 'POST',
@@ -85,7 +85,7 @@ async function callMethodByPath(methodPath, args = {}) {
   return payload.message
 }
 
-async function callMethodByPathGET(methodPath, args = {}) {
+export async function callMethodByPathGET(methodPath, args = {}, opts = {}) {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(args || {})) {
     if (value === undefined || value === null) {
@@ -103,6 +103,7 @@ async function callMethodByPathGET(methodPath, args = {}) {
   const response = await fetch(url, {
     method: 'GET',
     credentials: 'include',
+    ...opts,
   })
 
   const payload = await response.json().catch(() => ({}))
@@ -370,7 +371,7 @@ async function getMenuBootFallback() {
   }
 }
 
-async function listManagementProductsFallback({ search = '', category = '', active_only = 0, branch = '' } = {}) {
+async function listManagementProductsFallback({ search = '', category = '', active_only = 0, branch = '', tag = '' } = {}) {
   const itemHasRestaurantEnabled = await hasDoctypeField('Item', 'restaurant_enabled')
   const itemHasRestaurantSlug = await hasDoctypeField('Item', 'restaurant_slug')
   const itemHasRestaurantShortDesc = await hasDoctypeField('Item', 'restaurant_short_desc')
@@ -381,6 +382,7 @@ async function listManagementProductsFallback({ search = '', category = '', acti
   const itemHasCustomSnappCode = await hasDoctypeField('Item', 'custom_snapp_code')
   const itemHasImage = await hasDoctypeField('Item', 'image')
   const itemHasItemImage = await hasDoctypeField('Item', 'item_image')
+  const itemHasRestaurantItemTags = await hasDoctypeField('Item', 'restaurant_item_tags')
   const itemGroupHasSlug = await hasDoctypeField('Item Group', 'restaurant_slug')
 
   const fields = ['name', 'item_code', 'item_name', 'item_group', 'standard_rate', 'disabled']
@@ -411,10 +413,14 @@ async function listManagementProductsFallback({ search = '', category = '', acti
   if (itemHasItemImage && !fields.includes('item_image')) {
     fields.push('item_image')
   }
+  if (itemHasRestaurantItemTags) {
+    fields.push('restaurant_item_tags')
+  }
 
   const query = String(search || '').trim()
   const normalizedCategory = String(category || '').trim()
   const normalizedBranch = String(branch || '').trim()
+  const normalizedTag = String(tag || '').trim()
   const filters = []
 
   if (Number(active_only || 0) === 1) {
@@ -480,6 +486,10 @@ async function listManagementProductsFallback({ search = '', category = '', acti
     } else if (!itemHasRestaurantCategory) {
       filters.push(['item_group', '=', categoryValue])
     }
+  }
+
+  if (normalizedTag && itemHasRestaurantItemTags) {
+    filters.push(['restaurant_item_tags', 'like', `%${normalizedTag}%`])
   }
 
   const orFilters = []
@@ -597,6 +607,9 @@ async function listManagementProductsFallback({ search = '', category = '', acti
       is_active: isActive ? 1 : 0,
       is_disabled: Number(row?.disabled || 0) ? 1 : 0,
       stock_qty: Number(stockMap.get(itemCode) || 0),
+      tags: itemHasRestaurantItemTags
+        ? String(row?.restaurant_item_tags || '').split(',').map(t => t.trim()).filter(Boolean)
+        : [],
     }
   })
 
@@ -621,6 +634,9 @@ export async function getManagementSessionProfile() {
         full_name: '',
         user_image: '',
         is_guest: true,
+        is_staff: false,
+        is_admin: false,
+        roles: [],
       }
     }
 
@@ -639,11 +655,27 @@ export async function getManagementSessionProfile() {
       userImage = ''
     }
 
+    // Fetch role/permission info from restaurant API
+    let isStaff = false
+    let isAdmin = false
+    let roles = []
+    try {
+      const roleData = await callRestaurantAPI('get_session_roles')
+      isStaff = Boolean(roleData?.is_staff)
+      isAdmin = Boolean(roleData?.is_admin)
+      roles = Array.isArray(roleData?.roles) ? roleData.roles : []
+    } catch (_) {
+      // Fallback: not staff if role check fails
+    }
+
     return {
       user,
       full_name: fullName,
       user_image: userImage,
       is_guest: false,
+      is_staff: isStaff,
+      is_admin: isAdmin,
+      roles,
     }
   } catch (error) {
     return {
@@ -651,6 +683,9 @@ export async function getManagementSessionProfile() {
       full_name: '',
       user_image: '',
       is_guest: true,
+      is_staff: false,
+      is_admin: false,
+      roles: [],
     }
   }
 }
@@ -771,7 +806,9 @@ async function getMenuItemsFallback({
       prep_time_mins: Number(row?.prep_time_mins || 0),
       nutrition: row?.nutrition || {},
       allergens: Array.isArray(row?.allergens) ? row.allergens : [],
+      has_bom: Number(row?.has_bom || 0) ? 1 : 0,
       has_customization: Number(row?.has_customization || 0) ? 1 : 0,
+      coming_soon: Number(row?.coming_soon ?? row?.restaurant_coming_soon ?? 0) ? 1 : 0,
       is_active: Number(row?.is_active || 0) ? 1 : 0,
       show_in_print: showInPrintValue === undefined ? 1 : Number(showInPrintValue) ? 1 : 0,
       show_in_website: showInPrintValue === undefined ? 1 : Number(showInPrintValue) ? 1 : 0,
@@ -834,8 +871,39 @@ export async function getItemDetail(item_slug, branch = '') {
   }
 }
 
+export async function getRelatedItems(item_slug, limit = 6) {
+  try {
+    const data = await callMethodByPathGET('restaurant.api.get_related_items', { item_slug, limit })
+    return Array.isArray(data) ? data : []
+  } catch (_) {
+    return []
+  }
+}
+
+export async function getBomPreview(item_code, signal) {
+  const opts = signal ? { signal } : {}
+  try {
+    const data = await callMethodByPathGET('restaurant.api.get_bom_preview', { item_code }, opts)
+    return data?.data || data || {}
+  } catch (error) {
+    if (error.name === 'AbortError') throw error
+    // Fallback to POST if GET fails
+    console.warn('[BOM] GET failed, falling back to POST:', error.message)
+    const data = await callMethodByPath('restaurant.api.get_bom_preview', { item_code })
+    return data?.data || data || {}
+  }
+}
+
 export function getCustomerCheckoutProfile({ mobile = '', customer_name = '' } = {}) {
   return callRestaurantAPI('get_customer_checkout_profile', { mobile, customer_name })
+}
+
+export function getCustomerProfile({ mobile = '' } = {}) {
+  return callRestaurantAPI('get_customer_profile', mobile ? { mobile } : {})
+}
+
+export function getCustomerOrders({ mobile = '', limit = 50, start = 0 } = {}) {
+  return callRestaurantAPI('get_customer_orders', { mobile, limit, start })
 }
 
 export function saveCustomerDeliveryAddress({ customer_info = {}, address_info = {} } = {}) {
@@ -1143,22 +1211,22 @@ export function createManagementReturnOrder({ order_name = '', reason = '' } = {
   return callRestaurantAPI('create_management_return_order', { order_name, reason })
 }
 
-export async function listManagementProducts({ search = '', category = '', active_only = 0, branch = '' } = {}) {
+export async function listManagementProducts({ search = '', category = '', active_only = 0, branch = '', tag = '' } = {}) {
   if (preferManagementProductsFallback) {
-    return listManagementProductsFallback({ search, category, active_only, branch })
+    return listManagementProductsFallback({ search, category, active_only, branch, tag })
   }
 
   const hasCoreSupport = await hasCoreMenuSupportOnClient()
   if (!hasCoreSupport) {
     preferManagementProductsFallback = true
-    return listManagementProductsFallback({ search, category, active_only, branch })
+    return listManagementProductsFallback({ search, category, active_only, branch, tag })
   }
 
   try {
-    return await callRestaurantAPI('list_management_products', { search, category, active_only, branch })
+    return await callRestaurantAPI('list_management_products', { search, category, active_only, branch, tag })
   } catch (error) {
     preferManagementProductsFallback = true
-    return listManagementProductsFallback({ search, category, active_only, branch })
+    return listManagementProductsFallback({ search, category, active_only, branch, tag })
   }
 }
 
@@ -1884,6 +1952,10 @@ export async function reorderManagementMenuGroups(items = []) {
   }
 }
 
+export function saveManagementMenuDesign(payload = {}) {
+  return callRestaurantAPI('save_management_menu_design', { payload })
+}
+
 export async function listManagementItemGroupParents({ search = '' } = {}) {
   const query = String(search || '').trim()
   const args = {
@@ -2094,28 +2166,9 @@ export async function getManagementSiteSettings() {
 }
 
 export async function setManagementSiteSettings(payload = {}) {
-  let apiResult = null
-  let apiError = null
-  try {
-    apiResult = await callRestaurantAPI('set_management_site_settings', { payload })
-  } catch (err) {
-    apiError = err
-  }
-
-  if (apiResult) {
-    try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(apiResult)) } catch (_) {}
-    return apiResult
-  }
-
-  const localPayload = {
-    web_settings: payload.web_settings || {},
-    hero_slides: payload.hero_slides || [],
-    about_sections: payload.about_sections || [],
-    faq_items: payload.faq_items || [],
-  }
-  try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(localPayload)) } catch (_) {}
-
-  return localPayload
+  const result = await callRestaurantAPI('set_management_site_settings', payload)
+  try { localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(result)) } catch (_) {}
+  return result
 }
 
 export function listManagementCustomers({ search = '', date_from = '', date_to = '' } = {}) {
@@ -2383,4 +2436,57 @@ export function listManagementPrintFormats({ search = '', doc_type = '', blank_o
 
 export function getManagementPrintFormatPreview({ print_format_name = '', doc_type = '' } = {}) {
   return callRestaurantAPI('get_management_print_format_preview', { print_format_name, doc_type })
+}
+
+// ─── Product Builder API helpers ──────────────────────────────────────
+
+export async function getBuilderTemplate(itemCode) {
+  return callMethodByPathGET('restaurant.api.get_builder_template', { item_code: itemCode })
+}
+
+export async function computeBuilderPrice(itemCode, selections) {
+  return callMethodByPath('restaurant.api.compute_builder_price', {
+    item_code: itemCode,
+    selections: typeof selections === 'string' ? selections : JSON.stringify(selections),
+  })
+}
+
+export async function saveBuilderSelection(payload) {
+  return callMethodByPath('restaurant.api.save_builder_selection', payload)
+}
+
+// ─── Customer Login API helpers ───────────────────────────────────────
+
+export async function customerSendOTP(mobile) {
+  return callMethodByPath('restaurant.api.customer_send_otp', { mobile })
+}
+
+export async function customerVerifyOTP(mobile, code) {
+  return callMethodByPath('restaurant.api.customer_verify_otp', { mobile, code })
+}
+
+export async function customerLoginPassword(mobile, password) {
+  return callMethodByPath('restaurant.api.customer_login_password', { mobile, password })
+}
+
+export async function customerLogout() {
+  return callMethodByPath('restaurant.api.customer_logout', {})
+}
+
+export async function customerSession() {
+  return callMethodByPathGET('restaurant.api.customer_session', {})
+}
+
+// ── Zarinpal Settings API ──────────────────────────────────
+
+export async function getZarinpalSettings() {
+  return callRestaurantAPI('get_zarinpal_settings')
+}
+
+export async function saveZarinpalSettings(payload = {}) {
+  return callRestaurantAPI('save_zarinpal_settings', { payload })
+}
+
+export async function testZarinpalConnection(payload = {}) {
+  return callRestaurantAPI('test_zarinpal_connection', { payload })
 }

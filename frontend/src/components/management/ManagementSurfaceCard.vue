@@ -34,37 +34,50 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 <style scoped>
 .surface-card {
-  border-radius: 22px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+  border-radius: 8px;
+  border: 1px solid #e4ded6;
   background: #fff;
-  box-shadow: 0 8px 20px rgb(15 23 42 / 0.06);
+  box-shadow: 0 12px 30px rgb(15 23 42 / 0.06);
   overflow: visible;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .surface-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.6rem;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
 }
 
 .surface-head h3 {
   margin: 0;
-  font-size: 0.96rem;
+  color: #2b211a;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.45;
 }
 
 .surface-head p {
   margin: 0.2rem 0 0;
-  font-size: 0.78rem;
+  color: #74685f;
+  font-size: 0.82rem;
+  line-height: 1.65;
 }
 
 .tone-soft {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.04);
+  background: #fbfaf8;
 }
 
 .tone-accent {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.07);
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.28);
+  background: #f7f1ea;
+  border-color: rgb(124 90 66 / 0.18);
+}
+
+@media (hover: hover) {
+  .surface-card:hover {
+    border-color: rgb(124 90 66 / 0.18);
+    box-shadow: 0 18px 42px rgb(15 23 42 / 0.08);
+  }
 }
 </style>

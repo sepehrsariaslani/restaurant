@@ -2,40 +2,116 @@
   <article
     class="product-card"
     :class="[`layout--${layout}`, { 'is-added': justAdded }]"
+    :style="cardStyle"
     role="article"
   >
+    <!-- ════ LAYOUT: compact (CSS Grid — 3-column desktop) ════ -->
+    <template v-if="layout === 'compact'">
+      <!-- Image Column (rightmost in RTL grid) -->
+      <div class="compact-image-col">
+        <img
+          class="card-image"
+          :src="resolvedImage"
+          :alt="item.title"
+          loading="lazy"
+          :class="{ 'img-dimmed': isTemporarilyUnavailable }"
+        />
+        <span v-if="isComingSoon" class="unavailable-badge">به‌زودی</span>
+        <span v-if="isTemporarilyUnavailable && !isComingSoon" class="unavailable-badge">ناموجود</span>
+      </div>
+
+      <!-- Content Column (center) -->
+      <div class="compact-content">
+        <div class="pills-row">
+          <span v-if="item.category_title" class="pill pill--category">{{ item.category_title }}</span>
+          <span v-if="item.subcategory_title" class="pill pill--combo">{{ item.subcategory_title }}</span>
+        </div>
+        <h3 class="card-title">{{ item.title }}</h3>
+        <p v-if="item.short_desc || item.description" class="card-description">{{ item.short_desc || item.description }}</p>
+        <span v-if="nutritionText" class="card-nutrition">{{ nutritionText }}</span>
+        <div class="card-price-row">
+          <span v-if="isComingSoon" class="card-price soon-label">به‌زودی</span>
+          <span v-else class="card-price">{{ formatMoney(item.base_price, currency) }}</span>
+        </div>
+      </div>
+
+      <!-- Actions Column (leftmost in RTL grid) -->
+      <div class="compact-actions">
+        <div class="calorie-chip" v-if="kcalValue">
+          <svg class="calorie-chip__icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+          <span>{{ kcalValue }}kcal</span>
+        </div>
+        <button v-if="showBomButton" class="bom-btn bom-btn--compact" type="button" :aria-label="`مشاهده BOM ${item.title}`" @click.prevent="handleBomPreview">
+          <Layers :size="12" />
+          BOM
+        </button>
+        <button
+          v-if="!isUnavailable"
+          class="add-btn"
+          type="button"
+          :aria-label="`افزودن ${item.title} به سبد`"
+          @click.prevent="handleAdd"
+        >
+          <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+        </button>
+      </div>
+    </template>
+
     <!-- ════ LAYOUT: featured ════ -->
-    <template v-if="layout === 'featured'">
+    <template v-else-if="layout === 'featured'">
       <a class="featured-cover" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
-        <img :src="resolvedImage" :alt="item.title" class="featured-img" loading="lazy" />
+        <img :src="resolvedImage" :alt="item.title" class="featured-img" loading="lazy" :class="{ 'img-dimmed': isTemporarilyUnavailable }" />
         <span class="prep-badge" v-if="item.prep_time_mins">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
           {{ item.prep_time_mins }} دقیقه
         </span>
+        <span class="unavailable-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
+        <span class="calorie-badge calorie-badge--featured" v-if="kcalValue">🔥 {{ kcalValue }} kcal</span>
       </a>
       <div class="featured-body">
+        <div class="tag-row" v-if="item.tags && item.tags.length">
+          <span class="mini-pill tag-pill" v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+        </div>
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || 'توضیحی برای این آیتم ثبت نشده است.' }}</p>
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
         <div class="featured-foot">
           <div>
-            <small class="muted">قیمت</small>
-            <strong class="price">{{ formatMoney(item.base_price, currency) }}</strong>
+            <small class="muted" v-if="!isComingSoon">قیمت</small>
+            <strong class="price soon-label" v-if="isComingSoon">به‌زودی</strong>
+            <strong class="price" v-else :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ formatMoney(item.base_price, currency) }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
           <div class="foot-actions">
-            <button class="like-btn" type="button" :aria-label="`علاقه‌مندی`" @click.prevent="toggleLike">
-              <svg width="17" height="17" viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <button class="bom-btn btn-sm" type="button" :aria-label="`مشاهده BOM ${item.title}`" @click.prevent="handleBomPreview" v-if="showBomButton">
+              <Layers :size="13" />
+              BOM
             </button>
-            <div class="qty-pill" v-if="cartQty > 0 && !hasCustomization">
+            <div class="qty-pill" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
               <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)">−</button>
               <strong>{{ cartQty }}</strong>
               <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)">+</button>
             </div>
-            <button v-else class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
+            <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+              <span>بساز</span>
+              <span class="add-circle">✎</span>
+            </button>
+            <template v-else-if="isCustomizable && allowDirectAdd">
+              <button v-if="!isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+                <span>بساز</span>
+              </button>
+              <button v-if="!isUnavailable" class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
+                <span>{{ justAdded ? 'افزوده شد' : 'افزودن به سبد' }}</span>
+                <span class="add-circle">{{ justAdded ? '✓' : '+' }}</span>
+              </button>
+            </template>
+            <button v-else-if="!isUnavailable" class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
               <span>{{ justAdded ? 'افزوده شد' : 'افزودن به سبد' }}</span>
               <span class="add-circle">{{ justAdded ? '✓' : '+' }}</span>
             </button>
+            <span v-if="isTemporarilyUnavailable" class="unavailable-pill">ناموجود</span>
           </div>
         </div>
       </div>
@@ -44,27 +120,52 @@
     <!-- ════ LAYOUT: list ════ -->
     <template v-else-if="layout === 'list'">
       <a class="list-cover" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
-        <img :src="resolvedImage" :alt="item.title" class="list-img" loading="lazy" />
+        <img :src="resolvedImage" :alt="item.title" class="list-img" loading="lazy" :class="{ 'img-dimmed': isTemporarilyUnavailable }" />
+        <span class="prep-badge list-prep-badge" v-if="item.prep_time_mins">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          {{ item.prep_time_mins }} دقیقه
+        </span>
+        <span class="unavailable-badge list-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
       </a>
       <div class="list-body">
         <div class="list-labels">
           <span class="mini-pill" v-if="item.category_title">{{ item.category_title }}</span>
           <span class="mini-pill sub" v-if="item.subcategory_title">{{ item.subcategory_title }}</span>
+          <span class="mini-pill tag-pill" v-for="tag in (item.tags || [])" :key="tag">{{ tag }}</span>
         </div>
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || '' }}</p>
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
+        <span class="calorie-badge calorie-badge--list" v-if="kcalValue">🔥 {{ kcalValue }} kcal</span>
         <div class="list-foot">
-          <div>
-            <strong class="price">{{ formatMoney(item.base_price, currency) }}</strong>
+          <div v-if="isComingSoon">
+            <strong class="price soon-label">به‌زودی</strong>
+          </div>
+          <div v-else>
+            <strong class="price" :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ formatMoney(item.base_price, currency) }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
-          <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization">
+          <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
             <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)">−</button>
             <strong>{{ cartQty }}</strong>
             <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)">+</button>
           </div>
-          <button v-else class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
+          <button v-if="showBomButton" class="bom-btn btn-sm" type="button" :aria-label="`مشاهده BOM ${item.title}`" @click.prevent="handleBomPreview">
+            <Layers :size="13" />
+            BOM
+          </button>
+          <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+            <span class="add-icon">✎</span>
+          </button>
+          <template v-else-if="isCustomizable && allowDirectAdd">
+            <button v-if="!isTemporarilyUnavailable" class="add-btn customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+              <span class="add-icon">✎</span>
+            </button>
+            <button v-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
+              <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+            </button>
+          </template>
+          <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
             <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
           </button>
         </div>
@@ -74,65 +175,154 @@
     <!-- ════ LAYOUT: grid ════ -->
     <template v-else>
       <a class="grid-cover" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
-        <img :src="resolvedImage" :alt="item.title" class="grid-img" loading="lazy" />
+        <img :src="resolvedImage" :alt="item.title" class="grid-img" loading="lazy" :class="{ 'img-dimmed': isTemporarilyUnavailable }" />
         <span class="category-badge" v-if="item.subcategory_title || item.category_title">
           {{ item.subcategory_title || item.category_title }}
         </span>
+        <span class="coming-soon-ribbon" v-if="isComingSoon">به‌زودی</span>
+        <span class="prep-badge grid-prep-badge" v-if="item.prep_time_mins">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          {{ item.prep_time_mins }} دقیقه
+        </span>
+        <span class="unavailable-badge grid-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
+        <button class="like-btn grid-like" type="button" :aria-label="`علاقه‌مندی`" @click.prevent="toggleLike">
+          <svg width="17" height="17" viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </button>
+        <span class="calorie-badge calorie-badge--grid" v-if="kcalValue">🔥 {{ kcalValue }} kcal</span>
       </a>
       <div class="grid-body">
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || 'توضیحی ثبت نشده.' }}</p>
+        <div class="tag-row" v-if="item.tags && item.tags.length">
+          <span class="mini-pill tag-pill" v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+        </div>
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
         <div class="grid-foot">
-          <div>
-            <strong class="price">{{ formatMoney(item.base_price, currency) }}</strong>
+          <div v-if="isComingSoon">
+            <strong class="price soon-label">به‌زودی</strong>
+          </div>
+          <div v-else>
+            <strong class="price" :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ formatMoney(item.base_price, currency) }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
           <div class="foot-actions">
+            <button v-if="showBomButton" type="button" class="bom-btn btn-sm" @click.prevent="handleBomPreview" :aria-label="`مشاهده BOM ${item.title}`">
+              <Layers :size="13" />
+              BOM
+            </button>
             <a :href="`/item/${item.slug}`" class="detail-link">جزئیات</a>
-            <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization">
+            <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
               <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)">−</button>
               <strong>{{ cartQty }}</strong>
               <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)">+</button>
             </div>
-            <button v-else class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
+            <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+              <span class="add-icon">✎</span>
+            </button>
+            <template v-else-if="isCustomizable && allowDirectAdd">
+              <button v-if="!isTemporarilyUnavailable" class="add-btn customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+                <span class="add-icon">✎</span>
+              </button>
+              <button v-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
+                <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+              </button>
+            </template>
+            <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
               <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
             </button>
           </div>
         </div>
+        <small class="review-badge" v-if="reviewCount > 0">★ {{ reviewCount }} نظر</small>
       </div>
     </template>
   </article>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { formatMoney } from '@/utils/format'
+import { getReviewCount } from '@/utils/reviewsStore'
+import { Layers } from 'lucide-vue-next'
 
 const props = defineProps({
   item: { type: Object, required: true },
   currency: { type: String, default: 'TOMAN' },
+  canViewBom: { type: Boolean, default: false },
   cartQty: { type: Number, default: 0 },
   layout: {
     type: String,
-    default: 'list',
-    validator: (v) => ['featured', 'list', 'grid'].includes(v),
+    default: 'compact',
+    validator: (v) => ['featured', 'list', 'grid', 'compact'].includes(v),
   },
+  theme: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['quick-add', 'quick-increase', 'quick-decrease'])
-const justAdded = ref(false)
-const liked = ref(false)
-let addTimer = null
+const showBomButton = computed(() => props.canViewBom && Number(props.item?.has_bom) === 1)
 
-function handleAdd() {
-  emit('quick-add', props.item)
-  justAdded.value = true
-  clearTimeout(addTimer)
-  addTimer = setTimeout(() => { justAdded.value = false }, 1800)
+function handleBomPreview() {
+  emit('bom-preview', props.item)
 }
 
-function toggleLike() { liked.value = !liked.value }
+const emit = defineEmits(['quick-add', 'quick-increase', 'quick-decrease', 'bom-preview'])
+const justAdded = ref(false)
+const isAdding = ref(false)
+const liked = ref(false)
+let addTimer = null
+onUnmounted(() => { clearTimeout(addTimer) })
+
+// Wishlist persistence
+const WISHLIST_KEY = 'restaurant_wishlist_v1'
+function loadWishlist() {
+  try { return JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]') } catch (_) { return [] }
+}
+function saveWishlist(list) {
+  try { localStorage.setItem(WISHLIST_KEY, JSON.stringify(list)) } catch (_) {}
+}
+function toggleLike() {
+  const slug = props.item?.slug || ''
+  if (!slug) return
+  const list = loadWishlist()
+  const idx = list.indexOf(slug)
+  if (idx >= 0) { list.splice(idx, 1); liked.value = false }
+  else { list.push(slug); liked.value = true }
+  saveWishlist(list)
+}
+
+onMounted(() => {
+  const slug = props.item?.slug || ''
+  liked.value = slug ? loadWishlist().includes(slug) : false
+})
+
+// Review count
+const reviewCount = computed(() => getReviewCount(props.item?.slug || ''))
+
+function handleAdd() {
+  if (isComingSoon.value) return
+  emit('quick-add', props.item)
+  justAdded.value = true
+  isAdding.value = true
+  clearTimeout(addTimer)
+  addTimer = setTimeout(() => { justAdded.value = false; isAdding.value = false }, 1800)
+}
+
+// Dynamic theme colors — read from site management settings
+const cardStyle = computed(() => {
+  const t = props.theme || {}
+  return {
+    '--color-primary': t.primary_color || t.primary || '#ff6b35',
+    '--color-primary-dark': t.primary_color_dark || t.primary_dark || '#e55a2b',
+    '--color-accent': t.accent_color || t.accent || '#24473b',
+    '--color-text-primary': t.text_primary || '#1f332d',
+    '--color-text-secondary': t.text_secondary || '#7b8a84',
+    '--color-text-muted': t.text_muted || '#7f918a',
+    '--color-surface': t.surface || '#ffffff',
+    '--color-surface-alt': t.surface_alt || '#f7f8f6',
+    '--color-border': t.border || 'rgba(0,0,0,0.04)',
+    '--color-success': t.success || '#2e7d32',
+    '--color-success-bg': t.success_bg || '#e8f5e9',
+    '--add-btn-bg': t.add_btn_bg || t.primary_color || '#ff4b16',
+  }
+})
 
 const resolvedImage = computed(
   () => props.item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60',
@@ -151,23 +341,86 @@ const nutritionText = computed(() => {
   return parts.join(' • ')
 })
 
+const kcalValue = computed(() => {
+  const kcal = Number(props.item?.nutrition?.kcal ?? props.item?.nutrition_kcal ?? 0)
+  return Number.isFinite(kcal) && kcal > 0 ? Math.round(kcal) : 0
+})
+
 const hasCustomization = computed(() => Number(props.item?.has_customization || 0) === 1)
+const isComingSoon = computed(() => Number(props.item?.coming_soon ?? props.item?.restaurant_coming_soon ?? 0) === 1)
+const isTemporarilyUnavailable = computed(() => {
+  if (Number(props.item?.is_temporarily_unavailable || 0) !== 1) return false
+  const until = props.item?.unavailable_until || ''
+  if (!until) return true
+  const untilDate = new Date(until)
+  return untilDate > new Date()
+})
+const isUnavailable = computed(() => isComingSoon.value || isTemporarilyUnavailable.value)
+const isCustomizable = computed(() =>
+  Number(props.item?.restaurant_is_customizable || 0) === 1 &&
+  Number(props.item?.restaurant_builder_active || 1) === 1,
+)
+const allowDirectAdd = computed(() => Number(props.item?.restaurant_allow_direct_add || 0) === 1)
+
+function handleCustomize() {
+  window.location.href = `/customize/${props.item.slug}`
+}
 </script>
 
 <style scoped>
-/* ─── مشترک ─────────────────────────────────── */
+/* ─── Shared ─── */
 .product-card { position: relative; overflow: hidden; }
 
 .product-card.is-added {
-  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline: 2px solid var(--color-success, #2e7d32);
   outline-offset: 2px;
 }
 
-.price { font-size: 1.05rem; font-weight: 700; color: var(--ink-900, #141210); }
+.price { font-size: 1.05rem; font-weight: 700; color: var(--ink-900, #141210); font-variant-numeric: tabular-nums; }
+.soon-label {
+  font-size: 0.95rem;
+  color: var(--text-muted, #7a6e64);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
 .desc  { margin: 0; font-size: 0.79rem; line-height: 1.55; }
 .muted { color: var(--text-muted, #7a6e64); }
 .foot-actions { display: flex; align-items: center; gap: 0.42rem; }
 .nutrition-line { margin: 0.2rem 0 0; font-size: 0.72rem; color: var(--text-muted, #7a6e64); }
+
+.calorie-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: rgba(20, 15, 8, 0.72);
+  color: #fff;
+  font-weight: 700;
+  z-index: 2;
+  backdrop-filter: blur(6px);
+}
+
+.calorie-badge--featured {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  padding: 0.28rem 0.72rem;
+  font-size: 0.72rem;
+}
+
+.calorie-badge--list {
+  padding: 0.18rem 0.55rem;
+  font-size: 0.68rem;
+  margin-top: 0.15rem;
+}
+
+.calorie-badge--grid {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.68rem;
+}
 .in-cart-badge { display: block; margin-top: 0.12rem; font-size: 0.68rem; color: var(--accent-green, #2f6f5c); }
 
 .mini-pill {
@@ -178,8 +431,11 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
   color: var(--ink-600, #4a4038);
 }
 .mini-pill.sub { background: rgb(var(--palette-june-bud-rgb) / 0.34); color: var(--ink-800); }
+.mini-pill.tag-pill { background: rgb(var(--palette-deep-sapphire-rgb) / 0.12); color: rgb(var(--palette-deep-sapphire-rgb) / 1); }
 
-/* دکمه لایک */
+.tag-row { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; }
+
+/* Like button */
 .like-btn {
   width: 38px; height: 38px;
   border-radius: 50%;
@@ -193,42 +449,112 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
 }
 .like-btn:hover { background: rgb(var(--palette-deep-saffron-rgb) / 0.14); transform: scale(1.1); }
 
-/* دکمه افزودن (مربعی) */
+/* Glass-style add button */
 .add-btn {
-  width: 36px; height: 36px;
-  border-radius: 12px; border: 0;
-  background: var(--ink-800, #1e1a17);
-  color: #fff;
+  width: 42px; height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+  background: rgb(var(--palette-eggshell-rgb) / 0.92);
+  backdrop-filter: blur(8px);
+  color: var(--palette-deep-sapphire);
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
-  box-shadow: 0 8px 20px rgba(20, 15, 8, 0.3);
-  transition: background 0.28s ease, transform 0.18s ease;
+  box-shadow: 0 4px 14px rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+  transition: background 0.22s ease,
+              transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.22s ease;
   flex-shrink: 0;
 }
-.add-btn:hover  { transform: scale(1.1); }
-.add-btn:active { transform: scale(0.93); }
-.add-btn.added  { background: var(--accent-green); }
+.add-btn:hover {
+  background: rgb(var(--palette-eggshell-rgb) / 1);
+  box-shadow: 0 6px 20px rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+  transform: scale(1.08);
+}
+.add-btn:active {
+  transform: scale(0.94);
+  box-shadow: 0 2px 8px rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+}
+.add-btn.added {
+  background: var(--palette-deep-sapphire);
+  color: #fff;
+  border-color: var(--palette-deep-sapphire);
+  box-shadow: 0 4px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.30);
+}
+.add-btn:focus-visible {
+  outline: 2px solid var(--palette-deep-saffron);
+  outline-offset: 2px;
+}
 
 .add-icon {
-  font-size: 1.3rem; line-height: 1;
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-size: 1.35rem; line-height: 1;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .add-btn.added .add-icon { transform: scale(1.25); }
 
-/* دکمه pill (featured) */
+/* Pill variant (featured) */
 .add-btn--pill {
-  width: auto; border-radius: 999px;
-  padding: 0 0.65rem 0 1rem; gap: 0.5rem;
-  font-size: 0.84rem; font-family: inherit; height: 42px;
+  width: auto; border-radius: 22px;
+  padding: 0 1.2rem 0 1.4rem;
+  font-size: 0.88rem; font-family: inherit; font-weight: 600;
+  height: 44px;
+  gap: 0.55rem;
 }
-.add-circle {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+.add-btn--pill .add-circle {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+  color: var(--palette-deep-sapphire);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  transition: background 0.22s ease, color 0.22s ease;
+}
+.add-btn--pill.added .add-circle {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
-/* detail link */
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .add-btn,
+  .add-btn .add-icon {
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .add-btn:hover,
+  .add-btn:active {
+    transform: none;
+  }
+  .add-btn.loading .add-icon {
+    animation: none;
+  }
+}
+/* Mobile: smaller touch target */
+@media (max-width: 768px) {
+  .add-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+  .add-btn--pill {
+    height: 42px;
+    padding: 0 1rem 0 1.2rem;
+    font-size: 0.82rem;
+  }
+}
+
+/* customize button */
+.customize-btn {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
+}
+.customize-btn:hover {
+  background: rgb(var(--palette-deep-sapphire-rgb));
+}
+.customize-btn.btn-sm {
+  padding: 0 0.5rem;
+  height: 32px;
+  font-size: 0.78rem;
+}
+.customize-btn.btn-sm .add-icon {
+  font-size: 1rem;
+}
 .detail-link {
   border-radius: 999px;
   border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.34);
@@ -239,6 +565,70 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
   transition: background 0.18s ease;
 }
 .detail-link:hover { background: rgb(var(--palette-eggshell-rgb) / 0.92); }
+
+/* BOM button */
+.bom-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.34);
+  padding: 0.3rem 0.72rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: rgb(var(--palette-deep-sapphire-rgb) / 1);
+  background: rgb(var(--palette-eggshell-rgb) / 0.72);
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.bom-btn:hover {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  box-shadow: 0 2px 8px rgb(var(--palette-deep-sapphire-rgb) / 0.15);
+}
+.bom-btn:active {
+  transform: scale(0.96);
+}
+.bom-btn.btn-sm {
+  padding: 0.22rem 0.55rem;
+  font-size: 0.7rem;
+  height: 30px;
+}
+.bom-btn.bom-btn--compact {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  color: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
+  font-size: 0;
+}
+.bom-btn.bom-btn--compact:hover {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+}
+.bom-btn.bom-btn--compact svg {
+  margin: 0;
+}
+
+.bom-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.34);
+  padding: 0.3rem 0.72rem;
+  font-size: 0.76rem;
+  color: rgb(var(--palette-deep-sapphire-rgb) / 1);
+  text-decoration: none;
+  background: rgb(var(--palette-eggshell-rgb) / 0.72);
+  transition: background 0.18s ease;
+  cursor: pointer;
+  font-family: inherit;
+}
+.bom-link:hover { background: rgb(var(--palette-eggshell-rgb) / 0.92); }
 
 .qty-pill {
   display: inline-flex;
@@ -267,7 +657,314 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
   line-height: 1;
 }
 
-/* ─── LAYOUT: featured ───────────────────────── */
+/* ─── LAYOUT: compact (CSS Grid — 3-column desktop) ─── */
+.layout--compact {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 56px;
+  gap: 12px;
+  align-items: center;
+  direction: rtl;
+  background: var(--color-surface, #ffffff);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.04));
+  padding: 16px 18px;
+  min-height: 180px;
+  position: relative;
+  transition: box-shadow 0.2s ease;
+}
+
+.layout--compact:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* Image column (rightmost in RTL — grid column 1) */
+.compact-image-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-width: 0;
+}
+
+.card-image {
+  width: 100%;
+  max-width: 120px;
+  max-height: 135px;
+  object-fit: contain;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+/* Content column (center — grid column 2) */
+.compact-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+}
+
+/* Actions column (leftmost in RTL — grid column 3) */
+.compact-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Pill chips */
+.pills-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.pill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.pill--category {
+  background: #fff0e8;
+  color: #ff5a1f;
+}
+
+.pill--combo {
+  background: #eaf4ee;
+  color: #24473b;
+}
+
+/* Title */
+.card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-accent, #24473b);
+  text-align: right;
+  line-height: 1.4;
+  margin: 0 0 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-width: 100%;
+}
+
+/* Description */
+.card-description {
+  font-size: 11px;
+  color: var(--color-text-secondary, #7b8a84);
+  text-align: center;
+  line-height: 1.5;
+  margin: 0 0 6px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Nutrition row */
+.card-nutrition {
+  font-size: 10px;
+  color: var(--color-text-muted, #7f918a);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Price */
+.card-price-row {
+  margin-top: auto;
+}
+
+.card-price {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-accent, #24473b);
+  text-align: center;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-price.soon-label {
+  font-size: 14px;
+  color: var(--text-muted, #7a6e64);
+  font-weight: 600;
+}
+
+/* Calorie chip */
+.calorie-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--color-surface-alt, #f7f8f6);
+  font-size: 10px;
+  font-weight: 600;
+  color: #3d4f48;
+}
+
+.calorie-chip__icon {
+  width: 12px;
+  height: 12px;
+  color: var(--color-primary, #ff6b35);
+}
+
+/* Add button — orange, 52x52 */
+.add-btn {
+  width: 52px;
+  height: 52px;
+  background: var(--add-btn-bg, #ff4b16);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 8px 16px rgba(255, 80, 20, 0.22);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 300;
+  transition: all 0.15s ease-out;
+  flex-shrink: 0;
+}
+
+.add-btn:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.add-btn:active {
+  transform: scale(0.95);
+  filter: brightness(0.95);
+}
+
+.add-btn.added {
+  background: var(--color-accent, #24473b);
+  box-shadow: 0 4px 16px rgba(36, 71, 59, 0.25);
+}
+
+.add-icon {
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+/* Unavailable badge */
+.unavailable-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: auto;
+  border-radius: 999px;
+  background: var(--accent-red, #dc2626);
+  color: #fff;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.img-dimmed { opacity: 0.65; }
+.price-strikethrough { text-decoration: line-through; opacity: 0.6; }
+
+/* ─── Responsive: compact layout ─── */
+@media (max-width: 600px) {
+  .layout--compact {
+    grid-template-columns: 100px minmax(0, 1fr) 48px;
+    min-height: 160px;
+    max-height: 180px;
+    padding: 12px;
+    gap: 8px;
+    border-radius: 16px;
+  }
+
+  .compact-image-col {
+    flex: 0 0 auto;
+  }
+
+  .card-image {
+    max-width: 100px;
+    max-height: 110px;
+  }
+
+  .card-title {
+    font-size: 14px;
+  }
+
+  .card-description {
+    font-size: 10px;
+    -webkit-line-clamp: 1;
+  }
+
+  .card-price {
+    font-size: 14px;
+  }
+
+  .add-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+  }
+
+  .add-icon {
+    font-size: 20px;
+  }
+
+  .calorie-chip {
+    font-size: 9px;
+    padding: 4px 6px;
+  }
+
+  .pill {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+
+  .card-nutrition {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 360px) {
+  .layout--compact {
+    grid-template-columns: 85px minmax(0, 1fr) 44px;
+    min-height: 150px;
+    max-height: 170px;
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .card-image {
+    max-width: 85px;
+    max-height: 95px;
+  }
+
+  .card-description {
+    -webkit-line-clamp: 1;
+  }
+}
+
+/* ─── LAYOUT: featured ─── */
 .layout--featured {
   background: #fff;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
@@ -302,6 +999,19 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
   padding: 0.28rem 0.72rem;
   font-size: 0.72rem; font-weight: 600; color: var(--ink-700, #2e2820);
   display: flex; align-items: center; gap: 0.3rem;
+  z-index: 2;
+}
+
+.list-prep-badge {
+  top: 0.5rem; left: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.68rem;
+}
+
+.grid-prep-badge {
+  top: 0.5rem; left: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.68rem;
 }
 
 .featured-body {
@@ -319,7 +1029,7 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
 .featured-foot .price { font-size: 1.35rem; }
 .featured-foot small { display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.1rem; }
 
-/* ─── LAYOUT: list ───────────────────────────── */
+/* ─── LAYOUT: list ─── */
 .layout--list {
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
   border-radius: 24px;
@@ -338,7 +1048,7 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
 .list-img {
   width: 95% ;
   height:95% ;
-  object-fit: contain ; 
+  object-fit: contain ;
   object-position: center;
   background: transparent;
   border-radius: 18px ;
@@ -356,7 +1066,7 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
   margin-top: auto; padding-top: 0.2rem;
 }
 
-/* ─── LAYOUT: grid ───────────────────────────── */
+/* ─── LAYOUT: grid ─── */
 .layout--grid {
   background: #fff;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
@@ -400,5 +1110,87 @@ const hasCustomization = computed(() => Number(props.item?.has_customization || 
 .grid-body .desc { flex: 1; min-height: 2.4rem; }
 .grid-foot {
   display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem;
+}
+
+/* ─── Coming soon ribbon ─── */
+.coming-soon-ribbon {
+  position: absolute; top: 0.6rem; left: 0.6rem;
+  border-radius: 999px; padding: 0.18rem 0.65rem;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.85);
+  color: #fff;
+  font-size: 0.68rem; font-weight: 700;
+  z-index: 2;
+}
+
+/* ─── Grid like button ─── */
+.grid-like {
+  position: absolute; top: 0.5rem; right: 0.5rem;
+  z-index: 2;
+  width: 34px; height: 34px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(4px);
+}
+
+/* ─── Review badge ─── */
+.review-badge {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-muted, #7a6e64);
+  margin-top: 0.25rem;
+}
+
+/* ─── Add button loading state ─── */
+.add-btn.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+.add-btn.loading .add-icon {
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Unavailable state ─── */
+.img-dimmed { opacity: 0.65; }
+.price-strikethrough { text-decoration: line-through; opacity: 0.6; }
+
+.unavailable-badge {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-red, #dc2626);
+  color: #fff;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.unavailable-badge.list-badge {
+  top: 0.5rem;
+  left: 0.5rem;
+}
+
+.unavailable-badge.grid-badge {
+  top: 0.5rem;
+  left: 0.5rem;
+}
+
+.unavailable-pill {
+  border-radius: 999px;
+  background: rgb(var(--danger-rgb) / 0.12);
+  color: var(--danger);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
 }
 </style>

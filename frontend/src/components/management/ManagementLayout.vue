@@ -113,11 +113,13 @@ class="mobile-overlay"
 v-for="group in menuGroups"
 :key="`mobile-group-${group.key}`"
 class="nav-group"
+:class="{ open: isGroupOpen(group.key) }"
 >
 <button
 type="button"
 class="group-button"
-:class="{ active: openGroupKey === group.key }"
+:class="{ active: isGroupOpen(group.key) }"
+:aria-expanded="isGroupOpen(group.key)"
 @click="toggleGroup(group.key)"
 >
 <span class="group-icon">
@@ -126,11 +128,11 @@ class="group-button"
 <span>{{ group.title }}</span>
 <ChevronDownIcon
 class="icon-sm chevron"
-:class="{ rotated: openGroupKey === group.key }"
+:class="{ rotated: isGroupOpen(group.key) }"
 />
 </button>
 
-<div v-if="openGroupKey === group.key" class="group-items">
+<div v-if="isGroupOpen(group.key)" class="group-items">
 <a
 v-for="item in group.items"
 :key="`mobile-item-${item.key}`"
@@ -227,11 +229,13 @@ class="rail-mini-toggle"
 v-for="group in menuGroups"
 :key="group.key"
 class="nav-group"
+:class="{ open: isGroupOpen(group.key) }"
 >
 <button
 type="button"
 class="group-button"
-:class="{ active: openGroupKey === group.key }"
+:class="{ active: isGroupOpen(group.key) }"
+:aria-expanded="isGroupOpen(group.key)"
 @click="toggleGroup(group.key)"
 >
 <span class="group-icon">
@@ -242,11 +246,11 @@ class="group-button"
 
 <ChevronDownIcon
 class="icon-sm chevron"
-:class="{ rotated: openGroupKey === group.key }"
+:class="{ rotated: isGroupOpen(group.key) }"
 />
 </button>
 
-<div v-if="openGroupKey === group.key" class="group-items">
+<div v-if="isGroupOpen(group.key)" class="group-items">
 <a
 v-for="item in group.items"
 :key="item.key"
@@ -460,11 +464,23 @@ const isDesktop = ref(false)
 const desktopScale = ref(1)
 const railMode = ref('expanded')
 const mobileMenuOpen = ref(false)
-const openGroupKey = ref('overview')
+const openGroupKey = ref('')
+const openGroups = ref({})
+
+function initOpenGroup() {
+  const active = menuGroups.value.find((group) =>
+    group.items.some((item) => isLinkActive(item.key)),
+  )
+  if (active) {
+    openGroupKey.value = active.key
+    openMenuGroup(active.key)
+  }
+}
 const isDarkMode = ref(false)
 
 let desktopMedia = null
 let desktopListener = null
+let lockedScrollY = 0
 
 const authLoading = ref(true)
 const authSubmitting = ref(false)
@@ -474,9 +490,14 @@ const authProfile = ref({
   full_name: '',
   user_image: '',
   is_guest: true,
+  is_staff: false,
+  is_admin: false,
+  roles: [],
 })
 
-const navLinks = computed(() => [
+const navLinks = computed(() => {
+  const isStaff = authProfile.value?.is_staff || false
+  const links = [
   {
 key: 'management-dashboard',
 label: 'داشبورد',
@@ -523,13 +544,31 @@ url: '/management/products',
 group: 'menu',
   },
   {
-key: 'management-variant-builder',
-label: 'صفت محصولات',
-shortLabel: 'صفت',
-caption: 'ویژگی‌ها و انواع',
-iconComponent: TagsIcon,
-url: '/management/product?variant_studio=1',
+key: 'management-menu-design',
+label: 'طراحی منو',
+shortLabel: 'طراحی',
+caption: 'Preview و چیدمان',
+iconComponent: LayoutGridIcon,
+url: '/management/menu-design',
 group: 'menu',
+  },
+  {
+    key: 'management-variant-builder',
+    label: 'صفت محصولات',
+    shortLabel: 'صفت',
+    caption: 'ویژگی‌ها و انواع',
+    iconComponent: TagsIcon,
+    url: '/management/product?variant_studio=1',
+    group: 'menu',
+  },
+  {
+    key: 'management-builder-templates',
+    label: 'قالب‌های سفارشی‌سازی',
+    shortLabel: 'سفارشی‌سازی',
+    caption: 'قالب‌ها و مراحل',
+    iconComponent: TagsIcon,
+    url: '/management/builder-templates',
+    group: 'menu',
   },
   {
 key: 'management-menu-groups',
@@ -603,7 +642,14 @@ iconComponent: SlidersIcon,
 url: '/management/settings',
 group: 'settings',
   },
-])
+  ]
+
+  // Hide BOM/formula section from non-staff users
+  if (!isStaff) {
+    return links.filter((link) => link.key !== 'management-boms')
+  }
+  return links
+})
 
 const menuGroups = computed(() => [
   {
@@ -676,28 +722,70 @@ const isLoginPage = computed(() => props.page === 'management-login')
 const authGuest = computed(() => Boolean(authProfile.value?.is_guest))
 
 const moduleThemeVars = computed(() => ({
-  '--module-500': '#6f4a31',
-  '--module-600': '#5a3a25',
-  '--module-50': '#f3ede7',
-  '--module-title-light': '#1c1411',
-  '--module-title-dark': '#e8dacd',
+  '--module-500': '#7c5a42',
+  '--module-600': '#5f402d',
+  '--module-50': '#f7f1ea',
+  '--module-title-light': '#2b211a',
+  '--module-title-dark': '#f5eadd',
 }))
 
+function openMenuGroup(key) {
+  const normalized = String(key || '').trim()
+  if (!normalized) return
+  openGroupKey.value = normalized
+  openGroups.value = { ...openGroups.value, [normalized]: true }
+}
+
 function toggleGroup(key) {
-  openGroupKey.value = openGroupKey.value === key ? '' : key
+  const normalized = String(key || '').trim()
+  if (!normalized) return
+  openGroupKey.value = normalized
+  openGroups.value = { ...openGroups.value, [normalized]: !openGroups.value[normalized] }
+}
+
+function isGroupOpen(key) {
+  const normalized = String(key || '').trim()
+  return Boolean(normalized && openGroups.value[normalized])
 }
 
 function isLinkActive(key) {
   if (props.page === key) return true
-  if (props.page === 'management-product' && key === 'management-products') return true
-  if (props.page === 'management-menu-group' && key === 'management-menu-groups') return true
-  if (props.page === 'management-bom' && key === 'management-boms') return true
-  if (props.page === 'management-report' && key === 'management-reports') return true
+  if (props.page.startsWith(key + '-')) return true
+  if (key === 'management-products' && props.page.startsWith('management-product')) return true
+  if (key === 'management-menu-groups' && props.page.startsWith('management-menu-group')) return true
+  if (key === 'management-boms' && props.page.startsWith('management-bom')) return true
+  if (key === 'management-reports' && props.page.startsWith('management-report')) return true
+  if (key === 'management-builder-templates' && props.page === 'management-builder-templates') return true
   return false
 }
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false
+}
+
+function lockBodyScroll() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  lockedScrollY = window.scrollY || window.pageYOffset || 0
+  document.documentElement.style.scrollBehavior = 'auto'
+  document.body.style.position = 'fixed'
+  document.body.style.top = `-${lockedScrollY}px`
+  document.body.style.left = '0'
+  document.body.style.right = '0'
+  document.body.style.width = '100%'
+  document.body.style.overflow = 'hidden'
+}
+
+function unlockBodyScroll() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  document.documentElement.style.scrollBehavior = ''
+  document.body.style.position = ''
+  document.body.style.top = ''
+  document.body.style.left = ''
+  document.body.style.right = ''
+  document.body.style.width = ''
+  document.body.style.overflow = ''
+  window.scrollTo(0, lockedScrollY || 0)
+  lockedScrollY = 0
 }
 
 function toggleRailMode() {
@@ -925,13 +1013,14 @@ window.scrollTo({ top: 0, behavior: 'auto' })
   }
 
   refreshAuthProfile()
+  initOpenGroup()
 })
 
 watch(
   activeGroup,
   (group) => {
 if (group?.key) {
-openGroupKey.value = group.key
+openMenuGroup(group.key)
 }
   },
   { immediate: true },
@@ -951,8 +1040,11 @@ watch(isDesktop, (desktop) => {
 })
 
 watch(mobileMenuOpen, (open) => {
-  if (typeof document === 'undefined') return
-  document.body.style.overflow = open ? 'hidden' : ''
+  if (open) {
+    lockBodyScroll()
+  } else {
+    unlockBodyScroll()
+  }
 })
 
 watch([authLoading, authGuest, isLoginPage, redirectTarget], () => {
@@ -968,9 +1060,7 @@ desktopMedia.removeListener(desktopListener)
 }
   }
 
-  if (typeof document !== 'undefined') {
-document.body.style.overflow = ''
-  }
+  unlockBodyScroll()
 
   clearDesktopScale()
 })
@@ -979,61 +1069,61 @@ document.body.style.overflow = ''
 <style scoped>
 .management-layout,
 .management-auth-shell {
-  --bg-page: #f5f6f8;
+  --bg-page: #f7f6f4;
   --bg-card: #ffffff;
-  --bg-soft: #f0ece7;
-  --border: #e8e3dd;
-  --text: #1c1411;
-  --muted: #7a6a60;
-  --muted-2: #9a8a80;
+  --bg-soft: #f2eee9;
+  --border: #e4ded6;
+  --text: #2b211a;
+  --muted: #6f6258;
+  --muted-2: #92857a;
   --danger: #dc2626;
-  --shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 4px 16px rgb(0 0 0 / 0.05);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px rgb(0 0 0 / 0.04);
+  --shadow: 0 18px 42px rgb(15 23 42 / 0.08);
+  --shadow-sm: 0 8px 22px rgb(15 23 42 / 0.06);
 
-  --palette-deep-sapphire: #6f4a31;
-  --palette-deep-sapphire-rgb: 111 74 49;
-  --palette-june-bud: #f0ece7;
-  --palette-june-bud-rgb: 240 236 231;
-  --palette-deep-saffron: #c98d42;
-  --palette-deep-saffron-rgb: 201 141 66;
+  --palette-deep-sapphire: #7c5a42;
+  --palette-deep-sapphire-rgb: 124 90 66;
+  --palette-june-bud: #f7f1ea;
+  --palette-june-bud-rgb: 247 241 234;
+  --palette-deep-saffron: #a87949;
+  --palette-deep-saffron-rgb: 168 121 73;
   --palette-eggshell: #ffffff;
   --palette-eggshell-rgb: 255 255 255;
-  --theme-surface-alt: #f0ece7;
-  --theme-background: #f5f6f8;
-  --theme-border: #e8e3dd;
+  --theme-surface-alt: #f2eee9;
+  --theme-background: #f7f6f4;
+  --theme-border: #e4ded6;
   --glass-bg: #ffffff;
-  --glass-border: #e8e3dd;
+  --glass-border: #e4ded6;
   --glass-highlight: rgb(255 255 255 / 0.95);
-  --accent-green: #6f4a31;
-  --accent-green80: rgb(111 74 49 / 0.85);
-  --accent-green60: rgb(111 74 49 / 0.6);
-  --accent-green40: rgb(111 74 49 / 0.1);
-  --accent-green20: rgb(111 74 49 / 0.06);
-  --accent-cream: #f0ece7;
-  --accent-cream80: rgb(240 236 231 / 0.95);
-  --accent-cream50: rgb(240 236 231 / 0.7);
-  --accent-cream20: rgb(240 236 231 / 0.4);
-  --accent-gold: #c98d42;
-  --accent-gold80: rgb(201 141 66 / 0.85);
-  --accent-gold50: rgb(201 141 66 / 0.5);
-  --accent-gold20: rgb(201 141 66 / 0.1);
-  --accent: #6f4a31;
-  --text-primary: #1c1411;
-  --text-secondary: #3d2e26;
-  --text-muted: #7a6a60;
-  --management-ink: #1c1411;
-  --ink-900: #1c1411;
-  --ink-800: #3d2e26;
-  --ink-700: #7a6a60;
-  --ink-600: #9a8a80;
-  --ink-400: #c4b8b0;
-  --ink-200: #ece8e3;
+  --accent-green: #7c5a42;
+  --accent-green80: rgb(124 90 66 / 0.85);
+  --accent-green60: rgb(124 90 66 / 0.6);
+  --accent-green40: rgb(124 90 66 / 0.1);
+  --accent-green20: rgb(124 90 66 / 0.06);
+  --accent-cream: #f7f1ea;
+  --accent-cream80: rgb(247 241 234 / 0.95);
+  --accent-cream50: rgb(247 241 234 / 0.72);
+  --accent-cream20: rgb(247 241 234 / 0.42);
+  --accent-gold: #a87949;
+  --accent-gold80: rgb(168 121 73 / 0.85);
+  --accent-gold50: rgb(168 121 73 / 0.5);
+  --accent-gold20: rgb(168 121 73 / 0.1);
+  --accent: #7c5a42;
+  --text-primary: #2b211a;
+  --text-secondary: #4a3b31;
+  --text-muted: #74685f;
+  --management-ink: #2b211a;
+  --ink-900: #2b211a;
+  --ink-800: #3d3028;
+  --ink-700: #5a4d43;
+  --ink-600: #74685f;
+  --ink-400: #a99b8f;
+  --ink-200: #e4ded6;
   --success: #16a34a;
   --success-rgb: 22 163 74;
   --warning: #d97706;
   --warning-rgb: 217 119 6;
-  --shadow-deep: 0 4px 24px rgb(0 0 0 / 0.08);
-  --shadow-soft: 0 1px 6px rgb(0 0 0 / 0.05);
+  --shadow-deep: 0 24px 56px rgb(15 23 42 / 0.1);
+  --shadow-soft: 0 12px 28px rgb(15 23 42 / 0.07);
   --radius-xl: 28px;
   --radius-lg: 18px;
   --radius-md: 14px;
@@ -1050,9 +1140,7 @@ document.body.style.overflow = ''
   --pos-surface-color: #ffffff;
 
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 5% 0%, rgb(201 141 66 / 0.04) 0%, transparent 40%),
-    var(--bg-page);
+  background: var(--bg-page);
   color: var(--text);
 }
 
@@ -1140,26 +1228,27 @@ document.body.style.overflow = ''
 
 .brand-mark,
 .rail-brand-mark {
-  width: 2.35rem;
-  height: 2.35rem;
-  border-radius: 0.95rem;
-  background: linear-gradient(135deg, var(--module-500), var(--module-600));
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.8rem;
+  background: #f7f1ea;
+  border: 1px solid #e4ded6;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 20px color-mix(in srgb, var(--module-500) 26%, transparent);
+  box-shadow: none;
   flex-shrink: 0;
 }
 
 .icon-button {
-  width: 2.4rem;
-  height: 2.4rem;
-  border: none;
-  border-radius: 0.8rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: #fff;
   color: var(--muted);
   cursor: pointer;
   transition: 0.18s ease;
@@ -1167,6 +1256,7 @@ document.body.style.overflow = ''
 
 .icon-button:hover {
   background: var(--bg-soft);
+  border-color: var(--border);
   color: var(--text);
 }
 
@@ -1178,10 +1268,10 @@ document.body.style.overflow = ''
 }
 
 .mobile-header {
-  height: 3.5rem;
-  padding: 0 1rem;
+  min-height: 4.35rem;
+  padding: 0 0.9rem;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 98%, transparent);
   backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
@@ -1218,7 +1308,10 @@ document.body.style.overflow = ''
 .mobile-main {
   flex: 1;
   overflow: auto;
-  padding: 0.85rem 0.75rem 5.5rem;
+  overflow-x: hidden;
+  padding: 0.85rem clamp(0.7rem, 3vw, 1rem) 5.75rem;
+  width: 100%;
+  max-width: 100vw;
 }
 
 .mobile-bottom-nav {
@@ -1227,7 +1320,7 @@ document.body.style.overflow = ''
   left: 0;
   bottom: 0;
   z-index: 90;
-  height: calc(4rem + env(safe-area-inset-bottom));
+  height: calc(4.55rem + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--bg-card) 96%, transparent);
   border-top: 1px solid var(--border);
@@ -1239,18 +1332,23 @@ document.body.style.overflow = ''
 
 .bottom-nav-item {
   height: 100%;
-  min-width: 4rem;
-  padding: 0.35rem;
+  min-width: 4.45rem;
+  min-height: 3.75rem;
+  border-radius: 8px;
+  padding: 0.38rem 0.42rem;
   display: grid;
   justify-items: center;
   align-content: center;
   gap: 0.25rem;
   color: var(--muted);
   font-size: 0.68rem;
+  touch-action: manipulation;
 }
 
 .bottom-nav-item.active {
   color: var(--module-600);
+  background: #f7f1ea;
+  font-weight: 900;
 }
 
 :global(.dark) .bottom-nav-item.active {
@@ -1260,37 +1358,65 @@ document.body.style.overflow = ''
 .mobile-overlay {
   position: fixed;
   inset: 0;
+  height: 100dvh;
   z-index: 110;
-  background: rgb(0 0 0 / 0.5);
+  background: rgb(15 12 10 / 0.46);
+  backdrop-filter: blur(2px);
 }
 
 .mobile-sidebar {
   position: fixed;
+  inset-block: 0;
   top: 0;
   right: 0;
   bottom: 0;
   z-index: 120;
-  width: min(86vw, 330px);
+  width: min(94vw, 410px);
+  height: 100dvh;
+  max-height: 100dvh;
   background: var(--bg-card);
   border-left: 1px solid var(--border);
+  border-radius: 16px 0 0 16px;
   display: flex;
   flex-direction: column;
-  box-shadow: -18px 0 45px rgb(0 0 0 / 0.18);
+  box-shadow: -24px 0 56px rgb(43 33 26 / 0.2);
+  overflow: hidden;
 }
 
 .mobile-sidebar-header {
-  height: 4rem;
-  padding: 0 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 4.6rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
+.mobile-sidebar .accordion-nav {
+  flex: 1;
+  min-height: 0;
+  padding: 0.85rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mobile-sidebar .group-button {
+  min-height: 3.02rem;
+  padding-block: 0.48rem;
+}
+
+.mobile-sidebar .nav-item {
+  min-height: 2.82rem;
+}
+
 .sidebar-title {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.75rem;
 }
 
 .sidebar-title div {
@@ -1298,12 +1424,12 @@ document.body.style.overflow = ''
 }
 
 .sidebar-title strong {
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 
 .sidebar-title small {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.74rem;
 }
 
 /* Desktop */
@@ -1322,15 +1448,16 @@ display: flex;
   }
 
   .desktop-sidebar {
-width: 16rem;
+width: 18.25rem;
 height: 100vh;
 position: sticky;
 top: 0;
 border-left: 1px solid var(--border);
-background: color-mix(in srgb, var(--bg-card) 96%, transparent);
+background: #fbfaf8;
 display: flex;
 flex-direction: column;
-transition: width 0.22s ease;
+box-shadow: -10px 0 30px rgb(43 33 26 / 0.04);
+transition: width 0.22s ease, box-shadow 0.22s ease;
   }
 
   .management-layout.rail-collapsed .desktop-sidebar {
@@ -1338,20 +1465,21 @@ width: 5.8rem;
   }
 
   .sidebar-logo-block {
-min-height: 4rem;
-padding: 0.75rem 1rem;
+min-height: 5.35rem;
+padding: 0.95rem 1rem;
 border-bottom: 1px solid var(--border);
-display: grid;
-gap: 0.65rem;
+display: flex;
+align-items: center;
+gap: 0.7rem;
   }
 
   .rail-mini-toggle {
-width: 2rem;
-height: 2rem;
-justify-self: start;
+width: 2.45rem;
+height: 2.45rem;
+flex-shrink: 0;
 border: 1px solid var(--border);
 border-radius: 0.75rem;
-background: var(--bg-soft);
+background: #fff;
 color: var(--text);
 cursor: pointer;
 display: inline-flex;
@@ -1362,7 +1490,7 @@ justify-content: center;
   .rail-brand {
 display: flex;
 align-items: center;
-gap: 0.7rem;
+gap: 0.75rem;
 color: var(--text);
 min-width: 0;
   }
@@ -1386,6 +1514,16 @@ font-size: 0.72rem;
 justify-content: center;
   }
 
+  .management-layout.rail-collapsed .sidebar-logo-block {
+justify-content: center;
+padding-inline: 0.55rem;
+  }
+
+  .management-layout.rail-collapsed .rail-mini-toggle {
+width: 2.65rem;
+height: 2.65rem;
+  }
+
   .management-layout.rail-collapsed .rail-brand-text,
   .management-layout.rail-collapsed .group-title,
   .management-layout.rail-collapsed .chevron,
@@ -1406,10 +1544,10 @@ flex-direction: column;
   }
 
   .desktop-header {
-height: 3.5rem;
+height: 4.6rem;
 border-bottom: 1px solid var(--border);
 background: color-mix(in srgb, var(--bg-card) 96%, transparent);
-padding: 0 1.5rem;
+padding: 0 1.65rem;
 display: flex;
 align-items: center;
 justify-content: space-between;
@@ -1432,7 +1570,7 @@ font-size: 0.72rem;
   .page-title-wrap h1 {
 margin: 0;
 color: var(--module-title-light);
-font-size: 0.95rem;
+font-size: 1.04rem;
 font-weight: 900;
   }
 
@@ -1449,7 +1587,7 @@ gap: 0.55rem;
   .desktop-main {
 flex: 1;
 overflow: auto;
-padding: 1rem;
+padding: 1.25rem;
   }
 
   .desktop-main > :deep(*) {
@@ -1460,22 +1598,34 @@ margin-inline: auto;
 
 /* Accordion Nav */
 .accordion-nav {
-  padding: 1rem;
-  overflow: auto;
-  display: grid;
-  gap: 0.55rem;
-  align-content: start;
+  padding: 0.9rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
 }
 
 .desktop-nav {
   flex: 1;
+  padding-bottom: 1.1rem;
 }
 
 .nav-group {
-  border: 1px solid var(--border);
-  border-radius: 0.95rem;
+  border: 1px solid #ece6de;
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-card);
+  background: #fff;
+  flex: 0 0 auto;
+  min-height: 0;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.nav-group.open {
+  overflow: hidden;
+  border-color: rgb(124 90 66 / 0.22);
+  box-shadow: 0 10px 24px rgb(43 33 26 / 0.055);
 }
 
 .group-button {
@@ -1483,19 +1633,21 @@ margin-inline: auto;
   border: 0;
   background: transparent;
   color: var(--text);
-  padding: 0.62rem 0.65rem;
+  min-height: 2.82rem;
+  padding: 0.48rem 0.62rem;
   display: flex;
   align-items: center;
   gap: 0.65rem;
   cursor: pointer;
   font-weight: 800;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   transition: 0.18s ease;
+  touch-action: manipulation;
 }
 
 .group-button:hover,
 .group-button.active {
-  background: var(--module-50);
+  background: #f7f1ea;
   color: var(--module-title-light);
 }
 
@@ -1509,8 +1661,8 @@ margin-inline: auto;
 .item-icon {
   width: 2rem;
   height: 2rem;
-  border-radius: 0.7rem;
-  background: var(--bg-soft);
+  border-radius: 8px;
+  background: #f2eee9;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1518,8 +1670,9 @@ margin-inline: auto;
 }
 
 .group-button.active .group-icon {
-  background: var(--module-500);
-  color: white;
+  background: #fff;
+  color: var(--module-600);
+  border: 1px solid #e4ded6;
 }
 
 .group-title {
@@ -1536,14 +1689,19 @@ margin-inline: auto;
 }
 
 .group-items {
-  padding: 0.35rem 0.5rem 0.55rem;
+  padding: 0.32rem 0.42rem 0.5rem;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  background: #fff;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
 }
 
 .nav-item {
-  border-radius: 0.75rem;
-  padding: 0.42rem 0.5rem;
+  border-radius: 8px;
+  min-height: 2.72rem;
+  padding: 0.4rem 0.48rem;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -1552,14 +1710,14 @@ margin-inline: auto;
 }
 
 .nav-item:hover {
-  background: var(--bg-soft);
+  background: #f7f6f4;
   color: var(--text);
 }
 
 .nav-item.active {
-  background: var(--module-50);
+  background: #f7f1ea;
   color: var(--module-title-light);
-  box-shadow: 0 8px 16px color-mix(in srgb, var(--module-500) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--module-600);
 }
 
 :global(.dark) .nav-item.active {
@@ -1568,8 +1726,9 @@ margin-inline: auto;
 }
 
 .nav-item.active .item-icon {
-  background: var(--module-500);
-  color: white;
+  background: #fff;
+  color: var(--module-600);
+  border: 1px solid #e4ded6;
 }
 
 .item-label {
@@ -1580,7 +1739,7 @@ margin-inline: auto;
 }
 
 .item-label strong {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: currentColor;
 }
 
@@ -1596,17 +1755,17 @@ margin-inline: auto;
 /* Sidebar Footer */
 .sidebar-footer {
   border-top: 1px solid var(--border);
-  padding: 0.85rem 1rem;
+  padding: 0.9rem;
   display: grid;
   gap: 0.65rem;
 }
 
 .customer-site-link,
 .theme-toggle {
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  background: var(--bg-soft);
+  border-radius: 8px;
+  background: #fff;
   color: var(--text);
   display: inline-flex;
   align-items: center;
@@ -1623,8 +1782,8 @@ margin-inline: auto;
 .auth-panel,
 .sidebar-auth-card {
   border: 1px solid var(--border);
-  border-radius: 0.95rem;
-  background: color-mix(in srgb, var(--bg-soft) 72%, transparent);
+  border-radius: 8px;
+  background: #f7f6f4;
   padding: 0.75rem;
   display: grid;
   gap: 0.55rem;
@@ -1683,8 +1842,9 @@ margin-inline: auto;
 .header-site-link {
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.75rem;
+  min-height: 2.5rem;
+  padding: 0.62rem 0.95rem;
+  font-size: 0.78rem;
   line-height: 1;
   text-align: center;
   cursor: pointer;
@@ -1780,6 +1940,8 @@ margin-inline: auto;
 @media (max-width: 1023px) {
   .mobile-main {
     overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
 
   .mobile-main :deep(.glass-card),
@@ -1792,6 +1954,7 @@ margin-inline: auto;
   .mobile-main :deep(.surface-card),
   .mobile-main :deep(.management-surface-card) {
     padding: 0.75rem !important;
+    overflow-x: auto;
   }
 
   .mobile-main :deep(.form-grid) {
@@ -1819,22 +1982,22 @@ margin-inline: auto;
     gap: 0.4rem;
   }
 
-  .mobile-main :deep(.primary-btn),
+.mobile-main :deep(.primary-btn),
   .mobile-main :deep(.secondary-btn),
   .mobile-main :deep(.tertiary-btn),
   .mobile-main :deep(.header-auth-btn),
   .mobile-main :deep(.sheet-management-btn) {
-    min-height: 2.35rem;
+    min-height: 2.75rem;
     padding: 0.42rem 0.68rem;
     font-size: 0.8rem;
   }
 
-  .mobile-main :deep(.input),
+.mobile-main :deep(.input),
   .mobile-main :deep(.textarea),
   .mobile-main :deep(select),
   .mobile-main :deep(.searchable-dropdown),
   .mobile-main :deep(.searchable-select) {
-    min-height: 2.3rem;
+    min-height: 2.75rem;
     font-size: 0.82rem;
   }
 
@@ -1845,6 +2008,12 @@ margin-inline: auto;
 
   .mobile-main :deep(table) {
     min-width: 480px;
+  }
+
+  .mobile-main :deep(.table-shell) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
 
   .mobile-main :deep(.table-scroll),
@@ -1865,6 +2034,49 @@ margin-inline: auto;
   .mobile-main :deep(.pos-grid),
   .mobile-main :deep(.order-grid) {
     grid-template-columns: 1fr !important;
+  }
+
+  /* Force all grids inside management pages to single column on mobile */
+  .mobile-main :deep([class*="grid"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* But keep 2-col for specific small grids */
+  .mobile-main :deep(.kpi-grid),
+  .mobile-main :deep(.mini-matrix) {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* KPI cards should wrap properly */
+  .mobile-main :deep(.kpi-card) {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* Charts should not overflow */
+  .mobile-main :deep(canvas),
+  .mobile-main :deep(svg) {
+    max-width: 100% !important;
+  }
+
+  /* Toggle rows and filter controls should wrap */
+  .mobile-main :deep(.toggle-row),
+  .mobile-main :deep(.legend-checks),
+  .mobile-main :deep(.global-controls),
+  .mobile-main :deep(.filters),
+  .mobile-main :deep(.toolbar) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+    grid-template-columns: unset !important;
+  }
+
+  /* Make labels inside controls wrap properly */
+  .mobile-main :deep(.global-controls label),
+  .mobile-main :deep(.filters label),
+  .mobile-main :deep(.toolbar label) {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 }
 
@@ -1915,6 +2127,17 @@ margin-inline: auto;
   transition: transform 0.28s ease;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .slide-right-enter-from,
 .slide-right-leave-to {
   transform: translateX(100%);
@@ -1927,6 +2150,7 @@ a {
 
 /* Mobile auth card spacing */
 .mobile-sidebar .sidebar-auth-card {
-  margin: auto 1rem 1rem;
+  margin: 0 1rem 1rem;
+  flex-shrink: 0;
 }
 </style>

@@ -55,6 +55,17 @@
               </span>
             </template>
 
+            <template #cell-show_on_homepage="{ row }">
+              <label class="check-toggle">
+                <input
+                  type="checkbox"
+                  :checked="Number(row?.show_on_homepage || 1) === 1"
+                  @change="toggleHomepage(row)"
+                />
+                <span class="check-label">{{ Number(row?.show_on_homepage || 1) ? 'بله' : 'خیر' }}</span>
+              </label>
+            </template>
+
             <template #cell-actions="{ row }">
               <div class="actions">
                 <button class="secondary-btn mini" type="button" @click="toggleActive(row)">
@@ -195,6 +206,7 @@ const columns = [
   { key: 'is_group', label: 'is_group' },
   { key: 'restaurant_sort_order', label: 'ترتیب' },
   { key: 'restaurant_active', label: 'وضعیت' },
+  { key: 'show_on_homepage', label: 'صفحه اصلی' },
   { key: 'actions', label: 'عملیات سریع' },
 ]
 
@@ -386,14 +398,42 @@ async function toggleActive(row) {
     return
   }
 
+  const nextActive = Number(row?.restaurant_active || 0) ? 0 : 1
+
   try {
     await updateManagementMenuGroup({
       name: rowName,
-      restaurant_active: Number(row?.restaurant_active || 0) ? 0 : 1,
+      restaurant_active: nextActive,
     })
-    await loadGroups()
+    const idx = rows.value.findIndex(r => String(r?.name || '').trim() === rowName)
+    if (idx !== -1) {
+      rows.value[idx] = { ...rows.value[idx], restaurant_active: nextActive }
+    }
   } catch (err) {
     error.value = err.message || 'تغییر وضعیت گروه ناموفق بود.'
+  }
+}
+
+async function toggleHomepage(row) {
+  error.value = ''
+  const rowName = String(row?.name || '').trim()
+  if (!rowName) {
+    return
+  }
+
+  const nextValue = Number(row?.show_on_homepage || 1) ? 0 : 1
+
+  try {
+    await updateManagementMenuGroup({
+      name: rowName,
+      show_on_homepage: nextValue,
+    })
+    const idx = rows.value.findIndex(r => String(r?.name || '').trim() === rowName)
+    if (idx !== -1) {
+      rows.value[idx] = { ...rows.value[idx], show_on_homepage: nextValue }
+    }
+  } catch (err) {
+    error.value = err.message || 'تغییر وضعیت نمایش صفحه اصلی ناموفق بود.'
   }
 }
 
@@ -483,6 +523,25 @@ loadGroups()
 .state-pill.off {
   background: rgb(var(--palette-deep-saffron-rgb) / 0.2);
   color: var(--ink-800);
+}
+
+.check-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+}
+.check-toggle input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--palette-deep-sapphire, #6F4A31);
+  cursor: pointer;
+}
+.check-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-700, #7a6a60);
 }
 
 .actions {

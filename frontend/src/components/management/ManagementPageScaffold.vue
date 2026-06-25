@@ -29,34 +29,40 @@ defineProps({
 <style scoped>
 .management-page {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .hero-card {
-  border-radius: 22px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
-  background: #fff;
-  box-shadow: 0 10px 24px rgb(15 23 42 / 0.06);
+  border-radius: 8px;
+  border: 1px solid #e4ded6;
+  background: linear-gradient(180deg, #fff 0%, #fbfaf8 100%);
+  box-shadow: 0 14px 34px rgb(15 23 42 / 0.07);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.7rem;
+  gap: 0.85rem;
+  padding: clamp(0.9rem, 2vw, 1.25rem);
 }
 
 .hero-card h2 {
   margin: 0;
-  font-size: 1.06rem;
+  color: #2b211a;
+  font-size: clamp(1.02rem, 1vw + 0.8rem, 1.35rem);
+  font-weight: 900;
+  line-height: 1.35;
 }
 
 .hero-card p {
   margin: 0.24rem 0 0;
-  font-size: 0.8rem;
+  color: #74685f;
+  font-size: 0.86rem;
+  line-height: 1.7;
 }
 
 .hero-actions {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
@@ -64,13 +70,13 @@ defineProps({
   .hero-card {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.55rem;
+    gap: 0.75rem;
   }
 
   .hero-actions {
     width: 100%;
     overflow-x: auto;
-    padding-bottom: 0.15rem;
+    padding-bottom: 0.2rem;
     flex-wrap: nowrap;
   }
 }

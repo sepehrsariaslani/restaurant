@@ -292,7 +292,9 @@ function selectOption(value) {
     next.push(value)
   }
   emit('update:modelValue', next)
-  close()
+  searchQuery.value = ''
+  highlightedIndex.value = -1
+  nextTick(() => searchInputRef.value?.focus?.())
 }
 
 function clearValue() {
@@ -381,6 +383,11 @@ onBeforeUnmount(() => {
 .searchable-dropdown {
   position: relative;
   width: 100%;
+  z-index: 1;
+}
+
+.searchable-dropdown.is-open {
+  z-index: 1200;
 }
 
 .trigger {
@@ -444,7 +451,7 @@ onBeforeUnmount(() => {
   background: #fff;
   box-shadow: 0 18px 30px rgb(15 23 42 / 0.14);
   overflow: hidden;
-  z-index: 40;
+  z-index: 1201;
 }
 
 .search-row {

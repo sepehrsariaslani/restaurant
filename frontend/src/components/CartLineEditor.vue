@@ -7,7 +7,8 @@
 
       <div class="body">
         <h3>{{ line.item_title }}</h3>
-        <p class="muted" v-if="summary.length">{{ summary[0] }}</p>
+        <p class="muted" v-if="isBuilderItem">{{ builderSummaryText }}</p>
+        <p class="muted" v-else-if="summary.length">{{ summary[0] }}</p>
         <p class="muted" v-else>سفارشی سازی نشده</p>
         <strong>{{ formatMoney(line.unit_price_preview, currency) }}</strong>
       </div>
@@ -21,13 +22,17 @@
 
     <div class="foot-row">
       <div class="line-actions">
-        <button class="mini-btn" type="button" @click="$emit('edit-customization')">ویرایش مواد</button>
+        <a v-if="isBuilderItem" class="mini-btn" :href="builderEditUrl">ویرایش سفارشی‌سازی</a>
+        <button v-else class="mini-btn" type="button" @click="$emit('edit-customization')">ویرایش مواد</button>
         <a class="mini-btn" :href="`/item/${line.item_slug}?edit=${line.id}`">صفحه محصول</a>
       </div>
       <strong class="line-total">{{ formatMoney(line.line_total_preview, currency) }}</strong>
     </div>
 
-    <ul class="extra-list" v-if="summary.length > 1">
+    <ul class="extra-list" v-if="isBuilderItem && builderDetails.length">
+      <li v-for="entry in builderDetails.slice(0, 3)" :key="entry">{{ entry }}</li>
+    </ul>
+    <ul class="extra-list" v-else-if="summary.length > 1">
       <li v-for="entry in summary.slice(1, 3)" :key="entry">{{ entry }}</li>
     </ul>
   </GlassCard>
@@ -60,6 +65,32 @@ const summary = computed(() =>
 const lineItemImage = computed(
   () => String(props.line?.item_image || props.line?.image || props.line?.item?.image || '').trim() || fallbackImage,
 )
+
+const isBuilderItem = computed(() => {
+  const c = props.line?.customization || {}
+  return Boolean(c.builder_selection_id && c.builder_summary)
+})
+
+const builderSummaryText = computed(() => {
+  const c = props.line?.customization || {}
+  return c.builder_summary || 'سفارشی‌سازی بیلدر'
+})
+
+const builderDetails = computed(() => {
+  const c = props.line?.customization || {}
+  if (!c.builder_selections || !Array.isArray(c.builder_selections)) return []
+  return c.builder_selections.map((s) => {
+    const label = s.step_title || s.step_key || ''
+    const option = s.option_label || s.option_key || ''
+    return label && option ? `${label}: ${option}` : label || option || ''
+  }).filter(Boolean)
+})
+
+const builderEditUrl = computed(() => {
+  const c = props.line?.customization || {}
+  const editId = c.builder_selection_id || ''
+  return `/item/${props.line.item_slug}?edit=${props.line.id}&builder_edit=${editId}`
+})
 </script>
 
 <style scoped>

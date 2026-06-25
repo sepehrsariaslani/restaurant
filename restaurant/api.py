@@ -177,14 +177,44 @@ def _load_management_theme_settings():
 
 
 def _split_tags(raw_value):
+    """Return list of tag titles from either old comma-separated string or new child table"""
     if not raw_value:
         return []
+    # If it's already a list (from child table), extract titles
+    if isinstance(raw_value, list):
+        titles = []
+        for item in raw_value:
+            if isinstance(item, dict):
+                title = item.get("title") or item.get("tag_title") or ""
+                if title:
+                    titles.append(str(title).strip())
+            elif isinstance(item, str) and item.strip():
+                titles.append(item.strip())
+        return titles
+    # Old comma-separated string
     parts = []
     for chunk in str(raw_value).replace("\n", ",").split(","):
         tag = (chunk or "").strip()
         if tag:
             parts.append(tag)
     return parts
+
+
+def _get_item_tag_titles(item_name):
+    """Get tag titles for an item from the new child table"""
+    if not item_name:
+        return []
+    links = frappe.db.sql(
+        "SELECT tag FROM `tabRestaurant Item Tag Link` WHERE parent=%s AND parentfield='restaurant_item_tag_table' ORDER BY idx",
+        (item_name,),
+        as_dict=True,
+    )
+    titles = []
+    for link in links:
+        title = frappe.db.get_value("Restaurant Item Tag", link.tag, "title")
+        if title:
+            titles.append(str(title))
+    return titles
 
 
 def _read_field(source, fieldname):
@@ -2021,29 +2051,69 @@ def _process_management_pos_payment(order_payload, payment_input):
 
 
 def _get_branding_payload():
-    try:
-        settings = frappe.get_cached_doc("Restaurant Web Settings")
-    except Exception:
-        settings = None
-
-    if not settings:
-        return {
-            "name": "Restaurant",
-            "tagline": "منوی آنلاین تازه، سریع و شفاف",
-            "hero_title": "سالادهای تازه و غذای سالم روز",
-            "hero_subtitle": "با انتخاب کامل مواد داخل هر غذا، سفارش مهمان را سریع ثبت کنید.",
-            "hero_image": "",
-            "primary_cta_label": "ورود به منو",
-        }
-
-    return {
-        "name": settings.brand_name or "Restaurant",
-        "tagline": settings.brand_tagline or "منوی آنلاین تازه، سریع و شفاف",
-        "hero_title": settings.hero_title or "سالادهای تازه و غذای سالم روز",
-        "hero_subtitle": settings.hero_subtitle or "با انتخاب کامل مواد داخل هر غذا، سفارش مهمان را سریع ثبت کنید.",
-        "hero_image": settings.hero_image or "",
-        "primary_cta_label": settings.primary_cta_label or "ورود به منو",
+    # Layer 1: defaults
+    result = {
+        "name": "Restaurant",
+        "tagline": "منوی آنلاین تازه، سریع و شفاف",
+        "hero_title": "سالادهای تازه و غذای سالم روز",
+        "hero_subtitle": "با انتخاب کامل مواد داخل هر غذا، سفارش مهمان را سریع ثبت کنید.",
+        "hero_image": "",
+        "primary_cta_label": "ورود به منو",
+        "header_variant": "classic",
+        "menu_search_variant": "search-card",
+        "hero_section_variant": "off",
+        "footer_variant": "full",
+        "card_variant": "classic",
+        "hero_section_title": "",
+        "hero_section_description": "",
+        "hero_section_cta": "",
+        "footer_description": "",
+        "footer_phone": "",
+        "footer_email": "",
+        "footer_address": "",
+        "footer_instagram": "",
+        "footer_telegram": "",
+        "footer_copyright": "",
     }
+
+    # Layer 2: web_settings blob (primary storage)
+    try:
+        raw_blob = frappe.defaults.get_global_default(MANAGEMENT_SITE_SETTINGS_BLOB_KEY)
+        blob = _parse_json(raw_blob, {})
+        if isinstance(blob, dict) and blob:
+            for key in result:
+                if key in blob and blob[key] not in (None, ""):
+                    result[key] = blob[key]
+    except Exception:
+        pass
+
+    # Layer 3: display variant settings
+    try:
+        raw_dv = frappe.defaults.get_global_default(MANAGEMENT_DISPLAY_VARIANT_KEY)
+        dv = _parse_json(raw_dv, {})
+        if isinstance(dv, dict):
+            for key in ["header_variant", "menu_search_variant", "hero_section_variant", "footer_variant", "card_variant"]:
+                if key in dv and dv[key] not in (None, ""):
+                    result[key] = dv[key]
+    except Exception:
+        pass
+
+    # Layer 4: Restaurant Web Settings DocType (only basic fields)
+    try:
+        if frappe.db.exists("DocType", "Restaurant Web Settings"):
+            settings = frappe.get_cached_doc("Restaurant Web Settings")
+            for key in ["tagline", "hero_title", "hero_subtitle", "hero_image", "primary_cta_label"]:
+                val = settings.get(key)
+                if val not in (None, ""):
+                    result[key] = val
+            # brand_name is special - use the field directly
+            brand_name = settings.get("brand_name")
+            if brand_name not in (None, ""):
+                result["name"] = brand_name
+    except Exception:
+        pass
+
+    return result
 
 
 def _get_hero_slides(branch=None):
@@ -2224,6 +2294,17 @@ def _has_doctype_field(doctype, fieldname):
         return False
 
 
+def _ensure_coming_soon_field():
+    if _has_column("Item", "restaurant_coming_soon"):
+        return True
+    try:
+        setup_coming_soon_field()
+        frappe.clear_cache(doctype="Item")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "restaurant.api.ensure_coming_soon_field")
+    return _has_column("Item", "restaurant_coming_soon")
+
+
 def _has_core_menu_support():
     return all(
         [
@@ -2241,6 +2322,102 @@ def _use_core_menu_data():
     if not _has_core_menu_support():
         frappe.throw(_("Core restaurant fields are not installed on Item/Item Group."))
     return True
+
+
+def _core_item_image_field():
+    for fieldname in ("image", "item_image", "website_image"):
+        if _has_column("Item", fieldname):
+            return fieldname
+    return "image"
+
+
+def sync_item_image_from_attachment(doc, method=None):
+    """After insert/update Item: if image field is empty but attachments have images,
+    use the first attached image as the item's image."""
+    if not doc or not doc.name:
+        return
+
+    image_field = _core_item_image_field()
+    current_image = getattr(doc, image_field, "") or ""
+    if current_image:
+        return
+
+    # Find first image attachment
+    try:
+        attachments = frappe.get_all(
+            "File",
+            filters={
+                "attached_to_doctype": "Item",
+                "attached_to_name": doc.name,
+                "is_private": 0,
+            },
+            fields=["name", "file_url"],
+            order_by="creation asc",
+            limit=10,
+        )
+    except Exception:
+        return
+
+    for att in attachments or []:
+        file_url = att.get("file_url") or ""
+        if file_url and ("/files/" in file_url or "http" in file_url):
+            try:
+                frappe.db.set_value("Item", doc.name, image_field, file_url, update_modified=False)
+            except Exception:
+                pass
+            break
+
+def sync_item_image_from_file_attachment(doc, method=None):
+    """After insert on File: if the file is attached to an Item and the Item's
+    image field is empty, use this file's URL as the item's image.
+    This handles images uploaded via Management panel (POS/back-office)."""
+    if not doc or not doc.name:
+        return
+
+    # Only process files attached to Item
+    if doc.get("attached_to_doctype") != "Item" or not doc.get("attached_to_name"):
+        return
+
+    item_name = doc.get("attached_to_name")
+    file_url = doc.get("file_url") or ""
+
+    if not file_url:
+        return
+
+    # Check if item already has an image
+    image_field = _core_item_image_field()
+    current_image = frappe.db.get_value("Item", item_name, image_field) or ""
+    if current_image:
+        return
+
+    # Set the file as item's image
+    try:
+        frappe.db.set_value("Item", item_name, image_field, file_url, update_modified=False)
+        print(f"HOOK FIRED: Set image for {item_name} to {file_url}")
+    except Exception as e:
+        print(f"HOOK ERROR: {e}")
+
+
+def sync_item_image_on_file_change(doc, method=None):
+    """Wildcard on_update hook: when any doc is updated, check if it's a File
+    attached to an Item — if so, sync the Item's image field."""
+    if doc.doctype != "File":
+        return
+    attached_to_doctype = getattr(doc, "attached_to_doctype", "") or ""
+    attached_to_name = getattr(doc, "attached_to_name", "") or ""
+    if attached_to_doctype != "Item" or not attached_to_name:
+        return
+    file_url = (getattr(doc, "file_url", "") or "").strip()
+    if not file_url or file_url.startswith("http"):
+        return  # skip external URLs or empty
+    try:
+        image_field = _core_item_image_field()
+        current_image = frappe.db.get_value("Item", attached_to_name, image_field) or ""
+        if not current_image:
+            frappe.db.set_value("Item", attached_to_name, image_field, file_url, update_modified=False)
+            print(f"FILE HOOK: Set image for {attached_to_name} to {file_url}")
+    except Exception as e:
+        print(f"FILE HOOK ERROR: {e}")
 
 
 def _core_item_filters(branch=None):
@@ -2265,7 +2442,44 @@ def _core_category_filters(is_subcategory=0):
     return filters
 
 
-def _core_item_image_field():
+def _ensure_item_group_homepage_field():
+    """Ensure show_on_homepage custom field exists on Item Group"""
+    fieldname = "show_on_homepage"
+    if _has_column("Item Group", fieldname):
+        return
+    try:
+        frappe.get_doc({
+            "doctype": "Custom Field",
+            "dt": "Item Group",
+            "fieldname": fieldname,
+            "label": "نمایش در صفحه اصلی",
+            "fieldtype": "Check",
+            "default": "1",
+            "insert_after": "restaurant_active",
+        }).insert(ignore_permissions=True)
+        frappe.clear_cache(doctype="Item Group")
+    except Exception:
+        pass
+
+
+def _ensure_item_tags_field():
+    """Ensure restaurant_item_tags custom field exists on Item"""
+    fieldname = "restaurant_item_tags"
+    if _has_column("Item", fieldname):
+        return
+    try:
+        frappe.get_doc({
+            "doctype": "Custom Field",
+            "dt": "Item",
+            "fieldname": fieldname,
+            "label": "تگ‌های محصول",
+            "fieldtype": "Small Text",
+            "description": "تگ‌ها را با کاما جدا کنید. مثال: رژیمی, پرفروش, وگان",
+            "insert_after": "restaurant_allergen_tags",
+        }).insert(ignore_permissions=True)
+        frappe.clear_cache(doctype="Item")
+    except Exception:
+        pass
     if _has_column("Item", "item_image"):
         return "item_image"
     return "image"
@@ -2334,28 +2548,39 @@ def _get_core_subcategory_meta_map():
     }
 
 
+def _get_default_item_price_rate(row, price_list=None):
+    price_list = (price_list or _get_default_selling_price_list_name() or "").strip()
+    if not price_list:
+        return None
+
+    candidates = []
+    for value in (row.get("name"), row.get("item_code")):
+        normalized = (value or "").strip()
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+
+    for item_code in candidates:
+        rate = frappe.db.get_value(
+            "Item Price",
+            {
+                "item_code": item_code,
+                "price_list": price_list,
+                "selling": 1,
+            },
+            "price_list_rate",
+        )
+        if rate not in (None, ""):
+            return flt(rate)
+    return None
+
+
 def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None):
     category_meta_map = category_meta_map or {}
     subcategory_meta_map = subcategory_meta_map or {}
     category_meta = category_meta_map.get(row.restaurant_category, {})
     subcategory_meta = subcategory_meta_map.get(row.restaurant_subcategory, {})
-    default_price_list = _get_default_selling_price_list_name()
-    item_price = None
-    if default_price_list:
-        item_price = frappe.db.get_value(
-            "Item Price",
-            {
-                "item_code": row.item_code,
-                "price_list": default_price_list,
-                "selling": 1
-            },
-            "price_list_rate"
-        )
-    base_price = (
-        flt(item_price)
-        or flt(row.restaurant_base_price)
-        or flt(row.standard_rate)
-    )
+    item_price = _get_default_item_price_rate(row)
+    base_price = item_price if item_price is not None else (flt(row.restaurant_base_price) or flt(row.standard_rate))
     nutrition = _nutrition_payload(row)
 
     return {
@@ -2371,6 +2596,8 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
         "subcategory": row.restaurant_subcategory,
         "subcategory_title": subcategory_meta.get("title"),
         "subcategory_slug": subcategory_meta.get("slug"),
+        "sort_order": cint(row.get("restaurant_sort_order") or 0),
+        "restaurant_sort_order": cint(row.get("restaurant_sort_order") or 0),
         "nutrition": nutrition,
         "nutrition_kcal": nutrition.get("kcal"),
         "nutrition_protein_g": nutrition.get("protein_g"),
@@ -2379,6 +2606,9 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
         "nutrition_fat_g": nutrition.get("fat_g"),
         "nutrition_protein_percent": nutrition.get("protein_percent"),
         "has_customization": cint(row.get("has_customization") or 0),
+        "has_bom": cint(row.get("has_bom") or 0),
+        "tags": _split_tags(getattr(row, "restaurant_item_tags", None)) or _get_item_tag_titles(getattr(row, "name", None)),
+        "coming_soon": cint(getattr(row, "restaurant_coming_soon", 0)),
     }
 
 
@@ -2397,6 +2627,30 @@ def _count_core_menu_items(filters=None, or_filters=None):
     if not template_rows:
         return 0
     return cint(template_rows[0].get("total") or 0)
+
+
+def _get_items_with_bom(item_names):
+    """Return a dict of {item_name: True} for items that have an active BOM."""
+    names = [n for n in (item_names or []) if n]
+    if not names:
+        return {}
+    bom_rows = frappe.get_all(
+        "BOM",
+        filters={
+            "item": ["in", names],
+            "is_active": 1,
+            "docstatus": ["!=", 2],
+        },
+        fields=["item"],
+        ignore_permissions=True,
+        limit_page_length=5000,
+    )
+    result = {}
+    for row in bom_rows or []:
+        item_code = (row.get("item") or "").strip()
+        if item_code and item_code not in result:
+            result[item_code] = True
+    return result
 
 
 def _menu_item_customization_flags(item_names=None):
@@ -2710,12 +2964,14 @@ def _apply_menu_customization_flags(rows):
             item_names.append(variant_of)
 
     flags = _menu_item_customization_flags(item_names)
+    bom_item_map = _get_items_with_bom(item_names)
     out = []
     for row in rows or []:
         payload = frappe._dict(dict(row))
         item_name = (payload.get("name") or "").strip()
         variant_of = (payload.get("variant_of") or "").strip()
         payload["has_customization"] = 1 if (flags.get(item_name) or (variant_of and flags.get(variant_of))) else 0
+        payload["has_bom"] = 1 if (bom_item_map.get(item_name) or (variant_of and bom_item_map.get(variant_of))) else 0
         out.append(payload)
     return out
 
@@ -2725,6 +2981,9 @@ def _get_core_menu_boot(branch=None):
     category_meta_map = _get_core_category_meta_map()
     subcategory_meta_map = _get_core_subcategory_meta_map()
     nutrition_fields = _available_item_nutrition_fields()
+
+    _ensure_item_group_homepage_field()
+    _ensure_item_tags_field()
 
     categories = frappe.get_all(
         "Item Group",
@@ -2736,10 +2995,15 @@ def _get_core_menu_boot(branch=None):
             "restaurant_description as description",
             "image",
             "restaurant_sort_order as sort_order",
+            "show_on_homepage",
         ],
         ignore_permissions=True,
         order_by="restaurant_sort_order asc, item_group_name asc",
     )
+
+    # Filter out categories that have show_on_homepage = 0
+    if _has_column("Item Group", "show_on_homepage"):
+        categories = [c for c in categories if c.get("show_on_homepage") != 0]
 
     category_item_fields = [
         "name",
@@ -2753,6 +3017,7 @@ def _get_core_menu_boot(branch=None):
         "restaurant_category",
         "restaurant_subcategory",
         "restaurant_sort_order",
+        "restaurant_item_tags",
     ]
     for fieldname in nutrition_fields:
         if fieldname not in category_item_fields:
@@ -2811,6 +3076,7 @@ def _get_core_menu_boot(branch=None):
         f"{image_field} as image",
         "restaurant_category",
         "restaurant_subcategory",
+        "restaurant_sort_order",
     ]
     for fieldname in nutrition_fields:
         if fieldname not in featured_item_fields:
@@ -2957,6 +3223,8 @@ def _get_core_menu_boot(branch=None):
         "branding": _get_branding_payload(),
         "checkout_map": _get_checkout_map_settings(),
         "theme_settings": _load_management_theme_settings(),
+        "loader_settings": _load_management_loader_settings(),
+        "user_roles": list(frappe.get_roles(frappe.session.user)) if frappe.session.user != "Guest" else [],
     }
 
 
@@ -3038,10 +3306,13 @@ def _get_core_menu_items(category_slug=None, subcategory_slug=None, search=None,
         f"{image_field} as image",
         "restaurant_category",
         "restaurant_subcategory",
+        "restaurant_sort_order",
     ]
     for fieldname in nutrition_fields:
         if fieldname not in item_fields:
             item_fields.append(fieldname)
+    if _has_column("Item", "restaurant_coming_soon"):
+        item_fields.append("restaurant_coming_soon")
 
     template_rows = frappe.get_all(
         "Item",
@@ -3375,6 +3646,9 @@ def _get_core_item_detail(item_slug, branch=None):
         item_fields = ["name"]
         if ingredient_image_field:
             item_fields.append(ingredient_image_field)
+        for _img_field in ("website_image", "image", "item_image"):
+            if _img_field not in item_fields and _has_column("Item", _img_field):
+                item_fields.append(_img_field)
         for fieldname in nutrition_fields:
             if _has_column("Item", fieldname):
                 item_fields.append(fieldname)
@@ -3413,7 +3687,15 @@ def _get_core_item_detail(item_slug, branch=None):
         ingredient_item = (row.get("ingredient_item") or "").strip()
         ingredient_item_doc = ingredient_item_map.get(ingredient_item, {})
         ingredient_nutrition = _nutrition_per_unit_payload(ingredient_item_doc)
-        ingredient_image = ingredient_item_doc.get(ingredient_image_field) if ingredient_image_field else ""
+        ingredient_image = row.get("image") or ""
+        if not ingredient_image:
+            ingredient_image = ingredient_item_doc.get(ingredient_image_field) if ingredient_image_field else ""
+        if not ingredient_image:
+            for _img_field in ("item_image", "website_image", "image"):
+                _val = ingredient_item_doc.get(_img_field) or ""
+                if _val:
+                    ingredient_image = _val
+                    break
         uom_factor = _nutrition_factor_from_item_qty(ingredient_item, base_qty, row.get("qty_uom"))
         _add_nutrition_to_totals(estimated_nutrition, ingredient_nutrition, uom_factor)
 
@@ -3472,6 +3754,23 @@ def _get_core_item_detail(item_slug, branch=None):
             min((flt(item_nutrition["protein_g"]) * 4 * 100.0) / flt(item_nutrition["kcal"]), 100.0), 1
         )
 
+    # Resolve price: default selling price list > restaurant_base_price > standard_rate
+    _price_list_rate = None
+    try:
+        _price_list_rate = _get_default_item_price_rate(doc)
+    except Exception:
+        pass
+    _base_price = _price_list_rate if _price_list_rate is not None else flt(doc.restaurant_base_price or doc.standard_rate)
+
+    # Resolve image: try multiple fields
+    _image = getattr(doc, image_field, "") or ""
+    if not _image:
+        for _img_field in ("item_image", "website_image", "image"):
+            _val = getattr(doc, _img_field, "") or ""
+            if _val:
+                _image = _val
+                break
+
     item_payload = {
         "name": doc.name,
         "slug": doc.restaurant_slug,
@@ -3484,11 +3783,13 @@ def _get_core_item_detail(item_slug, branch=None):
         else doc.item_name,
         "short_desc": doc.restaurant_short_desc,
         "long_desc": doc.restaurant_long_desc or doc.description,
-        "base_price": flt(doc.restaurant_base_price or doc.standard_rate),
-        "image": getattr(doc, image_field, ""),
+        "base_price": _base_price,
+        "image": _image,
         "category": doc.restaurant_category,
+        "category_title": frappe.db.get_value("Item Group", doc.restaurant_category, "item_group_name") or doc.restaurant_category,
         "category_slug": category_slug,
         "subcategory": doc.restaurant_subcategory,
+        "subcategory_title": frappe.db.get_value("Item Group", doc.restaurant_subcategory, "item_group_name") or doc.restaurant_subcategory,
         "subcategory_slug": subcategory_slug or "",
         "prep_time_mins": cint(doc.get("restaurant_prep_time_mins") or 0),
         "nutrition": item_nutrition,
@@ -3501,6 +3802,8 @@ def _get_core_item_detail(item_slug, branch=None):
         "variant_of": template_doc.name if template_doc.name != doc.name else "",
         "variant_fixed_attributes": fixed_attribute_values if fixed_attribute_values else {},
         "variant_attributes": _variant_attribute_public_payload(doc.name),
+        "has_bom": 1 if frappe.db.exists("BOM", {"item": doc.name, "is_active": 1, "docstatus": ["!=", 2]}) else 0,
+        "tags": _split_tags(getattr(doc, "restaurant_item_tags", None)),
     }
 
     return {
@@ -4683,11 +4986,17 @@ def _get_bom_ingredient_rows(menu_item_doc):
     rows = []
     item_meta_cache = {}
     for row in sorted(bom_doc.get("items") or [], key=lambda d: cint(d.idx or 0)):
+        ingredient_item_code = (row.get("item_code") or "").strip()
+        ingredient_image = ""
+        if ingredient_item_code:
+            ingredient_image = frappe.db.get_value("Item", ingredient_item_code, "image") or ""
+        
         alternative_options = _get_bom_row_alternative_options(bom_doc, row, item_meta_cache=item_meta_cache)
         payload = {
             "ingredient_name": row.get("restaurant_customer_label") or row.get("item_name") or row.get("item_code"),
             "customer_label": row.get("restaurant_customer_label") or row.get("item_name") or row.get("item_code"),
-            "ingredient_item": (row.get("item_code") or "").strip(),
+            "ingredient_item": ingredient_item_code,
+            "image": ingredient_image,
             "qty_uom": row.get("uom") or row.get("stock_uom"),
             "base_qty": flt(row.get("qty") or 0),
             "is_included_by_default": cint(row.get("restaurant_is_included_by_default")),
@@ -4921,6 +5230,7 @@ def get_menu_items(category_slug=None, subcategory_slug=None, search=None, page=
 
 @frappe.whitelist(allow_guest=True)
 def get_item_detail(item_slug, branch=None):
+    _ensure_item_tags_field()
     try:
         return _get_core_item_detail(item_slug=item_slug, branch=branch)
     except Exception:
@@ -4928,8 +5238,173 @@ def get_item_detail(item_slug, branch=None):
         raise
 
 
-def _ensure_mobile(value):
-    mobile = "".join(ch for ch in str(value or "") if ch.isdigit())
+@frappe.whitelist(allow_guest=True)
+def test_item_tags():
+    """Test endpoint to verify item tags field exists and works"""
+    _ensure_item_tags_field()
+    has_field = frappe.db.has_column("Item", "restaurant_item_tags")
+    items = frappe.get_all(
+        "Item",
+        fields=["name", "item_name", "restaurant_item_tags"],
+        limit=5,
+    )
+    return {
+        "field_exists": has_field,
+        "sample_items": [
+            {"name": i.name, "title": i.item_name, "tags": i.restaurant_item_tags or ""}
+            for i in items
+        ],
+    }
+
+@frappe.whitelist(allow_guest=True)
+def set_item_tags(item_name, tags):
+    """Set tags for an item. Tags should be comma-separated."""
+    if not frappe.db.has_column("Item", "restaurant_item_tags"):
+        _ensure_item_tags_field()
+    frappe.db.set_value("Item", item_name, "restaurant_item_tags", tags or "")
+    frappe.db.commit()
+    return {"status": "ok", "item": item_name, "tags": tags}
+
+
+@frappe.whitelist(allow_guest=True)
+def find_items_for_salad():
+    """Find items needed for protein salad"""
+    terms = ['فیله مرغ', 'سینه مرغ', 'تخم مرغ', 'خیار', 'کاهو', 'پنیر فتا', 'آفتابگردان', 'بادام', 'کاسه کرافت', 'سالاد', 'مرغ']
+    results = {}
+    for term in terms:
+        items = frappe.get_all('Item', fields=['name', 'item_name', 'item_group', 'stock_uom', 'restaurant_nutrition_kcal', 'restaurant_nutrition_protein_g', 'restaurant_nutrition_carb_g', 'restaurant_nutrition_fat_g'], filters={'item_name': ['like', f'%{term}%'], 'disabled': 0}, limit=5)
+        if items:
+            results[term] = items
+    return results
+
+
+@frappe.whitelist(allow_guest=True)
+def create_protein_salad():
+    """Create protein salad product with BOM"""
+    frappe.set_user('Administrator')
+
+    # Step 1: Create missing items
+    new_items = [
+        {'item_code': 'فیله مرغ', 'item_name': 'فیله مرغ', 'item_group': 'مواد اولیه', 'stock_uom': 'گرم', 'is_stock_item': 1, 'restaurant_nutrition_kcal': 1.65, 'restaurant_nutrition_protein_g': 0.31, 'restaurant_nutrition_carb_g': 0, 'restaurant_nutrition_fat_g': 0.036},
+        {'item_code': 'تخم مرغ خالص', 'item_name': 'تخم مرغ خالص', 'item_group': 'مواد اولیه', 'stock_uom': 'عدد', 'is_stock_item': 1, 'restaurant_nutrition_kcal': 155.0, 'restaurant_nutrition_protein_g': 12.5, 'restaurant_nutrition_carb_g': 1.1, 'restaurant_nutrition_fat_g': 11.0},
+        {'item_code': 'پنیر فتا', 'item_name': 'پنیر فتا', 'item_group': 'مواد اولیه', 'stock_uom': 'گرم', 'is_stock_item': 1, 'restaurant_nutrition_kcal': 2.64, 'restaurant_nutrition_protein_g': 0.14, 'restaurant_nutrition_carb_g': 0.04, 'restaurant_nutrition_fat_g': 0.21},
+        {'item_code': 'تخمه آفتابگردان', 'item_name': 'تخمه آفتابگردان', 'item_group': 'مواد اولیه', 'stock_uom': 'گرم', 'is_stock_item': 1, 'restaurant_nutrition_kcal': 5.84, 'restaurant_nutrition_protein_g': 0.21, 'restaurant_nutrition_carb_g': 0.2, 'restaurant_nutrition_fat_g': 0.51},
+        {'item_code': 'بادام درختی', 'item_name': 'بادام درختی', 'item_group': 'مواد اولیه', 'stock_uom': 'گرم', 'is_stock_item': 1, 'restaurant_nutrition_kcal': 5.79, 'restaurant_nutrition_protein_g': 0.21, 'restaurant_nutrition_carb_g': 0.22, 'restaurant_nutrition_fat_g': 0.49},
+    ]
+
+    created_items = []
+    for item_data in new_items:
+        if not frappe.db.exists('Item', item_data['item_code']):
+            doc = frappe.new_doc('Item')
+            for key, value in item_data.items():
+                setattr(doc, key, value)
+            doc.insert(ignore_permissions=True)
+            created_items.append(item_data['item_code'])
+
+    frappe.db.commit()
+
+    # Step 2: Create the salad product
+    salad_name = 'سالاد فیله پروتئینی'
+    if not frappe.db.exists('Item', salad_name):
+        salad = frappe.new_doc('Item')
+        salad.item_code = salad_name
+        salad.item_name = salad_name
+        salad.item_group = 'محصولات'
+        salad.stock_uom = 'عدد'
+        salad.is_stock_item = 1
+        salad.is_sales_item = 1
+        salad.restaurant_enabled = 1
+        salad.restaurant_category = frappe.db.get_value('Item Group', {'name': ['like', '%سالاد%']}, 'name') or 'محصولات'
+        salad.restaurant_slug = 'protein-fillet-salad'
+        salad.restaurant_short_desc = 'سالاد فیله مرغ پروتئینی با کاهو، خیار، تخم مرغ، پنیر فتا و تخمه‌ها'
+        salad.restaurant_item_tags = 'رژیمی, پروتئینی, سالاد'
+        salad.restaurant_nutrition_kcal = 0  # Will be calculated from BOM
+        salad.restaurant_nutrition_protein_g = 0
+        salad.insert(ignore_permissions=True)
+    else:
+        salad = frappe.get_doc('Item', salad_name)
+
+    frappe.db.commit()
+
+    # Step 3: Create BOM
+    bom_name = f'BOM-{salad_name}-001'
+    if not frappe.db.exists('BOM', bom_name):
+        bom = frappe.new_doc('BOM')
+        bom.item = salad_name
+        bom.bom_name = bom_name
+        bom.quantity = 1
+        bom.uom = 'عدد'
+        bom.is_active = 1
+        bom.is_default = 1
+        bom.with_operations = 0
+        bom.rm_cost_as_per = 'Valuation Rate'
+
+        # BOM items - quantities for one serving
+        bom_items = [
+            {'item_code': 'فیله مرغ', 'qty': 150, 'uom': 'گرم'},      # 150g chicken fillet
+            {'item_code': 'کاهو فرانسوی', 'qty': 80, 'uom': 'گرم'},    # 80g lettuce
+            {'item_code': 'خیار', 'qty': 60, 'uom': 'گرم'},            # 60g cucumber
+            {'item_code': 'تخم مرغ خالص', 'qty': 2, 'uom': 'عدد'},     # 2 eggs
+            {'item_code': 'پنیر فتا', 'qty': 30, 'uom': 'گرم'},        # 30g feta
+            {'item_code': 'تخمه آفتابگردان', 'qty': 10, 'uom': 'گرم'},  # 10g sunflower seeds
+            {'item_code': 'بادام درختی', 'qty': 10, 'uom': 'گرم'},     # 10g almonds
+            {'item_code': 'کاسه کرافت بزرگ', 'qty': 1, 'uom': 'عدد'},  # 1 kraft bowl
+        ]
+
+        for bi in bom_items:
+            bom.append('items', {
+                'item_code': bi['item_code'],
+                'qty': bi['qty'],
+                'uom': bi['uom'],
+                'rate': 0,
+                'include_item_in_manufacturing': 1,
+            })
+
+        bom.insert(ignore_permissions=True)
+        bom.submit()
+    else:
+        bom = frappe.get_doc('BOM', bom_name)
+
+    frappe.db.commit()
+
+    # Step 4: Calculate nutrition from BOM
+    from restaurant.api import _upsert_bom_nutrition_fields, _refresh_item_nutrition_from_bom
+    _upsert_bom_nutrition_fields(bom)
+    _refresh_item_nutrition_from_bom(salad_name)
+    frappe.db.commit()
+
+    # Get final nutrition
+    salad.reload()
+    return {
+        'status': 'ok',
+        'created_items': created_items,
+        'salad': salad_name,
+        'bom': bom_name,
+        'nutrition_kcal': salad.restaurant_nutrition_kcal,
+        'nutrition_protein_g': salad.restaurant_nutrition_protein_g,
+        'nutrition_carb_g': salad.restaurant_nutrition_carb_g,
+        'nutrition_fat_g': salad.restaurant_nutrition_fat_g,
+        'tags': salad.restaurant_item_tags,
+    }
+
+
+@frappe.whitelist(allow_guest=True)
+def debug_salad():
+    """Debug salad item"""
+    item = frappe.get_doc('Item', 'سالاد فیله پروتئینی')
+    boms = frappe.get_all('BOM', filters={'item': item.name}, fields=['name', 'is_active', 'is_default', 'docstatus'])
+    return {
+        'name': item.name,
+        'restaurant_enabled': item.restaurant_enabled,
+        'restaurant_slug': item.restaurant_slug,
+        'restaurant_category': item.restaurant_category,
+        'restaurant_subcategory': item.restaurant_subcategory,
+        'disabled': item.disabled,
+        'is_sales_item': item.is_sales_item,
+        'item_group': item.item_group,
+        'tags': item.restaurant_item_tags,
+        'bom': boms,
+    }
     if len(mobile) < 10:
         frappe.throw(_("A valid mobile number is required."))
     return mobile
@@ -5968,6 +6443,8 @@ def _template_display_variants(template_doc, branch=None):
             "restaurant_short_desc",
             "restaurant_base_price",
             "standard_rate",
+            "restaurant_enabled",
+            "disabled",
             "restaurant_category",
             "restaurant_subcategory",
             "restaurant_sort_order",
@@ -6040,6 +6517,8 @@ def _template_display_row_or_self(template_row, branch=None):
     payload["variant_fixed_attributes"] = {}
     payload["variant_attributes"] = []
     payload["variant_source_item"] = payload.get("name") or ""
+    if "restaurant_coming_soon" not in payload and template_row.get("restaurant_coming_soon") is not None:
+        payload["restaurant_coming_soon"] = template_row.get("restaurant_coming_soon")
     return [payload]
 
 
@@ -8304,7 +8783,9 @@ def set_management_site_settings(payload=None):
 
     frappe.clear_cache(doctype="Restaurant Web Settings")
     frappe.db.commit()
-    return _management_site_settings_payload()
+    result = _management_site_settings_payload()
+    result["loader_settings"] = _load_management_loader_settings()
+    return result
 
 
 def _management_date_window(date_from=None, date_to=None, default_days=30):
@@ -9914,6 +10395,32 @@ def get_management_pos_boot(branch=None):
         order_by="restaurant_sort_order asc, item_name asc",
         limit=300,
     )
+
+    # Fallback: for items with no image, get first attachment
+    item_names = [r["name"] for r in rows if not (r.get("image") or "").strip()]
+    attachment_map = {}
+    if item_names and frappe.db.exists("DocType", "File"):
+        attached = frappe.get_all(
+            "File",
+            fields=["attached_to_name", "file_url"],
+            filters={
+                "attached_to_doctype": "Item",
+                "attached_to_name": ["in", item_names],
+                "is_folder": 0,
+                "is_private": 0,
+            },
+            order_by="creation asc",
+            ignore_permissions=True,
+        )
+        for att in attached:
+            name = att.get("attached_to_name")
+            if name and name not in attachment_map:
+                attachment_map[name] = att.get("file_url", "")
+
+    for r in rows:
+        if not (r.get("image") or "").strip() and r["name"] in attachment_map:
+            r["image"] = attachment_map[r["name"]]
+
     items = [
         _serialize_core_item(
             row,
@@ -11812,7 +12319,9 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
             "restaurant_subcategory_slug": subcategory_slug,
             "restaurant_requires_bom": cint(item_doc.get("restaurant_requires_bom") or 0),
             "restaurant_auto_add_to_order": cint(item_doc.get("restaurant_auto_add_to_order") or 0),
+            "restaurant_coming_soon": cint(item_doc.get("restaurant_coming_soon") or 0),
             "restaurant_auto_add_qty": flt(item_doc.get("restaurant_auto_add_qty") or 0),
+            "restaurant_item_tags": item_doc.get("restaurant_item_tags") or "",
             "restaurant_nutrition_kcal": flt(item_doc.get("restaurant_nutrition_kcal") or 0),
             "restaurant_nutrition_protein_g": flt(item_doc.get("restaurant_nutrition_protein_g") or 0),
             "restaurant_nutrition_carb_g": flt(item_doc.get("restaurant_nutrition_carb_g") or 0),
@@ -11857,6 +12366,9 @@ def update_management_product_settings(payload=None):
 
     item_name = _management_resolve_item_name(parsed_payload.get("item_name") or parsed_payload.get("name"))
     item_doc = frappe.get_doc("Item", item_name)
+    if "restaurant_coming_soon" in parsed_payload:
+        _ensure_coming_soon_field()
+        item_doc = frappe.get_doc("Item", item_doc.name)
 
     data_fields = {
         "item_name",
@@ -11884,6 +12396,7 @@ def update_management_product_settings(payload=None):
         "restaurant_prep_time_mins",
         "restaurant_requires_bom",
         "restaurant_auto_add_to_order",
+        "restaurant_coming_soon",
     }
     float_fields = {"restaurant_auto_add_qty"}
     nutrition_fields = set(NUTRITION_KEY_FIELD_MAP.values())
@@ -11956,6 +12469,27 @@ def update_management_product_settings(payload=None):
             item_doc.set(fieldname, next_value)
             changed = True
 
+    # Handle tag table (child table)
+    tag_table_field = "restaurant_item_tag_table"
+    if tag_table_field in parsed_payload:
+        tag_links = parsed_payload.get(tag_table_field) or []
+        if isinstance(tag_links, list):
+            # Clear existing links
+            item_doc.set(tag_table_field, [])
+            # Add new links
+            for link in tag_links:
+                tag_name = link.get("tag") or link.get("_tag_title") or ""
+                if tag_name:
+                    # Find or create tag
+                    tag_docname = frappe.db.get_value("Restaurant Item Tag", {"title": tag_name}, "name")
+                    if not tag_docname:
+                        td = frappe.new_doc("Restaurant Item Tag")
+                        td.title = tag_name
+                        td.insert(ignore_permissions=True)
+                        tag_docname = td.name
+                    item_doc.append(tag_table_field, {"tag": tag_docname})
+            changed = True
+
     default_price_list = (parsed_payload.get("default_price_list") or "").strip()
     if default_price_list:
         set_management_default_price_list(default_price_list)
@@ -11963,6 +12497,11 @@ def update_management_product_settings(payload=None):
     if changed:
         item_doc.save(ignore_permissions=True)
         frappe.db.commit()
+        frappe.clear_cache(doctype="Item")
+        try:
+            frappe.clear_website_cache()
+        except Exception:
+            pass
 
     return get_management_product_detail(item_doc.name)
 
@@ -12216,16 +12755,27 @@ def update_management_bom_cost(payload=None):
         bom_doc.rm_cost_as_per = (parsed_payload.get("rm_cost_as_per") or "").strip() or "Valuation Rate"
 
     bom_doc.update_cost()
+
+    # Recalculate and sync nutrition data after cost update
+    try:
+        _upsert_bom_nutrition_fields(bom_doc)
+        item_code = (getattr(bom_doc, "item", "") or "").strip()
+        if item_code:
+            _refresh_item_nutrition_from_bom(item_code)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "restaurant.api.update_management_bom_cost_nutrition_sync")
+
     frappe.db.commit()
     return frappe.get_doc("BOM", bom_doc.name).as_dict()
 
 
 @frappe.whitelist()
-def list_management_products(search=None, category=None, active_only=0, branch=None):
+def list_management_products(search=None, category=None, active_only=0, branch=None, tag=None):
     _ensure_management_access()
     branch = (branch or "").strip()
     search = (search or "").strip()
     category = (category or "").strip()
+    tag = (tag or "").strip()
     active_only = cint(active_only)
 
     image_field = _core_item_image_field()
@@ -12257,6 +12807,28 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
         like = f"%{search}%"
         or_filters = [["item_name", "like", like], ["restaurant_slug", "like", like]]
 
+    # Tag filter via child table and legacy comma-separated Item field.
+    if tag:
+        tagged_name_set = set()
+        tagged_items = frappe.db.sql("""
+            SELECT DISTINCT parent FROM `tabRestaurant Item Tag Link`
+            WHERE tag = %s
+        """, tag, as_dict=True)
+        tagged_name_set.update((r.parent or "").strip() for r in tagged_items if (r.parent or "").strip())
+        if _has_column("Item", "restaurant_item_tags"):
+            legacy_rows = frappe.get_all(
+                "Item",
+                filters={"restaurant_item_tags": ["like", f"%{tag}%"]},
+                fields=["name"],
+                ignore_permissions=True,
+                limit_page_length=1000,
+            )
+            tagged_name_set.update((row.name or "").strip() for row in legacy_rows if (row.name or "").strip())
+        if tagged_name_set:
+            filters["name"] = ["in", sorted(tagged_name_set)]
+        else:
+            return {"products": []}
+
     item_fields = [
         "name",
         "item_code",
@@ -12269,10 +12841,15 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
         "disabled",
         "restaurant_category",
         "restaurant_subcategory",
+        "restaurant_sort_order",
         f"{image_field} as image",
     ]
     if _has_column("Item", "custom_snapp_code"):
         item_fields.append("custom_snapp_code")
+    if _has_column("Item", "restaurant_item_tags"):
+        item_fields.append("restaurant_item_tags")
+    if _has_column("Item", "restaurant_coming_soon"):
+        item_fields.append("restaurant_coming_soon")
 
     template_rows = frappe.get_all(
         "Item",
@@ -14891,4 +15468,1172 @@ def reorder_management_menu_groups(items=None):
         if name and frappe.db.exists("Item Group", name):
             frappe.db.set_value("Item Group", name, "restaurant_sort_order", sort_order)
     frappe.db.commit()
+    frappe.clear_cache(doctype="Item Group")
+    try:
+        frappe.clear_website_cache()
+    except Exception:
+        pass
     return {"ok": True, "count": len(items)}
+
+
+@frappe.whitelist()
+def save_management_menu_design(payload=None):
+    _ensure_management_access()
+    parsed_payload = payload
+    if isinstance(parsed_payload, str):
+        parsed_payload = _parse_json(parsed_payload, {})
+    if not isinstance(parsed_payload, dict):
+        frappe.throw(_("Invalid payload format."))
+
+    groups = parsed_payload.get("groups") or []
+    products = parsed_payload.get("products") or []
+    if isinstance(groups, str):
+        groups = _parse_json(groups, [])
+    if isinstance(products, str):
+        products = _parse_json(products, [])
+    if not isinstance(groups, list):
+        groups = []
+    if not isinstance(products, list):
+        products = []
+
+    saved_groups = []
+    group_fields = {"restaurant_sort_order"}
+    for fieldname in ("item_group_name", "restaurant_description", "restaurant_active"):
+        if _has_column("Item Group", fieldname):
+            group_fields.add(fieldname)
+
+    for row in groups:
+        if not isinstance(row, dict):
+            continue
+        name = (row.get("name") or "").strip()
+        if not name or not frappe.db.exists("Item Group", name):
+            continue
+        updates = {}
+        if "sort_order" in row or "restaurant_sort_order" in row:
+            updates["restaurant_sort_order"] = cint(row.get("sort_order", row.get("restaurant_sort_order")) or 0)
+        if "item_group_name" in row and "item_group_name" in group_fields:
+            updates["item_group_name"] = (row.get("item_group_name") or "").strip()
+        if "restaurant_description" in row and "restaurant_description" in group_fields:
+            updates["restaurant_description"] = (row.get("restaurant_description") or "").strip()
+        if "restaurant_active" in row and "restaurant_active" in group_fields:
+            updates["restaurant_active"] = cint(row.get("restaurant_active") or 0)
+        if updates:
+            frappe.db.set_value("Item Group", name, updates, update_modified=True)
+            saved_groups.append({"name": name, **updates})
+
+    saved_products = []
+    product_fields = {"item_name", "restaurant_sort_order"}
+    for fieldname in ("restaurant_short_desc", "restaurant_category", "restaurant_subcategory", "restaurant_enabled"):
+        if _has_column("Item", fieldname):
+            product_fields.add(fieldname)
+
+    for row in products:
+        if not isinstance(row, dict):
+            continue
+        requested_name = row.get("name") or row.get("item_name") or row.get("item_code")
+        try:
+            item_name = _management_resolve_item_name(requested_name)
+        except Exception:
+            continue
+        updates = {}
+        if "item_name" in row and "item_name" in product_fields:
+            updates["item_name"] = (row.get("item_name") or "").strip()
+        if "restaurant_short_desc" in row and "restaurant_short_desc" in product_fields:
+            updates["restaurant_short_desc"] = (row.get("restaurant_short_desc") or "").strip()
+        if "restaurant_category" in row and "restaurant_category" in product_fields:
+            updates["restaurant_category"] = (row.get("restaurant_category") or "").strip()
+        if "restaurant_subcategory" in row and "restaurant_subcategory" in product_fields:
+            updates["restaurant_subcategory"] = (row.get("restaurant_subcategory") or "").strip()
+        if "restaurant_sort_order" in row:
+            updates["restaurant_sort_order"] = cint(row.get("restaurant_sort_order") or 0)
+        if "restaurant_enabled" in row and "restaurant_enabled" in product_fields:
+            updates["restaurant_enabled"] = cint(row.get("restaurant_enabled") or 0)
+        if updates:
+            frappe.db.set_value("Item", item_name, updates, update_modified=True)
+            saved_products.append({"name": item_name, **updates})
+
+    frappe.db.commit()
+    frappe.clear_cache(doctype="Item Group")
+    frappe.clear_cache(doctype="Item")
+    try:
+        frappe.clear_website_cache()
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "groups_count": len(saved_groups),
+        "products_count": len(saved_products),
+        "groups": saved_groups,
+        "products": saved_products,
+    }
+
+
+@frappe.whitelist()
+def setup_coming_soon_field():
+    """Add restaurant_coming_soon checkbox to Item doctype"""
+    existing = frappe.db.get_value('Custom Field', {'dt': 'Item', 'fieldname': 'restaurant_coming_soon'}, 'name')
+    if existing:
+        return f'Field already exists: {existing}'
+    from frappe.custom.doctype.custom_field.custom_field import create_custom_field
+    try:
+        doc = create_custom_field('Item', frappe._dict({
+            'fieldname': 'restaurant_coming_soon',
+            'label': '\u0628\u0647\u200c\u0632\u0648\u062f\u06cc',
+            'fieldtype': 'Check',
+            'insert_after': 'restaurant_item_tag_table',
+            'default': 0,
+            'description': '\u0627\u06af\u0631 \u0641\u0639\u0627\u0644 \u0628\u0627\u0634\u062f \u0628\u0647 \u062c\u0627\u06cc \u0642\u06cc\u0645\u062a \u0646\u0648\u0634\u062a\u0647 \u00ab\u0628\u0647\u200c\u0632\u0648\u062f\u06cc\u00bb \u0646\u0645\u0627\u06cc\u0634 \u062f\u0627\u062f\u0647 \u0645\u06cc\u200c\u0634\u0648\u062f'
+        }))
+        frappe.db.commit()
+        return f'Created: {doc}'
+    except Exception as e:
+        return f'Error: {e}'
+
+
+# =============================================================================
+# Product Builder API Endpoints
+# =============================================================================
+
+
+@frappe.whitelist(allow_guest=True)
+def get_builder_template(item_code=None, template_slug=None):
+    """
+    Get the Product Builder Template for a given item or slug.
+    Customer-facing API (guest-accessible).
+    Only returns active templates.
+    """
+    import json
+
+    if not item_code and not template_slug:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "item_code or template_slug is required.", "code": "MISSING_PARAM"}}
+
+    try:
+        template_name = None
+
+        if item_code:
+            # Verify item exists and is customizable
+            item = frappe.db.get_value(
+                "Item",
+                {"name": item_code, "restaurant_is_customizable": 1, "restaurant_builder_active": 1},
+                ["name", "restaurant_builder_template"],
+                as_dict=True,
+            )
+            if not item:
+                return {"status": "error", "error": {"type": "NotFoundError", "message": "No active builder template found for this item.", "code": "TEMPLATE_NOT_FOUND"}}
+            template_name = item.get("restaurant_builder_template")
+
+        if not template_name and template_slug:
+            template_name = frappe.db.get_value(
+                "Product Builder Template",
+                {"slug": template_slug, "is_active": 1},
+                "name",
+            )
+
+        if not template_name:
+            return {"status": "error", "error": {"type": "NotFoundError", "message": "No active builder template found.", "code": "TEMPLATE_NOT_FOUND"}}
+
+        template = frappe.get_doc("Product Builder Template", template_name)
+
+        if not template.is_active:
+            return {"status": "error", "error": {"type": "NotFoundError", "message": "Builder template is not active.", "code": "TEMPLATE_INACTIVE"}}
+
+        # Build steps with options
+        steps_data = []
+        for step in sorted(template.steps, key=lambda s: s.sort_order or 0):
+            options_data = []
+            for opt in sorted(step.options, key=lambda o: o.sort_order or 0):
+                if not opt.is_available:
+                    continue
+                options_data.append({
+                    "option_key": opt.option_key,
+                    "option_label": opt.option_label,
+                    "option_description": opt.option_description or "",
+                    "price_delta": opt.base_price_delta or 0,
+                    "price_type": opt.price_type,
+                    "price_percentage": opt.price_percentage or 0,
+                    "is_default": opt.is_default,
+                    "image": opt.image or "",
+                    "color_code": opt.color_code or "",
+                    "nutrition": json.loads(opt.nutrition_json) if opt.nutrition_json else {},
+                    "allergens": [a.strip() for a in (opt.allergen_tags or "").split(",") if a.strip()],
+                    "max_qty": opt.max_qty or 1,
+                })
+
+            steps_data.append({
+                "step_key": step.step_key,
+                "step_title": step.step_title,
+                "step_description": step.step_description or "",
+                "selection_mode": step.selection_mode,
+                "min_select": step.min_select or 0,
+                "max_select": step.max_select or 0,
+                "is_required": step.is_required,
+                "show_step_price": step.show_step_price,
+                "step_icon": step.step_icon or "",
+                "options": options_data,
+            })
+
+        return {
+            "status": "success",
+            "data": {
+                "template": {
+                    "name": template.name,
+                    "title": template.title,
+                    "slug": template.slug,
+                    "layout_mode": template.layout_mode,
+                    "show_summary_panel": template.show_summary_panel,
+                    "show_price_live": template.show_price_live,
+                    "primary_color": template.primary_color or "#1a73e8",
+                    "allow_skip_steps": template.allow_skip_steps,
+                    "allow_go_back": template.allow_go_back,
+                    "require_all_required": template.require_all_required,
+                    "max_total_selections": template.max_total_selections or 0,
+                    "steps": steps_data,
+                }
+            },
+        }
+
+    except frappe.exceptions.AuthenticationError:
+        raise
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_builder_template API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+@frappe.whitelist(allow_guest=True)
+def compute_builder_price(item_code, selections):
+    """
+    Compute the final price for a set of builder selections.
+    Server-side pricing to prevent tampering.
+    """
+    import json
+
+    if isinstance(selections, str):
+        selections = json.loads(selections)
+
+    if not item_code or not selections:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "item_code and selections are required.", "code": "MISSING_PARAM"}}
+
+    try:
+        # Get item price
+        item_price = frappe.db.get_value("Item", item_code, "standard_rate") or 0
+
+        # Recompute prices from template definitions
+        total_delta = 0
+        breakdown = []
+
+        for sel in selections:
+            step_key = sel.get("step_key")
+            option_key = sel.get("option_key")
+            qty = sel.get("qty", 1) or 1
+
+            # Look up the option in the template to get authoritative pricing
+            # We need to find the template via the item
+            item = frappe.db.get_value(
+                "Item", item_code, ["restaurant_builder_template"], as_dict=True
+            )
+            if not item or not item.get("restaurant_builder_template"):
+                continue
+
+            # Query the option's price from the template
+            option_price = frappe.db.sql(
+                """SELECT pbo.base_price_delta, pbo.price_type, pbo.price_percentage
+                FROM `tabProduct Builder Option` pbo
+                INNER JOIN `tabProduct Builder Step` pbs ON pbs.name = pbo.parent
+                INNER JOIN `tabProduct Builder Template` pbt ON pbt.name = pbs.parent
+                WHERE pbt.name = %s AND pbs.step_key = %s AND pbo.option_key = %s
+                AND pbo.is_available = 1
+                LIMIT 1""",
+                (item.restaurant_builder_template, step_key, option_key),
+                as_dict=True,
+            )
+
+            if option_price:
+                opt = option_price[0]
+                delta = opt.base_price_delta or 0
+                price_type = opt.price_type or "fixed"
+                percentage = opt.price_percentage or 0
+
+                if price_type == "fixed":
+                    line_delta = delta * qty
+                elif price_type == "percentage":
+                    line_delta = (item_price * percentage / 100) * qty
+                elif price_type == "multiply":
+                    line_delta = item_price * delta * qty
+                else:
+                    line_delta = delta * qty
+            else:
+                line_delta = 0
+
+            total_delta += line_delta
+            breakdown.append({
+                "step_key": step_key,
+                "option_key": option_key,
+                "label": sel.get("option_label", option_key),
+                "delta": line_delta,
+            })
+
+        final_price = item_price + total_delta
+
+        currency = frappe.db.get_default("currency") or "IRR"
+
+        return {
+            "status": "success",
+            "data": {
+                "base_price": item_price,
+                "options_total": total_delta,
+                "final_price": final_price,
+                "currency": currency,
+                "breakdown": breakdown,
+            },
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "compute_builder_price API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+@frappe.whitelist(allow_guest=True)
+def save_builder_selection(template, item, base_price, selections, selection_json=None, created_via="customer_menu", session_id=None):
+    """
+    Save a completed builder selection.
+    Prices are recomputed server-side to prevent tampering.
+    """
+    import json
+
+    if isinstance(selections, str):
+        selections = json.loads(selections)
+    if isinstance(selection_json, str):
+        selection_json = json.loads(selection_json)
+
+    if not template or not item or not selections:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "template, item, and selections are required.", "code": "MISSING_PARAM"}}
+
+    try:
+        # Verify template is active
+        tpl = frappe.get_doc("Product Builder Template", template)
+        if not tpl.is_active:
+            return {"status": "error", "error": {"type": "ValidationError", "message": "Builder template is not active.", "code": "TEMPLATE_INACTIVE"}}
+
+        # Verify item is customizable
+        item_doc = frappe.db.get_value(
+            "Item", item, ["restaurant_is_customizable", "restaurant_builder_active"], as_dict=True
+        )
+        if not item_doc or not item_doc.get("restaurant_is_customizable"):
+            return {"status": "error", "error": {"type": "ValidationError", "message": "Item is not customizable.", "code": "ITEM_NOT_CUSTOMIZABLE"}}
+
+        # Get authoritative item price
+        item_price = frappe.db.get_value("Item", item, "standard_rate") or base_price or 0
+
+        # Build selection items with server-side pricing
+        selection_items = []
+        for sel in selections:
+            step_key = sel.get("step_key")
+            option_key = sel.get("option_key")
+
+            # Look up option for authoritative pricing
+            option_data = frappe.db.sql(
+                """SELECT pbo.base_price_delta, pbo.price_type, pbo.price_percentage, pbo.option_label
+                FROM `tabProduct Builder Option` pbo
+                INNER JOIN `tabProduct Builder Step` pbs ON pbs.name = pbo.parent
+                WHERE pbs.parent = %s AND pbs.step_key = %s AND pbo.option_key = %s
+                LIMIT 1""",
+                (template, step_key, option_key),
+                as_dict=True,
+            )
+
+            price_delta = 0
+            option_label = sel.get("option_label", option_key)
+            if option_data:
+                opt = option_data[0]
+                delta = opt.base_price_delta or 0
+                price_type = opt.price_type or "fixed"
+                percentage = opt.price_percentage or 0
+                qty = sel.get("qty", 1) or 1
+                option_label = opt.option_label or option_label
+
+                if price_type == "fixed":
+                    price_delta = delta * qty
+                elif price_type == "percentage":
+                    price_delta = (item_price * percentage / 100) * qty
+                elif price_type == "multiply":
+                    price_delta = item_price * delta * qty
+                else:
+                    price_delta = delta * qty
+
+            selection_items.append({
+                "step_key": step_key,
+                "step_title": sel.get("step_title", ""),
+                "option_key": option_key,
+                "option_label": option_label,
+                "qty": sel.get("qty", 1) or 1,
+                "price_delta": price_delta,
+            })
+
+        # Compute totals
+        options_total = sum(s["price_delta"] for s in selection_items)
+        final_price = item_price + options_total
+
+        # Build selection JSON if not provided
+        if not selection_json:
+            selection_json = {
+                "template": template,
+                "template_title": tpl.title,
+                "item": item,
+                "base_price": item_price,
+                "steps": [],
+                "pricing": {
+                    "base_price": item_price,
+                    "options_total": options_total,
+                    "final_price": final_price,
+                },
+            }
+
+        # Create the selection document
+        sel_doc = frappe.get_doc({
+            "doctype": "Product Builder Selection",
+            "template": template,
+            "template_title": tpl.title,
+            "item": item,
+            "item_name": frappe.db.get_value("Item", item, "item_name"),
+            "base_price": item_price,
+            "options_total": options_total,
+            "final_price": final_price,
+            "currency": frappe.db.get_default("currency") or "IRR",
+            "selection_json": json.dumps(selection_json),
+            "created_by_session": session_id,
+            "created_via": created_via,
+            "selections": selection_items,
+        })
+        sel_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        return {
+            "status": "success",
+            "data": {
+                "selection_id": sel_doc.name,
+                "final_price": final_price,
+                "summary": sel_doc.summary_text,
+            },
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "save_builder_selection API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_builder_selection(selection_id):
+    """
+    Get a saved builder selection by ID.
+    """
+    if not selection_id:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "selection_id is required.", "code": "MISSING_PARAM"}}
+
+    try:
+        sel = frappe.get_doc("Product Builder Selection", selection_id)
+        return {
+            "status": "success",
+            "data": {
+                "selection": {
+                    "name": sel.name,
+                    "template": sel.template,
+                    "template_title": sel.template_title,
+                    "item": sel.item,
+                    "item_name": sel.item_name,
+                    "base_price": sel.base_price,
+                    "options_total": sel.options_total,
+                    "final_price": sel.final_price,
+                    "selections": [
+                        {
+                            "step_key": s.step_key,
+                            "step_title": s.step_title,
+                            "option_key": s.option_key,
+                            "option_label": s.option_label,
+                            "qty": s.qty,
+                            "price_delta": s.price_delta,
+                        }
+                        for s in sel.selections
+                    ],
+                    "selection_json": sel.selection_json,
+                    "summary_text": sel.summary_text,
+                }
+            },
+        }
+    except frappe.exceptions.DoesNotExistError:
+        return {"status": "error", "error": {"type": "NotFoundError", "message": "Selection not found.", "code": "NOT_FOUND"}}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_builder_selection API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+@frappe.whitelist()
+def list_builder_templates(filters=None, limit=20, offset=0):
+    """
+    List builder templates (management API).
+    Requires Accounts Manager or System Manager role.
+    """
+    import json
+
+    if isinstance(filters, str):
+        filters = json.loads(filters)
+
+    if not filters:
+        filters = {}
+
+    # Only allow management roles
+    if not frappe.has_permission("Product Builder Template", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    try:
+        templates = frappe.get_all(
+            "Product Builder Template",
+            filters=filters,
+            fields=["name", "title", "slug", "is_active", "layout_mode", "modified"],
+            limit_page_length=cint(limit),
+            limit_start=cint(offset),
+            order_by="modified desc",
+        )
+        total_count = frappe.db.count("Product Builder Template", filters=filters)
+
+        return {
+            "status": "success",
+            "data": {
+                "templates": templates,
+                "total_count": total_count,
+            },
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "list_builder_templates API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+@frappe.whitelist()
+def save_builder_template(template_data):
+    """
+    Create or update a builder template (management API).
+    Requires Accounts Manager or System Manager role.
+    """
+    import json
+
+    if isinstance(template_data, str):
+        template_data = json.loads(template_data)
+
+    if not frappe.has_permission("Product Builder Template", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    try:
+        if template_data.get("name"):
+            # Update existing
+            doc = frappe.get_doc("Product Builder Template", template_data["name"])
+            doc.update(template_data)
+        else:
+            # Create new
+            doc = frappe.get_doc({"doctype": "Product Builder Template", **template_data})
+
+        doc.save()
+        frappe.db.commit()
+
+        return {
+            "status": "success",
+            "data": {
+                "name": doc.name,
+                "title": doc.title,
+                "slug": doc.slug,
+            },
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "save_builder_template API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+@frappe.whitelist()
+def duplicate_builder_template(name):
+    """
+    Duplicate an existing builder template (management API).
+    Requires Accounts Manager or System Manager role.
+    """
+    import json
+
+    if not frappe.has_permission("Product Builder Template", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    try:
+        source = frappe.get_doc("Product Builder Template", name)
+        new_doc = frappe.get_doc("Product Builder Template", {
+            "title": f"{source.title} (کپی)",
+            "slug": f"{source.slug}-copy-{frappe.generate_hash(length=6)}",
+            "description": source.description,
+            "is_active": False,
+            "layout_mode": source.layout_mode,
+            "show_summary_panel": source.show_summary_panel,
+            "show_price_live": source.show_price_live,
+            "primary_color": source.primary_color,
+            "background_image": source.background_image,
+            "allow_skip_steps": source.allow_skip_steps,
+            "allow_go_back": source.allow_go_back,
+            "require_all_required": source.require_all_required,
+            "max_total_selections": source.max_total_selections,
+        })
+
+        for step in sorted(source.steps, key=lambda s: s.sort_order or 0):
+            new_step = {
+                "step_key": f"step-{frappe.generate_hash(length=8)}",
+                "step_title": step.step_title,
+                "step_description": step.step_description,
+                "selection_mode": step.selection_mode,
+                "min_select": step.min_select,
+                "max_select": step.max_select,
+                "is_required": step.is_required,
+                "show_step_price": step.show_step_price,
+                "step_icon": step.step_icon,
+            }
+            new_step_obj = new_doc.append("steps", new_step)
+            for opt in sorted(step.options, key=lambda o: o.sort_order or 0):
+                new_doc.append("options", {
+                    "step": new_step_obj.name,
+                    "option_key": f"opt-{frappe.generate_hash(length=8)}",
+                    "option_label": opt.option_label,
+                    "option_description": opt.option_description,
+                    "item": opt.item,
+                    "base_price_delta": opt.base_price_delta,
+                    "price_type": opt.price_type,
+                    "price_percentage": opt.price_percentage,
+                    "is_default": False,
+                    "is_available": opt.is_available,
+                    "allergen_tags": opt.allergen_tags,
+                    "image": opt.image,
+                    "color_code": opt.color_code,
+                    "max_qty": opt.max_qty,
+                })
+
+        new_doc.insert()
+        frappe.db.commit()
+
+        return {
+            "status": "success",
+            "data": {
+                "name": new_doc.name,
+                "title": new_doc.title,
+            },
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "duplicate_builder_template API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"}}
+
+
+def cint(val):
+    """Cast to int safely."""
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return 0
+
+
+# -------------------------------------------------------------------
+# Builder Integration Layer — ERPNext integration for custom orders
+# -------------------------------------------------------------------
+
+@frappe.whitelist()
+def builder_kitchen_ticket(sales_order_name, sales_order_item_name=None):
+    """
+    Build kitchen ticket context for a Sales Order.
+    Requires management access.
+    """
+    from restaurant.restaurant.builder_integration import build_kitchen_ticket_context
+
+    _ensure_management_access()
+
+    if not sales_order_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_name is required."}}
+
+    try:
+        context = build_kitchen_ticket_context(sales_order_name, sales_order_item_name)
+        return {"status": "success", "data": context}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_kitchen_ticket API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_render_kitchen_lines(sales_order_name, sales_order_item_name=None):
+    """
+    Render kitchen ticket lines for printing, respecting each item's kitchen_print_mode.
+    Returns structured lines ready for print template rendering.
+    """
+    from restaurant.restaurant.builder_integration import (
+        build_kitchen_ticket_context,
+        render_kitchen_ticket_lines,
+    )
+
+    _ensure_management_access()
+
+    if not sales_order_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_name is required."}}
+
+    try:
+        context = build_kitchen_ticket_context(sales_order_name, sales_order_item_name)
+        rendered_items = []
+        for item_ctx in context.get("items", []):
+            mode = item_ctx.get("print_mode", "parent_with_components")
+            lines = render_kitchen_ticket_lines(item_ctx, mode)
+            rendered_items.append({
+                "item_code": item_ctx["item_code"],
+                "item_name": item_ctx["item_name"],
+                "qty": item_ctx["qty"],
+                "print_mode": mode,
+                "lines": lines,
+            })
+        return {"status": "success", "data": {"items": rendered_items}}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_render_kitchen_lines API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_resolve_stock(sales_order_name, sales_order_item_name=None):
+    """
+    Resolve builder selections into stock deduction items.
+    Respects each item's stock_consumption_mode.
+    """
+    from restaurant.restaurant.builder_integration import resolve_builder_stock_deductions
+
+    _ensure_management_access()
+
+    if not sales_order_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_name is required."}}
+
+    try:
+        results = resolve_builder_stock_deductions(sales_order_name, sales_order_item_name)
+        return {"status": "success", "data": results}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_resolve_stock API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_dry_run(sales_order_name):
+    """
+    Dry-run preview of ERPNext records that would be created.
+    NO live records are created.
+    """
+    from restaurant.restaurant.builder_integration import dry_run_erpnext_records
+
+    _ensure_management_access()
+
+    if not sales_order_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_name is required."}}
+
+    try:
+        result = dry_run_erpnext_records(sales_order_name)
+        return result
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_dry_run API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_validate_before_write(sales_order_name, operation="stock_entry"):
+    """
+    Triple-check safety gate before ERPNext writes.
+    Returns dry-run + duplicate check results. Requires human approval to proceed.
+    """
+    from restaurant.restaurant.builder_integration import validate_before_erpnext_write
+
+    _ensure_management_access()
+
+    if not sales_order_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_name is required."}}
+
+    try:
+        result = validate_before_erpnext_write(sales_order_name, operation)
+        return {"status": "success", "data": result}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_validate_before_write API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_execute_records(sales_order_name, approval_token=None):
+    """
+    Execute ERPNext record creation after human approval.
+    Requires a valid approval_token from builder_validate_before_write().
+    """
+    from restaurant.restaurant.builder_integration import execute_erpnext_records
+
+    _ensure_management_access()
+
+    if not sales_order_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_name is required."}}
+
+    if not approval_token:
+        return {"status": "error", "error": {"type": "ApprovalRequired", "message": "approval_token is required."}}
+
+    try:
+        result = execute_erpnext_records(sales_order_name, approval_token)
+        return result
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_execute_records API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_attach_selection(sales_order_item_name, selection_name):
+    """
+    Attach a builder selection to a Sales Order Item.
+    Copies the selection reference + JSON for redundancy.
+    """
+    from restaurant.restaurant.builder_integration import attach_builder_selection_to_so_item
+
+    _ensure_management_access()
+
+    if not sales_order_item_name or not selection_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "Both sales_order_item_name and selection_name are required."}}
+
+    try:
+        attach_builder_selection_to_so_item(sales_order_item_name, selection_name)
+        return {"status": "success", "message": "Builder selection attached successfully."}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_attach_selection API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def builder_get_selection_for_item(sales_order_item_name):
+    """
+    Get the builder selection linked to a Sales Order Item.
+    """
+    from restaurant.restaurant.builder_integration import get_builder_selection_for_so_item
+
+    _ensure_management_access()
+
+    if not sales_order_item_name:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "sales_order_item_name is required."}}
+
+    try:
+        result = get_builder_selection_for_so_item(sales_order_item_name)
+        if not result:
+            return {"status": "error", "error": {"type": "NotFoundError", "message": "Sales Order Item not found."}}
+        return {"status": "success", "data": result}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "builder_get_selection_for_item API error")
+        return {"status": "error", "error": {"type": "ServerError", "message": str(e)}}
+
+
+@frappe.whitelist()
+def get_bom_preview(item_code=None):
+    """
+    Return the full BOM tree for a menu item.
+    Accepts either an ERPNext item_code or a restaurant slug (resolved to item_code).
+    Only staff/employee users can view BOM — customers see a permission error.
+    Response shape matches frontend BomPreviewPage expectations.
+    """
+    if frappe.session.user == "Guest":
+        frappe.throw(_("Please login to access this resource."), frappe.PermissionError)
+
+    if not _is_restaurant_staff() and not frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name"):
+        frappe.throw(_("You do not have permission to view BOM data. Staff access required."), frappe.PermissionError)
+
+    item_code = (item_code or "").strip() if item_code else ""
+    if not item_code:
+        return {"status": "error", "error": {"type": "ValidationError", "message": "item_code is required."}}
+
+    # Try direct item_code first, then resolve from slug
+    item_name = frappe.db.get_value(
+        "Item",
+        {
+            "item_code": item_code,
+            "disabled": 0,
+            "restaurant_enabled": 1,
+        },
+        "name",
+    )
+
+    if not item_name:
+        # Resolve from restaurant_slug
+        slug = _normalize_slug(item_code)
+        if slug:
+            item_name = frappe.db.get_value(
+                "Item",
+                {
+                    "restaurant_slug": slug,
+                    "disabled": 0,
+                    "restaurant_enabled": 1,
+                },
+                "name",
+            )
+
+    if not item_name:
+        # Try variant resolution
+        item_name = _resolve_menu_item_name_from_variant_slug(slug=item_code)
+
+    if not item_name:
+        return {"status": "error", "error": {"type": "NotFoundError", "message": _("Item not found: {0}").format(item_code)}}
+
+    item_doc = frappe.get_doc("Item", item_name)
+
+    # Resolve the default/active BOM
+    bom_name = _resolve_bom_template(item_doc)
+
+    if not bom_name:
+        # Return product info without BOM
+        product_data = _build_product_data(item_doc, has_bom=False)
+        return {
+            "status": "success",
+            "data": {
+                "product": product_data,
+                "bom_tree": [],
+                "gramezh": [],
+                "prep_notes": "",
+            },
+        }
+
+    bom_doc = frappe.get_doc("BOM", bom_name)
+
+    # Build response in frontend-expected format
+    product_data = _build_product_data(item_doc, has_bom=True)
+    bom_tree = _build_bom_tree_nodes(bom_doc)
+    gramezh = _build_gramezh_rows(bom_doc)
+    prep_notes = (bom_doc.get("prep_notes") or "").strip() if bom_doc.meta.has_field("prep_notes") else ""
+    operations = _build_bom_operations(bom_doc)
+
+    # BOM-level QC notes (from BOM.doctype custom field)
+    bom_qc_notes = ""
+    if bom_doc.meta.has_field("quality_inspection"):
+        bom_qc_notes = (bom_doc.get("quality_inspection") or "").strip()
+
+    return {
+        "status": "success",
+        "data": {
+            "product": product_data,
+            "bom_tree": bom_tree,
+            "gramezh": gramezh,
+            "prep_notes": prep_notes,
+            "operations": operations,
+            "bom_qc_notes": bom_qc_notes,
+        },
+    }
+
+
+def _build_product_data(item_doc, has_bom=False):
+    """Build the product object expected by BomPreviewPage."""
+    image_field = "item_image" if _has_column("Item", "item_image") else "website_image"
+    image = item_doc.get(image_field) if image_field else ""
+
+    nutrition = {}
+    if _has_column("Item", "restaurant_nutrition_kcal"):
+        nutrition["kcal"] = item_doc.get("restaurant_nutrition_kcal")
+    if _has_column("Item", "restaurant_nutrition_protein"):
+        nutrition["protein_g"] = item_doc.get("restaurant_nutrition_protein")
+    if _has_column("Item", "restaurant_nutrition_carb"):
+        nutrition["carb_g"] = item_doc.get("restaurant_nutrition_carb")
+    if _has_column("Item", "restaurant_nutrition_fat"):
+        nutrition["fat_g"] = item_doc.get("restaurant_nutrition_fat")
+
+    category = ""
+    if item_doc.get("restaurant_category"):
+        category = frappe.db.get_value("Item Group", item_doc.restaurant_category, "item_group_name") or ""
+
+    # Quality control notes from Item custom field
+    qc_notes = ""
+    if item_doc.get("restaurant_qc_notes"):
+        qc_notes = item_doc.get("restaurant_qc_notes") or ""
+
+    return {
+        "item_name": item_doc.item_name,
+        "slug": item_doc.get("restaurant_slug") or "",
+        "base_price": item_doc.get("restaurant_base_price") or item_doc.get("standard_rate") or 0,
+        "category": category,
+        "prep_time_mins": item_doc.get("restaurant_prep_time") or item_doc.get("prep_time_mins") or 0,
+        "description": item_doc.get("restaurant_short_desc") or item_doc.get("description") or "",
+        "nutrition": nutrition,
+        "formula_description": item_doc.get("restaurant_formula_description") or "",
+        "has_bom": has_bom,
+        "image": image,
+        "qc_notes": qc_notes,
+    }
+
+
+def _build_bom_tree_nodes(bom_doc, depth=0, visited=None):
+    """
+    Build BOM tree for the frontend BomTree component.
+    Returns a single root node with children array (matches BomPreviewPage expectation).
+    Root: {title, item_code, qty, uom, rate, amount, is_sub_assembly, children: [...]}
+    """
+    if visited is None:
+        visited = set()
+
+    bom_name = (bom_doc.name or "").strip()
+    if bom_name in visited:
+        return {"title": bom_name, "item_code": "", "qty": 0, "uom": "", "children": [], "_recursive": True}
+    visited.add(bom_name)
+
+    children = []
+    for row in (bom_doc.get("items") or []):
+        item_code = (row.get("item_code") or "").strip()
+        if not item_code:
+            continue
+
+        node = {
+            "title": row.get("item_name") or item_code,
+            "item_code": item_code,
+            "item_name": row.get("item_name") or item_code,
+            "qty": flt(row.get("qty") or 0),
+            "uom": row.get("uom") or row.get("stock_uom") or "",
+            "rate": flt(row.get("rate") or row.get("price_list_rate") or 0),
+            "amount": flt(row.get("amount") or (flt(row.get("qty") or 0) * flt(row.get("rate") or 0))),
+            "is_sub_assembly": False,
+            "children": [],
+        }
+
+        # Recursively resolve sub-BOMs
+        sub_bom_name = frappe.get_all(
+            "BOM",
+            filters={
+                "item": item_code,
+                "is_active": 1,
+                "docstatus": 1,
+            },
+            fields=["name"],
+            order_by="is_default desc, modified desc",
+            ignore_permissions=True,
+            limit_page_length=1,
+        )
+        if sub_bom_name:
+            try:
+                sub_bom_doc = frappe.get_doc("BOM", sub_bom_name[0].name)
+                if frappe.has_permission("BOM", "read", sub_bom_doc):
+                    node["is_sub_assembly"] = True
+                    node["children"] = _build_bom_tree_nodes(sub_bom_doc, depth=depth + 1, visited=visited)["children"]
+            except Exception:
+                pass
+
+        children.append(node)
+
+    return {
+        "title": bom_doc.get("item_name") or bom_doc.get("item") or bom_name,
+        "item_code": bom_doc.get("item") or "",
+        "qty": flt(bom_doc.get("quantity") or 1),
+        "uom": bom_doc.get("uom") or "",
+        "children": children,
+    }
+
+
+def _build_gramezh_rows(bom_doc):
+    """
+    Build gramezh (material quantity) rows for the frontend GramezhTable.
+    Each row: {item_code, item_name, qty, uom, rate, amount}
+    """
+    rows = []
+    bom_qty = flt(bom_doc.get("quantity") or 1)
+    if bom_qty <= 0:
+        bom_qty = 1.0
+
+    for row in (bom_doc.get("items") or []):
+        item_code = (row.get("item_code") or "").strip()
+        if not item_code:
+            continue
+
+        qty = flt(row.get("qty") or 0)
+        rate = flt(row.get("rate") or row.get("price_list_rate") or 0)
+
+        rows.append({
+            "item_code": item_code,
+            "item_name": row.get("item_name") or item_code,
+            "qty": qty,
+            "uom": row.get("uom") or row.get("stock_uom") or "",
+            "rate": rate,
+            "amount": flt(qty * rate),
+        })
+
+    return rows
+
+
+def _build_bom_operations(bom_doc):
+    """
+    Fetch BOM Operation child table for display as preparation steps.
+    Returns list of {operation, description, time_in_mins, workstation}.
+    """
+    operations = []
+    if not bom_doc.meta.has_field("operations"):
+        return operations
+
+    for row in (bom_doc.get("operations") or []):
+        op_name = (row.get("operation") or "").strip()
+        if not op_name:
+            continue
+        operations.append({
+            "operation": op_name,
+            "description": (row.get("description") or "").strip(),
+            "time_in_mins": row.get("time_in_mins") or 0,
+            "workstation": (row.get("workstation") or "").strip(),
+        })
+    return operations
+
+
+# ─── Role / Permission helpers ───────────────────────────────────
+
+_RESTAURANT_STAFF_ROLES = frozenset([
+    "Employee",
+    "Chef",
+    "Item Manager",
+    "Stock Manager",
+    "Manufacturing User",
+    "Manufacturing Manager",
+    "System Manager",
+    "Stock User",
+])
+
+_RESTAURANT_ADMIN_ROLES = frozenset([
+    "System Manager",
+    "Administrator",
+])
+
+
+def _user_roles(user=None):
+    """Return set of role names for the given user (default: current session)."""
+    if not user:
+        user = frappe.session.user
+    if not user or user == "Guest":
+        return set()
+    return {r.role for r in frappe.get_all("Has Role", filters={"parent": user}, fields=["role"])}
+
+
+def _is_restaurant_staff(user=None):
+    """True if user has at least one staff-role in the restaurant app."""
+    return bool(_user_roles(user) & _RESTAURANT_STAFF_ROLES)
+
+
+def _is_restaurant_admin(user=None):
+    """True if user has admin-level role."""
+    if not user:
+        user = frappe.session.user
+    if user == "Administrator":
+        return True
+    return bool(_user_roles(user) & _RESTAURANT_ADMIN_ROLES)
+
+
+@frappe.whitelist()
+def get_session_roles():
+    """
+    Return role information for the currently logged-in user.
+
+    Used by the frontend to gate BOM / formula visibility.
+    Response: { user, roles: [...], is_staff, is_admin }
+    """
+    user = frappe.session.user
+    if user == "Guest":
+        frappe.throw(_("Please login to access this resource."), frappe.PermissionError)
+
+    roles = sorted(_user_roles(user))
+
+    # Also check if user is linked to an Employee record
+    has_employee = bool(frappe.db.get_value("Employee", {"user_id": user}, "name"))
+
+    return {
+        "user": user,
+        "roles": roles,
+        "is_staff": _is_restaurant_staff(user) or has_employee,
+        "is_admin": _is_restaurant_admin(user),
+        "has_employee_record": has_employee,
+    }

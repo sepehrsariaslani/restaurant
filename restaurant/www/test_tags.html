@@ -1,0 +1,52 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div dir="rtl" style="padding: 2rem; font-family: Tahoma, sans-serif;">
+    <h1>🏷️ تست تگ‌ها</h1>
+    <pre id="result" style="white-space: pre-wrap; background: #f5f5f5; padding: 1rem; border-radius: 8px; font-size: 0.85rem; max-height: 80vh; overflow: auto;">در حال بارگذاری...</pre>
+</div>
+
+<script>
+fetch('/api/method/restaurant.restaurant.api.get_menu_boot', {credentials: 'same-origin'})
+.then(r => r.json())
+.then(data => {
+    const msg = data.message || data;
+    const cats = msg.categories || [];
+    const featured = msg.featured_items || [];
+    
+    let out = '=== Categories: ' + cats.length + ' ===\n';
+    for (const cat of cats.slice(0, 3)) {
+        out += '\n📁 ' + cat.title + ' (slug: ' + cat.slug + ')\n';
+        out += '   show_on_homepage: ' + cat.show_on_homepage + '\n';
+        out += '   item_count: ' + cat.item_count + '\n';
+        const items = cat.items || [];
+        for (const item of items.slice(0, 2)) {
+            out += '   • ' + item.title + ' | tags: ' + JSON.stringify(item.tags) + '\n';
+        }
+    }
+    
+    out += '\n=== Featured: ' + featured.length + ' ===\n';
+    for (const item of featured.slice(0, 3)) {
+        out += '  • ' + item.title + ' | tags: ' + JSON.stringify(item.tags) + '\n';
+    }
+    
+    // Check if any item has tags
+    let allItems = [];
+    for (const cat of cats) {
+        allItems = allItems.concat(cat.items || []);
+    }
+    allItems = allItems.concat(featured);
+    
+    const tagged = allItems.filter(i => i.tags && i.tags.length > 0);
+    out += '\n=== Items with tags: ' + tagged.length + ' ===\n';
+    for (const item of tagged.slice(0, 5)) {
+        out += '  • ' + item.title + ' | tags: ' + JSON.stringify(item.tags) + '\n';
+    }
+    
+    document.getElementById('result').textContent = out;
+})
+.catch(err => {
+    document.getElementById('result').textContent = 'Error: ' + err.message;
+});
+</script>
+{% endblock %}

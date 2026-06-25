@@ -1,18 +1,11 @@
 <template>
-  <LiquidGlassBackdrop>
-    <section class="page-shell menu-shell">
-
-      <!-- هدر جستجو و برندینگ -->
-      <MenuHeroHeader
-        v-if="menuSearchVariant === 'search-card'"
-        :branding="branding"
-        :search="search"
-        :cart-count="cartCount"
-        @update:search="search = $event"
-        @search="onSearchSubmit"
-      />
-
-      <!-- دسته‌بندی‌ها -->
+  <div class="menu-page-root">
+    <!-- ─── Sticky Category Rail (first on mobile, after hero on desktop) ─── -->
+    <div
+      class="category-rail-sticky"
+      :class="{ 'is-sticky': railSticky }"
+      ref="railRef"
+    >
       <CategoryImageRail
         v-if="categoryRailVariant === 'image'"
         :categories="categories"
@@ -33,8 +26,28 @@
         @select-category="selectCategory"
         @select-subcategory="selectSubcategory"
       />
+    </div>
 
-      <section class="item-section-list" v-if="highlightedItems.length && !isSearchMode">
+    <!-- فیلتر تگ‌ها -->
+    <div class="tag-filter-row" v-if="availableTags.length">
+      <button
+        class="tag-filter-btn"
+        :class="{ active: !selectedTag }"
+        @click="selectedTag = ''"
+      >همه</button>
+      <button
+        v-for="tag in availableTags"
+        :key="tag"
+        class="tag-filter-btn"
+        :class="{ active: selectedTag === tag }"
+        @click="selectedTag = selectedTag === tag ? '' : tag"
+      >{{ tag }}</button>
+    </div>
+
+    <LiquidGlassBackdrop>
+    <section class="page-shell menu-shell">
+
+      <section class="item-section-list" v-if="highlightedItems.length">
         <article class="subcategory-block">
           <header class="subcategory-head">
             <h3>{{ highlightedTitle }}</h3>
@@ -47,12 +60,14 @@
               :key="`highlight-${item.slug || idx}`"
               :item="resolveDisplayItem(item)"
               :currency="currency"
-              :cart-qty="getItemCartQty(item)"
+          :cart-qty="getItemCartQty(item)"
+          :can-view-bom="canViewBom"
               class="product-card-anim"
               :style="{ animationDelay: `${Math.min(idx, 8) * 40}ms` }"
               @quick-add="quickAdd"
               @quick-increase="quickIncrease"
               @quick-decrease="quickDecrease"
+              @bom-preview="openBomModal"
             />
           </div>
         </article>
@@ -67,7 +82,10 @@
           </p>
           <p class="muted" v-else key="loading-text">در حال بارگذاری...</p>
         </transition>
-        <p class="muted error-text" v-if="error">{{ error }}</p>
+        <p class="muted error-text" v-if="error">
+          {{ error }}
+          <button class="retry-btn" @click="reloadItems(1)" :disabled="loading">تلاش مجدد</button>
+        </p>
       </section>
 
       <!-- اسکلتون هنگام لودینگ اولیه -->
@@ -105,11 +123,13 @@
               :item="item"
               :currency="currency"
               :cart-qty="getItemCartQty(item)"
+              :can-view-bom="canViewBom"
               class="product-card-anim"
               :style="{ animationDelay: `${Math.min(idx, 8) * 55}ms` }"
               @quick-add="quickAdd"
               @quick-increase="quickIncrease"
               @quick-decrease="quickDecrease"
+              @bom-preview="openBomModal"
             />
           </div>
         </article>
@@ -133,18 +153,20 @@
       </section>
 
       <!-- لیست محصولات (حالت ساده) -->
-      <section class="item-list" v-else-if="items.length">
+      <section class="item-list" v-else-if="displayItems.length">
         <MenuProductCard
-          v-for="(item, idx) in items"
+          v-for="(item, idx) in displayItems"
           :key="item.slug"
           :item="item"
           :currency="currency"
-          :cart-qty="getItemCartQty(item)"
+              :cart-qty="getItemCartQty(item)"
+              :can-view-bom="canViewBom"
           class="product-card-anim"
           :style="{ animationDelay: `${Math.min(idx, 8) * 55}ms` }"
           @quick-add="quickAdd"
           @quick-increase="quickIncrease"
           @quick-decrease="quickDecrease"
+          @bom-preview="openBomModal"
         />
 
         <!-- اسکلتون برای لود بیشتر (infinite scroll) -->
@@ -168,20 +190,25 @@
 
       <!-- حالت خالی -->
       <transition name="fade">
-        <LiquidGlassCard class="empty-box" v-if="!loading && !items.length && !error">
+        <LiquidGlassCard class="empty-box" v-if="!loading && !displayItems.length && !error">
           <span class="empty-icon">🍽️</span>
-          <p class="empty-title">محصولی پیدا نشد</p>
-          <p class="muted">فیلترها یا جستجو را تغییر دهید</p>
-          <button class="reset-btn" @click="resetFilters">پاک کردن فیلترها</button>
+          <p class="empty-title">{{ emptyStateTitle }}</p>
+          <p class="muted">{{ emptyStateMessage }}</p>
+          <button class="reset-btn" @click="resetFilters">{{ emptyStateAction }}</button>
         </LiquidGlassCard>
       </transition>
 
       <!-- پیام پایان لیست -->
       <transition name="fade">
-        <p class="end-label muted" v-if="!loading && !loadingMore && allLoaded && items.length">
+        <p class="end-label muted" v-if="!loading && !loadingMore && allLoaded && displayItems.length">
           ✓ همه محصولات نمایش داده شدند
         </p>
       </transition>
+
+      <!-- Progress indicator -->
+      <p class="progress-indicator muted" v-if="pagination.total && !loading">
+        نمایش {{ displayItems.length }} از {{ pagination.total }} محصول
+      </p>
 
       <!-- سبد سفارش شناور -->
       <transition name="cart-pop">
@@ -220,23 +247,45 @@
         <p class="print-empty" v-else>آیتمی برای چاپ پیدا نشد.</p>
       </section>
 
+      <!-- دکمه فلش رو به بالا -->
+      <button
+        class="scroll-top-btn"
+        :class="{ visible: showScrollTop }"
+        @click="scrollToTop"
+        aria-label="بازگشت به بالا"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+      </button>
+
     </section>
-  </LiquidGlassBackdrop>
+    </LiquidGlassBackdrop>
+
+    <!-- BOM Preview Modal -->
+    <BomPreviewModal
+      :open="bomModalOpen"
+      :item-slug="bomModalItem?.slug || ''"
+      :item-title="bomModalItem?.title || ''"
+      :item-image="bomModalItem?.image || ''"
+      :item-code="bomModalItem?.item_code || ''"
+      :is-staff-only="bomModalItem?.is_staff_only || false"
+      @close="closeBomModal"
+    />
+  </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
-import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import CategoryPillRail from '@/components/CategoryPillRail.vue'
 import CategoryImageRail from '@/components/CategoryImageRail.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
-import { getMenuItems } from '@/utils/api'
+import BomPreviewModal from '@/components/BomPreviewModal.vue'
+import { getMenuItems, getManagementSessionProfile } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { cartState, cartSubtotal, upsertLine, removeLine } from '@/stores/cartStore'
-import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'
+import { resolveSiteComponents } from '@/utils/siteComponents'
 
 const props = defineProps({
   boot: {
@@ -277,10 +326,12 @@ const items = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref('')
-const search = ref('')
-const searchDebounceTimer = ref(null)
+const selectedTag = ref('')
 const selectedCategorySlug = ref(categories.value[0]?.slug || '')
 const selectedSubcategorySlug = ref('')
+
+// Flag to track if URL category was applied
+let urlCategoryApplied = false
 const allLoaded = ref(false)
 const infiniteAnchor = ref(null)
 const resultHeadRef = ref(null)
@@ -288,8 +339,44 @@ const subcategorySectionRefs = ref({})
 let intersectionObserver = null
 const quickSheetOpen = ref(false)
 const quickSheetItem = ref(null)
+const bomModalOpen = ref(false)
+const bomModalItem = ref(null)
+const canViewBom = ref(false)
 const printPreparing = ref(false)
 const printCards = ref([])
+const showScrollTop = ref(false)
+const railSticky = ref(false)
+const railRef = ref(null)
+let railOffsetTop = 0
+
+function handleScroll() {
+  if (!railOffsetTop) {
+    railOffsetTop = railRef.value?.offsetTop || 0
+  }
+  const scrolled = window.scrollY || document.documentElement.scrollTop
+  const shouldSticky = scrolled > railOffsetTop
+  if (shouldSticky !== railSticky.value) {
+    railSticky.value = shouldSticky
+    // Set CSS variable for padding compensation
+    if (shouldSticky && railRef.value) {
+      document.documentElement.style.setProperty('--rail-height', `${railRef.value.offsetHeight}px`)
+    } else {
+      document.documentElement.style.setProperty('--rail-height', '0px')
+    }
+  }
+}
+
+let scrollTicking = false
+function onScroll() {
+  showScrollTop.value = window.scrollY > 300
+  if (!scrollTicking) {
+    requestAnimationFrame(() => {
+      handleScroll()
+      scrollTicking = false
+    })
+    scrollTicking = true
+  }
+}
 
 const pagination = ref({
   page: 1,
@@ -299,13 +386,47 @@ const pagination = ref({
 })
 
 // ─── computed ───────────────────────────────────────────────────────
-const branding = computed(() => resolveBranding(props.boot))
 const siteComponents = computed(() => resolveSiteComponents(props.boot))
-const menuSearchVariant = computed(() => siteComponents.value.menu_search_variant)
 const categoryRailVariant = computed(() => siteComponents.value.category_rail_variant)
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 const cartTotal = computed(() => cartSubtotal())
-const isSearchMode = computed(() => Boolean(search.value.trim()))
+const availableTags = computed(() => {
+  const tagSet = new Set()
+  const allItems = items.value || []
+  for (const item of allItems) {
+    const tags = Array.isArray(item.tags) ? item.tags : []
+    for (const tag of tags) {
+      const t = String(tag || '').trim()
+      if (t) tagSet.add(t)
+    }
+  }
+  return Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'fa'))
+})
+const tagFilteredItems = computed(() => {
+  const tag = selectedTag.value
+  if (!tag) return items.value
+  return (items.value || []).filter((item) => {
+    const tags = Array.isArray(item.tags) ? item.tags : []
+    return tags.some((t) => String(t).trim() === tag)
+  })
+})
+
+const displayItems = computed(() => tagFilteredItems.value)
+
+// ─── empty state context ────────────────────────────────────────────
+const emptyStateTitle = computed(() => {
+  if (selectedTag.value) return 'محصولی با این فیلتر پیدا نشد'
+  return 'محصولی پیدا نشد'
+})
+const emptyStateMessage = computed(() => {
+  if (selectedTag.value) return 'فیلترها را تغییر دهید'
+  return 'در این دسته‌بندی محصولی وجود ندارد'
+})
+const emptyStateAction = computed(() => {
+  if (selectedTag.value) return 'حذف فیلتر'
+  return 'نمایش همه محصولات'
+})
+
 const activeCategory = computed(() => categories.value.find((row) => row.slug === selectedCategorySlug.value) || null)
 const activeCategoryTitle = computed(() => activeCategory.value?.title || 'دسته')
 const highlightedItems = computed(() => {
@@ -329,10 +450,6 @@ const highlightedItems = computed(() => {
 })
 const highlightedTitle = computed(() => String(menuHighlight.value?.title || 'ویژه و پرفروش').trim() || 'ویژه و پرفروش')
 const currentSubcategories = computed(() => {
-  if (isSearchMode.value) {
-    return []
-  }
-
   const rows = []
   const bySlug = new Map()
   const byTitle = new Map()
@@ -374,7 +491,7 @@ const currentSubcategories = computed(() => {
     registerSubcategory(sub, Number(sub?.sort_order || 0))
   }
 
-  for (const item of items.value) {
+  for (const item of displayItems.value) {
     const itemSlug = String(item?.subcategory_slug || '').trim()
     const itemTitle = String(item?.subcategory_title || item?.subcategory || '').trim()
     const itemTitleToken = normalizeSubcategoryToken(itemTitle)
@@ -415,7 +532,7 @@ const currentSubcategories = computed(() => {
     return String(left?.title || '').localeCompare(String(right?.title || ''), 'fa')
   })
 })
-const showSubcategorySections = computed(() => !isSearchMode.value && currentSubcategories.value.length > 0)
+const showSubcategorySections = computed(() => currentSubcategories.value.length > 0)
 const groupedSections = computed(() => {
   if (!showSubcategorySections.value) {
     return []
@@ -448,7 +565,7 @@ const groupedSections = computed(() => {
     items: [],
   }
 
-  for (const item of items.value) {
+  for (const item of displayItems.value) {
     const slug = String(item.subcategory_slug || '').trim()
     const titleToken = normalizeSubcategoryToken(item.subcategory_title || item.subcategory)
     const section = (slug ? sectionMap.get(slug) : null) || (titleToken ? sectionByTitle.get(titleToken) : null)
@@ -586,21 +703,10 @@ function handlePrintShortcut(event) {
   }
 }
 
-// ─── جستجو با debounce ─────────────────────────────────────────────
-watch(search, (newVal) => {
-  if (String(newVal || '').trim()) {
-    selectedSubcategorySlug.value = ''
-  }
-  clearTimeout(searchDebounceTimer.value)
-  searchDebounceTimer.value = setTimeout(() => {
-    reloadItems(1)
-  }, 420)
+watch(selectedTag, () => {
+  // Scroll to top of results when tag filter changes
+  resultHeadRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
 })
-
-function onSearchSubmit() {
-  clearTimeout(searchDebounceTimer.value)
-  reloadItems(1)
-}
 
 // ─── بارگذاری آیتم‌ها ──────────────────────────────────────────────
 async function reloadItems(page = 1) {
@@ -615,12 +721,10 @@ async function reloadItems(page = 1) {
   error.value = ''
 
   try {
-    const query = search.value.trim()
-    const searchMode = Boolean(query)
     const data = await getMenuItems({
-      category_slug: searchMode ? '' : selectedCategorySlug.value,
+      category_slug: selectedCategorySlug.value,
       subcategory_slug: '',
-      search: query,
+      search: '',
       page,
       page_size: 12,
       branch: activeBranch.value,
@@ -644,27 +748,49 @@ async function reloadItems(page = 1) {
 }
 
 // ─── infinite scroll ────────────────────────────────────────────────
+let scrollLoadLock = false
+
 function setupIntersectionObserver() {
   if (!infiniteAnchor.value) return
+
+  if (intersectionObserver) {
+    intersectionObserver.disconnect()
+  }
+
+  scrollLoadLock = false
 
   intersectionObserver = new IntersectionObserver(
     (entries) => {
       const entry = entries[0]
-      if (entry.isIntersecting && !loading.value && !loadingMore.value && !allLoaded.value) {
-        reloadItems(pagination.value.page + 1)
+      if (
+        entry.isIntersecting &&
+        !loading.value &&
+        !loadingMore.value &&
+        !allLoaded.value &&
+        !scrollLoadLock
+      ) {
+        scrollLoadLock = true
+        reloadItems(pagination.value.page + 1).finally(() => {
+          scrollLoadLock = false
+        })
       }
     },
-    { rootMargin: '200px' },
+    { rootMargin: '300px' },
   )
   intersectionObserver.observe(infiniteAnchor.value)
 }
 
 // ─── دسته‌بندی ──────────────────────────────────────────────────────
 function selectCategory(slug) {
-  if (selectedCategorySlug.value === slug && !isSearchMode.value) return
+  if (selectedCategorySlug.value === slug) return
   selectedCategorySlug.value = slug
   selectedSubcategorySlug.value = ''
+  selectedTag.value = '' // reset tag filter on category change
   reloadItems(1)
+  // Scroll to top so the new category content is visible
+  if (window.scrollY > 0) {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 }
 
 function getSubcategoryAnchorKey(slug) {
@@ -694,17 +820,25 @@ async function scrollToSubcategory(slug) {
 
   const target = subcategorySectionRefs.value[anchorKey]
   if (target?.scrollIntoView) {
+    // First scroll to top so the sticky rail offset is calculated correctly
+    if (window.scrollY > 0) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      await new Promise(r => setTimeout(r, 300))
+    }
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 }
 
 async function selectSubcategory(slug) {
-  if (isSearchMode.value) return
-
   const cleanSlug = String(slug || '').trim()
   selectedSubcategorySlug.value = cleanSlug
 
   if (!cleanSlug) {
+    // First scroll to top so the sticky rail offset is calculated correctly
+    if (window.scrollY > 0) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      await new Promise(r => setTimeout(r, 300))
+    }
     resultHeadRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
     return
   }
@@ -713,7 +847,7 @@ async function selectSubcategory(slug) {
 }
 
 function resetFilters() {
-  search.value = ''
+  selectedTag.value = ''
   selectedCategorySlug.value = categories.value[0]?.slug || ''
   selectedSubcategorySlug.value = ''
   reloadItems(1)
@@ -822,8 +956,15 @@ function resolveDisplayItem(item = {}) {
   return item || {}
 }
 
+function isComingSoonItem(item = {}) {
+  return Number(item?.coming_soon ?? item?.restaurant_coming_soon ?? 0) === 1
+}
+
 // ─── افزودن سریع به سبد ────────────────────────────────────────────
 function quickAdd(item) {
+  if (isComingSoonItem(item)) {
+    return
+  }
   if (!itemHasCustomization(item)) {
     addSimpleLine(item, 1)
     return
@@ -833,6 +974,9 @@ function quickAdd(item) {
 }
 
 function quickIncrease(item) {
+  if (isComingSoonItem(item)) {
+    return
+  }
   if (itemHasCustomization(item)) {
     quickAdd(item)
     return
@@ -852,6 +996,16 @@ function closeQuickSheet() {
   quickSheetItem.value = null
 }
 
+function openBomModal(item) {
+  bomModalItem.value = item
+  bomModalOpen.value = true
+}
+
+function closeBomModal() {
+  bomModalOpen.value = false
+  bomModalItem.value = null
+}
+
 function confirmQuickAdd(linePayload) {
   upsertLine({
     ...linePayload,
@@ -860,7 +1014,29 @@ function confirmQuickAdd(linePayload) {
 }
 
 // ─── lifecycle ──────────────────────────────────────────────────────
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 onMounted(async () => {
+  try {
+    const profile = await getManagementSessionProfile()
+    canViewBom.value = Boolean(profile?.is_staff || profile?.is_admin)
+  } catch (_) {
+    canViewBom.value = false
+  }
+
+  // Apply category from URL query parameter
+  const urlCategory = new URLSearchParams(window.location.search).get('category')
+  if (urlCategory && !urlCategoryApplied) {
+    const matched = categories.value.find((c) => c.slug === urlCategory)
+    if (matched && selectedCategorySlug.value !== matched.slug) {
+      selectedCategorySlug.value = matched.slug
+      selectedSubcategorySlug.value = ''
+      urlCategoryApplied = true
+    }
+  }
+
   const highlightPayload = props.boot.menu_highlight || {}
   menuHighlight.value = {
     enabled: Number(highlightPayload.enabled || 0) ? 1 : 0,
@@ -876,19 +1052,98 @@ onMounted(async () => {
   printCards.value = items.value.filter((row) => isPrintableItem(row))
   setupIntersectionObserver()
   window.addEventListener('keydown', handlePrintShortcut)
+  window.addEventListener('scroll', onScroll)
+  // Capture rail offset after DOM is ready
+  nextTick(() => {
+    railOffsetTop = railRef.value?.offsetTop || 0
+  })
 })
 
 onUnmounted(() => {
   intersectionObserver?.disconnect()
-  clearTimeout(searchDebounceTimer.value)
   window.removeEventListener('keydown', handlePrintShortcut)
+  window.removeEventListener('scroll', onScroll)
 })
 </script>
 
 <style scoped>
 .menu-shell {
   width: min(540px, calc(100% - 1rem));
-  padding: 0.6rem 0.2rem 7rem;
+  padding: 0.6rem 0.2rem max(7rem, calc(7rem + env(safe-area-inset-bottom)));
+}
+
+/* ─── Sticky Rail (JS-based because overflow:hidden ancestors break CSS sticky) ─── */
+.category-rail-sticky {
+  position: relative;
+  z-index: 100;
+  background: var(--theme-background, #f6f1ea);
+  padding: 0.25rem 0;
+  border-bottom: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.1);
+  transition: box-shadow 0.2s ease;
+}
+
+/* On mobile, rail is at the very top — add some breathing room */
+@media (max-width: 919px) {
+  .category-rail-sticky {
+    padding-top: 0.4rem;
+  }
+}
+
+.category-rail-sticky.is-sticky {
+  position: fixed;
+  top: 82px;
+  left: 0;
+  right: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* On mobile (no header), rail sits at top: 0 when sticky */
+@media (max-width: 919px) {
+  .category-rail-sticky.is-sticky {
+    top: 0;
+  }
+}
+
+.menu-page-root {
+  min-height: 100dvh;
+}
+
+/* Reserve space when rail is fixed so content doesn't jump */
+.category-rail-sticky.is-sticky ~ .liquid-backdrop {
+  padding-top: var(--rail-height, 0px);
+}
+
+/* ─── فیلتر تگ‌ها ─── */
+.tag-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.5rem 0.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.tag-filter-btn {
+  background: var(--glass-bg, #fdf8f1);
+  border: 1px solid var(--glass-border, #d5c3af);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary, #654a38);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tag-filter-btn:hover {
+  border-color: var(--accent-green, #6f4a31);
+  color: var(--accent-green, #6f4a31);
+}
+
+.tag-filter-btn.active {
+  background: var(--accent-green, #6f4a31);
+  border-color: var(--accent-green, #6f4a31);
+  color: #fff;
+  font-weight: 600;
 }
 
 /* ─── سربرگ نتایج ─── */
@@ -929,6 +1184,37 @@ onUnmounted(() => {
 .error-text {
   color: var(--danger, #c0392b);
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.retry-btn {
+  border-radius: 999px;
+  border: 1px solid var(--danger, #c0392b);
+  background: transparent;
+  color: var(--danger, #c0392b);
+  padding: 0.3rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+.retry-btn:hover {
+  background: var(--danger, #c0392b);
+  color: #fff;
+}
+.retry-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.progress-indicator {
+  text-align: center;
+  padding: 0.5rem;
+  font-size: 0.78rem;
 }
 
 /* ─── لیست آیتم‌ها ─── */
@@ -1320,5 +1606,41 @@ onUnmounted(() => {
   .item-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* دکمه فلش رو به بالا */
+.scroll-top-btn {
+  position: fixed;
+  bottom: 5rem;
+  right: 1.2rem;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent-green, #6f4a31);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.35);
+  opacity: 0;
+  transform: translateY(12px) scale(0.85);
+  transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s ease;
+  z-index: 9999;
+  pointer-events: none;
+}
+.scroll-top-btn.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.scroll-top-btn:hover {
+  background: var(--accent-green80, #6f4a31);
+  transform: translateY(-2px) scale(1.08);
+  box-shadow: 0 12px 28px rgb(var(--palette-deep-sapphire-rgb) / 0.45);
+}
+.scroll-top-btn:active {
+  transform: scale(0.95);
 }
 </style>
