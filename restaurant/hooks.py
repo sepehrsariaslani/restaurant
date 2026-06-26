@@ -27,8 +27,8 @@ app_license = "mit"
 # include js, css files in header of desk.html
 # app_include_css = "/assets/restaurant/css/restaurant.css"
 app_include_js = [
-        "/assets/restaurant/js/desk_print_picker.js",
-        "/assets/restaurant/js/activity_tracker.js",
+	"/assets/restaurant/js/desk_print_picker.js",
+	"/assets/restaurant/js/activity_tracker.js",
 ]
 
 # include js, css files in header of web template
@@ -52,8 +52,8 @@ app_include_js = [
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 doctype_js = {
-        "Auto Price List": "public/js/auto_price_list.js",
-        "Sales Order": "public/js/sales_order.js",
+	"Auto Price List": "public/js/auto_price_list.js",
+	"Sales Order": "public/js/sales_order.js",
 }
 
 # Svg Icons
@@ -79,42 +79,60 @@ homepage = "restaurant"
 # website_generators = ["Web Page"]
 
 website_route_rules = [
-        # Root redirect → restaurant landing
-        {"from_route": "/", "to_route": "restaurant/index"},
-        # Customer-facing routes (no prefix)
-        {"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
-        {"from_route": "/menu", "to_route": "restaurant/menu"},
-        {"from_route": "/item/<slug>", "to_route": "restaurant/item"},
-        {"from_route": "/about-us", "to_route": "restaurant/about_us"},
-        {"from_route": "/faq", "to_route": "restaurant/faq"},
-        {"from_route": "/cart", "to_route": "restaurant/cart"},
-        {"from_route": "/order-success", "to_route": "restaurant/order_success"},
-        {"from_route": "/order-success/<order_code>", "to_route": "restaurant/order_success"},
-        # Management routes
-        {"from_route": "/management", "to_route": "management"},
-        {"from_route": "/management/login", "to_route": "management/login"},
-        {"from_route": "/management/dashboard", "to_route": "management"},
-        {"from_route": "/management/pos", "to_route": "management/pos"},
-        {"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
-        {"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
-        {"from_route": "/management/orders", "to_route": "management/orders"},
-        {"from_route": "/management/products", "to_route": "management/products"},
-        {"from_route": "/management/product", "to_route": "management/product"},
-        {"from_route": "/management/menu-design", "to_route": "management"},
-        {"from_route": "/management/menu_design", "to_route": "management"},
-        {"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
-        {"from_route": "/management/menu-group", "to_route": "management/menu_group"},
-        {"from_route": "/management/site-settings", "to_route": "management/site_settings"},
-        {"from_route": "/management/boms", "to_route": "management/boms"},
-        {"from_route": "/management/bom", "to_route": "management/bom"},
-        {"from_route": "/management/customers", "to_route": "management/customers"},
-        {"from_route": "/management/reports", "to_route": "management/reports"},
-        {"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
-        {"from_route": "/management/print-formats", "to_route": "management/print_formats"},
-        {"from_route": "/management/settings", "to_route": "management/settings"},
-        {"from_route": "/management/builder-templates", "to_route": "management/builder_templates"},
-        {"from_route": "/management/builder-template/edit/<template_id>", "to_route": "management/builder_template"},
-        {"from_route": "/management/builder-template/new", "to_route": "management/builder_template"},
+	# Root redirect → restaurant landing
+	{"from_route": "/", "to_route": "restaurant/index"},
+	# Customer-facing routes (no prefix)
+	{"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
+	{"from_route": "/menu", "to_route": "restaurant/menu"},
+	{"from_route": "/search", "to_route": "restaurant/menu"},
+	{"from_route": "/item/<slug>", "to_route": "restaurant/item"},
+	{"from_route": "/about-us", "to_route": "restaurant/about_us"},
+	{"from_route": "/faq", "to_route": "restaurant/faq"},
+	{"from_route": "/cart", "to_route": "restaurant/cart"},
+	{"from_route": "/order-success", "to_route": "restaurant/order_success"},
+	{"from_route": "/order-success/<order_code>", "to_route": "restaurant/order_success"},
+	{"from_route": "/customize/<item_slug>", "to_route": "restaurant/item"},
+	{"from_route": "/bom-preview/<item_slug>", "to_route": "restaurant/menu"},
+	{"from_route": "/payment/<order_code>", "to_route": "restaurant/cart"},
+	{"from_route": "/payment/callback", "to_route": "restaurant/cart"},
+	{"from_route": "/delivery", "to_route": "restaurant/index"},
+	{"from_route": "/table-reservation", "to_route": "restaurant/index"},
+	{"from_route": "/table-select", "to_route": "restaurant/index"},
+	{"from_route": "/customer/login", "to_route": "restaurant/index"},
+	{"from_route": "/customer/dashboard", "to_route": "restaurant/index"},
+	{"from_route": "/customer/profile", "to_route": "restaurant/index"},
+	{"from_route": "/customer/addresses", "to_route": "restaurant/index"},
+	{"from_route": "/customer/branches", "to_route": "restaurant/index"},
+	{"from_route": "/customer/orders", "to_route": "customer/orders"},
+	{"from_route": "/customer/orders/<order_code>", "to_route": "customer/orders"},
+	# Management routes
+	{"from_route": "/management", "to_route": "management"},
+	{"from_route": "/management/login", "to_route": "management/login"},
+	{"from_route": "/management/dashboard", "to_route": "management"},
+	{"from_route": "/management/pos", "to_route": "management/pos"},
+	{"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
+	{"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
+	{"from_route": "/management/orders", "to_route": "management/orders"},
+	{"from_route": "/management/products", "to_route": "management/products"},
+	{"from_route": "/management/product", "to_route": "management/product"},
+	{"from_route": "/management/menu-design", "to_route": "management"},
+	{"from_route": "/management/menu_design", "to_route": "management"},
+	{"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
+	{"from_route": "/management/menu-group", "to_route": "management/menu_group"},
+	{"from_route": "/management/site-settings", "to_route": "management/site_settings"},
+	{"from_route": "/management/boms", "to_route": "management/boms"},
+	{"from_route": "/management/bom", "to_route": "management/bom"},
+	{"from_route": "/management/customers", "to_route": "management/customers"},
+	{"from_route": "/management/reports", "to_route": "management/reports"},
+	{"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
+	{"from_route": "/management/print-formats", "to_route": "management/print_formats"},
+	{"from_route": "/management/settings", "to_route": "management/settings"},
+	{"from_route": "/management/builder-templates", "to_route": "management/builder_templates"},
+	{
+		"from_route": "/management/builder-template/edit/<template_id>",
+		"to_route": "management/builder_template",
+	},
+	{"from_route": "/management/builder-template/new", "to_route": "management/builder_template"},
 ]
 
 # Jinja
@@ -193,37 +211,37 @@ website_route_rules = [
 # }
 
 doc_events = {
-        "BOM": {
-                "on_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
-                "before_submit": "restaurant.api.refresh_item_nutrition_for_bom",
-                "validate": "restaurant.api.refresh_item_nutrition_for_bom",
-                "on_update_after_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
-                "on_trash": "restaurant.api.clear_item_default_bom_links_for_bom",
-        },
-        "Work Order": {
-                "after_insert": "restaurant.api.sync_work_order_required_items_from_ticket",
-                "on_update": "restaurant.api.sync_work_order_required_items_from_ticket",
-                "on_cancel": "restaurant.api.unlink_work_order_from_restaurant_ticket",
-                "on_trash": "restaurant.api.unlink_work_order_from_restaurant_ticket",
-        },
-        "Restaurant Production Ticket": {
-                "on_cancel": "restaurant.api.unlink_production_ticket_links",
-                "on_trash": "restaurant.api.unlink_production_ticket_links",
-        },
-        "Item": {
-                "on_update": "restaurant.api.sync_item_image_from_attachment",
-                "on_insert": "restaurant.api.sync_item_image_from_attachment",
-        },
-        "File": {
-                "after_insert": "restaurant.api.sync_item_image_on_file_change",
-                "on_update": "restaurant.api.sync_item_image_on_file_change",
-        },
-        "*": {
-                "on_update": "restaurant.api.sync_item_image_on_file_change",
-        },
-        "Sales Order": {
-                "on_submit": "restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.on_sales_order_submit",
-        },
+	"BOM": {
+		"on_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
+		"before_submit": "restaurant.api.refresh_item_nutrition_for_bom",
+		"validate": "restaurant.api.refresh_item_nutrition_for_bom",
+		"on_update_after_submit": "restaurant.api.clear_item_default_bom_links_for_bom",
+		"on_trash": "restaurant.api.clear_item_default_bom_links_for_bom",
+	},
+	"Work Order": {
+		"after_insert": "restaurant.api.sync_work_order_required_items_from_ticket",
+		"on_update": "restaurant.api.sync_work_order_required_items_from_ticket",
+		"on_cancel": "restaurant.api.unlink_work_order_from_restaurant_ticket",
+		"on_trash": "restaurant.api.unlink_work_order_from_restaurant_ticket",
+	},
+	"Restaurant Production Ticket": {
+		"on_cancel": "restaurant.api.unlink_production_ticket_links",
+		"on_trash": "restaurant.api.unlink_production_ticket_links",
+	},
+	"Item": {
+		"on_update": "restaurant.api.sync_item_image_from_attachment",
+		"on_insert": "restaurant.api.sync_item_image_from_attachment",
+	},
+	"File": {
+		"after_insert": "restaurant.api.sync_item_image_on_file_change",
+		"on_update": "restaurant.api.sync_item_image_on_file_change",
+	},
+	"*": {
+		"on_update": "restaurant.api.sync_item_image_on_file_change",
+	},
+	"Sales Order": {
+		"on_submit": "restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.on_sales_order_submit",
+	},
 }
 
 # Scheduled Tasks
@@ -248,20 +266,20 @@ doc_events = {
 # }
 
 scheduler_events = {
-        "daily": [
-                "restaurant.restaurant.doctype.auto_price_list.auto_price_list.run_due_restaurant_price_lists",
-                "restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
-                "restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
-                "restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.purge_orphaned_selections",
-        ],
-        "cron": {
-                "* * * * *": [
-                        "restaurant.snapp_sync.sync_snapp_orders",
-                ],
-                "*/5 * * * *": [
-                        "restaurant.activity_tracking.jobs.close_timed_out_activity_sessions",
-                ],
-        }
+	"daily": [
+		"restaurant.restaurant.doctype.auto_price_list.auto_price_list.run_due_restaurant_price_lists",
+		"restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
+		"restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
+		"restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.purge_orphaned_selections",
+	],
+	"cron": {
+		"* * * * *": [
+			"restaurant.snapp_sync.sync_snapp_orders",
+		],
+		"*/5 * * * *": [
+			"restaurant.activity_tracking.jobs.close_timed_out_activity_sessions",
+		],
+	},
 }
 
 # Testing
@@ -345,16 +363,16 @@ on_logout = "restaurant.activity_tracking.api.on_logout"
 
 
 app_include_js = [
-    "/assets/restaurant/js/item_image_sync.js",
+	"/assets/restaurant/js/item_image_sync.js",
 ]
 
 fixtures = [
-    {
-        "dt": "Custom Field",
-        "filters": [["module", "=", "Restaurant"]],
-    }
+	{
+		"dt": "Custom Field",
+		"filters": [["module", "=", "Restaurant"]],
+	}
 ]
 
 patches = [
-    "restaurant.patches.v2_6.backfill_item_images_from_attachments",
+	"restaurant.patches.v2_6.backfill_item_images_from_attachments",
 ]

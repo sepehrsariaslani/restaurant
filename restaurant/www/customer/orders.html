@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Veederakht" />
   <meta name="application-name" content="Veederakht" />
-  <meta name="description" content="وب‌اپ سفارش آنلاین، رزرو میز و پیگیری سفارش رستوران ویدرخت" />
+  <meta name="description" content="تاریخچه سفارش‌های مشتری در وب‌اپ ویدرخت" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/assets/restaurant/frontend/NoshYar.png" />
   <link rel="icon" type="image/png" href="/assets/restaurant/frontend/NoshYar.png" />
-  <title>منوی رستوران</title>
+  <title>سفارش‌های من | Veederakht</title>
   <style>
     @font-face {
       font-family: 'Peyda';
@@ -22,7 +22,7 @@
       font-style: normal;
       font-display: swap;
     }
-    body { margin: 0; font-family: Peyda, sans-serif;}
+    body { margin: 0; font-family: Peyda, sans-serif; }
     #app { min-height: 100vh; }
   </style>
   <script type="module" crossorigin src="/assets/restaurant/frontend/assets/index.js"></script>
@@ -31,7 +31,7 @@
 <body>
   <div id="app"></div>
   <script>
-    window._PAGE = 'menu';
+    window._PAGE = 'customer-orders';
     window._BOOT = {{ (boot or {}) | tojson }};
     window.csrf_token = "{{ csrf_token }}";
   </script>

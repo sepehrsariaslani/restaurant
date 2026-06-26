@@ -92,8 +92,7 @@
       "fieldname": "options",
       "fieldtype": "Table",
       "label": "Options",
-      "options": "Product Builder Option",
-      "reqd": 1
+      "options": "Product Builder Option"
     },
     {
       "fieldname": "conditional_logic",

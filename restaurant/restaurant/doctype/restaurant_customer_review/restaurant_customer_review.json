@@ -1,0 +1,45 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RREV-{#####}",
+  "creation": "2026-06-26 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "customer_name",
+    "mobile",
+    "item",
+    "item_slug",
+    "sales_order",
+    "order_code",
+    "rating",
+    "title",
+    "comment",
+    "is_approved"
+  ],
+  "fields": [
+    {"fieldname": "customer_name", "fieldtype": "Data", "in_list_view": 1, "label": "Customer Name", "reqd": 1},
+    {"fieldname": "mobile", "fieldtype": "Data", "in_list_view": 1, "label": "Mobile", "reqd": 1},
+    {"fieldname": "item", "fieldtype": "Link", "in_list_view": 1, "label": "Item", "options": "Item"},
+    {"fieldname": "item_slug", "fieldtype": "Data", "in_list_view": 1, "label": "Item Slug"},
+    {"fieldname": "sales_order", "fieldtype": "Link", "label": "Sales Order", "options": "Sales Order"},
+    {"fieldname": "order_code", "fieldtype": "Data", "label": "Order Code"},
+    {"fieldname": "rating", "fieldtype": "Rating", "in_list_view": 1, "label": "Rating", "reqd": 1},
+    {"fieldname": "title", "fieldtype": "Data", "label": "Title"},
+    {"fieldname": "comment", "fieldtype": "Small Text", "label": "Comment"},
+    {"default": "0", "fieldname": "is_approved", "fieldtype": "Check", "in_list_view": 1, "label": "Is Approved"}
+  ],
+  "links": [],
+  "modified": "2026-06-26 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Customer Review",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+    {"read": 1, "role": "Desk User"}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}
