@@ -4,7 +4,7 @@
   "description": "وب‌اپ سفارش آنلاین، رزرو میز و پیگیری سفارش رستوران ویدرخت",
   "lang": "fa-IR",
   "dir": "rtl",
-  "start_url": "/restaurant",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],

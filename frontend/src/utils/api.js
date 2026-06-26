@@ -1016,6 +1016,14 @@ export function saveCustomerDeliveryAddress({ customer_info = {}, address_info =
 	return callRestaurantAPI("save_customer_delivery_address", { customer_info, address_info });
 }
 
+export function getCustomerVehicles({ mobile = "", customer_name = "" } = {}) {
+	return callRestaurantAPI("get_customer_vehicles", { mobile, customer_name });
+}
+
+export function saveCustomerVehicle({ customer_info = {}, vehicle_info = {} } = {}) {
+	return callRestaurantAPI("save_customer_vehicle", { customer_info, vehicle_info });
+}
+
 export function placeOrder(payload) {
 	return callRestaurantAPI("place_order", payload);
 }

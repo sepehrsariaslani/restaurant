@@ -91,6 +91,7 @@
       :has-last-order="hasLastOrder"
       :last-order-url="lastOrderUrl"
     />
+    <PwaInstallPrompt />
   </div>
 
   <SiteLoaderOverlay v-if="!isManagement && !isCustomerPage" :settings="loaderSettings" />
@@ -101,6 +102,7 @@
 import { computed, reactive } from 'vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
 import PublicHeader from './components/PublicHeader.vue'
+import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 import SiteFooter from './components/SiteFooter.vue'
 import SiteFooterMinimal from './components/SiteFooterMinimal.vue'
 import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'

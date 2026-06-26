@@ -94,14 +94,24 @@
               <p class="hint" v-if="customerLookupError">{{ customerLookupError }}</p>
             </div>
 
-            <div class="delivery-mode-grid">
+            <div class="delivery-mode-grid delivery-mode-grid--three">
               <button
                 type="button"
                 class="mode-chip"
-                :class="{ active: checkoutForm.delivery_mode === 'pickup' }"
+                :class="{ active: checkoutForm.delivery_mode === 'pickup' && checkoutForm.pickup_method !== 'car' }"
                 @click="setDeliveryMode('pickup')"
               >
-                حضوری (خودم تحویل میگیرم)
+                حضوری
+                <small>خودم تحویل می‌گیرم</small>
+              </button>
+              <button
+                type="button"
+                class="mode-chip"
+                :class="{ active: checkoutForm.delivery_mode === 'pickup' && checkoutForm.pickup_method === 'car' }"
+                @click="setDeliveryMode('pickup_car')"
+              >
+                کنار خودرو
+                <small>تحویل کنار ماشین</small>
               </button>
               <button
                 type="button"
@@ -109,9 +119,120 @@
                 :class="{ active: checkoutForm.delivery_mode === 'delivery' }"
                 @click="setDeliveryMode('delivery')"
               >
-                تحویل درب منزل
+                ارسال
+                <small>تحویل درب منزل</small>
               </button>
             </div>
+
+            <section class="delivery-box pickup-car-box" v-if="checkoutForm.delivery_mode === 'pickup' && checkoutForm.pickup_method === 'car'">
+              <header class="delivery-head">
+                <h4>اطلاعات تحویل کنار خودرو</h4>
+                <button class="ghost-btn" type="button" @click="switchToNewVehicle">ثبت خودروی جدید</button>
+              </header>
+
+              <p class="hint" v-if="savedVehicles.length">خودروی ذخیره‌شده را انتخاب کنید یا مشخصات جدید وارد کنید.</p>
+              <p class="hint" v-else>برای تحویل کنار خودرو، مشخصات ماشین را وارد کنید تا سفارش‌های بعدی ذخیره بماند.</p>
+
+              <div class="saved-addresses" v-if="savedVehicles.length">
+                <label class="saved-address vehicle-option" v-for="vehicle in savedVehicles" :key="vehicle.id">
+                  <input
+                    type="radio"
+                    name="saved-vehicle"
+                    :value="vehicle.id"
+                    :checked="!checkoutForm.use_new_vehicle && checkoutForm.vehicle_id === vehicle.id"
+                    @change="selectSavedVehicle(vehicle.id)"
+                  />
+                  <div>
+                    <strong>{{ vehicle.title || vehicle.plate || 'خودرو' }}</strong>
+                    <p>{{ vehicle.type || 'خودرو' }} · {{ vehicle.color || 'رنگ نامشخص' }}</p>
+                    <small>{{ vehicle.plate || '-' }}</small>
+                  </div>
+                </label>
+              </div>
+
+              <section class="new-address" v-if="checkoutForm.use_new_vehicle || !savedVehicles.length">
+                <div class="coord-grid">
+                  <label>
+                    <span>عنوان خودرو</span>
+                    <input class="input" :value="checkoutForm.vehicle_title" @input="setCheckoutField('vehicle_title', $event.target.value)" placeholder="مثلاً ماشین من" />
+                  </label>
+                  <label>
+                    <span>نوع خودرو</span>
+                    <input class="input" :value="checkoutForm.vehicle_type" @input="setCheckoutField('vehicle_type', $event.target.value)" placeholder="مثلاً پژو ۲۰۶" />
+                  </label>
+                </div>
+
+                <div class="coord-grid">
+                  <label>
+                    <span>رنگ خودرو</span>
+                    <input class="input" :value="checkoutForm.vehicle_color" @input="setCheckoutField('vehicle_color', $event.target.value)" placeholder="مثلاً سفید" />
+                  </label>
+                  <label>
+                    <span>شماره پلاک</span>
+                    <input class="input" :value="checkoutForm.vehicle_plate" @input="setCheckoutField('vehicle_plate', $event.target.value)" placeholder="مثلاً ۱۲ ب ۳۴۵ ۶۷" />
+                  </label>
+                </div>
+              </section>
+
+              <div class="pickup-time-grid">
+                <button
+                  type="button"
+                  class="mode-chip"
+                  :class="{ active: checkoutForm.pickup_eta_mode === 'now' }"
+                  @click="setCheckoutFields({ pickup_eta_mode: 'now' })"
+                >
+                  الان در مسیرم
+                </button>
+                <button
+                  type="button"
+                  class="mode-chip"
+                  :class="{ active: checkoutForm.pickup_eta_mode === '15min' }"
+                  @click="setCheckoutFields({ pickup_eta_mode: '15min' })"
+                >
+                  تا ۱۵ دقیقه دیگر
+                </button>
+                <button
+                  type="button"
+                  class="mode-chip"
+                  :class="{ active: checkoutForm.pickup_eta_mode === 'scheduled' }"
+                  @click="setCheckoutFields({ pickup_eta_mode: 'scheduled' })"
+                >
+                  زمان‌بندی برای بعد
+                </button>
+              </div>
+
+              <div class="coord-grid" v-if="checkoutForm.pickup_eta_mode === 'scheduled'">
+                <label>
+                  <span>ساعت رسیدن</span>
+                  <input class="input" type="time" :value="checkoutForm.pickup_eta_time" @input="setCheckoutField('pickup_eta_time', $event.target.value)" />
+                </label>
+                <label>
+                  <span>محل توقف</span>
+                  <input class="input" :value="checkoutForm.pickup_parking_spot" @input="setCheckoutField('pickup_parking_spot', $event.target.value)" placeholder="مثلاً ورودی اصلی" />
+                </label>
+              </div>
+
+              <label v-else>
+                <span>محل توقف</span>
+                <input class="input" :value="checkoutForm.pickup_parking_spot" @input="setCheckoutField('pickup_parking_spot', $event.target.value)" placeholder="مثلاً جلوی درب اصلی" />
+              </label>
+
+              <div class="pickup-checks">
+                <label class="inline-toggle">
+                  <input type="checkbox" :checked="checkoutForm.pickup_stay_in_car" @change="setCheckoutField('pickup_stay_in_car', $event.target.checked)" />
+                  <span>داخل خودرو منتظر می‌مانم</span>
+                </label>
+                <label class="inline-toggle">
+                  <input type="checkbox" :checked="checkoutForm.pickup_need_call" @change="setCheckoutField('pickup_need_call', $event.target.checked)" />
+                  <span>قبل از خروج سفارش با من تماس بگیرید</span>
+                </label>
+              </div>
+
+              <label>
+                <span>یادداشت تحویل کنار خودرو</span>
+                <textarea class="textarea" :value="checkoutForm.pickup_notes" @input="setCheckoutField('pickup_notes', $event.target.value)" placeholder="مثلاً کنار درب جنوبی منتظر می‌مانم" />
+              </label>
+            </section>
 
             <section class="delivery-box" v-if="checkoutForm.delivery_mode === 'delivery'">
               <header class="delivery-head">
@@ -247,6 +368,7 @@ import {
   getMenuBoot,
   placeOrder,
   saveCustomerDeliveryAddress,
+  saveCustomerVehicle,
   validateCoupon,
 } from '@/utils/api'
 import { formatMoney, normalizeMobile } from '@/utils/format'
@@ -260,6 +382,7 @@ const customerLookupLoading = ref(false)
 const customerLookupError = ref('')
 const mapStatus = ref('')
 const savedAddresses = ref([])
+const savedVehicles = ref([])
 const couponCode = ref('')
 const couponLoading = ref(false)
 const couponError = ref('')
@@ -290,6 +413,7 @@ const checkoutForm = ref({
   customer_name: cartState.checkoutDraft.customer_name || '',
   mobile: cartState.checkoutDraft.mobile || '',
   delivery_mode: cartState.checkoutDraft.delivery_mode || (cartState.checkoutDraft.order_type === 'delivery' ? 'delivery' : 'pickup'),
+  pickup_method: cartState.checkoutDraft.pickup_method || 'counter',
   order_type: cartState.checkoutDraft.order_type || 'takeaway',
   delivery_address_id: cartState.checkoutDraft.delivery_address_id || '',
   use_new_address: cartState.checkoutDraft.use_new_address !== false,
@@ -301,6 +425,18 @@ const checkoutForm = ref({
   address_floor: cartState.checkoutDraft.address_floor || '',
   address_lat: cartState.checkoutDraft.address_lat || '',
   address_lng: cartState.checkoutDraft.address_lng || '',
+  vehicle_id: cartState.checkoutDraft.vehicle_id || '',
+  use_new_vehicle: cartState.checkoutDraft.use_new_vehicle !== false,
+  vehicle_title: cartState.checkoutDraft.vehicle_title || '',
+  vehicle_type: cartState.checkoutDraft.vehicle_type || '',
+  vehicle_color: cartState.checkoutDraft.vehicle_color || '',
+  vehicle_plate: cartState.checkoutDraft.vehicle_plate || '',
+  pickup_eta_mode: cartState.checkoutDraft.pickup_eta_mode || 'now',
+  pickup_eta_time: cartState.checkoutDraft.pickup_eta_time || '',
+  pickup_parking_spot: cartState.checkoutDraft.pickup_parking_spot || '',
+  pickup_stay_in_car: cartState.checkoutDraft.pickup_stay_in_car !== false,
+  pickup_need_call: cartState.checkoutDraft.pickup_need_call === true,
+  pickup_notes: cartState.checkoutDraft.pickup_notes || '',
   note: cartState.checkoutDraft.note || '',
   include_service_items: cartState.checkoutDraft.include_service_items !== false,
 })
@@ -360,7 +496,8 @@ watch(
     }
     if (mobile.length < 10) {
       savedAddresses.value = []
-      setCheckoutFields({ delivery_address_id: '', use_new_address: true })
+      savedVehicles.value = []
+      setCheckoutFields({ delivery_address_id: '', use_new_address: true, vehicle_id: '', use_new_vehicle: true })
       return
     }
 
@@ -383,12 +520,14 @@ function setCheckoutField(field, value) {
 }
 
 function setDeliveryMode(mode) {
-  const deliveryMode = mode === 'delivery' ? 'delivery' : 'pickup'
+  const isDelivery = mode === 'delivery'
+  const isCarPickup = mode === 'pickup_car'
   setCheckoutFields({
-    delivery_mode: deliveryMode,
-    order_type: deliveryMode === 'delivery' ? 'delivery' : 'takeaway',
-    delivery_address_id: deliveryMode === 'delivery' ? checkoutForm.value.delivery_address_id : '',
-    use_new_address: deliveryMode === 'delivery' ? checkoutForm.value.use_new_address : true,
+    delivery_mode: isDelivery ? 'delivery' : 'pickup',
+    pickup_method: isCarPickup ? 'car' : 'counter',
+    order_type: isDelivery ? 'delivery' : 'takeaway',
+    delivery_address_id: isDelivery ? checkoutForm.value.delivery_address_id : '',
+    use_new_address: isDelivery ? checkoutForm.value.use_new_address : true,
   })
 }
 
@@ -416,6 +555,68 @@ function switchToNewAddress() {
   setCheckoutFields({
     use_new_address: true,
     delivery_address_id: '',
+  })
+}
+
+async function saveVehicleToCustomerProfile() {
+  const form = checkoutForm.value
+  const mobile = normalizeMobile(form.mobile || '')
+  if (!mobile || form.pickup_method !== 'car') return null
+
+  const selected = !form.use_new_vehicle ? savedVehicles.value.find((row) => row.id === form.vehicle_id) : null
+  const vehicleInfo = {
+    id: selected?.id || form.vehicle_id || '',
+    title: selected?.title || form.vehicle_title || '',
+    type: selected?.type || form.vehicle_type || '',
+    color: selected?.color || form.vehicle_color || '',
+    plate: selected?.plate || form.vehicle_plate || '',
+    is_primary: savedVehicles.value.length ? 0 : 1,
+  }
+
+  const saved = await saveCustomerVehicle({
+    customer_info: {
+      name: form.customer_name,
+      mobile,
+    },
+    vehicle_info: vehicleInfo,
+  })
+
+  const vehicle = saved.vehicle || {}
+  savedVehicles.value = Array.isArray(saved.vehicles) ? saved.vehicles : savedVehicles.value
+  if (vehicle.id) {
+    setCheckoutFields({
+      vehicle_id: vehicle.id,
+      use_new_vehicle: false,
+      vehicle_title: vehicle.title || form.vehicle_title,
+      vehicle_type: vehicle.type || form.vehicle_type,
+      vehicle_color: vehicle.color || form.vehicle_color,
+      vehicle_plate: vehicle.plate || form.vehicle_plate,
+    })
+  }
+  return vehicle
+}
+
+function selectSavedVehicle(vehicleId) {
+  const selected = savedVehicles.value.find((row) => row.id === vehicleId)
+  if (!selected) return
+  setCheckoutFields({
+    vehicle_id: selected.id,
+    use_new_vehicle: false,
+    vehicle_title: selected.title || '',
+    vehicle_type: selected.type || '',
+    vehicle_color: selected.color || '',
+    vehicle_plate: selected.plate || '',
+  })
+}
+
+function switchToNewVehicle() {
+  setCheckoutFields({
+    vehicle_id: '',
+    use_new_vehicle: true,
+    vehicle_title: '',
+    vehicle_type: '',
+    vehicle_color: '',
+    vehicle_plate: '',
   })
 }
 
@@ -554,7 +755,9 @@ async function loadCustomerProfile() {
       customer_name: checkoutForm.value.customer_name,
     })
     const addresses = Array.isArray(payload.addresses) ? payload.addresses : []
+    const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : []
     savedAddresses.value = addresses
+    savedVehicles.value = vehicles
 
     if (!checkoutForm.value.customer_name && payload.customer?.name) {
       setCheckoutField('customer_name', payload.customer.name)
@@ -605,6 +808,23 @@ function validateCheckout() {
     return 'موبایل معتبر وارد کنید.'
   }
 
+  if (form.delivery_mode === 'pickup' && form.pickup_method === 'car') {
+    if (form.use_new_vehicle || !form.vehicle_id) {
+      if (!form.vehicle_type.trim()) {
+        return 'نوع خودرو برای تحویل کنار خودرو الزامی است.'
+      }
+      if (!form.vehicle_color.trim()) {
+        return 'رنگ خودرو برای تحویل کنار خودرو الزامی است.'
+      }
+      if (!form.vehicle_plate.trim()) {
+        return 'شماره پلاک برای تحویل کنار خودرو الزامی است.'
+      }
+    }
+    if (form.pickup_eta_mode === 'scheduled' && !form.pickup_eta_time) {
+      return 'ساعت رسیدن برای پیکاپ زمان‌بندی‌شده الزامی است.'
+    }
+  }
+
   if (form.delivery_mode === 'delivery') {
     if (!form.use_new_address && !form.delivery_address_id) {
       return 'برای ارسال، یک آدرس ذخیره شده انتخاب کنید یا آدرس جدید ثبت کنید.'
@@ -637,6 +857,55 @@ function validateCheckout() {
   }
 
   return ''
+}
+
+function pickupEtaText(form) {
+  if (form.pickup_eta_mode === 'scheduled') {
+    return form.pickup_eta_time ? `ساعت ${form.pickup_eta_time}` : 'زمان‌بندی‌شده'
+  }
+  if (form.pickup_eta_mode === '15min') {
+    return 'تا ۱۵ دقیقه دیگر'
+  }
+  return 'الان در مسیرم'
+}
+
+function selectedVehicleSnapshot() {
+  const form = checkoutForm.value
+  const selected = !form.use_new_vehicle ? savedVehicles.value.find((row) => row.id === form.vehicle_id) : null
+  return {
+    id: selected?.id || form.vehicle_id || '',
+    title: selected?.title || form.vehicle_title || '',
+    type: selected?.type || form.vehicle_type || '',
+    color: selected?.color || form.vehicle_color || '',
+    plate: selected?.plate || form.vehicle_plate || '',
+  }
+}
+
+function composeOrderNote(baseNote = '') {
+  const form = checkoutForm.value
+  const parts = []
+  if (baseNote.trim()) {
+    parts.push(baseNote.trim())
+  }
+
+  if (form.delivery_mode === 'pickup' && form.pickup_method === 'car') {
+    const vehicle = selectedVehicleSnapshot()
+    parts.push(
+      [
+        'تحویل کنار خودرو',
+        `خودرو: ${vehicle.type || '-'} / ${vehicle.color || '-'} / پلاک ${vehicle.plate || '-'}`,
+        `زمان رسیدن: ${pickupEtaText(form)}`,
+        `محل توقف: ${form.pickup_parking_spot || '-'}`,
+        form.pickup_stay_in_car ? 'مشتری داخل خودرو منتظر می‌ماند.' : '',
+        form.pickup_need_call ? 'قبل از خروج سفارش تماس گرفته شود.' : '',
+        form.pickup_notes ? `یادداشت خودرو: ${form.pickup_notes}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
+
+  return parts.join('\n\n')
 }
 
 function selectedAddressSnapshot() {
@@ -735,6 +1004,11 @@ async function submitOrder() {
       })
     }
 
+    let pickupVehicle = selectedVehicleSnapshot()
+    if (form.delivery_mode === 'pickup' && form.pickup_method === 'car') {
+      pickupVehicle = await saveVehicleToCustomerProfile()
+    }
+
     const response = await placeOrder({
       customer_info: {
         name: form.customer_name,
@@ -744,8 +1018,11 @@ async function submitOrder() {
       order_type: form.delivery_mode === 'delivery' ? 'delivery' : 'takeaway',
       delivery_address_id: form.delivery_mode === 'delivery' ? deliveryAddressId : '',
       delivery_address_snapshot: form.delivery_mode === 'delivery' ? deliverySnapshot : {},
+      pickup_method: form.delivery_mode === 'pickup' ? form.pickup_method : '',
+      pickup_vehicle_id: form.delivery_mode === 'pickup' && form.pickup_method === 'car' ? pickupVehicle?.id || form.vehicle_id : '',
+      pickup_vehicle_snapshot: form.delivery_mode === 'pickup' && form.pickup_method === 'car' ? pickupVehicle || selectedVehicleSnapshot() : {},
       address: form.delivery_mode === 'delivery' ? deliverySnapshot.address_line : '',
-      note: form.note,
+      note: composeOrderNote(form.note),
       include_service_items: form.include_service_items ? 1 : 0,
       coupon_code: couponResult.value?.code || couponCode.value.trim() || '',
       items: cartItemsPayload(),
@@ -997,6 +1274,10 @@ label {
   gap: 0.45rem;
 }
 
+.delivery-mode-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mode-chip {
   border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.35);
   border-radius: 14px;
@@ -1004,11 +1285,27 @@ label {
   color: var(--text-primary);
   padding: 0.58rem;
   font-family: inherit;
+  display: grid;
+  gap: 0.18rem;
+  align-content: center;
+  min-height: 48px;
+}
+
+.mode-chip small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 500;
 }
 
 .mode-chip.active {
   background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
   border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.45);
+  color: var(--accent-green);
+  box-shadow: inset 0 0 0 1px rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+}
+
+.mode-chip.active small {
+  color: var(--accent-green);
 }
 
 .delivery-box {
@@ -1017,6 +1314,10 @@ label {
   padding: 0.6rem;
   display: grid;
   gap: 0.6rem;
+}
+
+.pickup-car-box {
+  background: rgb(var(--palette-eggshell-rgb) / 0.56);
 }
 
 .delivery-head {
@@ -1052,6 +1353,24 @@ label {
   margin: 0.2rem 0 0;
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+.vehicle-option strong {
+  color: var(--accent-green);
+}
+
+.pickup-time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.pickup-checks {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.5rem;
+  border-radius: 14px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.035);
 }
 
 .new-address {
@@ -1107,6 +1426,8 @@ label {
 
 @media (max-width: 560px) {
   .delivery-mode-grid,
+  .delivery-mode-grid--three,
+  .pickup-time-grid,
   .coord-grid {
     grid-template-columns: 1fr;
   }

@@ -36,7 +36,7 @@
         </span>
       </template>
       <template #cell.steps_count="{ row }">
-        {{ (row.steps || []).length }}
+        {{ row.steps_count || 0 }}
       </template>
       <template #cell.modified="{ row }">
         {{ formatDate(row.modified) }}
@@ -132,7 +132,7 @@ async function toggleActive(row) {
   try {
     loading.value = true
     await callMethodByPath('restaurant.api.save_builder_template', {
-      template: JSON.stringify({ name: row.name, is_active: !row.is_active }),
+      template_data: JSON.stringify({ name: row.name, is_active: !row.is_active }),
     })
     row.is_active = !row.is_active
   } catch (e) {

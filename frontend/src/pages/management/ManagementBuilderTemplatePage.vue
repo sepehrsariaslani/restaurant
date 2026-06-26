@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
@@ -264,7 +264,7 @@ async function saveTemplate() {
       })),
     }
     const result = await callMethodByPath('restaurant.api.save_builder_template', {
-      template: JSON.stringify(payload),
+      template_data: JSON.stringify(payload),
     })
     const data = result?.data || result
     hasUnsavedChanges.value = false
@@ -289,7 +289,7 @@ async function loadTemplate() {
     return
   }
   try {
-    const result = await callMethodByPathGET('restaurant.api.get_builder_template', {
+    const result = await callMethodByPathGET('restaurant.api.get_builder_template_detail', {
       name: props.templateId,
     })
     const data = result?.data || result
@@ -322,16 +322,21 @@ async function loadTemplate() {
 
 async function loadItemOptions() {
   try {
-    const result = await callMethodByPathGET('frappe.client.get_list', {
-      doctype: 'Item',
-      fields: ['name', 'item_name'],
-      filters: [['disabled', '=', 0]],
-      limit_page_length: 200,
+    const result = await callMethodByPathGET('restaurant.api.list_builder_option_items', {
+      limit: 500,
     })
     const data = result?.data || result
-    itemOptions.value = Array.isArray(data)
-      ? data.map((r) => ({ value: r.name, label: r.item_name || r.name }))
-      : []
+    const rows = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []
+    itemOptions.value = rows.map((r) => ({
+      value: r.value || r.name,
+      label: r.label || r.item_name || r.name,
+      item_name: r.item_name || r.label || r.name,
+      item_code: r.item_code || r.name,
+      image: r.image || '',
+      standard_rate: Number(r.standard_rate) || 0,
+      stock_uom: r.stock_uom || '',
+      item_group: r.item_group || '',
+    }))
   } catch {
     itemOptions.value = []
   }

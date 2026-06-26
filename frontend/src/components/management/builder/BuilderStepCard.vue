@@ -105,7 +105,7 @@
             :options="itemOptions"
             placeholder="انتخاب محصول"
             search-placeholder="جستجوی محصول..."
-            @update:model-value="emitUpdate"
+            @update:model-value="onRowItemSelected(row, $event)"
           />
         </template>
         <template #cell.base_price_delta="{ row }">
@@ -123,8 +123,16 @@
       </ManagementEditableTable>
     </section>
 
-    <ManagementPopup v-if="showAddOption" title="افزودن گزینه جدید" @close="showAddOption = false">
+    <ManagementPopup
+      :open="showAddOption"
+      title="افزودن گزینه جدید"
+      size="sm"
+      @update:open="showAddOption = $event"
+    >
       <div class="add-option-form">
+        <p v-if="!itemOptions.length" class="empty-picker-note">
+          آیتمی برای انتخاب پیدا نشد. اگر آیتم‌ها را تازه ساخته‌اید، صفحه را یک‌بار رفرش کنید.
+        </p>
         <label>
           محصول
           <SearchableDropdown
@@ -132,6 +140,7 @@
             :options="itemOptions"
             placeholder="انتخاب محصول"
             search-placeholder="جستجو..."
+            @update:model-value="onNewOptionItemSelected"
           />
         </label>
         <label>
@@ -227,27 +236,63 @@ const newOption = reactive({
   image: '',
 })
 
+function findItemOption(value) {
+  return props.itemOptions.find((item) => String(item.value) === String(value)) || null
+}
+
+function applyItemToOption(option, itemValue, { fillPrice = false } = {}) {
+  const selectedItem = findItemOption(itemValue)
+  option.item = itemValue || ''
+  if (!selectedItem) return
+  if (!option.option_label) {
+    option.option_label = selectedItem.item_name || selectedItem.label || selectedItem.value
+  }
+  if (!option.image) {
+    option.image = selectedItem.image || ''
+  }
+  if (fillPrice && !Number(option.base_price_delta)) {
+    option.base_price_delta = Number(selectedItem.standard_rate) || 0
+  }
+}
+
+function onRowItemSelected(row, value) {
+  applyItemToOption(row, value)
+  emitUpdate()
+}
+
+function onNewOptionItemSelected(value) {
+  applyItemToOption(newOption, value, { fillPrice: true })
+}
+
+function resetNewOption() {
+  newOption.item = ''
+  newOption.option_label = ''
+  newOption.base_price_delta = 0
+  newOption.allergen_tags = ''
+  newOption.image = ''
+}
+
 function addOption() {
   if (!newOption.item) return
+  const selectedItem = findItemOption(newOption.item)
   const opt = {
-    option_label: newOption.option_label || newOption.item,
+    option_label: newOption.option_label || selectedItem?.label || newOption.item,
     option_key: `opt-${Date.now()}`,
     item: newOption.item,
     base_price_delta: Number(newOption.base_price_delta) || 0,
     price_type: 'fixed',
+    price_percentage: 0,
     is_default: false,
     is_available: true,
+    max_qty: 1,
     allergen_tags: newOption.allergen_tags,
-    image: '',
+    image: newOption.image || selectedItem?.image || '',
     sort_order: localStep.options.length,
   }
   localStep.options.push(opt)
   emitUpdate()
   showAddOption.value = false
-  newOption.item = ''
-  newOption.option_label = ''
-  newOption.base_price_delta = 0
-  newOption.allergen_tags = ''
+  resetNewOption()
 }
 
 function deleteOption(index) {
@@ -403,5 +448,14 @@ function uploadOptionImage(row) {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+.empty-picker-note {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border-radius: 10px;
+  background: rgb(var(--palette-eggshell-rgb) / 0.72);
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 </style>

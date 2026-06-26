@@ -4,9 +4,11 @@
       <section class="sheet-panel" ref="panelRef" dir="rtl">
         <header class="sheet-head" ref="headRef">
           <div class="drag-handle" aria-hidden="true"></div>
-          <button class="icon-btn back-btn" type="button" @click="$emit('close')" aria-label="بازگشت"><ChevronRight :size="18" /></button>
-          <span class="sheet-title">افزودن به سبد</span>
-          <button class="icon-btn close-btn" type="button" @click="$emit('close')" aria-label="بستن"><X :size="18" /></button>
+          <div class="sheet-head__row">
+            <button class="icon-btn back-btn" type="button" @click="$emit('close')" aria-label="بازگشت"><ChevronRight :size="20" /></button>
+            <span class="sheet-title">افزودن به سبد</span>
+            <button class="icon-btn close-btn" type="button" @click="$emit('close')" aria-label="بستن"><X :size="20" /></button>
+          </div>
         </header>
 
         <div class="sheet-body" ref="bodyRef" @touchstart.passive="onPanelTouchStart" @touchmove.passive="onPanelTouchMove" @touchend.passive="onPanelTouchEnd">
@@ -458,7 +460,7 @@ function mergeItemData(baseItem = null, detailItem = null) {
   overscroll-behavior: contain;
   touch-action: pan-y;
   padding: 0 0.85rem 0.85rem;
-  padding-top: 0.15rem;
+  padding-top: 0.25rem;
   display: grid;
   gap: 0.55rem;
 }
@@ -633,56 +635,65 @@ function mergeItemData(baseItem = null, detailItem = null) {
 }
 
 .sheet-head {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 34px;
-  align-items: center;
   position: relative;
   z-index: 2;
   background: var(--pos-surface-color, #ffffff);
   border-radius: 22px 22px 0 0;
-  padding: 12px 12px 4px;
-  min-height: 50px;
+  padding: 1.35rem 1rem 0.65rem;
   flex-shrink: 0;
 }
 
-.sheet-head .close-btn {
-  grid-column: 1;
-}
-
-.sheet-head .sheet-title {
-  grid-column: 2;
-  text-align: center;
-  margin: 0;
-  color: var(--accent-green);
-  font-size: clamp(0.92rem, 2.4vw, 1rem);
-  font-weight: 900;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+.sheet-head__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  direction: ltr;
 }
 
 .sheet-head .back-btn {
-  grid-column: 3;
+  order: 1;
 }
 
+.sheet-head .close-btn {
+  order: 3;
+}
 
+.sheet-head .sheet-title {
+  position: absolute;
+  inset-inline: 52px;
+  left: 52px;
+  right: 52px;
+  order: 2;
+  text-align: center;
+  margin: 0;
+  color: var(--accent-green);
+  font-size: clamp(1.02rem, 3.4vw, 1.18rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
 
 .drag-handle {
   position: absolute;
-  top: 5px;
+  top: 0.48rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 34px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.10);
+  width: 42px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
 }
 
-
-
 .icon-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
   background: var(--pos-surface-color, #ffffff);
   color: var(--accent-green);
@@ -957,21 +968,27 @@ function mergeItemData(baseItem = null, detailItem = null) {
 
 @media (max-width: 390px) {
   .sheet-head {
-    padding: 10px 12px 5px;
+    padding: 1.25rem 0.85rem 0.55rem;
+  }
+
+  .sheet-head__row {
+    min-height: 38px;
   }
 
   .sheet-head .sheet-title {
-    font-size: 0.92rem;
+    left: 46px;
+    right: 46px;
+    inset-inline: 46px;
+  }
+
+  .sheet-head .sheet-title {
+    font-size: 1rem;
   }
 
   .icon-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 11px;
-  }
-
-  .sheet-head {
-    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
   }
 
   .product-info__image {
