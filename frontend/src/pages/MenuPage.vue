@@ -7,7 +7,6 @@
       ref="railRef"
     >
       <CategoryImageRail
-        v-if="categoryRailVariant === 'image'"
         :categories="categories"
         :selected-category="selectedCategorySlug"
         :subcategories="currentSubcategories"
@@ -16,16 +15,24 @@
         @select-category="selectCategory"
         @select-subcategory="selectSubcategory"
       />
-      <CategoryPillRail
-        v-else
-        :categories="categories"
-        :selected-category="selectedCategorySlug"
-        :subcategories="currentSubcategories"
-        :selected-subcategory="selectedSubcategorySlug"
-        :active-category-title="activeCategoryTitle"
-        @select-category="selectCategory"
-        @select-subcategory="selectSubcategory"
-      />
+    </div>
+
+    <div class="menu-toolbar">
+      <button class="sort-toggle" type="button" @click="toggleSortMenu" :aria-expanded="sortMenuOpen ? 'true' : 'false'">
+        <ChevronDown :size="16" />
+        <span>{{ activeSortLabel }}</span>
+      </button>
+      <div class="sort-menu" v-if="sortMenuOpen">
+        <button
+          v-for="option in sortOptions"
+          :key="option.value"
+          type="button"
+          :class="{ active: sortMode === option.value }"
+          @click="setSortMode(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
     </div>
 
     <!-- فیلتر تگ‌ها -->
@@ -60,8 +67,9 @@
               :key="`highlight-${item.slug || idx}`"
               :item="resolveDisplayItem(item)"
               :currency="currency"
-          :cart-qty="getItemCartQty(item)"
-          :can-view-bom="canViewBom"
+              :theme="menuCardTheme"
+              :cart-qty="getItemCartQty(item)"
+              :can-view-bom="canViewBom"
               class="product-card-anim"
               :style="{ animationDelay: `${Math.min(idx, 8) * 40}ms` }"
               @quick-add="quickAdd"
@@ -122,6 +130,7 @@
               :key="item.slug"
               :item="item"
               :currency="currency"
+              :theme="menuCardTheme"
               :cart-qty="getItemCartQty(item)"
               :can-view-bom="canViewBom"
               class="product-card-anim"
@@ -159,8 +168,9 @@
           :key="item.slug"
           :item="item"
           :currency="currency"
-              :cart-qty="getItemCartQty(item)"
-              :can-view-bom="canViewBom"
+          :theme="menuCardTheme"
+          :cart-qty="getItemCartQty(item)"
+          :can-view-bom="canViewBom"
           class="product-card-anim"
           :style="{ animationDelay: `${Math.min(idx, 8) * 55}ms` }"
           @quick-add="quickAdd"
@@ -191,30 +201,18 @@
       <!-- حالت خالی -->
       <transition name="fade">
         <LiquidGlassCard class="empty-box" v-if="!loading && !displayItems.length && !error">
-          <span class="empty-icon">🍽️</span>
+          <Utensils class="empty-icon" :size="34" stroke-width="1.8" />
           <p class="empty-title">{{ emptyStateTitle }}</p>
           <p class="muted">{{ emptyStateMessage }}</p>
           <button class="reset-btn" @click="resetFilters">{{ emptyStateAction }}</button>
         </LiquidGlassCard>
       </transition>
 
-      <!-- پیام پایان لیست -->
-      <transition name="fade">
-        <p class="end-label muted" v-if="!loading && !loadingMore && allLoaded && displayItems.length">
-          ✓ همه محصولات نمایش داده شدند
-        </p>
-      </transition>
-
-      <!-- Progress indicator -->
-      <p class="progress-indicator muted" v-if="pagination.total && !loading">
-        نمایش {{ displayItems.length }} از {{ pagination.total }} محصول
-      </p>
-
       <!-- سبد سفارش شناور -->
       <transition name="cart-pop">
         <a class="sticky-cart" href="/cart" v-if="cartCount > 0">
           <div class="cart-info">
-            <span class="cart-icon">🛒</span>
+            <span class="cart-icon"><ShoppingCart :size="20" stroke-width="2" /></span>
             <div>
               <small>سبد سفارش</small>
               <strong>{{ cartCount }} آیتم</strong>
@@ -275,9 +273,9 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ChevronDown, ShoppingCart, Utensils } from 'lucide-vue-next'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
-import CategoryPillRail from '@/components/CategoryPillRail.vue'
 import CategoryImageRail from '@/components/CategoryImageRail.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
@@ -285,7 +283,6 @@ import BomPreviewModal from '@/components/BomPreviewModal.vue'
 import { getMenuItems, getManagementSessionProfile } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { cartState, cartSubtotal, upsertLine, removeLine } from '@/stores/cartStore'
-import { resolveSiteComponents } from '@/utils/siteComponents'
 
 const props = defineProps({
   boot: {
@@ -327,6 +324,8 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref('')
 const selectedTag = ref('')
+const sortMode = ref('default')
+const sortMenuOpen = ref(false)
 const selectedCategorySlug = ref(categories.value[0]?.slug || '')
 const selectedSubcategorySlug = ref('')
 
@@ -386,8 +385,21 @@ const pagination = ref({
 })
 
 // ─── computed ───────────────────────────────────────────────────────
-const siteComponents = computed(() => resolveSiteComponents(props.boot))
-const categoryRailVariant = computed(() => siteComponents.value.category_rail_variant)
+const menuCardTheme = computed(() => {
+  const theme = props.boot?.theme && typeof props.boot.theme === 'object' ? props.boot.theme : {}
+  return {
+    primary_color: theme.primary_color || props.boot?.primary_color || 'var(--accent-gold)',
+    primary_color_dark: theme.primary_color_dark || props.boot?.primary_color_dark || 'var(--accent-gold80)',
+    accent_color: theme.accent_color || props.boot?.accent_color || 'var(--accent-green)',
+    surface: theme.surface || 'var(--pos-surface-color, #ffffff)',
+    surface_alt: theme.surface_alt || 'var(--theme-surface-alt)',
+    border: theme.border || 'var(--glass-border)',
+    text_primary: theme.text_primary || 'var(--text-primary)',
+    text_secondary: theme.text_secondary || 'var(--text-secondary)',
+    text_muted: theme.text_muted || 'var(--text-muted)',
+    add_btn_bg: theme.add_btn_bg || theme.accent_color || props.boot?.accent_color || 'var(--accent-gold)',
+  }
+})
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 const cartTotal = computed(() => cartSubtotal())
 const availableTags = computed(() => {
@@ -402,6 +414,13 @@ const availableTags = computed(() => {
   }
   return Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'fa'))
 })
+const sortOptions = [
+  { value: 'default', label: 'مرتب‌سازی' },
+  { value: 'price_asc', label: 'ارزان‌ترین' },
+  { value: 'price_desc', label: 'گران‌ترین' },
+  { value: 'name_asc', label: 'نام محصول' },
+]
+const activeSortLabel = computed(() => sortOptions.find((row) => row.value === sortMode.value)?.label || 'مرتب‌سازی')
 const tagFilteredItems = computed(() => {
   const tag = selectedTag.value
   if (!tag) return items.value
@@ -411,7 +430,7 @@ const tagFilteredItems = computed(() => {
   })
 })
 
-const displayItems = computed(() => tagFilteredItems.value)
+const displayItems = computed(() => sortItems(tagFilteredItems.value))
 
 // ─── empty state context ────────────────────────────────────────────
 const emptyStateTitle = computed(() => {
@@ -580,7 +599,10 @@ const groupedSections = computed(() => {
   if (miscSection.items.length) {
     ordered.push(miscSection)
   }
-  return ordered
+  return ordered.map((section) => ({
+    ...section,
+    items: sortItems(section.items),
+  }))
 })
 
 const itemsBySlug = computed(() => {
@@ -593,6 +615,29 @@ const itemsBySlug = computed(() => {
   }
   return map
 })
+
+function sortItems(rows = []) {
+  const next = [...(rows || [])]
+  if (sortMode.value === 'price_asc') {
+    return next.sort((left, right) => Number(left?.base_price || 0) - Number(right?.base_price || 0))
+  }
+  if (sortMode.value === 'price_desc') {
+    return next.sort((left, right) => Number(right?.base_price || 0) - Number(left?.base_price || 0))
+  }
+  if (sortMode.value === 'name_asc') {
+    return next.sort((left, right) => String(left?.title || '').localeCompare(String(right?.title || ''), 'fa'))
+  }
+  return next
+}
+
+function toggleSortMenu() {
+  sortMenuOpen.value = !sortMenuOpen.value
+}
+
+function setSortMode(value) {
+  sortMode.value = value
+  sortMenuOpen.value = false
+}
 
 function normalizeSubcategoryToken(value) {
   return String(value || '').trim().toLowerCase()
@@ -786,6 +831,7 @@ function selectCategory(slug) {
   selectedCategorySlug.value = slug
   selectedSubcategorySlug.value = ''
   selectedTag.value = '' // reset tag filter on category change
+  sortMenuOpen.value = false
   reloadItems(1)
   // Scroll to top so the new category content is visible
   if (window.scrollY > 0) {
@@ -1068,8 +1114,8 @@ onUnmounted(() => {
 
 <style scoped>
 .menu-shell {
-  width: min(540px, calc(100% - 1rem));
-  padding: 0.6rem 0.2rem max(7rem, calc(7rem + env(safe-area-inset-bottom)));
+  width: min(540px, 100%);
+  padding: 0 0 max(6.5rem, calc(6.5rem + env(safe-area-inset-bottom)));
 }
 
 /* ─── Sticky Rail (JS-based because overflow:hidden ancestors break CSS sticky) ─── */
@@ -1077,7 +1123,7 @@ onUnmounted(() => {
   position: relative;
   z-index: 100;
   background: var(--theme-background, #f6f1ea);
-  padding: 0.25rem 0;
+  padding: 0;
   border-bottom: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.1);
   transition: box-shadow 0.2s ease;
 }
@@ -1085,13 +1131,13 @@ onUnmounted(() => {
 /* On mobile, rail is at the very top — add some breathing room */
 @media (max-width: 919px) {
   .category-rail-sticky {
-    padding-top: 0.4rem;
+    padding-top: 0;
   }
 }
 
 .category-rail-sticky.is-sticky {
   position: fixed;
-  top: 82px;
+  top: 0;
   left: 0;
   right: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -1100,12 +1146,71 @@ onUnmounted(() => {
 /* On mobile (no header), rail sits at top: 0 when sticky */
 @media (max-width: 919px) {
   .category-rail-sticky.is-sticky {
-    top: 0;
+    top: 3.3rem;
   }
 }
 
 .menu-page-root {
   min-height: 100dvh;
+}
+
+.menu-toolbar {
+  width: min(540px, calc(100% - 0.75rem));
+  margin: 0.32rem auto 0.28rem;
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+  z-index: 20;
+}
+
+.sort-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-height: 32px;
+  padding: 0 0.62rem;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: #fff;
+  color: var(--text-secondary);
+  box-shadow: 0 6px 14px rgb(15 23 42 / 0.045);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sort-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 132px;
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.28rem;
+  border-radius: 13px;
+  border: 1px solid var(--glass-border);
+  background: #fff;
+  box-shadow: 0 12px 24px rgb(15 23 42 / 0.10);
+}
+
+.sort-menu button {
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  padding: 0.4rem 0.52rem;
+  text-align: right;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sort-menu button.active,
+.sort-menu button:hover {
+  background: var(--accent-green20);
+  color: var(--accent-green);
 }
 
 /* Reserve space when rail is fixed so content doesn't jump */
@@ -1209,12 +1314,6 @@ onUnmounted(() => {
 .retry-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.progress-indicator {
-  text-align: center;
-  padding: 0.5rem;
-  font-size: 0.78rem;
 }
 
 /* ─── لیست آیتم‌ها ─── */
@@ -1368,13 +1467,6 @@ onUnmounted(() => {
 .infinite-anchor {
   height: 1px;
   margin-top: 0.5rem;
-}
-
-/* ─── پیام پایان لیست ─── */
-.end-label {
-  text-align: center;
-  padding: 0.7rem;
-  font-size: 0.78rem;
 }
 
 /* ─── سبد شناور ─── */
@@ -1579,7 +1671,7 @@ onUnmounted(() => {
 /* ─── ریسپانسیو ─── */
 @media (min-width: 760px) {
   .menu-shell {
-    width: min(980px, calc(100% - 2rem));
+    width: min(980px, 100%);
   }
 
   .item-list {

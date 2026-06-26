@@ -42,6 +42,10 @@
             <span>ارسال</span>
             <strong>{{ shippingAmount > 0 ? formatMoney(shippingAmount, currency) : 'رایگان' }}</strong>
           </div>
+          <div class="sum-row" v-if="discountAmount > 0">
+            <span>تخفیف</span>
+            <strong>-{{ formatMoney(discountAmount, currency) }}</strong>
+          </div>
           <div class="sum-row total">
             <span>خالص پرداختنی</span>
             <strong>{{ formatMoney(totalAmount, currency) }}</strong>
@@ -187,6 +191,18 @@
             </section>
 
             <label>
+              <span>کد تخفیف</span>
+              <div class="coupon-row">
+                <input class="input" v-model="couponCode" placeholder="مثلاً WELCOME" />
+                <button class="ghost-btn" type="button" :disabled="couponLoading || !couponCode.trim()" @click="applyCoupon">
+                  {{ couponLoading ? '...' : 'اعمال' }}
+                </button>
+              </div>
+              <small class="hint" v-if="couponResult">{{ couponResult.message || 'کد تخفیف اعمال شد.' }}</small>
+              <small class="hint" v-if="couponError" style="color:#b84f4f">{{ couponError }}</small>
+            </label>
+
+            <label>
               <span>توضیحات سفارش</span>
               <textarea class="textarea" :value="checkoutForm.note" @input="setCheckoutField('note', $event.target.value)" />
             </label>
@@ -231,6 +247,7 @@ import {
   getMenuBoot,
   placeOrder,
   saveCustomerDeliveryAddress,
+  validateCoupon,
 } from '@/utils/api'
 import { formatMoney, normalizeMobile } from '@/utils/format'
 import { estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
@@ -243,6 +260,10 @@ const customerLookupLoading = ref(false)
 const customerLookupError = ref('')
 const mapStatus = ref('')
 const savedAddresses = ref([])
+const couponCode = ref('')
+const couponLoading = ref(false)
+const couponError = ref('')
+const couponResult = ref(null)
 let mobileLookupTimer = null
 
 const checkoutMapConfig = ref({
@@ -287,7 +308,8 @@ const checkoutForm = ref({
 const subtotal = computed(() => cartSubtotal())
 const taxAmount = computed(() => Math.round(subtotal.value * 0.04))
 const shippingAmount = computed(() => 0)
-const totalAmount = computed(() => subtotal.value + taxAmount.value + shippingAmount.value)
+const discountAmount = computed(() => Number(couponResult.value?.discount_amount || 0))
+const totalAmount = computed(() => Math.max(subtotal.value + taxAmount.value + shippingAmount.value - discountAmount.value, 0))
 const totalQty = computed(() => cartState.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0))
 const canLookupProfile = computed(() => normalizeMobile(checkoutForm.value.mobile || '').length >= 10)
 
@@ -400,6 +422,34 @@ function switchToNewAddress() {
 function openCheckout() {
   error.value = ''
   showCheckout.value = true
+}
+
+function cartItemsPayload() {
+  return cartState.lines.map((line) => ({
+    item_slug: line.item_slug,
+    qty: line.qty,
+    customization: line.customization,
+    branch: line.branch || '',
+  }))
+}
+
+async function applyCoupon() {
+  if (!couponCode.value.trim()) return
+  couponLoading.value = true
+  couponError.value = ''
+  couponResult.value = null
+  try {
+    couponResult.value = await validateCoupon({
+      coupon_code: couponCode.value.trim(),
+      items: cartItemsPayload(),
+      mobile: normalizeMobile(checkoutForm.value.mobile || ''),
+      subtotal: subtotal.value,
+    })
+  } catch (err) {
+    couponError.value = err?.message || 'کد تخفیف معتبر نیست.'
+  } finally {
+    couponLoading.value = false
+  }
 }
 
 function setQty(lineId, qty) {
@@ -697,11 +747,8 @@ async function submitOrder() {
       address: form.delivery_mode === 'delivery' ? deliverySnapshot.address_line : '',
       note: form.note,
       include_service_items: form.include_service_items ? 1 : 0,
-      items: cartState.lines.map((line) => ({
-        item_slug: line.item_slug,
-        qty: line.qty,
-        customization: line.customization,
-      })),
+      coupon_code: couponResult.value?.code || couponCode.value.trim() || '',
+      items: cartItemsPayload(),
     })
 
     saveLastOrder({ order_code: response.order_code, mobile })

@@ -80,7 +80,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { sendOtp as sendOtpAPI, verifyOtp as verifyOtpAPI } from '@/utils/api'
 
+const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const brandName = ref(window._BOOT?.restaurant_name || window._BOOT?.brand_name || 'رستوران')
 const step = ref('phone')
 const phone = ref('')
@@ -116,11 +118,8 @@ async function sendOtp() {
   error.value = ''
   try {
     const fullPhone = `0${phone.value.replace(/\D/g, '')}`
-    await fetch('/api/method/restaurant.api.send_otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Frappe-CSRF-Token': getCsrfToken() },
-      body: JSON.stringify({ mobile: fullPhone }),
-    })
+    const result = await sendOtpAPI({ mobile: fullPhone })
+    if (result?.debug_otp) console.info('[Restaurant OTP]', result.debug_otp)
     step.value = 'otp'
     otpDigits.value = ['', '', '', '', '', '']
     startCountdown(120)
@@ -138,13 +137,19 @@ async function verifyOtp() {
   error.value = ''
   try {
     const fullPhone = `0${phone.value.replace(/\D/g, '')}`
-    const res = await fetch('/api/method/restaurant.api.verify_otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Frappe-CSRF-Token': getCsrfToken() },
-      body: JSON.stringify({ mobile: fullPhone, otp: otpCode.value }),
-    })
-    const data = await res.json()
-    if (data?.message?.success) {
+    const data = await verifyOtpAPI({ mobile: fullPhone, otp: otpCode.value })
+    if (data?.success || data?.verified) {
+      const customer = data.customer || {}
+      try {
+        localStorage.setItem(CUSTOMER_AUTH_KEY, JSON.stringify({
+          mobile: fullPhone,
+          customer_name: customer.name || '',
+          customer_id: customer.customer_id || '',
+          verified_at: new Date().toISOString(),
+        }))
+        localStorage.setItem('customer_phone', fullPhone)
+        if (customer.name) localStorage.setItem('customer_name', customer.name)
+      } catch {}
       window.location.href = '/customer/dashboard'
     } else {
       error.value = 'کد وارد شده اشتباه است.'
@@ -178,11 +183,6 @@ function startCountdown(seconds) {
     countdown.value--
     if (countdown.value <= 0) clearInterval(countdownTimer)
   }, 1000)
-}
-
-function getCsrfToken() {
-  const match = document.cookie.match(/csrftoken=([^;]+)/)
-  return match ? match[1] : ''
 }
 
 onMounted(() => phoneInput.value?.focus())

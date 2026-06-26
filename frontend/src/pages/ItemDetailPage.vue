@@ -581,11 +581,11 @@ import { Teleport } from 'vue'
 import IngredientQuantityEditor from '@/components/IngredientQuantityEditor.vue'
 import ModifierRecipeImpactSelector from '@/components/ModifierRecipeImpactSelector.vue'
 import LivePricingBreakdown from '@/components/LivePricingBreakdown.vue'
-import { getItemDetail, getRelatedItems } from '@/utils/api'
-import { formatMoney, parseQuery } from '@/utils/format'
+import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview } from '@/utils/api'
+import { formatMoney, normalizeMobile, parseQuery } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
 import { getLineById, upsertLine } from '@/stores/cartStore'
-import { getItemReviews, addItemReview, getAverageRating, getReviewCount } from '@/utils/reviewsStore'
+import { getItemReviews as getLocalItemReviews, addItemReview, getAverageRating as getLocalAverageRating, getReviewCount as getLocalReviewCount } from '@/utils/reviewsStore'
 
 const props = defineProps({
   boot: { type: Object, default: () => ({}) },
@@ -773,26 +773,78 @@ const reviewCount = ref(0)
 const newReview = ref({ author: '', rating: 5, comment: '' })
 const reviewSubmitted = ref(false)
 
-function refreshReviews() {
-  const slug = item.value?.slug || ''
-  reviews.value = getItemReviews(slug)
-  averageRating.value = getAverageRating(slug)
-  reviewCount.value = getReviewCount(slug)
+function readCustomerAuth() {
+  try {
+    const auth = JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}')
+    return {
+      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
+      name: auth.customer_name || localStorage.getItem('customer_name') || '',
+    }
+  } catch {
+    return { mobile: '', name: '' }
+  }
 }
 
-function submitReview() {
+function normalizeReviewRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    id: row.id || row.name || `review-${row.created_at || Date.now()}`,
+    author: row.author || row.customer_name || 'مشتری',
+    rating: Number(row.rating || 0),
+    comment: row.comment || '',
+    date: row.date || row.created_at || row.creation || '',
+  }))
+}
+
+async function refreshReviews() {
+  const slug = item.value?.slug || ''
+  if (!slug) return
+  try {
+    const payload = await fetchItemReviews({ item_slug: slug, page_size: 50 })
+    reviews.value = normalizeReviewRows(payload?.reviews || [])
+    averageRating.value = Number(payload?.average_rating || 0)
+    reviewCount.value = Number(payload?.count || reviews.value.length || 0)
+  } catch (_) {
+    reviews.value = getLocalItemReviews(slug)
+    averageRating.value = getLocalAverageRating(slug)
+    reviewCount.value = getLocalReviewCount(slug)
+  }
+}
+
+async function submitReview() {
   if (!validateReview()) return
   const slug = item.value?.slug || ''
   if (!slug) return
   reviewSubmitting.value = true
   try {
-    addItemReview(slug, { ...newReview.value })
-    refreshReviews()
+    const auth = readCustomerAuth()
+    const customerName = newReview.value.author.trim() || auth.name || 'مشتری'
+    const mobile = normalizeMobile(auth.mobile || localStorage.getItem('customer_phone') || '')
+    if (!mobile) {
+      reviewError.value = 'برای ثبت نظر، ابتدا با شماره موبایل وارد شوید.'
+      window.setTimeout(() => { window.location.href = `/customer/login?redirect=${encodeURIComponent(window.location.pathname)}` }, 900)
+      return
+    }
+    await submitItemReview({
+      customer_name: customerName,
+      mobile,
+      item_slug: slug,
+      rating: newReview.value.rating,
+      comment: newReview.value.comment,
+    })
+    await refreshReviews()
     newReview.value = { author: '', rating: 5, comment: '' }
     reviewSubmitted.value = true
     setTimeout(() => { reviewSubmitted.value = false }, 3000)
-  } catch (_) {
-    reviewError.value = 'ثبت نظر ناموفق بود. لطفا دوباره تلاش کنید.'
+  } catch (err) {
+    try {
+      addItemReview(slug, { ...newReview.value })
+      await refreshReviews()
+      newReview.value = { author: '', rating: 5, comment: '' }
+      reviewSubmitted.value = true
+      setTimeout(() => { reviewSubmitted.value = false }, 3000)
+    } catch (_) {
+      reviewError.value = err?.message || 'ثبت نظر ناموفق بود. لطفا دوباره تلاش کنید.'
+    }
   } finally {
     reviewSubmitting.value = false
   }
@@ -967,7 +1019,7 @@ async function loadItem() {
     hydrateForEdit(slug)
     isWishlisted.value = loadWishlist().includes(slug)
     loadUserImages(slug)
-    refreshReviews()
+    await refreshReviews()
     loadRelatedItems()
   } catch (err) {
     error.value = err.message || 'دریافت جزئیات آیتم ناموفق بود.'

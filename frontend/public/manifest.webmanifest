@@ -1,0 +1,55 @@
+{
+  "name": "Veederakht Restaurant",
+  "short_name": "Veederakht",
+  "description": "وب‌اپ سفارش آنلاین، رزرو میز و پیگیری سفارش رستوران ویدرخت",
+  "lang": "fa-IR",
+  "dir": "rtl",
+  "start_url": "/restaurant",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "theme_color": "#24473b",
+  "background_color": "#f7f1ea",
+  "categories": ["food", "shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/assets/restaurant/frontend/NoshYar.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/restaurant/frontend/NoshYar.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/restaurant/frontend/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "مشاهده منو",
+      "short_name": "منو",
+      "url": "/menu",
+      "icons": [{ "src": "/assets/restaurant/frontend/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "سبد سفارش",
+      "short_name": "سبد",
+      "url": "/cart",
+      "icons": [{ "src": "/assets/restaurant/frontend/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "رزرو میز",
+      "short_name": "رزرو",
+      "url": "/table-reservation",
+      "icons": [{ "src": "/assets/restaurant/frontend/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

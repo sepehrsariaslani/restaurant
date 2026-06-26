@@ -76,7 +76,7 @@
         </label>
         <div v-if="form.image" class="image-preview-wrap">
           <img :src="form.image" :alt="form.item_group_name" class="image-preview" @error="onImgError" />
-          <button type="button" class="clear-img-btn" @click="form.image = ''">✕ حذف تصویر</button>
+          <button type="button" class="clear-img-btn" @click="form.image = ''"><X :size="14" /> حذف تصویر</button>
         </div>
         <p class="hint">می‌توانید از آدرس مستقیم تصویر یا مسیر فایل آپلودشده در Frappe استفاده کنید.</p>
       </div>
@@ -102,6 +102,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { X } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -399,6 +400,9 @@ bootstrap()
   color: var(--danger, #e53935);
   font-family: inherit;
   transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .clear-img-btn:hover {

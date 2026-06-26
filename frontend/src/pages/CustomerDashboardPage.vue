@@ -63,6 +63,10 @@
         <span class="qc-icon">🏪</span>
         <span class="qc-label">شعبه‌ها</span>
       </a>
+      <a href="/customer/orders" class="quick-card">
+        <span class="qc-icon">🧾</span>
+        <span class="qc-label">سفارش‌ها</span>
+      </a>
       <a href="/cart" class="quick-card">
         <span class="qc-icon">🛒</span>
         <span class="qc-label">سبد خرید</span>
@@ -93,27 +97,57 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { cartState } from '@/stores/cartStore'
+import { getCustomerProfile, getMenuItems } from '@/utils/api'
 
+const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const cartCount = computed(() => cartState.lines.reduce((s, l) => s + (Number(l.qty) || 0), 0))
+const customer = ref({ name: '', mobile: '' })
+const orders = ref([])
+const specialOffers = ref([])
 
-const customerName = computed(() => {
-  try { return localStorage.getItem('customer_name') || 'مهمان عزیز' } catch { return 'مهمان عزیز' }
-})
+const customerName = computed(() => customer.value.name || 'مهمان عزیز')
 
 const avatarLetter = computed(() => {
   const name = customerName.value
   return name !== 'مهمان عزیز' ? name.slice(0, 1) : '👤'
 })
 
-function goMenu() { window.location.href = '/menu' }
+function goMenu() { window.location.href = '/search' }
 
-const specialOffers = [
-  { id: 1, title: 'پیتزا مخصوص', subtitle: 'دو نفره با نوشیدنی', discount: 20, image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&auto=format&fit=crop&q=60' },
-  { id: 2, title: 'برگر کلاسیک', subtitle: 'با سیب‌زمینی سرخ‌کرده', discount: 15, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&auto=format&fit=crop&q=60' },
-  { id: 3, title: 'سالاد فصل', subtitle: 'تازه و سالم', discount: 0, image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&auto=format&fit=crop&q=60' },
-]
+function readAuth() {
+  try {
+    const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
+    return {
+      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
+      name: auth.customer_name || localStorage.getItem('customer_name') || '',
+    }
+  } catch { return { mobile: '', name: '' } }
+}
+
+onMounted(async () => {
+  const auth = readAuth()
+  customer.value = { name: auth.name, mobile: auth.mobile }
+  if (auth.mobile) {
+    try {
+      const profile = await getCustomerProfile({ mobile: auth.mobile })
+      customer.value = profile?.customer || customer.value
+      orders.value = profile?.orders || []
+      if (customer.value.name) localStorage.setItem('customer_name', customer.value.name)
+    } catch {}
+  }
+  try {
+    const menu = await getMenuItems({ page_size: 6 })
+    specialOffers.value = (menu?.items || []).slice(0, 6).map(item => ({
+      id: item.slug || item.name,
+      title: item.title,
+      subtitle: item.short_desc || item.category_title || 'پیشنهاد امروز',
+      discount: 0,
+      image: item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&auto=format&fit=crop&q=60',
+    }))
+  } catch {}
+})
 </script>
 
 <style scoped>
@@ -174,7 +208,7 @@ const specialOffers = [
 .section-header h3 { margin: 0; font-size: 1rem; font-weight: 800; color: #3f2a1d; }
 .see-all { font-size: 0.82rem; color: #6f4a31; font-weight: 600; text-decoration: none; }
 
-.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem; padding: 0 1.25rem; }
+.quick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.7rem; padding: 0 1.25rem; }
 .quick-card {
   background: #fff; border-radius: 18px; padding: 1rem 0.5rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
@@ -206,5 +240,6 @@ const specialOffers = [
 .offer-body strong { font-size: 0.88rem; font-weight: 700; color: #3f2a1d; display: block; }
 .offer-body p { font-size: 0.75rem; color: #846b58; margin: 0.2rem 0 0; }
 
+@media (max-width: 380px) { .quick-grid { grid-template-columns: repeat(4, 1fr); } }
 .bottom-spacer { height: 2rem; }
 </style>

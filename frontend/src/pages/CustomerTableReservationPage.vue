@@ -71,10 +71,18 @@
       <div v-if="step === 1" class="step-card">
         <h3 class="step-title">انتخاب میز</h3>
         <p class="step-sub">میز مورد نظر خود را انتخاب کنید</p>
+        <p v-if="tablesLoading" class="step-sub">در حال دریافت میزهای آزاد...</p>
+        <p v-if="error" class="step-sub" style="color:#b84f4f">{{ error }}</p>
         <a href="/table-select" class="table-select-link">
           <div class="table-map-preview">
             <div class="table-grid">
-              <div v-for="t in tables" :key="t.id" class="table-item" :class="t.status">
+              <div
+                v-for="t in tables"
+                :key="t.id"
+                class="table-item"
+                :class="[t.status, { selected: selectedTable?.id === t.id }]"
+                @click.prevent="t.is_available && (selectedTable = t)"
+              >
                 <span>{{ t.label }}</span>
               </div>
             </div>
@@ -163,8 +171,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { createTableReservation, getAvailableTables } from '@/utils/api'
 
+const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const step = ref(0)
 const guests = ref(2)
 const selectedDate = ref('')
@@ -174,52 +184,91 @@ const reserverName = ref('')
 const reserverPhone = ref('')
 const reserverNote = ref('')
 const submitting = ref(false)
+const tablesLoading = ref(false)
+const error = ref('')
 
 const steps = ['تاریخ و ساعت', 'انتخاب میز', 'تأیید']
 
-const availableDates = [
-  { value: '1403-04-05', label: '۵', dayName: 'جمعه', available: true },
-  { value: '1403-04-06', label: '۶', dayName: 'شنبه', available: true },
-  { value: '1403-04-07', label: '۷', dayName: 'یکشنبه', available: true },
-  { value: '1403-04-08', label: '۸', dayName: 'دوشنبه', available: false },
-  { value: '1403-04-09', label: '۹', dayName: 'سه‌شنبه', available: true },
-  { value: '1403-04-10', label: '۱۰', dayName: 'چهارشنبه', available: true },
-  { value: '1403-04-11', label: '۱۱', dayName: 'پنجشنبه', available: true },
-]
+const availableDates = Array.from({ length: 7 }, (_, i) => {
+  const date = new Date()
+  date.setDate(date.getDate() + i)
+  const value = date.toISOString().slice(0, 10)
+  return {
+    value,
+    label: new Intl.DateTimeFormat('fa-IR', { day: 'numeric' }).format(date),
+    dayName: new Intl.DateTimeFormat('fa-IR', { weekday: 'long' }).format(date),
+    available: true,
+  }
+})
 
-const availableTimes = [
-  { value: '۱۲:۰۰', label: '۱۲:۰۰', available: true },
-  { value: '۱۳:۰۰', label: '۱۳:۰۰', available: true },
-  { value: '۱۴:۰۰', label: '۱۴:۰۰', available: false },
-  { value: '۱۸:۰۰', label: '۱۸:۰۰', available: true },
-  { value: '۱۹:۰۰', label: '۱۹:۰۰', available: true },
-  { value: '۲۰:۰۰', label: '۲۰:۰۰', available: true },
-  { value: '۲۱:۰۰', label: '۲۱:۰۰', available: false },
-  { value: '۲۲:۰۰', label: '۲۲:۰۰', available: true },
-]
+const availableTimes = ['12:00', '13:00', '14:00', '18:00', '19:00', '20:00', '21:00', '22:00']
+  .map(value => ({ value, label: value, available: true }))
 
-const tables = [
-  { id: 1, label: 'میز ۱', status: 'available', capacity: 2 },
-  { id: 2, label: 'میز ۲', status: 'reserved', capacity: 4 },
-  { id: 3, label: 'میز ۳', status: 'available', capacity: 4 },
-  { id: 4, label: 'میز ۴', status: 'occupied', capacity: 6 },
-  { id: 5, label: 'میز ۵', status: 'available', capacity: 2 },
-  { id: 6, label: 'میز ۶', status: 'available', capacity: 8 },
-]
+const tables = ref([])
 
 const selectedDateLabel = computed(() => {
   const d = availableDates.find(d => d.value === selectedDate.value)
-  return d ? `${d.dayName} ${d.label} تیر` : ''
+  return d ? `${d.dayName} ${d.label}` : ''
 })
 
+async function loadTables() {
+  if (!selectedDate.value || !selectedTime.value) return
+  tablesLoading.value = true
+  error.value = ''
+  try {
+    const data = await getAvailableTables({
+      reservation_date: selectedDate.value,
+      reservation_time: selectedTime.value,
+      guest_count: guests.value,
+    })
+    tables.value = Array.isArray(data?.tables) ? data.tables : []
+    if (selectedTable.value && !tables.value.some(t => t.id === selectedTable.value.id && t.is_available)) {
+      selectedTable.value = null
+    }
+  } catch (err) {
+    error.value = err?.message || 'خطا در دریافت میزها'
+  } finally {
+    tablesLoading.value = false
+  }
+}
+
 async function submitReservation() {
+  if (!selectedTable.value) return
   submitting.value = true
-  await new Promise(r => setTimeout(r, 1200))
-  submitting.value = false
-  step.value = 3
+  error.value = ''
+  try {
+    await createTableReservation({
+      customer_name: reserverName.value,
+      mobile: reserverPhone.value,
+      table: selectedTable.value.id,
+      branch: selectedTable.value.branch || '',
+      reservation_date: selectedDate.value,
+      reservation_time: selectedTime.value,
+      guest_count: guests.value,
+      note: reserverNote.value,
+    })
+    step.value = 3
+  } catch (err) {
+    error.value = err?.message || 'خطا در ثبت رزرو'
+  } finally {
+    submitting.value = false
+  }
 }
 
 function goBack() { window.history.back() }
+
+onMounted(() => {
+  selectedDate.value = availableDates[0]?.value || ''
+  selectedTime.value = availableTimes[0]?.value || ''
+  try {
+    const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
+    reserverName.value = auth.customer_name || localStorage.getItem('customer_name') || ''
+    reserverPhone.value = auth.mobile || localStorage.getItem('customer_phone') || ''
+  } catch {}
+  loadTables()
+})
+
+watch([selectedDate, selectedTime, guests], loadTables)
 </script>
 
 <style scoped>

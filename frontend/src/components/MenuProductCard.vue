@@ -49,14 +49,19 @@
           <Layers :size="12" />
           BOM
         </button>
+        <div class="qty-pill qty-pill--compact" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
+          <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)"><Minus :size="13" /></button>
+          <strong>{{ cartQty }}</strong>
+          <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
+        </div>
         <button
-          v-if="!isUnavailable"
+          v-else-if="!isUnavailable"
           class="add-btn"
           type="button"
           :aria-label="`افزودن ${item.title} به سبد`"
           @click.prevent="handleAdd"
         >
-          <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+          <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
         </button>
       </div>
     </template>
@@ -70,7 +75,7 @@
           {{ item.prep_time_mins }} دقیقه
         </span>
         <span class="unavailable-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
-        <span class="calorie-badge calorie-badge--featured" v-if="kcalValue">🔥 {{ kcalValue }} kcal</span>
+        <span class="calorie-badge calorie-badge--featured" v-if="kcalValue"><Flame :size="12" /> {{ kcalValue }} kcal</span>
       </a>
       <div class="featured-body">
         <div class="tag-row" v-if="item.tags && item.tags.length">
@@ -92,13 +97,13 @@
               BOM
             </button>
             <div class="qty-pill" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
-              <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)">−</button>
+              <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)"><Minus :size="13" /></button>
               <strong>{{ cartQty }}</strong>
-              <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)">+</button>
+              <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
             </div>
             <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
               <span>بساز</span>
-              <span class="add-circle">✎</span>
+              <span class="add-circle"><Pencil :size="14" /></span>
             </button>
             <template v-else-if="isCustomizable && allowDirectAdd">
               <button v-if="!isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
@@ -106,12 +111,12 @@
               </button>
               <button v-if="!isUnavailable" class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
                 <span>{{ justAdded ? 'افزوده شد' : 'افزودن به سبد' }}</span>
-                <span class="add-circle">{{ justAdded ? '✓' : '+' }}</span>
+                <span class="add-circle"><Check v-if="justAdded" :size="15" /><Plus v-else :size="16" /></span>
               </button>
             </template>
             <button v-else-if="!isUnavailable" class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
               <span>{{ justAdded ? 'افزوده شد' : 'افزودن به سبد' }}</span>
-              <span class="add-circle">{{ justAdded ? '✓' : '+' }}</span>
+              <span class="add-circle"><Check v-if="justAdded" :size="15" /><Plus v-else :size="16" /></span>
             </button>
             <span v-if="isTemporarilyUnavailable" class="unavailable-pill">ناموجود</span>
           </div>
@@ -138,7 +143,7 @@
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || '' }}</p>
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
-        <span class="calorie-badge calorie-badge--list" v-if="kcalValue">🔥 {{ kcalValue }} kcal</span>
+        <span class="calorie-badge calorie-badge--list" v-if="kcalValue"><Flame :size="12" /> {{ kcalValue }} kcal</span>
         <div class="list-foot">
           <div v-if="isComingSoon">
             <strong class="price soon-label">به‌زودی</strong>
@@ -148,27 +153,27 @@
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
           <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
-            <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)">−</button>
+            <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)"><Minus :size="13" /></button>
             <strong>{{ cartQty }}</strong>
-            <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)">+</button>
+            <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
           </div>
           <button v-if="showBomButton" class="bom-btn btn-sm" type="button" :aria-label="`مشاهده BOM ${item.title}`" @click.prevent="handleBomPreview">
             <Layers :size="13" />
             BOM
           </button>
           <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-            <span class="add-icon">✎</span>
+            <span class="add-icon"><Pencil :size="15" /></span>
           </button>
           <template v-else-if="isCustomizable && allowDirectAdd">
             <button v-if="!isTemporarilyUnavailable" class="add-btn customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-              <span class="add-icon">✎</span>
+              <span class="add-icon"><Pencil :size="15" /></span>
             </button>
             <button v-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
-              <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+              <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
             </button>
           </template>
           <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
-            <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+            <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
           </button>
         </div>
       </div>
@@ -190,7 +195,7 @@
         <button class="like-btn grid-like" type="button" :aria-label="`علاقه‌مندی`" @click.prevent="toggleLike">
           <svg width="17" height="17" viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </button>
-        <span class="calorie-badge calorie-badge--grid" v-if="kcalValue">🔥 {{ kcalValue }} kcal</span>
+        <span class="calorie-badge calorie-badge--grid" v-if="kcalValue"><Flame :size="12" /> {{ kcalValue }} kcal</span>
       </a>
       <div class="grid-body">
         <h3>{{ item.title }}</h3>
@@ -214,27 +219,27 @@
             </button>
             <a :href="`/item/${item.slug}`" class="detail-link">جزئیات</a>
             <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
-              <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)">−</button>
+              <button type="button" class="qty-step" @click.prevent="$emit('quick-decrease', item)"><Minus :size="13" /></button>
               <strong>{{ cartQty }}</strong>
-              <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)">+</button>
+              <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
             </div>
             <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-              <span class="add-icon">✎</span>
+              <span class="add-icon"><Pencil :size="15" /></span>
             </button>
             <template v-else-if="isCustomizable && allowDirectAdd">
               <button v-if="!isTemporarilyUnavailable" class="add-btn customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-                <span class="add-icon">✎</span>
+                <span class="add-icon"><Pencil :size="15" /></span>
               </button>
               <button v-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
-                <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+                <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
               </button>
             </template>
             <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
-              <span class="add-icon">{{ justAdded ? '✓' : '+' }}</span>
+              <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
             </button>
           </div>
         </div>
-        <small class="review-badge" v-if="reviewCount > 0">★ {{ reviewCount }} نظر</small>
+        <small class="review-badge" v-if="reviewCount > 0"><Star :size="12" /> {{ reviewCount }} نظر</small>
       </div>
     </template>
   </article>
@@ -244,7 +249,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { formatMoney } from '@/utils/format'
 import { getReviewCount } from '@/utils/reviewsStore'
-import { Layers } from 'lucide-vue-next'
+import { Check, Flame, Layers, Minus, Pencil, Plus, Star } from 'lucide-vue-next'
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -311,18 +316,18 @@ function handleAdd() {
 const cardStyle = computed(() => {
   const t = props.theme || {}
   return {
-    '--color-primary': t.primary_color || t.primary || '#ff6b35',
-    '--color-primary-dark': t.primary_color_dark || t.primary_dark || '#e55a2b',
-    '--color-accent': t.accent_color || t.accent || '#24473b',
-    '--color-text-primary': t.text_primary || '#1f332d',
-    '--color-text-secondary': t.text_secondary || '#7b8a84',
-    '--color-text-muted': t.text_muted || '#7f918a',
+    '--color-primary': t.primary_color || t.primary || 'var(--accent-gold)',
+    '--color-primary-dark': t.primary_color_dark || t.primary_dark || 'var(--accent-gold80)',
+    '--color-accent': t.accent_color || t.accent || 'var(--accent-green)',
+    '--color-text-primary': t.text_primary || 'var(--text-primary)',
+    '--color-text-secondary': t.text_secondary || 'var(--text-secondary)',
+    '--color-text-muted': t.text_muted || 'var(--text-muted)',
     '--color-surface': t.surface || '#ffffff',
-    '--color-surface-alt': t.surface_alt || '#f7f8f6',
-    '--color-border': t.border || 'rgba(0,0,0,0.04)',
-    '--color-success': t.success || '#2e7d32',
-    '--color-success-bg': t.success_bg || '#e8f5e9',
-    '--add-btn-bg': t.add_btn_bg || t.primary_color || '#ff4b16',
+    '--color-surface-alt': t.surface_alt || 'var(--theme-surface-alt)',
+    '--color-border': t.border || 'var(--glass-border)',
+    '--color-success': t.success || 'var(--success, var(--accent-green))',
+    '--color-success-bg': t.success_bg || 'var(--accent-green20)',
+    '--add-btn-bg': t.add_btn_bg || t.primary_color || 'var(--accent-gold)',
   }
 })
 
@@ -643,8 +648,22 @@ function handleCustomize() {
   min-height: 36px;
 }
 
-.qty-pill.compact {
+.qty-pill.compact,
+.qty-pill--compact {
   min-height: 34px;
+}
+
+.qty-pill--compact {
+  flex-direction: column-reverse;
+  gap: 0.18rem;
+  padding: 0.28rem 0.2rem;
+  border-radius: 16px;
+}
+
+.qty-pill--compact strong {
+  font-size: 0.76rem;
+  line-height: 1;
+  color: var(--color-accent, var(--accent-green));
 }
 
 .qty-step {
@@ -659,25 +678,32 @@ function handleCustomize() {
   line-height: 1;
 }
 
-/* ─── LAYOUT: compact (CSS Grid — 3-column desktop) ─── */
+.qty-pill--compact .qty-step {
+  width: 24px;
+  height: 24px;
+  font-size: 0.92rem;
+}
+
+/* ─── LAYOUT: compact (modern healthy food card) ─── */
 .layout--compact {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 56px;
-  gap: 12px;
+  grid-template-columns: 102px minmax(0, 1fr) 34px;
+  gap: 10px;
   align-items: center;
   direction: rtl;
   background: var(--color-surface, #ffffff);
-  border-radius: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.04));
-  padding: 16px 18px;
-  min-height: 180px;
+  border-radius: 22px;
+  box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.07);
+  border: 1px solid var(--color-border, var(--glass-border));
+  padding: 12px;
+  min-height: 132px;
   position: relative;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .layout--compact:hover {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgb(var(--palette-deep-sapphire-rgb) / 0.10);
 }
 
 /* Image column (rightmost in RTL — grid column 1) */
@@ -698,11 +724,13 @@ function handleCustomize() {
 
 .card-image {
   width: 100%;
-  max-width: 120px;
-  max-height: 135px;
+  max-width: 102px;
+  height: 102px;
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: 16px;
   flex-shrink: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Content column (center — grid column 2) */
@@ -713,6 +741,7 @@ function handleCustomize() {
   min-width: 0;
   text-align: right;
   overflow: hidden;
+  gap: 3px;
 }
 
 /* Actions column (leftmost in RTL — grid column 3) */
@@ -721,47 +750,48 @@ function handleCustomize() {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  align-self: stretch;
 }
 
 /* Pill chips */
 .pills-row {
   display: flex;
-  gap: 6px;
-  justify-content: center;
+  gap: 5px;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
 }
 
 .pill {
   display: inline-block;
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.35;
   flex-shrink: 0;
 }
 
 .pill--category {
   background: #fff0e8;
-  color: #ff5a1f;
+  color: var(--color-primary, var(--accent-gold));
 }
 
 .pill--combo {
-  background: #eaf4ee;
-  color: #24473b;
+  background: var(--accent-green20);
+  color: var(--color-accent, var(--accent-green));
 }
 
 /* Title */
 .card-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--color-accent, #24473b);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--color-accent, var(--accent-green));
   text-align: right;
-  line-height: 1.4;
-  margin: 0 0 4px 0;
+  line-height: 1.35;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -773,10 +803,10 @@ function handleCustomize() {
 /* Description */
 .card-description {
   font-size: 11px;
-  color: var(--color-text-secondary, #7b8a84);
-  text-align: center;
-  line-height: 1.5;
-  margin: 0 0 6px 0;
+  color: var(--color-text-secondary, var(--text-secondary));
+  text-align: right;
+  line-height: 1.48;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -786,14 +816,13 @@ function handleCustomize() {
 
 /* Nutrition row */
 .card-nutrition {
-  font-size: 10px;
-  color: var(--color-text-muted, #7f918a);
+  font-size: 9.5px;
+  color: var(--color-text-muted, var(--text-muted));
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-  margin-bottom: 8px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
@@ -804,10 +833,10 @@ function handleCustomize() {
 }
 
 .card-price {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--color-accent, #24473b);
-  text-align: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--color-accent, var(--accent-green));
+  text-align: right;
   direction: ltr;
   font-variant-numeric: tabular-nums;
 }
@@ -823,35 +852,35 @@ function handleCustomize() {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 5px 8px;
+  padding: 4px 6px;
   border-radius: 999px;
-  background: var(--color-surface-alt, #f7f8f6);
-  font-size: 10px;
-  font-weight: 600;
-  color: #3d4f48;
+  background: var(--color-surface-alt, var(--theme-surface-alt));
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-text-primary, var(--text-primary));
 }
 
 .calorie-chip__icon {
   width: 12px;
   height: 12px;
-  color: var(--color-primary, #ff6b35);
+  color: var(--color-primary, var(--accent-gold));
 }
 
-/* Add button — orange, 52x52 */
+/* Add button — compact accent */
 .add-btn {
-  width: 52px;
-  height: 52px;
-  background: var(--add-btn-bg, #ff4b16);
+  width: 30px;
+  height: 30px;
+  background: var(--add-btn-bg, var(--accent-gold));
   color: #ffffff;
   border: none;
-  border-radius: 14px;
-  box-shadow: 0 8px 16px rgba(255, 80, 20, 0.22);
+  border-radius: 11px;
+  box-shadow: 0 8px 16px rgb(var(--palette-deep-saffron-rgb) / 0.22);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  font-weight: 300;
+  font-size: 17px;
+  font-weight: 500;
   transition: all 0.15s ease-out;
   flex-shrink: 0;
 }
@@ -867,14 +896,15 @@ function handleCustomize() {
 }
 
 .add-btn.added {
-  background: var(--color-accent, #24473b);
-  box-shadow: 0 4px 16px rgba(36, 71, 59, 0.25);
+  background: var(--color-accent, var(--accent-green));
+  box-shadow: 0 4px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.25);
 }
 
 .add-icon {
-  font-size: 22px;
+  font-size: 17px;
   line-height: 1;
-  font-weight: 300;
+  font-weight: 500;
+  transform: translateY(-1px);
 }
 
 /* Unavailable badge */
@@ -899,12 +929,11 @@ function handleCustomize() {
 /* ─── Responsive: compact layout ─── */
 @media (max-width: 600px) {
   .layout--compact {
-    grid-template-columns: 100px minmax(0, 1fr) 48px;
-    min-height: 160px;
-    max-height: 180px;
-    padding: 12px;
+    grid-template-columns: 86px minmax(0, 1fr) 32px;
+    min-height: 122px;
+    padding: 10px;
     gap: 8px;
-    border-radius: 16px;
+    border-radius: 20px;
   }
 
   .compact-image-col {
@@ -912,12 +941,13 @@ function handleCustomize() {
   }
 
   .card-image {
-    max-width: 100px;
-    max-height: 110px;
+    max-width: 86px;
+    height: 86px;
+    border-radius: 16px;
   }
 
   .card-title {
-    font-size: 14px;
+    font-size: 13.5px;
   }
 
   .card-description {
@@ -926,17 +956,17 @@ function handleCustomize() {
   }
 
   .card-price {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .add-btn {
-    width: 42px;
-    height: 42px;
+    width: 30px;
+    height: 30px;
     border-radius: 11px;
   }
 
   .add-icon {
-    font-size: 20px;
+    font-size: 17px;
   }
 
   .calorie-chip {
@@ -956,16 +986,15 @@ function handleCustomize() {
 
 @media (max-width: 360px) {
   .layout--compact {
-    grid-template-columns: 85px minmax(0, 1fr) 44px;
-    min-height: 150px;
-    max-height: 170px;
-    padding: 10px;
+    grid-template-columns: 76px minmax(0, 1fr) 30px;
+    min-height: 112px;
+    padding: 9px;
     gap: 6px;
   }
 
   .card-image {
-    max-width: 85px;
-    max-height: 95px;
+    max-width: 76px;
+    height: 76px;
   }
 
   .card-description {

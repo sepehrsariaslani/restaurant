@@ -54,6 +54,11 @@
         <span class="mi-label">شعبه‌ها</span>
         <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
+      <a href="/customer/orders" class="menu-item">
+        <span class="mi-icon">🧾</span>
+        <span class="mi-label">سفارش‌های من</span>
+        <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
       <button class="menu-item logout-item" @click="logout">
         <span class="mi-icon">🚪</span>
         <span class="mi-label" style="color:#e74c3c">خروج از حساب</span>
@@ -65,10 +70,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { getCustomerProfile } from '@/utils/api'
 
+const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const saving = ref(false)
 const saved = ref(false)
+const loading = ref(false)
+const error = ref('')
 
 const form = ref({
   name: '',
@@ -77,9 +86,22 @@ const form = ref({
   birthday: '',
 })
 
+function readAuth() {
+  try {
+    const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
+    return {
+      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
+      name: auth.customer_name || localStorage.getItem('customer_name') || '',
+    }
+  } catch {
+    return { mobile: '', name: '' }
+  }
+}
+
 try {
-  form.value.name = localStorage.getItem('customer_name') || ''
-  form.value.phone = localStorage.getItem('customer_phone') || ''
+  const auth = readAuth()
+  form.value.name = auth.name
+  form.value.phone = auth.mobile
   form.value.email = localStorage.getItem('customer_email') || ''
 } catch {}
 
@@ -105,11 +127,28 @@ async function saveProfile() {
 
 function logout() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید خارج شوید؟')) return
+  localStorage.removeItem(CUSTOMER_AUTH_KEY)
   localStorage.removeItem('customer_name')
   localStorage.removeItem('customer_phone')
   localStorage.removeItem('customer_email')
   window.location.href = '/customer/login'
 }
+
+onMounted(async () => {
+  const auth = readAuth()
+  if (!auth.mobile) return
+  loading.value = true
+  try {
+    const data = await getCustomerProfile({ mobile: auth.mobile })
+    const customer = data?.customer || {}
+    form.value.name = customer.name || auth.name || form.value.name
+    form.value.phone = customer.mobile || auth.mobile
+  } catch (err) {
+    error.value = err?.message || 'خطا در دریافت پروفایل'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>

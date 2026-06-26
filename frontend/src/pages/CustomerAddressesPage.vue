@@ -89,14 +89,38 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import { getCustomerCheckoutProfile, saveCustomerDeliveryAddress } from '@/utils/api'
 
+const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const STORAGE_KEY = 'customer_addresses_v1'
 function loadAddresses() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] } }
 function saveAddresses(list) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch {} }
+function readAuth() {
+  try {
+    const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
+    return {
+      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
+      name: auth.customer_name || localStorage.getItem('customer_name') || '',
+    }
+  } catch { return { mobile: '', name: '' } }
+}
+function normalizeAddress(row) {
+  const address = row.address || row.address_line1 || ''
+  return {
+    ...row,
+    id: row.id || row.name || Date.now(),
+    label: row.label || row.address_title || row.type || 'آدرس',
+    type: row.type || row.address_type || 'سایر',
+    address,
+    detail: row.detail || row.address_line2 || '',
+  }
+}
 
 const addresses = ref(loadAddresses())
 const selectedId = ref(addresses.value[0]?.id || null)
+const loading = ref(false)
+const error = ref('')
 const showForm = ref(false)
 const editingId = ref(null)
 const types = ['خانه', 'محل کار', 'سایر']
@@ -119,13 +143,37 @@ function editAddress(addr) {
 
 function closeForm() { showForm.value = false; editingId.value = null }
 
-function saveAddress() {
+async function saveAddress() {
   if (!newAddr.value.address.trim()) return
-  if (editingId.value) {
-    const idx = addresses.value.findIndex(a => a.id === editingId.value)
-    if (idx >= 0) addresses.value[idx] = { ...newAddr.value, id: editingId.value }
-  } else {
-    addresses.value.push({ ...newAddr.value, id: Date.now() })
+  const auth = readAuth()
+  if (!auth.mobile) {
+    error.value = 'برای ذخیره آدرس ابتدا وارد شوید.'
+    window.location.href = '/customer/login?redirect=/customer/addresses'
+    return
+  }
+  const localId = editingId.value || Date.now()
+  try {
+    const result = await saveCustomerDeliveryAddress({
+      customer_info: { name: auth.name || 'مشتری', mobile: auth.mobile },
+      address_info: {
+        id: editingId.value || '',
+        label: newAddr.value.label,
+        type: newAddr.value.type,
+        address: newAddr.value.address,
+        detail: newAddr.value.detail,
+        address_line1: newAddr.value.address,
+        address_line2: newAddr.value.detail,
+      },
+    })
+    addresses.value = (result?.addresses || []).map(normalizeAddress)
+    if (!addresses.value.length) addresses.value.push({ ...newAddr.value, id: localId })
+  } catch {
+    if (editingId.value) {
+      const idx = addresses.value.findIndex(a => a.id === editingId.value)
+      if (idx >= 0) addresses.value[idx] = { ...newAddr.value, id: editingId.value }
+    } else {
+      addresses.value.push({ ...newAddr.value, id: localId })
+    }
   }
   saveAddresses(addresses.value)
   closeForm()
@@ -145,6 +193,22 @@ function confirmSelection() {
     window.history.back()
   }
 }
+
+onMounted(async () => {
+  const auth = readAuth()
+  if (!auth.mobile) return
+  loading.value = true
+  try {
+    const data = await getCustomerCheckoutProfile({ mobile: auth.mobile, customer_name: auth.name })
+    addresses.value = (data?.addresses || []).map(normalizeAddress)
+    selectedId.value = addresses.value[0]?.id || null
+    saveAddresses(addresses.value)
+  } catch (err) {
+    error.value = err?.message || 'خطا در دریافت آدرس‌ها'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>

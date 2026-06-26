@@ -100,27 +100,28 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { getBranches } from '@/utils/api'
 
 const orderType = ref('delivery')
 const deliveryNote = ref('')
-const selectedBranch = ref(1)
+const selectedBranch = ref('')
+const branches = ref([])
 
-const branches = [
-  { id: 1, name: 'شعبه مرکزی', address: 'تهران، ولیعصر', prepTime: 20, isOpen: true },
-  { id: 2, name: 'شعبه شمال', address: 'تهران، الهیه', prepTime: 25, isOpen: true },
-  { id: 3, name: 'شعبه غرب', address: 'تهران، پونک', prepTime: 30, isOpen: false },
-]
-
-const selectedBranchObj = computed(() => branches.find(b => b.id === selectedBranch.value))
+const selectedBranchObj = computed(() => branches.value.find(b => b.id === selectedBranch.value))
 
 const selectedAddress = ref(null)
-onMounted(() => {
+onMounted(async () => {
   try {
     const addr = localStorage.getItem('selected_address')
     if (addr) selectedAddress.value = JSON.parse(addr)
   } catch {}
   const params = new URLSearchParams(window.location.search)
   if (params.get('type') === 'pickup') orderType.value = 'pickup'
+  try {
+    const data = await getBranches()
+    branches.value = Array.isArray(data?.branches) ? data.branches : []
+    selectedBranch.value = branches.value.find(b => b.isOpen)?.id || branches.value[0]?.id || ''
+  } catch {}
 })
 
 const canConfirm = computed(() => {

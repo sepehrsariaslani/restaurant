@@ -4,9 +4,9 @@
       <section class="sheet-panel" ref="panelRef" dir="rtl">
         <header class="sheet-head" ref="headRef">
           <div class="drag-handle" aria-hidden="true"></div>
-          <button class="icon-btn back-btn" type="button" @click="$emit('close')" aria-label="بازگشت"><ChevronRight :size="20" /></button>
+          <button class="icon-btn back-btn" type="button" @click="$emit('close')" aria-label="بازگشت"><ChevronRight :size="18" /></button>
           <span class="sheet-title">افزودن به سبد</span>
-          <button class="icon-btn close-btn" type="button" @click="$emit('close')" aria-label="بستن"><X :size="20" /></button>
+          <button class="icon-btn close-btn" type="button" @click="$emit('close')" aria-label="بستن"><X :size="18" /></button>
         </header>
 
         <div class="sheet-body" ref="bodyRef" @touchstart.passive="onPanelTouchStart" @touchmove.passive="onPanelTouchMove" @touchend.passive="onPanelTouchEnd">
@@ -37,9 +37,6 @@
 
               <!-- Product title -->
               <h2 class="product-info__title">{{ selectedItem.title }}</h2>
-
-              <!-- Helper text -->
-              <p class="product-info__helper">قبل از افزودن، آیتم‌ها را انتخاب کن</p>
 
               <!-- Short description -->
               <p v-if="selectedItem.short_desc || selectedItem.long_desc" class="product-info__desc">
@@ -75,27 +72,12 @@
             </p>
 
             <!-- Nutrition summary bar -->
-            <div class="nutrition-bar">
+            <div class="nutrition-bar" v-if="nutritionItems.length">
               <div class="nutrition-bar__items">
-                <div class="nutrition-item">
-                  <Flame class="nutrition-item__icon" :size="20" />
-                  <span class="nutrition-item__value">{{ nutritionKcal }}</span>
-                  <span class="nutrition-item__label">کیلوکالری</span>
-                </div>
-                <div class="nutrition-item">
-                  <Dumbbell class="nutrition-item__icon" :size="20" />
-                  <span class="nutrition-item__value">{{ nutritionProtein }} g</span>
-                  <span class="nutrition-item__label">پروتئین</span>
-                </div>
-                <div class="nutrition-item">
-                  <Wheat class="nutrition-item__icon" :size="20" />
-                  <span class="nutrition-item__value">{{ nutritionCarb }} g</span>
-                  <span class="nutrition-item__label">کربوهیدرات</span>
-                </div>
-                <div class="nutrition-item">
-                  <Droplets class="nutrition-item__icon" :size="20" />
-                  <span class="nutrition-item__value">{{ nutritionFat }} g</span>
-                  <span class="nutrition-item__label">چربی</span>
+                <div class="nutrition-item" v-for="entry in nutritionItems" :key="entry.key">
+                  <component :is="entry.icon" class="nutrition-item__icon" :size="20" />
+                  <span class="nutrition-item__value">{{ entry.value }}</span>
+                  <span class="nutrition-item__label">{{ entry.label }}</span>
                 </div>
               </div>
             </div>
@@ -110,22 +92,21 @@
         <footer class="sheet-footer">
           <div class="footer-price-card">
             <span class="footer-price-value">{{ formatMoney(preview.lineTotal, currency) }}</span>
-            <span class="footer-price-currency">تومان</span>
           </div>
 
           <!-- State 1: Not yet added — show qty stepper + add button -->
           <template v-if="!hasAdded">
             <div class="footer-qty">
               <button class="qty-btn qty-minus" type="button" @click="qty = Math.max(1, qty - 1)" :disabled="qty <= 1" :class="{ 'is-disabled': qty <= 1 }">
-                <Minus :size="14" />
+                <Minus :size="13" />
               </button>
               <span class="qty-value">{{ qty }}</span>
               <button class="qty-btn qty-plus" type="button" @click="qty++">
-                <Plus :size="14" />
+                <Plus :size="13" />
               </button>
             </div>
             <button class="footer-cta" type="button" @click="confirmAdd">
-              <ShoppingBasket class="footer-cta-icon" :size="18" />
+              <ShoppingBasket class="footer-cta-icon" :size="16" />
               افزودن به سبد
             </button>
           </template>
@@ -134,15 +115,15 @@
           <template v-else>
             <div class="footer-qty footer-qty--added">
               <button class="qty-btn qty-minus" type="button" @click="decrementFromCart" :disabled="addedQty <= 1" :class="{ 'is-disabled': addedQty <= 1 }">
-                <Minus :size="14" />
+                <Minus :size="13" />
               </button>
               <span class="qty-value qty-value--added">{{ addedQty }}</span>
               <button class="qty-btn qty-plus" type="button" @click="incrementToCart">
-                <Plus :size="14" />
+                <Plus :size="13" />
               </button>
             </div>
             <button class="footer-cta footer-cta--done" type="button" @click="$emit('close')">
-              <Check class="footer-cta-icon" :size="18" />
+              <Check class="footer-cta-icon" :size="16" />
               ثبت شد
             </button>
           </template>
@@ -249,24 +230,18 @@ const preview = computed(() =>
   }),
 )
 
-const nutritionKcal = computed(() => {
-  const n = preview.value?.nutrition
-  return n?.kcal || 560
-})
-
-const nutritionProtein = computed(() => {
-  const n = preview.value?.nutrition
-  return n?.protein_g || 12
-})
-
-const nutritionCarb = computed(() => {
-  const n = preview.value?.nutrition
-  return n?.carb_g || 34
-})
-
-const nutritionFat = computed(() => {
-  const n = preview.value?.nutrition
-  return n?.fat_g || 15
+const nutritionItems = computed(() => {
+  const n = preview.value?.nutrition || {}
+  const rows = []
+  const kcal = Number(n.kcal || 0)
+  const protein = Number(n.protein_g || 0)
+  const carb = Number(n.carb_g || 0)
+  const fat = Number(n.fat_g || 0)
+  if (Number.isFinite(kcal) && kcal > 0) rows.push({ key: 'kcal', icon: Flame, value: Math.round(kcal), label: 'کیلوکالری' })
+  if (Number.isFinite(protein) && protein > 0) rows.push({ key: 'protein', icon: Dumbbell, value: `${Math.round(protein)} g`, label: 'پروتئین' })
+  if (Number.isFinite(carb) && carb > 0) rows.push({ key: 'carb', icon: Wheat, value: `${Math.round(carb)} g`, label: 'کربوهیدرات' })
+  if (Number.isFinite(fat) && fat > 0) rows.push({ key: 'fat', icon: Droplets, value: `${Math.round(fat)} g`, label: 'چربی' })
+  return rows
 })
 
 function withVariantContext(customizationPayload = {}) {
@@ -458,16 +433,16 @@ function mergeItemData(baseItem = null, detailItem = null) {
   }
 
   .sheet-head .sheet-title {
-    font-size: 2.125rem;
+    font-size: 1rem;
   }
 }
 
 .sheet-panel {
-  width: min(860px, 100%);
-  max-height: calc(100dvh - 1rem);
-  max-height: calc(100svh - 1rem);
-  border-radius: 30px 30px 0 0;
-  padding: 0 0 1.5rem;
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 0.5rem);
+  max-height: calc(100svh - 0.5rem);
+  border-radius: 22px 22px 0 0;
+  padding: 0 0 1rem;
   background: var(--pos-surface-color, #ffffff);
   box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.10);
   display: flex;
@@ -482,20 +457,20 @@ function mergeItemData(baseItem = null, detailItem = null) {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding: 0 1.75rem 1.5rem;
-  padding-top: 0.35rem;
+  padding: 0 0.85rem 0.85rem;
+  padding-top: 0.15rem;
   display: grid;
-  gap: 0.62rem;
+  gap: 0.55rem;
 }
 
 /* ── Sticky Footer ── */
 .sheet-footer {
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: 150px 104px minmax(0, 1fr);
+  grid-template-columns: 136px 86px minmax(0, 1fr);
   grid-template-areas: "price qty cta";
-  gap: 8px;
-  padding: 0.4rem 1.75rem;
+  gap: 7px;
+  padding: 0.35rem 1.25rem;
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
   background: var(--pos-surface-color, rgba(255, 255, 255, 0.97));
   backdrop-filter: blur(20px);
@@ -510,14 +485,15 @@ function mergeItemData(baseItem = null, detailItem = null) {
 .footer-price-card {
   grid-area: price;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 0.05rem;
   padding: 0.3rem 0.7rem;
   background: rgb(var(--palette-deep-sapphire-rgb) / 0.03);
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.06);
-  border-radius: 14px;
+  border-radius: 12px;
   min-width: 0;
-  height: 40px;
+  height: 36px;
   justify-content: center;
 }
 
@@ -527,10 +503,10 @@ function mergeItemData(baseItem = null, detailItem = null) {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 36px;
   background: var(--pos-surface-color, #ffffff);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 18px;
+  border-radius: 13px;
   gap: 0;
   overflow: hidden;
 }
@@ -539,7 +515,7 @@ function mergeItemData(baseItem = null, detailItem = null) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  width: 26px;
   height: 100%;
   border: none;
   background: transparent;
@@ -576,7 +552,7 @@ function mergeItemData(baseItem = null, detailItem = null) {
 .qty-value {
   flex: 1;
   text-align: center;
-  font-size: 1.1rem;
+  font-size: 0.92rem;
   font-weight: 800;
   color: var(--accent-green);
   font-variant-numeric: tabular-nums;
@@ -597,44 +573,38 @@ function mergeItemData(baseItem = null, detailItem = null) {
 }
 
 .footer-price-value {
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-weight: 800;
-  color: var(--success);
+  color: var(--accent-green);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
 
-.footer-price-currency {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
 .footer-cta {
   grid-area: cta;
   min-width: 0;
-  height: 42px;
+  height: 38px;
   border: none;
-  border-radius: 14px;
-  padding: 0 1.5rem;
-  background: var(--accent-orange, #fd5010);
+  border-radius: 13px;
+  padding: 0 1rem;
+  background: var(--accent-gold);
   color: #fff;
   font-family: inherit;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 800;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  box-shadow: 0 4px 18px rgb(var(--accent-orange-rgb, 253 80 16) / 0.35);
+  gap: 0.38rem;
+  box-shadow: 0 4px 18px rgb(var(--palette-deep-saffron-rgb) / 0.35);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .footer-cta-icon {
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
   flex-shrink: 0;
 }
 
@@ -655,7 +625,7 @@ function mergeItemData(baseItem = null, detailItem = null) {
 }
 
 .footer-cta:hover {
-  box-shadow: 0 6px 24px rgb(var(--accent-orange-rgb, 253 80 16) / 0.45);
+  box-shadow: 0 6px 24px rgb(var(--palette-deep-saffron-rgb) / 0.45);
 }
 
 .footer-cta:active {
@@ -664,13 +634,14 @@ function mergeItemData(baseItem = null, detailItem = null) {
 
 .sheet-head {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
   position: relative;
   z-index: 2;
   background: var(--pos-surface-color, #ffffff);
-  border-radius: 30px 30px 0 0;
-  padding: 12px 20px 10px;
+  border-radius: 22px 22px 0 0;
+  padding: 12px 12px 4px;
+  min-height: 50px;
   flex-shrink: 0;
 }
 
@@ -683,9 +654,10 @@ function mergeItemData(baseItem = null, detailItem = null) {
   text-align: center;
   margin: 0;
   color: var(--accent-green);
-  font-size: clamp(1.75rem, 4vw, 2rem);
-  font-weight: 800;
+  font-size: clamp(0.92rem, 2.4vw, 1rem);
+  font-weight: 900;
   letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .sheet-head .back-btn {
@@ -696,10 +668,10 @@ function mergeItemData(baseItem = null, detailItem = null) {
 
 .drag-handle {
   position: absolute;
-  top: 6px;
+  top: 5px;
   left: 50%;
   transform: translateX(-50%);
-  width: 36px;
+  width: 34px;
   height: 4px;
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.10);
@@ -708,13 +680,13 @@ function mergeItemData(baseItem = null, detailItem = null) {
 
 
 .icon-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
   background: var(--pos-surface-color, #ffffff);
   color: var(--accent-green);
-  font-size: 1.2rem;
+  font-size: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -728,7 +700,7 @@ function mergeItemData(baseItem = null, detailItem = null) {
 }
 
 .icon-btn.close-btn {
-  font-size: 1.4rem;
+  font-size: 1rem;
 }
 
 /* ── Product Info Card ── */
@@ -736,21 +708,21 @@ function mergeItemData(baseItem = null, detailItem = null) {
   display: flex;
   flex-direction: row-reverse;
   align-items: center;
-  gap: 1.25rem;
-  padding: 24px;
-  min-height: 210px;
+  gap: 0.75rem;
+  padding: 10px 12px;
+  min-height: 108px;
   background: var(--pos-surface-color, var(--color-surface, #ffffff));
   border-radius: 22px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  box-shadow: 0 8px 22px rgb(var(--palette-deep-sapphire-rgb) / 0.06);
   position: relative;
 }
 
 /* ── Image column ── */
 .product-info__image-col {
   flex-shrink: 0;
-  width: 200px;
-  height: 200px;
+  width: 96px;
+  height: 96px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -773,7 +745,7 @@ function mergeItemData(baseItem = null, detailItem = null) {
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 0.35rem;
+  gap: 0.24rem;
 }
 
 /* ── Category chips (centered above title) ── */
@@ -808,9 +780,9 @@ function mergeItemData(baseItem = null, detailItem = null) {
 /* ── Title (centered, 30px) ── */
 .product-info__title {
   margin: 0;
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: var(--color-accent, #24473b);
+  font-size: 1.02rem;
+  font-weight: 900;
+  color: var(--accent-green);
   line-height: 1.35;
   text-align: center;
   overflow: hidden;
@@ -819,15 +791,6 @@ function mergeItemData(baseItem = null, detailItem = null) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   max-width: 100%;
-}
-
-/* ── Helper text (muted, centered) ── */
-.product-info__helper {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--color-text-muted, #7f918a);
-  text-align: center;
-  line-height: 1.5;
 }
 
 /* ── Description (muted, centered) ── */
@@ -848,29 +811,29 @@ function mergeItemData(baseItem = null, detailItem = null) {
 /* ── Mobile responsive ── */
 @media (max-width: 600px) {
   .product-info-card {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 18px;
-    gap: 0.75rem;
+    flex-direction: row-reverse;
+    align-items: center;
+    padding: 12px;
+    gap: 0.72rem;
     min-height: auto;
     border-radius: 20px;
   }
 
   .product-info__image-col {
-    width: 100%;
-    height: auto;
+    width: 104px;
+    height: 104px;
     justify-content: center;
   }
 
   .product-info__image {
-    width: 130px;
-    height: 130px;
+    width: 104px;
+    height: 104px;
     margin: 0 auto;
   }
 
   .product-info__title {
-    font-size: 1.375rem;
-    text-align: center;
+    font-size: 1rem;
+    text-align: right;
   }
 
   .product-info__chips {
@@ -878,24 +841,26 @@ function mergeItemData(baseItem = null, detailItem = null) {
   }
 
   .product-info__content {
-    gap: 0.25rem;
+    align-items: flex-start;
+    text-align: right;
+    gap: 0.22rem;
   }
 }
 
 @media (max-width: 600px) {
   .sheet-footer {
-    padding: 0.5rem 1rem;
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
-    gap: 8px;
-    grid-template-columns: 1fr auto minmax(0, 1fr);
+    padding: 0.42rem 0.85rem;
+    padding-bottom: max(0.45rem, env(safe-area-inset-bottom, 0.45rem));
+    gap: 6px;
+    grid-template-columns: 1fr 76px minmax(0, 1fr);
     grid-template-areas: "price qty cta";
     align-items: stretch;
   }
 
   .footer-price-card {
-    padding: 0.4rem 0.6rem;
-    border-radius: 14px;
-    height: 52px;
+    padding: 0.32rem 0.5rem;
+    border-radius: 12px;
+    height: 42px;
     min-width: 0;
   }
 
@@ -904,93 +869,34 @@ function mergeItemData(baseItem = null, detailItem = null) {
   }
 
   .footer-price-value {
-    font-size: 1.1rem;
-    white-space: nowrap;
-  }
-
-  .footer-price-currency {
-    font-size: 0.65rem;
+    font-size: 0.94rem;
     white-space: nowrap;
   }
 
   .footer-qty {
-    height: 52px;
-    width: 88px;
-    min-width: 88px;
-    border-radius: 14px;
+    height: 42px;
+    width: 76px;
+    min-width: 76px;
+    border-radius: 12px;
     flex-shrink: 0;
   }
 
   .qty-btn {
-    width: 26px;
+    width: 23px;
   }
 
   .qty-value {
-    font-size: 0.9rem;
-    min-width: 20px;
+    font-size: 0.84rem;
+    min-width: 18px;
   }
 
   .footer-cta {
-    height: 52px;
-    font-size: 0.88rem;
-    padding: 0 0.8rem;
-    border-radius: 14px;
+    height: 42px;
+    font-size: 0.78rem;
+    padding: 0 0.65rem;
+    border-radius: 12px;
     white-space: nowrap;
     min-width: 0;
-  }
-
-  .footer-cta-icon {
-    width: 18px;
-    height: 18px;
-  }
-}
-
-@media (max-width: 390px) {
-  .sheet-footer {
-    padding: 0.4rem 0.75rem;
-    padding-bottom: max(0.4rem, env(safe-area-inset-bottom, 0.4rem));
-    gap: 6px;
-    grid-template-columns: 1fr 80px minmax(0, 1fr);
-  }
-
-  .footer-price-card {
-    padding: 0.35rem 0.5rem;
-    height: 48px;
-    border-radius: 12px;
-  }
-
-  .footer-price-label {
-    font-size: 0.58rem;
-  }
-
-  .footer-price-value {
-    font-size: 1rem;
-  }
-
-  .footer-price-currency {
-    font-size: 0.6rem;
-  }
-
-  .footer-qty {
-    height: 48px;
-    width: 80px;
-    min-width: 80px;
-    border-radius: 12px;
-  }
-
-  .qty-btn {
-    width: 24px;
-  }
-
-  .qty-value {
-    font-size: 0.85rem;
-  }
-
-  .footer-cta {
-    height: 48px;
-    font-size: 0.82rem;
-    padding: 0 0.6rem;
-    border-radius: 12px;
   }
 
   .footer-cta-icon {
@@ -1000,35 +906,85 @@ function mergeItemData(baseItem = null, detailItem = null) {
 }
 
 @media (max-width: 390px) {
+  .sheet-footer {
+    padding: 0.36rem 0.65rem;
+    padding-bottom: max(0.4rem, env(safe-area-inset-bottom, 0.4rem));
+    gap: 5px;
+    grid-template-columns: 1fr 70px minmax(0, 1fr);
+  }
+
+  .footer-price-card {
+    padding: 0.3rem 0.42rem;
+    height: 40px;
+    border-radius: 11px;
+  }
+
+  .footer-price-label {
+    font-size: 0.58rem;
+  }
+
+  .footer-price-value {
+    font-size: 0.88rem;
+  }
+
+  .footer-qty {
+    height: 40px;
+    width: 70px;
+    min-width: 70px;
+    border-radius: 11px;
+  }
+
+  .qty-btn {
+    width: 21px;
+  }
+
+  .qty-value {
+    font-size: 0.78rem;
+  }
+
+  .footer-cta {
+    height: 40px;
+    font-size: 0.72rem;
+    padding: 0 0.48rem;
+    border-radius: 11px;
+  }
+
+  .footer-cta-icon {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (max-width: 390px) {
   .sheet-head {
-    padding: 10px 16px 8px;
+    padding: 10px 12px 5px;
   }
 
   .sheet-head .sheet-title {
-    font-size: 1.75rem;
+    font-size: 0.92rem;
   }
 
   .icon-btn {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 11px;
   }
 
   .sheet-head {
-    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
   }
 
   .product-info__image {
-    width: 120px;
-    height: 120px;
+    width: 86px;
+    height: 86px;
   }
 
   .product-info__title {
-    font-size: 1.25rem;
+    font-size: 0.95rem;
   }
 
   .product-info-card {
-    padding: 16px;
+    padding: 10px;
     gap: 0.5rem;
     border-radius: 18px;
   }
@@ -1057,33 +1013,34 @@ function mergeItemData(baseItem = null, detailItem = null) {
   .sheet-footer {
     grid-template-columns: 1fr;
     grid-template-areas: "price" "qty" "cta";
-    gap: 8px;
+    gap: 6px;
   }
 
   .footer-price-card {
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    height: 48px;
+    justify-content: center;
+    padding: 0.36rem 0.6rem;
+    height: 40px;
   }
 
   .footer-qty {
-    height: 48px;
-    border-radius: 16px;
+    height: 40px;
+    border-radius: 12px;
+    width: 100%;
   }
 
   .qty-btn {
-    width: 28px;
+    width: 24px;
   }
 
   .qty-value {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
   }
 
   .footer-cta {
-    height: 52px;
-    font-size: 0.9rem;
+    height: 42px;
+    font-size: 0.78rem;
   }
 }
 

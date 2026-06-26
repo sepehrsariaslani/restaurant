@@ -45,40 +45,27 @@
 </template>
 
 <script setup>
+import { onMounted, ref } from 'vue'
+import { getBranches } from '@/utils/api'
+
+const branches = ref([])
+const loading = ref(false)
+const error = ref('')
+
 function goBack() { window.history.back() }
 
-const branches = [
-  {
-    id: 1,
-    name: 'شعبه مرکزی',
-    address: 'تهران، خیابان ولیعصر، پلاک ۱۲۳',
-    hours: 'شنبه تا پنجشنبه ۱۲:۰۰ – ۲۳:۰۰',
-    phone: '۰۲۱-۱۲۳۴۵۶۷۸',
-    isOpen: true,
-    mapUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70',
-  },
-  {
-    id: 2,
-    name: 'شعبه شمال',
-    address: 'تهران، الهیه، خیابان فرشته، پلاک ۴۵',
-    hours: 'همه روزه ۱۱:۰۰ – ۲۴:۰۰',
-    phone: '۰۲۱-۸۷۶۵۴۳۲۱',
-    isOpen: true,
-    mapUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=70',
-  },
-  {
-    id: 3,
-    name: 'شعبه غرب',
-    address: 'تهران، پونک، خیابان اشرفی اصفهانی، پلاک ۶۷',
-    hours: 'دوشنبه تا جمعه ۱۳:۰۰ – ۲۲:۰۰',
-    phone: '۰۲۱-۱۱۲۲۳۳۴۴',
-    isOpen: false,
-    mapUrl: 'https://maps.google.com',
-    image: 'https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=600&auto=format&fit=crop&q=70',
-  },
-]
+onMounted(async () => {
+  loading.value = true
+  error.value = ''
+  try {
+    const data = await getBranches()
+    branches.value = Array.isArray(data?.branches) ? data.branches : []
+  } catch (err) {
+    error.value = err?.message || 'خطا در دریافت شعبه‌ها'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>

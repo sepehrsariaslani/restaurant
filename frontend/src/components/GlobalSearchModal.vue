@@ -28,7 +28,7 @@
               @keydown.esc="closeSearch"
               @keydown.enter="goFirst"
             />
-            <button class="search-close-btn" type="button" @click="closeSearch" aria-label="بستن">×</button>
+            <button class="search-close-btn" type="button" @click="closeSearch" aria-label="بستن"><X :size="18" /></button>
           </div>
 
           <div class="search-results" v-if="results.length">
@@ -63,12 +63,12 @@
           </div>
 
           <div class="search-empty" v-else-if="query.length >= 2 && !searching">
-            <span class="empty-icon">🍽️</span>
+            <Utensils class="empty-icon" :size="30" />
             <p>نتیجه‌ای برای «{{ query }}» یافت نشد.</p>
           </div>
 
           <div class="search-hint" v-else>
-            <span class="hint-icon">🔍</span>
+            <Search class="hint-icon" :size="30" />
             <p>نام غذا، دسته‌بندی یا مواد اولیه را وارد کنید</p>
             <div class="hint-chips">
               <button type="button" class="hint-chip" v-for="chip in hintChips" :key="chip" @click="query = chip">{{ chip }}</button>
@@ -82,6 +82,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { Search, Utensils, X } from 'lucide-vue-next'
 import { useSearchModal } from '@/composables/useSearchModal'
 import { getMenuItems } from '@/utils/api'
 import { formatMoney } from '@/utils/format'

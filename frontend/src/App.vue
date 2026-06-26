@@ -30,7 +30,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <PublicHeader
-      v-if="page !== 'landing' && !(page === 'menu' && isMobile) && !(page === 'item' && isMobile) && !page.startsWith('customer-') && page !== 'customer-delivery' && page !== 'customer-table-reservation' && page !== 'customer-table-select'"
+      v-if="page !== 'landing'"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -47,6 +47,7 @@
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
       <MenuPage v-else-if="page === 'menu'" :boot="boot" />
+      <CustomerSearchPage v-else-if="page === 'search'" />
       <ItemDetailPage v-else-if="page === 'item'" :boot="boot" />
       <CartPage v-else-if="page === 'cart'" />
       <CustomizePage v-else-if="page === 'customize'" :boot="boot" />
@@ -59,6 +60,8 @@
       <CustomerProfilePage v-else-if="page === 'customer-profile'" />
       <CustomerAddressesPage v-else-if="page === 'customer-addresses'" />
       <CustomerBranchesPage v-else-if="page === 'customer-branches'" />
+      <CustomerOrdersPage v-else-if="page === 'customer-orders'" />
+      <CustomerOrderDetailPage v-else-if="page === 'customer-order-detail'" />
       <CustomerDeliveryPage v-else-if="page === 'customer-delivery'" />
       <CustomerTableReservationPage v-else-if="page === 'customer-table-reservation'" />
       <CustomerTableSelectPage v-else-if="page === 'customer-table-select'" />
@@ -104,6 +107,7 @@ import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'
 import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
 import MenuPage from './pages/MenuPage.vue'
+import CustomerSearchPage from './pages/CustomerSearchPage.vue'
 import ItemDetailPage from './pages/ItemDetailPage.vue'
 import CartPage from './pages/CartPage.vue'
 import CustomizePage from './pages/CustomizePage.vue'
@@ -116,6 +120,8 @@ import CustomerDashboardPage from './pages/CustomerDashboardPage.vue'
 import CustomerProfilePage from './pages/CustomerProfilePage.vue'
 import CustomerAddressesPage from './pages/CustomerAddressesPage.vue'
 import CustomerBranchesPage from './pages/CustomerBranchesPage.vue'
+import CustomerOrdersPage from './pages/CustomerOrdersPage.vue'
+import CustomerOrderDetailPage from './pages/CustomerOrderDetailPage.vue'
 import CustomerDeliveryPage from './pages/CustomerDeliveryPage.vue'
 import CustomerTableReservationPage from './pages/CustomerTableReservationPage.vue'
 import CustomerTableSelectPage from './pages/CustomerTableSelectPage.vue'
@@ -182,6 +188,7 @@ function resolveInitialPage() {
 
     if (pathname === '/' || pathname === '') return 'landing'
     if (pathname.startsWith('/menu')) return 'menu'
+    if (pathname.startsWith('/search')) return 'search'
     if (pathname.startsWith('/item')) return 'item'
     if (pathname.startsWith('/cart')) return 'cart'
     if (pathname.startsWith('/about-us') || pathname.startsWith('/about_us')) return 'about-us'
@@ -193,6 +200,8 @@ function resolveInitialPage() {
     if (pathname.startsWith('/customer/profile')) return 'customer-profile'
     if (pathname.startsWith('/customer/addresses')) return 'customer-addresses'
     if (pathname.startsWith('/customer/branches')) return 'customer-branches'
+    if (pathname.startsWith('/customer/orders/')) return 'customer-order-detail'
+    if (pathname.startsWith('/customer/orders')) return 'customer-orders'
     if (pathname.startsWith('/delivery')) return 'customer-delivery'
     if (pathname.startsWith('/table-reservation')) return 'customer-table-reservation'
     if (pathname.startsWith('/table-select')) return 'customer-table-select'
@@ -238,16 +247,7 @@ const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && c
 const isCustomerPage = page.startsWith('customer-') || page === 'customer-delivery' || page === 'customer-table-reservation' || page === 'customer-table-select'
 
 const useNoHeaderOffset = computed(() => {
-  if (page === 'landing' || isCustomerPage) {
-    return true
-  }
-
-  if (isMobile.value && (page === 'menu' || page === 'item')) {
-    return true
-  }
-
-  // Desktop pages with a visible header always need the offset
-  return false
+  return page === 'landing'
 })
 
 const lastOrderUrl = computed(() => {
@@ -273,7 +273,8 @@ const lastOrderUrl = computed(() => {
   padding-top: 6.5rem;
 }
 
-.app-main--no-offset {
+.app-main--no-offset,
+.app-main.app-main--no-offset {
   padding-top: 0;
 }
 
@@ -283,7 +284,11 @@ const lastOrderUrl = computed(() => {
 
 @media (max-width: 920px) {
   .app-main {
-    padding-top: 5rem;
+    padding-top: 3.75rem;
+  }
+
+  .app-main.app-main--no-offset {
+    padding-top: 0;
   }
 }
 

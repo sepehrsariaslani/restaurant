@@ -1,6 +1,26 @@
 <template>
   <header class="app-header" :class="{ 'app-header--preview': preview }" dir="rtl">
     <div class="header-surface"></div>
+    <div class="webapp-header">
+      <button class="webapp-icon-btn webapp-menu-btn" :class="{ open: mobileOpen }" type="button" @click="mobileOpen = !mobileOpen" aria-label="منو">
+        <Menu v-if="!mobileOpen" :size="18" />
+        <X v-else :size="18" />
+      </button>
+
+      <a href="/" class="webapp-brand" :aria-label="branding.name">
+        <span>{{ branding.name }}</span>
+      </a>
+
+      <div class="webapp-actions">
+        <button class="webapp-icon-btn" type="button" aria-label="اعلان‌ها">
+          <Bell :size="17" />
+        </button>
+        <a class="webapp-icon-btn" href="/customer/dashboard" aria-label="داشبورد کاربر">
+          <UserRound :size="17" />
+        </a>
+      </div>
+    </div>
+
     <div class="header-inner">
       <a href="/" class="brand-link">
         <span class="brand-dot"></span>
@@ -53,9 +73,8 @@
         </a>
 
         <button class="hamburger" :class="{ open: mobileOpen }" type="button" @click="mobileOpen = !mobileOpen" aria-label="منو">
-          <span></span>
-          <span></span>
-          <span></span>
+          <Menu v-if="!mobileOpen" :size="18" />
+          <X v-else :size="18" />
         </button>
       </div>
     </div>
@@ -65,7 +84,7 @@
     <aside class="mobile-sheet" :class="{ open: mobileOpen }" dir="rtl">
       <div class="sheet-head">
         <strong>{{ branding.name }}</strong>
-        <button class="sheet-close" type="button" @click="mobileOpen = false">×</button>
+        <button class="sheet-close" type="button" @click="mobileOpen = false" aria-label="بستن"><X :size="17" /></button>
       </div>
 
       <nav class="sheet-links">
@@ -90,6 +109,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { Bell, Menu, UserRound, X } from 'lucide-vue-next'
 import { useSearchModal } from '@/composables/useSearchModal'
 
 const props = defineProps({
@@ -182,7 +202,7 @@ function isActive(link) {
   left: 0;
   right: 0;
   z-index: 120;
-  padding: 0.75rem 0.7rem 0;
+  padding: max(0.45rem, env(safe-area-inset-top)) 0.65rem 0;
 }
 
 .app-header--preview {
@@ -203,7 +223,69 @@ function isActive(link) {
   right: 0.7rem;
   height: 64px;
   border-radius: 22px;
-  }
+}
+
+.webapp-header {
+  position: relative;
+  width: min(540px, 100%);
+  min-height: 46px;
+  margin: 0 auto;
+  display: none;
+  grid-template-columns: 40px minmax(0, 1fr) 84px;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.35rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.webapp-brand {
+  min-width: 0;
+  justify-self: center;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 900;
+  font-size: 0.88rem;
+  line-height: 1.2;
+  max-width: 100%;
+}
+
+.webapp-brand span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.webapp-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.28rem;
+}
+
+.webapp-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 13px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  background: #fff;
+  color: var(--accent-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.webapp-menu-btn {
+  justify-self: start;
+}
 
 .header-inner {
   position: relative;
@@ -368,18 +450,11 @@ function isActive(link) {
   border-radius: 12px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.24);
   background: #fff;
-  display: grid;
-  align-content: center;
-  gap: 4px;
-  padding: 0 8px;
-}
-
-.hamburger span {
-  display: block;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--text-primary);
-  transition: transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-green);
+  padding: 0;
 }
 
 .mobile-overlay {
@@ -431,7 +506,9 @@ function isActive(link) {
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.3);
   background: #fff;
   color: var(--text-primary);
-  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sheet-links {
@@ -484,6 +561,25 @@ function isActive(link) {
   }
 }
 
+@media (max-width: 919px) {
+  .app-header {
+    padding: max(0.35rem, env(safe-area-inset-top)) 0.5rem 0;
+  }
+
+  .header-surface,
+  .header-inner {
+    display: none;
+  }
+
+  .webapp-header {
+    display: grid;
+  }
+
+  .mobile-sheet {
+    padding-top: max(0.9rem, calc(env(safe-area-inset-top) + 0.65rem));
+  }
+}
+
 /* Centered search button in navbar */
 .center-search-btn {
   display: none;
@@ -528,12 +624,9 @@ function isActive(link) {
   }
 }
 
-/* Mobile (<920px): show centered button prominently in navbar, hide old search-pill */
+/* Mobile header uses .webapp-header instead of .header-inner */
 @media (max-width: 919px) {
-  .center-search-btn {
-    display: inline-flex;
-    order: -1;
-  }
+  .center-search-btn,
   .search-pill--desktop {
     display: none;
   }
