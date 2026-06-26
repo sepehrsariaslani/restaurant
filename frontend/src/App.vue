@@ -30,7 +30,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <PublicHeader
-      v-if="page !== 'landing'"
+      v-if="page !== 'landing' && !isCustomerPage && page !== 'checkout' && page !== 'payment-fail' && page !== 'not-found' && page !== 'kitchen'"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -65,11 +65,15 @@
       <CustomerDeliveryPage v-else-if="page === 'customer-delivery'" />
       <CustomerTableReservationPage v-else-if="page === 'customer-table-reservation'" />
       <CustomerTableSelectPage v-else-if="page === 'customer-table-select'" />
-      <MenuPage v-else :boot="boot" />
+      <CheckoutPage v-else-if="page === 'checkout'" />
+      <PaymentFailPage v-else-if="page === 'payment-fail'" />
+      <KitchenDisplayPage v-else-if="page === 'kitchen'" />
+      <NotFoundPage v-else-if="page === 'not-found'" />
+      <NotFoundPage v-else />
     </main>
 
     <SiteFooter
-      v-if="page !== 'landing' && siteComponents.footer_variant === 'full'"
+      v-if="page !== 'landing' && !isCustomerPage && !isFullscreenPage && siteComponents.footer_variant === 'full'"
       :brand-name="branding.name"
       :description="branding.footer_description || branding.hero_subtitle"
       :phone="branding.footer_phone"
@@ -80,12 +84,13 @@
       :copyright="branding.footer_copyright"
     />
     <SiteFooterMinimal
-      v-else-if="page !== 'landing' && siteComponents.footer_variant === 'minimal'"
+      v-else-if="page !== 'landing' && !isCustomerPage && !isFullscreenPage && siteComponents.footer_variant === 'minimal'"
       :brand-name="branding.name"
       :copyright="branding.footer_copyright"
     />
 
     <MobileBottomNav
+      v-if="!isFullscreenPage && page !== 'kitchen'"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
@@ -94,7 +99,7 @@
     <PwaInstallPrompt />
   </div>
 
-  <SiteLoaderOverlay v-if="!isManagement && !isCustomerPage" :settings="loaderSettings" />
+  <SiteLoaderOverlay v-if="!isManagement && !isCustomerPage && !isFullscreenPage" :settings="loaderSettings" />
   <GlobalSearchModal />
 </template>
 
@@ -127,6 +132,10 @@ import CustomerOrderDetailPage from './pages/CustomerOrderDetailPage.vue'
 import CustomerDeliveryPage from './pages/CustomerDeliveryPage.vue'
 import CustomerTableReservationPage from './pages/CustomerTableReservationPage.vue'
 import CustomerTableSelectPage from './pages/CustomerTableSelectPage.vue'
+import CheckoutPage from './pages/CheckoutPage.vue'
+import PaymentFailPage from './pages/PaymentFailPage.vue'
+import NotFoundPage from './pages/NotFoundPage.vue'
+import KitchenDisplayPage from './pages/KitchenDisplayPage.vue'
 import ManagementLayout from './components/management/ManagementLayout.vue'
 import ManagementDashboardPage from './pages/management/ManagementDashboardPage.vue'
 import ManagementPosPage from './pages/management/ManagementPosPage.vue'
@@ -207,9 +216,13 @@ function resolveInitialPage() {
     if (pathname.startsWith('/delivery')) return 'customer-delivery'
     if (pathname.startsWith('/table-reservation')) return 'customer-table-reservation'
     if (pathname.startsWith('/table-select')) return 'customer-table-select'
+    if (pathname.startsWith('/checkout')) return 'checkout'
+    if (pathname.startsWith('/payment/fail') || pathname.startsWith('/payment-fail')) return 'payment-fail'
+    if (pathname.startsWith('/kitchen')) return 'kitchen'
     if (pathname.startsWith('/payment/callback')) return 'payment-callback'
     if (pathname.startsWith('/payment/')) return 'payment'
     if (pathname.startsWith('/bom-preview/')) return 'bom-preview'
+    if (pathname.startsWith('/404') || pathname.startsWith('/not-found')) return 'not-found'
   }
   return window._PAGE || 'landing'
 }
@@ -248,8 +261,10 @@ const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && c
 
 const isCustomerPage = page.startsWith('customer-') || page === 'customer-delivery' || page === 'customer-table-reservation' || page === 'customer-table-select'
 
+const isFullscreenPage = page === 'checkout' || page === 'payment-fail' || page === 'not-found' || page === 'kitchen'
+
 const useNoHeaderOffset = computed(() => {
-  return page === 'landing'
+  return page === 'landing' || isCustomerPage || isFullscreenPage
 })
 
 const lastOrderUrl = computed(() => {

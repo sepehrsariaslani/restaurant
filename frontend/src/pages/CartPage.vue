@@ -51,7 +51,7 @@
             <strong>{{ formatMoney(totalAmount, currency) }}</strong>
           </div>
 
-          <button class="checkout-btn" :disabled="!cartState.lines.length" @click="openCheckout">ادامه و ثبت سفارش</button>
+          <a class="checkout-btn" :class="{ disabled: !cartState.lines.length }" href="/checkout" @click.prevent="cartState.lines.length && (window.location.href='/checkout')">ادامه و ثبت سفارش →</a>
           <p class="error" v-if="error">{{ error }}</p>
         </section>
       </section>
@@ -621,8 +621,8 @@ function switchToNewVehicle() {
 }
 
 function openCheckout() {
-  error.value = ''
-  showCheckout.value = true
+  if (!cartState.lines.length) return
+  window.location.href = '/checkout'
 }
 
 function cartItemsPayload() {
