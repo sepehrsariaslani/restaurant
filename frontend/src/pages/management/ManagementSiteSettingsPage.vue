@@ -100,503 +100,661 @@
     </template>
 
     <template v-else-if="activeTab === 'components'">
-      <ManagementSurfaceCard title="هدر سایت" subtitle="یک سبک هدر انتخاب کنید — این تنها هدری است که روی سایت نمایش داده می‌شود.">
-        <div class="variant-row">
-          <button
-            v-for="opt in headerVariantOptions"
-            :key="opt.value"
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.header_variant === opt.value }"
-            @click="webSettings.header_variant = opt.value"
-          >
-            <div class="variant-preview" :style="opt.previewStyle">
-              <div class="vp-bar" :style="opt.barStyle">
-                <span class="vp-brand"></span>
-                <span class="vp-links"></span>
+      <div class="designer-shell">
+        <aside class="designer-preview" aria-label="پیش‌نمایش طراحی صفحه">
+          <div class="preview-frame">
+            <div class="preview-topbar">
+              <div>
+                <span>{{ currentDesignPage?.label || 'پیش‌نمایش' }}</span>
+                <small>{{ currentDesignComponent?.label || '' }}</small>
+              </div>
+              <div class="preview-device-toggle" role="group" aria-label="انتخاب نمای پیش‌نمایش">
+                <button
+                  v-for="device in previewDeviceOptions"
+                  :key="device.value"
+                  type="button"
+                  :class="{ active: previewDevice === device.value }"
+                  @click="previewDevice = device.value"
+                >
+                  {{ device.label }}
+                </button>
               </div>
             </div>
-            <div class="variant-meta">
-              <strong>{{ opt.label }}</strong>
-              <small>{{ opt.desc }}</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.header_variant === opt.value">✓</span>
-          </button>
-        </div>
-      </ManagementSurfaceCard>
 
-      <ManagementSurfaceCard title="کامپوننت سرچ منو" subtitle="این کارت جدا از هدر است و در صفحه خانه/منو برای جستجوی سریع نمایش داده می‌شود.">
-        <div class="variant-row">
-          <button
-            v-for="opt in menuSearchVariantOptions"
-            :key="opt.value"
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.menu_search_variant === opt.value }"
-            @click="webSettings.menu_search_variant = opt.value"
-          >
-            <div class="variant-preview" :style="opt.previewStyle">
-              <div class="vp-search-card" :style="opt.searchStyle">
-                <span class="vp-search-title"></span>
-                <span class="vp-search-input"></span>
-              </div>
-            </div>
-            <div class="variant-meta">
-              <strong>{{ opt.label }}</strong>
-              <small>{{ opt.desc }}</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.menu_search_variant === opt.value">✓</span>
-          </button>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="هیرو سکشن" subtitle="نحوه نمایش بنر اصلی صفحه خانه را مشخص کنید — فقط یک گزینه فعال می‌ماند.">
-        <div class="variant-row">
-          <button
-            v-for="opt in heroVariantOptions"
-            :key="opt.value"
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.hero_section_variant === opt.value }"
-            @click="webSettings.hero_section_variant = opt.value"
-          >
-            <div class="variant-preview" :style="opt.previewStyle">
-              <div class="vp-hero" :style="opt.heroStyle">
-                <span class="vp-title"></span>
-                <span class="vp-sub"></span>
-              </div>
-            </div>
-            <div class="variant-meta">
-              <strong>{{ opt.label }}</strong>
-              <small>{{ opt.desc }}</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.hero_section_variant === opt.value">✓</span>
-          </button>
-        </div>
-        <div class="variant-action-row" v-if="webSettings.hero_section_variant !== 'off'">
-          <button type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوای هیرو ←</button>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="فوتر سایت" subtitle="سبک پاورقی سایت را انتخاب کنید — فقط یک گزینه فعال می‌ماند.">
-        <div class="variant-row">
-          <button
-            v-for="opt in footerVariantOptions"
-            :key="opt.value"
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.footer_variant === opt.value }"
-            @click="webSettings.footer_variant = opt.value"
-          >
-            <div class="variant-preview" :style="opt.previewStyle">
-              <div class="vp-footer" :style="opt.footerStyle">
-                <span class="vp-footer-brand"></span>
-                <span class="vp-footer-links"></span>
-              </div>
-            </div>
-            <div class="variant-meta">
-              <strong>{{ opt.label }}</strong>
-              <small>{{ opt.desc }}</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.footer_variant === opt.value">✓</span>
-          </button>
-        </div>
-        <div class="variant-action-row" v-if="webSettings.footer_variant !== 'off'">
-          <button type="button" class="secondary-btn mini" @click="activeTab = 'content'">ویرایش محتوای فوتر ←</button>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="دسته‌بندی‌های منو" subtitle="نحوه نمایش دسته‌بندی‌ها را انتخاب کنید — تصویری یا متنی.">
-        <div class="variant-row">
-          <button
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.category_rail_variant === 'pill' }"
-            @click="webSettings.category_rail_variant = 'pill'"
-          >
-            <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
-              <div style="display: flex; gap: 6px; margin-top: 8px;">
-                <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
-                <div style="background: rgba(111,74,49,0.12); border: 1px solid rgba(111,74,49,0.4); border-radius: 10px; width: 56px; height: 38px;"></div>
-                <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
-              </div>
-            </div>
-            <div class="variant-meta">
-              <strong>دسته‌بندی متنی (Pill)</strong>
-              <small>دکمه‌های متنی با نام و تعداد آیتم — کلاسیک و خوانا</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.category_rail_variant === 'pill'">✓</span>
-          </button>
-          <button
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.category_rail_variant === 'image' }"
-            @click="webSettings.category_rail_variant = 'image'"
-          >
-            <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
-              <div style="display: flex; gap: 8px; margin-top: 6px; justify-content: center;">
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                  <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent-green, #6f4a31);"></div>
-                  <div style="width: 34px; height: 6px; background: #ccc; border-radius: 3px;"></div>
-                </div>
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
-                  <div style="width: 34px; height: 6px; background: #ccc; border-radius: 3px;"></div>
-                </div>
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
-                  <div style="width: 34px; height: 6px; background: #ccc; border-radius: 3px;"></div>
-                </div>
-              </div>
-            </div>
-            <div class="variant-meta">
-              <strong>دسته‌بندی تصویری (Image)</strong>
-              <small>دایره‌های تصویر/ایموجی با برچسب — بصری و مدرن</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.category_rail_variant === 'image'">✓</span>
-          </button>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="کارت محصولات" subtitle="نمایش کارت‌های منو — یک استایل را انتخاب کنید.">
-        <div class="variant-row">
-          <button
-            v-for="opt in cardVariantOptions"
-            :key="opt.value"
-            type="button"
-            class="variant-card"
-            :class="{ selected: webSettings.card_variant === opt.value }"
-            @click="webSettings.card_variant = opt.value"
-          >
-            <div class="variant-preview" :style="opt.previewStyle">
-              <div class="vp-card-preview" :style="opt.cardStyle"></div>
-            </div>
-            <div class="variant-meta">
-              <strong>{{ opt.label }}</strong>
-              <small>{{ opt.desc }}</small>
-            </div>
-            <span class="variant-check" v-if="webSettings.card_variant === opt.value">✓</span>
-          </button>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="پیش‌نمایش کارت محصول" subtitle="نمایش زنده کارت با استایل انتخابی">
-        <div class="card-preview-row">
-          <div class="card-preview-item">
-            <MenuItemCard
-              :key="`card-preview-${webSettings.card_variant}`"
-              :item="previewCardItem"
-              :card-variant="webSettings.card_variant"
-              :currency="'TOMAN'"
-            />
-          </div>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="پیش‌نمایش زنده" subtitle="با تغییر هر گزینه، همین‌جا کامپوننت واقعی را می‌بینی.">
-        <div class="site-preview-shell">
-          <PublicHeader
-            :key="`preview-${webSettings.header_variant}`"
-            :branding="previewBranding"
-            :page="'preview'"
-            :cart-count="3"
-            :has-last-order="false"
-            :last-order-url="'/menu'"
-            :header-variant="webSettings.header_variant"
-            :preview="true"
-          />
-
-          <MenuHeroHeader
-            v-if="webSettings.menu_search_variant === 'search-card'"
-            :key="`menu-search-${webSettings.menu_search_variant}`"
-            :branding="previewBranding"
-            :search="'جستجو در منو...'"
-            :cart-count="3"
-          />
-
-          <component
-            :is="heroPreviewComponent"
-            v-if="heroPreviewComponent"
-            :key="`hero-${webSettings.hero_section_variant}`"
-            v-bind="heroPreviewProps"
-            class="site-preview-hero"
-          />
-
-          <div v-else class="site-preview-empty">
-            <strong>هیرو سکشن خاموش است</strong>
-            <p>برای دیدن پیش‌نمایش هیرو، یک حالت دیگر را از تب کامپوننت‌ها انتخاب کن.</p>
-          </div>
-
-          <component
-            :is="footerPreviewComponent"
-            v-if="footerPreviewComponent"
-            :key="`footer-${webSettings.footer_variant}`"
-            v-bind="footerPreviewProps"
-            class="site-preview-footer"
-          />
-
-          <div v-else class="site-preview-empty site-preview-empty--footer">
-            <strong>فوتر خاموش است</strong>
-            <p>با انتخاب فوتر کامل یا مینیمال، پاورقی سایت روی همه صفحات عمومی نمایش داده می‌شود.</p>
-          </div>
-        </div>
-      </ManagementSurfaceCard>
-    </template>
-
-    <template v-else-if="activeTab === 'content'">
-      <ManagementSurfaceCard title="اطلاعات هیرو سکشن" subtitle="محتوای بنر انتخابی صفحه خانه را تنظیم کنید." v-if="webSettings.hero_section_variant !== 'off'">
-        <div class="form-grid">
-          <label class="span-2">
-            عنوان هیرو سکشن
-            <input class="input" v-model.trim="webSettings.hero_section_title" placeholder="مثال: بهترین غذا را سفارش دهید" />
-          </label>
-          <label class="span-2">
-            توضیحات هیرو سکشن
-            <textarea class="textarea" v-model.trim="webSettings.hero_section_description" placeholder="متن توضیحی که زیر عنوان نمایش داده می‌شود..." />
-          </label>
-          <label>
-            متن دکمه CTA
-            <input class="input" v-model.trim="webSettings.hero_section_cta" placeholder="مثال: مشاهده منو" />
-          </label>
-          <label>
-            تصویر پس‌زمینه
-            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg یا URL عکس" />
-            <div class="image-upload-row">
-              <button type="button" class="secondary-btn mini" @click="heroImageInput.click()">📁 انتخاب عکس از دستگاه</button>
-              <button type="button" class="secondary-btn mini danger" v-if="webSettings.hero_image" @click="webSettings.hero_image = ''">حذف عکس</button>
-            </div>
-            <input
-              ref="heroImageInput"
-              type="file"
-              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-              style="display:none"
-              @change="handleHeroImageUpload"
-            />
-            <img
-              v-if="String(webSettings.hero_image || '').trim()"
-              class="image-preview"
-              :src="webSettings.hero_image"
-              alt="Hero bg"
-            />
-          </label>
-          <label>
-            موقعیت تصویر
-            <SearchableDropdown
-              v-model="webSettings.hero_image_position"
-              :options="imagePositionOptions"
-              placeholder="انتخاب موقعیت"
-            />
-          </label>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="اطلاعات فوتر" subtitle="محتوایی که در پاورقی سایت نمایش داده می‌شود." v-if="webSettings.footer_variant !== 'off'">
-        <div class="form-grid">
-          <label class="span-2">
-            توضیحات برند (زیر لوگو)
-            <textarea class="textarea" v-model.trim="webSettings.footer_description" placeholder="جمله معرفی کسب‌وکار..." />
-          </label>
-          <label>
-            شماره تماس
-            <input class="input" v-model.trim="webSettings.footer_phone" placeholder="مثال: 021-12345678" />
-          </label>
-          <label>
-            ایمیل
-            <input class="input" type="email" v-model.trim="webSettings.footer_email" placeholder="info@example.com" />
-          </label>
-          <label class="span-2">
-            آدرس
-            <input class="input" v-model.trim="webSettings.footer_address" placeholder="آدرس کامل..." />
-          </label>
-          <label>
-            لینک اینستاگرام
-            <input class="input" v-model.trim="webSettings.footer_instagram" placeholder="https://instagram.com/..." />
-          </label>
-          <label>
-            لینک تلگرام
-            <input class="input" v-model.trim="webSettings.footer_telegram" placeholder="https://t.me/..." />
-          </label>
-          <label class="span-2">
-            متن کپی‌رایت
-            <input class="input" v-model.trim="webSettings.footer_copyright" placeholder="مثال: تمامی حقوق محفوظ است." />
-          </label>
-        </div>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard v-if="webSettings.hero_section_variant === 'off' && webSettings.footer_variant === 'off'">
-        <p class="muted">هیچ کامپوننتی فعال نیست. ابتدا از تب <strong>کامپوننت‌ها</strong> یک بخش را فعال کنید.</p>
-      </ManagementSurfaceCard>
-    </template>
-
-    <template v-else-if="activeTab === 'hero'">
-      <ManagementEditableTable
-        v-model="heroSlides"
-        title="اسلایدهای هدر"
-        subtitle="این بخش در صفحه اصلی سایت نمایش داده می‌شود."
-        tone="accent"
-        :columns="heroColumns"
-        popup-title-add="افزودن اسلاید"
-        popup-title-edit="ویرایش اسلاید"
-        popup-subtitle="محتوای اسلاید را تکمیل کنید."
-        :create-empty-row="createEmptyHeroSlide"
-        :normalize-row="normalizeHeroSlide"
-        :validate-row="validateHeroSlide"
-      >
-        <template #cell-is_active="{ value }">
-          <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
-        </template>
-
-        <template #editor="{ draft }">
-          <div class="editor-grid">
-            <label>
-              عنوان
-              <input class="input" v-model.trim="draft.title" />
-            </label>
-            <label>
-              ترتیب
-              <input class="input" type="number" min="0" v-model.number="draft.sort_order" />
-            </label>
-            <label class="span-2">
-              زیرعنوان
-              <textarea class="textarea" v-model.trim="draft.subtitle" />
-            </label>
-            <label>
-              تصویر
-              <input class="input" v-model.trim="draft.image" placeholder="/files/slide.jpg" />
-              <img
-                v-if="String(draft.image || '').trim()"
-                class="image-preview"
-                :src="draft.image"
-                alt="Slide preview"
+            <div class="preview-stage" :class="`preview-stage--${previewDevice}`">
+              <div class="preview-viewport" :class="`preview-viewport--${previewDevice}`">
+                <div class="site-preview-shell compact-preview">
+              <PublicHeader
+                v-if="activeDesignPage !== 'product' || activeDesignComponent !== 'productCard'"
+                :key="`preview-header-${webSettings.header_variant}-${activeDesignPage}`"
+                :branding="previewBranding"
+                :page="'preview'"
+                :cart-count="3"
+                :has-last-order="false"
+                :last-order-url="'/menu'"
+                :header-variant="webSettings.header_variant"
+                :preview="true"
               />
-            </label>
-            <label>
-              لینک محصول (Item)
-              <input class="input" v-model.trim="draft.linked_item" placeholder="مثال: ITEM-0001" />
-            </label>
-            <label>
-              متن دکمه
-              <input class="input" v-model.trim="draft.cta_label" />
-            </label>
-            <label>
-              لینک دکمه
-              <input class="input" v-model.trim="draft.cta_url" placeholder="/menu" />
-            </label>
-            <label>
-              شعبه (اختیاری)
-              <input class="input" v-model.trim="draft.branch" />
-            </label>
-            <label class="check">
-              <input type="checkbox" v-model="draft.is_active" :true-value="1" :false-value="0" />
-              فعال
-            </label>
-          </div>
-        </template>
-      </ManagementEditableTable>
-    </template>
 
-    <template v-else-if="activeTab === 'about'">
-      <ManagementSurfaceCard title="بخش درباره ما" subtitle="برای ویرایش، روی ردیف کلیک کنید.">
-        <div class="section-toolbar">
-          <button class="secondary-btn" type="button" @click="openAboutAdd">افزودن بخش</button>
-        </div>
-        <ManagementListView
-          :columns="aboutColumns"
-          :rows="aboutSections"
-          row-key="name"
-          :row-clickable="true"
-          @row-click="openAboutEdit"
-        >
-          <template #cell-is_active="{ value }">
-            <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
-          </template>
-          <template #cell-actions="{ row, rowIndex }">
-            <div class="row-actions">
-              <button class="secondary-btn mini" type="button" @click.stop="openAboutEdit(row)">ویرایش</button>
-              <button class="secondary-btn mini danger" type="button" @click.stop="removeAboutRow(rowIndex)">حذف</button>
+              <template v-if="activeDesignPage === 'home'">
+                <MenuHeroHeader
+                  v-if="webSettings.menu_search_variant === 'search-card'"
+                  :key="`menu-search-${webSettings.menu_search_variant}`"
+                  :branding="previewBranding"
+                  :search="'جستجو در منو...'"
+                  :cart-count="3"
+                />
+
+                <div v-if="webSettings.hero_section_variant === 'slider'" class="slider-hero-preview site-preview-hero">
+                  <div class="slider-hero-copy">
+                    <span>اسلایدر هیرو</span>
+                    <h2>{{ previewHeroTitle || 'اسلایدر پیشنهادهای ویژه' }}</h2>
+                    <p>{{ previewHeroDescription || 'اسلایدهای تصویری برای معرفی محصولات و کمپین‌های روزانه.' }}</p>
+                  </div>
+                  <div class="slider-hero-card">
+                    <img :src="heroSlidesPreviewImage" alt="Hero slide preview" />
+                    <strong>{{ heroSlidesPreviewTitle }}</strong>
+                  </div>
+                </div>
+                <SiteHeaderHero
+                  v-else-if="webSettings.hero_section_variant === 'cover'"
+                  :key="`cover-${previewDevice}-${webSettings.hero_image}`"
+                  :branding="previewBranding"
+                  :cart-count="3"
+                  :page="'landing'"
+                  :preview="true"
+                  class="site-preview-hero"
+                />
+                <div
+                  v-else-if="webSettings.hero_section_variant === 'foodbar'"
+                  class="healthy-cover-preview site-preview-hero"
+                  :style="previewHeroImage ? { '--hero-img': `url('${previewHeroImage}')` } : {}"
+                >
+                  <div class="hcp-media"></div>
+                  <div class="hcp-content">
+                    <span class="hcp-badge">تازه، سالم، روزانه</span>
+                    <h2>{{ previewHeroTitle || 'سبک زندگی سالم، انتخاب هر روز ما' }}</h2>
+                    <p>{{ previewHeroDescription || 'غذاهای سالم و متنوع با بهترین مواد اولیه تازه برای یک زندگی پرانرژی و متعادل.' }}</p>
+                    <div class="hcp-actions">
+                      <span>{{ previewHeroCta || 'سفارش آنلاین' }}</span>
+                      <span class="ghost">مشاهده منو</span>
+                    </div>
+                    <div class="hcp-features">
+                      <span>مواد اولیه تازه</span>
+                      <span>ارسال سریع</span>
+                    </div>
+                  </div>
+                </div>
+                <component
+                  :is="heroPreviewComponent"
+                  v-else-if="heroPreviewComponent"
+                  :key="`hero-${webSettings.hero_section_variant}`"
+                  v-bind="heroPreviewProps"
+                  class="site-preview-hero"
+                />
+                <div v-else class="site-preview-empty">
+                  <strong>هیرو خاموش است</strong>
+                </div>
+
+                <div class="mini-section" v-if="Number(webSettings.restaurant_menu_highlight_enabled || 0) === 1">
+                  <strong>{{ webSettings.restaurant_menu_highlight_title || 'ویژه و پرفروش' }}</strong>
+                  <div class="mini-products">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              </template>
+
+              <template v-else-if="activeDesignPage === 'about'">
+                <div class="about-preview-card">
+                  <small>درباره ما</small>
+                  <strong>{{ aboutPreviewTitle }}</strong>
+                  <p>{{ aboutPreviewText }}</p>
+                </div>
+                <div class="faq-preview-card" v-if="faqItems.length">
+                  <span>{{ faqItems.length }} سوال متداول</span>
+                </div>
+              </template>
+
+              <template v-else-if="activeDesignPage === 'product'">
+                <div class="card-preview-row compact-card-preview">
+                  <div class="card-preview-item">
+                    <MenuItemCard
+                      :key="`product-preview-${webSettings.card_variant}`"
+                      :item="previewCardItem"
+                      :card-variant="webSettings.card_variant"
+                      :currency="'TOMAN'"
+                    />
+                  </div>
+                </div>
+              </template>
+
+              <template v-else>
+                <div class="mini-section">
+                  <strong>محتوای نمونه</strong>
+                  <p>کامپوننت‌های عمومی روی صفحات سایت اعمال می‌شوند.</p>
+                </div>
+              </template>
+
+              <component
+                :is="footerPreviewComponent"
+                v-if="footerPreviewComponent && activeDesignPage !== 'product'"
+                :key="`footer-${webSettings.footer_variant}`"
+                v-bind="footerPreviewProps"
+                class="site-preview-footer"
+              />
+              <div v-else-if="activeDesignPage !== 'product'" class="site-preview-empty site-preview-empty--footer">
+                <strong>فوتر خاموش است</strong>
+              </div>
+                </div>
+              </div>
             </div>
-          </template>
-        </ManagementListView>
-      </ManagementSurfaceCard>
+          </div>
+        </aside>
 
-      <ManagementSurfaceCard
-        v-if="aboutEditorOpen"
-        :title="aboutEditorIndex >= 0 ? 'ویرایش بخش درباره ما' : 'افزودن بخش درباره ما'"
-      >
-        <div class="editor-grid">
-          <label>
-            نوع بخش
-            <SearchableDropdown
-              v-model="aboutDraft.section_type"
-              :options="aboutSectionTypeOptions"
-              placeholder="نوع بخش"
-              search-placeholder="جستجو..."
-            />
-          </label>
-          <label>
-            عنوان
-            <input class="input" v-model.trim="aboutDraft.title" />
-          </label>
-          <label>
-            ترتیب
-            <input class="input" type="number" min="0" v-model.number="aboutDraft.sort_order" />
-          </label>
-          <label class="span-2">
-            زیرعنوان
-            <textarea class="textarea" v-model.trim="aboutDraft.subtitle" />
-          </label>
-          <label class="span-2">
-            متن اصلی
-            <textarea class="textarea" v-model.trim="aboutDraft.body_text" />
-          </label>
-          <label>
-            آیکون
-            <input class="input" v-model.trim="aboutDraft.icon" placeholder="مثال: ✦" />
-          </label>
-          <label>
-            سال/برچسب زمانی
-            <input class="input" v-model.trim="aboutDraft.year_label" placeholder="مثال: ۱۴۰۲" />
-          </label>
-          <label>
-            Badge هیرو
-            <input class="input" v-model.trim="aboutDraft.badge" placeholder="مثال: ABOUT US" />
-          </label>
-          <label>
-            سال تاسیس
-            <input class="input" v-model.trim="aboutDraft.founded_year" placeholder="مثال: ۱۳۹۶" />
-          </label>
-          <label class="check">
-            <input type="checkbox" v-model="aboutDraft.highlight" :true-value="1" :false-value="0" />
-            هایلایت شود
-          </label>
-          <label>
-            تصویر
-            <input class="input" v-model.trim="aboutDraft.image" placeholder="/files/about.jpg" />
-            <img
-              v-if="String(aboutDraft.image || '').trim()"
-              class="image-preview"
-              :src="aboutDraft.image"
-              alt="About preview"
-            />
-          </label>
-          <label>
-            برچسب آمار
-            <input class="input" v-model.trim="aboutDraft.stat_label" />
-          </label>
-          <label>
-            مقدار آمار
-            <input class="input" v-model.trim="aboutDraft.stat_value" />
-          </label>
-          <label class="check">
-            <input type="checkbox" v-model="aboutDraft.is_active" :true-value="1" :false-value="0" />
-            فعال
-          </label>
-        </div>
-        <div class="editor-actions">
-          <button class="secondary-btn" type="button" @click="closeAboutEditor">انصراف</button>
-          <button class="primary-btn" type="button" @click="saveAboutDraft">ثبت بخش</button>
-        </div>
-      </ManagementSurfaceCard>
+        <section class="designer-panel">
+          <ManagementSurfaceCard title="طراحی صفحات" subtitle="صفحه و کامپوننت را انتخاب کن.">
+            <div class="page-switcher">
+              <button
+                v-for="pageItem in designPages"
+                :key="pageItem.value"
+                type="button"
+                class="page-chip"
+                :class="{ active: activeDesignPage === pageItem.value }"
+                @click="selectDesignPage(pageItem.value)"
+              >
+                <strong>{{ pageItem.label }}</strong>
+                <small>{{ pageItem.count }} بخش</small>
+              </button>
+            </div>
+          </ManagementSurfaceCard>
+
+          <ManagementSurfaceCard>
+            <div class="component-list">
+              <button
+                v-for="componentItem in currentDesignComponents"
+                :key="componentItem.value"
+                type="button"
+                class="component-chip"
+                :class="{ active: activeDesignComponent === componentItem.value }"
+                @click="selectDesignComponent(componentItem.value)"
+              >
+                <span>{{ componentItem.label }}</span>
+                <small>{{ componentItem.status }}</small>
+              </button>
+            </div>
+          </ManagementSurfaceCard>
+
+          <ManagementSurfaceCard :title="currentDesignComponent?.label || 'کامپوننت'">
+            <template v-if="activeDesignComponent === 'header'">
+              <div class="variant-row">
+                <button
+                  v-for="opt in headerVariantOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="variant-card"
+                  :class="{ selected: webSettings.header_variant === opt.value }"
+                  @click="webSettings.header_variant = opt.value"
+                >
+                  <div class="variant-preview" :style="opt.previewStyle">
+                    <div class="vp-bar" :style="opt.barStyle">
+                      <span class="vp-brand"></span>
+                      <span class="vp-links"></span>
+                    </div>
+                  </div>
+                  <div class="variant-meta">
+                    <strong>{{ opt.label }}</strong>
+                    <small>{{ opt.desc }}</small>
+                  </div>
+                  <span class="variant-check" v-if="webSettings.header_variant === opt.value">✓</span>
+                </button>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'footer'">
+              <div class="variant-row">
+                <button
+                  v-for="opt in footerVariantOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="variant-card"
+                  :class="{ selected: webSettings.footer_variant === opt.value }"
+                  @click="webSettings.footer_variant = opt.value"
+                >
+                  <div class="variant-preview" :style="opt.previewStyle">
+                    <div class="vp-footer" :style="opt.footerStyle">
+                      <span class="vp-footer-brand"></span>
+                      <span class="vp-footer-links"></span>
+                    </div>
+                  </div>
+                  <div class="variant-meta">
+                    <strong>{{ opt.label }}</strong>
+                    <small>{{ opt.desc }}</small>
+                  </div>
+                  <span class="variant-check" v-if="webSettings.footer_variant === opt.value">✓</span>
+                </button>
+              </div>
+
+              <div class="inline-editor" v-if="webSettings.footer_variant !== 'off'">
+                <div class="form-grid">
+                  <label class="span-2">
+                    توضیحات برند
+                    <textarea class="textarea" v-model.trim="webSettings.footer_description" />
+                  </label>
+                  <label>
+                    شماره تماس
+                    <input class="input" v-model.trim="webSettings.footer_phone" />
+                  </label>
+                  <label>
+                    ایمیل
+                    <input class="input" type="email" v-model.trim="webSettings.footer_email" />
+                  </label>
+                  <label class="span-2">
+                    آدرس
+                    <input class="input" v-model.trim="webSettings.footer_address" />
+                  </label>
+                  <label>
+                    اینستاگرام
+                    <input class="input" v-model.trim="webSettings.footer_instagram" />
+                  </label>
+                  <label>
+                    تلگرام
+                    <input class="input" v-model.trim="webSettings.footer_telegram" />
+                  </label>
+                  <label class="span-2">
+                    کپی‌رایت
+                    <input class="input" v-model.trim="webSettings.footer_copyright" />
+                  </label>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'homeHero'">
+              <div class="variant-row">
+                <button
+                  v-for="opt in heroVariantOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="variant-card"
+                  :class="{ selected: webSettings.hero_section_variant === opt.value }"
+                  @click="webSettings.hero_section_variant = opt.value"
+                >
+                  <div class="variant-preview" :style="opt.previewStyle">
+                    <div class="vp-hero" :style="opt.heroStyle">
+                      <span class="vp-title"></span>
+                      <span class="vp-sub"></span>
+                    </div>
+                  </div>
+                  <div class="variant-meta">
+                    <strong>{{ opt.label }}</strong>
+                    <small>{{ opt.desc }}</small>
+                  </div>
+                  <span class="variant-check" v-if="webSettings.hero_section_variant === opt.value">✓</span>
+                </button>
+              </div>
+
+              <div class="inline-editor" v-if="webSettings.hero_section_variant !== 'off'">
+                <div class="hero-editor-head">
+                  <strong>{{ activeHeroContentMeta.title }}</strong>
+                  <small>{{ activeHeroContentMeta.hint }}</small>
+                </div>
+
+                <div class="form-grid">
+                  <label class="span-2" v-if="activeHeroContentMeta.fields.includes('title')">
+                    {{ activeHeroContentMeta.titleLabel }}
+                    <input class="input" v-model.trim="webSettings.hero_section_title" :placeholder="activeHeroContentMeta.titlePlaceholder" />
+                  </label>
+                  <label class="span-2" v-if="activeHeroContentMeta.fields.includes('description')">
+                    {{ activeHeroContentMeta.descriptionLabel }}
+                    <textarea class="textarea" v-model.trim="webSettings.hero_section_description" :placeholder="activeHeroContentMeta.descriptionPlaceholder" />
+                  </label>
+                  <label v-if="activeHeroContentMeta.fields.includes('cta')">
+                    متن دکمه اصلی
+                    <input class="input" v-model.trim="webSettings.hero_section_cta" :placeholder="activeHeroContentMeta.ctaPlaceholder" />
+                  </label>
+                  <label v-if="activeHeroContentMeta.fields.includes('image')">
+                    {{ activeHeroContentMeta.imageLabel }}
+                    <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
+                    <div class="image-upload-row">
+                      <button type="button" class="secondary-btn mini" @click="heroImageInput.click()">انتخاب عکس</button>
+                      <button type="button" class="secondary-btn mini danger" v-if="webSettings.hero_image" @click="webSettings.hero_image = ''">حذف</button>
+                    </div>
+                    <input
+                      ref="heroImageInput"
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                      style="display:none"
+                      @change="handleHeroImageUpload"
+                    />
+                    <img v-if="String(webSettings.hero_image || '').trim()" class="image-preview" :src="webSettings.hero_image" alt="Hero bg" />
+                  </label>
+                  <label v-if="activeHeroContentMeta.fields.includes('imagePosition')">
+                    موقعیت تصویر
+                    <SearchableDropdown v-model="webSettings.hero_image_position" :options="imagePositionOptions" placeholder="انتخاب موقعیت" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="inline-editor hero-slider-editor" v-if="activeHeroContentMeta.usesSlides">
+                <ManagementEditableTable
+                  v-model="heroSlides"
+                  title="اسلایدر همین هیرو"
+                  subtitle=""
+                  tone="accent"
+                  :columns="heroColumns"
+                  popup-title-add="افزودن اسلاید"
+                  popup-title-edit="ویرایش اسلاید"
+                  popup-subtitle=""
+                  :create-empty-row="createEmptyHeroSlide"
+                  :normalize-row="normalizeHeroSlide"
+                  :validate-row="validateHeroSlide"
+                >
+                  <template #cell-is_active="{ value }">
+                    <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
+                  </template>
+
+                  <template #editor="{ draft }">
+                    <div class="editor-grid">
+                      <label>
+                        عنوان
+                        <input class="input" v-model.trim="draft.title" />
+                      </label>
+                      <label>
+                        ترتیب
+                        <input class="input" type="number" min="0" v-model.number="draft.sort_order" />
+                      </label>
+                      <label class="span-2">
+                        زیرعنوان
+                        <textarea class="textarea" v-model.trim="draft.subtitle" />
+                      </label>
+                      <label>
+                        تصویر
+                        <input class="input" v-model.trim="draft.image" placeholder="/files/slide.jpg" />
+                        <img v-if="String(draft.image || '').trim()" class="image-preview" :src="draft.image" alt="Slide preview" />
+                      </label>
+                      <label>
+                        لینک محصول
+                        <input class="input" v-model.trim="draft.linked_item" />
+                      </label>
+                      <label>
+                        متن دکمه
+                        <input class="input" v-model.trim="draft.cta_label" />
+                      </label>
+                      <label>
+                        لینک دکمه
+                        <input class="input" v-model.trim="draft.cta_url" placeholder="/menu" />
+                      </label>
+                      <label>
+                        شعبه
+                        <input class="input" v-model.trim="draft.branch" />
+                      </label>
+                      <label class="check">
+                        <input type="checkbox" v-model="draft.is_active" :true-value="1" :false-value="0" />
+                        فعال
+                      </label>
+                    </div>
+                  </template>
+                </ManagementEditableTable>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'menuSearch'">
+              <div class="variant-row">
+                <button
+                  v-for="opt in menuSearchVariantOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="variant-card"
+                  :class="{ selected: webSettings.menu_search_variant === opt.value }"
+                  @click="webSettings.menu_search_variant = opt.value"
+                >
+                  <div class="variant-preview" :style="opt.previewStyle">
+                    <div class="vp-search-card" :style="opt.searchStyle">
+                      <span class="vp-search-title"></span>
+                      <span class="vp-search-input"></span>
+                    </div>
+                  </div>
+                  <div class="variant-meta">
+                    <strong>{{ opt.label }}</strong>
+                    <small>{{ opt.desc }}</small>
+                  </div>
+                  <span class="variant-check" v-if="webSettings.menu_search_variant === opt.value">✓</span>
+                </button>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'featuredBlock'">
+              <div class="form-grid">
+                <label class="check span-2">
+                  <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_enabled" :true-value="1" :false-value="0" />
+                  نمایش بخش ویژه و پرفروش
+                </label>
+                <template v-if="Number(webSettings.restaurant_menu_highlight_enabled || 0) === 1">
+                  <label class="span-2">
+                    عنوان
+                    <input class="input" v-model.trim="webSettings.restaurant_menu_highlight_title" />
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_show_featured" :true-value="1" :false-value="0" />
+                    آیتم‌های ویژه
+                  </label>
+                  <label>
+                    تعداد ویژه
+                    <input class="input" type="number" min="0" max="50" v-model.number="webSettings.restaurant_menu_highlight_featured_limit" />
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_show_best_seller" :true-value="1" :false-value="0" />
+                    پرفروش‌ها
+                  </label>
+                  <label>
+                    تعداد پرفروش
+                    <input class="input" type="number" min="0" max="50" v-model.number="webSettings.restaurant_menu_highlight_best_seller_limit" />
+                  </label>
+                </template>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'categoryRail'">
+              <div class="variant-row">
+                <button type="button" class="variant-card" :class="{ selected: webSettings.category_rail_variant === 'pill' }" @click="webSettings.category_rail_variant = 'pill'">
+                  <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
+                    <div style="display: flex; gap: 6px; margin-top: 8px;">
+                      <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
+                      <div style="background: rgba(111,74,49,0.12); border: 1px solid rgba(111,74,49,0.4); border-radius: 10px; width: 56px; height: 38px;"></div>
+                      <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
+                    </div>
+                  </div>
+                  <div class="variant-meta"><strong>متنی</strong><small>دکمه‌های ساده و خوانا</small></div>
+                  <span class="variant-check" v-if="webSettings.category_rail_variant === 'pill'">✓</span>
+                </button>
+                <button type="button" class="variant-card" :class="{ selected: webSettings.category_rail_variant === 'image' }" @click="webSettings.category_rail_variant = 'image'">
+                  <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
+                    <div style="display: flex; gap: 8px; margin-top: 6px; justify-content: center;">
+                      <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent-green, #6f4a31);"></div>
+                      <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
+                      <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
+                    </div>
+                  </div>
+                  <div class="variant-meta"><strong>تصویری</strong><small>دایره‌های تصویر با برچسب</small></div>
+                  <span class="variant-check" v-if="webSettings.category_rail_variant === 'image'">✓</span>
+                </button>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'productCard'">
+              <div class="variant-row">
+                <button
+                  v-for="opt in cardVariantOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="variant-card"
+                  :class="{ selected: webSettings.card_variant === opt.value }"
+                  @click="webSettings.card_variant = opt.value"
+                >
+                  <div class="variant-preview" :style="opt.previewStyle">
+                    <div class="vp-card-preview" :style="opt.cardStyle"></div>
+                  </div>
+                  <div class="variant-meta">
+                    <strong>{{ opt.label }}</strong>
+                    <small>{{ opt.desc }}</small>
+                  </div>
+                  <span class="variant-check" v-if="webSettings.card_variant === opt.value">✓</span>
+                </button>
+              </div>
+              <div class="card-preview-row">
+                <div class="card-preview-item">
+                  <MenuItemCard :key="`card-preview-${webSettings.card_variant}`" :item="previewCardItem" :card-variant="webSettings.card_variant" :currency="'TOMAN'" />
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'aboutSections'">
+              <div class="section-toolbar">
+                <button class="secondary-btn" type="button" @click="openAboutAdd">افزودن بخش</button>
+              </div>
+              <ManagementListView :columns="aboutColumns" :rows="aboutSections" row-key="name" :row-clickable="true" @row-click="openAboutEdit">
+                <template #cell-is_active="{ value }">
+                  <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
+                </template>
+                <template #cell-actions="{ row, rowIndex }">
+                  <div class="row-actions">
+                    <button class="secondary-btn mini" type="button" @click.stop="openAboutEdit(row)">ویرایش</button>
+                    <button class="secondary-btn mini danger" type="button" @click.stop="removeAboutRow(rowIndex)">حذف</button>
+                  </div>
+                </template>
+              </ManagementListView>
+
+              <div v-if="aboutEditorOpen" class="inline-editor">
+                <div class="editor-grid">
+                  <label>
+                    نوع بخش
+                    <SearchableDropdown v-model="aboutDraft.section_type" :options="aboutSectionTypeOptions" placeholder="نوع بخش" search-placeholder="جستجو..." />
+                  </label>
+                  <label>
+                    عنوان
+                    <input class="input" v-model.trim="aboutDraft.title" />
+                  </label>
+                  <label>
+                    ترتیب
+                    <input class="input" type="number" min="0" v-model.number="aboutDraft.sort_order" />
+                  </label>
+                  <label class="span-2">
+                    زیرعنوان
+                    <textarea class="textarea" v-model.trim="aboutDraft.subtitle" />
+                  </label>
+                  <label class="span-2">
+                    متن اصلی
+                    <textarea class="textarea" v-model.trim="aboutDraft.body_text" />
+                  </label>
+                  <label>
+                    آیکون
+                    <input class="input" v-model.trim="aboutDraft.icon" />
+                  </label>
+                  <label>
+                    سال/برچسب
+                    <input class="input" v-model.trim="aboutDraft.year_label" />
+                  </label>
+                  <label>
+                    Badge
+                    <input class="input" v-model.trim="aboutDraft.badge" />
+                  </label>
+                  <label>
+                    سال تاسیس
+                    <input class="input" v-model.trim="aboutDraft.founded_year" />
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" v-model="aboutDraft.highlight" :true-value="1" :false-value="0" />
+                    هایلایت
+                  </label>
+                  <label>
+                    تصویر
+                    <input class="input" v-model.trim="aboutDraft.image" />
+                    <img v-if="String(aboutDraft.image || '').trim()" class="image-preview" :src="aboutDraft.image" alt="About preview" />
+                  </label>
+                  <label>
+                    برچسب آمار
+                    <input class="input" v-model.trim="aboutDraft.stat_label" />
+                  </label>
+                  <label>
+                    مقدار آمار
+                    <input class="input" v-model.trim="aboutDraft.stat_value" />
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" v-model="aboutDraft.is_active" :true-value="1" :false-value="0" />
+                    فعال
+                  </label>
+                </div>
+                <div class="editor-actions">
+                  <button class="secondary-btn" type="button" @click="closeAboutEditor">انصراف</button>
+                  <button class="primary-btn" type="button" @click="saveAboutDraft">ثبت</button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'faqItems'">
+              <div class="section-toolbar">
+                <button class="secondary-btn" type="button" @click="openFaqAdd">افزودن سوال</button>
+              </div>
+              <ManagementListView :columns="faqColumns" :rows="faqItems" row-key="name" :row-clickable="true" @row-click="openFaqEdit">
+                <template #cell-is_active="{ value }">
+                  <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
+                </template>
+                <template #cell-actions="{ row, rowIndex }">
+                  <div class="row-actions">
+                    <button class="secondary-btn mini" type="button" @click.stop="openFaqEdit(row)">ویرایش</button>
+                    <button class="secondary-btn mini danger" type="button" @click.stop="removeFaqRow(rowIndex)">حذف</button>
+                  </div>
+                </template>
+              </ManagementListView>
+
+              <div v-if="faqEditorOpen" class="inline-editor">
+                <div class="editor-grid">
+                  <label class="span-2">
+                    سوال
+                    <input class="input" v-model.trim="faqDraft.question" />
+                  </label>
+                  <label>
+                    دسته‌بندی
+                    <input class="input" v-model.trim="faqDraft.category" />
+                  </label>
+                  <label>
+                    آیکون
+                    <input class="input" v-model.trim="faqDraft.icon" />
+                  </label>
+                  <label class="span-2">
+                    تصویر
+                    <input class="input" v-model.trim="faqDraft.image" />
+                    <img v-if="String(faqDraft.image || '').trim()" class="image-preview image-preview-wide" :src="faqDraft.image" alt="FAQ preview" />
+                  </label>
+                  <label class="span-2">
+                    توضیح کوتاه
+                    <input class="input" v-model.trim="faqDraft.summary" />
+                  </label>
+                  <label>
+                    ترتیب
+                    <input class="input" type="number" min="0" v-model.number="faqDraft.sort_order" />
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" v-model="faqDraft.is_active" :true-value="1" :false-value="0" />
+                    فعال
+                  </label>
+                  <label class="span-2">
+                    پاسخ
+                    <textarea class="textarea" v-model.trim="faqDraft.answer" />
+                  </label>
+                </div>
+                <div class="editor-actions">
+                  <button class="secondary-btn" type="button" @click="closeFaqEditor">انصراف</button>
+                  <button class="primary-btn" type="button" @click="saveFaqDraft">ثبت</button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <p class="muted">یک کامپوننت را انتخاب کن.</p>
+            </template>
+          </ManagementSurfaceCard>
+        </section>
+      </div>
     </template>
 
     <template v-else-if="activeTab === 'loader'">
@@ -679,81 +837,6 @@
       </ManagementSurfaceCard>
     </template>
 
-    <template v-else-if="activeTab === 'faq'">
-      <ManagementSurfaceCard title="سوالات متداول" subtitle="برای ویرایش، روی ردیف کلیک کنید.">
-        <div class="section-toolbar">
-          <button class="secondary-btn" type="button" @click="openFaqAdd">افزودن سوال</button>
-        </div>
-        <ManagementListView
-          :columns="faqColumns"
-          :rows="faqItems"
-          row-key="name"
-          :row-clickable="true"
-          @row-click="openFaqEdit"
-        >
-          <template #cell-is_active="{ value }">
-            <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
-          </template>
-          <template #cell-actions="{ row, rowIndex }">
-            <div class="row-actions">
-              <button class="secondary-btn mini" type="button" @click.stop="openFaqEdit(row)">ویرایش</button>
-              <button class="secondary-btn mini danger" type="button" @click.stop="removeFaqRow(rowIndex)">حذف</button>
-            </div>
-          </template>
-        </ManagementListView>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard
-        v-if="faqEditorOpen"
-        :title="faqEditorIndex >= 0 ? 'ویرایش سوال متداول' : 'افزودن سوال متداول'"
-      >
-        <div class="editor-grid">
-          <label class="span-2">
-            سوال
-            <input class="input" v-model.trim="faqDraft.question" />
-          </label>
-          <label>
-            دسته‌بندی
-            <input class="input" v-model.trim="faqDraft.category" placeholder="مثال: سفارش و پرداخت" />
-          </label>
-          <label>
-            آیکون
-            <input class="input" v-model.trim="faqDraft.icon" placeholder="مثال: 💳 یا ❓" />
-          </label>
-          <label class="span-2">
-            تصویر
-            <input class="input" v-model.trim="faqDraft.image" placeholder="/files/faq.jpg" />
-            <img
-              v-if="String(faqDraft.image || '').trim()"
-              class="image-preview image-preview-wide"
-              :src="faqDraft.image"
-              alt="FAQ preview"
-            />
-          </label>
-          <label class="span-2">
-            توضیح کوتاه
-            <input class="input" v-model.trim="faqDraft.summary" placeholder="متن کوتاه اختیاری" />
-          </label>
-          <label>
-            ترتیب
-            <input class="input" type="number" min="0" v-model.number="faqDraft.sort_order" />
-          </label>
-          <label class="check">
-            <input type="checkbox" v-model="faqDraft.is_active" :true-value="1" :false-value="0" />
-            فعال
-          </label>
-          <label class="span-2">
-            پاسخ
-            <textarea class="textarea" v-model.trim="faqDraft.answer" />
-          </label>
-        </div>
-        <div class="editor-actions">
-          <button class="secondary-btn" type="button" @click="closeFaqEditor">انصراف</button>
-          <button class="primary-btn" type="button" @click="saveFaqDraft">ثبت سوال</button>
-        </div>
-      </ManagementSurfaceCard>
-    </template>
-
     <template v-else>
       <ManagementSurfaceCard title="تنظیمات سایت">
         <p class="muted">یک تب را برای ویرایش انتخاب کنید.</p>
@@ -763,7 +846,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import PublicHeader from '@/components/PublicHeader.vue'
@@ -772,6 +855,7 @@ import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
+import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
@@ -793,12 +877,8 @@ const activeTab = ref('general')
 
 const tabs = [
   { value: 'general', label: 'عمومی' },
-  { value: 'components', label: 'کامپوننت‌ها' },
-  { value: 'content', label: 'محتوای سایت' },
-  { value: 'hero', label: 'اسلایدر هدر' },
-  { value: 'about', label: 'درباره ما' },
+  { value: 'components', label: 'طراحی صفحات' },
   { value: 'loader', label: 'Loader' },
-  { value: 'faq', label: 'FAQ' },
 ]
 
 const webSettings = reactive({
@@ -824,6 +904,7 @@ const webSettings = reactive({
   hero_section_title: '',
   hero_section_description: '',
   hero_section_cta: '',
+  hero_variant_contents: {},
   footer_description: '',
   footer_phone: '',
   footer_email: '',
@@ -858,6 +939,245 @@ const faqEditorIndex = ref(-1)
 const faqDraft = reactive(createEmptyFaqItem())
 
 const heroImageInput = ref(null)
+
+const activeDesignPage = ref('global')
+const activeDesignComponent = ref('header')
+const previewDevice = ref('desktop')
+
+const previewDeviceOptions = [
+  { value: 'desktop', label: 'دسکتاپ' },
+  { value: 'mobile', label: 'گوشی' },
+]
+
+const heroContentDefaults = {
+  off: {
+    title: '',
+    description: '',
+    cta: '',
+    image: '',
+    imagePosition: 'center',
+  },
+  slider: {
+    title: 'اسلایدر پیشنهادهای ویژه',
+    description: 'اسلایدهای تصویری برای معرفی محصولات، کمپین‌ها یا پیشنهادهای روزانه.',
+    cta: 'مشاهده پیشنهادها',
+    image: '',
+    imagePosition: 'center',
+  },
+  fullscreen: {
+    title: 'غذای تازه با سفارش سریع',
+    description: 'تجربه سفارش آنلاین با تصویر بزرگ، متن کوتاه و مسیر سریع ورود به منو.',
+    cta: 'مشاهده منو',
+    image: '',
+    imagePosition: 'center',
+  },
+  banner: {
+    title: 'پیشنهاد امروز رستوران',
+    description: 'یک بنر کوتاه برای معرفی سریع پیشنهادها یا کمپین‌های روزانه.',
+    cta: 'شروع سفارش',
+    image: '',
+    imagePosition: 'center',
+  },
+  cover: {
+    title: 'سبک زندگی سالم، انتخاب هر روز ما',
+    description: 'غذاهای سالم و متنوع با بهترین مواد اولیه تازه برای یک زندگی پرانرژی و متعادل.',
+    cta: 'سفارش آنلاین',
+    image: '',
+    imagePosition: 'center',
+  },
+  foodbar: {
+    title: 'محبوب‌ترین انتخاب‌های امروز',
+    description: 'نمایش محصول‌محور برای غذاهای پرفروش همراه با تصویر بزرگ و کارت‌های انتخاب سریع.',
+    cta: 'سفارش الان',
+    image: '',
+    imagePosition: 'center',
+  },
+}
+
+const heroContentMeta = {
+  slider: {
+    title: 'محتوای اسلایدر هیرو',
+    hint: 'برای هیرویی که محتوای اصلی‌اش از اسلایدهای تصویری می‌آید.',
+    fields: ['title', 'description', 'cta'],
+    usesSlides: true,
+    titleLabel: 'عنوان کلی اسلایدر',
+    titlePlaceholder: 'اسلایدر پیشنهادهای ویژه',
+    descriptionLabel: 'توضیح کلی',
+    descriptionPlaceholder: 'توضیح کوتاه قبل یا کنار اسلایدر...',
+    ctaPlaceholder: 'مشاهده پیشنهادها',
+    imageLabel: 'تصویر',
+  },
+  fullscreen: {
+    title: 'محتوای هیرو تمام‌صفحه',
+    hint: 'برای بنر بزرگ با پس‌زمینه تصویری.',
+    fields: ['title', 'description', 'cta', 'image', 'imagePosition'],
+    usesSlides: false,
+    titleLabel: 'عنوان اصلی',
+    titlePlaceholder: 'مثال: غذای تازه با سفارش سریع',
+    descriptionLabel: 'توضیح کوتاه',
+    descriptionPlaceholder: 'توضیحی که روی هیرو نمایش داده می‌شود...',
+    ctaPlaceholder: 'مشاهده منو',
+    imageLabel: 'تصویر پس‌زمینه',
+  },
+  banner: {
+    title: 'محتوای بنر کوتاه',
+    hint: 'برای پیام کوتاه، کمپین یا پیشنهاد روز.',
+    fields: ['title', 'description', 'cta', 'image', 'imagePosition'],
+    usesSlides: false,
+    titleLabel: 'عنوان بنر',
+    titlePlaceholder: 'مثال: پیشنهاد امروز رستوران',
+    descriptionLabel: 'متن بنر',
+    descriptionPlaceholder: 'متن کوتاه و مستقیم...',
+    ctaPlaceholder: 'شروع سفارش',
+    imageLabel: 'تصویر بنر',
+  },
+  cover: {
+    title: 'محتوای کاور سالم',
+    hint: 'برای هیروی روشن شبیه نمونه با عکس غذا و متن بزرگ.',
+    fields: ['title', 'description', 'cta', 'image', 'imagePosition'],
+    usesSlides: false,
+    titleLabel: 'تیتر بزرگ کاور',
+    titlePlaceholder: 'سبک زندگی سالم، انتخاب هر روز ما',
+    descriptionLabel: 'متن زیر تیتر',
+    descriptionPlaceholder: 'غذاهای سالم و متنوع با بهترین مواد اولیه...',
+    ctaPlaceholder: 'سفارش آنلاین',
+    imageLabel: 'عکس اصلی غذا',
+  },
+  foodbar: {
+    title: 'محتوای فودبار محصولی',
+    hint: 'متن کلی فودبار و آیتم‌های نمایشی از محصولات پرفروش می‌آیند.',
+    fields: ['title', 'description', 'cta'],
+    usesSlides: false,
+    titleLabel: 'عنوان فودبار',
+    titlePlaceholder: 'محبوب‌ترین انتخاب‌های امروز',
+    descriptionLabel: 'توضیح فودبار',
+    descriptionPlaceholder: 'معرفی کوتاه بخش محصول‌محور...',
+    ctaPlaceholder: 'سفارش الان',
+    imageLabel: 'تصویر محصول از لیست محصولات می‌آید',
+  },
+  off: {
+    title: 'هیرو خاموش است',
+    hint: 'برای ویرایش محتوا یک هیرو انتخاب کن.',
+    fields: [],
+    usesSlides: false,
+    titleLabel: 'عنوان',
+    titlePlaceholder: '',
+    descriptionLabel: 'توضیحات',
+    descriptionPlaceholder: '',
+    ctaPlaceholder: '',
+    imageLabel: 'تصویر',
+  },
+}
+
+const activeHeroContentMeta = computed(() => {
+  const variant = String(webSettings.hero_section_variant || 'off').trim() || 'off'
+  return heroContentMeta[variant] || heroContentMeta.fullscreen
+})
+
+function normalizeHeroVariantContent(value = {}) {
+  return {
+    title: String(value?.title || '').trim(),
+    description: String(value?.description || '').trim(),
+    cta: String(value?.cta || '').trim(),
+    image: String(value?.image || '').trim(),
+    imagePosition: String(value?.imagePosition || 'center').trim() || 'center',
+  }
+}
+
+function ensureHeroVariantContents(source = {}) {
+  const next = {}
+  for (const [variant, defaults] of Object.entries(heroContentDefaults)) {
+    next[variant] = normalizeHeroVariantContent({ ...defaults, ...(source?.[variant] || {}) })
+  }
+  return next
+}
+
+function currentHeroVariant() {
+  return String(webSettings.hero_section_variant || 'off').trim() || 'off'
+}
+
+function applyHeroContentToForm(variant = currentHeroVariant()) {
+  const contents = ensureHeroVariantContents(webSettings.hero_variant_contents)
+  webSettings.hero_variant_contents = contents
+  const content = contents[variant] || contents.off
+  webSettings.hero_section_title = content.title
+  webSettings.hero_section_description = content.description
+  webSettings.hero_section_cta = content.cta
+  webSettings.hero_image = content.image
+  webSettings.hero_image_position = content.imagePosition || 'center'
+}
+
+function persistActiveHeroContent(variant = currentHeroVariant()) {
+  const contents = ensureHeroVariantContents(webSettings.hero_variant_contents)
+  contents[variant] = normalizeHeroVariantContent({
+    title: webSettings.hero_section_title,
+    description: webSettings.hero_section_description,
+    cta: webSettings.hero_section_cta,
+    image: webSettings.hero_image,
+    imagePosition: webSettings.hero_image_position,
+  })
+  webSettings.hero_variant_contents = contents
+}
+
+
+const componentRegistry = {
+  header: { value: 'header', label: 'هدر', status: 'عمومی' },
+  footer: { value: 'footer', label: 'فوتر', status: 'عمومی' },
+  loader: { value: 'loader', label: 'Loader', status: 'تب جدا' },
+  homeHero: { value: 'homeHero', label: 'هیرو و اسلایدر', status: 'صفحه اصلی' },
+  menuSearch: { value: 'menuSearch', label: 'سرچ منو', status: 'صفحه اصلی' },
+  featuredBlock: { value: 'featuredBlock', label: 'ویژه و پرفروش', status: 'صفحه اصلی' },
+  categoryRail: { value: 'categoryRail', label: 'دسته‌بندی‌ها', status: 'صفحه اصلی' },
+  productCard: { value: 'productCard', label: 'کارت محصول', status: 'مشترک' },
+  aboutSections: { value: 'aboutSections', label: 'محتوای درباره ما', status: 'درباره ما' },
+  faqItems: { value: 'faqItems', label: 'سوالات متداول', status: 'درباره ما' },
+}
+
+const designPages = [
+  { value: 'global', label: 'عمومی', components: ['header', 'footer'] },
+  { value: 'home', label: 'صفحه اصلی', components: ['homeHero', 'menuSearch', 'featuredBlock', 'categoryRail', 'productCard'] },
+  { value: 'about', label: 'درباره ما', components: ['aboutSections', 'faqItems'] },
+  { value: 'product', label: 'جزئیات محصول', components: ['productCard'] },
+].map((pageItem) => ({ ...pageItem, count: pageItem.components.length }))
+
+const currentDesignPage = computed(() => designPages.find((pageItem) => pageItem.value === activeDesignPage.value) || designPages[0])
+const currentDesignComponents = computed(() => currentDesignPage.value.components.map((key) => componentRegistry[key]).filter(Boolean))
+const currentDesignComponent = computed(() => componentRegistry[activeDesignComponent.value] || currentDesignComponents.value[0])
+
+function selectDesignPage(value) {
+  const nextPage = designPages.find((pageItem) => pageItem.value === value) || designPages[0]
+  activeDesignPage.value = nextPage.value
+  if (!nextPage.components.includes(activeDesignComponent.value)) {
+    activeDesignComponent.value = nextPage.components[0]
+  }
+}
+
+function selectDesignComponent(value) {
+  activeDesignComponent.value = value
+}
+
+watch(
+  () => webSettings.hero_section_variant,
+  (nextVariant, previousVariant) => {
+    if (previousVariant) {
+      persistActiveHeroContent(previousVariant)
+    }
+    applyHeroContentToForm(nextVariant)
+  },
+)
+
+watch(
+  () => [
+    webSettings.hero_section_title,
+    webSettings.hero_section_description,
+    webSettings.hero_section_cta,
+    webSettings.hero_image,
+    webSettings.hero_image_position,
+  ],
+  () => {
+    persistActiveHeroContent()
+  },
+)
 
 function handleHeroImageUpload(event) {
   const file = event?.target?.files?.[0]
@@ -1005,6 +1325,13 @@ const heroVariantOptions = [
     heroStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
   {
+    value: 'slider',
+    label: 'اسلایدر هیرو',
+    desc: 'هیرو مخصوص اسلایدها؛ هر اسلاید تصویر، عنوان، لینک و CTA خودش را دارد',
+    previewStyle: { background: '#f0ece7' },
+    heroStyle: { background: 'linear-gradient(135deg, #fff, #e7d8c8)', height: '100%' },
+  },
+  {
     value: 'fullscreen',
     label: 'تمام‌صفحه',
     desc: 'بنر بزرگ تمام صفحه با تصویر پس‌زمینه و هدر شفاف روی آن',
@@ -1020,15 +1347,15 @@ const heroVariantOptions = [
   },
   {
     value: 'cover',
-    label: 'هیرو پوشش‌دهنده',
-    desc: 'هدر و هیرو در یک کامپوننت تمام‌صفحه با تصویر پس‌زمینه و ناوبری شفاف روی آن',
-    previewStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)' },
-    heroStyle: { background: 'linear-gradient(145deg, rgba(28,20,17,0.95), rgba(61,37,16,0.9))', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    label: 'کاور سالم',
+    desc: 'هیرو روشن شبیه تصویر نمونه؛ عکس غذا، متن بزرگ، دکمه‌ها و مزیت‌ها',
+    previewStyle: { background: '#f7efe4' },
+    heroStyle: { background: 'linear-gradient(135deg, #fff7ed 45%, #f0dfca)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
   {
     value: 'foodbar',
-    label: 'فودبار (محصول محور)',
-    desc: 'هیرو با نمایش محصولات پرفروش، تصویر بزرگ محصول، چرخش خودکار و کارت‌های مینیاتوری',
+    label: 'فودبار محصولی',
+    desc: 'هیرو محصول‌محور با تصویر بزرگ و تمرکز روی آیتم‌های پرفروش',
     previewStyle: { background: '#1c1411' },
     heroStyle: { background: 'linear-gradient(180deg, #1c1411 40%, #fff 40%)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
@@ -1134,6 +1461,7 @@ function syncBootFromWebSettings(payload = {}) {
     hero_section_title: String(nextWeb.hero_section_title || currentBranding.hero_section_title || '').trim(),
     hero_section_description: String(nextWeb.hero_section_description || currentBranding.hero_section_description || '').trim(),
     hero_section_cta: String(nextWeb.hero_section_cta || currentBranding.hero_section_cta || '').trim(),
+    hero_variant_contents: ensureHeroVariantContents(nextWeb.hero_variant_contents || currentBranding.hero_variant_contents || {}),
     footer_description: String(nextWeb.footer_description || currentBranding.footer_description || '').trim(),
     footer_phone: String(nextWeb.footer_phone || currentBranding.footer_phone || '').trim(),
     footer_email: String(nextWeb.footer_email || currentBranding.footer_email || '').trim(),
@@ -1345,6 +1673,7 @@ const previewBranding = computed(() => ({
   hero_section_title: String(webSettings.hero_section_title || '').trim(),
   hero_section_description: String(webSettings.hero_section_description || '').trim(),
   hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
+  hero_variant_contents: ensureHeroVariantContents(webSettings.hero_variant_contents),
   footer_description: String(webSettings.footer_description || '').trim(),
   footer_phone: String(webSettings.footer_phone || '').trim(),
   footer_email: String(webSettings.footer_email || '').trim(),
@@ -1366,10 +1695,18 @@ const previewCardItem = computed(() => ({
   restaurant_enabled: 1,
 }))
 
+
+const aboutPreviewSection = computed(() => aboutSections.value.find((row) => Number(row?.is_active || 0) === 1) || aboutSections.value[0] || {})
+const aboutPreviewTitle = computed(() => String(aboutPreviewSection.value.title || 'داستان ما').trim())
+const aboutPreviewText = computed(() => String(aboutPreviewSection.value.body_text || aboutPreviewSection.value.subtitle || 'محتوای صفحه درباره ما اینجا نمایش داده می‌شود.').trim())
+
 const previewHeroTitle = computed(() => String(webSettings.hero_section_title || previewBranding.value.hero_title || '').trim())
 const previewHeroDescription = computed(() => String(webSettings.hero_section_description || previewBranding.value.hero_subtitle || '').trim())
 const previewHeroCta = computed(() => String(webSettings.hero_section_cta || previewBranding.value.primary_cta_label || 'مشاهده منو').trim() || 'مشاهده منو')
 const previewHeroImage = computed(() => String(webSettings.hero_image || previewBranding.value.hero_image || '').trim())
+const heroSlidesPreviewItem = computed(() => heroSlides.value.find((row) => Number(row?.is_active || 0) === 1) || heroSlides.value[0] || {})
+const heroSlidesPreviewTitle = computed(() => String(heroSlidesPreviewItem.value.title || 'اسلاید ویژه').trim())
+const heroSlidesPreviewImage = computed(() => String(heroSlidesPreviewItem.value.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=70').trim())
 
 const heroPreviewComponent = computed(() => {
   if (String(webSettings.hero_section_variant || 'off').trim() === 'fullscreen') {
@@ -1547,11 +1884,23 @@ async function loadSettings() {
     webSettings.menu_search_variant = normalizeMenuSearchSetting(nextWeb.menu_search_variant)
     const heroEnabled = Number(nextWeb.hero_section_enabled || 0)
     webSettings.hero_section_variant = String(nextWeb.hero_section_variant || (heroEnabled ? 'fullscreen' : 'off')).trim() || 'off'
+    webSettings.hero_variant_contents = ensureHeroVariantContents(nextWeb.hero_variant_contents || {})
     const footerEnabled = Number(nextWeb.footer_enabled ?? 1)
     webSettings.footer_variant = String(nextWeb.footer_variant || (footerEnabled ? 'full' : 'off')).trim() || 'full'
-    webSettings.hero_section_title = String(nextWeb.hero_section_title || '').trim()
-    webSettings.hero_section_description = String(nextWeb.hero_section_description || '').trim()
-    webSettings.hero_section_cta = String(nextWeb.hero_section_cta || '').trim()
+    if (nextWeb.hero_section_title || nextWeb.hero_section_description || nextWeb.hero_section_cta || nextWeb.hero_image) {
+      const variant = currentHeroVariant()
+      const contents = ensureHeroVariantContents(webSettings.hero_variant_contents)
+      contents[variant] = normalizeHeroVariantContent({
+        ...contents[variant],
+        title: nextWeb.hero_section_title,
+        description: nextWeb.hero_section_description,
+        cta: nextWeb.hero_section_cta,
+        image: nextWeb.hero_image,
+        imagePosition: nextWeb.hero_image_position,
+      })
+      webSettings.hero_variant_contents = contents
+    }
+    applyHeroContentToForm()
     webSettings.footer_description = String(nextWeb.footer_description || '').trim()
     webSettings.footer_phone = String(nextWeb.footer_phone || '').trim()
     webSettings.footer_email = String(nextWeb.footer_email || '').trim()
@@ -1584,6 +1933,7 @@ async function saveSettings() {
   statusText.value = ''
 
   try {
+    persistActiveHeroContent()
     const loaderPayload = toLoaderWebSettingsPayload(webSettings)
     if (loaderPayload.loader_enabled && loaderPayload.loader_mode === 'custom' && !String(loaderPayload.loader_custom_code || '').trim()) {
       throw new Error('برای حالت کد اختصاصی، لطفا کد Loader را وارد کنید.')
@@ -1617,6 +1967,7 @@ async function saveSettings() {
         hero_section_title: String(webSettings.hero_section_title || '').trim(),
         hero_section_description: String(webSettings.hero_section_description || '').trim(),
         hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
+        hero_variant_contents: ensureHeroVariantContents(webSettings.hero_variant_contents),
         footer_description: String(webSettings.footer_description || '').trim(),
         footer_phone: String(webSettings.footer_phone || '').trim(),
         footer_email: String(webSettings.footer_email || '').trim(),
@@ -1643,10 +1994,20 @@ async function saveSettings() {
       }),
     })
 
+    const savedWeb = payload?.web_settings || {}
+    webSettings.header_variant = normalizeHeaderSetting(savedWeb.header_variant || webSettings.header_variant)
+    webSettings.menu_search_variant = normalizeMenuSearchSetting(savedWeb.menu_search_variant || webSettings.menu_search_variant)
+    webSettings.hero_section_variant = String(savedWeb.hero_section_variant || webSettings.hero_section_variant || 'off').trim() || 'off'
+    webSettings.hero_variant_contents = ensureHeroVariantContents(savedWeb.hero_variant_contents || webSettings.hero_variant_contents || {})
+    applyHeroContentToForm()
+    webSettings.footer_variant = String(savedWeb.footer_variant || webSettings.footer_variant || 'full').trim() || 'full'
+    webSettings.card_variant = String(savedWeb.card_variant || webSettings.card_variant || 'classic').trim() || 'classic'
+    webSettings.hero_image_position = String(savedWeb.hero_image_position || webSettings.hero_image_position || 'center').trim() || 'center'
+    webSettings.category_rail_variant = savedWeb.category_rail_variant === 'image' ? 'image' : 'pill'
     heroSlides.value = (payload?.hero_slides || []).map((row) => normalizeHeroSlide(row))
     aboutSections.value = (payload?.about_sections || []).map((row) => normalizeAboutSection(row))
     faqItems.value = (payload?.faq_items || []).map((row) => normalizeFaqItem(row))
-    assignLoaderSettingsToForm(payload?.web_settings || {})
+    assignLoaderSettingsToForm(savedWeb)
     syncBootFromWebSettings(payload)
     statusText.value = 'تنظیمات سایت با موفقیت ذخیره شد.'
   } catch (saveError) {
@@ -1816,7 +2177,502 @@ loadSettings()
   color: var(--danger);
 }
 
+.designer-shell {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.35fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.designer-preview {
+  position: sticky;
+  top: 0.8rem;
+}
+
+.preview-frame {
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 0.86);
+  box-shadow: 0 18px 45px rgb(15 23 42 / 0.08);
+  overflow: hidden;
+}
+
+.preview-topbar {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+  background: rgb(var(--palette-eggshell-rgb) / 0.55);
+}
+
+.preview-topbar span {
+  font-weight: 900;
+  color: var(--ink-900, #1c1411);
+}
+
+.preview-topbar small {
+  color: var(--text-muted, #786b61);
+}
+
+.preview-topbar > div:first-child {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.preview-device-toggle {
+  display: inline-flex;
+  padding: 0.16rem;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.preview-device-toggle button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted, #786b61);
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 0.22rem 0.58rem;
+  cursor: pointer;
+}
+
+.preview-device-toggle button.active {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  color: var(--ink-900, #1c1411);
+  font-weight: 800;
+}
+
+.preview-stage {
+  position: relative;
+  height: 620px;
+  overflow: auto;
+  background: linear-gradient(145deg, rgb(var(--palette-eggshell-rgb) / 0.65), #fff);
+}
+
+.preview-stage--mobile {
+  height: 720px;
+  display: flex;
+  justify-content: center;
+}
+
+.preview-viewport {
+  transform-origin: top right;
+  background: #fff;
+}
+
+.preview-viewport--desktop {
+  width: 1280px;
+  min-height: 1600px;
+  transform: scale(0.31);
+}
+
+.preview-viewport--mobile {
+  width: 390px;
+  min-height: 900px;
+  transform: scale(0.88);
+  transform-origin: top center;
+  border-radius: 34px;
+  overflow: hidden;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 0.16);
+  margin-top: 0.8rem;
+}
+
+.compact-preview {
+  padding: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.designer-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.page-switcher,
+.component-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.page-chip,
+.component-chip {
+  min-height: 44px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink-900, #1c1411);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+}
+
+.page-chip {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.65rem 0.85rem;
+  text-align: right;
+}
+
+.component-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.page-chip small,
+.component-chip small {
+  color: var(--text-muted, #786b61);
+  font-size: 0.68rem;
+}
+
+.page-chip.active,
+.component-chip.active {
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.45);
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+}
+
+.inline-editor {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+}
+
+.hero-editor-head {
+  display: grid;
+  gap: 0.18rem;
+  margin-bottom: 0.75rem;
+}
+
+.hero-editor-head strong {
+  color: var(--ink-900, #1c1411);
+  font-size: 0.92rem;
+}
+
+.hero-editor-head small {
+  color: var(--text-muted, #786b61);
+  line-height: 1.7;
+}
+
+.hero-slider-editor {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.mini-section,
+.about-preview-card,
+.faq-preview-card {
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-radius: 18px;
+  background: #fff;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.mini-section p,
+.about-preview-card p {
+  margin: 0;
+  color: var(--text-muted, #786b61);
+  line-height: 1.7;
+}
+
+.about-preview-card small,
+.faq-preview-card span {
+  color: var(--text-muted, #786b61);
+}
+
+.mini-products {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.mini-products span {
+  height: 58px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgb(var(--palette-eggshell-rgb) / 0.9), rgb(var(--palette-deep-sapphire-rgb) / 0.08));
+}
+
+.compact-card-preview {
+  padding: 0;
+}
+
+.slider-hero-preview {
+  min-height: 560px;
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 3rem;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #fffaf2, #efe0cf);
+  color: #174d32;
+}
+
+.slider-hero-copy {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.slider-hero-copy span {
+  width: max-content;
+  border-radius: 999px;
+  padding: 0.36rem 0.78rem;
+  background: rgb(23 77 50 / 0.08);
+  font-weight: 900;
+}
+
+.slider-hero-copy h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1.15;
+}
+
+.slider-hero-copy p {
+  margin: 0;
+  color: rgb(28 20 17 / 0.65);
+  line-height: 1.9;
+}
+
+.slider-hero-card {
+  position: relative;
+  min-height: 360px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 22px 64px rgb(72 44 18 / 0.18);
+}
+
+.slider-hero-card img {
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  object-fit: cover;
+  display: block;
+}
+
+.slider-hero-card strong {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.82);
+  padding: 0.55rem 0.9rem;
+}
+
+.preview-viewport--mobile .slider-hero-preview {
+  min-height: 620px;
+  grid-template-columns: 1fr;
+  padding: 1.1rem;
+  border-radius: 0;
+}
+
+.preview-viewport--mobile .slider-hero-card,
+.preview-viewport--mobile .slider-hero-card img {
+  min-height: 260px;
+}
+
+.healthy-cover-preview {
+  min-height: 620px;
+  border-radius: 28px;
+  background: radial-gradient(circle at 16% 15%, rgb(255 255 255 / 0.9), transparent 28%), linear-gradient(135deg, #fffaf2, #f1ddc3);
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 1.2rem;
+  align-items: center;
+  padding: 3rem;
+  direction: ltr;
+  border: 1px solid rgb(255 255 255 / 0.8);
+}
+
+.hcp-media {
+  min-height: 470px;
+  border-radius: 999px;
+  background: var(--hero-img, url('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=70')) center / cover;
+  box-shadow: 0 24px 70px rgb(72 44 18 / 0.22);
+}
+
+.hcp-content {
+  direction: rtl;
+  display: grid;
+  gap: 1rem;
+  color: #174d32;
+}
+
+.hcp-badge {
+  width: max-content;
+  border-radius: 999px;
+  border: 1px solid rgb(23 77 50 / 0.16);
+  background: rgb(255 255 255 / 0.68);
+  padding: 0.42rem 0.8rem;
+  font-weight: 900;
+  font-size: 0.84rem;
+}
+
+.hcp-content h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4.8vw, 4.3rem);
+  line-height: 1.14;
+  font-weight: 950;
+}
+
+.hcp-content p {
+  margin: 0;
+  max-width: 520px;
+  color: rgb(28 20 17 / 0.68);
+  font-size: 1.05rem;
+  line-height: 1.9;
+}
+
+.hcp-actions,
+.hcp-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.hcp-actions span {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  padding: 0 1.3rem;
+  background: #175333;
+  color: #fff;
+  font-weight: 900;
+}
+
+.hcp-actions .ghost {
+  background: rgb(255 255 255 / 0.66);
+  color: #174d32;
+  border: 1px solid rgb(23 77 50 / 0.18);
+}
+
+.hcp-features {
+  margin-top: 0.8rem;
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgb(255 255 255 / 0.62);
+}
+
+.hcp-features span {
+  color: #174d32;
+  font-weight: 900;
+}
+
+.preview-viewport--mobile .slider-hero-preview {
+  min-height: 560px;
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 3rem;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #fffaf2, #efe0cf);
+  color: #174d32;
+}
+
+.slider-hero-copy {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.slider-hero-copy span {
+  width: max-content;
+  border-radius: 999px;
+  padding: 0.36rem 0.78rem;
+  background: rgb(23 77 50 / 0.08);
+  font-weight: 900;
+}
+
+.slider-hero-copy h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1.15;
+}
+
+.slider-hero-copy p {
+  margin: 0;
+  color: rgb(28 20 17 / 0.65);
+  line-height: 1.9;
+}
+
+.slider-hero-card {
+  position: relative;
+  min-height: 360px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 22px 64px rgb(72 44 18 / 0.18);
+}
+
+.slider-hero-card img {
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  object-fit: cover;
+  display: block;
+}
+
+.slider-hero-card strong {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.82);
+  padding: 0.55rem 0.9rem;
+}
+
+.preview-viewport--mobile .slider-hero-preview {
+  min-height: 620px;
+  grid-template-columns: 1fr;
+  padding: 1.1rem;
+  border-radius: 0;
+}
+
+.preview-viewport--mobile .slider-hero-card,
+.preview-viewport--mobile .slider-hero-card img {
+  min-height: 260px;
+}
+
+.healthy-cover-preview {
+  min-height: 620px;
+  grid-template-columns: 1fr;
+  padding: 1.2rem;
+  border-radius: 0;
+}
+
+.preview-viewport--mobile .hcp-media {
+  min-height: 260px;
+}
+
+.preview-viewport--mobile .hcp-content h2 {
+  font-size: 2.2rem;
+}
+
+
 @media (max-width: 900px) {
+  .designer-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .designer-preview {
+    position: static;
+    order: 2;
+  }
+
+  .preview-viewport--desktop {
+    transform: scale(0.28);
+  }
+
   .form-grid,
   .editor-grid {
     grid-template-columns: minmax(0, 1fr);

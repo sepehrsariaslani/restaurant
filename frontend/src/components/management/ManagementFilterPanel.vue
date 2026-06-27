@@ -121,9 +121,10 @@ function onSearchInput(event) {
 
 <style scoped>
 .filter-panel {
-  border-radius: 22px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  background: rgb(var(--palette-eggshell-rgb) / 0.75);
+  border-radius: 18px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--bg-card, #fff);
+  box-shadow: var(--shadow-sm, 0 8px 22px rgb(15 23 42 / 0.045));
 }
 
 .filter-head {

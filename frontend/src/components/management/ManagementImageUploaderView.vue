@@ -118,9 +118,9 @@ function confirmRemove(url) {
 
 .upload-drop {
   min-height: 5rem;
-  border: 1px dashed rgb(124 90 66 / 0.34);
-  border-radius: 8px;
-  background: #fbfaf8;
+  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.28);
+  border-radius: 12px;
+  background: var(--bg-soft, #f1f5f9);
   padding: 0.75rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -133,18 +133,18 @@ function confirmRemove(url) {
 
 .upload-drop:hover,
 .upload-drop:focus-within {
-  border-color: rgb(124 90 66 / 0.58);
-  background: #f7f1ea;
-  box-shadow: 0 10px 22px rgb(43 33 26 / 0.07);
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.45);
+  background: var(--module-50, rgb(139 94 52 / 0.075));
+  box-shadow: 0 10px 22px rgb(15 23 42 / 0.06);
 }
 
 .upload-icon {
   width: 2.55rem;
   height: 2.55rem;
-  border-radius: 8px;
-  background: #fff;
-  border: 1px solid #e4ded6;
-  color: #7c5a42;
+  border-radius: 12px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  color: var(--module-500, #8b5e34);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -162,13 +162,13 @@ function confirmRemove(url) {
 }
 
 .upload-copy strong {
-  color: #2b211a;
+  color: var(--text-primary, #0f172a);
   font-size: 0.9rem;
 }
 
 .upload-copy small {
   font-size: 0.78rem;
-  color: #74685f;
+  color: var(--text-muted, #64748b);
   line-height: 1.65;
 }
 
@@ -184,9 +184,9 @@ function confirmRemove(url) {
 }
 
 .image-card {
-  border: 1px solid #e4ded6;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: var(--bg-card, #fff);
   padding: 0.5rem;
   display: grid;
   gap: 0.45rem;
@@ -194,10 +194,10 @@ function confirmRemove(url) {
 }
 
 .thumb-btn {
-  border: 1px solid #f2eee9;
+  border: 1px solid var(--border, #e2e8f0);
   padding: 0;
-  background: #fbfaf8;
-  border-radius: 8px;
+  background: var(--bg-soft, #f1f5f9);
+  border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
   cursor: pointer;
@@ -205,7 +205,7 @@ function confirmRemove(url) {
 }
 
 .thumb-btn:hover {
-  border-color: rgb(124 90 66 / 0.35);
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.32);
   transform: translateY(-1px);
 }
 
@@ -235,18 +235,18 @@ function confirmRemove(url) {
 }
 
 .badge.cover {
-  background: #f7f1ea;
-  color: #5f402d;
+  background: var(--module-50, rgb(139 94 52 / 0.075));
+  color: var(--module-title-light, #0f172a);
 }
 
 .badge.secondary {
   background: rgb(var(--palette-deep-saffron-rgb) / 0.15);
-  color: #6b4a24;
+  color: var(--module-600, #6f4726);
 }
 
 .badge.muted {
-  background: #f7f6f4;
-  color: #74685f;
+  background: var(--bg-soft, #f1f5f9);
+  color: var(--text-muted, #64748b);
 }
 
 .action-row {

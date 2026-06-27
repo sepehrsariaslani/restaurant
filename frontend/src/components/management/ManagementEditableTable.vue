@@ -228,17 +228,18 @@ function saveDraft() {
 
 <style scoped>
 .editable-table {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  border-radius: 14px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.58);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 16px;
+  background: var(--bg-card, #fff);
   padding: 0.56rem;
   display: grid;
   gap: 0.48rem;
+  box-shadow: var(--shadow-sm, 0 8px 22px rgb(15 23 42 / 0.045));
 }
 
 .editable-table.tone-accent {
-  border-color: rgb(var(--palette-deep-saffron-rgb) / 0.34);
-  background: linear-gradient(180deg, rgb(var(--palette-deep-saffron-rgb) / 0.05), rgb(var(--palette-eggshell-rgb) / 0.58));
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.18);
+  background: linear-gradient(180deg, var(--bg-card, #fff), color-mix(in srgb, var(--bg-card, #fff) 92%, var(--module-50, rgb(139 94 52 / 0.075))));
 }
 
 .table-head {
@@ -258,7 +259,7 @@ function saveDraft() {
 }
 
 .meta small {
-  color: var(--text-muted);
+  color: var(--muted, var(--text-muted));
   font-size: 0.76rem;
   line-height: 1.7;
 }
@@ -284,7 +285,7 @@ function saveDraft() {
 
 .danger {
   color: var(--danger);
-  border-color: rgb(var(--palette-deep-saffron-rgb) / 0.35);
+  border-color: rgb(var(--danger-rgb, 220 38 38) / 0.28);
 }
 
 .foot-actions {

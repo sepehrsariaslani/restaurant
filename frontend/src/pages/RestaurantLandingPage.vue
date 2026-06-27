@@ -1,7 +1,7 @@
 <template>
   <div class="home-page" dir="rtl">
     <PublicHeader
-      v-if="siteComponents.hero_section_variant !== 'cover' && siteComponents.hero_section_variant !== 'foodbar'"
+      v-if="siteComponents.hero_section_variant !== 'cover'"
       :branding="branding"
       :page="'landing'"
       :cart-count="cartCount"
@@ -15,6 +15,22 @@
       :page="'landing'"
       :preview="false"
     />
+    <section v-else-if="siteComponents.hero_section_variant === 'slider'" class="home-container section-hero hero-grid hero-grid--top">
+      <ScrollReveal>
+        <div class="hero-main glass-card">
+          <span class="hero-chip">{{ branding.hero_section_cta || 'پیشنهاد ویژه' }}</span>
+          <h1>{{ branding.hero_section_title || branding.hero_title }}</h1>
+          <p class="muted">{{ branding.hero_section_description || shortHeroSubtitle }}</p>
+          <div class="hero-actions">
+            <a class="primary-btn" href="/menu">{{ branding.primary_cta_label || 'مشاهده منو' }}</a>
+            <a class="secondary-btn" :href="secondaryCta.href">{{ secondaryCta.label }}</a>
+          </div>
+        </div>
+      </ScrollReveal>
+      <ScrollReveal :delay="120">
+        <HomeHeroSlider :slides="heroSlides" :fallback-items="featured" />
+      </ScrollReveal>
+    </section>
     <SiteHeroFoodbar
       v-else-if="siteComponents.hero_section_variant === 'foodbar'"
       :items="featured"
@@ -29,7 +45,6 @@
       :cta="branding.hero_section_cta"
       :hero-image="branding.hero_image"
       :categories="categories"
-      @visibility-change="heroVisible = $event"
     />
     <SiteHeroBanner
       v-else-if="siteComponents.hero_section_variant === 'banner'"
@@ -44,30 +59,30 @@
       <GlassShell class="home-shell" :title="branding.name" :subtitle="'ارگانیک، تازه، قابل شخصی سازی'">
         <FloatingFoodIcons />
 
-        <section class="home-container section-hero hero-grid">
+        <section v-if="showInlineHero" class="home-container section-hero hero-grid">
           <ScrollReveal>
             <div class="hero-main glass-card">
-              <span class="hero-chip">رستوران آنلاین مدرن</span>
+              <span class="hero-chip">سفارش تازه‌ترین غذاها</span>
               <h1>{{ branding.hero_title }}</h1>
               <p class="muted">
-                {{ branding.hero_subtitle }}
+                {{ shortHeroSubtitle }}
               </p>
               <div class="hero-actions">
-                <a class="primary-btn" href="/menu">{{ branding.primary_cta_label || 'ورود به منو' }}</a>
-                <a class="secondary-btn" href="/cart">مشاهده سبد سفارش</a>
+                <a class="primary-btn" href="/menu">{{ branding.primary_cta_label || 'مشاهده منو' }}</a>
+                <a class="secondary-btn" :href="secondaryCta.href">{{ secondaryCta.label }}</a>
               </div>
               <div class="hero-stats">
                 <div class="stat-item">
-                  <strong><AnimatedCounter :target="categories.length || 8" suffix="+" /></strong>
-                  <small>دسته غذایی</small>
+                  <strong><AnimatedCounter :target="25" suffix=" دقیقه" /></strong>
+                  <small>میانگین آماده‌سازی</small>
                 </div>
                 <div class="stat-item">
-                  <strong><AnimatedCounter :target="featured.length || 24" suffix="+" /></strong>
-                  <small>غذای پرطرفدار</small>
+                  <strong><AnimatedCounter :target="100" suffix="٪" /></strong>
+                  <small>مواد اولیه تازه</small>
                 </div>
                 <div class="stat-item">
-                  <strong><AnimatedCounter :target="faqItems.length || 12" suffix="+" /></strong>
-                  <small>پاسخ سریع</small>
+                  <strong><AnimatedCounter :target="5" suffix="/5" /></strong>
+                  <small>امکان شخصی‌سازی</small>
                 </div>
               </div>
             </div>
@@ -78,24 +93,14 @@
           </ScrollReveal>
         </section>
 
-        <section class="home-container section-features">
-          <ScrollReveal :delay="80">
-            <SectionHeader
-              eyebrow="چرا ما؟"
-              title="تجربه سفارش سریع، جذاب و قابل شخصی‌سازی"
-              subtitle="از انتخاب غذا تا پرداخت نهایی، همه چیز برای راحتی کاربر روی موبایل و دسکتاپ بهینه شده است."
-            />
-          </ScrollReveal>
-          <div class="features-grid">
-            <ScrollReveal v-for="(feature, idx) in featureCards" :key="feature.title" :delay="idx * 80">
-              <FeatureCard :icon="feature.icon" :title="feature.title" :description="feature.description" :bg-image="feature.bgImage" />
-            </ScrollReveal>
-          </div>
-        </section>
-
         <section class="home-container section-categories">
           <ScrollReveal :delay="100">
-            <SectionHeader eyebrow="دسته‌بندی" title="انتخاب کنید، ببینید، سفارش دهید" subtitle="روی هر دسته کلیک کنید تا محصولات آن را ببینید." />
+            <SectionHeader
+              eyebrow="دسته‌بندی"
+              title="از کدام دسته شروع می‌کنید؟"
+              subtitle="یک دسته را باز کنید، چند آیتم محبوب را ببینید یا مستقیم وارد منوی کامل شوید."
+              variant="compact"
+            />
           </ScrollReveal>
           <ScrollReveal :delay="160">
             <CategoryExpandableGrid :categories="categories" :currency="currency" @quick-add="quickAdd" />
@@ -104,7 +109,12 @@
 
         <section class="home-container section-featured featured-wrap" v-if="featured.length">
           <ScrollReveal :delay="100">
-            <SectionHeader eyebrow="پرفروش‌ترین‌ها" title="محبوب‌های امروز" subtitle="انتخاب‌های ویژه که بیشترین سفارش را داشته‌اند." />
+            <SectionHeader
+              eyebrow="پرفروش‌ترین‌ها"
+              title="محبوب‌ترین انتخاب‌های امروز"
+              subtitle="آیتم‌هایی که مشتری‌ها بیشتر انتخاب کرده‌اند؛ آماده برای سفارش سریع."
+              variant="compact"
+            />
           </ScrollReveal>
           <div class="featured-grid">
             <ScrollReveal
@@ -112,12 +122,27 @@
               :key="item.slug"
               :delay="Math.min(idx, 7) * 70"
             >
-              <MenuItemCard
+              <HomeFeaturedProductCard
                 :item="item"
                 :currency="currency"
-                :card-variant="siteComponents.card_variant"
                 @quick-add="quickAdd"
               />
+            </ScrollReveal>
+          </div>
+        </section>
+
+        <section class="home-container section-features">
+          <ScrollReveal :delay="80">
+            <SectionHeader
+              eyebrow="چرا ما؟"
+              title="سه دلیل برای سفارش راحت‌تر"
+              subtitle="تمرکز ما روی سرعت، تازگی و کنترل کامل انتخاب شماست."
+              variant="feature"
+            />
+          </ScrollReveal>
+          <div class="features-grid">
+            <ScrollReveal v-for="(feature, idx) in featureCards" :key="feature.title" :delay="idx * 80">
+              <FeatureCard :icon="feature.icon" :title="feature.title" :description="feature.description" :bg-image="feature.bgImage" />
             </ScrollReveal>
           </div>
         </section>
@@ -136,10 +161,23 @@
       </GlassShell>
     </div>
 
+    <Transition name="home-toast">
+      <div v-if="toastMessage" class="home-toast" role="status" aria-live="polite">
+        {{ toastMessage }}
+      </div>
+    </Transition>
+
+    <Transition name="cart-pop">
+      <a v-if="cartCount > 0" class="home-sticky-cart" href="/cart" aria-label="مشاهده سبد سفارش">
+        <span>سبد سفارش</span>
+        <strong>{{ cartCount }} آیتم</strong>
+      </a>
+    </Transition>
+
     <SiteFooter
       v-if="siteComponents.footer_variant === 'full'"
       :brand-name="branding.name"
-      :description="branding.footer_description"
+      :description="branding.footer_description || branding.hero_subtitle || 'تجربه سفارش آنلاین سریع، تازه و خوش‌طعم با امکان انتخاب از محبوب‌ترین آیتم‌های امروز.'"
       :phone="branding.footer_phone"
       :email="branding.footer_email"
       :address="branding.footer_address"
@@ -156,9 +194,9 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import GlassShell from '@/components/GlassShell.vue'
-import MenuItemCard from '@/components/MenuItemCard.vue'
+import HomeFeaturedProductCard from '@/components/HomeFeaturedProductCard.vue'
 import HomeHeroSlider from '@/components/HomeHeroSlider.vue'
 import HomeAboutSection from '@/components/HomeAboutSection.vue'
 import HomeFaqSection from '@/components/HomeFaqSection.vue'
@@ -185,7 +223,9 @@ const props = defineProps({
   },
 })
 
-const heroVisible = ref(true)
+const toastMessage = ref('')
+let toastTimer = null
+
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 
 const categories = computed(() => props.boot.categories || [])
@@ -196,31 +236,40 @@ const faqItems = computed(() => props.boot.faq_items || [])
 const currency = computed(() => props.boot.currency || 'IRR')
 const branding = computed(() => resolveBranding(props.boot))
 const siteComponents = computed(() => resolveSiteComponents(props.boot))
+const showInlineHero = computed(() => !['cover', 'slider', 'banner', 'fullscreen', 'foodbar'].includes(siteComponents.value.hero_section_variant))
+
+const shortHeroSubtitle = computed(() => {
+  const text = String(branding.value.hero_subtitle || '').trim()
+  if (!text) {
+    return 'غذاهای تازه، امکان شخصی‌سازی مواد و سفارش سریع بدون نیاز به ثبت‌نام.'
+  }
+  return text.length <= 115 ? text : `${text.slice(0, 112).trim()}…`
+})
+
+const secondaryCta = computed(() => (
+  cartCount.value > 0
+    ? { label: `ادامه سفارش (${cartCount.value})`, href: '/cart' }
+    : { label: 'مشاهده منو', href: '/menu' }
+))
 
 const featureCards = computed(() => [
   {
-    icon: '⚡',
-    title: 'سفارش سریع',
-    description: 'فرآیند سفارش با کمترین کلیک و بیشترین سرعت طراحی شده است.',
+    icon: 'zap',
+    title: 'تحویل سریع',
+    description: 'از انتخاب آیتم تا تکمیل سفارش، مسیر خرید کوتاه و روشن طراحی شده است.',
     bgImage: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=60',
   },
   {
-    icon: '🧩',
-    title: 'شخصی‌سازی کامل',
-    description: 'مواد اولیه هر غذا را متناسب با سلیقه خودتان تنظیم کنید.',
+    icon: 'sliders',
+    title: 'شخصی‌سازی مواد',
+    description: 'مواد اولیه و افزودنی‌ها را قبل از افزودن به سبد مطابق سلیقه تنظیم کنید.',
     bgImage: 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=600&auto=format&fit=crop&q=60',
   },
   {
-    icon: '🍃',
+    icon: 'leaf',
     title: 'مواد تازه',
-    description: 'تمرکز اصلی روی کیفیت، تازگی و ترکیب سالم مواد اولیه است.',
+    description: 'آیتم‌ها با تمرکز روی تازگی، کیفیت و ترکیب قابل اعتماد آماده می‌شوند.',
     bgImage: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&auto=format&fit=crop&q=60',
-  },
-  {
-    icon: '💬',
-    title: 'پشتیبانی شفاف',
-    description: 'پاسخ سوالات متداول و مسیر ارتباطی روشن برای مشتریان.',
-    bgImage: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?w=600&auto=format&fit=crop&q=60',
   },
 ])
 
@@ -238,8 +287,20 @@ function quickAdd(item) {
       selected_modifiers: [],
     },
   })
-  window.location.href = '/cart'
+  showToast(`${item.title || 'آیتم'} به سبد اضافه شد.`)
 }
+
+function showToast(message) {
+  toastMessage.value = message
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toastMessage.value = ''
+  }, 2200)
+}
+
+onUnmounted(() => {
+  clearTimeout(toastTimer)
+})
 </script>
 
 <style scoped>
@@ -276,7 +337,8 @@ function quickAdd(item) {
 }
 
 .section-features {
-  margin-bottom: 0;
+  margin-top: 1.25rem;
+  margin-bottom: 1.2rem;
 }
 
 .section-categories {
@@ -369,16 +431,71 @@ function quickAdd(item) {
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.7rem;
   margin-top: 1rem;
 }
 
 .featured-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 0.9rem;
   margin-top: 1rem;
+  align-items: stretch;
+}
+
+.home-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 80;
+  max-width: min(340px, calc(100vw - 2rem));
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  background: var(--palette-deep-sapphire, #6F4A31);
+  color: #fff;
+  box-shadow: 0 16px 38px rgb(0 0 0 / 0.18);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.home-sticky-cart {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 79;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  padding: 0.65rem 0.9rem;
+  background: var(--accent-gold);
+  color: var(--ink-900);
+  text-decoration: none;
+  box-shadow: 0 16px 38px rgb(0 0 0 / 0.16);
+}
+
+.home-sticky-cart span {
+  font-size: 0.78rem;
+}
+
+.home-sticky-cart strong {
+  font-size: 0.84rem;
+}
+
+.home-toast-enter-active,
+.home-toast-leave-active,
+.cart-pop-enter-active,
+.cart-pop-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.home-toast-enter-from,
+.home-toast-leave-to,
+.cart-pop-enter-from,
+.cart-pop-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
 @media (max-width: 900px) {

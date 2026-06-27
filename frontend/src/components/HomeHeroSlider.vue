@@ -1,5 +1,13 @@
 <template>
-  <section class="hero-slider glass-card" dir="rtl" v-if="resolvedSlides.length">
+  <section
+    class="hero-slider glass-card"
+    dir="rtl"
+    v-if="resolvedSlides.length"
+    @mouseenter="pauseAutoplay"
+    @mouseleave="resumeAutoplay"
+    @focusin="pauseAutoplay"
+    @focusout="resumeAutoplay"
+  >
     <div class="slider-track" :style="{ transform: `translateX(-${activeIndex * 100}%)` }">
       <article
         class="hero-slide"
@@ -9,7 +17,7 @@
         <img class="slide-image" :src="slide.image" :alt="slide.title" />
         <div class="slide-overlay"></div>
         <div class="slide-content">
-          <small class="eyebrow">تازه و خوشمزه</small>
+          <small class="eyebrow">پیشنهاد ویژه امروز</small>
           <h2>{{ slide.title }}</h2>
           <p>{{ slide.subtitle }}</p>
           <a class="slide-cta" :href="slide.url">{{ slide.ctaLabel }}</a>
@@ -20,7 +28,7 @@
     <button class="nav-btn nav-next" type="button" @click="nextSlide" aria-label="اسلاید بعدی">‹</button>
     <button class="nav-btn nav-prev" type="button" @click="prevSlide" aria-label="اسلاید قبلی">›</button>
 
-    <div class="dots" role="tablist" aria-label="اسلایدها">
+    <div class="dots" role="tablist" aria-label="اسلایدهای ویژه">
       <button
         v-for="(slide, idx) in resolvedSlides"
         :key="`dot-${slide.key}`"
@@ -50,13 +58,16 @@ const props = defineProps({
 
 const activeIndex = ref(0)
 let autoplayTimer = null
+let mediaQuery = null
+const isPausedByInteraction = ref(false)
+const reduceMotion = ref(false)
 
 const resolvedSlides = computed(() => {
   if (Array.isArray(props.slides) && props.slides.length) {
     return props.slides.map((slide, idx) => ({
       key: slide.name || `hero-${idx}`,
       title: slide.title || 'محصول ویژه',
-      subtitle: slide.subtitle || 'با مواد تازه و امکان شخصی سازی کامل',
+      subtitle: truncateText(slide.subtitle || 'با مواد تازه و امکان شخصی‌سازی کامل'),
       image:
         slide.image ||
         'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1400&auto=format&fit=crop&q=60',
@@ -68,7 +79,7 @@ const resolvedSlides = computed(() => {
   return (props.fallbackItems || []).slice(0, 3).map((item, idx) => ({
     key: item.slug || `featured-${idx}`,
     title: item.title || 'محصول ویژه',
-    subtitle: item.short_desc || 'سفارش سریع با جزئیات کامل',
+    subtitle: truncateText(item.short_desc || 'سفارش سریع با جزئیات کامل'),
     image:
       item.image ||
       'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=1400&auto=format&fit=crop&q=60',
@@ -99,12 +110,17 @@ function prevSlide() {
   activeIndex.value = (activeIndex.value - 1 + resolvedSlides.value.length) % resolvedSlides.value.length
 }
 
+function truncateText(value, max = 86) {
+  const text = String(value || '').trim()
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`
+}
+
 function startAutoplay() {
   stopAutoplay()
-  if (resolvedSlides.value.length <= 1) {
+  if (reduceMotion.value || isPausedByInteraction.value || resolvedSlides.value.length <= 1) {
     return
   }
-  autoplayTimer = window.setInterval(nextSlide, 5000)
+  autoplayTimer = window.setInterval(nextSlide, 6500)
 }
 
 function stopAutoplay() {
@@ -113,6 +129,25 @@ function stopAutoplay() {
   }
   window.clearInterval(autoplayTimer)
   autoplayTimer = null
+}
+
+function pauseAutoplay() {
+  isPausedByInteraction.value = true
+  stopAutoplay()
+}
+
+function resumeAutoplay() {
+  isPausedByInteraction.value = false
+  startAutoplay()
+}
+
+function syncReducedMotion() {
+  reduceMotion.value = Boolean(mediaQuery?.matches)
+  if (reduceMotion.value) {
+    stopAutoplay()
+  } else {
+    startAutoplay()
+  }
 }
 
 watch(
@@ -126,11 +161,14 @@ watch(
 )
 
 onMounted(() => {
-  startAutoplay()
+  mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null
+  syncReducedMotion()
+  mediaQuery?.addEventListener?.('change', syncReducedMotion)
 })
 
 onBeforeUnmount(() => {
   stopAutoplay()
+  mediaQuery?.removeEventListener?.('change', syncReducedMotion)
 })
 </script>
 
@@ -138,7 +176,7 @@ onBeforeUnmount(() => {
 .hero-slider {
   position: relative;
   overflow: hidden;
-  border-radius: 30px;
+  border-radius: 26px;
   padding: 0;
   margin-bottom: 1rem;
 }
@@ -152,7 +190,7 @@ onBeforeUnmount(() => {
 
 .hero-slide {
   min-width: 100%;
-  height: 470px;
+  height: clamp(320px, 36vw, 430px);
   position: relative;
   display: grid;
   align-items: end;
@@ -169,7 +207,9 @@ onBeforeUnmount(() => {
 .slide-overlay {
   position: absolute;
   inset: 0;
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.20);
+  background:
+    linear-gradient(180deg, rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.72)),
+    linear-gradient(90deg, rgb(0 0 0 / 0.52), rgb(0 0 0 / 0.12));
 }
 
 .slide-content {
@@ -195,7 +235,7 @@ onBeforeUnmount(() => {
 
 .slide-content p {
   margin: 0.55rem 0 0.8rem;
-  color: rgb(var(--palette-eggshell-rgb) / 0.95);
+  color: rgb(255 255 255 / 0.92);
   line-height: 1.7;
   font-size: 0.9rem;
 }
@@ -262,11 +302,21 @@ onBeforeUnmount(() => {
 
 @media (max-width: 720px) {
   .hero-slide {
-    height: 500px;
+    height: 340px;
   }
 
   .slide-content h2 {
     font-size: 1.35rem;
+  }
+
+  .slide-content {
+    padding: 1rem 1rem 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slider-track {
+    transition: none;
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="section-header" :class="[`align-${align}`]">
+  <div class="section-header" :class="[`align-${align}`, `variant-${variant}`]">
     <span class="section-eyebrow" v-if="eyebrow">{{ eyebrow }}</span>
     <h2 class="section-heading">{{ title }}</h2>
     <p class="section-subtitle muted" v-if="subtitle">{{ subtitle }}</p>
@@ -13,12 +13,25 @@ defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, default: '' },
   align: { type: String, default: 'center' },
+  variant: {
+    type: String,
+    default: 'default',
+    validator: (value) => ['compact', 'default', 'feature'].includes(value),
+  },
 })
 </script>
 
 <style scoped>
 .section-header {
   margin-bottom: 2rem;
+}
+
+.variant-compact {
+  margin-bottom: 1.15rem;
+}
+
+.variant-feature {
+  margin-bottom: 1.35rem;
 }
 
 .align-center {
@@ -44,7 +57,7 @@ defineProps({
 
 .section-heading {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: clamp(1.35rem, 3.5vw, 1.75rem);
   font-weight: 800;
   color: var(--ink-900);
   line-height: 1.3;
@@ -64,6 +77,14 @@ defineProps({
 @media (min-width: 920px) {
   .section-heading {
     font-size: 2.1rem;
+  }
+
+  .variant-compact .section-heading {
+    font-size: 1.82rem;
+  }
+
+  .variant-feature .section-heading {
+    font-size: 1.72rem;
   }
 }
 </style>

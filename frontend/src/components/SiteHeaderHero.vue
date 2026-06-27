@@ -55,12 +55,16 @@
 
     <div class="hero-header__content">
       <div class="hero-header__text">
-        <p class="hero-eyebrow">رستوران آنلاین</p>
-        <h1 class="hero-title">{{ branding.hero_title || branding.name }}</h1>
-        <p class="hero-subtitle">{{ branding.hero_subtitle || branding.tagline }}</p>
+        <p class="hero-eyebrow">تازه، سالم، روزانه</p>
+        <h1 class="hero-title">{{ heroTitle }}</h1>
+        <p class="hero-subtitle">{{ heroSubtitle }}</p>
         <div class="hero-cta-row">
-          <a class="hero-cta-btn" href="/menu">{{ branding.primary_cta_label || 'مشاهده منو' }}</a>
-          <a class="hero-cta-outline" href="/cart">سبد سفارش</a>
+          <a class="hero-cta-btn" href="/menu">{{ heroCta }}</a>
+          <a class="hero-cta-outline" href="/menu">مشاهده منو</a>
+        </div>
+        <div class="hero-benefits">
+          <span>مواد اولیه تازه</span>
+          <span>ارسال سریع</span>
         </div>
       </div>
     </div>
@@ -102,6 +106,10 @@ const props = defineProps({
 const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
 const managementLoginUrl = '/management/login?redirect_to=%2Fmanagement'
+
+const heroTitle = computed(() => String(props.branding?.hero_section_title || props.branding?.hero_title || props.branding?.name || 'سبک زندگی سالم، انتخاب هر روز ما').trim())
+const heroSubtitle = computed(() => String(props.branding?.hero_section_description || props.branding?.hero_subtitle || props.branding?.tagline || 'غذاهای سالم و متنوع با بهترین مواد اولیه تازه برای یک زندگی پرانرژی و متعادل.').trim())
+const heroCta = computed(() => String(props.branding?.hero_section_cta || props.branding?.primary_cta_label || 'سفارش آنلاین').trim())
 
 const bgStyle = computed(() => {
   const img = String(props.branding?.hero_image || '').trim()
@@ -145,9 +153,9 @@ const links = computed(() => {
 .hero-header__bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #1c1411 0%, #3d2510 40%, #5a3a20 100%);
+  background: radial-gradient(circle at 15% 18%, rgb(255 255 255 / 0.85), transparent 24%), linear-gradient(135deg, #fff8ee 0%, #f3dfc7 100%);
   background-size: cover;
-  background-position: center;
+  background-position: left center;
   background-repeat: no-repeat;
 }
 
@@ -156,9 +164,9 @@ const links = computed(() => {
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgb(0 0 0 / 0.55) 0%,
-    rgb(0 0 0 / 0.3) 40%,
-    rgb(0 0 0 / 0.65) 100%
+    rgb(255 249 240 / 0.18) 0%,
+    rgb(255 249 240 / 0.44) 46%,
+    rgb(255 249 240 / 0.72) 100%
   );
 }
 
@@ -172,7 +180,7 @@ const links = computed(() => {
   max-width: 1180px;
   margin: 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 0.7rem;
 }
@@ -195,7 +203,7 @@ const links = computed(() => {
 .hero-brand-copy strong {
   display: block;
   font-size: 0.95rem;
-  color: #fff;
+  color: #174d32;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -203,7 +211,7 @@ const links = computed(() => {
 .hero-brand-copy small {
   display: block;
   font-size: 0.72rem;
-  color: rgb(255 255 255 / 0.7);
+  color: rgb(23 77 50 / 0.62);
 }
 
 .hero-desktop-nav {
@@ -216,9 +224,9 @@ const links = computed(() => {
   border-radius: 999px;
   padding: 0.44rem 0.8rem;
   font-size: 0.82rem;
-  color: rgb(255 255 255 / 0.9);
-  border: 1px solid rgb(255 255 255 / 0.22);
-  background: rgb(255 255 255 / 0.08);
+  color: #174d32;
+  border: 1px solid rgb(23 77 50 / 0.14);
+  background: rgb(255 255 255 / 0.58);
   backdrop-filter: blur(8px);
   text-decoration: none;
   display: inline-flex;
@@ -228,7 +236,7 @@ const links = computed(() => {
 }
 
 .hero-nav-link:hover {
-  background: rgb(255 255 255 / 0.18);
+  background: rgb(255 255 255 / 0.85);
 }
 
 .hero-count-pill {
@@ -256,7 +264,7 @@ const links = computed(() => {
   border: 1px solid rgb(255 255 255 / 0.3);
   background: rgb(255 255 255 / 0.12);
   backdrop-filter: blur(8px);
-  color: #fff;
+  color: #174d32;
   font-size: 0.75rem;
   font-weight: 700;
   padding: 0.46rem 0.72rem;
@@ -271,7 +279,7 @@ const links = computed(() => {
   background: rgb(255 255 255 / 0.12);
   border: 1px solid rgb(255 255 255 / 0.24);
   backdrop-filter: blur(8px);
-  color: #fff;
+  color: #174d32;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -290,7 +298,7 @@ const links = computed(() => {
   background: rgb(255 255 255 / 0.12);
   border: 1px solid rgb(255 255 255 / 0.24);
   backdrop-filter: blur(8px);
-  color: #fff;
+  color: #174d32;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -371,7 +379,7 @@ const links = computed(() => {
   margin: 0;
   font-size: clamp(1.8rem, 5vw, 3.2rem);
   font-weight: 900;
-  color: #fff;
+  color: #174d32;
   line-height: 1.2;
   text-shadow: 0 2px 16px rgb(0 0 0 / 0.4);
 }
@@ -379,7 +387,7 @@ const links = computed(() => {
 .hero-subtitle {
   margin: 0;
   font-size: clamp(0.9rem, 2vw, 1.1rem);
-  color: rgb(255 255 255 / 0.82);
+  color: rgb(28 20 17 / 0.68);
   line-height: 1.65;
 }
 
@@ -410,7 +418,7 @@ const links = computed(() => {
   padding: 0.72rem 1.4rem;
   border-radius: 999px;
   border: 1.5px solid rgb(255 255 255 / 0.45);
-  color: #fff;
+  color: #174d32;
   background: transparent;
   font-size: 0.9rem;
   font-weight: 700;
@@ -498,7 +506,7 @@ const links = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #fff;
+  color: #174d32;
 }
 
 .sheet-close {
@@ -507,7 +515,7 @@ const links = computed(() => {
   border-radius: 999px;
   border: 1px solid rgb(255 255 255 / 0.2);
   background: transparent;
-  color: #fff;
+  color: #174d32;
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -523,7 +531,7 @@ const links = computed(() => {
   padding: 0.58rem 0.65rem;
   background: rgb(255 255 255 / 0.06);
   border: 1px solid rgb(255 255 255 / 0.1);
-  color: #fff;
+  color: #174d32;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -533,7 +541,7 @@ const links = computed(() => {
 .sheet-management-btn {
   border-radius: 12px;
   padding: 0.62rem 0.65rem;
-  text-align: center;
+  text-align: right;
   border: 1px solid rgb(255 200 100 / 0.3);
   background: rgb(255 200 100 / 0.12);
   color: rgb(255 220 150);

@@ -86,6 +86,9 @@ function handleRowKeydown(row) {
 <style scoped>
 .table-shell {
   overflow-x: auto;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 16px;
+  background: var(--bg-card, #fff);
 }
 
 .table {
@@ -97,7 +100,7 @@ function handleRowKeydown(row) {
 .table td {
   text-align: right;
   padding: 0.5rem 0.45rem;
-  border-bottom: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-bottom: 1px solid var(--border, #e2e8f0);
   font-size: 0.81rem;
   white-space: nowrap;
 }
@@ -107,18 +110,18 @@ function handleRowKeydown(row) {
 }
 
 .table tbody tr.clickable:hover {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  background: var(--module-50, rgb(139 94 52 / 0.075));
 }
 
 .table th {
   font-size: 0.78rem;
-  color: var(--text-muted);
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: var(--muted, var(--text-muted));
+  background: var(--bg-soft, #f1f5f9);
 }
 
 .empty-row {
   text-align: center;
-  color: var(--text-muted);
+  color: var(--muted, var(--text-muted));
   white-space: normal;
 }
 </style>

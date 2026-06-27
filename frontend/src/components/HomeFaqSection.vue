@@ -7,11 +7,23 @@
 
     <div class="faq-list">
       <article class="faq-item" v-for="(row, idx) in visibleFaqs" :key="row.name || idx">
-        <button class="faq-trigger" type="button" @click="toggle(idx)">
+        <button
+          class="faq-trigger"
+          type="button"
+          :aria-expanded="openIndex === idx"
+          :aria-controls="`home-faq-${idx}`"
+          @click="toggle(idx)"
+        >
           <strong>{{ row.question }}</strong>
-          <span>{{ openIndex === idx ? '−' : '+' }}</span>
+          <ChevronDown class="faq-icon" :class="{ open: openIndex === idx }" :size="18" stroke-width="2.2" />
         </button>
-        <p class="faq-answer muted" v-if="openIndex === idx">{{ row.answer }}</p>
+        <p
+          class="faq-answer muted"
+          v-if="openIndex === idx"
+          :id="`home-faq-${idx}`"
+        >
+          {{ row.answer }}
+        </p>
       </article>
     </div>
   </section>
@@ -19,6 +31,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
 import { normalizeFaqPublicRow } from '@/utils/faqMeta'
 
 const props = defineProps({
@@ -91,23 +104,30 @@ function toggle(index) {
   font-size: 0.88rem;
 }
 
-.faq-trigger span {
-  width: 1.2rem;
-  height: 1.2rem;
+.faq-icon {
+  flex: 0 0 auto;
+  width: 1.65rem;
+  height: 1.65rem;
   border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0.28rem;
   background: var(--accent-green20);
   color: var(--accent-green);
-  font-size: 0.95rem;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.faq-icon.open {
+  transform: rotate(180deg);
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
 }
 
 .faq-answer {
-  margin: 0;
-  padding: 0 0.75rem 0.7rem;
+  margin: 0 0.75rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.52);
+  border-right: 3px solid var(--accent-gold, #f4b24d);
   font-size: 0.82rem;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 @media (max-width: 980px) {

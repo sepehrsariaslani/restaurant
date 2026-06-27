@@ -46,10 +46,10 @@ defineEmits(['update:modelValue'])
 <style scoped>
 .toggle-switch {
   min-height: 3.25rem;
-  border: 1px solid #e4ded6;
-  border-radius: 8px;
-  background: #fff;
-  color: #2b211a;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: var(--bg-card, #fff);
+  color: var(--text-primary, #0f172a);
   padding: 0.55rem 0.65rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -60,13 +60,13 @@ defineEmits(['update:modelValue'])
 }
 
 .toggle-switch:hover {
-  border-color: rgb(124 90 66 / 0.24);
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.24);
   box-shadow: 0 10px 22px rgb(15 23 42 / 0.06);
 }
 
 .toggle-switch.checked {
-  border-color: rgb(124 90 66 / 0.22);
-  background: #f7f1ea;
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.22);
+  background: var(--module-50, rgb(139 94 52 / 0.075));
 }
 
 .toggle-switch.compact {
@@ -92,7 +92,7 @@ defineEmits(['update:modelValue'])
   width: 2.7rem;
   height: 1.55rem;
   border-radius: 999px;
-  background: #d8d0c7;
+  background: var(--border-strong, #cbd5e1);
   display: inline-flex;
   align-items: center;
   padding: 0.18rem;
@@ -120,7 +120,7 @@ defineEmits(['update:modelValue'])
 }
 
 .toggle-switch.checked .switch-track {
-  background: #7c5a42;
+  background: var(--module-500, #8b5e34);
 }
 
 .toggle-switch.checked .switch-thumb {
@@ -147,13 +147,13 @@ defineEmits(['update:modelValue'])
 }
 
 .switch-copy small {
-  color: #74685f;
+  color: var(--text-muted, #64748b);
   font-size: 0.74rem;
   line-height: 1.6;
 }
 
 .toggle-switch:focus-within {
-  outline: 3px solid rgb(124 90 66 / 0.18);
+  outline: 3px solid rgb(var(--palette-deep-sapphire-rgb, 124 90 66) / 0.18);
   outline-offset: 2px;
 }
 

@@ -370,7 +370,8 @@ const isCustomizable = computed(() =>
 const allowDirectAdd = computed(() => Number(props.item?.restaurant_allow_direct_add || 0) === 1)
 
 function handleCustomize() {
-  window.location.href = `/customize/${props.item.slug}`
+  if (!props.item?.slug) return
+  window.location.href = `/item/${props.item.slug}`
 }
 </script>
 

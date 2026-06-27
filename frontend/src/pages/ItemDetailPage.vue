@@ -24,6 +24,7 @@
     </div>
 
     <div class="detail-wrap" v-if="item">
+      <OrderContextStrip :currency="currency" />
       <!-- ════════════════════════════════════════════════════════════════
            MOBILE LAYOUT
            ════════════════════════════════════════════════════════════════ -->
@@ -128,6 +129,15 @@
             مواد تشکیل‌دهنده
           </button>
           <button
+            v-if="isBuilderEnabled"
+            class="detail-tab"
+            :class="{ active: activeTab === 'builder' }"
+            @click="activeTab = 'builder'"
+            type="button"
+          >
+            سفارشی‌سازی
+          </button>
+          <button
             class="detail-tab"
             :class="{ active: activeTab === 'reviews' }"
             @click="activeTab = 'reviews'"
@@ -175,6 +185,21 @@
             />
           </section>
           <p class="empty-tab" v-else>برای این محصول ماده تشکیل‌دهنده‌ای قابل تنظیم تعریف نشده است.</p>
+        </div>
+
+        <div class="tab-pane" v-show="activeTab === 'builder' && isBuilderEnabled">
+          <section class="builder-launch-card">
+            <div class="builder-launch-copy">
+              <span class="builder-kicker">محصول سفارشی</span>
+              <h3>در حال آماده‌سازی سفارشی‌سازی…</h3>
+              <p>
+                برای این محصول ویزارد مرحله‌به‌مرحله به‌صورت خودکار باز می‌شود.
+              </p>
+            </div>
+            <p v-if="builderLoading" class="empty-tab">در حال بارگذاری قالب سفارشی‌سازی…</p>
+            <p v-else-if="builderError" class="error-msg">{{ builderError }}</p>
+            <p v-else-if="!builderTemplate" class="empty-tab">برای این محصول هنوز قالب سفارشی‌سازی فعالی تعریف نشده است.</p>
+          </section>
         </div>
 
         <!-- Tab: reviews -->
@@ -352,6 +377,13 @@
                 type="button"
               >مواد تشکیل‌دهنده</button>
               <button
+                v-if="isBuilderEnabled"
+                class="detail-tab"
+                :class="{ active: activeTab === 'builder' }"
+                @click="activeTab = 'builder'"
+                type="button"
+              >سفارشی‌سازی</button>
+              <button
                 class="detail-tab"
                 :class="{ active: activeTab === 'reviews' }"
                 @click="activeTab = 'reviews'"
@@ -397,6 +429,21 @@
                 @update:model-value="setCustomization"
               />
               <p class="empty-tab" v-else>برای این محصول ماده تشکیل‌دهنده‌ای قابل تنظیم تعریف نشده است.</p>
+            </section>
+
+            <section class="tab-pane desktop-pane" v-show="activeTab === 'builder' && isBuilderEnabled">
+              <section class="builder-launch-card builder-launch-card--desktop">
+                <div class="builder-launch-copy">
+                  <span class="builder-kicker">محصول سفارشی</span>
+                  <h3>در حال آماده‌سازی سفارشی‌سازی…</h3>
+                  <p>
+                    ویزارد کامل این محصول به‌صورت خودکار باز می‌شود تا سفارش را مرحله‌به‌مرحله بسازید.
+                  </p>
+                </div>
+                <p v-if="builderLoading" class="empty-tab">در حال بارگذاری قالب سفارشی‌سازی…</p>
+                <p v-else-if="builderError" class="error-msg">{{ builderError }}</p>
+                <p v-else-if="!builderTemplate" class="empty-tab">برای این محصول هنوز قالب سفارشی‌سازی فعالی تعریف نشده است.</p>
+              </section>
             </section>
 
             <section class="tab-pane desktop-pane" v-show="activeTab === 'reviews'">
@@ -495,8 +542,8 @@
                 <small>قیمت کل</small>
                 <strong>{{ isComingSoon ? 'به‌زودی' : formatMoney(linePreview.lineTotal, currency) }}</strong>
               </div>
-              <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isComingSoon" @click="addToCart">
-                {{ isComingSoon ? 'به‌زودی' : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+              <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isComingSoon" @click="primaryAddAction">
+                {{ isComingSoon ? 'به‌زودی' : isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
                 <span class="cart-plus" v-if="!isComingSoon">+</span>
               </button>
             </div>
@@ -538,8 +585,8 @@
           <small>قیمت کل</small>
           <strong>{{ isComingSoon ? 'به‌زودی' : formatMoney(linePreview.lineTotal, currency) }}</strong>
         </div>
-        <button class="add-to-cart-btn" type="button" :disabled="isComingSoon" @click="addToCart">
-          {{ isComingSoon ? 'به‌زودی' : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+        <button class="add-to-cart-btn" type="button" :disabled="isComingSoon" @click="primaryAddAction">
+          {{ isComingSoon ? 'به‌زودی' : isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
           <span class="cart-plus" v-if="!isComingSoon">+</span>
         </button>
       </div>
@@ -551,6 +598,20 @@
       <main class="print-product-desc">{{ item?.long_desc || item?.short_desc || 'توضیحی ثبت نشده است.' }}</main>
       <footer class="print-product-price">{{ formatMoney(item?.base_price, currency) }}</footer>
     </section>
+
+    <Teleport to="body">
+      <ProductBuilderWizard
+        v-if="builderOpen && builderTemplate && item"
+        :product="{ ...item, item_name: item.title, item_code: item.name || item.item_code, image: resolveItemImage(item) }"
+        :template="builderTemplate"
+        :base-price="Number(item.base_price || 0)"
+        :currency="currency"
+        :loading-price="builderPriceLoading"
+        @close="builderOpen = false"
+        @selection-change="handleBuilderSelectionChange"
+        @add-to-cart="handleBuilderAddToCart"
+      />
+    </Teleport>
 
     <!-- ─── Image Lightbox ─── -->
     <Teleport to="body">
@@ -581,7 +642,9 @@ import { Teleport } from 'vue'
 import IngredientQuantityEditor from '@/components/IngredientQuantityEditor.vue'
 import ModifierRecipeImpactSelector from '@/components/ModifierRecipeImpactSelector.vue'
 import LivePricingBreakdown from '@/components/LivePricingBreakdown.vue'
-import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview } from '@/utils/api'
+import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
+import OrderContextStrip from '@/components/OrderContextStrip.vue'
+import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney, normalizeMobile, parseQuery } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
 import { getLineById, upsertLine } from '@/stores/cartStore'
@@ -600,10 +663,17 @@ const activeTab = ref('details')
 const ingredients = ref([])
 const modifierGroups = ref([])
 const allergens = ref([])
-const currency = ref('TOMAN')
+const currency = ref(props.boot.currency || 'IRR')
 const qty = ref(1)
 const customization = ref({ ingredient_adjustments: [], selected_modifiers: [] })
 const selectionError = ref('')
+const builderLoading = ref(false)
+const builderError = ref('')
+const builderTemplate = ref(null)
+const builderOpen = ref(false)
+const builderPriceLoading = ref(false)
+const builderPriceData = ref(null)
+const builderAutoOpened = ref(false)
 
 // ─── Lightbox ────────────────────────────────────────────────────────
 const lightboxOpen = ref(false)
@@ -877,6 +947,27 @@ const linePreview = computed(() =>
   }),
 )
 
+const isBuilderEnabled = computed(() => {
+  return Boolean(
+    item.value &&
+      Number(item.value.restaurant_is_customizable || 0) === 1 &&
+      Number(item.value.restaurant_builder_active || 0) === 1,
+  )
+})
+
+const builderSummary = computed(() => {
+  const steps = builderTemplate.value?.steps || []
+  const count = steps.reduce((sum, step) => sum + ((step.options || []).length), 0)
+  return {
+    steps: steps.length,
+    options: count,
+  }
+})
+
+const builderDisplayPrice = computed(() => {
+  return Number(builderPriceData.value?.final_price || item.value?.base_price || 0)
+})
+
 const hasIngredientCustomization = computed(() => Array.isArray(ingredients.value) && ingredients.value.length > 0)
 const hasModifierCustomization = computed(() => Array.isArray(modifierGroups.value) && modifierGroups.value.length > 0)
 
@@ -1001,6 +1092,99 @@ function hydrateForEdit(currentSlug) {
   customization.value = { ...withVariantContext(sanitized), selected_modifiers: normalizeSelectedModifiers(sanitized.selected_modifiers, modifierGroups.value) }
 }
 
+async function loadBuilderTemplate() {
+  if (!item.value?.name && !item.value?.item_code) {
+    builderTemplate.value = null
+    return
+  }
+  if (!isBuilderEnabled.value) {
+    builderTemplate.value = null
+    builderError.value = ''
+    return
+  }
+
+  builderLoading.value = true
+  builderError.value = ''
+  builderPriceData.value = null
+  try {
+    const response = await getBuilderTemplate(item.value.name || item.value.item_code)
+    builderTemplate.value = response?.data?.template || response?.template || response || null
+  } catch (err) {
+    builderTemplate.value = null
+    builderError.value = err?.message || 'دریافت قالب سفارشی‌سازی ناموفق بود.'
+  } finally {
+    builderLoading.value = false
+  }
+}
+
+async function handleBuilderSelectionChange(selections) {
+  if (!item.value?.name && !item.value?.item_code) return
+  if (!Array.isArray(selections) || !selections.length) {
+    builderPriceData.value = null
+    return
+  }
+
+  builderPriceLoading.value = true
+  try {
+    const response = await computeBuilderPrice(item.value.name || item.value.item_code, selections)
+    builderPriceData.value = response?.data || response || null
+  } catch (_) {
+    builderPriceData.value = null
+  } finally {
+    builderPriceLoading.value = false
+  }
+}
+
+async function primaryAddAction() {
+  if (isBuilderEnabled.value) {
+    if (!builderTemplate.value && !builderLoading.value) {
+      await loadBuilderTemplate()
+    }
+    if (builderTemplate.value) {
+      builderOpen.value = true
+      return
+    }
+    activeTab.value = 'builder'
+    return
+  }
+  addToCart()
+}
+
+function handleBuilderAddToCart(payload) {
+  if (!item.value) return
+
+  const finalPrice = Number(builderPriceData.value?.final_price ?? payload?.final_price ?? item.value.base_price ?? 0)
+  const optionsTotal = Number(payload?.options_total || 0)
+  const builderSelections = Array.isArray(payload?.selections) ? payload.selections : []
+  const builderSummaryText = builderSelections.map((row) => `${row.option_label}${row.qty > 1 ? ` × ${row.qty}` : ''}`).join('، ')
+
+  upsertLine({
+    item_slug: item.value.slug,
+    item_title: item.value.title,
+    item_image: resolveItemImage(item.value),
+    base_price: Number(item.value.base_price || 0),
+    qty: 1,
+    unit_price_preview: finalPrice,
+    line_total_preview: finalPrice,
+    customization: {
+      ingredient_adjustments: [],
+      selected_modifiers: [],
+      builder_selection: {
+        template: payload?.template || builderTemplate.value?.name || '',
+        selections: builderSelections,
+        options_total: optionsTotal,
+        final_price: finalPrice,
+        summary: builderSummaryText,
+      },
+    },
+    ingredient_catalog: [],
+    modifier_groups_catalog: [],
+  })
+
+  builderOpen.value = false
+  window.location.href = '/cart'
+}
+
 async function loadItem() {
   const slug = resolveSlug()
   if (!slug) { error.value = 'آدرس محصول معتبر نیست.'; return }
@@ -1021,6 +1205,12 @@ async function loadItem() {
     loadUserImages(slug)
     await refreshReviews()
     loadRelatedItems()
+    await loadBuilderTemplate()
+    if (isBuilderEnabled.value && builderTemplate.value && !editLineId.value && !builderAutoOpened.value) {
+      activeTab.value = 'builder'
+      builderAutoOpened.value = true
+      builderOpen.value = true
+    }
   } catch (err) {
     error.value = err.message || 'دریافت جزئیات آیتم ناموفق بود.'
   } finally {
@@ -1439,6 +1629,92 @@ onUnmounted(() => {
 
 .error-msg { color: #c0392b; font-size: 0.83rem; margin: 0; }
 .muted { color: var(--text-muted, #846b58); font-size: 0.82rem; }
+
+.builder-launch-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgb(var(--palette-gold-rgb) / 0.14), transparent 38%),
+    linear-gradient(180deg, rgb(var(--palette-eggshell-rgb) / 0.96), rgb(var(--palette-eggshell-rgb) / 0.88));
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  box-shadow: 0 18px 42px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+}
+
+.builder-launch-card--desktop {
+  padding: 1.25rem;
+}
+
+.builder-launch-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.builder-kicker {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.32rem 0.72rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-gold-rgb) / 0.14);
+  color: var(--accent-gold, #c98d42);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.builder-launch-copy h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-primary, #3f2a1d);
+}
+
+.builder-launch-copy p {
+  margin: 0;
+  color: var(--text-secondary, #654a38);
+  line-height: 1.8;
+  font-size: 0.88rem;
+}
+
+.builder-launch-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.builder-stat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  color: var(--text-primary, #3f2a1d);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.builder-start-btn {
+  min-height: 48px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent-green, #6f4a31), rgb(var(--palette-gold-rgb) / 0.92));
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  box-shadow: 0 14px 28px rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+}
+
+.builder-start-btn:hover {
+  transform: translateY(-1px);
+}
+
+.builder-start-btn:active {
+  transform: scale(0.985);
+}
 
 /* ════════════════════════════════════════════════════════════════
    REVIEWS

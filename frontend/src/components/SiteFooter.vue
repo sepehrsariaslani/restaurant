@@ -1,10 +1,26 @@
 <template>
   <footer class="site-footer" dir="rtl">
     <div class="footer-inner">
+      <section class="footer-cta" aria-label="شروع سفارش">
+        <div>
+          <span class="footer-cta-kicker">آماده سفارش هستید؟</span>
+          <h2>محبوب‌ترین آیتم‌ها را سریع انتخاب کنید و سفارش را بسازید.</h2>
+        </div>
+        <div class="footer-cta-actions">
+          <a href="/menu" class="footer-primary-link">مشاهده منو</a>
+          <a href="/cart" class="footer-secondary-link">سبد سفارش</a>
+        </div>
+      </section>
+
       <div class="footer-grid">
         <div class="footer-col footer-brand-col">
           <a href="/" class="footer-logo">{{ brandName }}</a>
-          <p class="footer-desc" v-if="description">{{ description }}</p>
+          <p class="footer-desc">{{ description || 'منوی آنلاین با سفارش سریع، مواد تازه و تجربه‌ای روان برای انتخاب غذای دلخواه شما.' }}</p>
+          <div class="footer-trust-row" aria-label="مزیت‌ها">
+            <span>تازه‌پز</span>
+            <span>سفارش سریع</span>
+            <span>پرداخت امن</span>
+          </div>
           <div class="footer-social" v-if="instagram || telegram">
             <a v-if="instagram" :href="instagram" target="_blank" rel="noopener" class="social-link">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -31,10 +47,11 @@
             <a href="/menu" class="footer-link">منو</a>
             <a href="/cart" class="footer-link">سبد خرید</a>
             <a href="/about-us" class="footer-link">درباره ما</a>
+            <a href="/faq" class="footer-link">سوالات متداول</a>
           </nav>
         </div>
 
-        <div class="footer-col" v-if="phone || email || address">
+        <div class="footer-col">
           <h4 class="footer-heading">ارتباط با ما</h4>
           <div class="footer-contacts">
             <a v-if="phone" :href="`tel:${phone}`" class="footer-contact-item">
@@ -56,6 +73,9 @@
                 <circle cx="12" cy="10" r="3"/>
               </svg>
               {{ address }}
+            </p>
+            <p v-if="!phone && !email && !address" class="footer-contact-item footer-address">
+              سفارش آنلاین شما از طریق منو و سبد خرید در دسترس است.
             </p>
           </div>
         </div>
@@ -128,6 +148,94 @@ defineProps({
   padding: 3.5rem 0 1.5rem;
 }
 
+.footer-cta {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.4rem;
+  margin-bottom: 2.4rem;
+  padding: clamp(1.2rem, 3vw, 2rem);
+  border-radius: 28px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 20%, rgb(255 255 255 / 0.18), transparent 30%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0.06));
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 18px 42px rgb(0 0 0 / 0.12);
+}
+
+.footer-cta::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -4rem;
+  top: -5rem;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-june-bud-rgb, 201 223 144) / 0.18);
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+.footer-cta-kicker {
+  display: inline-flex;
+  margin-bottom: 0.45rem;
+  color: var(--palette-deep-saffron, #C98D42);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.footer-cta h2 {
+  margin: 0;
+  max-width: 620px;
+  color: #fff;
+  font-size: clamp(1.25rem, 3vw, 2rem);
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+.footer-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.footer-primary-link,
+.footer-secondary-link {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.65rem 1.05rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.footer-primary-link {
+  background: var(--palette-june-bud, #c9df90);
+  color: var(--palette-deep-sapphire, #6F4A31);
+}
+
+.footer-secondary-link {
+  border: 1px solid rgb(255 255 255 / 0.2);
+  color: rgb(255 255 255 / 0.86);
+}
+
+.footer-primary-link:hover,
+.footer-secondary-link:hover {
+  transform: translateY(-2px);
+}
+
+.footer-secondary-link:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+}
+
 .footer-grid {
   display: grid;
   grid-template-columns: 1.6fr 1fr 1fr;
@@ -156,6 +264,25 @@ defineProps({
   line-height: 1.7;
   color: rgb(255 255 255 / 0.72);
   max-width: 280px;
+}
+
+.footer-trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.footer-trust-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.76);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .footer-social {
@@ -290,6 +417,20 @@ defineProps({
 }
 
 @media (max-width: 900px) {
+  .footer-cta {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .footer-cta-actions {
+    width: 100%;
+  }
+
+  .footer-primary-link,
+  .footer-secondary-link {
+    flex: 1 1 10rem;
+  }
+
   .footer-grid {
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
@@ -301,6 +442,15 @@ defineProps({
 }
 
 @media (max-width: 580px) {
+  .footer-inner {
+    width: min(100% - 1.5rem, 1200px);
+    padding: 2.4rem 0 6rem;
+  }
+
+  .footer-cta {
+    border-radius: 22px;
+  }
+
   .footer-grid {
     grid-template-columns: 1fr;
     gap: 1.5rem;

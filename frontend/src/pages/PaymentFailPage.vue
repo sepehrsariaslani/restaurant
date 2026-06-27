@@ -12,8 +12,8 @@
         </div>
       </div>
 
-      <h1 class="fail-title">پرداخت ناموفق</h1>
-      <p class="fail-subtitle">متأسفانه پرداخت شما با موفقیت انجام نشد.</p>
+      <h1 class="fail-title">پرداخت ناموفق بود</h1>
+      <p class="fail-subtitle">اطلاعات سفارش شما محفوظ است. می‌توانید دوباره پرداخت را امتحان کنید یا روش پرداخت را تغییر دهید.</p>
 
       <div class="info-card" v-if="orderCode">
         <div class="info-row">
@@ -34,11 +34,12 @@
           <li>اطلاعات کارت نادرست وارد شد</li>
           <li>درگاه بانکی در دسترس نبود</li>
         </ul>
-        <p class="help-note">سفارش شما <strong>ذخیره نشده</strong> و هزینه‌ای از حساب کسر نشده است.</p>
+        <p class="help-note">اگر سفارش قبلاً ثبت شده باشد، حذف نشده است. در صورت کسر وجه، وضعیت پرداخت از طریق پشتیبانی قابل پیگیری است.</p>
       </div>
 
       <div class="actions">
-        <a :href="retryUrl" class="primary-btn">🔄 تلاش مجدد</a>
+        <a :href="retryUrl" class="primary-btn">تلاش مجدد</a>
+        <a href="/checkout" class="secondary-btn">تغییر روش پرداخت</a>
         <a href="/cart" class="secondary-btn">بازگشت به سبد</a>
         <a href="/menu" class="ghost-link">رفتن به منو</a>
       </div>

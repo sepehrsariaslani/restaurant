@@ -1,74 +1,86 @@
 <template>
-  <div class="orders-page" dir="rtl">
-    <header class="page-header">
-      <button class="back-btn" type="button" @click="goBack" aria-label="بازگشت">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-      </button>
-      <h1 class="page-title">سفارش‌های من</h1>
-      <button class="refresh-btn" type="button" :disabled="loading" @click="loadOrders">↻</button>
-    </header>
-
-    <section class="hero-card">
-      <div>
-        <p class="eyebrow">تاریخچه خرید</p>
-        <h2>{{ customerName }}</h2>
-        <p>{{ mobile ? `شماره ${mobile}` : 'برای دیدن سفارش‌ها وارد شوید.' }}</p>
+  <div class="customer-page orders-page" dir="rtl">
+    <section class="customer-page__hero">
+      <div class="customer-page__topbar">
+        <button class="customer-page__back" type="button" @click="goBack" aria-label="بازگشت">
+          <ChevronRight :size="20" />
+        </button>
+        <div class="customer-page__titles">
+          <p class="customer-page__eyebrow"><ReceiptText :size="14" /> تاریخچه خرید</p>
+          <h1 class="customer-page__title">سفارش‌های من</h1>
+          <p class="customer-page__subtitle">همه سفارش‌های ثبت‌شده را با جزئیات و وضعیت جاری ببینید.</p>
+        </div>
+        <button class="customer-page__action" type="button" :disabled="loading" @click="loadOrders">
+          <RefreshCcw :size="16" />
+          <span>بروزرسانی</span>
+        </button>
       </div>
-      <a v-if="!mobile" href="/customer/login?redirect=/customer/orders" class="login-link">ورود</a>
+
+      <div class="hero-summary customer-grid customer-grid--2">
+        <article class="hero-summary__item customer-glass-card">
+          <small>نام مشتری</small>
+          <strong>{{ customerName }}</strong>
+        </article>
+        <article class="hero-summary__item customer-glass-card">
+          <small>شماره همراه</small>
+          <strong>{{ mobile || '—' }}</strong>
+        </article>
+      </div>
     </section>
 
-    <section class="stats-grid" v-if="orders.length">
-      <article>
-        <strong>{{ orders.length.toLocaleString('fa-IR') }}</strong>
-        <span>سفارش</span>
-      </article>
-      <article>
-        <strong>{{ formatMoney(totalSpent, currency) }}</strong>
-        <span>جمع خرید</span>
-      </article>
-    </section>
+    <div class="customer-page__body">
+      <section class="stats-grid" v-if="orders.length">
+        <article class="customer-glass-card">
+          <strong>{{ orders.length.toLocaleString('fa-IR') }}</strong>
+          <span>سفارش ثبت‌شده</span>
+        </article>
+        <article class="customer-glass-card">
+          <strong>{{ formatMoney(totalSpent, currency) }}</strong>
+          <span>جمع خرید</span>
+        </article>
+      </section>
 
-    <p v-if="loading" class="state muted">در حال دریافت سفارش‌ها...</p>
-    <p v-else-if="error" class="state error">{{ error }}</p>
+      <p v-if="loading" class="state customer-muted-text">در حال دریافت سفارش‌ها...</p>
+      <p v-else-if="error" class="state customer-danger-text">{{ error }}</p>
 
-    <section v-else-if="orders.length" class="orders-list">
-      <a
-        v-for="order in orders"
-        :key="order.order_code || order.name"
-        class="order-card"
-        :href="orderDetailUrl(order)"
-      >
-        <div class="order-top">
-          <div>
-            <small>کد سفارش</small>
-            <strong>{{ order.order_code || order.name }}</strong>
+      <section v-else-if="orders.length" class="customer-stack">
+        <a
+          v-for="order in orders"
+          :key="order.order_code || order.name"
+          class="order-card customer-glass-card"
+          :href="orderDetailUrl(order)"
+        >
+          <div class="order-card__top">
+            <div>
+              <small>کد سفارش</small>
+              <strong>{{ order.order_code || order.name }}</strong>
+            </div>
+            <span class="order-status">{{ formatStatus(order.status) }}</span>
           </div>
-          <span class="status-pill">{{ formatStatus(order.status) }}</span>
-        </div>
-        <div class="order-meta">
-          <span>{{ formatDate(order.created_at || order.transaction_date || order.creation) }}</span>
-          <span>{{ formatMoney(order.grand_total || order.total || 0, currency) }}</span>
-        </div>
-        <div class="order-footer">
-          <span>{{ order.channel || order.delivery_mode || 'آنلاین' }}</span>
-          <span>جزئیات ←</span>
-        </div>
-      </a>
-    </section>
+          <div class="order-card__meta">
+            <span>{{ formatDate(order.created_at || order.transaction_date || order.creation) }}</span>
+            <span>{{ formatMoney(order.grand_total || order.total || 0, currency) }}</span>
+          </div>
+          <div class="order-card__footer">
+            <span>{{ order.channel || order.delivery_mode || 'آنلاین' }}</span>
+            <span class="order-card__more">مشاهده جزئیات <ChevronLeft :size="16" /></span>
+          </div>
+        </a>
+      </section>
 
-    <section v-else class="empty-card">
-      <div class="empty-icon">🧾</div>
-      <h3>هنوز سفارشی ندارید</h3>
-      <p>بعد از ثبت سفارش، تاریخچه خرید شما اینجا نمایش داده می‌شود.</p>
-      <a href="/menu" class="primary-btn">شروع سفارش</a>
-    </section>
-
-    <div class="bottom-spacer"></div>
+      <section v-else class="customer-glass-card customer-empty">
+        <div class="customer-icon-badge"><ReceiptText :size="28" /></div>
+        <h3>هنوز سفارشی ندارید</h3>
+        <p>بعد از ثبت اولین سفارش، تاریخچه خرید شما اینجا نمایش داده می‌شود.</p>
+        <a href="/menu" class="primary-btn empty-cta">شروع سفارش</a>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { ChevronLeft, ChevronRight, ReceiptText, RefreshCcw } from 'lucide-vue-next'
 import { getCustomerOrders } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 
@@ -136,35 +148,117 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.orders-page { min-height: 100vh; background: #f7f0e8; padding-bottom: 7rem; color: #3f2a1d; }
-.page-header { display: flex; align-items: center; justify-content: space-between; padding: 3.5rem 1rem 1rem; background: #fff; border-bottom: 1px solid #ede3d8; }
-.back-btn, .refresh-btn { width: 40px; height: 40px; border-radius: 50%; background: #f7f0e8; border: none; cursor: pointer; color: #3f2a1d; display: flex; align-items: center; justify-content: center; font-family: inherit; }
-.refresh-btn:disabled { opacity: 0.5; }
-.page-title { font-size: 1.1rem; font-weight: 800; margin: 0; }
-.hero-card { margin: 1rem; padding: 1.2rem; border-radius: 24px; color: #fff; background: linear-gradient(135deg, #3f2a1d, #6f4a31); display: flex; justify-content: space-between; gap: 1rem; align-items: center; box-shadow: 0 12px 26px rgba(63,42,29,.18); }
-.hero-card h2, .hero-card p { margin: 0; }
-.hero-card p { color: rgba(255,255,255,.72); font-size: .84rem; margin-top: .25rem; }
-.eyebrow { color: rgba(255,255,255,.58) !important; font-size: .72rem !important; margin: 0 0 .2rem !important; }
-.login-link, .primary-btn { background: #fff; color: #6f4a31; border-radius: 999px; padding: .65rem 1rem; text-decoration: none; font-weight: 800; font-size: .85rem; }
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin: 0 1rem 1rem; }
-.stats-grid article { background: #fff; border-radius: 20px; padding: 1rem; box-shadow: 0 4px 14px rgba(0,0,0,.06); }
-.stats-grid strong { display: block; font-size: 1.05rem; }
-.stats-grid span { color: #846b58; font-size: .78rem; }
-.state { margin: 1rem; text-align: center; }
-.muted { color: #846b58; }
-.error { color: #b84f4f; }
-.orders-list { display: grid; gap: .75rem; margin: 0 1rem; }
-.order-card { background: #fff; border-radius: 22px; padding: 1rem; text-decoration: none; color: inherit; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-.order-top, .order-meta, .order-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
-.order-top small { display: block; color: #9b866f; font-size: .72rem; margin-bottom: .15rem; }
-.order-top strong { font-size: 1rem; direction: ltr; display: inline-block; }
-.status-pill { background: #f0e2d3; color: #6f4a31; border-radius: 999px; padding: .35rem .65rem; font-size: .75rem; font-weight: 800; white-space: nowrap; }
-.order-meta { margin-top: .75rem; color: #846b58; font-size: .82rem; }
-.order-footer { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid #f1e7db; color: #6f4a31; font-size: .82rem; font-weight: 800; }
-.empty-card { margin: 1rem; background: #fff; border-radius: 24px; padding: 2rem 1.2rem; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-.empty-icon { font-size: 2.4rem; }
-.empty-card h3 { margin: .5rem 0; }
-.empty-card p { color: #846b58; line-height: 1.8; }
-.empty-card .primary-btn { display: inline-block; background: #6f4a31; color: #fff; margin-top: .5rem; }
-.bottom-spacer { height: 2rem; }
+.hero-summary {
+  margin-top: 0.95rem;
+}
+
+.hero-summary__item {
+  padding: 0.85rem 0.95rem;
+  background: rgb(255 255 255 / 0.1);
+  border-color: rgb(255 255 255 / 0.12);
+  color: #fff;
+  box-shadow: none;
+}
+
+.hero-summary__item small {
+  display: block;
+  color: rgb(255 255 255 / 0.7);
+}
+
+.hero-summary__item strong {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.96rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.stats-grid article {
+  padding: 1rem;
+}
+
+.stats-grid strong {
+  display: block;
+  font-size: 1.02rem;
+}
+
+.stats-grid span {
+  display: block;
+  margin-top: 0.28rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.state {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.order-card {
+  padding: 1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.order-card__top,
+.order-card__meta,
+.order-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.order-card__top small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.order-card__top strong {
+  font-size: 0.98rem;
+  direction: ltr;
+  display: inline-block;
+}
+
+.order-status {
+  padding: 0.34rem 0.6rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: var(--accent-green);
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.order-card__meta {
+  margin-top: 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.order-card__footer {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.order-card__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.empty-cta {
+  display: inline-flex;
+}
 </style>

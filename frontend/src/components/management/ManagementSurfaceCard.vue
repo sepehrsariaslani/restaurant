@@ -34,10 +34,10 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 <style scoped>
 .surface-card {
-  border-radius: 8px;
-  border: 1px solid #e4ded6;
-  background: #fff;
-  box-shadow: 0 12px 30px rgb(15 23 42 / 0.06);
+  border-radius: 16px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--bg-card, #fff);
+  box-shadow: var(--shadow-sm, 0 12px 30px rgb(15 23 42 / 0.05));
   overflow: visible;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
@@ -52,7 +52,7 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 .surface-head h3 {
   margin: 0;
-  color: #2b211a;
+  color: var(--text-primary, #0f172a);
   font-size: 1rem;
   font-weight: 900;
   line-height: 1.45;
@@ -60,23 +60,23 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 .surface-head p {
   margin: 0.2rem 0 0;
-  color: #74685f;
+  color: var(--text-muted, #64748b);
   font-size: 0.82rem;
   line-height: 1.65;
 }
 
 .tone-soft {
-  background: #fbfaf8;
+  background: color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, #f1f5f9));
 }
 
 .tone-accent {
-  background: #f7f1ea;
-  border-color: rgb(124 90 66 / 0.18);
+  background: linear-gradient(180deg, var(--bg-card, #fff), color-mix(in srgb, var(--bg-card, #fff) 86%, var(--module-50, rgb(139 94 52 / 0.075))));
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.16);
 }
 
 @media (hover: hover) {
   .surface-card:hover {
-    border-color: rgb(124 90 66 / 0.18);
+    border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.18);
     box-shadow: 0 18px 42px rgb(15 23 42 / 0.08);
   }
 }

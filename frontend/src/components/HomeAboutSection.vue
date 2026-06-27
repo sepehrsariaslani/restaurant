@@ -20,6 +20,9 @@
             <strong>{{ section.stat_value }}</strong>
             <small>{{ section.stat_label }}</small>
           </div>
+          <a class="about-card-cta" :href="`/about-us#${section.name || ''}`">
+            {{ ctaLabel(section) }}
+          </a>
         </div>
       </article>
     </div>
@@ -42,11 +45,26 @@ const fallbackImage =
 const visibleSections = computed(() => (props.sections || []).slice(0, 2))
 
 function excerpt(value) {
-  const text = String(value || '').trim()
-  if (text.length <= 140) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (text.length <= 132) {
     return text
   }
-  return `${text.slice(0, 140)}...`
+
+  const sentenceEnd = text.slice(0, 132).search(/[.!؟。]\s[^.!؟。]*$/)
+  if (sentenceEnd > 56) {
+    return text.slice(0, sentenceEnd + 1).trim()
+  }
+
+  const cut = text.slice(0, 132)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${cut.slice(0, lastSpace > 72 ? lastSpace : 132).trim()}…`
+}
+
+function ctaLabel(section) {
+  const text = `${section?.title || ''} ${section?.subtitle || ''}`
+  if (/مواد|کیفیت|تازه/.test(text)) return 'کیفیت و مواد اولیه'
+  if (/داستان|تاریخ|ما/.test(text)) return 'داستان ما'
+  return 'بیشتر بخوانید'
 }
 </script>
 
@@ -79,7 +97,7 @@ function excerpt(value) {
 
 .about-card {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: minmax(132px, 150px) 1fr;
   gap: 0.75rem;
   border-radius: 18px;
   background: rgb(var(--palette-eggshell-rgb) / 0.72);
@@ -88,7 +106,7 @@ function excerpt(value) {
 }
 
 .about-image {
-  width: 160px;
+  width: 100%;
   height: 100%;
   min-height: 160px;
   object-fit: cover;
@@ -129,6 +147,18 @@ function excerpt(value) {
 .stat-row small {
   color: var(--text-muted);
   font-size: 0.73rem;
+}
+
+.about-card-cta {
+  display: inline-flex;
+  margin-top: 0.55rem;
+  border-radius: 999px;
+  padding: 0.32rem 0.72rem;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: var(--palette-deep-sapphire, #6F4A31);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 @media (max-width: 980px) {

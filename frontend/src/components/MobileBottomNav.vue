@@ -1,6 +1,6 @@
 <template>
   <nav class="mobile-bottom-nav" dir="rtl" aria-label="منوی پایین">
-    <a href="/customer/dashboard" class="nav-item" :class="{ active: page === 'customer-dashboard' || page === 'landing' }">
+    <a href="/" class="nav-item" :class="{ active: page === 'landing' }">
       <Home class="nav-icon" :size="20" />
       <small>خانه</small>
     </a>
@@ -10,12 +10,12 @@
       <small>منو</small>
     </a>
 
-    <button class="nav-item nav-search" type="button" @click="openSearch" aria-label="جستجو">
+    <a href="/search" class="nav-item nav-search" :class="{ active: page === 'search' }" aria-label="جستجو">
       <span class="search-orb">
         <Search :size="22" />
       </span>
       <small>جستجو</small>
-    </button>
+    </a>
 
     <a href="/cart" class="nav-item" :class="{ active: page === 'cart' }">
       <ShoppingCart class="nav-icon" :size="20" />
@@ -23,7 +23,7 @@
       <i v-if="cartCount > 0">{{ cartCount }}</i>
     </a>
 
-    <a href="/customer/profile" class="nav-item" :class="{ active: page === 'customer-profile' || page === 'customer-addresses' || page === 'customer-branches' }">
+    <a href="/customer/dashboard" class="nav-item" :class="{ active: isCustomerAccountActive }">
       <UserRound class="nav-icon" :size="20" />
       <small>حساب</small>
     </a>
@@ -31,17 +31,29 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { Home, List, Search, ShoppingCart, UserRound } from 'lucide-vue-next'
-import { useSearchModal } from '@/composables/useSearchModal'
 
-defineProps({
+const props = defineProps({
   page: { type: String, default: 'landing' },
   cartCount: { type: Number, default: 0 },
   hasLastOrder: { type: Boolean, default: false },
   lastOrderUrl: { type: String, default: '/menu' },
 })
 
-const { openSearch } = useSearchModal()
+const customerAccountPages = new Set([
+  'customer-dashboard',
+  'customer-profile',
+  'customer-addresses',
+  'customer-branches',
+  'customer-orders',
+  'customer-order-detail',
+  'customer-delivery',
+  'customer-table-reservation',
+  'customer-table-select',
+])
+
+const isCustomerAccountActive = computed(() => customerAccountPages.has(props.page))
 </script>
 
 <style scoped>
@@ -116,6 +128,10 @@ const { openSearch } = useSearchModal()
 .nav-search small {
   color: var(--accent-green, #6f4a31);
   margin-top: -0.1rem;
+}
+
+.nav-search.active .search-orb {
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-gold));
 }
 
 .nav-item i {

@@ -95,9 +95,13 @@
       <ManagementEditableTable
         v-else
         :columns="optionColumns"
-        :rows="localStep.options"
-        @add-row="showAddOption = true"
-        @delete-row="deleteOption"
+        v-model="optionsProxy"
+        :popup-title-add="'افزودن گزینه جدید'"
+        :popup-title-edit="'ویرایش گزینه'"
+        empty-text="داده ای برای نمایش وجود ندارد."
+        :create-empty-row="createEmptyOption"
+        :normalize-row="normalizeOptionRow"
+        :validate-row="validateOptionRow"
       >
         <template #cell.item="{ row }">
           <SearchableDropdown
@@ -120,12 +124,56 @@
             <ImageIcon class="icon-sm" />
           </button>
         </template>
+        <template #cell.item_detail="{ row }">
+          <span v-if="getLinkedItem(row.item)" class="item-detail">
+            {{ formatPrice(getLinkedItem(row.item).standard_rate || 0) }}
+            <small v-if="getLinkedItem(row.item).stock_uom" class="uom">
+              / {{ getLinkedItem(row.item).stock_uom }}
+            </small>
+          </span>
+          <span v-else class="muted">—</span>
+        </template>
+        <template #editor="{ draft, mode }">
+          <div class="option-editor-grid">
+            <label>
+              محصول
+              <SearchableDropdown
+                v-model="draft.item"
+                :options="itemOptions"
+                placeholder="انتخاب محصول"
+                search-placeholder="جستجو..."
+                @update:model-value="onDraftItemPicked(draft, $event)"
+              />
+            </label>
+            <label>
+              نام گزینه
+              <input class="input" v-model="draft.option_label" placeholder="نام گزینه" />
+            </label>
+            <label>
+              افزودن قیمت (اضافه به قیمت پایه)
+              <PersianNumberInput v-model="draft.base_price_delta" :min="0" />
+            </label>
+            <label>
+              برچسب آلرژی
+              <input class="input" v-model="draft.allergen_tags" placeholder="مثلاً: گلوتن، لبنیات" />
+            </label>
+            <p v-if="!draft.item" class="muted small">
+              یک محصول انتخاب کنید تا اطلاعات آن به‌صورت خودکار پر شود.
+            </p>
+            <p v-else-if="getLinkedItem(draft.item)" class="muted small">
+              قیمت پایه: {{ formatPrice(getLinkedItem(draft.item).standard_rate || 0) }}
+              <span v-if="getLinkedItem(draft.item).stock_uom">
+                / {{ getLinkedItem(draft.item).stock_uom }}
+              </span>
+            </p>
+          </div>
+        </template>
       </ManagementEditableTable>
     </section>
 
     <ManagementPopup
       :open="showAddOption"
-      title="افزودن گزینه جدید"
+      title="افزودن گزینه سریع"
       size="sm"
       @update:open="showAddOption = $event"
     >
@@ -144,17 +192,23 @@
           />
         </label>
         <label>
-          افزودن قیمت
-          <PersianNumberInput v-model="newOption.base_price_delta" :min="0" />
+          نام گزینه
+          <input class="input" v-model="newOption.option_label" placeholder="نام گزینه" />
         </label>
         <label>
-          توضیح گزینه
-          <input class="input" v-model="newOption.option_label" placeholder="نام گزینه" />
+          افزودن قیمت (اضافه به قیمت پایه)
+          <PersianNumberInput v-model="newOption.base_price_delta" :min="0" />
         </label>
         <label>
           برچسب آلرژی
           <input class="input" v-model="newOption.allergen_tags" placeholder="مثلاً: گلوتن، لبنیات" />
         </label>
+        <p v-if="newOption.item && getLinkedItem(newOption.item)" class="muted small">
+          قیمت پایه: {{ formatPrice(getLinkedItem(newOption.item).standard_rate || 0) }}
+          <span v-if="getLinkedItem(newOption.item).stock_uom">
+            / {{ getLinkedItem(newOption.item).stock_uom }}
+          </span>
+        </p>
         <div class="popup-actions">
           <button class="primary-btn" type="button" @click="addOption">افزودن</button>
           <button class="secondary-btn" type="button" @click="showAddOption = false">انصراف</button>
@@ -189,6 +243,9 @@ const props = defineProps({
 const emit = defineEmits(['update:step', 'move-up', 'move-down', 'delete'])
 
 const localStep = reactive(JSON.parse(JSON.stringify(props.step)))
+if (!Array.isArray(localStep.options)) {
+  localStep.options = []
+}
 
 watch(
   () => props.step,
@@ -199,8 +256,19 @@ watch(
 )
 
 function emitUpdate() {
+  if (!Array.isArray(localStep.options)) {
+    localStep.options = []
+  }
   emit('update:step', JSON.parse(JSON.stringify(localStep)))
 }
+
+const optionsProxy = computed({
+  get: () => (Array.isArray(localStep.options) ? localStep.options : []),
+  set: (next) => {
+    localStep.options = Array.isArray(next) ? next : []
+    emitUpdate()
+  },
+})
 
 const errors = computed(() => {
   const e = {}
@@ -224,6 +292,7 @@ const optionColumns = [
   { key: 'base_price_delta', label: 'افزودن قیمت' },
   { key: 'is_default', label: 'پیش‌فرض' },
   { key: 'image', label: 'تصویر' },
+  { key: 'item_detail', label: 'قیمت پایه / واحد' },
 ]
 
 const showAddOption = ref(false)
@@ -240,7 +309,16 @@ function findItemOption(value) {
   return props.itemOptions.find((item) => String(item.value) === String(value)) || null
 }
 
-function applyItemToOption(option, itemValue, { fillPrice = false } = {}) {
+function getLinkedItem(value) {
+  return findItemOption(value)
+}
+
+function formatPrice(value) {
+  const num = Number(value) || 0
+  return num.toLocaleString('fa-IR')
+}
+
+function applyItemToOption(option, itemValue) {
   const selectedItem = findItemOption(itemValue)
   option.item = itemValue || ''
   if (!selectedItem) return
@@ -250,9 +328,67 @@ function applyItemToOption(option, itemValue, { fillPrice = false } = {}) {
   if (!option.image) {
     option.image = selectedItem.image || ''
   }
-  if (fillPrice && !Number(option.base_price_delta)) {
-    option.base_price_delta = Number(selectedItem.standard_rate) || 0
+  option.base_price_delta = Number(selectedItem.standard_rate) || 0
+}
+
+function createEmptyOption() {
+  return {
+    item: '',
+    option_label: '',
+    option_key: `opt-${Date.now()}`,
+    base_price_delta: 0,
+    price_type: 'fixed',
+    price_percentage: 0,
+    is_default: false,
+    is_available: true,
+    max_qty: 1,
+    allergen_tags: '',
+    image: '',
+    sort_order: Array.isArray(localStep.options) ? localStep.options.length : 0,
   }
+}
+
+function normalizeOptionRow(row) {
+  const normalized = {
+    ...createEmptyOption(),
+    ...(row || {}),
+  }
+
+  applyItemToOption(normalized, normalized.item)
+
+  normalized.option_label = String(normalized.option_label || '').trim()
+  normalized.option_key = String(normalized.option_key || `opt-${Date.now()}`).trim()
+  normalized.base_price_delta = Number(normalized.base_price_delta) || 0
+  normalized.price_percentage = Number(normalized.price_percentage) || 0
+  normalized.max_qty = Math.max(Number(normalized.max_qty) || 1, 1)
+  normalized.is_default = Boolean(normalized.is_default)
+  normalized.is_available = normalized.is_available !== false
+  normalized.sort_order = Number(normalized.sort_order)
+  if (!Number.isFinite(normalized.sort_order)) {
+    normalized.sort_order = Array.isArray(localStep.options) ? localStep.options.length : 0
+  }
+
+  if (normalized.is_default) {
+    ;(localStep.options || []).forEach((option) => {
+      option.is_default = false
+    })
+  }
+
+  return normalized
+}
+
+function validateOptionRow(row) {
+  if (!String(row?.item || '').trim()) {
+    return 'انتخاب محصول برای گزینه الزامی است.'
+  }
+  if (!String(row?.option_label || '').trim()) {
+    return 'نام گزینه نمی‌تواند خالی باشد.'
+  }
+  return ''
+}
+
+function onDraftItemPicked(draft, value) {
+  applyItemToOption(draft, value)
 }
 
 function onRowItemSelected(row, value) {
@@ -261,7 +397,7 @@ function onRowItemSelected(row, value) {
 }
 
 function onNewOptionItemSelected(value) {
-  applyItemToOption(newOption, value, { fillPrice: true })
+  applyItemToOption(newOption, value)
 }
 
 function resetNewOption() {
@@ -276,28 +412,23 @@ function addOption() {
   if (!newOption.item) return
   const selectedItem = findItemOption(newOption.item)
   const opt = {
-    option_label: newOption.option_label || selectedItem?.label || newOption.item,
+    option_label: newOption.option_label || selectedItem?.item_name || newOption.item,
     option_key: `opt-${Date.now()}`,
     item: newOption.item,
-    base_price_delta: Number(newOption.base_price_delta) || 0,
+    base_price_delta: Number(selectedItem?.standard_rate) || 0,
     price_type: 'fixed',
     price_percentage: 0,
     is_default: false,
     is_available: true,
     max_qty: 1,
     allergen_tags: newOption.allergen_tags,
-    image: newOption.image || selectedItem?.image || '',
+    image: selectedItem?.image || '',
     sort_order: localStep.options.length,
   }
   localStep.options.push(opt)
   emitUpdate()
   showAddOption.value = false
   resetNewOption()
-}
-
-function deleteOption(index) {
-  localStep.options.splice(index, 1)
-  emitUpdate()
 }
 
 function toggleDefault(row) {
@@ -355,7 +486,7 @@ function uploadOptionImage(row) {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--module-500, #7c5a42);
+  background: var(--module-500, #8b5e34);
   color: #fff;
   font-weight: 600;
   font-size: 0.85rem;
@@ -429,6 +560,20 @@ function uploadOptionImage(row) {
   height: 32px;
   object-fit: cover;
   border-radius: 4px;
+}
+.item-detail {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+.item-detail .uom {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.75rem;
+}
+.option-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  min-width: 320px;
 }
 .error-text {
   color: #dc2626;

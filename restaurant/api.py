@@ -33,6 +33,10 @@ MAX_PAGE_SIZE = 50
 ORDER_STATUSES = ["new", "confirmed", "preparing", "ready", "delivered", "cancelled"]
 ORDER_TYPES = {"dine_in", "takeaway", "delivery"}
 DELIVERY_MODES = {"pickup", "delivery"}
+ORDER_CONTEXT_TYPES = {"dine_in", "pickup", "delivery"}
+DINE_IN_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "served"]
+PICKUP_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "delivered"]
+DELIVERY_STATUS_FLOW = ["new", "confirmed", "preparing", "courier_handoff", "on_the_way", "delivered"]
 POS_PAYMENT_METHODS = {"cash", "card"}
 POS_PAYMENT_STATUSES = {"pending", "paid", "failed", "cancelled"}
 POS_PAYMENT_PROVIDERS = {"manual", "local_node", "webhook"}
@@ -62,10 +66,18 @@ MANAGEMENT_SITE_LOADER_GLOBAL_DEFAULT_KEY = "restaurant_management_loader_settin
 MANAGEMENT_DISPLAY_VARIANT_KEY = "restaurant_management_display_variant_v1"
 MANAGEMENT_SITE_SETTINGS_BLOB_KEY = "restaurant_management_site_settings_v1"
 MANAGEMENT_DISPLAY_VARIANT_DEFAULTS = {
+	"header_variant": "classic",
+	"menu_search_variant": "search-card",
+	"hero_section_variant": "off",
+	"footer_variant": "full",
 	"card_variant": "classic",
 	"hero_image_position": "center",
 	"category_rail_variant": "pill",
 }
+MANAGEMENT_HEADER_VARIANTS = {"classic", "minimal", "hero", "glass"}
+MANAGEMENT_MENU_SEARCH_VARIANTS = {"search-card", "off"}
+MANAGEMENT_HERO_SECTION_VARIANTS = {"off", "slider", "fullscreen", "banner", "cover", "foodbar"}
+MANAGEMENT_FOOTER_VARIANTS = {"off", "full", "minimal"}
 MANAGEMENT_THEME_LEGACY_DEFAULTS = {
 	"primary": "#2563EB",
 	"accent": "#DC2626",
@@ -406,7 +418,13 @@ def _public_menu_slugify(value):
 	return normalized
 
 
-def _get_currency():
+def _get_currency(company=None):
+	company = (company or "").strip()
+	if company and frappe.db.exists("Company", company):
+		company_currency = frappe.db.get_value("Company", company, "default_currency")
+		if company_currency:
+			return company_currency
+
 	settings_currency = frappe.db.get_single_value("Restaurant Web Settings", "default_currency")
 	if settings_currency:
 		return settings_currency
@@ -2170,6 +2188,7 @@ def _get_branding_payload():
 		"hero_section_title": "",
 		"hero_section_description": "",
 		"hero_section_cta": "",
+		"hero_variant_contents": {},
 		"footer_description": "",
 		"footer_phone": "",
 		"footer_email": "",
@@ -2726,6 +2745,11 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"nutrition_protein_percent": nutrition.get("protein_percent"),
 		"has_customization": cint(row.get("has_customization") or 0),
 		"has_bom": cint(row.get("has_bom") or 0),
+		"restaurant_is_customizable": cint(row.get("restaurant_is_customizable") or 0),
+		"restaurant_builder_active": cint(row.get("restaurant_builder_active") or 0),
+		"restaurant_builder_template": row.get("restaurant_builder_template") or "",
+		"restaurant_customize_button_label": row.get("restaurant_customize_button_label") or "",
+		"restaurant_allow_direct_add": cint(row.get("restaurant_allow_direct_add") or 0),
 		"tags": _split_tags(getattr(row, "restaurant_item_tags", None))
 		or _get_item_tag_titles(getattr(row, "name", None)),
 		"coming_soon": cint(getattr(row, "restaurant_coming_soon", 0)),
@@ -3119,6 +3143,34 @@ def _apply_menu_customization_flags(rows):
 		payload["has_bom"] = (
 			1 if (bom_item_map.get(item_name) or (variant_of and bom_item_map.get(variant_of))) else 0
 		)
+		builder_source_name = item_name
+		if variant_of and not cint(payload.get("restaurant_is_customizable") or 0):
+			builder_source_name = variant_of
+		if builder_source_name:
+			builder_flags = (
+				frappe.db.get_value(
+					"Item",
+					builder_source_name,
+					[
+						"restaurant_is_customizable",
+						"restaurant_builder_active",
+						"restaurant_builder_template",
+						"restaurant_customize_button_label",
+						"restaurant_allow_direct_add",
+					],
+					as_dict=True,
+				)
+				or {}
+			)
+			payload["restaurant_is_customizable"] = cint(builder_flags.get("restaurant_is_customizable") or 0)
+			payload["restaurant_builder_active"] = cint(builder_flags.get("restaurant_builder_active") or 0)
+			payload["restaurant_builder_template"] = builder_flags.get("restaurant_builder_template") or ""
+			payload["restaurant_customize_button_label"] = (
+				builder_flags.get("restaurant_customize_button_label") or ""
+			)
+			payload["restaurant_allow_direct_add"] = cint(
+				builder_flags.get("restaurant_allow_direct_add") or 0
+			)
 		out.append(payload)
 	return out
 
@@ -3952,6 +4004,8 @@ def _get_core_item_detail(item_slug, branch=None):
 				_image = _val
 				break
 
+	builder_source_doc = template_doc if template_doc.name != doc.name else doc
+
 	item_payload = {
 		"name": doc.name,
 		"slug": doc.restaurant_slug,
@@ -3988,6 +4042,23 @@ def _get_core_item_detail(item_slug, branch=None):
 		"has_bom": 1
 		if frappe.db.exists("BOM", {"item": doc.name, "is_active": 1, "docstatus": ["!=", 2]})
 		else 0,
+		"restaurant_is_customizable": cint(
+			builder_source_doc.get("restaurant_is_customizable") or doc.get("restaurant_is_customizable") or 0
+		),
+		"restaurant_builder_active": cint(
+			builder_source_doc.get("restaurant_builder_active") or doc.get("restaurant_builder_active") or 0
+		),
+		"restaurant_builder_template": builder_source_doc.get("restaurant_builder_template")
+		or doc.get("restaurant_builder_template")
+		or "",
+		"restaurant_customize_button_label": builder_source_doc.get("restaurant_customize_button_label")
+		or doc.get("restaurant_customize_button_label")
+		or "سفارشی‌سازی",
+		"restaurant_allow_direct_add": cint(
+			builder_source_doc.get("restaurant_allow_direct_add")
+			or doc.get("restaurant_allow_direct_add")
+			or 0
+		),
 		"tags": _split_tags(getattr(doc, "restaurant_item_tags", None)),
 	}
 
@@ -4032,6 +4103,14 @@ def _default_company():
 	return frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value(
 		"Company", {}, "name"
 	)
+
+
+def _resolve_order_company(order_context=None):
+	ctx = order_context if isinstance(order_context, dict) else {}
+	company = (ctx.get("branch") or ctx.get("company") or "").strip()
+	if company and frappe.db.exists("Company", company):
+		return company
+	return _default_company()
 
 
 def _ensure_default_selling_price_list_field():
@@ -4217,6 +4296,26 @@ def _ensure_customer(customer_name, mobile):
 	return doc.name
 
 
+def _normalize_order_context_payload(order_context=None, order_type="takeaway"):
+	ctx = _parse_json(order_context, {})
+	if not isinstance(ctx, dict):
+		ctx = {}
+	ctx_type = (ctx.get("order_type") or "").strip().lower()
+	if ctx_type not in ORDER_CONTEXT_TYPES:
+		ctx_type = (
+			"delivery" if order_type == "delivery" else "dine_in" if order_type == "dine_in" else "pickup"
+		)
+	ctx["order_type"] = ctx_type
+	ctx["delivery_fee"] = flt(ctx.get("delivery_fee") or 0)
+	ctx["branch"] = (ctx.get("branch") or "").strip()
+	ctx["branch_title"] = (ctx.get("branch_title") or ctx.get("branch") or "").strip()
+	ctx["table"] = (ctx.get("table") or "").strip()
+	ctx["customer_note"] = (ctx.get("customer_note") or "").strip()
+	ctx["kitchen_note"] = (ctx.get("kitchen_note") or "").strip()
+	ctx["courier_note"] = (ctx.get("courier_note") or "").strip()
+	return ctx
+
+
 def _create_sales_order(
 	customer_name,
 	mobile,
@@ -4228,13 +4327,15 @@ def _create_sales_order(
 	delivery_address_name="",
 	delivery_payload=None,
 	coupon=None,
+	order_context=None,
 ):
-	company = _default_company()
+	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
+	company = _resolve_order_company(order_context)
 	if not company:
 		frappe.throw(_("Default company is not configured."))
 
 	customer = _ensure_customer(customer_name, mobile)
-	currency = frappe.db.get_value("Company", company, "default_currency") or _get_currency()
+	currency = frappe.db.get_value("Company", company, "default_currency") or _get_currency(company)
 	selling_price_list = _default_selling_price_list(currency) or _default_selling_price_list()
 	if not selling_price_list:
 		frappe.throw(_("Please configure at least one selling price list."))
@@ -4243,8 +4344,7 @@ def _create_sales_order(
 
 	delivery_payload = delivery_payload if isinstance(delivery_payload, dict) else {}
 	coupon = coupon if isinstance(coupon, dict) else {}
-	if delivery_payload:
-		_ensure_checkout_sales_order_fields()
+	_ensure_checkout_sales_order_fields()
 
 	doc_payload = {
 		"doctype": "Sales Order",
@@ -4271,6 +4371,14 @@ def _create_sales_order(
 		doc_payload["restaurant_status"] = "new"
 	if _has_column("Sales Order", "restaurant_include_service_items"):
 		doc_payload["restaurant_include_service_items"] = cint(include_service_items)
+	if _has_column("Sales Order", "restaurant_order_context_json"):
+		doc_payload["restaurant_order_context_json"] = frappe.as_json(order_context)
+	if _has_column("Sales Order", "restaurant_branch"):
+		doc_payload["restaurant_branch"] = order_context.get("branch") or ""
+	if _has_column("Sales Order", "restaurant_table"):
+		doc_payload["restaurant_table"] = order_context.get("table") or ""
+	if _has_column("Sales Order", "restaurant_delivery_fee"):
+		doc_payload["restaurant_delivery_fee"] = flt(order_context.get("delivery_fee") or 0)
 	if delivery_payload and _has_column("Sales Order", "restaurant_delivery_address_name"):
 		doc_payload["restaurant_delivery_address_name"] = (
 			delivery_address_name or delivery_payload.get("id") or ""
@@ -4290,7 +4398,10 @@ def _create_sales_order(
 		menu_doc = _get_item_doc_by_payload(cart_line)
 		customization = _extract_customization(cart_line.get("customization") or cart_line.get("config"))
 		branch = (
-			cart_line.get("branch") or menu_doc.get("restaurant_branch") or "DEFAULT"
+			cart_line.get("branch")
+			or order_context.get("branch")
+			or menu_doc.get("restaurant_branch")
+			or "DEFAULT"
 		).strip() or "DEFAULT"
 		selected_branches.add(branch)
 		markup_percent = _get_branch_pricing_markup_percent(branch)
@@ -4506,7 +4617,7 @@ def _create_sales_order(
 		"status": "success",
 		"order_id": so_doc.name,
 		"order_code": so_doc.get("restaurant_order_code") or order_code,
-		"grand_total": flt(so_doc.grand_total or subtotal),
+		"grand_total": flt(so_doc.grand_total or subtotal) + flt(order_context.get("delivery_fee") or 0),
 		"pricing_breakdown": payload_snapshot,
 		"production_tickets": production_payload["production_tickets"],
 		"work_orders": production_payload["work_orders"],
@@ -5028,6 +5139,17 @@ def _create_production_for_sales_order(so_doc):
 	}
 
 
+def _status_timeline_for_order_type(status, order_type="takeaway"):
+	if order_type == "dine_in":
+		labels = DINE_IN_STATUS_FLOW
+	elif order_type == "delivery":
+		labels = DELIVERY_STATUS_FLOW
+	else:
+		labels = PICKUP_STATUS_FLOW
+	current_index = labels.index(status) if status in labels else 0
+	return [{"status": row, "done": index <= current_index} for index, row in enumerate(labels)]
+
+
 def _get_sales_order_payload(so_name):
 	doc = frappe.get_doc("Sales Order", so_name)
 	status = _core_order_status(doc)
@@ -5036,6 +5158,13 @@ def _get_sales_order_payload(so_name):
 		if _has_column("Sales Order", "restaurant_delivery_details_json")
 		else {}
 	)
+	order_context = (
+		_parse_json(doc.get("restaurant_order_context_json"), {})
+		if _has_column("Sales Order", "restaurant_order_context_json")
+		else {}
+	)
+	if not isinstance(order_context, dict):
+		order_context = {}
 
 	items_payload = []
 	for row in doc.items or []:
@@ -5073,12 +5202,25 @@ def _get_sales_order_payload(so_name):
 			}
 		)
 
+	resolved_order_type = doc.get("restaurant_order_type") or "takeaway"
+	context_order_type = order_context.get("order_type") or (
+		"pickup" if resolved_order_type == "takeaway" else resolved_order_type
+	)
+	order_context.setdefault("order_type", context_order_type)
+	if _has_column("Sales Order", "restaurant_branch") and doc.get("restaurant_branch"):
+		order_context.setdefault("branch", doc.get("restaurant_branch"))
+	if _has_column("Sales Order", "restaurant_table") and doc.get("restaurant_table"):
+		order_context.setdefault("table", doc.get("restaurant_table"))
+	if _has_column("Sales Order", "restaurant_delivery_fee"):
+		order_context.setdefault("delivery_fee", flt(doc.get("restaurant_delivery_fee") or 0))
+
 	order_payload = {
 		"name": doc.name,
 		"order_code": doc.get("restaurant_order_code") or doc.name,
 		"customer_name": doc.customer_name,
 		"mobile": doc.get("restaurant_customer_mobile") or "",
-		"order_type": doc.get("restaurant_order_type") or "takeaway",
+		"order_type": resolved_order_type,
+		"order_context": order_context,
 		"address": doc.get("restaurant_delivery_address") or "",
 		"delivery_address_id": doc.get("restaurant_delivery_address_name") or "",
 		"delivery_lat": flt(doc.get("restaurant_delivery_lat") or 0)
@@ -5101,7 +5243,7 @@ def _get_sales_order_payload(so_name):
 	return {
 		"order": order_payload,
 		"items": items_payload,
-		"status_timeline": _status_timeline(status),
+		"status_timeline": _status_timeline_for_order_type(status, context_order_type),
 	}
 
 
@@ -5907,6 +6049,31 @@ def _ensure_checkout_sales_order_fields():
 			"label": "Delivery Details JSON",
 			"fieldtype": "Long Text",
 			"insert_after": "restaurant_delivery_lng",
+		},
+		{
+			"fieldname": "restaurant_order_context_json",
+			"label": "Order Context JSON",
+			"fieldtype": "Long Text",
+			"insert_after": "restaurant_delivery_details_json",
+		},
+		{
+			"fieldname": "restaurant_branch",
+			"label": "Restaurant Branch",
+			"fieldtype": "Link",
+			"options": "Company",
+			"insert_after": "restaurant_order_context_json",
+		},
+		{
+			"fieldname": "restaurant_table",
+			"label": "Restaurant Table",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_branch",
+		},
+		{
+			"fieldname": "restaurant_delivery_fee",
+			"label": "Delivery Fee",
+			"fieldtype": "Currency",
+			"insert_after": "restaurant_table",
 		},
 	]
 
@@ -8136,9 +8303,369 @@ def customer_verify_otp(mobile, code=None, otp=None, customer_name=None):
 	return verify_otp(mobile=mobile, otp=otp, code=code, customer_name=customer_name)
 
 
+def _ensure_company_branch_fields():
+	if not frappe.db.exists("DocType", "Company"):
+		return
+
+	field_defs = [
+		{
+			"fieldname": "restaurant_is_branch",
+			"label": "Restaurant Branch",
+			"fieldtype": "Check",
+			"insert_after": "abbr",
+			"default": "1",
+		},
+		{
+			"fieldname": "restaurant_branch_active",
+			"label": "Restaurant Branch Active",
+			"fieldtype": "Check",
+			"insert_after": "restaurant_is_branch",
+			"default": "1",
+		},
+		{
+			"fieldname": "restaurant_public_title",
+			"label": "Restaurant Public Title",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_branch_active",
+		},
+		{
+			"fieldname": "restaurant_branch_address",
+			"label": "Restaurant Branch Address",
+			"fieldtype": "Small Text",
+			"insert_after": "restaurant_public_title",
+		},
+		{
+			"fieldname": "restaurant_branch_phone",
+			"label": "Restaurant Branch Phone",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_branch_address",
+		},
+		{
+			"fieldname": "restaurant_branch_lat",
+			"label": "Restaurant Branch Latitude",
+			"fieldtype": "Float",
+			"insert_after": "restaurant_branch_phone",
+		},
+		{
+			"fieldname": "restaurant_branch_lng",
+			"label": "Restaurant Branch Longitude",
+			"fieldtype": "Float",
+			"insert_after": "restaurant_branch_lat",
+		},
+		{
+			"fieldname": "restaurant_branch_image",
+			"label": "Restaurant Branch Image",
+			"fieldtype": "Attach Image",
+			"insert_after": "restaurant_branch_lng",
+		},
+		{
+			"fieldname": "restaurant_branch_map_url",
+			"label": "Restaurant Branch Map URL",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_branch_image",
+		},
+		{
+			"fieldname": "restaurant_prep_time_mins",
+			"label": "Default Preparation Time (mins)",
+			"fieldtype": "Int",
+			"insert_after": "restaurant_branch_map_url",
+			"default": "20",
+		},
+		{
+			"fieldname": "restaurant_pickup_available",
+			"label": "Pickup Available",
+			"fieldtype": "Check",
+			"insert_after": "restaurant_prep_time_mins",
+			"default": "1",
+		},
+		{
+			"fieldname": "restaurant_delivery_available",
+			"label": "Delivery Available",
+			"fieldtype": "Check",
+			"insert_after": "restaurant_pickup_available",
+			"default": "1",
+		},
+		{
+			"fieldname": "restaurant_delivery_eta_min",
+			"label": "Delivery ETA Min",
+			"fieldtype": "Int",
+			"insert_after": "restaurant_delivery_available",
+			"default": "35",
+		},
+		{
+			"fieldname": "restaurant_delivery_eta_max",
+			"label": "Delivery ETA Max",
+			"fieldtype": "Int",
+			"insert_after": "restaurant_delivery_eta_min",
+			"default": "45",
+		},
+		{
+			"fieldname": "restaurant_delivery_fee",
+			"label": "Delivery Fee",
+			"fieldtype": "Currency",
+			"insert_after": "restaurant_delivery_eta_max",
+			"default": "0",
+		},
+		{
+			"fieldname": "restaurant_delivery_radius_km",
+			"label": "Delivery Radius (km)",
+			"fieldtype": "Float",
+			"insert_after": "restaurant_delivery_fee",
+			"default": "0",
+		},
+		{
+			"fieldname": "restaurant_pricing_markup_percent",
+			"label": "Restaurant Pricing Markup Percent",
+			"fieldtype": "Percent",
+			"insert_after": "restaurant_delivery_radius_km",
+			"default": "0",
+		},
+	]
+
+	changed = False
+	for field_def in field_defs:
+		existing_name = frappe.db.get_value(
+			"Custom Field",
+			{"dt": "Company", "fieldname": field_def["fieldname"]},
+			"name",
+		)
+		payload = {
+			"doctype": "Custom Field",
+			"dt": "Company",
+			"module": "Restaurant",
+			**field_def,
+		}
+		if existing_name:
+			doc = frappe.get_doc("Custom Field", existing_name)
+			dirty = False
+			for key, value in payload.items():
+				if key == "doctype":
+					continue
+				if doc.get(key) != value:
+					doc.set(key, value)
+					dirty = True
+			if dirty:
+				doc.save(ignore_permissions=True)
+				changed = True
+			continue
+		frappe.get_doc(payload).insert(ignore_permissions=True)
+		changed = True
+
+	if changed:
+		frappe.clear_cache(doctype="Company")
+
+
+def _current_weekday_name():
+	return now_datetime().strftime("%A")
+
+
+def _time_to_label(value):
+	if value in (None, ""):
+		return ""
+	try:
+		return str(get_time(value))[:5]
+	except Exception:
+		return str(value).strip()[:5]
+
+
+def _is_now_between(opening_time, closing_time):
+	if not opening_time or not closing_time:
+		return True
+	try:
+		now_time = now_datetime().time()
+		open_time = get_time(opening_time)
+		close_time = get_time(closing_time)
+		if open_time <= close_time:
+			return open_time <= now_time <= close_time
+		return now_time >= open_time or now_time <= close_time
+	except Exception:
+		return True
+
+
+def _branch_schedule_map():
+	if not _restaurant_doctype_exists("Restaurant Branch Schedule"):
+		return {}
+	weekday = _current_weekday_name()
+	rows = frappe.get_all(
+		"Restaurant Branch Schedule",
+		fields=[
+			"branch",
+			"day_of_week",
+			"is_open",
+			"opening_time",
+			"closing_time",
+			"prep_time_mins",
+			"pickup_available",
+			"delivery_available",
+			"delivery_eta_min",
+			"delivery_eta_max",
+			"delivery_fee",
+			"delivery_radius_km",
+		],
+		filters={"day_of_week": weekday},
+		ignore_permissions=True,
+		limit_page_length=500,
+	)
+	return {(row.get("branch") or "").strip(): row for row in rows if (row.get("branch") or "").strip()}
+
+
+def _apply_branch_schedule(payload, schedule=None):
+	schedule = schedule or {}
+	opening = schedule.get("opening_time")
+	closing = schedule.get("closing_time")
+	base_active = cint(payload.get("is_active") if payload.get("is_active") not in (None, "") else 1) == 1
+	schedule_open = cint(schedule.get("is_open") if schedule.get("is_open") not in (None, "") else 1) == 1
+	is_open = base_active and schedule_open and _is_now_between(opening, closing)
+	open_label = "باز"
+	if opening or closing:
+		open_label = (
+			f"باز تا {_time_to_label(closing)}"
+			if is_open and closing
+			else f"ساعت کاری {_time_to_label(opening)} تا {_time_to_label(closing)}"
+		)
+	if not is_open:
+		open_label = "بسته"
+
+	payload.update(
+		{
+			"isOpen": bool(is_open),
+			"open_label": open_label,
+			"opening_time": _time_to_label(opening),
+			"closing_time": _time_to_label(closing),
+			"hours": open_label,
+			"prepTime": cint(schedule.get("prep_time_mins") or payload.get("prepTime") or 20),
+			"prep_time_mins": cint(
+				schedule.get("prep_time_mins")
+				or payload.get("prep_time_mins")
+				or payload.get("prepTime")
+				or 20
+			),
+			"pickup_available": base_active
+			and cint(
+				schedule.get("pickup_available")
+				if schedule.get("pickup_available") not in (None, "")
+				else payload.get("pickup_available", 1)
+			)
+			== 1,
+			"delivery_available": base_active
+			and cint(
+				schedule.get("delivery_available")
+				if schedule.get("delivery_available") not in (None, "")
+				else payload.get("delivery_available", 1)
+			)
+			== 1,
+			"delivery_eta_min": cint(
+				schedule.get("delivery_eta_min") or payload.get("delivery_eta_min") or 35
+			),
+			"delivery_eta_max": cint(
+				schedule.get("delivery_eta_max") or payload.get("delivery_eta_max") or 45
+			),
+			"delivery_fee": flt(schedule.get("delivery_fee") or payload.get("delivery_fee") or 0),
+			"delivery_radius_km": flt(
+				schedule.get("delivery_radius_km") or payload.get("delivery_radius_km") or 0
+			),
+		}
+	)
+	return payload
+
+
+def _company_branch_rows():
+	_ensure_company_branch_fields()
+	fields = ["name", "company_name", "default_currency"]
+	optional_fields = [
+		"restaurant_is_branch",
+		"restaurant_branch_active",
+		"restaurant_public_title",
+		"restaurant_branch_address",
+		"restaurant_branch_phone",
+		"restaurant_branch_lat",
+		"restaurant_branch_lng",
+		"restaurant_branch_image",
+		"restaurant_branch_map_url",
+		"restaurant_prep_time_mins",
+		"restaurant_pickup_available",
+		"restaurant_delivery_available",
+		"restaurant_delivery_eta_min",
+		"restaurant_delivery_eta_max",
+		"restaurant_delivery_fee",
+		"restaurant_delivery_radius_km",
+		"restaurant_pricing_markup_percent",
+	]
+	for fieldname in optional_fields:
+		if _has_column("Company", fieldname):
+			fields.append(fieldname)
+
+	filters = {"is_group": 0} if _has_column("Company", "is_group") else {}
+	if _has_column("Company", "restaurant_is_branch"):
+		filters["restaurant_is_branch"] = 1
+
+	rows = frappe.get_all(
+		"Company",
+		fields=fields,
+		filters=filters,
+		order_by="company_name asc",
+		ignore_permissions=True,
+		limit_page_length=200,
+	)
+	return rows
+
+
 @frappe.whitelist(allow_guest=True)
 def get_branches():
 	branches = {}
+	schedules = _branch_schedule_map()
+
+	for row in _company_branch_rows():
+		branch_name = (row.get("name") or "").strip()
+		if not branch_name:
+			continue
+		lat = _to_bounded_float(row.get("restaurant_branch_lat"), minimum=-90, maximum=90)
+		lng = _to_bounded_float(row.get("restaurant_branch_lng"), minimum=-180, maximum=180)
+		map_url = row.get("restaurant_branch_map_url") or ""
+		if not map_url and lat is not None and lng is not None:
+			map_url = f"https://maps.google.com/?q={lat},{lng}"
+		branches[branch_name.lower()] = _apply_branch_schedule(
+			{
+				"id": branch_name,
+				"name": branch_name,
+				"title": row.get("restaurant_public_title") or row.get("company_name") or branch_name,
+				"address": row.get("restaurant_branch_address") or "",
+				"phone": row.get("restaurant_branch_phone") or "",
+				"lat": lat,
+				"lng": lng,
+				"is_active": cint(
+					row.get("restaurant_branch_active")
+					if row.get("restaurant_branch_active") not in (None, "")
+					else 1
+				),
+				"company": branch_name,
+				"currency": row.get("default_currency") or _get_currency(branch_name),
+				"pricing_markup_percent": flt(row.get("restaurant_pricing_markup_percent") or 0),
+				"prepTime": cint(row.get("restaurant_prep_time_mins") or 20),
+				"prep_time_mins": cint(row.get("restaurant_prep_time_mins") or 20),
+				"pickup_available": cint(
+					row.get("restaurant_pickup_available")
+					if row.get("restaurant_pickup_available") not in (None, "")
+					else 1
+				)
+				== 1,
+				"delivery_available": cint(
+					row.get("restaurant_delivery_available")
+					if row.get("restaurant_delivery_available") not in (None, "")
+					else 1
+				)
+				== 1,
+				"delivery_eta_min": cint(row.get("restaurant_delivery_eta_min") or 35),
+				"delivery_eta_max": cint(row.get("restaurant_delivery_eta_max") or 45),
+				"delivery_fee": flt(row.get("restaurant_delivery_fee") or 0),
+				"delivery_radius_km": flt(row.get("restaurant_delivery_radius_km") or 0),
+				"mapUrl": map_url or "https://maps.google.com",
+				"image": row.get("restaurant_branch_image")
+				or "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
+			},
+			schedules.get(branch_name),
+		)
+
 	if _restaurant_doctype_exists("Restaurant Branch Production Settings"):
 		for row in frappe.get_all(
 			"Restaurant Branch Production Settings",
@@ -8148,22 +8675,29 @@ def get_branches():
 		):
 			branch_name = (row.get("branch") or row.get("name") or "").strip()
 			if branch_name:
-				branches[branch_name.lower()] = {
-					"id": branch_name,
-					"name": branch_name,
-					"title": branch_name,
-					"address": "",
-					"hours": "",
-					"phone": "",
-					"is_active": cint(row.get("is_active") if row.get("is_active") not in (None, "") else 1),
-					"isOpen": cint(row.get("is_active") if row.get("is_active") not in (None, "") else 1)
-					== 1,
-					"company": row.get("company") or "",
-					"pricing_markup_percent": flt(row.get("pricing_markup_percent") or 0),
-					"prepTime": 20,
-					"mapUrl": "https://maps.google.com",
-					"image": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
-				}
+				base = branches.get(branch_name.lower(), {})
+				base.update(
+					{
+						"id": branch_name,
+						"name": branch_name,
+						"title": base.get("title") or branch_name,
+						"address": base.get("address") or "",
+						"phone": base.get("phone") or "",
+						"is_active": cint(
+							row.get("is_active") if row.get("is_active") not in (None, "") else 1
+						),
+						"company": row.get("company") or base.get("company") or branch_name,
+						"pricing_markup_percent": flt(row.get("pricing_markup_percent") or 0),
+						"prepTime": base.get("prepTime") or 20,
+						"mapUrl": base.get("mapUrl") or "https://maps.google.com",
+						"image": base.get("image")
+						or "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
+					}
+				)
+				base["isOpen"] = cint(
+					row.get("is_active") if row.get("is_active") not in (None, "") else 1
+				) == 1 and bool(base.get("isOpen", True))
+				branches[branch_name.lower()] = _apply_branch_schedule(base, schedules.get(branch_name))
 
 	if _restaurant_doctype_exists("Restaurant Table"):
 		for row in frappe.get_all(
@@ -8175,34 +8709,36 @@ def get_branches():
 		):
 			location = (row.get("location") or "").strip()
 			if location and location.lower() not in branches:
-				branches[location.lower()] = {
-					"id": location,
-					"name": location,
-					"title": location,
-					"address": "",
-					"hours": "",
-					"phone": "",
-					"is_active": 1,
-					"isOpen": True,
-					"prepTime": 20,
-					"mapUrl": "https://maps.google.com",
-					"image": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=70",
-				}
+				branches[location.lower()] = _apply_branch_schedule(
+					{
+						"id": location,
+						"name": location,
+						"title": location,
+						"address": "",
+						"phone": "",
+						"is_active": 1,
+						"prepTime": 20,
+						"mapUrl": "https://maps.google.com",
+						"image": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=70",
+					},
+					schedules.get(location),
+				)
 
 	if not branches:
-		branches["default"] = {
-			"id": "DEFAULT",
-			"name": "شعبه اصلی",
-			"title": "شعبه اصلی",
-			"address": "",
-			"hours": "",
-			"phone": "",
-			"is_active": 1,
-			"isOpen": True,
-			"prepTime": 20,
-			"mapUrl": "https://maps.google.com",
-			"image": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
-		}
+		branches["default"] = _apply_branch_schedule(
+			{
+				"id": "DEFAULT",
+				"name": "شعبه اصلی",
+				"title": "شعبه اصلی",
+				"address": "",
+				"phone": "",
+				"is_active": 1,
+				"prepTime": 20,
+				"mapUrl": "https://maps.google.com",
+				"image": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
+			},
+			schedules.get("DEFAULT"),
+		)
 	return {"branches": list(branches.values())}
 
 
@@ -8588,6 +9124,7 @@ def place_order(
 	pickup_vehicle_id=None,
 	pickup_vehicle_snapshot=None,
 	coupon_code=None,
+	order_context=None,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -8671,6 +9208,7 @@ def place_order(
 		delivery_address_name=delivery_address_id,
 		delivery_payload=delivery_payload,
 		coupon=coupon,
+		order_context=order_context,
 	)
 
 
@@ -9763,13 +10301,15 @@ def get_management_site_settings():
 
 
 @frappe.whitelist()
-def set_management_site_settings(payload=None):
+def set_management_site_settings(payload=None, **kwargs):
 	_ensure_management_site_settings_access()
 	try:
 		_ensure_menu_highlight_setting_fields()
 	except Exception:
 		pass
 	data = _parse_json(payload, {})
+	if not data and kwargs:
+		data = {key: value for key, value in kwargs.items() if key not in {"cmd", "method"}}
 	if not isinstance(data, dict):
 		frappe.throw(_("Invalid payload format."))
 
@@ -9874,9 +10414,13 @@ def set_management_site_settings(payload=None):
 				continue
 			value = str(web_settings.get(fieldname) or "").strip()
 			if fieldname == "header_variant":
-				value = "minimal" if value == "minimal" else "classic"
+				value = value if value in MANAGEMENT_HEADER_VARIANTS else "classic"
 			if fieldname == "menu_search_variant":
-				value = "off" if value == "off" else "search-card"
+				value = value if value in MANAGEMENT_MENU_SEARCH_VARIANTS else "search-card"
+			if fieldname == "hero_section_variant":
+				value = value if value in MANAGEMENT_HERO_SECTION_VARIANTS else "off"
+			if fieldname == "footer_variant":
+				value = value if value in MANAGEMENT_FOOTER_VARIANTS else "full"
 			if fieldname == "brand_name" and not value:
 				value = existing_brand or "Restaurant"
 			try:
@@ -13826,6 +14370,143 @@ def set_management_default_price_list(price_list_name):
 	}
 
 
+def _serialize_management_builder_template(template):
+	steps_data = []
+	for step in sorted(template.steps or [], key=lambda s: s.sort_order or 0):
+		options_data = []
+		for opt in _get_builder_step_options(step.name):
+			item_name = frappe.db.get_value("Item", opt.item, "item_name") if opt.item else ""
+			options_data.append(
+				{
+					"name": opt.name,
+					"option_label": opt.option_label,
+					"option_key": opt.option_key,
+					"option_description": opt.option_description or "",
+					"sort_order": opt.sort_order or 0,
+					"item": opt.item or "",
+					"item_name": item_name or "",
+					"base_price_delta": opt.base_price_delta or 0,
+					"price_type": opt.price_type or "fixed",
+					"price_percentage": opt.price_percentage or 0,
+					"is_default": bool(opt.is_default),
+					"is_available": opt.is_available != 0,
+					"max_qty": opt.max_qty or 1,
+					"image": opt.image or "",
+					"color_code": opt.color_code or "",
+					"nutrition_json": opt.nutrition_json or "",
+					"allergen_tags": opt.allergen_tags or "",
+					"stock_impact_json": opt.stock_impact_json or "",
+					"linked_step_key": opt.linked_step_key or "",
+					"disable_if": opt.disable_if or "",
+				}
+			)
+
+		steps_data.append(
+			{
+				"name": step.name,
+				"step_title": step.step_title,
+				"step_key": step.step_key,
+				"step_description": step.step_description or "",
+				"sort_order": step.sort_order or 0,
+				"selection_mode": step.selection_mode or "single",
+				"min_select": step.min_select or 0,
+				"max_select": step.max_select or 1,
+				"is_required": bool(step.is_required),
+				"show_step_price": step.show_step_price != 0,
+				"step_icon": step.step_icon or "",
+				"conditional_logic": step.conditional_logic or {},
+				"options": options_data,
+			}
+		)
+
+	return {
+		"name": template.name,
+		"title": template.title,
+		"slug": template.slug,
+		"description": template.description or "",
+		"is_active": bool(template.is_active),
+		"layout_mode": template.layout_mode,
+		"show_summary_panel": template.show_summary_panel != 0,
+		"show_price_live": template.show_price_live != 0,
+		"primary_color": template.primary_color or "#1a73e8",
+		"background_image": template.background_image or "",
+		"allow_skip_steps": bool(template.allow_skip_steps),
+		"allow_go_back": template.allow_go_back != 0,
+		"require_all_required": template.require_all_required != 0,
+		"max_total_selections": template.max_total_selections or 0,
+		"steps": steps_data,
+	}
+
+
+def _management_builder_templates_summary():
+	templates = frappe.get_all(
+		"Product Builder Template",
+		fields=["name", "title", "slug", "description", "is_active", "layout_mode", "modified"],
+		order_by="modified desc",
+	)
+	for template in templates:
+		template["steps_count"] = frappe.db.count(
+			"Product Builder Step", {"parent": template.name, "parenttype": "Product Builder Template"}
+		)
+	return templates
+
+
+def _build_item_specific_builder_template(item_doc, builder_payload, selected_template_name=None):
+	payload = frappe.parse_json(builder_payload) if isinstance(builder_payload, str) else builder_payload
+	if not isinstance(payload, dict):
+		frappe.throw(_("Invalid product builder config."))
+
+	title = (payload.get("title") or item_doc.get("item_name") or item_doc.name or "").strip()
+	if not title:
+		frappe.throw(_("Builder title is required."))
+
+	base_slug = (payload.get("slug") or "").strip()
+	if not base_slug:
+		base_slug = frappe.scrub(item_doc.get("item_code") or item_doc.name or title) + "-builder"
+	if not base_slug:
+		base_slug = "item-builder"
+
+	target_name = (item_doc.get("restaurant_builder_template") or "").strip()
+	shared_name = (selected_template_name or "").strip()
+	use_existing = False
+	if target_name and frappe.db.exists("Product Builder Template", target_name):
+		# If the user is applying/editing a shared selected template, create an item-specific copy.
+		# If the item is already linked to its own generated template, update that existing one.
+		if not shared_name:
+			use_existing = True
+		elif target_name != shared_name:
+			use_existing = True
+
+	if use_existing:
+		template_name = target_name
+	else:
+		template_name = ""
+		candidate_slug = base_slug
+		counter = 1
+		while frappe.db.exists("Product Builder Template", {"slug": candidate_slug}):
+			candidate_slug = f"{base_slug}-{counter}"
+			counter += 1
+		payload["slug"] = candidate_slug
+		payload["name"] = ""
+		payload["title"] = title
+		payload["description"] = (
+			payload.get("description")
+			or f"Item-specific builder for {item_doc.get('item_name') or item_doc.name}"
+		).strip()
+		result = save_builder_template(template_data=frappe.as_json(payload))
+		data = (result or {}).get("data") or {}
+		template_name = data.get("name")
+		if not template_name:
+			frappe.throw(_("Failed to create item-specific builder template."))
+		return template_name
+
+	payload["name"] = template_name
+	payload["title"] = title
+	result = save_builder_template(template_data=frappe.as_json(payload))
+	data = (result or {}).get("data") or {}
+	return data.get("name") or template_name
+
+
 @frappe.whitelist()
 def get_management_product_detail(item_name, date_from=None, date_to=None):
 	_ensure_management_access()
@@ -13875,6 +14556,20 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 	if variant_of_name:
 		variant_of_item_name = frappe.db.get_value("Item", variant_of_name, "item_name") or variant_of_name
 
+	builder_templates = (
+		_management_builder_templates_summary()
+		if frappe.db.exists("DocType", "Product Builder Template")
+		else []
+	)
+	builder_config = None
+	builder_template_name = item_doc.get("restaurant_builder_template") or ""
+	if builder_template_name and frappe.db.exists("Product Builder Template", builder_template_name):
+		try:
+			builder_template_doc = frappe.get_doc("Product Builder Template", builder_template_name)
+			builder_config = _serialize_management_builder_template(builder_template_doc)
+		except Exception:
+			builder_config = None
+
 	return {
 		"item": {
 			"name": item_doc.name,
@@ -13912,6 +14607,16 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_auto_add_to_order": cint(item_doc.get("restaurant_auto_add_to_order") or 0),
 			"restaurant_coming_soon": cint(item_doc.get("restaurant_coming_soon") or 0),
 			"restaurant_auto_add_qty": flt(item_doc.get("restaurant_auto_add_qty") or 0),
+			"restaurant_is_customizable": cint(item_doc.get("restaurant_is_customizable") or 0),
+			"restaurant_customize_button_label": item_doc.get("restaurant_customize_button_label") or "",
+			"restaurant_custom_product_type": item_doc.get("restaurant_custom_product_type") or "",
+			"restaurant_builder_template": item_doc.get("restaurant_builder_template") or "",
+			"restaurant_builder_active": cint(item_doc.get("restaurant_builder_active") or 0),
+			"restaurant_allow_direct_add": cint(item_doc.get("restaurant_allow_direct_add") or 0),
+			"restaurant_show_nutrition_summary": cint(item_doc.get("restaurant_show_nutrition_summary") or 0),
+			"restaurant_show_allergen_warnings": cint(item_doc.get("restaurant_show_allergen_warnings") or 0),
+			"restaurant_kitchen_print_mode": item_doc.get("restaurant_kitchen_print_mode") or "",
+			"restaurant_stock_consumption_mode": item_doc.get("restaurant_stock_consumption_mode") or "",
 			"restaurant_item_tags": item_doc.get("restaurant_item_tags") or "",
 			"restaurant_nutrition_kcal": flt(item_doc.get("restaurant_nutrition_kcal") or 0),
 			"restaurant_nutrition_protein_g": flt(item_doc.get("restaurant_nutrition_protein_g") or 0),
@@ -13922,6 +14627,12 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 		},
 		"media": media,
 		"field_options": _management_product_field_options(),
+		"builder_templates": builder_templates,
+		"builder": {
+			"template_name": builder_template_name,
+			"builder_templates": builder_templates,
+			"product_builder_config": builder_config,
+		},
 		"pricing": {
 			"default_price_list": default_price_list or "",
 			"price_lists": price_lists,
@@ -13978,6 +14689,11 @@ def update_management_product_settings(payload=None):
 		"website_image",
 		"image",
 		"item_image",
+		"restaurant_customize_button_label",
+		"restaurant_custom_product_type",
+		"restaurant_builder_template",
+		"restaurant_kitchen_print_mode",
+		"restaurant_stock_consumption_mode",
 	}
 	int_fields = {
 		"disabled",
@@ -13990,6 +14706,11 @@ def update_management_product_settings(payload=None):
 		"restaurant_requires_bom",
 		"restaurant_auto_add_to_order",
 		"restaurant_coming_soon",
+		"restaurant_is_customizable",
+		"restaurant_builder_active",
+		"restaurant_allow_direct_add",
+		"restaurant_show_nutrition_summary",
+		"restaurant_show_allergen_warnings",
 	}
 	float_fields = {"restaurant_auto_add_qty"}
 	nutrition_fields = set(NUTRITION_KEY_FIELD_MAP.values())
@@ -14084,6 +14805,23 @@ def update_management_product_settings(payload=None):
 					item_doc.append(tag_table_field, {"tag": tag_docname})
 			changed = True
 
+	builder_config_payload = parsed_payload.get("product_builder_config")
+	selected_builder_template = (parsed_payload.get("restaurant_builder_template") or "").strip()
+	if builder_config_payload and cint(
+		parsed_payload.get("restaurant_is_customizable") or item_doc.get("restaurant_is_customizable") or 0
+	):
+		template_name = _build_item_specific_builder_template(
+			item_doc,
+			builder_config_payload,
+			selected_template_name=selected_builder_template,
+		)
+		if (
+			_has_column("Item", "restaurant_builder_template")
+			and (item_doc.get("restaurant_builder_template") or "") != template_name
+		):
+			item_doc.set("restaurant_builder_template", template_name)
+			changed = True
+
 	default_price_list = (parsed_payload.get("default_price_list") or "").strip()
 	if default_price_list:
 		set_management_default_price_list(default_price_list)
@@ -14170,6 +14908,86 @@ def set_management_product_price(payload=None):
 
 
 @frappe.whitelist()
+def get_management_bom_context():
+	_ensure_management_access()
+	default_company = (frappe.db.get_single_value("Global Defaults", "default_company") or "").strip()
+	companies = frappe.get_all(
+		"Company",
+		filters={"disabled": 0},
+		fields=["name", "default_currency", "abbr"],
+		ignore_permissions=True,
+		order_by="name asc",
+		limit_page_length=200,
+	)
+	default_row = None
+	for row in companies or []:
+		if (row.get("name") or "").strip() == default_company:
+			default_row = row
+			break
+	if not default_row and companies:
+		default_row = companies[0]
+	return {
+		"companies": companies or [],
+		"default_company": (default_row or {}).get("name") or default_company or "",
+		"default_currency": (default_row or {}).get("default_currency") or "",
+	}
+
+
+@frappe.whitelist()
+def list_management_bom_items(search="", limit=200):
+	_ensure_management_access()
+	query = (search or "").strip()
+	filters = {"disabled": 0}
+	or_filters = None
+	if query:
+		like = f"%{query}%"
+		or_filters = [["item_code", "like", like], ["item_name", "like", like], ["name", "like", like]]
+	return frappe.get_all(
+		"Item",
+		filters=filters,
+		or_filters=or_filters,
+		fields=["name", "item_code", "item_name", "stock_uom"],
+		ignore_permissions=True,
+		order_by="modified desc",
+		limit_page_length=max(1, min(cint(limit or 200), 500)),
+	)
+
+
+@frappe.whitelist()
+def list_management_boms(item_code="", search="", limit=50):
+	_ensure_management_access()
+	query = (search or "").strip()
+	item_code = (item_code or "").strip()
+	filters = [["docstatus", "in", [0, 1]]]
+	if item_code:
+		filters.append(["item", "=", item_code])
+	or_filters = None
+	if query:
+		like = f"%{query}%"
+		or_filters = [["name", "like", like], ["item", "like", like], ["item_name", "like", like]]
+	return frappe.get_all(
+		"BOM",
+		filters=filters,
+		or_filters=or_filters,
+		fields=["name", "item", "item_name", "quantity", "is_active", "is_default", "docstatus", "modified"],
+		ignore_permissions=True,
+		order_by="modified desc",
+		limit_page_length=max(1, min(cint(limit or 50), 300)),
+	)
+
+
+@frappe.whitelist()
+def get_management_bom_doc(bom_name=""):
+	_ensure_management_access()
+	bom_name = (bom_name or "").strip()
+	if not bom_name:
+		frappe.throw(_("BOM name is required."))
+	if not frappe.db.exists("BOM", bom_name):
+		frappe.throw(_("BOM not found."), frappe.DoesNotExistError)
+	return frappe.get_doc("BOM", bom_name).as_dict()
+
+
+@frappe.whitelist()
 def save_management_bom(payload=None):
 	_ensure_management_access()
 	parsed_payload = payload
@@ -14188,7 +15006,7 @@ def save_management_bom(payload=None):
 	if cint(bom_doc.docstatus) == 2:
 		frappe.throw(_("Cancelled BOM cannot be edited."))
 
-	for fieldname in ("item", "company", "currency", "rm_cost_as_per"):
+	for fieldname in ("item", "company", "currency", "rm_cost_as_per", "restaurant_recipe_instruction"):
 		if fieldname not in parsed_payload or not _has_column("BOM", fieldname):
 			continue
 		next_value = parsed_payload.get(fieldname)
@@ -18479,10 +19297,13 @@ def get_bom_preview(item_code=None):
 
 	bom_doc = frappe.get_doc("BOM", bom_name)
 
-	# Build response in frontend-expected format
+	# Build response in frontend-expected format.
+	# Quantities are scaled recursively: if a parent uses 50g of a sub-BOM,
+	# the sub-BOM children are calculated for that 50g, not for the sub-BOM's full batch size.
 	product_data = _build_product_data(item_doc, has_bom=True)
-	bom_tree = _build_bom_tree_nodes(bom_doc)
-	gramezh = _build_gramezh_rows(bom_doc)
+	root_qty = flt(bom_doc.get("quantity") or 1) or 1
+	bom_tree = _build_bom_tree_nodes(bom_doc, required_qty=root_qty)
+	gramezh = _build_gramezh_rows(bom_doc, required_qty=root_qty)
 	prep_notes = (bom_doc.get("prep_notes") or "").strip() if bom_doc.meta.has_field("prep_notes") else ""
 	operations = _build_bom_operations(bom_doc)
 
@@ -18504,10 +19325,29 @@ def get_bom_preview(item_code=None):
 	}
 
 
+def _get_item_image_value(item_code):
+	"""Safely return an Item image URL without querying missing columns."""
+	item_code = (item_code or "").strip()
+	if not item_code:
+		return ""
+	seen = set()
+	for fieldname in (_core_item_image_field(), "item_image", "website_image", "image"):
+		fieldname = (fieldname or "").strip()
+		if not fieldname or fieldname in seen or not _has_column("Item", fieldname):
+			continue
+		seen.add(fieldname)
+		value = frappe.db.get_value("Item", item_code, fieldname) or ""
+		if value:
+			return value
+	return ""
+
+
 def _build_product_data(item_doc, has_bom=False):
 	"""Build the product object expected by BomPreviewPage."""
-	image_field = "item_image" if _has_column("Item", "item_image") else "website_image"
+	image_field = _core_item_image_field()
 	image = item_doc.get(image_field) if image_field else ""
+	if not image:
+		image = item_doc.get("item_image") or item_doc.get("website_image") or item_doc.get("image") or ""
 
 	nutrition = {}
 	if _has_column("Item", "restaurant_nutrition_kcal"):
@@ -18543,11 +19383,46 @@ def _build_product_data(item_doc, has_bom=False):
 	}
 
 
-def _build_bom_tree_nodes(bom_doc, depth=0, visited=None):
+def _bom_effective_output(bom_doc):
+	"""Return the most realistic output quantity for scaling a BOM batch.
+
+	Restaurant BOMs are sometimes authored with BOM.quantity as the menu serving
+	amount, while the rows describe the production batch. Prefer a dominant/same
+	UOM row total when it is meaningfully larger than the declared quantity.
+	"""
+	declared_qty = flt(bom_doc.get("quantity") or 1)
+	if declared_qty <= 0:
+		declared_qty = 1.0
+	bom_uom = (bom_doc.get("uom") or "").strip()
+
+	totals_by_uom = {}
+	positive_rows = 0
+	for row in bom_doc.get("items") or []:
+		qty = flt(row.get("qty") or 0)
+		if qty <= 0:
+			continue
+		positive_rows += 1
+		uom = (row.get("uom") or row.get("stock_uom") or "").strip()
+		if not uom:
+			continue
+		totals_by_uom[uom] = totals_by_uom.get(uom, 0.0) + qty
+
+	if not totals_by_uom:
+		return declared_qty, bom_uom, declared_qty, "declared"
+
+	candidate_uom = bom_uom if bom_uom in totals_by_uom else max(totals_by_uom, key=totals_by_uom.get)
+	candidate_total = flt(totals_by_uom.get(candidate_uom) or 0)
+	if candidate_total > declared_qty * 1.05:
+		return candidate_total, candidate_uom, declared_qty, "uom_total"
+	return declared_qty, bom_uom or candidate_uom, declared_qty, "declared"
+
+
+def _build_bom_tree_nodes(bom_doc, depth=0, visited=None, required_qty=None):
 	"""
 	Build BOM tree for the frontend BomTree component.
-	Returns a single root node with children array (matches BomPreviewPage expectation).
-	Root: {title, item_code, qty, uom, rate, amount, is_sub_assembly, children: [...]}
+	Quantities are normalized to required_qty. This is important for nested BOMs:
+	if the parent needs 50g of a sub-assembly whose effective batch is 1000g,
+	child rows are scaled by 50/1000.
 	"""
 	if visited is None:
 		visited = set()
@@ -18557,20 +19432,31 @@ def _build_bom_tree_nodes(bom_doc, depth=0, visited=None):
 		return {"title": bom_name, "item_code": "", "qty": 0, "uom": "", "children": [], "_recursive": True}
 	visited.add(bom_name)
 
+	bom_qty, bom_uom, declared_qty, output_source = _bom_effective_output(bom_doc)
+	required_qty = flt(required_qty if required_qty not in (None, "") else bom_qty)
+	if required_qty <= 0:
+		required_qty = bom_qty
+	scale = required_qty / bom_qty if bom_qty else 1
+
 	children = []
 	for row in bom_doc.get("items") or []:
 		item_code = (row.get("item_code") or "").strip()
 		if not item_code:
 			continue
 
+		item_image = _get_item_image_value(item_code)
+		raw_qty = flt(row.get("qty") or 0)
+		scaled_qty = raw_qty * scale
+		rate = flt(row.get("rate") or row.get("price_list_rate") or 0)
 		node = {
 			"title": row.get("item_name") or item_code,
 			"item_code": item_code,
 			"item_name": row.get("item_name") or item_code,
-			"qty": flt(row.get("qty") or 0),
+			"image": item_image,
+			"qty": scaled_qty,
 			"uom": row.get("uom") or row.get("stock_uom") or "",
-			"rate": flt(row.get("rate") or row.get("price_list_rate") or 0),
-			"amount": flt(row.get("amount") or (flt(row.get("qty") or 0) * flt(row.get("rate") or 0))),
+			"rate": rate,
+			"amount": flt(scaled_qty * rate),
 			"is_sub_assembly": False,
 			"children": [],
 		}
@@ -18592,10 +19478,20 @@ def _build_bom_tree_nodes(bom_doc, depth=0, visited=None):
 			try:
 				sub_bom_doc = frappe.get_doc("BOM", sub_bom_name[0].name)
 				if frappe.has_permission("BOM", "read", sub_bom_doc):
+					sub_tree = _build_bom_tree_nodes(
+						sub_bom_doc,
+						depth=depth + 1,
+						visited=visited.copy(),
+						required_qty=scaled_qty,
+					)
 					node["is_sub_assembly"] = True
-					node["children"] = _build_bom_tree_nodes(sub_bom_doc, depth=depth + 1, visited=visited)[
-						"children"
-					]
+					node["children"] = sub_tree["children"]
+					node["bom_batch_qty"] = sub_tree.get("batch_qty")
+					node["bom_batch_uom"] = sub_tree.get("batch_uom")
+					node["bom_declared_qty"] = sub_tree.get("declared_qty")
+					node["bom_required_qty"] = scaled_qty
+					node["bom_scale"] = sub_tree.get("scale")
+					node["bom_output_source"] = sub_tree.get("output_source")
 			except Exception:
 				pass
 
@@ -18604,28 +19500,35 @@ def _build_bom_tree_nodes(bom_doc, depth=0, visited=None):
 	return {
 		"title": bom_doc.get("item_name") or bom_doc.get("item") or bom_name,
 		"item_code": bom_doc.get("item") or "",
-		"qty": flt(bom_doc.get("quantity") or 1),
-		"uom": bom_doc.get("uom") or "",
+		"qty": required_qty,
+		"uom": bom_uom or bom_doc.get("uom") or "",
+		"batch_qty": bom_qty,
+		"batch_uom": bom_uom,
+		"declared_qty": declared_qty,
+		"scale": scale,
+		"output_source": output_source,
 		"children": children,
 	}
 
 
-def _build_gramezh_rows(bom_doc):
+def _build_gramezh_rows(bom_doc, required_qty=None):
 	"""
-	Build gramezh (material quantity) rows for the frontend GramezhTable.
-	Each row: {item_code, item_name, qty, uom, rate, amount}
+	Build top-level material quantity rows.
+	Rows are scaled to required_qty for consistency with the BOM tree.
 	"""
 	rows = []
-	bom_qty = flt(bom_doc.get("quantity") or 1)
-	if bom_qty <= 0:
-		bom_qty = 1.0
+	bom_qty, bom_uom, declared_qty, output_source = _bom_effective_output(bom_doc)
+	required_qty = flt(required_qty if required_qty not in (None, "") else bom_qty)
+	if required_qty <= 0:
+		required_qty = bom_qty
+	scale = required_qty / bom_qty if bom_qty else 1
 
 	for row in bom_doc.get("items") or []:
 		item_code = (row.get("item_code") or "").strip()
 		if not item_code:
 			continue
 
-		qty = flt(row.get("qty") or 0)
+		qty = flt(row.get("qty") or 0) * scale
 		rate = flt(row.get("rate") or row.get("price_list_rate") or 0)
 
 		rows.append(

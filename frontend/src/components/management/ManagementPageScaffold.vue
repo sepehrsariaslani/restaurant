@@ -33,10 +33,10 @@ defineProps({
 }
 
 .hero-card {
-  border-radius: 8px;
-  border: 1px solid #e4ded6;
-  background: linear-gradient(180deg, #fff 0%, #fbfaf8 100%);
-  box-shadow: 0 14px 34px rgb(15 23 42 / 0.07);
+  border-radius: 16px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: linear-gradient(180deg, var(--bg-card, #fff) 0%, color-mix(in srgb, var(--bg-card, #fff) 92%, var(--bg-soft, #f1f5f9)) 100%);
+  box-shadow: var(--shadow-sm, 0 14px 34px rgb(15 23 42 / 0.06));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -46,7 +46,7 @@ defineProps({
 
 .hero-card h2 {
   margin: 0;
-  color: #2b211a;
+  color: var(--text-primary, #0f172a);
   font-size: clamp(1.02rem, 1vw + 0.8rem, 1.35rem);
   font-weight: 900;
   line-height: 1.35;
@@ -54,7 +54,7 @@ defineProps({
 
 .hero-card p {
   margin: 0.24rem 0 0;
-  color: #74685f;
+  color: var(--text-muted, #64748b);
   font-size: 0.86rem;
   line-height: 1.7;
 }

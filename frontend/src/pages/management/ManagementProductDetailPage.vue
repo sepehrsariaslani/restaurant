@@ -1,12 +1,166 @@
 <template>
   <ManagementPageScaffold :title="pageTitle" :subtitle="pageSubtitle">
     <template #actions>
-      <span v-if="hasUnsavedChanges" class="unsaved-chip">تغییرات ذخیره نشده</span>
-      <a class="secondary-btn" href="/management/products">بازگشت</a>
-      <button class="primary-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
-        {{ savingSettings ? 'در حال ذخیره...' : hasUnsavedChanges ? 'ذخیره تغییرات' : 'بدون تغییر' }}
-      </button>
+      <div class="page-sticky-actions">
+        <span v-if="hasUnsavedChanges" class="unsaved-chip">تغییرات ذخیره نشده</span>
+        <a class="secondary-btn" href="/management/products">بازگشت</a>
+        <button class="primary-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
+          {{ savingSettings ? 'در حال ذخیره...' : hasUnsavedChanges ? 'ذخیره تغییرات' : 'بدون تغییر' }}
+        </button>
+      </div>
     </template>
+
+    <ManagementSurfaceCard v-if="detail" class="product-general-card" title="چیزهای عمومی">
+      <div class="product-general-layout">
+        <aside class="product-general-media" aria-label="عکس محصول">
+          <div class="general-image-shell">
+            <img v-if="mainImage" :src="mainImage" :alt="settingsForm.item_name || 'عکس محصول'" class="general-product-image" />
+            <div v-else class="general-image-empty">
+              <span aria-hidden="true">+</span>
+              <p>عکس محصول ثبت نشده</p>
+            </div>
+          </div>
+        </aside>
+
+        <div class="product-general-main">
+          <div class="product-general-fields">
+            <label>
+              نام کالا
+              <input class="input" v-model="settingsForm.item_name" placeholder="نام نمایشی محصول" />
+            </label>
+
+            <label>
+              گروه کالا
+              <SearchableDropdown
+                v-model="settingsForm.item_group"
+                :options="fieldOptions.item_groups || []"
+                placeholder="انتخاب گروه کالا"
+                search-placeholder="جستجوی گروه کالا..."
+                include-empty-option
+                empty-label="انتخاب گروه کالا"
+              />
+            </label>
+
+            <label>
+              زیرگروه کالا
+              <SearchableDropdown
+                v-model="settingsForm.restaurant_subcategory"
+                :options="filteredSubcategoryOptions"
+                placeholder="بدون زیرگروه"
+                search-placeholder="جستجوی زیرگروه..."
+                include-empty-option
+                empty-label="بدون زیرگروه"
+              />
+            </label>
+
+            <label class="price-inline-field">
+              قیمت کالا
+              <span class="price-inline-control">
+                <PersianNumberInput v-model="priceForm.price_list_rate" :min="0" suffix="ریال" />
+                <button class="secondary-btn quick-price-save" type="button" @click="savePrice" :disabled="savingPrice">
+                  {{ savingPrice ? 'در حال ثبت...' : 'ثبت قیمت' }}
+                </button>
+              </span>
+            </label>
+          </div>
+
+          <section class="nutrition-box product-general-nutrition" aria-label="ارزش غذایی">
+            <header class="nutrition-head">
+              <strong>ارزش غذایی</strong>
+              <small>اعداد اختیاری هستند و در صفحه محصول مشتری نمایش داده می‌شوند.</small>
+            </header>
+            <div class="nutrition-grid">
+              <label>
+                کالری
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                پروتئین (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                کربوهیدرات (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                قند (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                چربی (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <div class="product-general-side">
+          <div class="product-general-toggles">
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_enabled"
+              label="نمایش در منوی سایت"
+              hint="مشتری محصول را در منو می‌بیند."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.show_in_print"
+              label="نمایش در پرینت"
+              hint="در رسیدها و چاپ‌ها نمایش داده شود."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_featured"
+              label="محصول ویژه"
+              hint="در بخش‌های برجسته سایت استفاده می‌شود."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_best_seller"
+              label="پرفروش"
+              hint="برای برچسب و مرتب‌سازی محصولات پرفروش."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_requires_bom"
+              label="نیازمند BOM"
+              hint="اگر مواد اولیه و فرمول ساخت دارد روشن باشد."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_coming_soon"
+              label="به‌زودی"
+              hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_auto_add_to_order"
+              label="افزودن خودکار"
+              hint="برای آیتم‌های مکمل یا اجباری سفارش."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.disabled"
+              label="غیرفعال در ERPNext"
+              hint="در کل سیستم ERP غیرفعال می‌شود."
+            />
+          </div>
+
+          <div class="product-general-meta-row">
+            <div class="mini-meta-chip" v-if="selectedCategoryLabel || selectedSubcategoryLabel">
+              <strong>دسته‌بندی</strong>
+              <span>{{ [selectedCategoryLabel, selectedSubcategoryLabel].filter(Boolean).join(' / ') || '-' }}</span>
+            </div>
+
+            <div class="mini-readiness-row" v-if="productReadinessChecks.length">
+              <span class="mini-readiness-score">{{ readinessScore.toLocaleString('fa-IR') }} / {{ productReadinessChecks.length.toLocaleString('fa-IR') }}</span>
+              <div class="mini-readiness-items">
+                <span
+                  v-for="check in productReadinessChecks"
+                  :key="check.key"
+                  class="mini-readiness-pill"
+                  :class="check.ok ? 'is-ok' : 'is-missing'"
+                >
+                  {{ check.label }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ManagementSurfaceCard>
 
     <ManagementSurfaceCard tone="soft" class="section-picker-shell">
       <div class="section-picker">
@@ -21,15 +175,14 @@
             :aria-selected="activeTab === tab.value"
             @click="activeTab = tab.value"
           >
-            {{ tab.label }}
+            <span>{{ tab.label }}</span>
+            <span v-if="getTabBadge(tab.value)" class="tab-badge">{{ getTabBadge(tab.value) }}</span>
           </button>
         </div>
         <button class="secondary-btn" type="button" @click="loadDetail" :disabled="loading">
           {{ loading ? 'در حال بروزرسانی...' : 'تازه‌سازی' }}
         </button>
       </div>
-      <p class="muted tab-hint">{{ activeTabHint }}</p>
-      <p class="unsaved-note" v-if="hasUnsavedChanges">تغییرات ذخیره نشده است؛ برای ثبت، روی «ذخیره تغییرات» در بالای صفحه بزنید.</p>
     </ManagementSurfaceCard>
 
     <ManagementSurfaceCard tone="accent" v-if="activeTab === 'reports'">
@@ -51,28 +204,12 @@
 
     <template v-if="detail && !loading">
       <section class="product-top-grid" v-if="activeTab === 'overview'">
-        <ManagementSurfaceCard title="مشخصات محصول" subtitle="فیلدهای اصلی سایت و منو">
+        <ManagementSurfaceCard title="کارت محصول" subtitle="توضیحات و خروجی قابل نمایش در منوی مشتری">
           <div class="identity-grid">
             <label>
               کد محصول
               <input class="input" v-model="settingsForm.item_code" />
               <small class="hint">کد یکتای محصول در سیستم</small>
-            </label>
-            <label>
-              نام محصول
-              <input class="input" v-model="settingsForm.item_name" />
-              <small class="hint">نام نمایشی محصول برای مشتریان</small>
-            </label>
-            <label>
-              گروه کالا
-              <SearchableDropdown
-                v-model="settingsForm.item_group"
-                :options="fieldOptions.item_groups || []"
-                placeholder="انتخاب گروه"
-                search-placeholder="جستجوی گروه..."
-                include-empty-option
-                empty-label="انتخاب گروه"
-              />
             </label>
             <label>
               واحد
@@ -95,14 +232,7 @@
           <label>
             <span class="field-label">توضیح کامل</span>
             <textarea class="textarea" v-model="settingsForm.restaurant_long_desc"></textarea>
-            <small class="field-help">این بخش در صفحه جزئیات محصول سایت (کنار اطلاعات اصلی) نشان داده می‌شود.</small>
-          </label>
-          <label>
-            <span class="field-label">توضیحات داخلی</span>
-            <textarea class="textarea" v-model="settingsForm.description"></textarea>
-            <small class="field-help">
-              توضیح داخلی تیم است؛ اگر توضیح کامل خالی باشد، این متن می‌تواند به‌عنوان متن جایگزین در سایت استفاده شود.
-            </small>
+            <small class="field-help">این بخش در صفحه جزئیات محصول سایت کنار اطلاعات اصلی نشان داده می‌شود.</small>
           </label>
         </ManagementSurfaceCard>
 
@@ -225,77 +355,6 @@
             </label>
           </div>
 
-          <section class="nutrition-box" aria-label="ارزش غذایی">
-            <header class="nutrition-head">
-              <strong>ارزش غذایی</strong>
-              <small>اعداد اختیاری هستند و در صفحه محصول مشتری نمایش داده می‌شوند.</small>
-            </header>
-            <div class="nutrition-grid">
-              <label>
-                کالری
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                پروتئین (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                کربوهیدرات (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                قند (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                چربی (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
-              </label>
-            </div>
-          </section>
-
-          <div class="checks-grid">
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_enabled"
-              label="نمایش در منوی سایت"
-              hint="مشتری محصول را در منو می‌بیند."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.show_in_print"
-              label="نمایش در پرینت"
-              hint="در رسیدها و چاپ‌ها نمایش داده شود."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_is_featured"
-              label="محصول ویژه"
-              hint="در بخش‌های برجسته سایت استفاده می‌شود."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_is_best_seller"
-              label="پرفروش"
-              hint="برای برچسب و مرتب‌سازی محصولات پرفروش."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_requires_bom"
-              label="نیازمند BOM"
-              hint="اگر مواد اولیه و فرمول ساخت دارد روشن باشد."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_coming_soon"
-              label="به‌زودی"
-              hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_auto_add_to_order"
-              label="افزودن خودکار"
-              hint="برای آیتم‌های مکمل یا اجباری سفارش."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.disabled"
-              label="غیرفعال در ERPNext"
-              hint="در کل سیستم ERP غیرفعال می‌شود."
-            />
-          </div>
         </ManagementSurfaceCard>
 
         <ManagementSurfaceCard title="قیمت‌گذاری" subtitle="پیروی از Price List پیش‌فرض">
@@ -354,67 +413,113 @@
           </button>
         </ManagementSurfaceCard>
 
-        <ManagementSurfaceCard
-          class="bom-card"
-          title="لیست BOMهای این محصول"
-          subtitle="ویرایش BOM فقط از صفحه اختصاصی BOM انجام می‌شود."
-        >
-          <div class="bom-meta">
-            <a class="primary-btn mini-link-btn" :href="productBomPageUrl">مدیریت BOM در صفحه اختصاصی</a>
-            <a
-              v-if="defaultBomName"
-              class="secondary-btn mini-link-btn"
-              :href="`/app/bom/${encodeURIComponent(defaultBomName)}`"
-              target="_blank"
-              rel="noreferrer"
-            >
-              BOM پیش‌فرض: {{ defaultBomName }}
-            </a>
-            <a
-              v-if="activeBomName && activeBomName !== defaultBomName"
-              class="secondary-btn mini-link-btn"
-              :href="`/app/bom/${encodeURIComponent(activeBomName)}`"
-              target="_blank"
-              rel="noreferrer"
-            >
-              BOM فعال: {{ activeBomName }}
-            </a>
-            <p v-if="!defaultBomName && !activeBomName" class="hint-line">
-              هنوز BOM پیش‌فرض/فعال برای این محصول تعیین نشده است.
-            </p>
-          </div>
-
-          <p class="muted" v-if="bomLoading">در حال دریافت لیست BOM...</p>
-          <p class="error" v-if="bomError">{{ bomError }}</p>
-
-          <ManagementDataTable v-if="productBoms.length" :columns="bomColumns" :rows="productBoms" row-key="name">
-            <template #cell-status="{ row }">
-              <div class="status-pills">
-                <span :class="['pill', Number(row.is_active) ? 'active' : 'inactive']">
-                  {{ Number(row.is_active) ? 'فعال' : 'غیرفعال' }}
-                </span>
-                <span class="pill default" v-if="Number(row.is_default)">پیش فرض</span>
-                <span class="pill docstatus" v-if="Number(row.docstatus) === 0">پیش نویس</span>
-                <span class="pill docstatus submitted" v-else-if="Number(row.docstatus) === 1">ثبت شده</span>
-              </div>
-            </template>
-            <template #cell-quantity="{ value }">{{ formatNumber(value) }}</template>
-            <template #cell-modified="{ value }">{{ formatPersianDate(value, true) }}</template>
-            <template #cell-actions="{ row }">
-              <div class="row-actions">
-                <a class="secondary-btn mini-link-btn" :href="bomManagerUrl(row)">ویرایش در صفحه BOM</a>
-                <a class="secondary-btn mini-link-btn" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">
-                  ERP
-                </a>
-              </div>
-            </template>
-          </ManagementDataTable>
-
-          <p v-else-if="!bomLoading" class="hint-line">برای این محصول BOM ثبت نشده است.</p>
-        </ManagementSurfaceCard>
       </section>
 
-      <section v-if="activeTab === 'variants'" class="variants-grid">
+            <section v-if="activeTab === 'formula'" class="variants-grid">
+              <ManagementSurfaceCard title="فرمول و رسپی" subtitle="ثبت BOM و دستور پخت همین محصول از همین صفحه">
+                <div class="identity-grid">
+                  <label>
+                    تعداد خروجی فرمول
+                    <PersianNumberInput v-model="bomForm.quantity" :min="1" :allow-float="true" />
+                  </label>
+                  <label>
+                    شرکت
+                    <SearchableDropdown
+                      v-model="bomForm.company"
+                      :options="bomCompanyOptions"
+                      placeholder="انتخاب شرکت"
+                      search-placeholder="جستجوی شرکت..."
+                      include-empty-option
+                      empty-label="انتخاب شرکت"
+                    />
+                  </label>
+                  <label>
+                    ارز
+                    <SearchableDropdown
+                      v-model="bomForm.currency"
+                      :options="bomCurrencyOptions"
+                      placeholder="انتخاب ارز"
+                      search-placeholder="جستجوی ارز..."
+                      include-empty-option
+                      empty-label="انتخاب ارز"
+                    />
+                  </label>
+                  <label>
+                    نام BOM فعال
+                    <input class="input" :value="bomForm.name || 'BOM جدید'" readonly />
+                  </label>
+                </div>
+
+                <label>
+                  <span class="field-label">دستور پخت</span>
+                  <textarea class="textarea" v-model="bomForm.restaurant_recipe_instruction" placeholder="مراحل آماده‌سازی و رسپی محصول را اینجا وارد کنید."></textarea>
+                </label>
+
+                <div class="checks-grid compact-checks">
+                  <ManagementToggleSwitch v-model="bomForm.is_active" label="BOM فعال" compact />
+                  <ManagementToggleSwitch v-model="bomForm.is_default" label="BOM پیش‌فرض" compact />
+                </div>
+
+                <div class="inline-actions">
+                  <button class="secondary-btn" type="button" @click="addBomItemRow">افزودن ماده اولیه</button>
+                  <button class="primary-btn" type="button" @click="saveBomFromProduct" :disabled="bomSaving">
+                    {{ bomSaving ? 'در حال ذخیره فرمول...' : 'ذخیره فرمول و رسپی' }}
+                  </button>
+                </div>
+
+                <p class="error" v-if="bomError">{{ bomError }}</p>
+                <p class="success" v-if="bomSaveSuccess">{{ bomSaveSuccess }}</p>
+
+                <div class="bom-inline-list">
+                  <article v-for="(row, index) in bomItemsSummary" :key="`bom-item-${index}`" class="bom-inline-card">
+                    <label>
+                      ماده اولیه
+                      <SearchableDropdown
+                        :model-value="row.item_code"
+                        :options="bomItemOptions"
+                        placeholder="انتخاب ماده اولیه"
+                        search-placeholder="جستجوی ماده اولیه..."
+                        include-empty-option
+                        empty-label="انتخاب ماده اولیه"
+                        @update:model-value="updateBomItemCode(index, $event)"
+                      />
+                    </label>
+                    <label>
+                      مقدار
+                      <PersianNumberInput v-model="row.qty" :min="0" :allow-float="true" />
+                    </label>
+                    <label>
+                      واحد
+                      <input class="input" v-model="row.uom" placeholder="واحد" />
+                    </label>
+                    <button class="secondary-btn danger-btn" type="button" @click="removeBomItemRow(index)">حذف</button>
+                  </article>
+                </div>
+
+                <ManagementDataTable v-if="productBoms.length" :columns="bomColumns" :rows="productBoms" row-key="name">
+                  <template #cell-status="{ row }">
+                    <div class="status-pills">
+                      <span :class="['pill', Number(row.is_active) ? 'active' : 'inactive']">
+                        {{ Number(row.is_active) ? 'فعال' : 'غیرفعال' }}
+                      </span>
+                      <span class="pill default" v-if="Number(row.is_default)">پیش فرض</span>
+                      <span class="pill docstatus" v-if="Number(row.docstatus) === 0">پیش نویس</span>
+                      <span class="pill docstatus submitted" v-else-if="Number(row.docstatus) === 1">ثبت شده</span>
+                    </div>
+                  </template>
+                  <template #cell-quantity="{ value }">{{ formatNumber(value) }}</template>
+                  <template #cell-modified="{ value }">{{ formatPersianDate(value, true) }}</template>
+                  <template #cell-actions="{ row }">
+                    <div class="row-actions">
+                      <button class="secondary-btn mini-link-btn" type="button" @click="loadBomDocIntoForm(row.name)">بارگذاری</button>
+                      <a class="secondary-btn mini-link-btn" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
+                    </div>
+                  </template>
+                </ManagementDataTable>
+              </ManagementSurfaceCard>
+            </section>
+
+            <section v-if="activeTab === 'variants'" class="variants-grid">
         <ManagementSurfaceCard
           v-if="isVariantContext"
           title="ویژگی‌های همین Variant"
@@ -686,10 +791,9 @@
                 نوع محصول سفارشی
                 <select class="input" v-model="settingsForm.restaurant_custom_product_type">
                   <option value="">انتخاب کنید</option>
-                  <option value="Pizza">پیتزا</option>
-                  <option value="Salad">سالاد</option>
-                  <option value="Sandwich">ساندویچ</option>
-                  <option value="Custom">سفارشی</option>
+                  <option value="configured">پیکربندی‌شده</option>
+                  <option value="made_to_order">سفارشی/سفارش‌ساز</option>
+                  <option value="assembled">مونتاژ‌شده</option>
                 </select>
               </label>
               <label>
@@ -746,22 +850,126 @@
               </label>
             </div>
 
-            <div class="builder-link">
-              <a
-                v-if="settingsForm.restaurant_builder_template"
-                class="primary-pill-link"
-                :href="`/management/builder-template/edit/${settingsForm.restaurant_builder_template}`"
-              >
-                پیکربندی قالب سفارشی‌سازی ←
-              </a>
-              <a
-                v-else
-                class="secondary-btn"
-                href="/management/builder-template/new"
-              >
-                ایجاد قالب سفارشی‌سازی جدید
-              </a>
-            </div>
+            <ManagementSurfaceCard
+              title="پیکربندی اختصاصی این محصول"
+              subtitle="می‌توانید یک قالب عمومی را روی این محصول اعمال کنید و سپس مرحله‌ها و گزینه‌های همین محصول را جداگانه ویرایش کنید."
+              tone="accent"
+              class="builder-editor-card"
+            >
+              <div class="builder-actions-row">
+                <button
+                  class="secondary-btn"
+                  type="button"
+                  :disabled="!settingsForm.restaurant_builder_template"
+                  @click="applyBuilderTemplateToProduct"
+                >
+                  آوردن داده‌های قالب داخل این محصول
+                </button>
+                <button
+                  class="secondary-btn"
+                  type="button"
+                  :disabled="!settingsForm.restaurant_builder_template || !hasBuilderConfig"
+                  @click="resetBuilderToTemplate"
+                >
+                  بازنشانی از روی قالب انتخاب‌شده
+                </button>
+                <a
+                  v-if="settingsForm.restaurant_builder_template"
+                  class="primary-pill-link"
+                  :href="`/management/builder-template/edit/${settingsForm.restaurant_builder_template}`"
+                >
+                  مشاهده/ویرایش قالب مرجع ←
+                </a>
+                <a
+                  v-else
+                  class="secondary-btn"
+                  href="/management/builder-template/new"
+                >
+                  ایجاد قالب سفارشی‌سازی جدید
+                </a>
+              </div>
+
+              <p v-if="builderSourceTemplateName" class="muted builder-source-note">
+                قالب مرجع این محصول: <strong>{{ builderSourceTemplateName }}</strong>
+              </p>
+
+              <div v-if="builderConfig" class="builder-editor-stack">
+                <div class="builder-grid">
+                  <label>
+                    عنوان پیکربندی
+                    <input class="input" v-model="builderConfig.title" placeholder="مثلاً سالاد سفارشی" />
+                  </label>
+                  <label>
+                    اسلاگ پیکربندی
+                    <input class="input" v-model="builderConfig.slug" placeholder="custom-salad-builder" dir="ltr" />
+                  </label>
+                  <label>
+                    حالت چیدمان
+                    <select class="input" v-model="builderConfig.layout_mode">
+                      <option value="vertical_steps">مرحله‌ای عمودی</option>
+                      <option value="horizontal_tabs">تب‌های افقی</option>
+                      <option value="accordion">آکاردئون</option>
+                      <option value="wizard">مرحله‌ای (ویزارد)</option>
+                    </select>
+                  </label>
+                  <label>
+                    رنگ اصلی
+                    <input class="input" v-model="builderConfig.primary_color" type="color" dir="ltr" />
+                  </label>
+                </div>
+
+                <div class="builder-grid">
+                  <ManagementToggleSwitch v-model="builderConfig.show_summary_panel" label="نمایش خلاصه" hint="خلاصه انتخاب‌ها را نشان بده" />
+                  <ManagementToggleSwitch v-model="builderConfig.show_price_live" label="قیمت زنده" hint="قیمت نهایی به‌صورت زنده محاسبه شود" />
+                  <ManagementToggleSwitch v-model="builderConfig.allow_skip_steps" label="اجازه رد شدن" hint="مشتری بتواند مراحل اختیاری را رد کند" />
+                  <ManagementToggleSwitch v-model="builderConfig.allow_go_back" label="اجازه بازگشت" hint="مشتری بتواند به مرحله قبل برگردد" />
+                  <ManagementToggleSwitch v-model="builderConfig.require_all_required" label="اجبار همه مراحل" hint="همه مراحل اجباری باید تکمیل شوند" />
+                  <label>
+                    حداکثر انتخاب کل
+                    <PersianNumberInput v-model="builderConfig.max_total_selections" :min="0" />
+                    <small class="hint">0 یعنی بدون محدودیت</small>
+                  </label>
+                </div>
+
+                <ManagementSurfaceCard title="مراحل سفارشی‌سازی" subtitle="مراحل و گزینه‌ها را برای همین محصول تنظیم کنید">
+                  <div class="steps-toolbar">
+                    <button class="primary-btn" type="button" @click="addBuilderStep">+ افزودن مرحله</button>
+                  </div>
+
+                  <div v-if="!builderConfig.steps?.length" class="empty-steps">
+                    <p class="muted">هنوز مرحله‌ای برای این محصول اضافه نشده است.</p>
+                    <button class="secondary-btn" type="button" @click="addBuilderStep">افزودن اولین مرحله</button>
+                  </div>
+
+                  <div v-else class="steps-list">
+                    <BuilderStepCard
+                      v-for="(step, index) in builderConfig.steps"
+                      :key="step.step_key || step.name || index"
+                      :step="step"
+                      :step-index="index"
+                      :steps-length="builderConfig.steps.length"
+                      :item-options="builderItemOptions"
+                      @update:step="updateBuilderStep(index, $event)"
+                      @move-up="moveBuilderStep(index, -1)"
+                      @move-down="moveBuilderStep(index, 1)"
+                      @delete="deleteBuilderStep(index)"
+                    />
+                  </div>
+                </ManagementSurfaceCard>
+              </div>
+
+              <div v-else class="empty-steps">
+                <p class="muted">هنوز پیکربندی اختصاصی برای این محصول ساخته نشده است.</p>
+                <div class="builder-actions-row">
+                  <button class="primary-btn" type="button" @click="applyBuilderTemplateToProduct" :disabled="!settingsForm.restaurant_builder_template">
+                    استفاده از قالب انتخاب‌شده
+                  </button>
+                  <button class="secondary-btn" type="button" @click="addBuilderStep">
+                    ساخت دستی از صفر
+                  </button>
+                </div>
+              </div>
+            </ManagementSurfaceCard>
           </div>
 
           <p v-else class="muted builder-hint">
@@ -836,6 +1044,15 @@
           <button class="secondary-btn" type="button" @click="close">بستن</button>
         </template>
       </ManagementPopup>
+      <div v-if="hasUnsavedChanges" class="sticky-save-bar" role="status" aria-live="polite">
+        <div>
+          <strong>تغییرات ذخیره نشده دارید</strong>
+          <small>با Ctrl/⌘ + S هم می‌توانید ذخیره کنید.</small>
+        </div>
+        <button class="primary-btn save-spark-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
+          {{ savingSettings ? 'در حال ذخیره...' : 'ذخیره تغییرات' }}
+        </button>
+      </div>
     </template>
   </ManagementPageScaffold>
 
@@ -1047,6 +1264,7 @@ import PersianDateInput from '@/components/PersianDateInput.vue'
 import PersianNumberInput from '@/components/PersianNumberInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
+import BuilderStepCard from '@/components/management/builder/BuilderStepCard.vue'
 import ManagementImageUploaderView from '@/components/management/ManagementImageUploaderView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
@@ -1057,19 +1275,39 @@ import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.
 import ReportInsightCards from '@/components/management/bi/ReportInsightCards.vue'
 import ReportKpiGrid from '@/components/management/bi/ReportKpiGrid.vue'
 import {
-  deleteManagementProduct,
+  callMethodByPathGET,
+  createManagementBom,
   deleteManagementItemImageByUrl,
   generateManagementProductVariants,
+  getManagementBomContext,
+  getManagementBomDoc,
   getManagementProductVariantBuilder,
   getManagementProductDetail,
+  listManagementBomItems,
   listManagementBoms,
+  listRestaurantItemTags,
   saveManagementProductVariantBuilder,
   setManagementDefaultPriceList,
   setManagementProductPrice,
+  updateManagementBom,
   uploadManagementItemImage,
   updateManagementProductSettings,
 } from '@/utils/api'
 import { formatMoney, parseQuery } from '@/utils/format'
+import {
+  PRODUCT_DETAIL_TABS,
+  buildProductSettingsPayload,
+  clonePlainObject,
+  createEmptyBuilderStep,
+  createInitialProductSettingsForm,
+  formatPersianDate,
+  hydrateProductSettingsForm,
+  localizeAxisLabel,
+  localizeText,
+  normalizeVariantAttributesDraft,
+  resolveTemplateAttributeSelection,
+  serializeProductSettingsState,
+} from '@/utils/managementProductDetail'
 
 const props = defineProps({
   boot: {
@@ -1106,13 +1344,19 @@ const mediaSuccess = ref('')
 const bomLoading = ref(false)
 const bomError = ref('')
 const productBoms = ref([])
+const bomSaving = ref(false)
+const bomSaveSuccess = ref('')
+const bomContext = ref({ companies: [], currencies: [], default_company: '', default_currency: '' })
+const bomItemOptions = ref([])
 const settingsSnapshot = ref('')
+const builderItemOptions = ref([])
+const builderConfig = ref(null)
+const builderSourceTemplateName = ref('')
 const variantBuilderLoading = ref(false)
 const variantBuilderSaving = ref(false)
 const variantBuilderGenerating = ref(false)
 const variantBuilderError = ref('')
 const variantBuilderSuccess = ref('')
-const deletingProduct = ref(false)
 const variantBuilder = ref(null)
 const variantAttributesDraft = ref([])
 const selectedTemplateAttributes = ref([])
@@ -1133,47 +1377,7 @@ const variantCreationForm = ref({
 const showAddAttributeDialog = ref(false)
 const selectedNewAttribute = ref('')
 
-const settingsForm = reactive({
-  item_code: '',
-  item_name: '',
-  item_group: '',
-  stock_uom: '',
-  description: '',
-  restaurant_slug: '',
-  restaurant_short_desc: '',
-  restaurant_long_desc: '',
-  restaurant_category: '',
-  restaurant_subcategory: '',
-  restaurant_branch: '',
-  image: '',
-  website_image: '',
-  restaurant_prep_time_mins: 0,
-  restaurant_sort_order: 0,
-  restaurant_auto_add_qty: 0,
-  restaurant_nutrition_kcal: 0,
-  restaurant_nutrition_protein_g: 0,
-  restaurant_nutrition_carb_g: 0,
-  restaurant_nutrition_sugar_g: 0,
-  restaurant_nutrition_fat_g: 0,
-  show_in_print: false,
-  restaurant_enabled: false,
-  restaurant_is_featured: false,
-  restaurant_is_best_seller: false,
-  restaurant_requires_bom: false,
-  restaurant_auto_add_to_order: false,
-  restaurant_coming_soon: false,
-  disabled: false,
-  restaurant_is_customizable: false,
-  restaurant_customize_button_label: 'سفارشی‌سازی',
-  restaurant_custom_product_type: '',
-  restaurant_builder_template: '',
-  restaurant_builder_active: true,
-  restaurant_allow_direct_add: false,
-  restaurant_show_nutrition_summary: false,
-  restaurant_show_allergen_warnings: false,
-  restaurant_kitchen_print_mode: '',
-  restaurant_stock_consumption_mode: '',
-})
+const settingsForm = reactive(createInitialProductSettingsForm())
 
 const priceForm = reactive({
   price_list: '',
@@ -1181,13 +1385,18 @@ const priceForm = reactive({
   valid_from: '',
 })
 
-const tabOptions = [
-  { value: 'overview', label: 'کارت محصول' },
-  { value: 'settings', label: 'فروش و نمایش' },
-  { value: 'variants', label: 'مدل‌ها' },
-  { value: 'builder', label: 'سفارشی‌سازی' },
-  { value: 'reports', label: 'گزارش فروش' },
-]
+const bomForm = reactive({
+  name: '',
+  quantity: 1,
+  company: '',
+  currency: '',
+  is_active: true,
+  is_default: true,
+  restaurant_recipe_instruction: '',
+  items: [],
+})
+
+const tabOptions = PRODUCT_DETAIL_TABS
 
 const bomColumns = [
   { key: 'name', label: 'BOM' },
@@ -1197,8 +1406,16 @@ const bomColumns = [
   { key: 'actions', label: 'عملیات' },
 ]
 
+
+
 const pageTitle = computed(() => detail.value?.item?.item_name || 'جزئیات محصول')
-const pageSubtitle = computed(() => detail.value?.item?.item_name || '')
+const pageSubtitle = computed(() => {
+  const item = detail.value?.item || {}
+  const parts = [item.item_code || item.name, selectedCategoryLabel.value, settingsForm.restaurant_enabled ? 'فعال در منو' : 'غیرفعال در منو']
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+  return parts.join(' • ')
+})
 const productBomItemCode = computed(() => {
   const item = detail.value?.item || {}
   return String(item.name || item.item_code || '').trim()
@@ -1226,6 +1443,16 @@ const activeBomName = computed(() => {
   const fromList = (productBoms.value || []).find((row) => Number(row?.is_active || 0))
   return String(fromList?.name || '').trim()
 })
+const activeBomRow = computed(() => {
+  const activeName = String(activeBomName.value || defaultBomName.value || '').trim()
+  if (!activeName) {
+    return null
+  }
+  return (productBoms.value || []).find((row) => String(row?.name || '').trim() === activeName) || null
+})
+const bomCompanyOptions = computed(() => (bomContext.value?.companies || []).map((row) => ({ value: row, label: row })))
+const bomCurrencyOptions = computed(() => (bomContext.value?.currencies || []).map((row) => ({ value: row, label: row })))
+const bomItemsSummary = computed(() => Array.isArray(bomForm.items) ? bomForm.items : [])
 const priceLists = computed(() => detail.value?.pricing?.price_lists || [])
 const activeCurrency = computed(() => detail.value?.report?.currency || 'IRR')
 const priceListOptions = computed(() =>
@@ -1237,23 +1464,80 @@ const priceListOptions = computed(() =>
 const currentPriceRate = computed(() => Number(detail.value?.pricing?.current_price?.price_list_rate || 0))
 const latestPriceRate = computed(() => Number(detail.value?.pricing?.latest_price?.price_list_rate || 0))
 const latestPriceDate = computed(() => detail.value?.pricing?.latest_price?.effective_at || '')
+const selectedCategoryLabel = computed(() => {
+  const selected = String(settingsForm.restaurant_category || '').trim()
+  if (!selected) return ''
+  return (fieldOptions.value?.categories || []).find((row) => String(row?.value || '').trim() === selected)?.label || selected
+})
+const selectedSubcategoryLabel = computed(() => {
+  const selected = String(settingsForm.restaurant_subcategory || '').trim()
+  if (!selected) return ''
+  return (fieldOptions.value?.subcategories || []).find((row) => String(row?.value || '').trim() === selected)?.label || selected
+})
+const productSummarySubtitle = computed(() => {
+  const item = detail.value?.item || {}
+  const code = String(item.item_code || item.name || '').trim()
+  const category = [selectedCategoryLabel.value, selectedSubcategoryLabel.value].filter(Boolean).join(' / ')
+  return [code ? `کد: ${code}` : '', category || 'بدون دسته‌بندی'].filter(Boolean).join(' • ')
+})
+const productSummaryChips = computed(() => [
+  {
+    key: 'visibility',
+    label: 'وضعیت منو',
+    value: settingsForm.restaurant_enabled ? 'فعال' : 'غیرفعال',
+    tone: settingsForm.restaurant_enabled ? 'success' : 'danger',
+  },
+  {
+    key: 'price',
+    label: 'قیمت فعلی',
+    value: formatMoney(currentPriceRate.value, activeCurrency.value),
+    tone: currentPriceRate.value > 0 ? 'success' : 'warn',
+  },
+  {
+    key: 'bom',
+    label: 'BOM',
+    value: defaultBomName.value || activeBomName.value ? 'متصل' : 'ندارد',
+    tone: defaultBomName.value || activeBomName.value ? 'info' : settingsForm.restaurant_requires_bom ? 'warn' : 'neutral',
+  },
+  {
+    key: 'builder',
+    label: 'سفارشی‌سازی',
+    value: settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'فعال' : 'خاموش',
+    tone: settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'info' : 'neutral',
+  },
+  {
+    key: 'slug',
+    label: 'اسلاگ',
+    value: settingsForm.restaurant_slug ? settingsForm.restaurant_slug : 'تنظیم نشده',
+    tone: settingsForm.restaurant_slug ? 'success' : 'warn',
+  },
+])
+const customerProductUrl = computed(() => {
+  const slug = String(settingsForm.restaurant_slug || detail.value?.item?.restaurant_slug || '').trim()
+  if (!slug) return ''
+  return `/item/${encodeURIComponent(slug)}`
+})
 const activeTabHint = computed(() => {
   if (activeTab.value === 'reports') {
-    return 'آمار فروش همین محصول را اینجا ببینید.'
+    return 'جزئیات تحلیلی و آمار فروش این محصول در این تب نمایش داده می‌شود.'
   }
   if (activeTab.value === 'variants') {
-    return 'مدل‌ها مثل سایز، طعم یا ویژگی‌های انتخابی مشتری اینجا مدیریت می‌شوند.'
+    return 'جزئیات مدل‌ها، ویژگی‌ها و Variantهای این محصول در این تب مدیریت می‌شود.'
   }
   if (activeTab.value === 'settings') {
-    return 'قیمت، دسته، زمان آماده‌سازی و روشن/خاموش بودن محصول اینجا است.'
+    return 'جزئیات فروش، نمایش، دسته‌بندی وب و قیمت‌گذاری در این تب قرار دارد.'
   }
-  return 'نام، توضیح و عکس محصول را اینجا کامل کنید.'
+  if (activeTab.value === 'builder') {
+    return 'جزئیات سفارشی‌سازی و ساختار انتخاب‌های مشتری در این تب قرار دارد.'
+  }
+  return 'جزئیات کارت محصول، توضیحات و تصاویر قابل نمایش برای مشتری در این تب قرار دارد.'
 })
 const canSaveSettings = computed(() => !savingSettings.value && !loading.value && hasUnsavedChanges.value && !!detail.value?.item?.name)
 const builderTemplateOptions = computed(() => {
   const templates = detail.value?.builder_templates || []
   return templates.map((t) => ({ value: t.name, label: t.title || t.name }))
 })
+const hasBuilderConfig = computed(() => Boolean(builderConfig.value && Array.isArray(builderConfig.value.steps)))
 const hasReportData = computed(() => {
   const report = detail.value?.report || {}
   return (
@@ -1350,6 +1634,47 @@ const filteredSubcategoryOptions = computed(() => {
   return rows.filter((row) => String(row.category || '').trim() === category)
 })
 
+function createEmptyBomItemRow() {
+  return {
+    item_code: '',
+    qty: 1,
+    uom: '',
+  }
+}
+
+function resetBomForm() {
+  bomForm.name = ''
+  bomForm.quantity = 1
+  bomForm.company = String(bomContext.value?.default_company || '').trim()
+  bomForm.currency = String(bomContext.value?.default_currency || activeCurrency.value || 'IRR').trim()
+  bomForm.is_active = true
+  bomForm.is_default = true
+  bomForm.restaurant_recipe_instruction = ''
+  bomForm.items = [createEmptyBomItemRow()]
+}
+
+function hydrateBomForm(doc = null) {
+  if (!doc) {
+    resetBomForm()
+    return
+  }
+  bomForm.name = String(doc.name || '').trim()
+  bomForm.quantity = Number(doc.quantity || 1) || 1
+  bomForm.company = String(doc.company || bomContext.value?.default_company || '').trim()
+  bomForm.currency = String(doc.currency || bomContext.value?.default_currency || activeCurrency.value || 'IRR').trim()
+  bomForm.is_active = Number(doc.is_active ?? 1) === 1
+  bomForm.is_default = Number(doc.is_default ?? 1) === 1
+  bomForm.restaurant_recipe_instruction = String(doc.restaurant_recipe_instruction || '').trim()
+  bomForm.items = (Array.isArray(doc.items) ? doc.items : []).map((row) => ({
+    item_code: String(row?.item_code || '').trim(),
+    qty: Number(row?.qty || 0) || 1,
+    uom: String(row?.uom || row?.stock_uom || '').trim(),
+  })).filter((row) => row.item_code)
+  if (!bomForm.items.length) {
+    bomForm.items = [createEmptyBomItemRow()]
+  }
+}
+
 const variantTemplate = computed(() => variantBuilder.value?.template || {})
 const resolvedTemplateName = computed(() => {
   const fromBuilder = String(variantTemplate.value?.name || '').trim()
@@ -1433,6 +1758,40 @@ const menuDisplayRows = computed(() => {
     },
   ]
 })
+const productReadinessChecks = computed(() => [
+  {
+    key: 'image',
+    label: 'تصویر اصلی',
+    detail: mainImage.value ? 'تصویر محصول آماده نمایش است.' : 'برای کارت منو تصویر اضافه کنید.',
+    ok: Boolean(mainImage.value),
+  },
+  {
+    key: 'slug',
+    label: 'اسلاگ محصول',
+    detail: settingsForm.restaurant_slug ? settingsForm.restaurant_slug : 'برای لینک صفحه مشتری اسلاگ لازم است.',
+    ok: Boolean(String(settingsForm.restaurant_slug || '').trim()),
+  },
+  {
+    key: 'description',
+    label: 'توضیح کوتاه',
+    detail: settingsForm.restaurant_short_desc ? 'متن کارت محصول تکمیل است.' : 'کارت منو بدون توضیح کوتاه ضعیف‌تر دیده می‌شود.',
+    ok: Boolean(String(settingsForm.restaurant_short_desc || '').trim()),
+  },
+  {
+    key: 'price',
+    label: 'قیمت معتبر',
+    detail: Number(priceForm.price_list_rate || currentPriceRate.value || 0) > 0 ? formatMoney(Number(priceForm.price_list_rate || currentPriceRate.value || 0), activeCurrency.value) : 'قیمت محصول صفر یا نامشخص است.',
+    ok: Number(priceForm.price_list_rate || currentPriceRate.value || 0) > 0,
+  },
+  {
+    key: 'category',
+    label: 'دسته‌بندی',
+    detail: selectedCategoryLabel.value || 'برای پیدا شدن راحت‌تر محصول، دسته انتخاب کنید.',
+    ok: Boolean(selectedCategoryLabel.value),
+  },
+])
+const readinessScore = computed(() => productReadinessChecks.value.filter((check) => check.ok).length)
+
 const previewMenuCardRows = computed(() => {
   const item = detail.value?.item || {}
   const categoryLabel =
@@ -1485,12 +1844,50 @@ function openPreviewCard(row) {
   previewModalOpen.value = Boolean(previewModalItem.value)
 }
 
+function getTabBadge(tabValue) {
+  if (tabValue === 'overview') {
+    const missingCount = productReadinessChecks.value.length - readinessScore.value
+    return missingCount > 0 ? `!${missingCount.toLocaleString('fa-IR')}` : '✓'
+  }
+  if (tabValue === 'variants') {
+    return variantRows.value.length ? variantRows.value.length.toLocaleString('fa-IR') : ''
+  }
+  if (tabValue === 'builder') {
+    return settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'فعال' : ''
+  }
+  if (tabValue === 'reports') {
+    return hasReportData.value ? 'داده' : ''
+  }
+  return ''
+}
+
 const hasUnsavedChanges = computed(() => {
   if (!detail.value?.item?.name || !settingsSnapshot.value) {
     return false
   }
   return serializeSettingsState() !== settingsSnapshot.value
 })
+
+watch(
+  () => settingsForm.restaurant_builder_template,
+  (templateName) => {
+    if (String(templateName || '').trim()) {
+      settingsForm.restaurant_is_customizable = true
+      settingsForm.restaurant_builder_active = true
+    }
+  },
+)
+
+watch(
+  () => builderConfig.value,
+  (config) => {
+    if (config) {
+      settingsForm.restaurant_is_customizable = true
+      settingsForm.restaurant_builder_active = true
+    }
+  },
+  { deep: true },
+)
 
 watch(
   () => settingsForm.restaurant_category,
@@ -1564,47 +1961,16 @@ watch(
   },
 )
 
+function cloneBuilderConfig(config = null) {
+  return clonePlainObject(config)
+}
+
 function syncForms(payload) {
+  hydrateProductSettingsForm(settingsForm, payload, allTagOptions.value)
+
   const item = payload?.item || {}
-  settingsForm.item_code = item.item_code || ''
-  settingsForm.item_name = item.item_name || ''
-  settingsForm.item_group = item.item_group || ''
-  settingsForm.stock_uom = item.stock_uom || ''
-  settingsForm.description = item.description || ''
-  settingsForm.restaurant_slug = item.restaurant_slug || ''
-  settingsForm.restaurant_short_desc = item.short_description || ''
-  settingsForm.restaurant_long_desc = item.long_description || ''
-  settingsForm.restaurant_category = item.restaurant_category || ''
-  settingsForm.restaurant_subcategory = item.restaurant_subcategory || ''
-  settingsForm.restaurant_branch = item.restaurant_branch || ''
-  settingsForm.image = item.image || ''
-  settingsForm.website_image = item.website_image || ''
-  settingsForm.restaurant_prep_time_mins = Number(item.restaurant_prep_time_mins || 0)
-  settingsForm.restaurant_sort_order = Number(item.restaurant_sort_order || 0)
-  settingsForm.restaurant_auto_add_qty = Number(item.restaurant_auto_add_qty || 0)
-  settingsForm.restaurant_item_tag_table = item.restaurant_item_tag_table || []
-  // Also populate _tag_title for each link for display
-  if (settingsForm.restaurant_item_tag_table.length) {
-    for (const link of settingsForm.restaurant_item_tag_table) {
-      if (link.tag && !link._tag_title) {
-        const tagOpt = allTagOptions.value.find(o => o.value === link.tag)
-        link._tag_title = tagOpt ? tagOpt.label : link.tag
-      }
-    }
-  }
-  settingsForm.restaurant_nutrition_kcal = Number(item.restaurant_nutrition_kcal || item.nutrition?.kcal || 0)
-  settingsForm.restaurant_nutrition_protein_g = Number(item.restaurant_nutrition_protein_g || item.nutrition?.protein_g || 0)
-  settingsForm.restaurant_nutrition_carb_g = Number(item.restaurant_nutrition_carb_g || item.nutrition?.carb_g || 0)
-  settingsForm.restaurant_nutrition_sugar_g = Number(item.restaurant_nutrition_sugar_g || item.nutrition?.sugar_g || 0)
-  settingsForm.restaurant_nutrition_fat_g = Number(item.restaurant_nutrition_fat_g || item.nutrition?.fat_g || 0)
-  settingsForm.show_in_print = Number(item.show_in_print ?? item.show_in_website ?? 0) === 1
-  settingsForm.restaurant_enabled = Number(item.restaurant_enabled || 0) === 1
-  settingsForm.restaurant_is_featured = Number(item.restaurant_is_featured || 0) === 1
-  settingsForm.restaurant_is_best_seller = Number(item.restaurant_is_best_seller || 0) === 1
-  settingsForm.restaurant_requires_bom = Number(item.restaurant_requires_bom || 0) === 1
-  settingsForm.restaurant_auto_add_to_order = Number(item.restaurant_auto_add_to_order || 0) === 1
-  settingsForm.restaurant_coming_soon = Number(item.restaurant_coming_soon || 0) === 1
-  settingsForm.disabled = Number(item.disabled || 0) === 1
+  builderSourceTemplateName.value = String(payload?.builder?.template_name || item.restaurant_builder_template || '').trim()
+  builderConfig.value = cloneBuilderConfig(payload?.builder?.product_builder_config || null)
 
   selectedDefaultPriceList.value = payload?.pricing?.default_price_list || ''
   priceForm.price_list = payload?.pricing?.default_price_list || priceLists.value?.[0]?.name || ''
@@ -1612,48 +1978,6 @@ function syncForms(payload) {
   priceForm.valid_from = ''
   selectedImage.value = payload?.media?.main_image || ''
   settingsSnapshot.value = serializeSettingsState()
-}
-
-function normalizeVariantAttributesDraft(attributes = []) {
-  const rows = []
-  for (const row of attributes || []) {
-    const name = String(row?.name || '').trim()
-    if (!name) {
-      continue
-    }
-    const values = Array.isArray(row?.values)
-      ? row.values.map((valueRow) => ({
-          value: String(valueRow?.value || '').trim(),
-          abbr: String(valueRow?.abbr || '').trim(),
-          sort_order: Number(valueRow?.sort_order || 0),
-          is_default: Number(valueRow?.is_default || 0) ? 1 : 0,
-        }))
-      : []
-    rows.push({
-      name,
-      label: String(row?.label || name).trim(),
-      selected_on_template: Number(row?.selected_on_template || 0) ? 1 : 0,
-      show_in_website: row?.show_in_website === undefined ? 1 : Number(row?.show_in_website || 0),
-      selection_only: Number(row?.selection_only || 0),
-      disabled: Number(row?.disabled || 0),
-      values,
-    })
-  }
-  return rows
-}
-
-function resolveTemplateAttributeSelection(attributes = [], templateAttributes = []) {
-  const availableNames = new Set(attributes.map((row) => row.name))
-  const fromPayload = Array.isArray(templateAttributes)
-    ? templateAttributes
-        .map((value) => String(value || '').trim())
-        .filter((value) => value && availableNames.has(value))
-    : []
-  const fromRows = attributes
-    .filter((row) => Number(row?.selected_on_template || 0) === 1)
-    .map((row) => row.name)
-
-  return Array.from(new Set((fromPayload.length ? fromPayload : fromRows).filter(Boolean)))
 }
 
 function resetVariantBuilderState(payload) {
@@ -1693,7 +2017,7 @@ const tagList = computed({
     // Rebuild child table rows
     const current = settingsForm[TAG_FIELD] || []
     const newTags = Array.isArray(val) ? val : []
-    
+
     // Remove tags not in new list
     const toRemove = current.filter(l => {
       const title = l._tag_title || l.tag_title || l.tag || ''
@@ -1703,7 +2027,7 @@ const tagList = computed({
       const idx = current.indexOf(r)
       if (idx >= 0) current.splice(idx, 1)
     }
-    
+
     // Add new tags
     for (const t of newTags) {
       const exists = current.some(l => (l._tag_title || l.tag_title || l.tag || '') === t)
@@ -1733,18 +2057,13 @@ function handleCreateTagOption(rawValue) {
   }
 }
 
-// Load available tags on mount
-onMounted(async () => {
+async function loadTagOptions() {
   try {
-    const res = await fetch('/api/method/frappe.client.get_list?doctype=Restaurant Item Tag&fields=["name","title"]&limit_page_length=500')
-    const data = await res.json()
-    if (data.message) {
-      allTagOptions.value = data.message.map(t => ({ value: t.name, label: t.title || t.name }))
-    }
-  } catch (e) {
-    console.warn('Could not load tags:', e)
+    allTagOptions.value = await listRestaurantItemTags({ limit: 500 })
+  } catch (tagError) {
+    allTagOptions.value = []
   }
-})
+}
 
 async function loadVariantBuilder({ force = false } = {}) {
   const targetItem = String(detail.value?.item?.name || itemName.value || '').trim()
@@ -1812,22 +2131,147 @@ async function loadProductBoms(itemCode = '') {
   if (!normalizedItem) {
     productBoms.value = []
     bomError.value = ''
+    resetBomForm()
     return
   }
 
   bomLoading.value = true
   bomError.value = ''
   try {
-    const rows = await listManagementBoms({
-      item_code: normalizedItem,
-      limit: 80,
-    })
+    const [rows, context] = await Promise.all([
+      listManagementBoms({ item_code: normalizedItem, limit: 80 }),
+      getManagementBomContext(),
+    ])
     productBoms.value = Array.isArray(rows) ? rows : []
+    bomContext.value = context || { companies: [], currencies: [], default_company: '', default_currency: '' }
+
+    const targetBomName = String(activeBomName.value || defaultBomName.value || '').trim()
+    if (targetBomName) {
+      try {
+        const doc = await getManagementBomDoc(targetBomName)
+        hydrateBomForm(doc)
+      } catch {
+        resetBomForm()
+      }
+    } else {
+      resetBomForm()
+    }
   } catch (bomErr) {
     bomError.value = bomErr.message || 'دریافت لیست BOM ناموفق بود.'
     productBoms.value = []
+    resetBomForm()
   } finally {
     bomLoading.value = false
+  }
+}
+
+async function searchBomItems(query = '') {
+  try {
+    const rows = await listManagementBomItems({ search: query, limit: 100 })
+    bomItemOptions.value = (Array.isArray(rows) ? rows : []).map((row) => {
+      const value = String(row?.item_code || row?.name || '').trim()
+      const title = String(row?.item_name || row?.name || value).trim()
+      return {
+        value,
+        label: value && title !== value ? `${title} (${value})` : title,
+        stock_uom: String(row?.stock_uom || '').trim(),
+      }
+    }).filter((row) => row.value)
+  } catch {
+    bomItemOptions.value = []
+  }
+}
+
+async function loadBomDocIntoForm(bomName = '') {
+  const normalized = String(bomName || '').trim()
+  if (!normalized) {
+    return
+  }
+  bomLoading.value = true
+  bomError.value = ''
+  try {
+    const doc = await getManagementBomDoc(normalized)
+    hydrateBomForm(doc)
+  } catch (errObj) {
+    bomError.value = errObj.message || 'دریافت فرمول محصول ناموفق بود.'
+  } finally {
+    bomLoading.value = false
+  }
+}
+
+function addBomItemRow() {
+  bomForm.items.push(createEmptyBomItemRow())
+}
+
+function removeBomItemRow(index) {
+  bomForm.items.splice(index, 1)
+  if (!bomForm.items.length) {
+    bomForm.items.push(createEmptyBomItemRow())
+  }
+}
+
+function updateBomItemCode(index, itemCode) {
+  const normalized = String(itemCode || '').trim()
+  const option = bomItemOptions.value.find((row) => String(row?.value || row?.item_code || '').trim() === normalized)
+  const nextRow = bomForm.items[index]
+  if (!nextRow) {
+    return
+  }
+  nextRow.item_code = normalized
+  if (option?.stock_uom && !nextRow.uom) {
+    nextRow.uom = String(option.stock_uom || '').trim()
+  }
+}
+
+async function saveBomFromProduct() {
+  const normalizedItem = String(detail.value?.item?.name || detail.value?.item?.item_code || '').trim()
+  if (!normalizedItem) {
+    bomError.value = 'محصول معتبری برای ثبت BOM پیدا نشد.'
+    return
+  }
+
+  const normalizedItems = (Array.isArray(bomForm.items) ? bomForm.items : [])
+    .map((row) => ({
+      item_code: String(row?.item_code || '').trim(),
+      qty: Number(row?.qty || 0),
+      uom: String(row?.uom || '').trim(),
+    }))
+    .filter((row) => row.item_code && row.qty > 0 && row.uom)
+
+  if (!normalizedItems.length) {
+    bomError.value = 'حداقل یک ماده اولیه معتبر برای BOM وارد کنید.'
+    return
+  }
+
+  bomSaving.value = true
+  bomError.value = ''
+  bomSaveSuccess.value = ''
+  try {
+    const payload = {
+      name: String(bomForm.name || '').trim(),
+      item: normalizedItem,
+      quantity: Number(bomForm.quantity || 1) || 1,
+      company: String(bomForm.company || '').trim(),
+      currency: String(bomForm.currency || '').trim(),
+      is_active: bomForm.is_active,
+      is_default: bomForm.is_default,
+      restaurant_recipe_instruction: String(bomForm.restaurant_recipe_instruction || '').trim(),
+      items: normalizedItems,
+    }
+
+    if (payload.name) {
+      await updateManagementBom(payload)
+      bomSaveSuccess.value = 'فرمول و رسپی محصول بروزرسانی شد.'
+    } else {
+      await createManagementBom(payload)
+      bomSaveSuccess.value = 'فرمول و رسپی محصول ثبت شد.'
+    }
+
+    await loadProductBoms(normalizedItem)
+  } catch (saveErr) {
+    bomError.value = saveErr.message || 'ذخیره فرمول و رسپی ناموفق بود.'
+  } finally {
+    bomSaving.value = false
   }
 }
 
@@ -1875,12 +2319,17 @@ async function savePrice() {
   if (!detail.value?.item?.name) {
     return
   }
+  const resolvedPriceList = String(priceForm.price_list || selectedDefaultPriceList.value || priceLists.value?.[0]?.name || '').trim()
+  if (!resolvedPriceList) {
+    error.value = 'برای ثبت قیمت، ابتدا یک لیست قیمت انتخاب کنید.'
+    return
+  }
   savingPrice.value = true
   error.value = ''
   try {
     await setManagementProductPrice({
       item_name: detail.value.item.name,
-      price_list: priceForm.price_list,
+      price_list: resolvedPriceList,
       price_list_rate: Number(priceForm.price_list_rate || 0),
       valid_from: priceForm.valid_from || '',
     })
@@ -1890,60 +2339,6 @@ async function savePrice() {
   } finally {
     savingPrice.value = false
   }
-}
-
-async function deleteProduct() {
-  const itemDocName = String(detail.value?.item?.name || '').trim()
-  if (!itemDocName || deletingProduct.value) {
-    return
-  }
-
-  const itemLabel =
-    String(settingsForm.item_name || '').trim() ||
-    String(settingsForm.item_code || '').trim() ||
-    itemDocName
-  const confirmed = window.confirm(
-    `آیا مطمئن هستید که می‌خواهید کالای «${itemLabel}» را حذف کنید؟`,
-  )
-  if (!confirmed) {
-    return
-  }
-
-  deletingProduct.value = true
-  error.value = ''
-  try {
-    await deleteManagementProduct(itemDocName, { allow_archive_on_link: 0, force_delete: 0 })
-    window.alert(`✅ کالای «${itemLabel}» با موفقیت حذف شد.`)
-    window.location.href = '/management/products'
-  } catch (errObj) {
-    if (isLinkedDeleteError(errObj)) {
-      const disableConfirmed = window.confirm(
-        `این کالا به اسناد فروش یا انبار متصل است و قابل حذف نیست.\n\nمی‌توانید فقط نمایش آن را در سایت خاموش کنید؛ خود کالا در ERPNext فعال می‌ماند.\n\nآیا می‌خواهید کالای «${itemLabel}» از سایت پنهان شود؟`,
-      )
-      if (!disableConfirmed) {
-        return
-      }
-      try {
-        await updateManagementProductSettings({
-          name: itemDocName,
-          restaurant_enabled: 0,
-        })
-        window.alert(`کالای «${itemLabel}» فقط از سایت پنهان شد و در ERPNext غیرفعال نشد.`)
-        window.location.href = '/management/products'
-      } catch (archiveErr) {
-        error.value = archiveErr.message || `پنهان کردن کالای «${itemLabel}» از سایت ناموفق بود. لطفاً دوباره تلاش کنید.`
-      }
-      return
-    }
-    error.value = errObj.message || `❌ متأسفانه حذف کالای «${itemLabel}» ناموفق بود. لطفاً دوباره تلاش کنید.`
-  } finally {
-    deletingProduct.value = false
-  }
-}
-
-function isLinkedDeleteError(errorObj) {
-  const message = String(errorObj?.message || '')
-  return /(disable this item|linked|link exists|cannot delete|وابسته|مرتبط|reference|dependent)/i.test(message)
 }
 
 function openAttributeEditor(attributeName) {
@@ -2053,30 +2448,6 @@ async function saveVariantBuilder() {
     variantBuilderError.value = saveErr.message || 'ذخیره تنظیمات ویژگی‌ها ناموفق بود.'
   } finally {
     variantBuilderSaving.value = false
-  }
-}
-
-async function generateVariantsFromBuilder() {
-  variantBuilderGenerating.value = true
-  variantBuilderError.value = ''
-  variantBuilderSuccess.value = ''
-  try {
-    const payload = await generateManagementProductVariants({
-      item_name: String(detail.value?.item?.name || itemName.value || '').trim(),
-      selected_attributes: selectedTemplateAttributes.value,
-      selected_values_by_attribute: selectedValuesByAttribute.value,
-    })
-    if (payload?.builder) {
-      resetVariantBuilderState(payload.builder)
-    }
-    const createdCount = Number(payload?.created_count || 0)
-    const existingCount = Number(payload?.existing_count || 0)
-    variantBuilderSuccess.value = `ایجاد شد: ${createdCount.toLocaleString('fa-IR')} | موجود بود: ${existingCount.toLocaleString('fa-IR')}`
-    await loadDetail()
-  } catch (generateErr) {
-    variantBuilderError.value = generateErr.message || 'ساخت وریانت‌ها ناموفق بود.'
-  } finally {
-    variantBuilderGenerating.value = false
   }
 }
 
@@ -2448,62 +2819,102 @@ function formatTableCell(column, value) {
   return localizeText(value)
 }
 
-function serializeSettingsState() {
-  return JSON.stringify({
-    item_code: String(settingsForm.item_code || '').trim(),
-    item_name: String(settingsForm.item_name || '').trim(),
-    item_group: String(settingsForm.item_group || '').trim(),
-    stock_uom: String(settingsForm.stock_uom || '').trim(),
-    description: String(settingsForm.description || '').trim(),
-    restaurant_slug: String(settingsForm.restaurant_slug || '').trim(),
-    restaurant_short_desc: String(settingsForm.restaurant_short_desc || '').trim(),
-    restaurant_long_desc: String(settingsForm.restaurant_long_desc || '').trim(),
-    restaurant_category: String(settingsForm.restaurant_category || '').trim(),
-    restaurant_subcategory: String(settingsForm.restaurant_subcategory || '').trim(),
-    restaurant_branch: String(settingsForm.restaurant_branch || '').trim(),
-    image: String(settingsForm.image || '').trim(),
-    website_image: String(settingsForm.website_image || '').trim(),
-    restaurant_prep_time_mins: Number(settingsForm.restaurant_prep_time_mins || 0),
-    restaurant_sort_order: Number(settingsForm.restaurant_sort_order || 0),
-    restaurant_auto_add_qty: Number(settingsForm.restaurant_auto_add_qty || 0),
-    restaurant_item_tag_table: (settingsForm.restaurant_item_tag_table || []).map(l => ({
-      tag: l.tag,
-      _tag_title: l._tag_title || '',
-    })),
-    restaurant_nutrition_kcal: Number(settingsForm.restaurant_nutrition_kcal || 0),
-    restaurant_nutrition_protein_g: Number(settingsForm.restaurant_nutrition_protein_g || 0),
-    restaurant_nutrition_carb_g: Number(settingsForm.restaurant_nutrition_carb_g || 0),
-    restaurant_nutrition_sugar_g: Number(settingsForm.restaurant_nutrition_sugar_g || 0),
-    restaurant_nutrition_fat_g: Number(settingsForm.restaurant_nutrition_fat_g || 0),
-    show_in_print: settingsForm.show_in_print ? 1 : 0,
-    restaurant_enabled: settingsForm.restaurant_enabled ? 1 : 0,
-    restaurant_is_featured: settingsForm.restaurant_is_featured ? 1 : 0,
-    restaurant_is_best_seller: settingsForm.restaurant_is_best_seller ? 1 : 0,
-    restaurant_requires_bom: settingsForm.restaurant_requires_bom ? 1 : 0,
-    restaurant_auto_add_to_order: settingsForm.restaurant_auto_add_to_order ? 1 : 0,
-    restaurant_coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0,
-    disabled: settingsForm.disabled ? 1 : 0,
-    restaurant_is_customizable: settingsForm.restaurant_is_customizable ? 1 : 0,
-    restaurant_customize_button_label: String(settingsForm.restaurant_customize_button_label || '').trim(),
-    restaurant_custom_product_type: String(settingsForm.restaurant_custom_product_type || '').trim(),
-    restaurant_builder_template: String(settingsForm.restaurant_builder_template || '').trim(),
-    restaurant_builder_active: settingsForm.restaurant_builder_active ? 1 : 0,
-    restaurant_allow_direct_add: settingsForm.restaurant_allow_direct_add ? 1 : 0,
-    restaurant_show_nutrition_summary: settingsForm.restaurant_show_nutrition_summary ? 1 : 0,
-    restaurant_show_allergen_warnings: settingsForm.restaurant_show_allergen_warnings ? 1 : 0,
-    restaurant_kitchen_print_mode: String(settingsForm.restaurant_kitchen_print_mode || '').trim(),
-    restaurant_stock_consumption_mode: String(settingsForm.restaurant_stock_consumption_mode || '').trim(),
+function loadBuilderItemOptions() {
+  return callMethodByPathGET('restaurant.api.list_builder_option_items', { limit: 500 })
+    .then((result) => {
+      const data = result?.data || result
+      const rows = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []
+      builderItemOptions.value = rows.map((r) => ({
+        value: r.value || r.name,
+        label: r.label || r.item_name || r.name,
+        item_name: r.item_name || r.label || r.name,
+        item_code: r.item_code || r.name,
+        image: r.image || '',
+        standard_rate: Number(r.standard_rate) || 0,
+        stock_uom: r.stock_uom || '',
+        item_group: r.item_group || '',
+      }))
+    })
+    .catch(() => {
+      builderItemOptions.value = []
+    })
+}
+
+async function applyBuilderTemplateToProduct() {
+  const templateName = String(settingsForm.restaurant_builder_template || '').trim()
+  if (!templateName) {
+    builderConfig.value = null
+    return
+  }
+  const result = await callMethodByPathGET('restaurant.api.get_builder_template_detail', { name: templateName })
+  const data = result?.data || result
+  const template = data?.template || data
+  builderConfig.value = cloneBuilderConfig(template)
+  builderSourceTemplateName.value = templateName
+}
+
+function addBuilderStep() {
+  if (!builderConfig.value) {
+    builderConfig.value = {
+      name: '',
+      title: settingsForm.item_name || 'سفارشی‌سازی محصول',
+      slug: '',
+      description: '',
+      is_active: true,
+      layout_mode: 'vertical_steps',
+      show_summary_panel: true,
+      show_price_live: true,
+      primary_color: '#1a73e8',
+      background_image: '',
+      allow_skip_steps: false,
+      allow_go_back: true,
+      require_all_required: true,
+      max_total_selections: 0,
+      steps: [],
+    }
+  }
+  builderConfig.value.steps.push(createEmptyBuilderStep(builderConfig.value.steps.length))
+}
+
+function updateBuilderStep(index, updatedStep) {
+  if (!builderConfig.value?.steps) return
+  builderConfig.value.steps[index] = { ...updatedStep }
+}
+
+function moveBuilderStep(index, direction) {
+  if (!builderConfig.value?.steps) return
+  const newIndex = index + direction
+  if (newIndex < 0 || newIndex >= builderConfig.value.steps.length) return
+  const temp = builderConfig.value.steps[index]
+  builderConfig.value.steps.splice(index, 1)
+  builderConfig.value.steps.splice(newIndex, 0, temp)
+  builderConfig.value.steps.forEach((row, i) => {
+    row.sort_order = i
   })
 }
 
+function deleteBuilderStep(index) {
+  if (!builderConfig.value?.steps) return
+  builderConfig.value.steps.splice(index, 1)
+  builderConfig.value.steps.forEach((row, i) => {
+    row.sort_order = i
+  })
+}
+
+function resetBuilderToTemplate() {
+  return applyBuilderTemplateToProduct()
+}
+
+function serializeSettingsState() {
+  return serializeProductSettingsState(settingsForm, builderConfig.value)
+}
+
 function buildSettingsPayload() {
-  const serialized = serializeSettingsState()
-  const parsed = JSON.parse(serialized)
-  return {
-    name: detail.value?.item?.name,
-    ...parsed,
-    show_in_website: Number(parsed.show_in_print || 0) ? 1 : 0,
-  }
+  return buildProductSettingsPayload({
+    itemName: detail.value?.item?.name,
+    form: settingsForm,
+    builderConfig: builderConfig.value,
+  })
 }
 
 function handleBeforeUnload(event) {
@@ -2570,209 +2981,10 @@ function bomManagerUrl(row) {
   return `/management/bom?item=${itemCode}&bom=${bomName}`
 }
 
-function formatPersianDate(value, withTime = false) {
-  const raw = String(value || '').trim()
-  if (!raw) {
-    return '-'
-  }
-  const normalizedRaw = normalizeDateRaw(raw)
-  try {
-    const parsedDate = new Date(normalizedRaw)
-    if (Number.isNaN(parsedDate.getTime())) {
-      return raw
-    }
-    return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-    }).format(parsedDate)
-  } catch (dateErr) {
-    return raw
-  }
-}
-
-function localizeAxisLabel(value) {
-  const raw = String(value || '').trim()
-  if (!raw) {
-    return raw
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-    return formatPersianDate(raw, false)
-  }
-  if (/^\d{1,2}:\d{2}/.test(raw)) {
-    return raw
-  }
-  if (/^\d+(\.\d+)?$/.test(raw)) {
-    return Number(raw).toLocaleString('fa-IR')
-  }
-  return localizeText(raw)
-}
-
-function localizeText(value) {
-  const raw = String(value || '').trim()
-  if (!raw) {
-    return ''
-  }
-
-  if (/^peak day for this item:/i.test(raw)) {
-    const datePart = raw.split(':').slice(1).join(':').trim().replace(/\.$/, '')
-    const formattedDate = localizeAxisLabel(datePart)
-    return `روز اوج فروش این محصول: ${formattedDate}.`
-  }
-
-  if (/^cancelled amount in window:/i.test(raw)) {
-    const amountPart = raw.split(':').slice(1).join(':').trim().replace(/\.$/, '')
-    return `مبلغ لغو شده در این بازه: ${amountPart}.`
-  }
-
-  const regexReplacements = [
-    [/\bCompared to previous window\b/gi, 'نسبت به بازه قبلی'],
-    [/\bProduct sales\b/gi, 'فروش محصول'],
-    [/\bSold Quantity\b/gi, 'مقدار فروش'],
-    [/\bUnique Customers\b/gi, 'مشتریان یکتا'],
-    [/\bAverage Order Value\b/gi, 'میانگین مبلغ سفارش'],
-    [/\bSales Contribution\b/gi, 'سهم از فروش'],
-    [/\bDaily Sales\b/gi, 'فروش روزانه'],
-    [/\bDaily Quantity\b/gi, 'تعداد روزانه'],
-    [/\bHourly Sales Trend\b/gi, 'روند فروش ساعتی'],
-    [/\bRecent Orders\b/gi, 'سفارش‌های اخیر'],
-    [/\bTop Customers\b/gi, 'برترین مشتریان'],
-    [/\bOrder Code\b/gi, 'کد سفارش'],
-    [/\bCustomer Name\b/gi, 'نام مشتری'],
-    [/\bPrice List Rate\b/gi, 'نرخ لیست قیمت'],
-    [/\bLine Total\b/gi, 'جمع ردیف'],
-    [/\bIn window\b/gi, 'در این بازه'],
-    [/\bWith\b/gi, 'با'],
-    [/\bSnapp Guest\b/gi, 'مهمان اسنپ'],
-    [/\bdine_in\b/gi, 'سالن'],
-  ]
-
-  let replaced = raw
-  for (const [pattern, replacement] of regexReplacements) {
-    replaced = replaced.replace(pattern, replacement)
-  }
-
-  if (replaced !== raw) {
-    return replaced
-  }
-
-  const normalized = raw
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  const phraseMap = {
-    'price history': 'تاریخچه قیمت',
-    'sales summary': 'خلاصه فروش',
-    'sales trend': 'روند فروش',
-    'sales hourly': 'فروش ساعتی',
-    'top products': 'محصولات پرفروش',
-    'product mix': 'ترکیب محصولات',
-    'order status': 'وضعیت سفارش',
-    'channel split': 'تفکیک کانال فروش',
-    'cashier performance': 'عملکرد صندوقدار',
-    cancellations: 'لغو سفارش‌ها',
-    'modifier usage': 'استفاده از افزودنی‌ها',
-    'average ticket': 'میانگین سبد خرید',
-    'line total': 'جمع ردیف',
-    'order code': 'کد سفارش',
-    'customer name': 'نام مشتری',
-    'price list rate': 'نرخ لیست قیمت',
-    'daily sales': 'فروش روزانه',
-    'daily quantity': 'تعداد روزانه',
-    'hourly sales trend': 'روند فروش ساعتی',
-    'recent orders': 'سفارش‌های اخیر',
-    'top customers': 'برترین مشتریان',
-    'product sales': 'فروش محصول',
-    'sold quantity': 'مقدار فروش',
-    'unique customers': 'مشتریان یکتا',
-    'average order value': 'میانگین مبلغ سفارش',
-    'sales contribution': 'سهم از فروش',
-    'compared to previous window': 'نسبت به بازه قبلی',
-    'valid from': 'تاریخ اعتبار',
-    'effective at': 'زمان اثرگذاری',
-    'created at': 'زمان ایجاد',
-    'updated at': 'زمان بروزرسانی',
-    'price list': 'لیست قیمت',
-    amount: 'مبلغ',
-    sales: 'فروش',
-    revenue: 'درآمد',
-    total: 'جمع کل',
-    orders: 'تعداد سفارش',
-    order: 'سفارش',
-    customer: 'مشتری',
-    customers: 'مشتریان',
-    name: 'نام',
-    product: 'محصول',
-    products: 'محصولات',
-    item: 'آیتم',
-    items: 'آیتم‌ها',
-    category: 'دسته',
-    subcategory: 'زیردسته',
-    date: 'تاریخ',
-    hour: 'ساعت',
-    status: 'وضعیت',
-    channel: 'کانال',
-    code: 'کد',
-    count: 'تعداد',
-    value: 'مقدار',
-    price: 'قیمت',
-    rate: 'نرخ',
-    qty: 'تعداد',
-    quantity: 'تعداد',
-    currency: 'ارز',
-    uom: 'واحد',
-    modified: 'آخرین بروزرسانی',
-    cost: 'هزینه',
-    profit: 'سود',
-    margin: 'حاشیه سود',
-    discount: 'تخفیف',
-    tax: 'مالیات',
-    tip: 'انعام',
-    service: 'حق سرویس',
-    wallet: 'کیف پول',
-    pending: 'در انتظار',
-    confirmed: 'تایید شده',
-    preparing: 'در حال آماده‌سازی',
-    ready: 'آماده تحویل',
-    delivered: 'تحویل شده',
-    cancelled: 'لغو شده',
-  }
-
-  if (phraseMap[normalized]) {
-    return phraseMap[normalized]
-  }
-
-  const words = normalized.split(' ')
-  const translatedWords = words.map((word) => phraseMap[word] || word)
-  const translated = translatedWords.join(' ')
-
-  if (translated !== normalized) {
-    return translated
-  }
-
-  return raw
-}
-
-function normalizeDateRaw(raw) {
-  let value = String(raw || '').trim()
-  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value)) {
-    value = value.replace(' ', 'T')
-  }
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{4,}$/.test(value)) {
-    value = value.replace(/^(.+\.\d{3})\d+$/, '$1')
-  }
-  return value
-}
-
 function readStoredDetailTab() {
   try {
     const raw = localStorage.getItem('management-product-detail-tab')
-    if (tabOptions.some((tab) => tab.value === raw)) {
+    if (PRODUCT_DETAIL_TABS.some((tab) => tab.value === raw)) {
       return raw
     }
   } catch (storageError) {
@@ -2818,6 +3030,7 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('keydown', onWindowKeydown)
   setupPreviewViewportListener()
+  searchBomItems('')
 })
 
 onBeforeUnmount(() => {
@@ -2826,10 +3039,275 @@ onBeforeUnmount(() => {
   cleanupPreviewViewportListener()
 })
 
-loadDetail()
+Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 </script>
 
 <style scoped>
+.page-sticky-actions {
+  position: sticky;
+  top: 0.85rem;
+  z-index: 18;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 42px rgb(15 23 42 / 0.1);
+}
+
+.product-general-card {
+  overflow: hidden;
+}
+
+.product-general-layout {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.72fr) minmax(360px, 1.28fr) minmax(320px, 1fr);
+  gap: 0.72rem;
+  align-items: start;
+}
+
+.product-general-main,
+.product-general-side {
+  min-width: 0;
+  display: grid;
+  gap: 0.56rem;
+  align-content: start;
+}
+
+.product-general-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.52rem;
+  align-content: start;
+}
+
+.product-general-fields label {
+  display: grid;
+  gap: 0.24rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 800;
+  min-width: 0;
+}
+
+.price-inline-field {
+  grid-column: span 1;
+}
+
+.price-inline-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.price-preview-input {
+  font-weight: 900;
+  color: var(--module-600, #6f4726) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-general-media {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.general-image-shell {
+  position: relative;
+  height: clamp(150px, 18vw, 210px);
+  min-height: 150px;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 18% 18%, var(--module-50, rgb(139 94 52 / 0.075)), transparent 34%),
+    var(--bg-soft, #f1f5f9);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.general-product-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: var(--bg-card, #fff);
+}
+
+.general-image-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  color: var(--muted, #64748b);
+  text-align: center;
+}
+
+.general-image-empty span {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border);
+  color: var(--module-600, #6f4726);
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.general-image-empty p {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.product-general-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.product-general-toggles :deep(.toggle-switch) {
+  min-height: 4.55rem;
+  padding: 0.56rem 0.62rem;
+}
+
+.product-general-toggles :deep(.switch-copy) {
+  gap: 0.12rem;
+}
+
+.product-general-toggles :deep(.switch-copy strong) {
+  font-size: 0.78rem;
+}
+
+.product-general-toggles :deep(.switch-copy small) {
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
+.product-general-nutrition {
+  margin-bottom: 0;
+}
+
+.product-general-meta-row {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.mini-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.75rem;
+}
+
+.mini-meta-chip strong {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.mini-readiness-row {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.mini-readiness-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.22rem 0.58rem;
+  border-radius: 999px;
+  background: var(--module-50);
+  color: var(--module-title-light);
+  font-size: 0.74rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.mini-readiness-items {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.mini-readiness-pill {
+  min-height: 1.72rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mini-readiness-pill.is-ok {
+  border-color: rgb(var(--success-rgb) / 0.25);
+  background: rgb(var(--success-rgb) / 0.1);
+  color: var(--success);
+}
+
+.mini-readiness-pill.is-missing {
+  border-color: rgb(var(--danger-rgb) / 0.2);
+  background: rgb(var(--danger-rgb) / 0.08);
+  color: var(--danger);
+}
+
+.quick-price-save {
+  min-width: 108px;
+  min-height: 2.65rem;
+  white-space: nowrap;
+}
+
+.bom-inline-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0;
+}
+
+.bom-inline-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 0.5fr) minmax(110px, 0.45fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-soft);
+}
+
+.bom-inline-card label {
+  display: grid;
+  gap: 0.22rem;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  min-width: 0;
+}
+
+.danger-btn {
+  color: var(--danger) !important;
+  border-color: rgb(var(--danger-rgb) / 0.28) !important;
+}
+
 .section-picker {
   display: flex;
   align-items: center;
@@ -2846,35 +3324,55 @@ loadDetail()
 }
 
 .simple-tab {
-  min-height: 2.36rem;
+  min-height: 2.75rem;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: #74685f;
+  color: var(--text-muted);
   padding: 0.34rem 0.68rem;
   font-size: 0.78rem;
   font-weight: 850;
   cursor: pointer;
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
   touch-action: manipulation;
 }
 
+.simple-tab:active {
+  transform: scale(0.98);
+}
+
+.tab-badge {
+  min-width: 1.32rem;
+  min-height: 1.32rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 0.34rem;
+  background: var(--module-50);
+  color: var(--module-title-light);
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
 .simple-tab:hover {
-  background: #fbfaf8;
-  border-color: #e4ded6;
-  color: #2b211a;
+  background: var(--bg-soft);
+  border-color: var(--border);
+  color: var(--text-primary);
 }
 
 .simple-tab.active {
-  background: #fff;
-  border-color: rgb(124 90 66 / 0.28);
-  color: #2b211a;
-  box-shadow: inset 0 -2px 0 #7c5a42;
+  background: var(--bg-card);
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.28);
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 var(--module-500);
 }
 
 .tab-hint {
   margin: 0.42rem 0 0;
-  color: #74685f;
+  color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1.65;
 }
@@ -2943,7 +3441,7 @@ loadDetail()
 .identity-grid label {
   display: grid;
   gap: 0.22rem;
-  color: #4a3b31;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 700;
   min-width: 0;
@@ -2952,7 +3450,7 @@ loadDetail()
 .field-label {
   font-size: 0.8rem;
   font-weight: 800;
-  color: #4a3b31;
+  color: var(--text-secondary);
 }
 
 .field-help {
@@ -2969,40 +3467,42 @@ loadDetail()
 }
 
 .nutrition-box {
-  border: 1px solid #e4ded6;
-  border-radius: 8px;
-  background: #fbfaf8;
-  padding: 0.58rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  padding: 0.5rem;
   margin-bottom: 0.58rem;
 }
 
 .nutrition-head {
-  display: grid;
-  gap: 0.15rem;
-  margin-bottom: 0.46rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.45rem;
+  margin-bottom: 0.42rem;
 }
 
 .nutrition-head strong {
-  color: #2b211a;
+  color: var(--text-primary);
   font-size: 0.84rem;
 }
 
 .nutrition-head small {
-  color: #74685f;
+  color: var(--text-muted);
   font-size: 0.7rem;
   line-height: 1.55;
 }
 
 .nutrition-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.38rem;
 }
 
 .nutrition-grid label {
   display: grid;
   gap: 0.22rem;
-  color: #4a3b31;
+  color: var(--text-secondary);
   font-size: 0.76rem;
   font-weight: 800;
   min-width: 0;
@@ -3017,10 +3517,10 @@ loadDetail()
 }
 
 .check--highlight {
-  background: #f7f1ea;
+  background: var(--module-50);
   border-radius: 8px;
   padding: 0.45rem 0.65rem;
-  border: 1px solid rgb(124 90 66 / 0.14);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
 }
 
 .status-dot {
@@ -3043,9 +3543,9 @@ loadDetail()
 }
 
 .image-shell {
-  border: 1px solid rgb(226 232 240 / 1);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fbfaf8;
+  background: var(--bg-soft);
   min-height: 200px;
   display: grid;
   place-items: center;
@@ -3059,7 +3559,7 @@ loadDetail()
   max-height: 360px;
   object-fit: contain;
   object-position: center;
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 8px;
 }
 
@@ -3101,9 +3601,9 @@ loadDetail()
 }
 
 .variant-config-shell {
-  border: 1px solid rgb(226 232 240 / 1);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fbfaf8;
+  background: var(--bg-soft);
   padding: 0.75rem;
   display: grid;
   gap: 0.6rem;
@@ -3121,9 +3621,9 @@ loadDetail()
 }
 
 .variant-editor-table-wrap {
-  border: 1px solid rgb(226 232 240 / 1);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-card);
   overflow-x: auto;
 }
 
@@ -3138,7 +3638,7 @@ loadDetail()
 .variant-editor-table td,
 .variant-values-table th,
 .variant-values-table td {
-  border-bottom: 1px solid rgb(226 232 240 / 1);
+  border-bottom: 1px solid var(--border);
   padding: 0.58rem 0.6rem;
   text-align: right;
   font-size: 0.77rem;
@@ -3147,13 +3647,13 @@ loadDetail()
 
 .variant-editor-table th,
 .variant-values-table th {
-  background: #fbfaf8;
-  color: #6f6258;
+  background: var(--bg-soft);
+  color: var(--text-muted);
   font-size: 0.74rem;
 }
 
 .variant-editor-table tbody tr.active {
-  background: #f7f1ea;
+  background: var(--module-50);
 }
 
 .variant-clickable-row {
@@ -3161,7 +3661,7 @@ loadDetail()
 }
 
 .variant-clickable-row:hover {
-  background: #fbfaf8;
+  background: var(--bg-soft);
 }
 
 .variant-attr-meta {
@@ -3179,9 +3679,9 @@ loadDetail()
 }
 
 .variant-values-shell {
-  border: 1px solid rgb(226 232 240 / 1);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-card);
   padding: 0.55rem;
   display: grid;
   gap: 0.5rem;
@@ -3224,17 +3724,17 @@ loadDetail()
 .variant-attribute-mobile-card,
 .variant-value-mobile-card,
 .variant-mobile-card {
-  border: 1px solid rgb(226 232 240 / 1);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-card);
   padding: 0.55rem;
   display: grid;
   gap: 0.45rem;
 }
 
 .variant-attribute-mobile-card.active {
-  border-color: rgb(124 90 66 / 0.32);
-  box-shadow: 0 14px 28px rgb(124 90 66 / 0.1);
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.26);
+  box-shadow: 0 14px 28px rgb(15 23 42 / 0.08);
 }
 
 .variant-attribute-mobile-card header,
@@ -3258,11 +3758,259 @@ loadDetail()
   display: block;
 }
 
+.sticky-save-bar {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 12;
+  margin: 1rem auto 0;
+  width: min(620px, calc(100% - 1rem));
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.22);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 70px rgb(15 23 42 / 0.16);
+  padding: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.sticky-save-bar > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.sticky-save-bar strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.sticky-save-bar small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.save-spark-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.save-spark-btn::after {
+  content: '';
+  position: absolute;
+  inset: -60% auto -60% -40%;
+  width: 38%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+  transform: skewX(-18deg) translateX(-140%);
+  animation: save-sheen 2.8s ease-in-out infinite;
+}
+
+@keyframes save-sheen {
+  0%, 58% { transform: skewX(-18deg) translateX(-140%); }
+  82%, 100% { transform: skewX(-18deg) translateX(420%); }
+}
+
+@media (max-width: 1180px) {
+  .product-general-layout {
+    grid-template-columns: minmax(150px, 0.45fr) minmax(0, 1fr);
+  }
+
+  .product-general-side {
+    grid-column: 1 / -1;
+  }
+
+  .product-general-toggles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .page-sticky-actions {
+    position: sticky;
+    top: 0.65rem;
+    width: 100%;
+    justify-content: space-between;
+    padding: 0.45rem;
+    border-radius: 14px;
+  }
+
+  .page-sticky-actions > * {
+    flex: 1 1 calc(50% - 0.3rem);
+  }
+
+  .page-sticky-actions .unsaved-chip {
+    flex-basis: 100%;
+    text-align: center;
+  }
+
+  .page-sticky-actions .primary-btn,
+  .page-sticky-actions .secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .product-general-layout,
+  .product-top-grid,
+  .product-settings-grid,
+  .charts-grid,
+  .tables-grid,
+  .identity-grid,
+  .checks-grid,
+  .product-general-fields,
+  .product-general-toggles,
+  .nutrition-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .product-general-media {
+    order: -1;
+  }
+
+  .product-general-side {
+    grid-column: auto;
+  }
+
+  .product-general-toggles :deep(.toggle-switch) {
+    min-height: auto;
+  }
+
+  .bom-inline-card {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .product-general-meta-row {
+    align-items: stretch;
+  }
+
+  .mini-readiness-row {
+    flex: 1 1 100%;
+  }
+
+  .price-inline-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quick-price-save {
+    width: 100%;
+  }
+
+  .section-picker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .section-picker > .secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .simple-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    margin-bottom: 0.1rem;
+    scrollbar-width: thin;
+  }
+
+  .simple-tab {
+    flex: 0 0 auto;
+    min-height: 2.6rem;
+    white-space: nowrap;
+  }
+
+  .nutrition-head,
+  .variant-config-head,
+  .variant-values-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inline-actions,
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inline-actions > *,
+  .filters > * {
+    width: 100%;
+  }
+
+  .general-image-shell {
+    height: auto;
+    min-height: 180px;
+    aspect-ratio: 16 / 10;
+  }
+}
+
+@media (max-width: 640px) {
+  .product-general-card,
+  .section-picker-shell,
+  .nutrition-box,
+  .variant-config-shell,
+  .variant-values-shell,
+  .bom-inline-card {
+    border-radius: 12px;
+  }
+
+  .product-general-layout,
+  .product-top-grid,
+  .product-settings-grid,
+  .variants-grid,
+  .reports-content,
+  .tables-grid,
+  .charts-grid {
+    gap: 0.56rem;
+  }
+
+  .product-general-fields label,
+  .identity-grid label,
+  .nutrition-grid label {
+    font-size: 0.76rem;
+  }
+
+  .mini-meta-chip,
+  .mini-readiness-score,
+  .mini-readiness-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sticky-save-bar {
+    width: calc(100% - 0.5rem);
+    bottom: 0.4rem;
+    padding: 0.55rem;
+    border-radius: 14px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sticky-save-bar .primary-btn,
+  .sticky-save-bar .secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .save-spark-btn::after {
+    animation: none;
+  }
+
+  .simple-tab,
+  .menu-preview-row {
+    transition: none;
+  }
+}
+
 .menu-preview-inline {
   margin-top: 0.8rem;
-  border: 1px solid rgb(226 232 240 / 1);
-  border-radius: 8px;
-  background: #fbfaf8;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: var(--bg-soft, #f1f5f9);
   padding: 0.7rem;
   display: grid;
   gap: 0.5rem;
@@ -3282,7 +4030,7 @@ loadDetail()
 
 .menu-preview-inline-meta strong {
   font-size: 0.84rem;
-  color: #2b211a;
+  color: var(--text, #0f172a);
 }
 
 .menu-preview-inline-meta small {
@@ -3317,8 +4065,8 @@ loadDetail()
 
 .menu-preview-row:hover,
 .menu-preview-row:focus-visible {
-  border-color: rgb(124 90 66 / 0.45);
-  box-shadow: 0 16px 34px rgb(124 90 66 / 0.14);
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.42);
+  box-shadow: 0 16px 34px rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.13);
   transform: translateY(-2px);
   outline: none;
 }
@@ -3331,10 +4079,10 @@ loadDetail()
 }
 
 .menu-preview-modal-details {
-  border: 1px solid rgb(226 232 240 / 1);
-  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
   padding: 0.6rem;
-  background: #fbfaf8;
+  background: var(--bg-soft, #f1f5f9);
   display: grid;
   gap: 0.45rem;
 }
@@ -3357,9 +4105,9 @@ loadDetail()
 }
 
 .menu-preview-customer-view {
-  border: 1px solid rgb(226 232 240 / 1);
-  border-radius: 8px;
-  background: #fbfaf8;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: var(--bg-soft, #f1f5f9);
   padding: 0.6rem;
   display: grid;
   gap: 0.45rem;
@@ -3514,6 +4262,14 @@ loadDetail()
 }
 
 @media (max-width: 980px) {
+  .sticky-save-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sticky-save-bar .primary-btn {
+    width: 100%;
+  }
   .filters {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

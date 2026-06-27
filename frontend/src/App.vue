@@ -55,6 +55,11 @@
       <PaymentGatewayEntry v-else-if="page === 'payment'" :boot="boot" />
       <PaymentCallback v-else-if="page === 'payment-callback'" :boot="boot" />
       <OrderSuccessPage v-else-if="page === 'order-success'" :boot="boot" />
+      <OrderStartPage v-else-if="page === 'order-start'" />
+      <OrderTypePage v-else-if="page === 'order-type'" />
+      <OrderDineInPage v-else-if="page === 'order-dine-in'" />
+      <OrderPickupPage v-else-if="page === 'order-pickup'" />
+      <OrderDeliveryPage v-else-if="page === 'order-delivery'" />
       <CustomerLoginPage v-else-if="page === 'customer-login'" />
       <CustomerDashboardPage v-else-if="page === 'customer-dashboard'" />
       <CustomerProfilePage v-else-if="page === 'customer-profile'" />
@@ -122,6 +127,11 @@ import BomPreviewPage from './pages/BomPreviewPage.vue'
 import PaymentGatewayEntry from './pages/PaymentGatewayEntry.vue'
 import PaymentCallback from './pages/PaymentCallback.vue'
 import OrderSuccessPage from './pages/OrderSuccessPage.vue'
+import OrderStartPage from './pages/OrderStartPage.vue'
+import OrderTypePage from './pages/OrderTypePage.vue'
+import OrderDineInPage from './pages/OrderDineInPage.vue'
+import OrderPickupPage from './pages/OrderPickupPage.vue'
+import OrderDeliveryPage from './pages/OrderDeliveryPage.vue'
 import CustomerLoginPage from './pages/CustomerLoginPage.vue'
 import CustomerDashboardPage from './pages/CustomerDashboardPage.vue'
 import CustomerProfilePage from './pages/CustomerProfilePage.vue'
@@ -205,6 +215,11 @@ function resolveInitialPage() {
     if (pathname.startsWith('/about-us') || pathname.startsWith('/about_us')) return 'about-us'
     if (pathname.startsWith('/faq')) return 'faq'
     if (pathname.startsWith('/order-success') || pathname.startsWith('/order_success')) return 'order-success'
+    if (pathname === '/order' || pathname === '/order/' || pathname.startsWith('/order/start')) return 'order-start'
+    if (pathname.startsWith('/order/type')) return 'order-type'
+    if (pathname.startsWith('/order/dine-in') || pathname.startsWith('/order/dine_in')) return 'order-dine-in'
+    if (pathname.startsWith('/order/pickup')) return 'order-pickup'
+    if (pathname.startsWith('/order/delivery')) return 'order-delivery'
     if (pathname.startsWith('/customize/')) return 'customize'
     if (pathname.startsWith('/customer/login')) return 'customer-login'
     if (pathname.startsWith('/customer/dashboard')) return 'customer-dashboard'
@@ -213,9 +228,15 @@ function resolveInitialPage() {
     if (pathname.startsWith('/customer/branches')) return 'customer-branches'
     if (pathname.startsWith('/customer/orders/')) return 'customer-order-detail'
     if (pathname.startsWith('/customer/orders')) return 'customer-orders'
-    if (pathname.startsWith('/delivery')) return 'customer-delivery'
+    if (pathname.startsWith('/delivery')) {
+      window.location.replace('/order/delivery')
+      return 'order-delivery'
+    }
     if (pathname.startsWith('/table-reservation')) return 'customer-table-reservation'
-    if (pathname.startsWith('/table-select')) return 'customer-table-select'
+    if (pathname.startsWith('/table-select')) {
+      window.location.replace('/order/dine-in')
+      return 'order-dine-in'
+    }
     if (pathname.startsWith('/checkout')) return 'checkout'
     if (pathname.startsWith('/payment/fail') || pathname.startsWith('/payment-fail')) return 'payment-fail'
     if (pathname.startsWith('/kitchen')) return 'kitchen'
@@ -249,7 +270,7 @@ const siteComponents = computed(() => resolveSiteComponents(boot))
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 
 const headerVariant = computed(() => {
-  return siteComponents.value.headerVariant
+  return siteComponents.value.header_variant
 })
 
 const isMobile = computed(() => {
@@ -259,9 +280,10 @@ const isMobile = computed(() => {
 
 const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && cartState.lastOrder?.mobile))
 
+const isOrderFlowPage = page.startsWith('order-') && page !== 'order-success'
 const isCustomerPage = page.startsWith('customer-') || page === 'customer-delivery' || page === 'customer-table-reservation' || page === 'customer-table-select'
 
-const isFullscreenPage = page === 'checkout' || page === 'payment-fail' || page === 'not-found' || page === 'kitchen'
+const isFullscreenPage = page === 'checkout' || isOrderFlowPage || page === 'payment-fail' || page === 'not-found' || page === 'kitchen'
 
 const useNoHeaderOffset = computed(() => {
   return page === 'landing' || isCustomerPage || isFullscreenPage

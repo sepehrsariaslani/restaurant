@@ -5,8 +5,8 @@
       <div class="fc-bg-overlay"></div>
     </div>
     <div class="fc-content">
-      <div class="feature-icon-wrap">
-        <span class="feature-icon">{{ icon }}</span>
+      <div class="feature-icon-wrap" aria-hidden="true">
+        <component :is="iconComponent" class="feature-icon" :size="24" stroke-width="2.1" />
       </div>
       <h4 class="feature-title">{{ title }}</h4>
       <p class="feature-desc">{{ description }}</p>
@@ -16,6 +16,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Leaf, MessageCircle, SlidersHorizontal, Zap } from 'lucide-vue-next'
 
 const props = defineProps({
   icon: { type: String, required: true },
@@ -25,6 +26,15 @@ const props = defineProps({
 })
 
 const hasBgImage = computed(() => Boolean(String(props.bgImage || '').trim()))
+
+const iconMap = {
+  leaf: Leaf,
+  message: MessageCircle,
+  sliders: SlidersHorizontal,
+  zap: Zap,
+}
+
+const iconComponent = computed(() => iconMap[String(props.icon || '').trim()] || Zap)
 </script>
 
 <style scoped>
@@ -107,7 +117,8 @@ const hasBgImage = computed(() => Boolean(String(props.bgImage || '').trim()))
 }
 
 .feature-icon {
-  font-size: 1.6rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .feature-title {

@@ -1149,7 +1149,7 @@ async function submitWizard() {
   try {
     const result = await createManagementProduct(payload)
     const itemName = result?.name || payload.item_code
-    
+
     if (wizardForm.value.price) {
       try {
         const priceLists = await listManagementPriceLists()
@@ -1411,7 +1411,7 @@ watch(
 function handleKeydown(event) {
   const key = String(event?.key || '').toLowerCase()
   const hasModifier = Boolean(event.ctrlKey || event.metaKey)
-  
+
   if (hasModifier && key === 's') {
     event.preventDefault()
     if (createPopupOpen.value && !creatingItem.value) {
@@ -1419,7 +1419,7 @@ function handleKeydown(event) {
     }
     return
   }
-  
+
   if (hasModifier && key === 'k') {
     event.preventDefault()
     openQuickStartWizard()
@@ -1510,10 +1510,10 @@ loadProducts()
 .group-header-btn {
   width: 100%;
   min-height: 2.85rem;
-  border: 1px solid rgb(226 232 240 / 1);
-  background: #fbfaf8;
-  color: #2b211a;
-  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--bg-soft, #f1f5f9);
+  color: var(--text, #0f172a);
+  border-radius: 12px;
   padding: 0.58rem 0.7rem;
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -1646,7 +1646,7 @@ loadProducts()
 }
 
 .product-card.clickable:hover {
-  border-color: rgb(124 90 66 / 0.28);
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.28);
   box-shadow: 0 18px 40px rgb(15 23 42 / 0.1);
   transform: translateY(-2px);
 }
@@ -1662,8 +1662,8 @@ loadProducts()
   height: 64px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgb(226 232 240 / 1);
-  background: #f7f1ea;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--bg-soft, #f1f5f9);
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -1676,7 +1676,7 @@ loadProducts()
 }
 
 .product-card__fallback {
-  color: #5f402d;
+  color: var(--module-600, #6f4726);
   font-size: 0.84rem;
   font-weight: 700;
 }
@@ -1688,7 +1688,7 @@ loadProducts()
 
 .product-card__title {
   margin: 0;
-  color: #2b211a;
+  color: var(--text, #0f172a);
   font-size: 0.96rem;
   font-weight: 800;
   line-height: 1.45;
@@ -1697,7 +1697,7 @@ loadProducts()
 .product-card__sub {
   margin: 0.18rem 0 0;
   font-size: 0.82rem;
-  color: #74685f;
+  color: var(--muted, #64748b);
   line-height: 1.6;
 }
 
@@ -1707,9 +1707,9 @@ loadProducts()
   gap: 0.45rem;
   padding: 0.65rem;
   border-radius: 8px;
-  background: #fbfaf8;
+  background: var(--bg-soft, #f1f5f9);
   font-size: 0.84rem;
-  color: #4a3b31;
+  color: var(--text, #0f172a);
 }
 
 .product-card__totals p {
@@ -1880,9 +1880,9 @@ loadProducts()
 
 .info-box {
   padding: 0.75rem 1rem;
-  background: #f7f1ea;
-  border: 1px solid rgb(124 90 66 / 0.14);
-  border-radius: 8px;
+  background: var(--module-50, rgb(139 94 52 / 0.075));
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.14);
+  border-radius: 12px;
   font-size: 0.85rem;
   color: var(--text-secondary);
   line-height: 1.5;
@@ -1900,8 +1900,8 @@ loadProducts()
 }
 
 .tertiary-btn:hover {
-  background: #f7f1ea;
-  border-color: rgb(124 90 66 / 0.22);
+  background: var(--module-50, rgb(139 94 52 / 0.075));
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.22);
 }
 
 .tag-pill {
@@ -1920,8 +1920,8 @@ loadProducts()
 }
 
 .tag-pill.more {
-  background: #e4ded6;
-  color: #4a3b31;
+  background: var(--bg-soft, #f1f5f9);
+  color: var(--text, #0f172a);
   font-weight: 600;
 }
 

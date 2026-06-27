@@ -8,8 +8,9 @@
       </div>
 
       <div class="success-hero-actions">
-        <a class="secondary-btn" href="/menu">بازگشت به منو</a>
-        <a class="primary-btn" href="/cart">رفتن به سبد</a>
+        <button class="primary-btn" type="button" @click="loadOrder" :disabled="loading">{{ loading ? 'در حال بروزرسانی...' : 'بروزرسانی وضعیت' }}</button>
+        <a class="secondary-btn" href="/menu">سفارش دوباره</a>
+        <a class="secondary-btn" href="/customer/orders">سفارش‌های من</a>
       </div>
     </header>
 
@@ -42,16 +43,24 @@
 
           <dl v-if="order" class="facts-grid">
             <div>
-              <dt>نام مشتری</dt>
-              <dd>{{ order.customer_name }}</dd>
+              <dt>سفارش برای کجاست؟</dt>
+              <dd>{{ destinationText }}</dd>
             </div>
             <div>
-              <dt>مبلغ</dt>
+              <dt>چه زمانی آماده یا تحویل می‌شود؟</dt>
+              <dd>{{ timeText }}</dd>
+            </div>
+            <div>
+              <dt>چقدر پرداخت شد؟</dt>
               <dd>{{ formatMoney(order.grand_total, currency) }}</dd>
             </div>
             <div>
-              <dt>وضعیت فعلی</dt>
-              <dd>{{ formatStatus(order.status) }}</dd>
+              <dt>مرحله بعد چیست؟</dt>
+              <dd>{{ nextStepText }}</dd>
+            </div>
+            <div>
+              <dt>نوع سفارش</dt>
+              <dd>{{ orderTypeLabel }}</dd>
             </div>
             <div>
               <dt>کد رهگیری</dt>
@@ -110,6 +119,7 @@ import { computed, onMounted, ref } from 'vue'
 import GlassCard from '@/components/GlassCard.vue'
 import { getOrder } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile, parseQuery } from '@/utils/format'
+import { fallbackTimeline } from '@/utils/orderFlow'
 import { cartState, saveLastOrder } from '@/stores/cartStore'
 
 const props = defineProps({
@@ -123,7 +133,7 @@ const query = parseQuery()
 const order = ref(null)
 const orderItems = ref([])
 const timeline = ref([])
-const currency = ref('TOMAN')
+const currency = ref('IRR')
 const loading = ref(false)
 const error = ref('')
 
@@ -133,6 +143,41 @@ const mobile = ref(
 )
 
 const hasMobile = computed(() => Boolean(normalizeMobile(mobile.value)))
+const orderContext = computed(() => order.value?.order_context || {})
+const orderTypeLabel = computed(() => {
+  const type = orderContext.value.order_type || order.value?.order_type
+  if (type === 'dine_in') return 'حضوری داخل سالن'
+  if (type === 'delivery') return 'ارسال با پیک'
+  return 'بیرون‌بر'
+})
+const destinationText = computed(() => {
+  const ctx = orderContext.value
+  if (ctx.order_type === 'dine_in') return `${ctx.branch_title || ctx.branch || 'شعبه'} · میز ${ctx.table || '-'}`
+  if (ctx.order_type === 'delivery') {
+    const address = ctx.address || order.value?.delivery_details || {}
+    return address.title || address.address_line || order.value?.address || 'آدرس ثبت‌شده'
+  }
+  return `تحویل از ${ctx.branch_title || ctx.branch || 'شعبه'}`
+})
+const timeText = computed(() => {
+  const ctx = orderContext.value
+  if (ctx.order_type === 'delivery') {
+    if (ctx.delivery_time_type === 'scheduled' && ctx.delivery_time) return `ارسال در ${ctx.delivery_time}`
+    if (ctx.eta_min && ctx.eta_max) return `${ctx.eta_min} تا ${ctx.eta_max} دقیقه`
+    return 'زمان دقیق پس از تایید شعبه مشخص می‌شود'
+  }
+  if (ctx.order_type === 'pickup') {
+    if (ctx.pickup_time_type === 'scheduled' && ctx.pickup_time) return `تحویل از شعبه در ${ctx.pickup_time}`
+    return `آماده‌سازی حدود ${ctx.prep_time_mins || 20} دقیقه`
+  }
+  return ctx.prep_time_mins ? `آماده سرو حدود ${ctx.prep_time_mins} دقیقه` : 'پس از تایید آشپزخانه'
+})
+const nextStepText = computed(() => {
+  const ctx = orderContext.value
+  if (ctx.order_type === 'pickup') return 'وقتی وضعیت آماده تحویل شد، به شعبه مراجعه کنید.'
+  if (ctx.order_type === 'delivery') return 'وضعیت پیک را از همین صفحه پیگیری کنید.'
+  return 'وقتی آماده سرو شد، کارکنان سفارش را به میز می‌آورند.'
+})
 
 function resolveOrderCode() {
   const fromBoot = String(props.boot.order_code || '').trim()
@@ -160,7 +205,9 @@ async function loadOrder() {
     const data = await getOrder(orderCode.value, normalizeMobile(mobile.value))
     order.value = data.order
     orderItems.value = data.items || []
-    timeline.value = data.status_timeline || []
+    const backendTimeline = Array.isArray(data.status_timeline) ? data.status_timeline : []
+    timeline.value = backendTimeline.length ? backendTimeline : fallbackTimeline(data.order?.order_context?.order_type || data.order?.order_type, data.order?.status)
+    currency.value = data.order?.currency || data.currency || currency.value
     saveLastOrder({ order_code: orderCode.value, mobile: normalizeMobile(mobile.value) })
   } catch (err) {
     error.value = err.message || 'دریافت وضعیت سفارش ناموفق بود.'
@@ -225,6 +272,12 @@ onMounted(() => {
   align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
+}
+
+.success-hero-actions button {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .summary-grid {
@@ -419,9 +472,9 @@ onMounted(() => {
   }
 
   .success-hero-actions > * {
-    flex: 1 1 0;
-    text-align: center;
-  }
+      flex: 1 1 0;
+      text-align: center;
+    }
 
   .summary-head h2 {
     font-size: 1.45rem;

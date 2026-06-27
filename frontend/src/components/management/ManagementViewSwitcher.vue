@@ -50,10 +50,10 @@ const normalizedModes = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.22);
+  border: 1px solid var(--border, #e2e8f0);
   border-radius: 999px;
   padding: 0.2rem;
-  background: rgb(var(--palette-eggshell-rgb) / 0.75);
+  background: var(--bg-card, #fff);
 }
 
 .switch-btn {
@@ -71,8 +71,12 @@ const normalizedModes = computed(() => {
 }
 
 .switch-btn.active {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
+  background: var(--module-500, #8b5e34);
   color: #fff;
+}
+
+:global(.dark) .switch-btn.active {
+  color: #111827;
 }
 
 .switch-btn .icon {

@@ -11,8 +11,8 @@
       >
         <div class="cat-img-wrap">
           <img v-if="cat.image" :src="cat.image" :alt="cat.title" loading="lazy" />
-          <div v-else class="cat-no-img">
-            <span class="cat-emoji">🍽️</span>
+          <div v-else class="cat-no-img" aria-hidden="true">
+            <Grid2X2 :size="30" stroke-width="1.8" />
           </div>
           <div class="cat-img-overlay"></div>
         </div>
@@ -59,19 +59,29 @@
           <a
             v-for="item in items"
             :key="item.slug || item.name"
-            :href="`/menu?category=${selectedCategory.slug}`"
+            :href="item.slug ? `/item/${item.slug}` : `/menu?category=${selectedCategory.slug}`"
             class="cat-item-card"
           >
             <div class="cat-item-img-wrap">
               <img v-if="item.image" :src="item.image" :alt="item.title || item.name" loading="lazy" />
-              <div v-else class="cat-item-no-img">🍴</div>
+              <div v-else class="cat-item-no-img" aria-hidden="true">
+                <Utensils :size="26" stroke-width="1.8" />
+              </div>
             </div>
             <div class="cat-item-info">
               <span class="cat-item-name">{{ item.title || item.item_name || item.name }}</span>
-              <span class="cat-item-price" v-if="item.price > 0">
-                {{ formatPrice(item.price, currency) }}
+              <span class="cat-item-price" v-if="getItemPrice(item) > 0">
+                {{ formatPrice(getItemPrice(item), currency) }}
               </span>
             </div>
+            <button
+              class="cat-item-add"
+              type="button"
+              :aria-label="`افزودن ${item.title || item.name} به سبد`"
+              @click.prevent.stop="emitQuickAdd(item)"
+            >
+              افزودن
+            </button>
           </a>
         </div>
       </div>
@@ -81,6 +91,7 @@
 
 <script setup>
 import { computed, ref, nextTick } from 'vue'
+import { Grid2X2, Utensils } from 'lucide-vue-next'
 import { getMenuItems } from '@/utils/api'
 
 const props = defineProps({
@@ -114,8 +125,35 @@ const resolvedCategories = computed(() =>
 const panelRef = ref(null)
 
 async function toggleCategory(cat) {
-  // Navigate to menu page with category filter
-  window.location.href = `/menu?category=${encodeURIComponent(cat.slug)}`
+  if (!cat?.slug) {
+    window.location.href = '/menu'
+    return
+  }
+
+  if (selectedSlug.value === cat.slug) {
+    close()
+    return
+  }
+
+  selectedSlug.value = cat.slug
+  selectedCategory.value = cat
+  items.value = []
+  loadingItems.value = true
+  scrollToPanel()
+
+  try {
+    const response = await getMenuItems({
+      category_slug: cat.slug,
+      page: 1,
+      page_size: 6,
+    })
+    items.value = Array.isArray(response?.items) ? response.items : []
+  } catch (error) {
+    items.value = []
+  } finally {
+    loadingItems.value = false
+    scrollToPanel()
+  }
 }
 
 function scrollToPanel() {
@@ -131,6 +169,14 @@ function close() {
   selectedSlug.value = ''
   selectedCategory.value = null
   items.value = []
+}
+
+function emitQuickAdd(item) {
+  emit('quick-add', item)
+}
+
+function getItemPrice(item) {
+  return Number(item?.base_price ?? item?.price ?? 0)
 }
 
 function formatPrice(price, currency) {
@@ -166,19 +212,33 @@ function formatPrice(price, currency) {
   cursor: pointer;
   padding: 0;
   text-align: right;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, outline-color 0.2s;
   font-family: inherit;
   overflow: hidden;
 }
 
-.cat-card:hover {
+.cat-card:hover,
+.cat-card:focus-visible {
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.cat-card:focus-visible {
+  outline: 3px solid rgb(var(--palette-deep-saffron-rgb, 245 159 66) / 0.52);
+  outline-offset: 3px;
+}
+
+.cat-card.active {
+  transform: translateY(-2px);
 }
 
 .cat-card.active .cat-img-wrap {
   outline: 2.5px solid var(--palette-deep-sapphire, #6F4A31);
   outline-offset: 2px;
+}
+
+.cat-card.active .cat-name {
+  color: var(--palette-deep-sapphire, #6F4A31);
 }
 
 .cat-img-wrap {
@@ -209,7 +269,7 @@ function formatPrice(price, currency) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
+  color: var(--palette-deep-sapphire, #6F4A31);
 }
 
 .cat-img-overlay {
@@ -368,6 +428,7 @@ function formatPrice(price, currency) {
 }
 
 .cat-item-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -409,7 +470,7 @@ function formatPrice(price, currency) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
+  color: var(--palette-deep-sapphire, #6F4A31);
   background: linear-gradient(135deg, #f5f0eb, #e8e0d6);
 }
 
@@ -436,6 +497,24 @@ function formatPrice(price, currency) {
   font-weight: 600;
 }
 
+.cat-item-add {
+  margin: 0 0.5rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.42rem 0.7rem;
+  background: var(--accent-gold, #f4b24d);
+  color: var(--ink-900, #1c1411);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cat-item-add:focus-visible {
+  outline: 3px solid rgb(var(--palette-deep-saffron-rgb, 245 159 66) / 0.42);
+  outline-offset: 2px;
+}
+
 /* Transition */
 .panel-slide-enter-active {
   animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -452,7 +531,7 @@ function formatPrice(price, currency) {
 
 @media (max-width: 520px) {
   .cat-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .cat-items-grid {

@@ -27,6 +27,29 @@
     <p class="muted" v-if="loading">در حال بارگذاری گروه‌ها...</p>
     <p class="error" v-if="error">{{ error }}</p>
 
+    <section class="summary-strip" v-if="!loading">
+      <article>
+        <small>کل گروه‌ها</small>
+        <strong>{{ summary.total.toLocaleString('fa-IR') }}</strong>
+      </article>
+      <article>
+        <small>دسته اصلی</small>
+        <strong>{{ summary.categories.toLocaleString('fa-IR') }}</strong>
+      </article>
+      <article>
+        <small>زیردسته</small>
+        <strong>{{ summary.subcategories.toLocaleString('fa-IR') }}</strong>
+      </article>
+      <article>
+        <small>فعال در سایت</small>
+        <strong>{{ summary.active.toLocaleString('fa-IR') }}</strong>
+      </article>
+      <article>
+        <small>دارای تصویر</small>
+        <strong>{{ summary.withImage.toLocaleString('fa-IR') }}</strong>
+      </article>
+    </section>
+
     <ManagementSurfaceCard title="گروه‌ها و زیرگروه‌های منو" subtitle="برای ویرایش کامل، روی هر سطر یا کارت کلیک کنید.">
       <ManagementCollectionView v-model="viewMode" :modes="viewModes" class="groups-collection">
         <template #list>
@@ -37,6 +60,19 @@
             :row-clickable="true"
             @row-click="openEditPage"
           >
+            <template #cell-item_group_name="{ row }">
+              <div class="group-title-cell">
+                <span class="group-thumb" :class="{ empty: !row.image }">
+                  <img v-if="row.image" :src="row.image" :alt="row.item_group_name" loading="lazy" />
+                  <span v-else>{{ initials(row.item_group_name || row.name) }}</span>
+                </span>
+                <div>
+                  <strong>{{ row.item_group_name || row.name }}</strong>
+                  <small>{{ row.name }}</small>
+                </div>
+              </div>
+            </template>
+
             <template #cell-type="{ row }">
               <span :class="['pill', row.restaurant_is_subcategory ? 'sub' : 'cat']">
                 {{ row.restaurant_is_subcategory ? 'زیردسته' : 'دسته اصلی' }}
@@ -56,14 +92,12 @@
             </template>
 
             <template #cell-show_on_homepage="{ row }">
-              <label class="check-toggle">
-                <input
-                  type="checkbox"
-                  :checked="Number(row?.show_on_homepage || 1) === 1"
-                  @change="toggleHomepage(row)"
-                />
-                <span class="check-label">{{ Number(row?.show_on_homepage || 1) ? 'بله' : 'خیر' }}</span>
-              </label>
+              <ManagementToggleSwitch
+                compact
+                :model-value="Number(row?.show_on_homepage || 1) === 1"
+                label="نمایش صفحه اصلی"
+                @update:model-value="toggleHomepage(row)"
+              />
             </template>
 
             <template #cell-actions="{ row }">
@@ -83,6 +117,7 @@
             title-field="item_group_name"
             subtitle-field="parent_item_group"
             fallback-text="GRP"
+            image-field="image"
             :clickable="true"
             @click-item="openEditPage"
           >
@@ -183,6 +218,7 @@ import ManagementFilterControl from '@/components/management/ManagementFilterCon
 import ManagementGalleryView from '@/components/management/ManagementGalleryView.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
 import ManagementTreeView from '@/components/management/ManagementTreeView.vue'
 import {
   listManagementMenuGroups,
@@ -234,6 +270,17 @@ const sortRows = ref([])
 const topLevelSortRows = computed(() =>
   (sortRows.value || []).filter((row) => Number(row?.restaurant_is_subcategory || 0) !== 1),
 )
+
+const summary = computed(() => {
+  const list = rows.value || []
+  return {
+    total: list.length,
+    categories: list.filter((row) => Number(row?.restaurant_is_subcategory || 0) !== 1).length,
+    subcategories: list.filter((row) => Number(row?.restaurant_is_subcategory || 0) === 1).length,
+    active: list.filter((row) => Number(row?.restaurant_active || 0) === 1).length,
+    withImage: list.filter((row) => String(row?.image || '').trim()).length,
+  }
+})
 
 const visibleRows = computed(() => {
   let output = [...rows.value]
@@ -391,6 +438,18 @@ function canOpenGroupNode(node) {
   return Boolean(String(node?.name || '').trim())
 }
 
+function initials(value = '') {
+  return (
+    String(value || 'گروه')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('') || 'گ'
+  )
+}
+
 async function toggleActive(row) {
   error.value = ''
   const rowName = String(row?.name || '').trim()
@@ -485,6 +544,32 @@ loadGroups()
   gap: 0.6rem;
 }
 
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.summary-strip article {
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-card, #fff) 82%, var(--bg-soft, #f8fafc));
+  padding: 0.75rem 0.85rem;
+  display: grid;
+  gap: 0.18rem;
+  box-shadow: 0 10px 26px rgb(15 23 42 / 0.04);
+}
+
+.summary-strip small {
+  color: var(--text-muted, #64748b);
+  font-size: 0.72rem;
+}
+
+.summary-strip strong {
+  color: var(--text-primary, #0f172a);
+  font-size: 1.2rem;
+}
+
 .pill {
   border-radius: 999px;
   padding: 0.16rem 0.52rem;
@@ -525,23 +610,47 @@ loadGroups()
   color: var(--ink-800);
 }
 
-.check-toggle {
+.group-title-cell {
+  min-width: 220px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.group-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  background: linear-gradient(135deg, rgb(var(--palette-eggshell-rgb) / 0.92), rgb(var(--palette-june-bud-rgb) / 0.2));
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-  user-select: none;
-}
-.check-toggle input[type="checkbox"] {
-  width: 1.1rem;
-  height: 1.1rem;
-  accent-color: var(--palette-deep-sapphire, #6F4A31);
-  cursor: pointer;
-}
-.check-label {
-  font-size: 0.72rem;
-  font-weight: 600;
+  justify-content: center;
   color: var(--ink-700, #7a6a60);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.group-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-title-cell strong,
+.group-title-cell small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-title-cell small {
+  margin-top: 0.12rem;
+  color: var(--ink-500, #9a8a80);
+  font-size: 0.68rem;
 }
 
 .actions {
@@ -720,6 +829,16 @@ loadGroups()
 @media (max-width: 960px) {
   .toolbar .input {
     width: 100%;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .summary-strip {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

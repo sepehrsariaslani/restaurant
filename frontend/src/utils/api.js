@@ -17,6 +17,58 @@ function storeCsrfToken(token) {
 	window.frappe.csrf_token = t;
 }
 
+export async function uploadFileToFrappe(file, options = {}) {
+	if (!file) {
+		throw new Error("فایلی برای آپلود انتخاب نشده است.");
+	}
+
+	const buildFormData = () => {
+		const formData = new FormData();
+		formData.append("file", file);
+		formData.append("is_private", options.isPrivate ? "1" : "0");
+		if (options.doctype) formData.append("doctype", String(options.doctype));
+		if (options.docname) formData.append("docname", String(options.docname));
+		if (options.fieldname) formData.append("fieldname", String(options.fieldname));
+		if (options.folder) formData.append("folder", String(options.folder));
+		return formData;
+	};
+
+	const doFetch = (csrfToken) =>
+		fetch("/api/method/upload_file", {
+			method: "POST",
+			headers: {
+				"X-Frappe-CSRF-Token": csrfToken,
+			},
+			credentials: "include",
+			body: buildFormData(),
+		});
+
+	let response = await doFetch(getCSRFToken());
+	if (response.status === 400 || response.status === 403) {
+		const freshToken = await refreshCsrfToken();
+		if (freshToken) {
+			response = await doFetch(freshToken);
+		}
+	}
+
+	const payload = await response.json().catch(() => ({}));
+	if (!response.ok || payload.exc || payload.exception) {
+		const serverMessage = unpackServerMessages(payload);
+		throw new Error(
+			serverMessage ||
+				payload._error_message ||
+				payload.message ||
+				"آپلود تصویر ناموفق بود. لطفاً دوباره تلاش کنید.",
+		);
+	}
+
+	const message = payload.message || {};
+	return {
+		...message,
+		file_url: String(message.file_url || "").trim(),
+	};
+}
+
 async function refreshCsrfToken() {
 	try {
 		const res = await fetch("/api/method/frappe.utils.get_csrf_token", {
@@ -195,6 +247,7 @@ const STATIC_DOCTYPE_COLUMNS = {
 		"restaurant_slug",
 		"restaurant_sort_order",
 		"restaurant_description",
+		"show_on_homepage",
 		"image",
 	]),
 };
@@ -1431,6 +1484,19 @@ export async function createManagementProduct(payload = {}) {
 	return callMethodByPath("frappe.client.insert", { doc });
 }
 
+export async function listRestaurantItemTags({ limit = 500 } = {}) {
+	const rows = await safeGetList({
+		doctype: "Restaurant Item Tag",
+		fields: ["name", "title"],
+		order_by: "title asc, modified desc",
+		limit_page_length: Math.max(1, Math.min(Number(limit || 500), 1000)),
+	});
+	return rows.map((row) => ({
+		value: row.name,
+		label: row.title || row.name,
+	}));
+}
+
 export async function uploadManagementItemImage({
 	item_name = "",
 	file = null,
@@ -1505,59 +1571,13 @@ export async function deleteManagementItemImageByUrl({ item_name = "", file_url 
 }
 
 export async function getManagementBomContext() {
-	let defaultCompany = "";
-	try {
-		defaultCompany = String(
-			(await callMethodByPath("frappe.client.get_single_value", {
-				doctype: "Global Defaults",
-				field: "default_company",
-			})) || "",
-		).trim();
-	} catch (error) {
-		defaultCompany = "";
-	}
-
-	const companies = await safeGetList({
-		doctype: "Company",
-		fields: ["name", "default_currency", "abbr"],
-		filters: [["disabled", "=", 0]],
-		order_by: "name asc",
-		limit_page_length: 200,
-	});
-
-	const defaultRow =
-		(companies || []).find((row) => String(row?.name || "").trim() === defaultCompany) ||
-		(companies || [])[0] ||
-		null;
-
-	return {
-		companies: Array.isArray(companies) ? companies : [],
-		default_company: defaultRow?.name || defaultCompany || "",
-		default_currency: defaultRow?.default_currency || "",
-	};
+	const payload = await callRestaurantAPI("get_management_bom_context", {});
+	return payload || { companies: [], default_company: "", default_currency: "" };
 }
 
 export async function listManagementBomItems({ search = "", limit = 200 } = {}) {
-	const query = String(search || "").trim();
-	const args = {
-		doctype: "Item",
-		fields: ["name", "item_code", "item_name", "stock_uom"],
-		filters: [["disabled", "=", 0]],
-		order_by: "modified desc",
-		limit_page_length: Math.max(1, Math.min(Number(limit || 200), 500)),
-	};
-
-	if (query) {
-		const like = `%${query}%`;
-		args.or_filters = [
-			["item_code", "like", like],
-			["item_name", "like", like],
-			["name", "like", like],
-		];
-	}
-
-	const rows = await safeGetList(args);
-	return rows;
+	const rows = await callRestaurantAPI("list_management_bom_items", { search, limit });
+	return Array.isArray(rows) ? rows : [];
 }
 
 export async function listManagementModifierGroups({ search = "", limit = 300 } = {}) {
@@ -1603,43 +1623,8 @@ export async function getManagementModifierGroupDoc(group_name = "") {
 }
 
 export async function listManagementBoms({ item_code = "", search = "", limit = 50 } = {}) {
-	const query = String(search || "").trim();
-	const itemCode = String(item_code || "").trim();
-	const filters = [["docstatus", "in", [0, 1]]];
-
-	if (itemCode) {
-		filters.push(["item", "=", itemCode]);
-	}
-
-	const args = {
-		doctype: "BOM",
-		// Keep only essential fields to avoid get_list validation errors on restricted fields.
-		fields: [
-			"name",
-			"item",
-			"item_name",
-			"quantity",
-			"is_active",
-			"is_default",
-			"docstatus",
-			"modified",
-		],
-		filters,
-		order_by: "modified desc",
-		limit_page_length: Math.max(1, Math.min(Number(limit || 50), 300)),
-	};
-
-	if (query) {
-		const like = `%${query}%`;
-		args.or_filters = [
-			["name", "like", like],
-			["item", "like", like],
-			["item_name", "like", like],
-		];
-	}
-
-	const rows = await safeGetList(args);
-	return rows;
+	const rows = await callRestaurantAPI("list_management_boms", { item_code, search, limit });
+	return Array.isArray(rows) ? rows : [];
 }
 
 export async function getManagementBomDoc(bom_name = "") {
@@ -1647,10 +1632,7 @@ export async function getManagementBomDoc(bom_name = "") {
 	if (!bomName) {
 		throw new Error("شناسه BOM معتبر نیست.");
 	}
-	return callMethodByPath("frappe.client.get", {
-		doctype: "BOM",
-		name: bomName,
-	});
+	return callRestaurantAPI("get_management_bom_doc", { bom_name: bomName });
 }
 
 function normalizeBomItems(items = []) {
@@ -1749,6 +1731,7 @@ export async function createManagementBom(payload = {}) {
 			String(payload?.rm_cost_as_per || "Valuation Rate").trim() || "Valuation Rate",
 		is_active: payload?.is_active === false ? 0 : 1,
 		is_default: payload?.is_default ? 1 : 0,
+		restaurant_recipe_instruction: String(payload?.restaurant_recipe_instruction || "").trim(),
 		restaurant_nutrition_kcal: Number(payload?.restaurant_nutrition_kcal || 0),
 		restaurant_nutrition_protein_g: Number(payload?.restaurant_nutrition_protein_g || 0),
 		restaurant_nutrition_carb_g: Number(payload?.restaurant_nutrition_carb_g || 0),
@@ -1799,6 +1782,11 @@ export async function updateManagementBom(payload = {}) {
 			currency: String(payload?.currency || current?.currency || "").trim(),
 			is_active: payload?.is_active === false ? 0 : 1,
 			is_default: payload?.is_default ? 1 : 0,
+			restaurant_recipe_instruction: String(
+				payload?.restaurant_recipe_instruction ||
+					current?.restaurant_recipe_instruction ||
+					"",
+			).trim(),
 			restaurant_nutrition_kcal: Number(
 				payload?.restaurant_nutrition_kcal || current?.restaurant_nutrition_kcal || 0,
 			),
@@ -2087,6 +2075,14 @@ function normalizeManagementMenuGroupPayload(payload = {}, currentDoc = null) {
 		restaurant_description: String(
 			source?.restaurant_description ?? fromDoc?.restaurant_description ?? "",
 		).trim(),
+		show_on_homepage:
+			source?.show_on_homepage !== undefined
+				? Number(source.show_on_homepage) === 1
+					? 1
+					: 0
+				: Number(fromDoc?.show_on_homepage ?? 1)
+					? 1
+					: 0,
 		image: String(source?.image ?? fromDoc?.image ?? "").trim(),
 	};
 
@@ -2108,6 +2104,7 @@ export async function listManagementMenuGroups({ search = "" } = {}) {
 			"restaurant_slug",
 			"restaurant_sort_order",
 			"restaurant_description",
+			"show_on_homepage",
 			"image",
 			"modified",
 		],
@@ -2136,6 +2133,7 @@ export async function listManagementMenuGroups({ search = "" } = {}) {
 		restaurant_slug: String(row?.restaurant_slug || "").trim(),
 		restaurant_sort_order: Number(row?.restaurant_sort_order || 0) || 0,
 		restaurant_description: String(row?.restaurant_description || "").trim(),
+		show_on_homepage: Number(row?.show_on_homepage ?? 1) ? 1 : 0,
 		image: String(row?.image || "").trim(),
 		modified: String(row?.modified || "").trim(),
 	}));
@@ -2224,6 +2222,7 @@ export async function createManagementMenuGroup(payload = {}) {
 		restaurant_slug: normalized.restaurant_slug,
 		restaurant_sort_order: normalized.restaurant_sort_order,
 		restaurant_description: normalized.restaurant_description,
+		show_on_homepage: normalized.show_on_homepage,
 		image: normalized.image,
 	};
 	return callMethodByPath("frappe.client.insert", { doc });
@@ -2247,6 +2246,7 @@ export async function updateManagementMenuGroup(payload = {}) {
 	current.restaurant_slug = normalized.restaurant_slug;
 	current.restaurant_sort_order = normalized.restaurant_sort_order;
 	current.restaurant_description = normalized.restaurant_description;
+	current.show_on_homepage = normalized.show_on_homepage;
 	current.image = normalized.image;
 	return callMethodByPath("frappe.client.save", { doc: current });
 }
@@ -2387,7 +2387,7 @@ export async function getManagementSiteSettings() {
 }
 
 export async function setManagementSiteSettings(payload = {}) {
-	const result = await callRestaurantAPI("set_management_site_settings", payload);
+	const result = await callRestaurantAPI("set_management_site_settings", { payload });
 	try {
 		localStorage.setItem(SITE_SETTINGS_STORAGE_KEY, JSON.stringify(result));
 	} catch (_) {}

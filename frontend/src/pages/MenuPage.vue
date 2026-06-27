@@ -53,6 +53,7 @@
 
     <LiquidGlassBackdrop>
     <section class="page-shell menu-shell">
+      <OrderContextStrip :currency="currency" />
 
       <section class="item-section-list" v-if="highlightedItems.length">
         <article class="subcategory-block">
@@ -234,6 +235,20 @@
         @confirm="confirmQuickAdd"
       />
 
+      <Teleport to="body">
+        <ProductBuilderWizard
+          v-if="builderOpen && builderTemplate && builderItem"
+          :product="builderProductPayload"
+          :template="builderTemplate"
+          :base-price="Number(builderItem.base_price || 0)"
+          :currency="currency"
+          :loading-price="builderPriceLoading"
+          @close="closeBuilderWizard"
+          @selection-change="handleBuilderSelectionChange"
+          @add-to-cart="handleBuilderAddToCart"
+        />
+      </Teleport>
+
       <section class="print-catalog">
         <section class="print-grid" v-if="printCards.length">
           <article class="print-card" v-for="item in printCards" :key="`print-item-${item.slug || item.name || item.title}`">
@@ -261,18 +276,18 @@
     <!-- BOM Preview Modal -->
     <BomPreviewModal
       :open="bomModalOpen"
-      :item-slug="bomModalItem?.slug || ''"
-      :item-title="bomModalItem?.title || ''"
-      :item-image="bomModalItem?.image || ''"
-      :item-code="bomModalItem?.item_code || ''"
+      :item="bomModalItem"
+      :currency="currency"
+      :branch="activeBranch"
       :is-staff-only="bomModalItem?.is_staff_only || false"
       @close="closeBomModal"
+      @confirm="confirmQuickAdd"
     />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, Teleport } from 'vue'
 import { ChevronDown, ShoppingCart, Utensils } from 'lucide-vue-next'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
@@ -280,7 +295,9 @@ import CategoryImageRail from '@/components/CategoryImageRail.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import BomPreviewModal from '@/components/BomPreviewModal.vue'
-import { getMenuItems, getManagementSessionProfile } from '@/utils/api'
+import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
+import OrderContextStrip from '@/components/OrderContextStrip.vue'
+import { getMenuItems, getManagementSessionProfile, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { cartState, cartSubtotal, upsertLine, removeLine } from '@/stores/cartStore'
 
@@ -308,7 +325,7 @@ function resolveBranchFromBoot() {
 
 // ─── state ─────────────────────────────────────────────────────────
 const categories = ref((props.boot.categories || []).filter((row) => (row.item_count || 0) > 0))
-const currency = ref('TOMAN')
+const currency = ref(props.boot.currency || 'IRR')
 const activeBranch = ref(resolveBranchFromBoot())
 const menuHighlight = ref(
   props.boot.menu_highlight || {
@@ -338,6 +355,11 @@ const subcategorySectionRefs = ref({})
 let intersectionObserver = null
 const quickSheetOpen = ref(false)
 const quickSheetItem = ref(null)
+const builderOpen = ref(false)
+const builderItem = ref(null)
+const builderTemplate = ref(null)
+const builderPriceLoading = ref(false)
+const builderPriceData = ref(null)
 const bomModalOpen = ref(false)
 const bomModalItem = ref(null)
 const canViewBom = ref(false)
@@ -414,6 +436,16 @@ const availableTags = computed(() => {
   }
   return Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'fa'))
 })
+const builderProductPayload = computed(() => {
+  const target = builderItem.value || {}
+  return {
+    ...target,
+    item_name: target.title || target.item_name || '',
+    item_code: target.name || target.item_code || '',
+    image: target.image || '',
+  }
+})
+
 const sortOptions = [
   { value: 'default', label: 'مرتب‌سازی' },
   { value: 'price_asc', label: 'ارزان‌ترین' },
@@ -906,6 +938,17 @@ function itemHasCustomization(item = {}) {
   return Number(target?.has_customization || 0) === 1
 }
 
+function itemHasBuilder(item = {}) {
+  const slug = String(item?.slug || '').trim()
+  const itemFromList = slug ? itemsBySlug.value.get(slug) : null
+  const target = itemFromList || item
+  return Boolean(
+    target &&
+      Number(target.restaurant_is_customizable || 0) === 1 &&
+      Number(target.restaurant_builder_active || 0) === 1,
+  )
+}
+
 function getItemCartQty(item = {}) {
   const slug = String(item?.slug || '').trim()
   if (!slug) {
@@ -1011,6 +1054,10 @@ function quickAdd(item) {
   if (isComingSoonItem(item)) {
     return
   }
+  if (itemHasBuilder(item)) {
+    openBuilderWizard(item)
+    return
+  }
   if (!itemHasCustomization(item)) {
     addSimpleLine(item, 1)
     return
@@ -1023,7 +1070,7 @@ function quickIncrease(item) {
   if (isComingSoonItem(item)) {
     return
   }
-  if (itemHasCustomization(item)) {
+  if (itemHasBuilder(item) || itemHasCustomization(item)) {
     quickAdd(item)
     return
   }
@@ -1031,10 +1078,84 @@ function quickIncrease(item) {
 }
 
 function quickDecrease(item) {
-  if (itemHasCustomization(item)) {
+  if (itemHasBuilder(item) || itemHasCustomization(item)) {
     return
   }
   removeSimpleLineQty(item, 1)
+}
+
+async function openBuilderWizard(item) {
+  const slug = String(item?.slug || '').trim()
+  const target = slug ? (itemsBySlug.value.get(slug) || item) : item
+  if (!target) return
+  closeQuickSheet()
+  builderItem.value = target
+  builderTemplate.value = null
+  builderPriceData.value = null
+  builderPriceLoading.value = false
+  builderOpen.value = true
+  try {
+    const itemCode = target.name || target.item_code || target.title || target.slug
+    const data = await getBuilderTemplate(itemCode)
+    builderTemplate.value = data?.data?.template || data?.template || data || null
+  } catch (err) {
+    builderOpen.value = false
+    builderItem.value = null
+    window.location.href = `/item/${target.slug}`
+  }
+}
+
+function closeBuilderWizard() {
+  builderOpen.value = false
+  builderItem.value = null
+  builderTemplate.value = null
+  builderPriceData.value = null
+  builderPriceLoading.value = false
+}
+
+async function handleBuilderSelectionChange(selections) {
+  if (!builderItem.value) return
+  builderPriceLoading.value = true
+  try {
+    const itemCode = builderItem.value.name || builderItem.value.item_code || builderItem.value.title || builderItem.value.slug
+    const response = await computeBuilderPrice(itemCode, selections || [])
+    builderPriceData.value = response?.data || response || null
+  } catch (_) {
+    builderPriceData.value = null
+  } finally {
+    builderPriceLoading.value = false
+  }
+}
+
+function handleBuilderAddToCart(payload) {
+  if (!builderItem.value) return
+  const finalPrice = Number(builderPriceData.value?.final_price ?? payload?.final_price ?? builderItem.value.base_price ?? 0)
+  upsertLine({
+    item_slug: builderItem.value.slug,
+    item_title: builderItem.value.title || builderItem.value.item_name,
+    item_image: builderItem.value.image,
+    base_price: Number(builderItem.value.base_price || 0),
+    qty: 1,
+    unit_price_preview: finalPrice,
+    line_total_preview: finalPrice,
+    customization: {
+      ingredient_adjustments: [],
+      selected_modifiers: [],
+      builder_selection: {
+        template: payload?.template || builderTemplate.value?.name || '',
+        selections: Array.isArray(payload?.selections) ? payload.selections : [],
+        options_total: Number(payload?.options_total || 0),
+        final_price: finalPrice,
+        summary: (Array.isArray(payload?.selections) ? payload.selections : [])
+          .map((row) => `${row.option_label}${row.qty > 1 ? ` × ${row.qty}` : ''}`)
+          .join('، '),
+      },
+      builder_template: builderTemplate.value?.name || payload?.template || '',
+    },
+  })
+  setTimeout(() => {
+    closeBuilderWizard()
+  }, 650)
 }
 
 function closeQuickSheet() {
