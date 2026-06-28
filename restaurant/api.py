@@ -2596,6 +2596,36 @@ def _ensure_item_group_homepage_field():
 		pass
 
 
+def _ensure_item_group_menu_icon_field():
+	"""Ensure restaurant_menu_icon custom field exists on Item Group."""
+	fieldname = "restaurant_menu_icon"
+	if _has_column("Item Group", fieldname):
+		return True
+	try:
+		existing_name = frappe.db.get_value(
+			"Custom Field",
+			{"dt": "Item Group", "fieldname": fieldname},
+			"name",
+		)
+		if not existing_name:
+			frappe.get_doc(
+				{
+					"doctype": "Custom Field",
+					"dt": "Item Group",
+					"module": "Restaurant",
+					"fieldname": fieldname,
+					"label": "آیکون منو",
+					"fieldtype": "Data",
+					"description": "نام آیکون Lucide برای نمایش گروه در صفحه منو",
+					"insert_after": "image",
+				}
+			).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype="Item Group")
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "restaurant.api.ensure_item_group_menu_icon_field")
+	return _has_column("Item Group", fieldname)
+
+
 def _ensure_item_tags_field():
 	"""Ensure restaurant_item_tags custom field exists on Item"""
 	fieldname = "restaurant_item_tags"

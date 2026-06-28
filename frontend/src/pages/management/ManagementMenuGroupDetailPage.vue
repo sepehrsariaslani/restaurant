@@ -80,7 +80,12 @@
             fieldname="image"
             @error="showUploadError"
           />
-          <p class="hint image-hint">بعد از ذخیره، تصویر در لیست گروه‌ها و کارت‌های منو نمایش داده می‌شود.</p>
+          <p class="hint image-hint">بعد از ذخیره، تصویر برای صفحه اصلی و نمایش‌های تصویری استفاده می‌شود.</p>
+        </ManagementSurfaceCard>
+
+        <ManagementSurfaceCard title="آیکون منو" subtitle="انتخاب آیکون دسته در صفحه منوی مشتری">
+          <ManagementMenuIconSelector v-model="form.restaurant_menu_icon" />
+          <p class="hint image-hint">این آیکون فقط برای دسته‌بندی‌های بالای صفحه /menu استفاده می‌شود.</p>
         </ManagementSurfaceCard>
 
         <ManagementSurfaceCard title="ساختار و وضعیت" subtitle="کنترل نوع دسته و حالت فعال بودن">
@@ -135,6 +140,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementImageDropzone from '@/components/management/ManagementImageDropzone.vue'
+import ManagementMenuIconSelector from '@/components/management/ManagementMenuIconSelector.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
@@ -205,6 +211,7 @@ function createEmptyForm() {
     restaurant_sort_order: 0,
     restaurant_description: '',
     show_on_homepage: 1,
+    restaurant_menu_icon: '',
     image: '',
   }
 }
@@ -241,6 +248,7 @@ function writeForm(payload = {}) {
   form.restaurant_sort_order = Number(next.restaurant_sort_order || 0) || 0
   form.restaurant_description = String(next.restaurant_description || '').trim()
   form.show_on_homepage = Number(next.show_on_homepage ?? 1) ? 1 : 0
+  form.restaurant_menu_icon = String(next.restaurant_menu_icon || '').trim()
   form.image = String(next.image || '').trim()
 }
 
@@ -326,6 +334,7 @@ function normalizePayload() {
     restaurant_sort_order: Number(form.restaurant_sort_order || 0) || 0,
     restaurant_description: form.restaurant_description,
     show_on_homepage: Number(form.show_on_homepage || 0) ? 1 : 0,
+    restaurant_menu_icon: form.restaurant_menu_icon,
     image: form.image,
   }
 }

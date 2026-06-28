@@ -247,7 +247,8 @@ const STATIC_DOCTYPE_COLUMNS = {
 		"restaurant_slug",
 		"restaurant_sort_order",
 		"restaurant_description",
-		"show_on_homepage",
+			"restaurant_menu_icon",
+			"show_on_homepage",
 		"image",
 	]),
 };
@@ -2075,6 +2076,9 @@ function normalizeManagementMenuGroupPayload(payload = {}, currentDoc = null) {
 		restaurant_description: String(
 			source?.restaurant_description ?? fromDoc?.restaurant_description ?? "",
 		).trim(),
+		restaurant_menu_icon: String(
+			source?.restaurant_menu_icon ?? fromDoc?.restaurant_menu_icon ?? "",
+		).trim(),
 		show_on_homepage:
 			source?.show_on_homepage !== undefined
 				? Number(source.show_on_homepage) === 1
@@ -2089,7 +2093,17 @@ function normalizeManagementMenuGroupPayload(payload = {}, currentDoc = null) {
 	return normalized;
 }
 
+let managementMenuGroupIconFieldReady = null;
+
+function ensureManagementMenuGroupIconField() {
+	if (!managementMenuGroupIconFieldReady) {
+		managementMenuGroupIconFieldReady = callRestaurantAPI("setup_menu_group_icon_field").catch(() => null);
+	}
+	return managementMenuGroupIconFieldReady;
+}
+
 export async function listManagementMenuGroups({ search = "" } = {}) {
+	await ensureManagementMenuGroupIconField();
 	const query = String(search || "").trim();
 	const args = {
 		doctype: "Item Group",
@@ -2104,6 +2118,7 @@ export async function listManagementMenuGroups({ search = "" } = {}) {
 			"restaurant_slug",
 			"restaurant_sort_order",
 			"restaurant_description",
+			"restaurant_menu_icon",
 			"show_on_homepage",
 			"image",
 			"modified",
@@ -2133,6 +2148,7 @@ export async function listManagementMenuGroups({ search = "" } = {}) {
 		restaurant_slug: String(row?.restaurant_slug || "").trim(),
 		restaurant_sort_order: Number(row?.restaurant_sort_order || 0) || 0,
 		restaurant_description: String(row?.restaurant_description || "").trim(),
+		restaurant_menu_icon: String(row?.restaurant_menu_icon || "").trim(),
 		show_on_homepage: Number(row?.show_on_homepage ?? 1) ? 1 : 0,
 		image: String(row?.image || "").trim(),
 		modified: String(row?.modified || "").trim(),
@@ -2196,6 +2212,7 @@ export async function getManagementMenuGroup(name = "") {
 		throw new Error("شناسه گروه معتبر نیست.");
 	}
 
+	await ensureManagementMenuGroupIconField();
 	return callMethodByPath("frappe.client.get", {
 		doctype: "Item Group",
 		name: normalizedName,
@@ -2203,6 +2220,7 @@ export async function getManagementMenuGroup(name = "") {
 }
 
 export async function createManagementMenuGroup(payload = {}) {
+	await ensureManagementMenuGroupIconField();
 	const normalized = normalizeManagementMenuGroupPayload(payload);
 	if (!normalized.item_group_name) {
 		throw new Error("عنوان گروه الزامی است.");
@@ -2222,6 +2240,7 @@ export async function createManagementMenuGroup(payload = {}) {
 		restaurant_slug: normalized.restaurant_slug,
 		restaurant_sort_order: normalized.restaurant_sort_order,
 		restaurant_description: normalized.restaurant_description,
+		restaurant_menu_icon: normalized.restaurant_menu_icon,
 		show_on_homepage: normalized.show_on_homepage,
 		image: normalized.image,
 	};
@@ -2229,6 +2248,7 @@ export async function createManagementMenuGroup(payload = {}) {
 }
 
 export async function updateManagementMenuGroup(payload = {}) {
+	await ensureManagementMenuGroupIconField();
 	const name = String(payload?.name || "").trim();
 	if (!name) {
 		throw new Error("شناسه گروه معتبر نیست.");
@@ -2246,6 +2266,7 @@ export async function updateManagementMenuGroup(payload = {}) {
 	current.restaurant_slug = normalized.restaurant_slug;
 	current.restaurant_sort_order = normalized.restaurant_sort_order;
 	current.restaurant_description = normalized.restaurant_description;
+	current.restaurant_menu_icon = normalized.restaurant_menu_icon;
 	current.show_on_homepage = normalized.show_on_homepage;
 	current.image = normalized.image;
 	return callMethodByPath("frappe.client.save", { doc: current });
