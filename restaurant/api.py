@@ -2626,6 +2626,14 @@ def _ensure_item_group_menu_icon_field():
 	return _has_column("Item Group", fieldname)
 
 
+@frappe.whitelist()
+def setup_menu_group_icon_field():
+	_ensure_management_access()
+	created = _ensure_item_group_menu_icon_field()
+	frappe.db.commit()
+	return {"ok": True, "ready": bool(created)}
+
+
 def _ensure_item_tags_field():
 	"""Ensure restaurant_item_tags custom field exists on Item"""
 	fieldname = "restaurant_item_tags"
@@ -3212,20 +3220,25 @@ def _get_core_menu_boot(branch=None):
 	nutrition_fields = _available_item_nutrition_fields()
 
 	_ensure_item_group_homepage_field()
+	_ensure_item_group_menu_icon_field()
 	_ensure_item_tags_field()
+
+	category_fields = [
+		"name",
+		"item_group_name as title",
+		"restaurant_slug as slug",
+		"restaurant_description as description",
+		"image",
+		"restaurant_sort_order as sort_order",
+		"show_on_homepage",
+	]
+	if _has_column("Item Group", "restaurant_menu_icon"):
+		category_fields.append("restaurant_menu_icon as menu_icon")
 
 	categories = frappe.get_all(
 		"Item Group",
 		filters=_core_category_filters(is_subcategory=0),
-		fields=[
-			"name",
-			"item_group_name as title",
-			"restaurant_slug as slug",
-			"restaurant_description as description",
-			"image",
-			"restaurant_sort_order as sort_order",
-			"show_on_homepage",
-		],
+		fields=category_fields,
 		ignore_permissions=True,
 		order_by="restaurant_sort_order asc, item_group_name asc",
 	)
@@ -8895,6 +8908,234 @@ def create_table_reservation(payload=None, **kwargs):
 			"guest_count": cint(doc.guest_count),
 			"status": doc.status,
 			"note": doc.note,
+		},
+	}
+
+
+@frappe.whitelist()
+def get_management_tables():
+	_ensure_management_site_settings_access()
+
+	tables = []
+	if _restaurant_doctype_exists("Restaurant Table"):
+		table_fields = ["name", "table_number", "status", "is_active", "location", "active_session", "notes"]
+		table_rows = frappe.get_all(
+			"Restaurant Table",
+			fields=table_fields,
+			order_by="table_number asc, modified desc",
+			ignore_permissions=True,
+			limit_page_length=500,
+		)
+		for row in table_rows:
+			tables.append(
+				{
+					"name": row.get("name"),
+					"table_number": row.get("table_number") or row.get("name"),
+					"status": (row.get("status") or "empty").strip().lower() or "empty",
+					"is_active": cint(row.get("is_active") or 0),
+					"location": row.get("location") or "",
+					"active_session": row.get("active_session") or "",
+					"notes": row.get("notes") or "",
+				}
+			)
+
+	reservations = []
+	if _restaurant_doctype_exists("Restaurant Table Reservation"):
+		reservation_rows = frappe.get_all(
+			"Restaurant Table Reservation",
+			fields=[
+				"name",
+				"customer_name",
+				"mobile",
+				"branch",
+				"table",
+				"reservation_date",
+				"reservation_time",
+				"guest_count",
+				"status",
+				"note",
+			],
+			order_by="reservation_date desc, reservation_time desc, modified desc",
+			ignore_permissions=True,
+			limit_page_length=500,
+		)
+		for row in reservation_rows:
+			reservations.append(
+				{
+					"name": row.get("name"),
+					"customer_name": row.get("customer_name") or "",
+					"mobile": row.get("mobile") or "",
+					"branch": row.get("branch") or "",
+					"table": row.get("table") or "",
+					"reservation_date": str(row.get("reservation_date") or ""),
+					"reservation_time": str(row.get("reservation_time") or ""),
+					"guest_count": cint(row.get("guest_count") or 0),
+					"status": (row.get("status") or "pending").strip().lower() or "pending",
+					"note": row.get("note") or "",
+				}
+			)
+
+	sessions = []
+	if _restaurant_doctype_exists("Restaurant Table Session"):
+		session_rows = frappe.get_all(
+			"Restaurant Table Session",
+			fields=["name", "table", "status", "opened_at", "closed_at", "total_confirmed_amount", "note"],
+			order_by="opened_at desc, modified desc",
+			ignore_permissions=True,
+			limit_page_length=500,
+		)
+		for row in session_rows:
+			sessions.append(
+				{
+					"name": row.get("name"),
+					"table": row.get("table") or "",
+					"status": (row.get("status") or "active").strip().lower() or "active",
+					"opened_at": str(row.get("opened_at") or ""),
+					"closed_at": str(row.get("closed_at") or ""),
+					"total_confirmed_amount": flt(row.get("total_confirmed_amount") or 0),
+					"note": row.get("note") or "",
+				}
+			)
+
+	return {"tables": tables, "reservations": reservations, "sessions": sessions}
+
+
+@frappe.whitelist()
+def update_management_table(payload=None, **kwargs):
+	_ensure_management_site_settings_access()
+	data = _parse_json(payload, {}) if payload is not None else {}
+	if not isinstance(data, dict):
+		data = {}
+	data.update({k: v for k, v in kwargs.items() if v is not None})
+
+	table_name = (data.get("name") or data.get("table") or "").strip()
+	if not table_name or not frappe.db.exists("Restaurant Table", table_name):
+		frappe.throw(_("Table not found."))
+
+	doc = frappe.get_doc("Restaurant Table", table_name)
+	if "table_number" in data:
+		doc.table_number = (data.get("table_number") or "").strip() or doc.table_number
+	if "status" in data:
+		status = (data.get("status") or "").strip().lower() or "empty"
+		if status not in {"empty", "occupied", "waiting"}:
+			status = "empty"
+		doc.status = status
+	if "is_active" in data:
+		doc.is_active = cint(data.get("is_active") or 0)
+	if "location" in data:
+		doc.location = (data.get("location") or "").strip()
+	if "notes" in data:
+		doc.notes = data.get("notes") or ""
+	if "active_session" in data and _has_column("Restaurant Table", "active_session"):
+		doc.active_session = (data.get("active_session") or "").strip()
+
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"success": True,
+		"table": {
+			"name": doc.name,
+			"table_number": doc.table_number,
+			"status": doc.status,
+			"is_active": cint(doc.is_active),
+			"location": doc.location or "",
+			"active_session": doc.active_session or "",
+			"notes": doc.notes or "",
+		},
+	}
+
+
+@frappe.whitelist()
+def update_management_table_reservation(payload=None, **kwargs):
+	_ensure_management_site_settings_access()
+	data = _parse_json(payload, {}) if payload is not None else {}
+	if not isinstance(data, dict):
+		data = {}
+	data.update({k: v for k, v in kwargs.items() if v is not None})
+
+	reservation_name = (data.get("name") or "").strip()
+	if not reservation_name or not frappe.db.exists("Restaurant Table Reservation", reservation_name):
+		frappe.throw(_("Reservation not found."))
+
+	doc = frappe.get_doc("Restaurant Table Reservation", reservation_name)
+	if "customer_name" in data:
+		doc.customer_name = (data.get("customer_name") or "").strip()
+	if "mobile" in data:
+		doc.mobile = _ensure_mobile(data.get("mobile") or doc.mobile)
+	if "branch" in data:
+		doc.branch = (data.get("branch") or "").strip()
+	if "table" in data:
+		doc.table = (data.get("table") or "").strip()
+	if "reservation_date" in data and data.get("reservation_date"):
+		doc.reservation_date = getdate(data.get("reservation_date"))
+	if "reservation_time" in data and data.get("reservation_time"):
+		doc.reservation_time = data.get("reservation_time")
+	if "guest_count" in data:
+		doc.guest_count = max(cint(data.get("guest_count") or 1), 1)
+	if "status" in data:
+		status = (data.get("status") or "").strip().lower() or "pending"
+		if status not in {"pending", "confirmed", "cancelled", "completed"}:
+			status = "pending"
+		doc.status = status
+	if "note" in data:
+		doc.note = data.get("note") or ""
+
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"success": True,
+		"reservation": {
+			"name": doc.name,
+			"customer_name": doc.customer_name,
+			"mobile": doc.mobile,
+			"branch": doc.branch or "",
+			"table": doc.table or "",
+			"reservation_date": str(doc.reservation_date or ""),
+			"reservation_time": str(doc.reservation_time or ""),
+			"guest_count": cint(doc.guest_count or 0),
+			"status": doc.status or "pending",
+			"note": doc.note or "",
+		},
+	}
+
+
+@frappe.whitelist()
+def update_management_table_session(payload=None, **kwargs):
+	_ensure_management_site_settings_access()
+	data = _parse_json(payload, {}) if payload is not None else {}
+	if not isinstance(data, dict):
+		data = {}
+	data.update({k: v for k, v in kwargs.items() if v is not None})
+
+	session_name = (data.get("name") or "").strip()
+	if not session_name or not frappe.db.exists("Restaurant Table Session", session_name):
+		frappe.throw(_("Session not found."))
+
+	doc = frappe.get_doc("Restaurant Table Session", session_name)
+	if "status" in data:
+		status = (data.get("status") or "").strip().lower() or "active"
+		if status not in {"active", "closed"}:
+			status = "active"
+		doc.status = status
+	if "note" in data:
+		doc.note = data.get("note") or ""
+	if "closed_at" in data and data.get("closed_at"):
+		doc.closed_at = data.get("closed_at")
+	if "opened_at" in data and data.get("opened_at"):
+		doc.opened_at = data.get("opened_at")
+
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"success": True,
+		"session": {
+			"name": doc.name,
+			"table": doc.table or "",
+			"status": doc.status or "active",
+			"opened_at": str(doc.opened_at or ""),
+			"closed_at": str(doc.closed_at or ""),
+			"total_confirmed_amount": flt(doc.total_confirmed_amount or 0),
+			"note": doc.note or "",
 		},
 	}
 
@@ -17964,6 +18205,66 @@ def reorder_management_menu_groups(items=None):
 	except Exception:
 		pass
 	return {"ok": True, "count": len(items)}
+
+
+@frappe.whitelist()
+def list_management_menu_groups(search=None):
+	_ensure_management_access()
+	_ensure_item_group_homepage_field()
+	_ensure_item_group_menu_icon_field()
+	query = (search or "").strip()
+	filters = None
+	or_filters = None
+	if query:
+		like = f"%{query}%"
+		or_filters = [["name", "like", like], ["item_group_name", "like", like]]
+	fields = [
+		"name",
+		"item_group_name",
+		"parent_item_group",
+		"is_group",
+		"restaurant_is_menu_category",
+		"restaurant_is_subcategory",
+		"restaurant_active",
+		"restaurant_slug",
+		"restaurant_sort_order",
+		"restaurant_description",
+		"show_on_homepage",
+		"image",
+		"modified",
+	]
+	if _has_column("Item Group", "restaurant_menu_icon"):
+		fields.append("restaurant_menu_icon")
+	rows = frappe.get_all(
+		"Item Group",
+		fields=fields,
+		filters=filters,
+		or_filters=or_filters,
+		order_by="restaurant_sort_order asc, item_group_name asc",
+		limit_page_length=2000,
+		ignore_permissions=True,
+	)
+	return rows
+
+
+@frappe.whitelist()
+def list_management_item_group_parents(search=None):
+	_ensure_management_access()
+	query = (search or "").strip()
+	filters = {"is_group": 1}
+	or_filters = None
+	if query:
+		like = f"%{query}%"
+		or_filters = [["name", "like", like], ["item_group_name", "like", like]]
+	return frappe.get_all(
+		"Item Group",
+		fields=["name", "item_group_name", "parent_item_group", "is_group"],
+		filters=filters,
+		or_filters=or_filters,
+		order_by="item_group_name asc",
+		limit_page_length=2000,
+		ignore_permissions=True,
+	)
 
 
 @frappe.whitelist()

@@ -47,6 +47,7 @@
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
       <MenuPage v-else-if="page === 'menu'" :boot="boot" />
+      <ProductGroupsPage v-else-if="page === 'product-groups'" :boot="boot" />
       <CustomerSearchPage v-else-if="page === 'search'" />
       <ItemDetailPage v-else-if="page === 'item'" :boot="boot" />
       <CartPage v-else-if="page === 'cart'" />
@@ -119,6 +120,7 @@ import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'
 import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
 import MenuPage from './pages/MenuPage.vue'
+import ProductGroupsPage from './pages/ProductGroupsPage.vue'
 import CustomerSearchPage from './pages/CustomerSearchPage.vue'
 import ItemDetailPage from './pages/ItemDetailPage.vue'
 import CartPage from './pages/CartPage.vue'
@@ -208,6 +210,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/settings')) return 'management-settings'
 
     if (pathname === '/' || pathname === '') return 'landing'
+    if (pathname.startsWith('/product-groups') || pathname.startsWith('/product_groups') || pathname.startsWith('/groups')) return 'product-groups'
     if (pathname.startsWith('/menu')) return 'menu'
     if (pathname.startsWith('/search')) return 'search'
     if (pathname.startsWith('/item')) return 'item'

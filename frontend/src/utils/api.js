@@ -247,8 +247,8 @@ const STATIC_DOCTYPE_COLUMNS = {
 		"restaurant_slug",
 		"restaurant_sort_order",
 		"restaurant_description",
-			"restaurant_menu_icon",
-			"show_on_homepage",
+		"restaurant_menu_icon",
+		"show_on_homepage",
 		"image",
 	]),
 };
@@ -2097,46 +2097,17 @@ let managementMenuGroupIconFieldReady = null;
 
 function ensureManagementMenuGroupIconField() {
 	if (!managementMenuGroupIconFieldReady) {
-		managementMenuGroupIconFieldReady = callRestaurantAPI("setup_menu_group_icon_field").catch(() => null);
+		managementMenuGroupIconFieldReady = callRestaurantAPI("setup_menu_group_icon_field").catch(
+			() => null,
+		);
 	}
 	return managementMenuGroupIconFieldReady;
 }
 
 export async function listManagementMenuGroups({ search = "" } = {}) {
 	await ensureManagementMenuGroupIconField();
-	const query = String(search || "").trim();
-	const args = {
-		doctype: "Item Group",
-		fields: [
-			"name",
-			"item_group_name",
-			"parent_item_group",
-			"is_group",
-			"restaurant_is_menu_category",
-			"restaurant_is_subcategory",
-			"restaurant_active",
-			"restaurant_slug",
-			"restaurant_sort_order",
-			"restaurant_description",
-			"restaurant_menu_icon",
-			"show_on_homepage",
-			"image",
-			"modified",
-		],
-		order_by: "restaurant_sort_order asc, item_group_name asc",
-		limit_page_length: 1000,
-	};
-
-	if (query) {
-		const like = `%${query}%`;
-		args.or_filters = [
-			["name", "like", like],
-			["item_group_name", "like", like],
-		];
-	}
-
-	const rows = await safeGetList(args);
-	return rows.map((row) => ({
+	const rows = await callRestaurantAPI("list_management_menu_groups", { search });
+	return (Array.isArray(rows) ? rows : []).map((row) => ({
 		...row,
 		restaurant_is_menu_category: Number(row?.restaurant_is_menu_category ?? 1) ? 1 : 0,
 		restaurant_is_subcategory: Number(
@@ -2186,24 +2157,26 @@ export function saveManagementMenuDesign(payload = {}) {
 
 export async function listManagementItemGroupParents({ search = "" } = {}) {
 	const query = String(search || "").trim();
-	const args = {
-		doctype: "Item Group",
-		fields: ["name", "item_group_name", "parent_item_group", "is_group"],
-		filters: [["is_group", "=", 1]],
-		order_by: "item_group_name asc",
-		limit_page_length: 800,
-	};
-
-	if (query) {
-		const like = `%${query}%`;
-		args.or_filters = [
-			["name", "like", like],
-			["item_group_name", "like", like],
-		];
+	let rows = await callRestaurantAPI("list_management_item_group_parents", {
+		search: query,
+	}).catch(() => []);
+	if (rows.length) {
+		return rows;
 	}
 
-	const rows = await safeGetList(args);
-	return rows;
+	const fallbackRows = await listManagementMenuGroups({ search: query }).catch(() => []);
+	return (fallbackRows || [])
+		.filter(
+			(row) =>
+				Number(row?.is_group || 0) === 1 ||
+				Number(row?.restaurant_is_subcategory || 0) !== 1,
+		)
+		.map((row) => ({
+			name: row.name,
+			item_group_name: row.item_group_name || row.name,
+			parent_item_group: row.parent_item_group || "",
+			is_group: Number(row.is_group || 0) ? 1 : 0,
+		}));
 }
 
 export async function getManagementMenuGroup(name = "") {
@@ -2417,6 +2390,34 @@ export async function setManagementSiteSettings(payload = {}) {
 
 export function listManagementCustomers({ search = "", date_from = "", date_to = "" } = {}) {
 	return callRestaurantAPI("list_management_customers", { search, date_from, date_to });
+}
+
+export function getManagementTables() {
+	return callRestaurantAPI("get_management_tables");
+}
+
+export function updateManagementTable(payload = {}) {
+	return callRestaurantAPI("update_management_table", { payload });
+}
+
+export function updateManagementTableReservation(payload = {}) {
+	return callRestaurantAPI("update_management_table_reservation", { payload });
+}
+
+export function updateManagementTableSession(payload = {}) {
+	return callRestaurantAPI("update_management_table_session", { payload });
+}
+
+export function getManagementTablesOverview({
+	branch = "",
+	reservation_date = "",
+	reservation_time = "",
+} = {}) {
+	return callRestaurantAPI("get_management_tables_overview", {
+		branch,
+		reservation_date,
+		reservation_time,
+	});
 }
 
 function isMissingCustomerDetailMethodError(error) {

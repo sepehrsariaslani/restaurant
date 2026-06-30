@@ -80,119 +80,142 @@
     </div>
     <p class="hint" v-else>سبد خرید خالی است.</p>
 
-    <section class="financial-box">
-      <div class="financial-head">
+    <section class="financial-box" :class="{ collapsed: !showAdvancedFinancial }">
+      <div class="financial-head" @click="showAdvancedFinancial = !showAdvancedFinancial">
         <h4 class="financial-title">متغیرهای مالی</h4>
-      </div>
-
-      <label class="wallet-row">
-        <span>استفاده از کیف پول ({{ formatMoney(financial.walletBalance || 0, currency) }})</span>
-        <input
-          type="checkbox"
-          :checked="Boolean(financial.useWallet)"
-          @change="patchFinancial({ useWallet: $event.target.checked })"
-        />
-      </label>
-
-      <div class="discount-row">
-        <span class="discount-label">تخفیف</span>
-        <div class="discount-input-group">
-          <PersianNumberInput
-            :model-value="financial.discountValue"
-            input-class="dark-input discount-input"
-            placeholder="0"
-            :min="0"
-            style="flex: 1; min-width: 0;"
-            @update:model-value="patchFinancial({ discountValue: $event })"
-          />
-          <button type="button" class="discount-type-btn" @click="toggleDiscountType">
-            {{ financial.discountType === 'percent' ? '%' : '﷼' }}
-          </button>
-        </div>
+        <button type="button" class="financial-toggle">
+          {{ showAdvancedFinancial ? '▼' : '◀' }}
+        </button>
       </div>
 
       <template v-if="showAdvancedFinancial">
-        <label class="field inline">
-          <span>کد تخفیف / معرف</span>
-          <div class="code-row">
+        <!-- ردیف ۱: کیف پول -->
+        <div class="fin-row">
+          <label class="fin-toggle-label">
             <input
-              class="input dark-input"
+              type="checkbox"
+              class="fin-checkbox"
+              :checked="Boolean(financial.useWallet)"
+              @change="patchFinancial({ useWallet: $event.target.checked })"
+            />
+            <span class="fin-label">کیف پول</span>
+          </label>
+          <span class="fin-value-badge" :class="{ active: financial.useWallet }">
+            {{ formatMoney(financial.walletBalance || 0, currency) }}
+          </span>
+        </div>
+
+        <!-- ردیف ۲: تخفیف -->
+        <div class="fin-row">
+          <span class="fin-label">تخفیف</span>
+          <div class="fin-input-group">
+            <PersianNumberInput
+              :model-value="financial.discountValue"
+              input-class="fin-input"
+              placeholder="0"
+              :min="0"
+              @update:model-value="patchFinancial({ discountValue: $event })"
+            />
+            <button type="button" class="fin-type-btn" @click="toggleDiscountType">
+              {{ financial.discountType === 'percent' ? '%' : '﷼' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- ردیف ۳: کد تخفیف -->
+        <div class="fin-row">
+          <span class="fin-label">کد تخفیف</span>
+          <div class="fin-input-group">
+            <input
+              class="fin-input"
               :value="financial.couponCode"
               @input="patchFinancial({ couponCode: $event.target.value })"
-              placeholder="کد"
+              placeholder="کد / معرف"
             />
-            <button type="button" class="check-btn" @click="$emit('verify-coupon')">بررسی</button>
+            <button type="button" class="fin-check-btn" @click="$emit('verify-coupon')">بررسی</button>
           </div>
-        </label>
+        </div>
 
-        <label class="field">
-          <span>معاف از مالیات</span>
-          <input
-            type="checkbox"
-            :checked="Boolean(financial.taxExempt)"
-            @change="patchFinancial({ taxExempt: $event.target.checked })"
-          />
-        </label>
-
-        <label class="field">
-          <span>ارزش افزوده</span>
+        <!-- ردیف ۴: مالیات -->
+        <div class="fin-row">
+          <label class="fin-toggle-label">
+            <input
+              type="checkbox"
+              class="fin-checkbox"
+              :checked="Boolean(financial.taxExempt)"
+              @change="patchFinancial({ taxExempt: $event.target.checked })"
+            />
+            <span class="fin-label">معاف از مالیات</span>
+          </label>
           <PersianNumberInput
             :model-value="financial.taxAmount"
-            input-class="dark-input"
-            placeholder="0"
+            input-class="fin-input fin-input-sm"
+            placeholder="ارزش افزوده"
             :min="0"
             :disabled="Boolean(financial.taxExempt)"
             @update:model-value="patchFinancial({ taxAmount: $event })"
           />
-        </label>
+        </div>
 
-        <label class="field">
-          <span>انعام</span>
+        <!-- ردیف ۵: انعام -->
+        <div class="fin-row">
+          <span class="fin-label">انعام</span>
           <PersianNumberInput
             :model-value="financial.tipAmount"
-            input-class="dark-input"
+            input-class="fin-input fin-input-sm"
             placeholder="0"
             :min="0"
             @update:model-value="patchFinancial({ tipAmount: $event })"
           />
-        </label>
-
-        <div class="radio-group">
-          <span>حق سرویس</span>
-          <label>
-            <input
-              type="radio"
-              name="service-type"
-              value="fixed"
-              :checked="financial.serviceType === 'fixed'"
-              @change="patchFinancial({ serviceType: 'fixed' })"
-            />
-            مبلغی
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="service-type"
-              value="percent"
-              :checked="financial.serviceType === 'percent'"
-              @change="patchFinancial({ serviceType: 'percent' })"
-            />
-            درصدی
-          </label>
         </div>
-        <PersianNumberInput
-          :model-value="financial.serviceValue"
-          input-class="dark-input"
-          placeholder="0"
-          :min="0"
-          @update:model-value="patchFinancial({ serviceValue: $event })"
-        />
-      </template>
 
-      <label class="field">
-        <span>یادداشت سفارش</span>
-        <input class="input dark-input" :value="note" @input="$emit('update:note', $event.target.value)" />
-      </label>
+        <!-- ردیف ۶: حق سرویس -->
+        <div class="fin-row">
+          <div class="fin-service-type">
+            <span class="fin-label">حق سرویس</span>
+            <div class="fin-radio-group">
+              <label class="fin-radio">
+                <input
+                  type="radio"
+                  name="service-type"
+                  value="fixed"
+                  :checked="financial.serviceType === 'fixed'"
+                  @change="patchFinancial({ serviceType: 'fixed' })"
+                />
+                مبلغی
+              </label>
+              <label class="fin-radio">
+                <input
+                  type="radio"
+                  name="service-type"
+                  value="percent"
+                  :checked="financial.serviceType === 'percent'"
+                  @change="patchFinancial({ serviceType: 'percent' })"
+                />
+                درصدی
+              </label>
+            </div>
+          </div>
+          <PersianNumberInput
+            :model-value="financial.serviceValue"
+            input-class="fin-input fin-input-sm"
+            placeholder="0"
+            :min="0"
+            @update:model-value="patchFinancial({ serviceValue: $event })"
+          />
+        </div>
+
+        <!-- ردیف ۷: یادداشت -->
+        <div class="fin-row fin-row-note">
+          <span class="fin-label">یادداشت</span>
+          <input
+            class="fin-input fin-note-input"
+            :value="note"
+            @input="$emit('update:note', $event.target.value)"
+            placeholder="یادداشت سفارش..."
+          />
+        </div>
+      </template>
     </section>
 
     <div class="summary-box">
@@ -677,12 +700,13 @@ defineExpose({
   border-radius: 18px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  padding: 0.7rem;
+  padding: 0.85rem;
   color: var(--pos-text);
   display: grid;
-  gap: 0.55rem;
+  grid-template-rows: auto auto 1fr auto auto auto;
+  gap: 0.65rem;
   max-height: 78vh;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .mode-row {
@@ -897,20 +921,24 @@ defineExpose({
 
 .cart-list {
   display: grid;
-  gap: 0.4rem;
-  max-height: none;
-  overflow: visible;
+  gap: 0.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-content: start;
+  min-height: 0;
+  padding-inline-end: 0.2rem;
 }
 
 .cart-row {
   border-radius: 12px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  padding: 0.45rem;
+  padding: 0.6rem;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.4rem;
+  gap: 0.5rem;
   cursor: pointer;
+  transition: all 0.15s;
 }
 
 .cart-row.active {
@@ -924,11 +952,12 @@ defineExpose({
 }
 
 .line-main strong {
-  font-size: 0.8rem;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .line-main small {
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.8);
 }
 
@@ -977,20 +1006,24 @@ defineExpose({
 }
 
 .counter button {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .counter span {
-  min-width: 38px;
+  min-width: 48px;
   text-align: center;
-  font-size: 0.76rem;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .icon {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   padding: 0;
+  font-size: 1rem;
 }
 
 .icon.bom {
@@ -1015,15 +1048,21 @@ defineExpose({
 .financial-box {
   border: 1px solid var(--pos-border);
   border-radius: 12px;
-  padding: 0.5rem;
+  padding: 0.5rem 0.6rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0;
+  transition: all 0.2s;
+}
+
+.financial-box.collapsed {
+  padding: 0.5rem 0.6rem;
 }
 
 .financial-title {
   margin: 0;
-  font-size: 0.79rem;
+  font-size: 0.88rem;
   color: var(--pos-primary);
+  font-weight: 700;
 }
 
 .financial-head {
@@ -1031,109 +1070,226 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  border-radius: 8px;
+  padding: 0.25rem 0.35rem;
+  margin: -0.25rem -0.35rem 0.3rem;
 }
 
-.toggle-advanced-btn {
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
+.financial-head:hover {
+  background: var(--pos-soft);
+}
+
+.financial-toggle {
+  border: none;
+  background: transparent;
   color: var(--pos-primary);
-  border-radius: 8px;
-  padding: 0.24rem 0.5rem;
-  font-size: 0.7rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+/* ردیف‌های مالی */
+.fin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.28rem 0;
+  border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.07);
+  min-height: 34px;
+}
+
+.fin-row:last-child {
+  border-bottom: 0;
+}
+
+.fin-row-note {
+  align-items: flex-start;
+  padding-top: 0.35rem;
+}
+
+.fin-label {
+  font-size: 0.82rem;
+  color: var(--pos-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fin-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   cursor: pointer;
 }
 
-.wallet-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem;
-  font-size: 0.76rem;
-  margin-bottom: 0.45rem;
-}
-
-.code-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.32rem;
-}
-
-.code-row.two {
-  grid-template-columns: 1fr 1fr;
-}
-
-.check-btn {
-  padding: 0.36rem 0.55rem;
-}
-
-.discount-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem;
-  font-size: 0.76rem;
-}
-
-.discount-label {
+.fin-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--pos-primary);
+  cursor: pointer;
   flex-shrink: 0;
-  color: var(--pos-primary);
-  font-weight: 600;
 }
 
-.discount-input-group {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  flex: 1;
-  max-width: 180px;
-}
-
-.discount-input {
-  border-radius: 8px 0 0 8px !important;
-  border-left: none !important;
-  flex: 1;
-  min-width: 0;
-}
-
-.discount-type-btn {
-  height: 100%;
-  min-height: 32px;
-  padding: 0 0.6rem;
+.fin-value-badge {
+  font-size: 0.72rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.6);
+  background: var(--pos-soft);
   border: 1px solid var(--pos-border);
-  border-radius: 0 8px 8px 0;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.fin-value-badge.active {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.1);
+  color: var(--pos-primary);
+  border-color: var(--pos-primary);
+  font-weight: 700;
+}
+
+.fin-input-group {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-shrink: 0;
+  max-width: 160px;
+}
+
+.fin-input {
+  border: 1px solid var(--pos-border);
+  background: var(--pos-white);
+  color: var(--pos-text);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  width: 100%;
+  min-width: 0;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.fin-input:focus {
+  border-color: var(--pos-primary);
+}
+
+.fin-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fin-input-group .fin-input {
+  border-radius: 8px 0 0 8px;
+  border-left: none;
+  flex: 1;
+}
+
+.fin-input-sm {
+  max-width: 110px;
+  flex-shrink: 0;
+}
+
+.fin-type-btn,
+.fin-check-btn {
+  border: 1px solid var(--pos-border);
   background: var(--pos-soft);
   color: var(--pos-primary);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
 }
 
-.discount-type-btn:hover {
+.fin-type-btn {
+  border-radius: 0 8px 8px 0;
+  padding: 0 0.55rem;
+  min-width: 32px;
+}
+
+.fin-check-btn {
+  border-radius: 0 8px 8px 0;
+  padding: 0.28rem 0.55rem;
+}
+
+.fin-type-btn:hover,
+.fin-check-btn:hover {
   background: var(--pos-border);
+}
+
+.fin-service-type {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.fin-radio-group {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.fin-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.8);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fin-radio input[type="radio"] {
+  accent-color: var(--pos-primary);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+.fin-note-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 8px;
 }
 
 .summary-box {
   border-radius: 12px;
   border: 1px solid var(--pos-border);
   background: var(--pos-soft);
-  padding: 0.5rem;
+  padding: 0.65rem 0.75rem;
   display: grid;
-  gap: 0.28rem;
+  gap: 0.4rem;
 }
 
 .sum-line {
   display: flex;
   justify-content: space-between;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
+}
+
+.sum-line strong {
+  font-weight: 700;
 }
 
 .sum-line.payable {
   border-top: 1px dashed var(--pos-border);
-  padding-top: 0.38rem;
-  font-size: 0.86rem;
+  padding-top: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .sum-line.payable strong {
@@ -1156,8 +1312,19 @@ defineExpose({
   border: 0;
   border-radius: 10px;
   color: #fff;
-  padding: 0.56rem;
+  padding: 0.7rem;
   cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.save-btn:disabled,
+.pay-btn:disabled,
+.print-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .save-btn {
@@ -1175,9 +1342,17 @@ defineExpose({
 .checkout-actions label {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.74rem;
+  gap: 0.35rem;
+  font-size: 0.82rem;
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.88);
+  cursor: pointer;
+}
+
+.checkout-actions input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--pos-primary);
 }
 
 .dark-input {

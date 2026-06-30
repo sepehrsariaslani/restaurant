@@ -183,6 +183,7 @@ const links = computed(() => {
   const base = [
     { key: 'landing', label: 'خانه', hint: 'شروع سریع', url: '/', prefix: '/', exact: true, icon: Home },
     { key: 'menu', label: 'منو', hint: 'مشاهده محصولات', url: '/menu', prefix: '/menu', icon: List },
+    { key: 'product-groups', label: 'دسته‌بندی منو', hint: 'گروه‌های محصول', url: '/product-groups', prefix: '/product-groups', icon: List },
     { key: 'about-us', label: 'درباره ما', hint: 'داستان برند', url: '/about-us', prefix: '/about-us', icon: UserRound },
     { key: 'faq', label: 'سوالات', hint: 'پاسخ‌های پرتکرار', url: '/faq', prefix: '/faq', icon: CircleHelp },
     { key: 'cart', label: 'سبد سفارش', hint: 'تکمیل خرید', url: '/cart', prefix: '/cart', kind: 'cart', icon: ShoppingCart },
@@ -198,6 +199,9 @@ const links = computed(() => {
 function isActive(link) {
   if (link.key === 'menu') {
     return props.page === 'menu' || props.page === 'item'
+  }
+  if (link.key === 'product-groups') {
+    return props.page === 'product-groups'
   }
   if (link.key === 'landing') {
     return props.page === 'landing'

@@ -68,25 +68,6 @@
             <textarea class="textarea" v-model.trim="form.restaurant_description" placeholder="توضیح داخلی برای تیم" />
           </label>
         </ManagementSurfaceCard>
-      </div>
-
-      <aside class="detail-side">
-        <ManagementSurfaceCard title="تصویر دسته‌بندی" subtitle="آپلود یا انتخاب تصویر گروه محصول">
-          <ManagementImageDropzone
-            v-model="form.image"
-            :alt-text="form.item_group_name"
-            doctype="Item Group"
-            :docname="groupName"
-            fieldname="image"
-            @error="showUploadError"
-          />
-          <p class="hint image-hint">بعد از ذخیره، تصویر برای صفحه اصلی و نمایش‌های تصویری استفاده می‌شود.</p>
-        </ManagementSurfaceCard>
-
-        <ManagementSurfaceCard title="آیکون منو" subtitle="انتخاب آیکون دسته در صفحه منوی مشتری">
-          <ManagementMenuIconSelector v-model="form.restaurant_menu_icon" />
-          <p class="hint image-hint">این آیکون فقط برای دسته‌بندی‌های بالای صفحه /menu استفاده می‌شود.</p>
-        </ManagementSurfaceCard>
 
         <ManagementSurfaceCard title="ساختار و وضعیت" subtitle="کنترل نوع دسته و حالت فعال بودن">
           <div class="checks-grid">
@@ -122,17 +103,36 @@
             />
           </div>
         </ManagementSurfaceCard>
+      </div>
+
+      <aside class="detail-side">
+        <ManagementSurfaceCard title="تصویر دسته‌بندی" subtitle="آپلود یا انتخاب تصویر گروه محصول">
+          <ManagementImageDropzone
+            v-model="form.image"
+            :alt-text="form.item_group_name"
+            doctype="Item Group"
+            :docname="groupName"
+            fieldname="image"
+            @error="showUploadError"
+          />
+          <p class="hint image-hint">بعد از ذخیره، تصویر برای صفحه اصلی و نمایش‌های تصویری استفاده می‌شود.</p>
+        </ManagementSurfaceCard>
+
+        <ManagementSurfaceCard title="آیکون منو" subtitle="انتخاب آیکون دسته در صفحه منوی مشتری">
+          <ManagementMenuIconSelector v-model="form.restaurant_menu_icon" />
+          <p class="hint image-hint">این آیکون فقط برای دسته‌بندی‌های بالای صفحه /menu استفاده می‌شود.</p>
+        </ManagementSurfaceCard>
       </aside>
     </div>
 
-    <ManagementSurfaceCard>
-      <div class="actions">
+    <div class="sticky-action-bar">
+      <div class="actions sticky-actions">
         <a class="secondary-btn" href="/management/menu-groups">انصراف</a>
         <button class="primary-btn" type="button" :disabled="saving || loading" @click="saveGroup">
           {{ saving ? 'در حال ذخیره...' : isEditMode ? 'ذخیره تغییرات' : 'ایجاد دسته' }}
         </button>
       </div>
-    </ManagementSurfaceCard>
+    </div>
   </ManagementPageScaffold>
 </template>
 
@@ -485,6 +485,7 @@ bootstrap()
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
   gap: 0.85rem;
   align-items: start;
+  padding-bottom: 7.5rem;
 }
 
 .detail-main,
@@ -516,6 +517,32 @@ bootstrap()
   margin-top: 0.7rem;
 }
 
+.sticky-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+  margin-top: 0;
+  padding: 0.7rem max(1rem, env(safe-area-inset-left, 0px)) calc(0.7rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-right, 0px));
+  background: linear-gradient(180deg, rgb(255 255 255 / 0), rgb(255 255 255 / 0.92) 26%, rgb(255 255 255 / 0.98));
+  backdrop-filter: blur(12px);
+}
+
+.sticky-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-radius: 18px;
+  padding: 0.75rem 0.85rem;
+  background: rgb(255 255 255 / 0.96);
+  box-shadow: 0 -10px 30px rgb(15 23 42 / 0.08);
+  max-width: min(1180px, calc(100vw - 2rem));
+  margin: 0 auto;
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -537,6 +564,7 @@ bootstrap()
 @media (max-width: 980px) {
   .detail-layout {
     grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 8.5rem;
   }
 }
 
@@ -552,6 +580,20 @@ bootstrap()
 
   .form-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .detail-layout {
+    padding-bottom: 9.2rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .sticky-actions {
+    justify-content: stretch;
+    flex-direction: column-reverse;
+    align-items: stretch;
   }
 }
 </style>

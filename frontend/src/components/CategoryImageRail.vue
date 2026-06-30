@@ -53,6 +53,7 @@
 
 <script setup>
 import { Beef, CakeSlice, Coffee, CupSoda, Drumstick, Fish, GlassWater, Pizza, Salad, Sandwich, Soup, Utensils, Wheat } from 'lucide-vue-next'
+import { getMenuIconComponent } from '@/utils/menuIcons'
 
 defineProps({
   categories:          { type: Array,  default: () => [] },
@@ -79,6 +80,11 @@ const ICON_RULES = [
 ]
 
 function getCategoryIcon(category) {
+  // Prefer stored icon from management
+  const stored = getMenuIconComponent(category.menu_icon || '', null)
+  if (stored) return stored
+
+  // Fallback: infer from title
   const title = String(category.title || category.name || '').toLowerCase()
   const matched = ICON_RULES.find((row) => row.keys.some((key) => title.includes(String(key).toLowerCase())))
   return matched?.icon || Utensils

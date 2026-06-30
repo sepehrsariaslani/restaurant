@@ -254,13 +254,13 @@ function displayQty(slug) {
   border-radius: 18px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  padding: 0.65rem;
+  padding: 0.85rem;
   color: var(--pos-text);
   height: 100%;
   display: grid;
   grid-template-rows: auto auto 1fr;
   overflow: hidden;
-  gap: 0.4rem;
+  gap: 0.6rem;
 }
 
 .customer-search-bar {
@@ -290,7 +290,7 @@ function displayQty(slug) {
   border: 0;
   background: transparent;
   padding-right: 0;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
 }
 
 .cust-clear {
@@ -385,7 +385,7 @@ function displayQty(slug) {
 
 .panel-top {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.55rem;
   flex-shrink: 0;
 }
 
@@ -501,12 +501,12 @@ function displayQty(slug) {
 .cat-chip {
   border: 1px solid var(--pos-border);
   border-radius: 999px;
-  padding: 0.26rem 0.7rem;
+  padding: 0.35rem 0.85rem;
   background: var(--pos-white);
   color: var(--pos-text);
   cursor: pointer;
   white-space: nowrap;
-  font-size: 0.77rem;
+  font-size: 0.85rem;
   font-family: inherit;
   flex-shrink: 0;
   transition: all 0.12s;
@@ -531,16 +531,16 @@ function displayQty(slug) {
 
 .products-grid {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.65rem;
   overflow-y: auto;
   overflow-x: hidden;
   align-content: start;
   min-height: 0;
-  padding-inline-end: 0.1rem;
+  padding-inline-end: 0.2rem;
 }
 
 .products-grid.mode-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 
 .products-grid.mode-list {
@@ -576,17 +576,17 @@ function displayQty(slug) {
 
 .product-image {
   width: 100%;
-  height: 120px;
-  object-fit: contain;
+  height: 160px;
+  object-fit: cover;
   object-position: center;
 }
 
 .product-body {
-  padding: 0.42rem 0.5rem 0.18rem;
+  padding: 0.55rem 0.65rem 0.3rem;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .products-grid.mode-list .product-body {
@@ -600,14 +600,16 @@ function displayQty(slug) {
   background: var(--pos-soft);
   color: var(--pos-primary);
   border: 1px solid var(--pos-border);
-  padding: 0.12rem 0.4rem;
-  font-size: 0.66rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .product-body h4 {
   margin: 0.24rem 0 0;
-  font-size: 0.79rem;
+  font-size: 0.9rem;
   line-height: 1.3;
+  font-weight: 600;
 }
 
 .products-grid.mode-list .product-body h4 {
@@ -616,9 +618,10 @@ function displayQty(slug) {
 }
 
 .product-body strong {
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   color: var(--pos-accent);
   flex-shrink: 0;
+  font-weight: 700;
 }
 
 .product-actions {
@@ -626,7 +629,7 @@ function displayQty(slug) {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.4rem 0.5rem 0.5rem;
+  padding: 0.5rem 0.6rem 0.6rem;
 }
 
 .counter {
@@ -636,19 +639,22 @@ function displayQty(slug) {
 }
 
 .counter button {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
   color: var(--pos-primary);
   cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .counter span {
-  min-width: 38px;
+  min-width: 45px;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .bom-btn {
@@ -656,9 +662,10 @@ function displayQty(slug) {
   background: var(--pos-accent);
   color: var(--pos-white);
   border-radius: 9px;
-  padding: 0.3rem 0.6rem;
+  padding: 0.4rem 0.7rem;
   cursor: pointer;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .dark-input {
