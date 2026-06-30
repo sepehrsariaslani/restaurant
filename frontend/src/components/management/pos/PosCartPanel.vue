@@ -80,142 +80,137 @@
     </div>
     <p class="hint" v-else>سبد خرید خالی است.</p>
 
-    <section class="financial-box" :class="{ collapsed: !showAdvancedFinancial }">
-      <div class="financial-head" @click="showAdvancedFinancial = !showAdvancedFinancial">
+    <section class="financial-box">
+      <div class="financial-head">
         <h4 class="financial-title">متغیرهای مالی</h4>
-        <button type="button" class="financial-toggle">
-          {{ showAdvancedFinancial ? '▼' : '◀' }}
-        </button>
       </div>
 
-      <template v-if="showAdvancedFinancial">
-        <!-- ردیف ۱: کیف پول -->
-        <div class="fin-row">
-          <label class="fin-toggle-label">
-            <input
-              type="checkbox"
-              class="fin-checkbox"
-              :checked="Boolean(financial.useWallet)"
-              @change="patchFinancial({ useWallet: $event.target.checked })"
-            />
-            <span class="fin-label">کیف پول</span>
-          </label>
-          <span class="fin-value-badge" :class="{ active: financial.useWallet }">
-            {{ formatMoney(financial.walletBalance || 0, currency) }}
-          </span>
-        </div>
-
-        <!-- ردیف ۲: تخفیف -->
-        <div class="fin-row">
-          <span class="fin-label">تخفیف</span>
-          <div class="fin-input-group">
-            <PersianNumberInput
-              :model-value="financial.discountValue"
-              input-class="fin-input"
-              placeholder="0"
-              :min="0"
-              @update:model-value="patchFinancial({ discountValue: $event })"
-            />
-            <button type="button" class="fin-type-btn" @click="toggleDiscountType">
-              {{ financial.discountType === 'percent' ? '%' : '﷼' }}
-            </button>
-          </div>
-        </div>
-
-        <!-- ردیف ۳: کد تخفیف -->
-        <div class="fin-row">
-          <span class="fin-label">کد تخفیف</span>
-          <div class="fin-input-group">
-            <input
-              class="fin-input"
-              :value="financial.couponCode"
-              @input="patchFinancial({ couponCode: $event.target.value })"
-              placeholder="کد / معرف"
-            />
-            <button type="button" class="fin-check-btn" @click="$emit('verify-coupon')">بررسی</button>
-          </div>
-        </div>
-
-        <!-- ردیف ۴: مالیات -->
-        <div class="fin-row">
-          <label class="fin-toggle-label">
-            <input
-              type="checkbox"
-              class="fin-checkbox"
-              :checked="Boolean(financial.taxExempt)"
-              @change="patchFinancial({ taxExempt: $event.target.checked })"
-            />
-            <span class="fin-label">معاف از مالیات</span>
-          </label>
-          <PersianNumberInput
-            :model-value="financial.taxAmount"
-            input-class="fin-input fin-input-sm"
-            placeholder="ارزش افزوده"
-            :min="0"
-            :disabled="Boolean(financial.taxExempt)"
-            @update:model-value="patchFinancial({ taxAmount: $event })"
-          />
-        </div>
-
-        <!-- ردیف ۵: انعام -->
-        <div class="fin-row">
-          <span class="fin-label">انعام</span>
-          <PersianNumberInput
-            :model-value="financial.tipAmount"
-            input-class="fin-input fin-input-sm"
-            placeholder="0"
-            :min="0"
-            @update:model-value="patchFinancial({ tipAmount: $event })"
-          />
-        </div>
-
-        <!-- ردیف ۶: حق سرویس -->
-        <div class="fin-row">
-          <div class="fin-service-type">
-            <span class="fin-label">حق سرویس</span>
-            <div class="fin-radio-group">
-              <label class="fin-radio">
-                <input
-                  type="radio"
-                  name="service-type"
-                  value="fixed"
-                  :checked="financial.serviceType === 'fixed'"
-                  @change="patchFinancial({ serviceType: 'fixed' })"
-                />
-                مبلغی
-              </label>
-              <label class="fin-radio">
-                <input
-                  type="radio"
-                  name="service-type"
-                  value="percent"
-                  :checked="financial.serviceType === 'percent'"
-                  @change="patchFinancial({ serviceType: 'percent' })"
-                />
-                درصدی
-              </label>
-            </div>
-          </div>
-          <PersianNumberInput
-            :model-value="financial.serviceValue"
-            input-class="fin-input fin-input-sm"
-            placeholder="0"
-            :min="0"
-            @update:model-value="patchFinancial({ serviceValue: $event })"
-          />
-        </div>
-
-        <!-- ردیف ۷: یادداشت -->
-        <div class="fin-row fin-row-note">
-          <span class="fin-label">یادداشت</span>
+      <!-- ردیف ۱: کیف پول -->
+      <div class="fin-row">
+        <label class="fin-toggle-label">
           <input
-            class="fin-input fin-note-input"
-            :value="note"
-            @input="$emit('update:note', $event.target.value)"
-            placeholder="یادداشت سفارش..."
+            type="checkbox"
+            class="fin-checkbox"
+            :checked="Boolean(financial.useWallet)"
+            @change="patchFinancial({ useWallet: $event.target.checked })"
           />
+          <span class="fin-label">کیف پول</span>
+        </label>
+        <span class="fin-value-badge" :class="{ active: financial.useWallet }">
+          {{ formatMoney(financial.walletBalance || 0, currency) }}
+        </span>
+      </div>
+
+      <!-- ردیف ۲: تخفیف -->
+      <div class="fin-row">
+        <span class="fin-label">تخفیف</span>
+        <div class="fin-input-group">
+          <PersianNumberInput
+            :model-value="financial.discountValue"
+            input-class="fin-input"
+            placeholder="0"
+            :min="0"
+            @update:model-value="patchFinancial({ discountValue: $event })"
+          />
+          <button type="button" class="fin-type-btn" @click="toggleDiscountType">
+            {{ financial.discountType === 'percent' ? '%' : '﷼' }}
+          </button>
         </div>
-      </template>
+      </div>
+
+      <!-- ردیف ۳: کد تخفیف -->
+      <div class="fin-row">
+        <span class="fin-label">کد تخفیف</span>
+        <div class="fin-input-group">
+          <input
+            class="fin-input"
+            :value="financial.couponCode"
+            @input="patchFinancial({ couponCode: $event.target.value })"
+            placeholder="کد / معرف"
+          />
+          <button type="button" class="fin-check-btn" @click="$emit('verify-coupon')">بررسی</button>
+        </div>
+      </div>
+
+      <!-- ردیف ۴: مالیات -->
+      <div class="fin-row">
+        <label class="fin-toggle-label">
+          <input
+            type="checkbox"
+            class="fin-checkbox"
+            :checked="Boolean(financial.taxExempt)"
+            @change="patchFinancial({ taxExempt: $event.target.checked })"
+          />
+          <span class="fin-label">معاف از مالیات</span>
+        </label>
+        <PersianNumberInput
+          :model-value="financial.taxAmount"
+          input-class="fin-input fin-input-sm"
+          placeholder="ارزش افزوده"
+          :min="0"
+          :disabled="Boolean(financial.taxExempt)"
+          @update:model-value="patchFinancial({ taxAmount: $event })"
+        />
+      </div>
+
+      <!-- ردیف ۵: انعام -->
+      <div class="fin-row">
+        <span class="fin-label">انعام</span>
+        <PersianNumberInput
+          :model-value="financial.tipAmount"
+          input-class="fin-input fin-input-sm"
+          placeholder="0"
+          :min="0"
+          @update:model-value="patchFinancial({ tipAmount: $event })"
+        />
+      </div>
+
+      <!-- ردیف ۶: حق سرویس -->
+      <div class="fin-row">
+        <div class="fin-service-type">
+          <span class="fin-label">حق سرویس</span>
+          <div class="fin-radio-group">
+            <label class="fin-radio">
+              <input
+                type="radio"
+                name="service-type"
+                value="fixed"
+                :checked="financial.serviceType === 'fixed'"
+                @change="patchFinancial({ serviceType: 'fixed' })"
+              />
+              مبلغی
+            </label>
+            <label class="fin-radio">
+              <input
+                type="radio"
+                name="service-type"
+                value="percent"
+                :checked="financial.serviceType === 'percent'"
+                @change="patchFinancial({ serviceType: 'percent' })"
+              />
+              درصدی
+            </label>
+          </div>
+        </div>
+        <PersianNumberInput
+          :model-value="financial.serviceValue"
+          input-class="fin-input fin-input-sm"
+          placeholder="0"
+          :min="0"
+          @update:model-value="patchFinancial({ serviceValue: $event })"
+        />
+      </div>
+
+      <!-- ردیف ۷: یادداشت -->
+      <div class="fin-row fin-row-note">
+        <span class="fin-label">یادداشت</span>
+        <input
+          class="fin-input fin-note-input"
+          :value="note"
+          @input="$emit('update:note', $event.target.value)"
+          placeholder="یادداشت سفارش..."
+        />
+      </div>
     </section>
 
     <div class="summary-box">
@@ -700,13 +695,12 @@ defineExpose({
   border-radius: 18px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  padding: 0.85rem;
+  padding: 0.7rem;
   color: var(--pos-text);
   display: grid;
-  grid-template-rows: auto auto 1fr auto auto auto;
-  gap: 0.65rem;
+  gap: 0.55rem;
   max-height: 78vh;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .mode-row {
@@ -921,24 +915,20 @@ defineExpose({
 
 .cart-list {
   display: grid;
-  gap: 0.5rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  align-content: start;
-  min-height: 0;
-  padding-inline-end: 0.2rem;
+  gap: 0.4rem;
+  max-height: none;
+  overflow: visible;
 }
 
 .cart-row {
   border-radius: 12px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  padding: 0.6rem;
+  padding: 0.45rem;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.5rem;
+  gap: 0.4rem;
   cursor: pointer;
-  transition: all 0.15s;
 }
 
 .cart-row.active {
@@ -952,12 +942,11 @@ defineExpose({
 }
 
 .line-main strong {
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.8rem;
 }
 
 .line-main small {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.8);
 }
 
@@ -1006,24 +995,20 @@ defineExpose({
 }
 
 .counter button {
-  width: 32px;
-  height: 32px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  width: 24px;
+  height: 24px;
 }
 
 .counter span {
-  min-width: 48px;
+  min-width: 38px;
   text-align: center;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.76rem;
 }
 
 .icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  font-size: 1rem;
 }
 
 .icon.bom {
@@ -1051,16 +1036,11 @@ defineExpose({
   padding: 0.5rem 0.6rem;
   display: grid;
   gap: 0;
-  transition: all 0.2s;
-}
-
-.financial-box.collapsed {
-  padding: 0.5rem 0.6rem;
 }
 
 .financial-title {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.79rem;
   color: var(--pos-primary);
   font-weight: 700;
 }
@@ -1070,31 +1050,9 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 0.35rem;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s;
-  border-radius: 8px;
-  padding: 0.25rem 0.35rem;
-  margin: -0.25rem -0.35rem 0.3rem;
-}
-
-.financial-head:hover {
-  background: var(--pos-soft);
-}
-
-.financial-toggle {
-  border: none;
-  background: transparent;
-  color: var(--pos-primary);
-  font-size: 0.9rem;
-  cursor: pointer;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--pos-border);
+  margin-bottom: 0.3rem;
 }
 
 /* ردیف‌های مالی */
@@ -1118,7 +1076,7 @@ defineExpose({
 }
 
 .fin-label {
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   color: var(--pos-primary);
   font-weight: 600;
   white-space: nowrap;
@@ -1171,8 +1129,8 @@ defineExpose({
   background: var(--pos-white);
   color: var(--pos-text);
   border-radius: 8px;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.85rem;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.76rem;
   font-family: inherit;
   width: 100%;
   min-width: 0;
@@ -1269,27 +1227,22 @@ defineExpose({
   border-radius: 12px;
   border: 1px solid var(--pos-border);
   background: var(--pos-soft);
-  padding: 0.65rem 0.75rem;
+  padding: 0.5rem;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.28rem;
 }
 
 .sum-line {
   display: flex;
   justify-content: space-between;
   gap: 0.4rem;
-  font-size: 0.9rem;
-}
-
-.sum-line strong {
-  font-weight: 700;
+  font-size: 0.78rem;
 }
 
 .sum-line.payable {
   border-top: 1px dashed var(--pos-border);
-  padding-top: 0.5rem;
-  font-size: 1.05rem;
-  font-weight: 700;
+  padding-top: 0.38rem;
+  font-size: 0.86rem;
 }
 
 .sum-line.payable strong {
@@ -1312,19 +1265,8 @@ defineExpose({
   border: 0;
   border-radius: 10px;
   color: #fff;
-  padding: 0.7rem;
+  padding: 0.56rem;
   cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 700;
-  font-family: inherit;
-  transition: opacity 0.15s;
-}
-
-.save-btn:disabled,
-.pay-btn:disabled,
-.print-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .save-btn {
@@ -1342,17 +1284,9 @@ defineExpose({
 .checkout-actions label {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.82rem;
+  gap: 0.3rem;
+  font-size: 0.74rem;
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.88);
-  cursor: pointer;
-}
-
-.checkout-actions input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--pos-primary);
 }
 
 .dark-input {
