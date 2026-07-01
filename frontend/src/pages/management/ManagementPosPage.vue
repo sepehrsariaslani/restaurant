@@ -20,247 +20,107 @@
     </div>
 
     <section class="pos-shell" dir="rtl">
-      <aside class="left-col">
-        <div class="left-col-tabs">
-          <button
-            type="button"
-            class="left-tab-btn"
-            :class="{ active: leftPanelTab === 'tables' }"
-            @click="leftPanelTab = 'tables'"
-          >
-            میزها
-            <span class="count-badge" v-if="tableOptions.length">{{ tableOptions.length }}</span>
-            <span class="occupied-badge" v-if="occupiedTableCount">{{ occupiedTableCount }} اشغال</span>
+      <header class="pos-workspace-head">
+        <div class="workspace-title">
+          <p class="workspace-kicker">داشبورد عملیاتی</p>
+          <h2>POS</h2>
+          <span class="workspace-meta">{{ dateLabel }}</span>
+        </div>
+        <div class="pos-workspace-actions">
+          <button type="button" class="ops-trigger" @click="openOperationsOverlay()">
+            <span>عملیات POS</span>
+            <small>{{ leftPanelTabLabel }}</small>
           </button>
-          <button
-            type="button"
-            class="left-tab-btn"
-            :class="{ active: leftPanelTab === 'invoices' }"
-            @click="leftPanelTab = 'invoices'"
-          >
-            فاکتورهای باز
-            <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
-          </button>
-          <button
-            type="button"
-            class="left-tab-btn"
-            :class="{ active: leftPanelTab === 'history' }"
-            @click="leftPanelTab = 'history'; loadTodayTransactions()"
-          >
-            تراکنش‌های امروز
-            <span class="count-badge" v-if="todayTransactions.length">{{ todayTransactions.length }}</span>
-          </button>
-          <button
-            type="button"
-            class="left-tab-btn"
-            :class="{ active: leftPanelTab === 'recent' }"
-            @click="leftPanelTab = 'recent'; loadRecentOrders()"
-          >
-            سفارش‌های اخیر
-            <span class="count-badge" v-if="recentOrders.length">{{ recentOrders.length }}</span>
+          <button type="button" class="kbd-help-btn" title="میانبرهای کیبورد (?)" @click="showKeyboardMap = true">
+            <Keyboard :size="16" />
+            <span>میانبرها</span>
           </button>
         </div>
+      </header>
 
-        <section v-if="leftPanelTab === 'tables'" class="table-session-preview">
-          <div class="tab-panel-toolbar">
-            <button type="button" class="icon-refresh-btn" @click="loadPOSBoot" title="بروزرسانی">↻</button>
-          </div>
-          <div class="table-grid">
-            <article
-              v-for="table in tableOptions"
-              :key="table.name"
-              class="table-cell"
-              :class="[`status-${String(table.status || '').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
-              @click="selectDineInTable(table)"
-            >
-              <span class="table-cell-name">{{ table.label }}</span>
-              <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
-              <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
-              <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
-            </article>
-          </div>
-          <p class="muted" v-if="tablePreviewLoading">در حال دریافت...</p>
-          <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
-          <template v-else-if="selectedDineInTable">
-            <div class="table-detail-bar">
-              <div class="table-detail-info">
-                <strong>{{ selectedDineInTable.label }}</strong>
-                <span v-if="selectedTablePreview?.totals?.session_grand_total">
-                  {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
-                </span>
-                <span v-if="selectedTableCustomer.name">👤 {{ selectedTableCustomer.name }}</span>
-                <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
-              </div>
-              <div class="table-detail-actions">
-                <button type="button" class="tbl-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
-                <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
-                <template v-if="selectedTablePreview?.session?.name">
-                  <div class="tbl-action-row">
-                    <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." tone="dark" />
-                    <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
-                  </div>
-                  <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
-                    <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." tone="dark" />
-                    <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
-                  </div>
-                  <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
-                </template>
-              </div>
-            </div>
-          </template>
-          <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
-        </section>
+      <div class="pos-main-grid">
+        <PosProductPanel
+          class="products-col"
+          :categories="categories"
+          :selected-category="selectedCategory"
+          @update:selected-category="selectedCategory = $event"
+          :products="filteredProducts"
+          :loading="loading"
+          :error="loading ? '' : productError"
+          :search-term="search"
+          :scanner-input="scannerInput"
+          :scanner-feedback="scannerFeedback"
+          :product-view="productView"
+          :quantity-map="productQtyMap"
+          :fallback-image="fallbackImage"
+          :currency="currency"
+          :customer-query="form.customer_query"
+          :customer-options="customerOptions"
+          @update:customer-query="setCustomerQuery"
+          @select-customer="selectCustomerFromHistory"
+          @create-customer="createCustomerFromQuery"
+          @add-customer="addQuickCustomer"
+          @update:search-term="search = $event"
+          @update:product-view="productView = $event"
+          @update:scanner-input="scannerInput = $event"
+          @scan-scale="handleScaleBarcodeScan"
+          @increment-product="incrementProduct"
+          @decrement-product="decrementProduct"
+          @open-bom="openCustomizationSheet"
+        />
 
-        <section v-if="leftPanelTab === 'history'" class="history-panel">
-          <div class="tab-panel-toolbar">
-            <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions" title="بروزرسانی">↻</button>
-          </div>
-          <p class="muted" v-if="todayTransactionsLoading">در حال دریافت...</p>
-          <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
-          <p class="muted" v-else-if="!todayTransactions.length">هنوز تراکنشی امروز ثبت نشده.</p>
-          <div v-else class="history-list">
-            <article v-for="tx in todayTransactions" :key="tx.name" class="history-card history-card-interactive" @click="openOrderDetailModal(tx)">
-              <div class="history-card-head">
-                <strong>{{ tx.order_code || tx.name }}</strong>
-                <span class="history-time">{{ formatInvoiceDateTime(tx.created_at) }}</span>
-              </div>
-              <div class="history-card-body">
-                <span>{{ tx.customer_name || 'POS Customer' }}</span>
-                <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
-              </div>
-              <span class="history-method-badge" v-if="tx.payment_method">
-                {{ tx.payment_method === 'cash' ? '💵 نقدی' : tx.payment_method === 'card' ? '💳 کارتخوان' : tx.payment_method }}
-              </span>
-            </article>
-          </div>
-        </section>
+        <aside v-if="isDesktopViewport" class="cart-desktop-col">
+          <PosCartPanel
+            ref="cartPanelRef"
+            :cart-lines="cart"
+            :selected-line-id="selectedCartLineId"
+            :currency="currency"
+            :order-mode="form.order_mode"
+            :place="form.place"
+            :place-options="placeOptions"
+            :table-orders="selectedDineInOrders"
+            :table-preview-loading="tablePreviewLoading"
+            :selected-table-label="selectedDineInTable?.label || ''"
+            :can-print-table-orders="confirmedDineInOrders.length > 0"
+            :note="form.note"
+            :payment-method="payment.method"
+            :payment-reference="payment.reference_no"
+            :payment-rrn="payment.rrn"
+            :payment-boot="paymentBoot"
+            :financial="financial"
+            :totals="totals"
+            :submitting="submitting"
+            :undo-line="lastRemovedLine"
+            @update:selected-line-id="selectedCartLineId = $event"
+            @update:order-mode="setOrderMode"
+            @update:place="form.place = $event"
+            @update:note="form.note = $event"
+            @update:payment-method="payment.method = $event"
+            @update:payment-reference="payment.reference_no = $event"
+            @update:payment-rrn="payment.rrn = $event"
+            @patch-financial="patchFinancial"
+            @increment-line="setCartQty($event, Number($event.qty || 0) + 1)"
+            @decrement-line="setCartQty($event, Number($event.qty || 0) - 1)"
+            @remove-line="setCartQty($event, 0)"
+            @undo-last-line="undoLastRemoval"
+            @edit-line-note="editLineNote"
+            @edit-line-customization="openLineCustomizationEditor"
+            @clear-cart="clearCart"
+            @verify-credit="verifyCreditCard"
+            @verify-coupon="verifyCoupon"
+            @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
+            @print-confirmed-table="printConfirmedTableOrders"
+            @submit-order="submitPOSOrder(false)"
+            @submit-and-pay="submitPOSOrder(true)"
+            @print-ticket="openPrintEditor"
+          />
+        </aside>
+      </div>
 
-        <section v-if="leftPanelTab === 'invoices'" class="open-invoices-panel">
-          <div class="tab-panel-toolbar">
-            <button type="button" class="icon-refresh-btn" @click="loadOpenInvoices" title="بروزرسانی">↻</button>
-          </div>
-          <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
-          <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
-          <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
-          <template v-else>
-            <div class="open-invoice-strip">
-              <article
-                v-for="invoice in openInvoices"
-                :key="invoice.invoice_key"
-                class="open-invoice-card"
-                :class="{ active: selectedOpenInvoice?.invoice_key === invoice.invoice_key }"
-                @click="selectOpenInvoice(invoice)"
-              >
-                <strong>{{ invoice.order_code }}</strong>
-                <small>{{ invoice.customer_name || 'POS Customer' }}</small>
-                <small>{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
-                <small>{{ formatInvoiceDateTime(invoice.created_at) }}</small>
-              </article>
-            </div>
-            <div class="open-invoice-detail" v-if="selectedOpenInvoiceDetail?.order">
-              <header>
-                <div>
-                  <strong>{{ selectedOpenInvoiceDetail.order.order_code }}</strong>
-                  <small>{{ formatStatus(selectedOpenInvoiceDetail.order.status) }}</small>
-                </div>
-                <div class="open-invoice-actions">
-                  <button type="button" class="tbl-btn" @click="applySelectedOpenInvoiceProfile">انتخاب</button>
-                  <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click="settleSelectedOpenInvoice">
-                    {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
-                  </button>
-                </div>
-              </header>
-              <ul>
-                <li v-for="(item, idx) in selectedOpenInvoiceDetail.order.items || []" :key="`${idx}-${item.title}`">
-                  <span>{{ item.title }}</span>
-                  <span>{{ formatCompactNumber(item.qty, 2) }}</span>
-                  <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
-                </li>
-              </ul>
-            </div>
-          </template>
-        </section>
-
-        <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
-          <div class="tab-panel-toolbar">
-            <button type="button" class="icon-refresh-btn" @click="loadRecentOrders" title="بروزرسانی">↻</button>
-          </div>
-          <div class="recent-orders-filter">
-            <input
-              class="input dark-input recent-search-input"
-              v-model="recentOrdersSearch"
-              placeholder="جستجو... (کد سفارش، نام مشتری)"
-              type="search"
-            />
-            <input
-              class="input dark-input recent-date-input"
-              type="date"
-              v-model="recentOrdersDateFrom"
-              @change="loadRecentOrders"
-            />
-          </div>
-          <p class="muted" v-if="recentOrdersLoading">در حال دریافت...</p>
-          <p class="error" v-else-if="recentOrdersError">{{ recentOrdersError }}</p>
-          <p class="muted" v-else-if="!filteredRecentOrders.length">سفارشی یافت نشد.</p>
-          <div v-else class="history-list">
-            <article
-              v-for="order in filteredRecentOrders"
-              :key="order.name"
-              class="history-card history-card-interactive"
-              @click="openOrderDetailModal(order)"
-            >
-              <div class="history-card-head">
-                <strong>{{ order.order_code || order.name }}</strong>
-                <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
-              </div>
-              <div class="history-card-body">
-                <span>{{ order.customer_name || 'POS Customer' }}</span>
-                <span class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</span>
-              </div>
-              <div class="history-card-footer">
-                <span class="history-method-badge" v-if="order.payment_method">
-                  {{ order.payment_method === 'cash' ? '💵 نقدی' : order.payment_method === 'card' ? '💳 کارتخوان' : order.payment_method }}
-                </span>
-                <span class="order-status-badge" :class="`status-${order.status}`">
-                  {{ formatStatus(order.status) }}
-                </span>
-              </div>
-            </article>
-          </div>
-        </section>
-      </aside>
-
-      <PosProductPanel
-        class="products-col"
-        :categories="categories"
-        :selected-category="selectedCategory"
-        @update:selected-category="selectedCategory = $event"
-        :products="filteredProducts"
-        :loading="loading"
-        :error="loading ? '' : productError"
-        :search-term="search"
-        :scanner-input="scannerInput"
-        :scanner-feedback="scannerFeedback"
-        :product-view="productView"
-        :quantity-map="productQtyMap"
-        :fallback-image="fallbackImage"
-        :currency="currency"
-        :customer-query="form.customer_query"
-        :customer-options="customerOptions"
-        @update:customer-query="setCustomerQuery"
-        @select-customer="selectCustomerFromHistory"
-        @create-customer="createCustomerFromQuery"
-        @add-customer="addQuickCustomer"
-        @update:search-term="search = $event"
-        @update:product-view="productView = $event"
-        @update:scanner-input="scannerInput = $event"
-        @scan-scale="handleScaleBarcodeScan"
-        @increment-product="incrementProduct"
-        @decrement-product="decrementProduct"
-        @open-bom="openCustomizationSheet"
-      />
-
-      <button type="button" class="kbd-help-btn" title="میانبرهای کیبورد (?)" @click="showKeyboardMap = true">⌨</button>
+      <button v-if="!isDesktopViewport" type="button" class="cart-fab" :class="{ 'has-items': cart.length }" title="سبد خرید" @click="cartDrawerOpen = true">
+        <ShoppingCart :size="18" />
+        <span v-if="cart.length" class="cart-fab-badge">{{ cart.length }}</span>
+      </button>
 
       <div v-if="showKeyboardMap" class="kbd-map-backdrop" @click.self="showKeyboardMap = false">
         <section class="kbd-map-modal" dir="rtl">
@@ -285,52 +145,283 @@
         </section>
       </div>
 
-      <PosCartPanel
-        ref="cartPanelRef"
-        class="cart-col"
-        :cart-lines="cart"
-        :selected-line-id="selectedCartLineId"
-        :currency="currency"
-        :order-mode="form.order_mode"
-        :place="form.place"
-        :place-options="placeOptions"
-        :table-orders="selectedDineInOrders"
-        :table-preview-loading="tablePreviewLoading"
-        :selected-table-label="selectedDineInTable?.label || ''"
-        :can-print-table-orders="confirmedDineInOrders.length > 0"
-        :note="form.note"
-        :payment-method="payment.method"
-        :payment-reference="payment.reference_no"
-        :payment-rrn="payment.rrn"
-        :payment-boot="paymentBoot"
-        :financial="financial"
-        :totals="totals"
-        :submitting="submitting"
-        @update:selected-line-id="selectedCartLineId = $event"
-        @update:order-mode="setOrderMode"
-        @update:place="form.place = $event"
-        @update:note="form.note = $event"
-        @update:payment-method="payment.method = $event"
-        @update:payment-reference="payment.reference_no = $event"
-        @update:payment-rrn="payment.rrn = $event"
-        @patch-financial="patchFinancial"
-        @increment-line="setCartQty($event, Number($event.qty || 0) + 1)"
-        @decrement-line="setCartQty($event, Number($event.qty || 0) - 1)"
-        :undo-line="lastRemovedLine"
-        @remove-line="setCartQty($event, 0)"
-        @undo-last-line="undoLastRemoval"
-        @edit-line-note="editLineNote"
-        @edit-line-customization="openLineCustomizationEditor"
-        @clear-cart="clearCart"
-        @verify-credit="verifyCreditCard"
-        @verify-coupon="verifyCoupon"
-        @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
-        @print-confirmed-table="printConfirmedTableOrders"
-        @submit-order="submitPOSOrder(false)"
-        @submit-and-pay="submitPOSOrder(true)"
-        @print-ticket="openPrintEditor"
-      />
     </section>
+
+    <Transition name="ops-overlay">
+      <div v-if="operationsOverlayOpen" class="ops-overlay-backdrop" @click.self="closeOperationsOverlay">
+        <aside class="ops-overlay-sheet" dir="rtl">
+          <header class="ops-overlay-head">
+            <div>
+              <p class="ops-overlay-kicker">عملیات صندوق</p>
+              <h3>{{ leftPanelTabLabel }}</h3>
+            </div>
+            <button type="button" class="ops-overlay-close" @click="closeOperationsOverlay">×</button>
+          </header>
+
+          <div class="left-col">
+            <div class="left-col-tabs">
+              <button
+                type="button"
+                class="left-tab-btn"
+                :class="{ active: leftPanelTab === 'tables' }"
+                @click="setLeftPanelTab('tables')"
+              >
+                میزها
+                <span class="count-badge" v-if="tableOptions.length">{{ tableOptions.length }}</span>
+                <span class="occupied-badge" v-if="occupiedTableCount">{{ occupiedTableCount }} اشغال</span>
+              </button>
+              <button
+                type="button"
+                class="left-tab-btn"
+                :class="{ active: leftPanelTab === 'invoices' }"
+                @click="setLeftPanelTab('invoices')"
+              >
+                فاکتورهای باز
+                <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="left-tab-btn"
+                :class="{ active: leftPanelTab === 'history' }"
+                @click="setLeftPanelTab('history')"
+              >
+                تراکنش‌های امروز
+                <span class="count-badge" v-if="todayTransactions.length">{{ todayTransactions.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="left-tab-btn"
+                :class="{ active: leftPanelTab === 'recent' }"
+                @click="setLeftPanelTab('recent')"
+              >
+                سفارش‌های اخیر
+                <span class="count-badge" v-if="recentOrders.length">{{ recentOrders.length }}</span>
+              </button>
+            </div>
+
+            <section v-if="leftPanelTab === 'tables'" class="table-session-preview">
+              <div class="tab-panel-toolbar">
+                <button type="button" class="icon-refresh-btn" @click="loadPOSBoot" title="بروزرسانی">↻</button>
+              </div>
+              <div class="table-grid">
+                <article
+                  v-for="table in tableOptions"
+                  :key="table.name"
+                  class="table-cell"
+                  :class="[`status-${String(table.status || '').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
+                  @click="selectDineInTable(table)"
+                >
+                  <span class="table-cell-name">{{ table.label }}</span>
+                  <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
+                  <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
+                  <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
+                </article>
+              </div>
+              <p class="muted" v-if="tablePreviewLoading">در حال دریافت...</p>
+              <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
+              <template v-else-if="selectedDineInTable">
+                <div class="table-detail-bar">
+                  <div class="table-detail-info">
+                    <strong>{{ selectedDineInTable.label }}</strong>
+                    <span v-if="selectedTablePreview?.totals?.session_grand_total">
+                      {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
+                    </span>
+                    <span v-if="selectedTableCustomer.name">👤 {{ selectedTableCustomer.name }}</span>
+                    <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
+                  </div>
+                  <div class="table-detail-actions">
+                    <button type="button" class="tbl-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
+                    <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
+                    <template v-if="selectedTablePreview?.session?.name">
+                      <div class="tbl-action-row">
+                        <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." tone="dark" />
+                        <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
+                      </div>
+                      <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
+                        <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." tone="dark" />
+                        <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
+                      </div>
+                      <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
+            </section>
+
+            <section v-if="leftPanelTab === 'history'" class="history-panel">
+              <div class="tab-panel-toolbar">
+                <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions" title="بروزرسانی">↻</button>
+              </div>
+              <p class="muted" v-if="todayTransactionsLoading">در حال دریافت...</p>
+              <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
+              <p class="muted" v-else-if="!todayTransactions.length">هنوز تراکنشی امروز ثبت نشده.</p>
+              <div v-else class="history-list">
+                <article v-for="tx in todayTransactions" :key="tx.name" class="history-card history-card-interactive" @click="openOrderDetailModal(tx)">
+                  <div class="history-card-head">
+                    <strong>{{ tx.order_code || tx.name }}</strong>
+                    <span class="history-time">{{ formatInvoiceDateTime(tx.created_at) }}</span>
+                  </div>
+                  <div class="history-card-body">
+                    <span>{{ tx.customer_name || 'POS Customer' }}</span>
+                    <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
+                  </div>
+                  <span class="history-method-badge" v-if="tx.payment_method">
+                    {{ tx.payment_method === 'cash' ? '💵 نقدی' : tx.payment_method === 'card' ? '💳 کارتخوان' : tx.payment_method }}
+                  </span>
+                </article>
+              </div>
+            </section>
+
+            <section v-if="leftPanelTab === 'invoices'" class="open-invoices-panel">
+              <div class="tab-panel-toolbar">
+                <button type="button" class="icon-refresh-btn" @click="loadOpenInvoices" title="بروزرسانی">↻</button>
+              </div>
+              <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
+              <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
+              <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
+              <template v-else>
+                <div class="open-invoice-strip">
+                  <article
+                    v-for="invoice in openInvoices"
+                    :key="invoice.invoice_key"
+                    class="open-invoice-card"
+                    :class="{ active: selectedOpenInvoice?.invoice_key === invoice.invoice_key }"
+                    @click="selectOpenInvoice(invoice)"
+                  >
+                    <strong>{{ invoice.order_code }}</strong>
+                    <small>{{ invoice.customer_name || 'POS Customer' }}</small>
+                    <small>{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
+                    <small>{{ formatInvoiceDateTime(invoice.created_at) }}</small>
+                  </article>
+                </div>
+                <div class="open-invoice-detail" v-if="selectedOpenInvoiceDetail?.order">
+                  <header>
+                    <div>
+                      <strong>{{ selectedOpenInvoiceDetail.order.order_code }}</strong>
+                      <small>{{ formatStatus(selectedOpenInvoiceDetail.order.status) }}</small>
+                    </div>
+                    <div class="open-invoice-actions">
+                      <button type="button" class="tbl-btn" @click="applySelectedOpenInvoiceProfile">انتخاب</button>
+                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click="settleSelectedOpenInvoice">
+                        {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
+                      </button>
+                    </div>
+                  </header>
+                  <ul>
+                    <li v-for="(item, idx) in selectedOpenInvoiceDetail.order.items || []" :key="`${idx}-${item.title}`">
+                      <span>{{ item.title }}</span>
+                      <span>{{ formatCompactNumber(item.qty, 2) }}</span>
+                      <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
+                    </li>
+                  </ul>
+                </div>
+              </template>
+            </section>
+
+            <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
+              <div class="tab-panel-toolbar">
+                <button type="button" class="icon-refresh-btn" @click="loadRecentOrders" title="بروزرسانی">↻</button>
+              </div>
+              <div class="recent-orders-filter">
+                <input
+                  class="input dark-input recent-search-input"
+                  v-model="recentOrdersSearch"
+                  placeholder="جستجو... (کد سفارش، نام مشتری)"
+                  type="search"
+                />
+                <input
+                  class="input dark-input recent-date-input"
+                  type="date"
+                  v-model="recentOrdersDateFrom"
+                  @change="loadRecentOrders"
+                />
+              </div>
+              <p class="muted" v-if="recentOrdersLoading">در حال دریافت...</p>
+              <p class="error" v-else-if="recentOrdersError">{{ recentOrdersError }}</p>
+              <p class="muted" v-else-if="!filteredRecentOrders.length">سفارشی یافت نشد.</p>
+              <div v-else class="history-list">
+                <article
+                  v-for="order in filteredRecentOrders"
+                  :key="order.name"
+                  class="history-card history-card-interactive"
+                  @click="openOrderDetailModal(order)"
+                >
+                  <div class="history-card-head">
+                    <strong>{{ order.order_code || order.name }}</strong>
+                    <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
+                  </div>
+                  <div class="history-card-body">
+                    <span>{{ order.customer_name || 'POS Customer' }}</span>
+                    <span class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</span>
+                  </div>
+                  <div class="history-card-footer">
+                    <span class="history-method-badge" v-if="order.payment_method">
+                      {{ order.payment_method === 'cash' ? '💵 نقدی' : order.payment_method === 'card' ? '💳 کارتخوان' : order.payment_method }}
+                    </span>
+                    <span class="order-status-badge" :class="`status-${order.status}`">
+                      {{ formatStatus(order.status) }}
+                    </span>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </Transition>
+
+    <!-- Cart Drawer -->
+    <Transition name="cart-drawer">
+      <div v-if="cartDrawerOpen && !isDesktopViewport" class="cart-drawer-backdrop" @click.self="cartDrawerOpen = false">
+        <aside class="cart-drawer" dir="rtl">
+          <PosCartPanel
+            ref="cartPanelRef"
+            :cart-lines="cart"
+            :selected-line-id="selectedCartLineId"
+            :currency="currency"
+            :order-mode="form.order_mode"
+            :place="form.place"
+            :place-options="placeOptions"
+            :table-orders="selectedDineInOrders"
+            :table-preview-loading="tablePreviewLoading"
+            :selected-table-label="selectedDineInTable?.label || ''"
+            :can-print-table-orders="confirmedDineInOrders.length > 0"
+            :note="form.note"
+            :payment-method="payment.method"
+            :payment-reference="payment.reference_no"
+            :payment-rrn="payment.rrn"
+            :payment-boot="paymentBoot"
+            :financial="financial"
+            :totals="totals"
+            :submitting="submitting"
+            @update:selected-line-id="selectedCartLineId = $event"
+            @update:order-mode="setOrderMode"
+            @update:place="form.place = $event"
+            @update:note="form.note = $event"
+            @update:payment-method="payment.method = $event"
+            @update:payment-reference="payment.reference_no = $event"
+            @update:payment-rrn="payment.rrn = $event"
+            @patch-financial="patchFinancial"
+            @increment-line="setCartQty($event, Number($event.qty || 0) + 1)"
+            @decrement-line="setCartQty($event, Number($event.qty || 0) - 1)"
+            :undo-line="lastRemovedLine"
+            @remove-line="setCartQty($event, 0)"
+            @undo-last-line="undoLastRemoval"
+            @edit-line-note="editLineNote"
+            @edit-line-customization="openLineCustomizationEditor"
+            @clear-cart="clearCart"
+            @verify-credit="verifyCreditCard"
+            @verify-coupon="verifyCoupon"
+            @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
+            @print-confirmed-table="printConfirmedTableOrders"
+            @submit-order="submitPOSOrder(false)"
+            @submit-and-pay="submitPOSOrder(true)"
+            @print-ticket="openPrintEditor"
+          />
+        </aside>
+      </div>
+    </Transition>
 
     <PosBomSheet
       :open="customizationSheet.open"
@@ -537,6 +628,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { Keyboard, ShoppingCart } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
@@ -641,6 +733,9 @@ const tableExpanded = ref(false)
 const leftPanelTab = ref('recent')
 const lastRemovedLine = ref(null)
 const showKeyboardMap = ref(false)
+const operationsOverlayOpen = ref(false)
+const cartDrawerOpen = ref(false)
+const isDesktopViewport = ref(typeof window === 'undefined' ? true : window.innerWidth >= 1180)
 const todayTransactions = ref([])
 const todayTransactionsLoading = ref(false)
 const todayTransactionsError = ref('')
@@ -762,6 +857,20 @@ const dateLabel = computed(() => {
     }).format(new Date())
   } catch (dateErr) {
     return 'امروز'
+  }
+})
+
+const leftPanelTabLabel = computed(() => {
+  switch (leftPanelTab.value) {
+    case 'tables':
+      return 'میزها'
+    case 'invoices':
+      return 'فاکتورهای باز'
+    case 'history':
+      return 'تراکنش‌های امروز'
+    case 'recent':
+    default:
+      return 'سفارش‌های اخیر'
   }
 })
 
@@ -1430,6 +1539,36 @@ function printConfirmedTableOrders() {
 function setOrderMode(mode) {
   form.order_mode = mode
   form.place = placeOptions.value[0] || ''
+}
+
+function setLeftPanelTab(tab) {
+  leftPanelTab.value = tab
+  if (tab === 'history') {
+    loadTodayTransactions()
+  }
+  if (tab === 'recent') {
+    loadRecentOrders()
+  }
+}
+
+function openOperationsOverlay(tab = leftPanelTab.value) {
+  setLeftPanelTab(tab)
+  operationsOverlayOpen.value = true
+}
+
+function closeOperationsOverlay() {
+  operationsOverlayOpen.value = false
+}
+
+function syncViewportMode() {
+  if (typeof window === 'undefined') {
+    isDesktopViewport.value = true
+    return
+  }
+  isDesktopViewport.value = window.innerWidth >= 1180
+  if (isDesktopViewport.value) {
+    cartDrawerOpen.value = false
+  }
 }
 
 function setCustomerQuery(value) {
@@ -3266,6 +3405,24 @@ function onWindowKeydown(event) {
     return
   }
 
+  if (operationsOverlayOpen.value && key === 'Escape') {
+    event.preventDefault()
+    closeOperationsOverlay()
+    return
+  }
+
+  if (showKeyboardMap.value && key === 'Escape') {
+    event.preventDefault()
+    showKeyboardMap.value = false
+    return
+  }
+
+  if (cartDrawerOpen.value && key === 'Escape') {
+    event.preventDefault()
+    cartDrawerOpen.value = false
+    return
+  }
+
   if (handleGlobalProductSearchTyping(event)) {
     return
   }
@@ -3365,7 +3522,9 @@ watch(
 )
 
 onMounted(async () => {
+  syncViewportMode()
   window.addEventListener('keydown', onWindowKeydown)
+  window.addEventListener('resize', syncViewportMode)
   window.addEventListener('online', updateNetworkState)
   window.addEventListener('offline', updateNetworkState)
   hydrateReceiptSettings()
@@ -3379,6 +3538,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   saveActiveTicketSnapshot()
   window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('resize', syncViewportMode)
   window.removeEventListener('online', updateNetworkState)
   window.removeEventListener('offline', updateNetworkState)
   if (reminderTimer.value) {
@@ -3865,28 +4025,125 @@ onBeforeUnmount(() => {
 }
 
 .pos-shell {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 420px;
+  display: flex;
+  flex-direction: column;
   gap: 0.65rem;
   height: calc(100vh - 1.2rem);
   min-height: 520px;
   overflow: hidden;
 }
 
+.pos-workspace-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff 0%, rgb(255 255 255 / 0.96) 100%);
+  box-shadow: 0 8px 20px rgb(15 23 42 / 0.04);
+}
+
+.workspace-title {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.workspace-kicker {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.5);
+}
+
+.workspace-title h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: var(--pos-text);
+}
+
+.workspace-meta {
+  font-size: 0.74rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+}
+
+.pos-workspace-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.pos-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.65rem;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.cart-desktop-col {
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.cart-desktop-col :deep(.cart-panel) {
+  height: 100%;
+}
+
+.ops-trigger,
+.kbd-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  min-height: 42px;
+  border-radius: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.ops-trigger {
+  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.05);
+  color: var(--pos-primary);
+  padding: 0.55rem 0.85rem;
+}
+
+.ops-trigger span {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.ops-trigger small {
+  font-size: 0.68rem;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.56);
+}
+
+.ops-trigger:hover {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
+  border-color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.22);
+}
+
 .left-col {
   display: grid;
   grid-template-rows: auto 1fr;
   align-content: start;
-  gap: 0;
-  overflow-y: auto;
+  gap: 0.55rem;
+  overflow: hidden;
   min-height: 0;
-  scrollbar-width: thin;
+  padding: 0 0.85rem 0.85rem;
 }
 
 .left-col-tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-bottom: 2px solid var(--pos-border);
+  border: 1px solid var(--pos-border);
+  border-bottom: 0;
   background: var(--pos-white);
   border-radius: 14px 14px 0 0;
   overflow: hidden;
@@ -3931,7 +4188,6 @@ onBeforeUnmount(() => {
 .open-invoices-panel,
 .history-panel {
   border: 1px solid var(--pos-border);
-  border-top: 0;
   border-radius: 0 0 14px 14px;
   padding: 0 0.55rem 0.55rem;
   background: var(--pos-white);
@@ -3939,6 +4195,19 @@ onBeforeUnmount(() => {
   gap: 0.45rem;
   align-content: start;
   overflow-y: auto;
+  min-height: 0;
+}
+
+.recent-orders-panel {
+  border: 1px solid var(--pos-border);
+  border-radius: 0 0 14px 14px;
+  padding: 0 0.55rem 0.55rem;
+  background: var(--pos-white);
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .history-list {
@@ -3992,28 +4261,211 @@ onBeforeUnmount(() => {
 }
 
 .kbd-help-btn {
+  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  background: var(--pos-white);
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
+  padding: 0.55rem 0.75rem;
+}
+
+.kbd-help-btn:hover {
+  color: var(--pos-primary);
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+}
+
+.kbd-help-btn span {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.ops-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  background: rgb(25 20 14 / 0.34);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0.8rem;
+}
+
+.ops-overlay-sheet {
+  width: min(420px, calc(100vw - 1.6rem));
+  height: calc(100vh - 1.6rem);
+  border-radius: 18px;
+  background: rgb(249 248 245 / 0.98);
+  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  box-shadow: 0 24px 48px rgb(15 23 42 / 0.16);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.85rem 0.95rem;
+  border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
+}
+
+.ops-overlay-kicker {
+  margin: 0 0 0.12rem;
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.46);
+}
+
+.ops-overlay-head h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--pos-text);
+}
+
+.ops-overlay-close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ops-overlay-close:hover {
+  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  color: var(--pos-text);
+}
+
+.ops-overlay-enter-active,
+.ops-overlay-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.ops-overlay-enter-active .ops-overlay-sheet,
+.ops-overlay-leave-active .ops-overlay-sheet {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.ops-overlay-enter-from,
+.ops-overlay-leave-to {
+  opacity: 0;
+}
+
+.ops-overlay-enter-from .ops-overlay-sheet,
+.ops-overlay-leave-to .ops-overlay-sheet {
+  transform: translateX(-24px);
+  opacity: 0;
+}
+
+/* ─── Cart FAB ─── */
+.cart-fab {
   position: fixed;
   bottom: 1.2rem;
-  left: 1.2rem;
+  left: 4.4rem;
   z-index: 200;
-  background: var(--pos-primary);
-  color: var(--pos-white);
+  background: var(--pos-accent);
+  color: #fff;
   border: none;
   border-radius: 50%;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2.8rem;
+  height: 2.8rem;
   font-size: 1.2rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 12px rgb(0 0 0 / 0.18);
-  transition: opacity 0.15s;
-  opacity: 0.75;
+  box-shadow: 0 4px 16px rgb(var(--pos-accent-rgb) / 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.kbd-help-btn:hover {
-  opacity: 1;
+.cart-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgb(var(--pos-accent-rgb) / 0.45);
+}
+
+.cart-fab.has-items {
+  animation: cart-pulse 0.3s ease;
+}
+
+.cart-fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--pos-danger);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+}
+
+@keyframes cart-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Cart Drawer ─── */
+.cart-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  background: rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(3px);
+}
+
+.cart-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(420px, 90vw);
+  z-index: 251;
+  background: var(--pos-white, #fff);
+  box-shadow: 4px 0 24px rgb(0 0 0 / 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cart-drawer > * {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cart-drawer-enter-active,
+.cart-drawer-leave-active {
+  transition: all 0.25s ease;
+}
+
+.cart-drawer-enter-active .cart-drawer,
+.cart-drawer-leave-active .cart-drawer {
+  transition: transform 0.25s ease;
+}
+
+.cart-drawer-enter-from,
+.cart-drawer-leave-to {
+  background: rgb(0 0 0 / 0);
+  backdrop-filter: blur(0);
+}
+
+.cart-drawer-enter-from .cart-drawer {
+  transform: translateX(-100%);
+}
+
+.cart-drawer-leave-to .cart-drawer {
+  transform: translateX(-100%);
 }
 
 .kbd-map-backdrop {
@@ -4097,8 +4549,7 @@ kbd {
   text-align: center;
 }
 
-.products-col,
-.cart-col {
+.products-col {
   min-height: 0;
   overflow: hidden;
 }
@@ -4340,28 +4791,25 @@ kbd {
   min-height: 100%;
 }
 
-@media (max-width: 1300px) {
-  .pos-shell {
-    grid-template-columns: 240px minmax(0, 1fr) 380px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .pos-shell {
-    grid-template-columns: 220px minmax(0, 1fr) 340px;
-    height: calc(100vh - 220px);
+@media (min-width: 1180px) {
+  .pos-main-grid {
+    grid-template-columns: minmax(0, 1fr) 360px;
   }
 }
 
 @media (max-width: 1040px) {
   .pos-shell {
-    grid-template-columns: 1fr;
     height: auto;
     overflow: visible;
   }
 
-  .left-col {
-    grid-template-rows: auto auto;
+  .pos-workspace-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pos-workspace-actions {
+    justify-content: space-between;
   }
 
   .print-editor-grid {
@@ -4383,25 +4831,23 @@ kbd {
   }
 
   .pos-shell {
-    grid-template-columns: 1fr;
     height: auto;
     overflow: visible;
     gap: 0.4rem;
   }
 
-  .left-col {
-    grid-template-rows: auto auto;
-    overflow: visible;
-  }
-
-  .left-col-tabs {
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  .products-col,
-  .cart-col {
+  .products-col {
     overflow: visible;
     min-height: 300px;
+  }
+
+  .ops-overlay-backdrop {
+    padding: 0.35rem;
+  }
+
+  .ops-overlay-sheet {
+    width: 100%;
+    height: calc(100vh - 0.7rem);
   }
 
   .open-invoices-head,
