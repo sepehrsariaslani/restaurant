@@ -106,6 +106,14 @@ export function buildLegacyLayout(boot = {}) {
 		);
 	}
 
+	// Popular (best-seller / featured showcase)
+	const hasPopular =
+		asArray(boot.featured_items).length ||
+		(boot.menu_highlight && asArray(boot.menu_highlight.items).length);
+	if (hasPopular) {
+		blocks.push(createBlock("popular", { variant: "showcase" }));
+	}
+
 	// Features
 	blocks.push(createBlock("features", { variant: "cards" }));
 
