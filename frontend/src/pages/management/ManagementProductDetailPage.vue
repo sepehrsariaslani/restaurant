@@ -833,19 +833,25 @@
               <label>
                 حالت چاپ آشپزخانه
                 <select class="input" v-model="settingsForm.restaurant_kitchen_print_mode">
-                  <option value="">انتخاب کنید</option>
-                  <option value="Full Detail">جزئیات کامل</option>
-                  <option value="Step Only">فقط مراحل</option>
-                  <option value="Option Only">فقط گزینه‌ها</option>
+                  <option
+                    v-for="option in fieldOptions.kitchen_print_modes"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
                 </select>
               </label>
               <label>
                 حالت مصرف موجودی
                 <select class="input" v-model="settingsForm.restaurant_stock_consumption_mode">
-                  <option value="">انتخاب کنید</option>
-                  <option value="Per Option">به ازای هر گزینه</option>
-                  <option value="Per Step">به ازای هر مرحله</option>
-                  <option value="Fixed">ثابت</option>
+                  <option
+                    v-for="option in fieldOptions.stock_consumption_modes"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
                 </select>
               </label>
             </div>
@@ -1302,11 +1308,13 @@ import {
   createInitialProductSettingsForm,
   formatPersianDate,
   hydrateProductSettingsForm,
+  KITCHEN_PRINT_MODE_OPTIONS,
   localizeAxisLabel,
   localizeText,
   normalizeVariantAttributesDraft,
   resolveTemplateAttributeSelection,
   serializeProductSettingsState,
+  STOCK_CONSUMPTION_MODE_OPTIONS,
 } from '@/utils/managementProductDetail'
 
 const props = defineProps({
@@ -1623,6 +1631,9 @@ const fieldOptions = computed(() => {
     categories: payload.categories || [],
     subcategories: payload.subcategories || [],
     branches: payload.branches || [],
+    kitchen_print_modes: payload.kitchen_print_modes || KITCHEN_PRINT_MODE_OPTIONS,
+    stock_consumption_modes:
+      payload.stock_consumption_modes || STOCK_CONSUMPTION_MODE_OPTIONS,
   }
 })
 const filteredSubcategoryOptions = computed(() => {

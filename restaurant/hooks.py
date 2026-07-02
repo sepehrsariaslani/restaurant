@@ -237,6 +237,7 @@ doc_events = {
 		"on_trash": "restaurant.api.unlink_production_ticket_links",
 	},
 	"Item": {
+		"before_validate": "restaurant.api.normalize_item_builder_modes",
 		"on_update": "restaurant.api.sync_item_image_from_attachment",
 		"on_insert": "restaurant.api.sync_item_image_from_attachment",
 	},

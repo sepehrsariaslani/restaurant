@@ -31,6 +31,7 @@
 		:class="{
 			dark: isDarkMode,
 			'rail-collapsed': isDesktop && isRailCollapsed,
+			'management-layout--pos': isPosPage,
 		}"
 		:style="moduleThemeVars"
 		dir="rtl"
@@ -372,8 +373,8 @@
 			</aside>
 
 			<!-- Main Content -->
-			<div class="desktop-content">
-				<header class="desktop-header">
+			<div class="desktop-content" :class="{ 'desktop-content--pos': isPosPage }">
+				<header v-if="!isPosPage" class="desktop-header">
 					<div class="page-title-wrap">
 						<small>داشبورد عملیاتی</small>
 						<h1>{{ activeTitle }}</h1>
@@ -405,7 +406,10 @@
 					</div>
 				</header>
 
-				<main class="desktop-main module-content">
+				<main
+					class="desktop-main module-content"
+					:class="{ 'desktop-main--fullbleed': isPosPage }"
+				>
 					<section v-if="authLoading" class="auth-gate-card">
 						<ManagementBearLoader :size="188" label="در حال همگام‌سازی نشست..." />
 						<p class="auth-gate-title">در حال بروزرسانی نشست کاربر...</p>
@@ -747,6 +751,7 @@ const isDefaultScale = computed(() => Math.abs(desktopScale.value - 1) < 0.001);
 const scaleLabel = computed(() => `${Math.round(desktopScale.value * 100)}%`);
 const isRailCollapsed = computed(() => railMode.value === "icons");
 const isLoginPage = computed(() => props.page === "management-login");
+const isPosPage = computed(() => props.page === "management-pos");
 const authGuest = computed(() => Boolean(authProfile.value?.is_guest));
 
 const moduleThemeVars = computed(() => {
@@ -1263,6 +1268,17 @@ onBeforeUnmount(() => {
 	--ink-600: #94a3b8;
 	--ink-400: #64748b;
 	--ink-200: #334155;
+	--pos-primary-color: #f4e6d3;
+	--pos-primary-rgb: 244 230 211;
+	--pos-accent-color: #d4a169;
+	--pos-accent-rgb: 212 161 105;
+	--pos-success-color: #34d399;
+	--pos-success-rgb: 52 211 153;
+	--pos-danger-color: #f87171;
+	--pos-danger-rgb: 248 113 113;
+	--pos-warning-color: #fbbf24;
+	--pos-warning-rgb: 251 191 36;
+	--pos-surface-color: #0f172a;
 }
 
 /* Auth */
@@ -1654,6 +1670,10 @@ onBeforeUnmount(() => {
 		flex-direction: column;
 	}
 
+	.desktop-content--pos {
+		background: var(--bg-page);
+	}
+
 	.desktop-header {
 		height: 4.6rem;
 		border-bottom: 1px solid var(--border);
@@ -1704,6 +1724,16 @@ onBeforeUnmount(() => {
 	.desktop-main > :deep(*) {
 		max-width: 1320px;
 		margin-inline: auto;
+	}
+
+	.desktop-main--fullbleed {
+		padding: 0;
+	}
+
+	.desktop-main--fullbleed > :deep(*) {
+		max-width: none;
+		margin-inline: 0;
+		width: 100%;
 	}
 }
 

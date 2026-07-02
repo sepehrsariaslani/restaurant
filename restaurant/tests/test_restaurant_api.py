@@ -6,11 +6,13 @@ from restaurant.api import (
     get_customer_checkout_profile,
     get_item_detail,
     get_management_dashboard,
+    get_management_product_detail,
     get_management_report_product_mix,
     get_management_report_sales_summary,
     get_menu_boot,
     place_order,
     save_customer_delivery_address,
+    update_management_product_settings,
 )
 
 
@@ -406,6 +408,61 @@ class TestRestaurantAPI(FrappeTestCase):
         group = next((row for row in payload.get("modifier_groups", []) if row.get("title") == "Milk Options"), None)
         self.assertIsNotNone(group)
         self.assertTrue(any(opt.get("name") == self.modifier_item_code for opt in group.get("options", [])))
+
+    def test_management_product_settings_normalize_legacy_builder_modes(self):
+        item_doc = frappe.get_doc("Item", self.menu_item)
+        if frappe.db.has_column("Item", "restaurant_is_customizable"):
+            item_doc.db_set("restaurant_is_customizable", 1, update_modified=False)
+        if frappe.db.has_column("Item", "restaurant_kitchen_print_mode"):
+            item_doc.db_set("restaurant_kitchen_print_mode", "full_selections", update_modified=False)
+        if frappe.db.has_column("Item", "restaurant_stock_consumption_mode"):
+            item_doc.db_set("restaurant_stock_consumption_mode", "from_builder", update_modified=False)
+        frappe.db.commit()
+
+        detail = get_management_product_detail(item_doc.name)
+        self.assertEqual(detail["item"]["restaurant_kitchen_print_mode"], "parent_with_components")
+        self.assertEqual(
+            detail["item"]["restaurant_stock_consumption_mode"],
+            "consume_selected_components",
+        )
+
+        updated = update_management_product_settings(
+            {
+                "item_name": item_doc.name,
+                "restaurant_kitchen_print_mode": "full_selections",
+                "restaurant_stock_consumption_mode": "from_builder",
+            }
+        )
+        self.assertEqual(updated["item"]["restaurant_kitchen_print_mode"], "parent_with_components")
+        self.assertEqual(
+            updated["item"]["restaurant_stock_consumption_mode"],
+            "consume_selected_components",
+        )
+
+        reloaded = frappe.get_doc("Item", item_doc.name)
+        self.assertEqual(reloaded.get("restaurant_kitchen_print_mode"), "parent_with_components")
+        self.assertEqual(
+            reloaded.get("restaurant_stock_consumption_mode"),
+            "consume_selected_components",
+        )
+
+    def test_item_save_normalizes_legacy_builder_modes(self):
+        item_doc = frappe.get_doc("Item", self.menu_item)
+        if frappe.db.has_column("Item", "restaurant_is_customizable"):
+            item_doc.restaurant_is_customizable = 1
+        if frappe.db.has_column("Item", "restaurant_kitchen_print_mode"):
+            item_doc.restaurant_kitchen_print_mode = "full_selections"
+        if frappe.db.has_column("Item", "restaurant_stock_consumption_mode"):
+            item_doc.restaurant_stock_consumption_mode = "from_builder"
+
+        item_doc.save(ignore_permissions=True)
+
+        reloaded = frappe.get_doc("Item", item_doc.name)
+        self.assertEqual(reloaded.get("restaurant_kitchen_print_mode"), "parent_with_components")
+        self.assertEqual(
+            reloaded.get("restaurant_stock_consumption_mode"),
+            "consume_selected_components",
+        )
 
     def test_place_order_returns_production_payload(self):
         payload = place_order(

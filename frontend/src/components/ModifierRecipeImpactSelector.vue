@@ -7,7 +7,7 @@
 				<header>
 					<h4>{{ group.title }}</h4>
 					<small>
-						{{ group.min_select }} تا {{ group.max_select }}
+						{{ formatNumber(group.min_select) }} تا {{ formatNumber(group.max_select) }}
 						<span v-if="Number(group.required) === 1">(اجباری)</span>
 					</small>
 				</header>
@@ -90,7 +90,7 @@
 
 <script setup>
 import { computed } from "vue";
-import { formatMoney } from "@/utils/format";
+import { formatMoney, toPersianNumber } from "@/utils/format";
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
@@ -100,6 +100,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue"]);
+
+function formatNumber(value, options = {}) {
+	const numeric = Number(value || 0);
+	if (!Number.isFinite(numeric)) {
+		return "۰";
+	}
+	return toPersianNumber(numeric, options);
+}
 
 const selections = computed(() =>
 	Array.isArray(props.modelValue)

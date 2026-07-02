@@ -5,25 +5,29 @@
       class="apt-seg"
       :class="{ active: modelValue === 'fixed' }"
       :aria-pressed="modelValue === 'fixed'"
+      :disabled="disabled"
       :title="amountTitle"
       @click="$emit('update:modelValue', 'fixed')"
     >
-      <span class="apt-glyph">{{ currencySymbol }}</span>
+      <Banknote :size="15" :stroke-width="2.2" />
     </button>
     <button
       type="button"
       class="apt-seg"
       :class="{ active: modelValue === 'percent' }"
       :aria-pressed="modelValue === 'percent'"
+      :disabled="disabled"
       :title="percentTitle"
       @click="$emit('update:modelValue', 'percent')"
     >
-      <span class="apt-glyph">٪</span>
+      <Percent :size="14" :stroke-width="2.5" />
     </button>
   </div>
 </template>
 
 <script setup>
+import { Banknote, Percent } from 'lucide-vue-next'
+
 defineProps({
   modelValue: {
     type: String,
@@ -46,6 +50,10 @@ defineProps({
     type: String,
     default: 'درصدی',
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 defineEmits(['update:modelValue'])
@@ -56,25 +64,23 @@ defineEmits(['update:modelValue'])
   display: inline-flex;
   align-items: stretch;
   padding: 2px;
-  border-radius: 10px;
+  border-radius: 9px;
   background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.18);
+  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
   gap: 2px;
-  height: 32px;
+  height: 30px;
   flex-shrink: 0;
 }
 
 .apt-seg {
   border: 0;
   background: transparent;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.7);
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.45);
   font-family: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
   line-height: 1;
-  padding: 0 0.55rem;
-  min-width: 30px;
-  border-radius: 8px;
+  padding: 0 0.45rem;
+  min-width: 28px;
+  border-radius: 7px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -85,7 +91,7 @@ defineEmits(['update:modelValue'])
 
 .apt-seg:hover:not(.active) {
   background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
-  color: var(--pos-primary, #015a72);
+  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.7);
 }
 
 .apt-seg.active {
@@ -94,13 +100,13 @@ defineEmits(['update:modelValue'])
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 }
 
+.apt-seg:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .apt-seg:focus-visible {
   outline: 2px solid rgb(var(--pos-accent-rgb, 255 152 54) / 0.6);
   outline-offset: 1px;
-}
-
-.apt-glyph {
-  display: inline-block;
-  font-variant-numeric: tabular-nums;
 }
 </style>

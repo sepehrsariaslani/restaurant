@@ -34,6 +34,14 @@ export function formatMoney(value, currency = "IRR") {
 	return `${formatted} ${unit}`;
 }
 
+export function toPersianNumber(value, options = {}) {
+	const numeric = Number(value || 0);
+	if (!Number.isFinite(numeric)) {
+		return "۰";
+	}
+	return numeric.toLocaleString("fa-IR", options);
+}
+
 export function formatStatus(status) {
 	return STATUS_LABELS[status] || status || "-";
 }

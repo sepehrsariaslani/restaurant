@@ -22,7 +22,7 @@
 						>
 							-
 						</button>
-						<strong>{{ qty }}</strong>
+						<strong>{{ Number(qty || 0).toLocaleString('fa-IR') }}</strong>
 						<button type="button" @click="$emit('update:qty', Number(qty || 1) + 1)">
 							+
 						</button>

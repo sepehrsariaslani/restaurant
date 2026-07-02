@@ -37,7 +37,7 @@ ORDER_CONTEXT_TYPES = {"dine_in", "pickup", "delivery"}
 DINE_IN_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "served"]
 PICKUP_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "delivered"]
 DELIVERY_STATUS_FLOW = ["new", "confirmed", "preparing", "courier_handoff", "on_the_way", "delivered"]
-POS_PAYMENT_METHODS = {"cash", "card"}
+POS_PAYMENT_METHODS = {"cash", "card", "credit"}
 POS_PAYMENT_STATUSES = {"pending", "paid", "failed", "cancelled"}
 POS_PAYMENT_PROVIDERS = {"manual", "local_node", "webhook"}
 POS_PAYMENT_SUCCESS_TOKENS = {"success", "successful", "paid", "approved", "ok", "done"}
@@ -73,6 +73,32 @@ MANAGEMENT_DISPLAY_VARIANT_DEFAULTS = {
 	"card_variant": "classic",
 	"hero_image_position": "center",
 	"category_rail_variant": "pill",
+}
+MANAGEMENT_KITCHEN_PRINT_MODE_DEFAULT = "parent_with_components"
+MANAGEMENT_KITCHEN_PRINT_MODES = (
+	"parent_only",
+	"parent_with_components",
+	"components_grouped_by_step",
+)
+MANAGEMENT_KITCHEN_PRINT_MODE_ALIASES = {
+	"full_selections": MANAGEMENT_KITCHEN_PRINT_MODE_DEFAULT,
+	"full detail": MANAGEMENT_KITCHEN_PRINT_MODE_DEFAULT,
+	"step only": "components_grouped_by_step",
+	"option only": MANAGEMENT_KITCHEN_PRINT_MODE_DEFAULT,
+}
+MANAGEMENT_STOCK_CONSUMPTION_MODE_DEFAULT = "consume_selected_components"
+MANAGEMENT_STOCK_CONSUMPTION_MODES = (
+	"no_stock_deduction",
+	"consume_selected_components",
+	"create_dynamic_bom",
+	"use_sales_order_exploded_components",
+	"manual_kitchen_consumption",
+)
+MANAGEMENT_STOCK_CONSUMPTION_MODE_ALIASES = {
+	"from_builder": MANAGEMENT_STOCK_CONSUMPTION_MODE_DEFAULT,
+	"per option": MANAGEMENT_STOCK_CONSUMPTION_MODE_DEFAULT,
+	"per step": "create_dynamic_bom",
+	"fixed": "no_stock_deduction",
 }
 MANAGEMENT_HEADER_VARIANTS = {"classic", "minimal", "hero", "glass"}
 MANAGEMENT_MENU_SEARCH_VARIANTS = {"search-card", "off"}
@@ -1102,6 +1128,7 @@ def _management_pos_profile_summary():
 		"shift_name": shift.get("name") or "",
 		"shift_opened_at": shift.get("opened_at"),
 		"shift_status": shift.get("status") or "",
+		"payments": profile.get("payments") or [],
 	}
 
 
@@ -2119,11 +2146,18 @@ def _process_management_pos_payment(order_payload, payment_input):
 
 	payment_result = {
 		"method": method,
+		"mode_of_payment": (payment_input.get("mode_of_payment") or "").strip(),
 		"provider": provider,
 		"status": "paid" if method == "cash" else "pending",
 		"reference_no": "",
 		"rrn": "",
-		"message": _("Cash payment recorded.") if method == "cash" else _("Card payment is pending."),
+		"message": (
+			_("Cash payment recorded.")
+			if method == "cash"
+			else _("Credit sale recorded. Payment will be collected later.")
+			if method == "credit"
+			else _("Card payment is pending.")
+		),
 		"provider_payload": {},
 	}
 
@@ -2141,11 +2175,17 @@ def _process_management_pos_payment(order_payload, payment_input):
 		else:
 			payment_result["status"] = "pending"
 			payment_result["message"] = _("Manual card payment mode. Confirm transaction after POS approval.")
+	elif method == "credit":
+		payment_result["status"] = "pending"
+		payment_result["message"] = _("Credit sale recorded. Payment will be collected later.")
 
 	if manual_reference:
 		payment_result["reference_no"] = manual_reference
 	if manual_rrn:
 		payment_result["rrn"] = manual_rrn
+
+	if not payment_result.get("mode_of_payment"):
+		payment_result["mode_of_payment"] = (payment_input.get("mode_of_payment") or "").strip()
 
 	if method == "card" and (manual_reference or manual_rrn):
 		payment_result["status"] = "paid"
@@ -13372,6 +13412,21 @@ def _management_product_field_options():
 		"subcategories": [],
 		"branches": [],
 		"item_attributes": [],
+		"kitchen_print_modes": [
+			{"value": "parent_only", "label": _("Only parent item")},
+			{"value": "parent_with_components", "label": _("Parent with selected components")},
+			{"value": "components_grouped_by_step", "label": _("Components grouped by builder step")},
+		],
+		"stock_consumption_modes": [
+			{"value": "no_stock_deduction", "label": _("No stock deduction")},
+			{"value": "consume_selected_components", "label": _("Consume selected components")},
+			{"value": "create_dynamic_bom", "label": _("Create dynamic BOM preview")},
+			{
+				"value": "use_sales_order_exploded_components",
+				"label": _("Use sales order exploded components"),
+			},
+			{"value": "manual_kitchen_consumption", "label": _("Manual kitchen consumption")},
+		],
 	}
 
 	if frappe.db.exists("DocType", "UOM"):
@@ -13556,6 +13611,65 @@ def _management_product_field_options():
 			)
 
 	return options
+
+
+def _normalize_management_select_value(
+	value,
+	*,
+	valid_options,
+	alias_map=None,
+	default="",
+	fallback_to_default=False,
+):
+	raw_value = (value or "").strip()
+	if not raw_value:
+		return default if fallback_to_default else ""
+
+	canonical = raw_value.lower()
+	if alias_map and canonical in alias_map:
+		return alias_map[canonical]
+
+	if raw_value in valid_options:
+		return raw_value
+
+	return default if fallback_to_default else raw_value
+
+
+def _normalize_management_kitchen_print_mode(value, fallback_to_default=False):
+	return _normalize_management_select_value(
+		value,
+		valid_options=MANAGEMENT_KITCHEN_PRINT_MODES,
+		alias_map=MANAGEMENT_KITCHEN_PRINT_MODE_ALIASES,
+		default=MANAGEMENT_KITCHEN_PRINT_MODE_DEFAULT,
+		fallback_to_default=fallback_to_default,
+	)
+
+
+def _normalize_management_stock_consumption_mode(value, fallback_to_default=False):
+	return _normalize_management_select_value(
+		value,
+		valid_options=MANAGEMENT_STOCK_CONSUMPTION_MODES,
+		alias_map=MANAGEMENT_STOCK_CONSUMPTION_MODE_ALIASES,
+		default=MANAGEMENT_STOCK_CONSUMPTION_MODE_DEFAULT,
+		fallback_to_default=fallback_to_default,
+	)
+
+
+def normalize_item_builder_modes(doc, method=None):
+	if not doc or getattr(doc, "doctype", "") != "Item":
+		return
+
+	if _has_column("Item", "restaurant_kitchen_print_mode"):
+		doc.restaurant_kitchen_print_mode = _normalize_management_kitchen_print_mode(
+			doc.get("restaurant_kitchen_print_mode"),
+			fallback_to_default=True,
+		)
+
+	if _has_column("Item", "restaurant_stock_consumption_mode"):
+		doc.restaurant_stock_consumption_mode = _normalize_management_stock_consumption_mode(
+			doc.get("restaurant_stock_consumption_mode"),
+			fallback_to_default=True,
+		)
 
 
 def _management_item_attribute_payload(attribute_doc, include_values=True):
@@ -14886,8 +15000,14 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_allow_direct_add": cint(item_doc.get("restaurant_allow_direct_add") or 0),
 			"restaurant_show_nutrition_summary": cint(item_doc.get("restaurant_show_nutrition_summary") or 0),
 			"restaurant_show_allergen_warnings": cint(item_doc.get("restaurant_show_allergen_warnings") or 0),
-			"restaurant_kitchen_print_mode": item_doc.get("restaurant_kitchen_print_mode") or "",
-			"restaurant_stock_consumption_mode": item_doc.get("restaurant_stock_consumption_mode") or "",
+			"restaurant_kitchen_print_mode": _normalize_management_kitchen_print_mode(
+				item_doc.get("restaurant_kitchen_print_mode"),
+				fallback_to_default=True,
+			),
+			"restaurant_stock_consumption_mode": _normalize_management_stock_consumption_mode(
+				item_doc.get("restaurant_stock_consumption_mode"),
+				fallback_to_default=True,
+			),
 			"restaurant_item_tags": item_doc.get("restaurant_item_tags") or "",
 			"restaurant_nutrition_kcal": flt(item_doc.get("restaurant_nutrition_kcal") or 0),
 			"restaurant_nutrition_protein_g": flt(item_doc.get("restaurant_nutrition_protein_g") or 0),
@@ -15020,6 +15140,10 @@ def update_management_product_settings(payload=None):
 			continue
 		next_value = parsed_payload.get(fieldname)
 		next_value = (next_value or "").strip() if isinstance(next_value, str) else (next_value or "")
+		if fieldname == "restaurant_kitchen_print_mode":
+			next_value = _normalize_management_kitchen_print_mode(next_value)
+		elif fieldname == "restaurant_stock_consumption_mode":
+			next_value = _normalize_management_stock_consumption_mode(next_value)
 		if item_doc.get(fieldname) != next_value:
 			item_doc.set(fieldname, next_value)
 			changed = True

@@ -1,19 +1,23 @@
 <template>
 	<section class="cart-panel">
-		<div class="mode-row">
+		<!-- Order Mode Segmented Control -->
+		<nav class="mode-seg" role="tablist">
 			<button
 				v-for="mode in orderModes"
 				:key="mode.value"
 				type="button"
+				role="tab"
+				:aria-selected="orderMode === mode.value"
 				:class="{ active: orderMode === mode.value }"
 				@click="$emit('update:orderMode', mode.value)"
 			>
 				{{ mode.label }}
 			</button>
-		</div>
+		</nav>
 
-		<label class="field">
-			<span>جایگاه</span>
+		<!-- Place Selector -->
+		<div class="place-field">
+			<span class="place-label">جایگاه</span>
 			<SearchableDropdown
 				:model-value="place"
 				:options="normalizedPlaceOptions"
@@ -21,218 +25,179 @@
 				search-placeholder="جستجوی جایگاه..."
 				include-empty-option
 				empty-label="انتخاب کنید"
-				tone="dark"
 				@update:model-value="$emit('update:place', $event)"
 			/>
-		</label>
+		</div>
 
-		<div class="cart-head">
-			<h3>سبد خرید</h3>
-			<div class="cart-head-actions">
-				<button
-					v-if="undoLine"
-					type="button"
-					class="undo-btn"
-					:title="`بازگردانی: ${undoLine.title}`"
-					@click="$emit('undo-last-line')"
+		<!-- Cart -->
+		<div class="cart-section">
+			<header class="cart-head">
+				<h3>سبد خرید</h3>
+				<div class="cart-head-actions">
+					<button
+						v-if="undoLine"
+						type="button"
+						class="undo-btn"
+						:title="`بازگردانی: ${undoLine.title}`"
+						@click="$emit('undo-last-line')"
+					>↩ {{ undoLine.title }}</button>
+					<button type="button" class="clear-btn" @click="$emit('clear-cart')">حذف همه</button>
+				</div>
+			</header>
+
+			<div class="cart-list" v-if="cartLines.length">
+				<article
+					v-for="line in cartLines"
+					:key="line.line_id"
+					class="cart-row"
+					:class="{ active: selectedLineId === line.line_id }"
+					@click="$emit('update:selectedLineId', line.line_id)"
 				>
-					↩ {{ undoLine.title }}
-				</button>
-				<button type="button" class="clear-btn" @click="$emit('clear-cart')">
-					حذف همه
-				</button>
-			</div>
-		</div>
-
-		<div class="cart-list" v-if="cartLines.length">
-			<article
-				v-for="line in cartLines"
-				:key="line.line_id"
-				class="cart-row"
-				:class="{ active: selectedLineId === line.line_id }"
-				@click="$emit('update:selectedLineId', line.line_id)"
-			>
-				<div class="line-main">
-					<strong>{{ line.title }}</strong>
-					<small>{{ formatMoney(rowTotal(line), currency) }}</small>
-					<small class="line-custom" v-if="canEditCustomization(line)"
-						>سفارشی سازی فعال</small
-					>
-					<ul class="line-custom-list" v-if="customizationSummary(line).length">
-						<li
-							v-for="(entry, idx) in customizationSummary(line)"
-							:key="`${line.line_id}-custom-${idx}`"
-						>
-							{{ entry }}
-						</li>
-					</ul>
-					<small class="line-note" v-if="line.note">{{ line.note }}</small>
-				</div>
-
-				<div class="line-actions">
-					<button
-						v-if="canEditCustomization(line)"
-						type="button"
-						class="icon bom"
-						title="ویرایش سفارشی سازی"
-						@click.stop="$emit('edit-line-customization', line)"
-					>
-						BOM
-					</button>
-					<button
-						type="button"
-						class="icon"
-						title="ویرایش"
-						@click.stop="$emit('edit-line-note', line)"
-					>
-						✎
-					</button>
-					<div class="counter">
-						<button type="button" @click.stop="$emit('decrement-line', line)">
-							-
-						</button>
-						<span>{{ qtyText(line.qty) }}</span>
-						<button type="button" @click.stop="$emit('increment-line', line)">
-							+
-						</button>
+					<div class="line-main">
+						<div class="line-title-row">
+							<strong>{{ line.title }}</strong>
+							<span class="line-price">{{ formatMoney(rowTotal(line), currency) }}</span>
+						</div>
+						<small class="line-custom" v-if="canEditCustomization(line)">سفارشی‌سازی فعال</small>
+						<ul class="line-custom-list" v-if="customizationSummary(line).length">
+							<li v-for="(entry, idx) in customizationSummary(line)" :key="`${line.line_id}-custom-${idx}`">{{ entry }}</li>
+						</ul>
+						<small class="line-note" v-if="line.note">{{ line.note }}</small>
 					</div>
-					<button
-						type="button"
-						class="icon danger"
-						title="حذف"
-						@click.stop="$emit('remove-line', line)"
-					>
-						×
-					</button>
-				</div>
-			</article>
+					<div class="line-actions">
+						<button v-if="canEditCustomization(line)" type="button" class="act-btn bom" title="ویرایش سفارشی سازی" @click.stop="$emit('edit-line-customization', line)">BOM</button>
+						<button type="button" class="act-btn" title="یادداشت" @click.stop="$emit('edit-line-note', line)">✎</button>
+						<div class="counter">
+							<button type="button" @click.stop="$emit('decrement-line', line)">−</button>
+							<span>{{ qtyText(line.qty) }}</span>
+							<button type="button" @click.stop="$emit('increment-line', line)">+</button>
+						</div>
+						<button type="button" class="act-btn remove" title="حذف" @click.stop="$emit('remove-line', line)">×</button>
+					</div>
+				</article>
+			</div>
+
+			<div class="cart-empty" v-else>
+				<span class="cart-empty-icon"><ShoppingCart :size="22" :stroke-width="2.1" /></span>
+				<p>سبد خرید خالی است</p>
+			</div>
 		</div>
-		<p class="hint" v-else>سبد خرید خالی است.</p>
 
-		<section class="financial-box">
-			<div class="financial-head">
-				<h4 class="financial-title">متغیرهای مالی</h4>
-			</div>
-
-			<!-- ردیف ۲: تخفیف -->
-			<div class="fin-row">
-				<span class="fin-label">تخفیف</span>
-				<div class="fin-input-group">
-					<PersianNumberInput
-						:model-value="financial.discountValue"
-						input-class="fin-input"
-						placeholder="0"
-						:min="0"
-						@update:model-value="patchFinancial({ discountValue: $event })"
-					/>
-					<AmountPercentToggle
-						:model-value="financial.discountType === 'percent' ? 'percent' : 'fixed'"
-						aria-label="نوع تخفیف"
-						@update:model-value="
-							patchFinancial({
-								discountType: $event === 'percent' ? 'percent' : 'fixed',
-							})
-						"
-					/>
+		<!-- Financial -->
+		<div class="fin-section">
+			<!-- Discount group: amount + coupon code -->
+			<div class="fin-group">
+				<div class="fin-row">
+					<span class="fin-label">تخفیف</span>
+					<div class="fin-control">
+						<AmountPercentToggle
+							:model-value="financial.discountType === 'percent' ? 'percent' : 'fixed'"
+							aria-label="نوع تخفیف"
+							@update:model-value="patchFinancial({ discountType: $event === 'percent' ? 'percent' : 'fixed' })"
+						/>
+						<PersianNumberInput
+							:model-value="financial.discountValue"
+							input-class="fin-input"
+							placeholder="0"
+							:min="0"
+							@update:model-value="patchFinancial({ discountValue: $event })"
+						/>
+					</div>
+				</div>
+				<div class="fin-row">
+					<span class="fin-label">کد تخفیف</span>
+					<div class="fin-control">
+						<input
+							class="fin-input"
+							:value="financial.couponCode"
+							@input="patchFinancial({ couponCode: $event.target.value })"
+							placeholder="کد / معرف"
+						/>
+						<button type="button" class="fin-action-btn" @click="$emit('verify-coupon')">بررسی</button>
+					</div>
 				</div>
 			</div>
 
-			<!-- ردیف ۳: کد تخفیف -->
-			<div class="fin-row">
-				<span class="fin-label">کد تخفیف</span>
-				<div class="fin-input-group">
-					<input
-						class="fin-input"
-						:value="financial.couponCode"
-						@input="patchFinancial({ couponCode: $event.target.value })"
-						placeholder="کد / معرف"
-					/>
-					<button type="button" class="fin-check-btn" @click="$emit('verify-coupon')">
-						بررسی
-					</button>
+			<!-- Service + Tax group -->
+			<div class="fin-group">
+				<div class="fin-row">
+					<span class="fin-label">حق سرویس</span>
+					<div class="fin-control">
+						<AmountPercentToggle
+							:model-value="financial.serviceType === 'percent' ? 'percent' : 'fixed'"
+							aria-label="نوع حق سرویس"
+							@update:model-value="patchFinancial({ serviceType: $event === 'percent' ? 'percent' : 'fixed' })"
+						/>
+						<PersianNumberInput
+							:model-value="financial.serviceValue"
+							input-class="fin-input"
+							placeholder="0"
+							:min="0"
+							@update:model-value="patchFinancial({ serviceValue: $event })"
+						/>
+					</div>
+				</div>
+				<div class="fin-row">
+					<label class="fin-toggle-label">
+						<input
+							type="checkbox"
+							class="fin-checkbox"
+							:checked="Boolean(financial.taxExempt)"
+							@change="patchFinancial({ taxExempt: $event.target.checked })"
+						/>
+						<span class="fin-label">معاف از مالیات</span>
+					</label>
+					<div class="fin-control">
+						<AmountPercentToggle
+							:model-value="financial.taxType === 'percent' ? 'percent' : 'fixed'"
+							aria-label="نوع مالیات"
+							:disabled="Boolean(financial.taxExempt)"
+							@update:model-value="patchFinancial({ taxType: $event === 'percent' ? 'percent' : 'fixed' })"
+						/>
+						<PersianNumberInput
+							:model-value="financial.taxValue"
+							input-class="fin-input"
+							placeholder="ارزش افزوده"
+							:min="0"
+							:disabled="Boolean(financial.taxExempt)"
+							@update:model-value="patchFinancial({ taxValue: $event })"
+						/>
+					</div>
 				</div>
 			</div>
 
-			<!-- ردیف ۴: مالیات -->
-			<div class="fin-row">
-				<label class="fin-toggle-label">
-					<input
-						type="checkbox"
-						class="fin-checkbox"
-						:checked="Boolean(financial.taxExempt)"
-						@change="patchFinancial({ taxExempt: $event.target.checked })"
-					/>
-					<span class="fin-label">معاف از مالیات</span>
-				</label>
-				<PersianNumberInput
-					:model-value="financial.taxAmount"
-					input-class="fin-input fin-input-sm"
-					placeholder="ارزش افزوده"
-					:min="0"
-					:disabled="Boolean(financial.taxExempt)"
-					@update:model-value="patchFinancial({ taxAmount: $event })"
-				/>
-			</div>
-
-			<!-- ردیف ۶: حق سرویس -->
-			<div class="fin-row">
-				<span class="fin-label">حق سرویس</span>
-				<div class="fin-input-group">
-					<PersianNumberInput
-						:model-value="financial.serviceValue"
-						input-class="fin-input"
-						placeholder="0"
-						:min="0"
-						@update:model-value="patchFinancial({ serviceValue: $event })"
-					/>
-					<AmountPercentToggle
-						:model-value="financial.serviceType === 'percent' ? 'percent' : 'fixed'"
-						aria-label="نوع حق سرویس"
-						@update:model-value="
-							patchFinancial({
-								serviceType: $event === 'percent' ? 'percent' : 'fixed',
-							})
-						"
-					/>
-				</div>
-			</div>
-
-			<!-- ردیف ۷: یادداشت -->
-			<div class="fin-row fin-row-note">
-				<span class="fin-label">یادداشت</span>
+			<!-- Note -->
+			<div class="fin-note-row">
 				<input
-					class="fin-input fin-note-input"
+					class="fin-note-input"
 					:value="note"
 					@input="$emit('update:note', $event.target.value)"
 					placeholder="یادداشت سفارش..."
 				/>
 			</div>
-		</section>
+		</div>
 
+		<!-- Summary -->
 		<div class="summary-box">
 			<div class="sum-line">
-				<span>جمع کالاها</span
-				><strong>{{ formatMoney(totals.itemsTotal || 0, currency) }}</strong>
+				<span>جمع کالاها</span>
+				<strong>{{ formatMoney(totals.itemsTotal || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line" v-if="isNonZero(totals.discountAmount)">
-				<span>تخفیف</span
-				><strong>- {{ formatMoney(totals.discountAmount || 0, currency) }}</strong>
-			</div>
-			<div class="sum-line" v-if="isNonZero(totals.walletApplied)">
-				<span>کیف پول</span
-				><strong>- {{ formatMoney(totals.walletApplied || 0, currency) }}</strong>
+				<span>تخفیف</span>
+				<strong class="discount">- {{ formatMoney(totals.discountAmount || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line" v-if="isNonZero(totals.taxAmount)">
-				<span>مالیات</span
-				><strong>{{ formatMoney(totals.taxAmount || 0, currency) }}</strong>
+				<span>مالیات</span>
+				<strong>{{ formatMoney(totals.taxAmount || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line" v-if="isNonZero(totals.tipAmount)">
-				<span>انعام</span
-				><strong>{{ formatMoney(totals.tipAmount || 0, currency) }}</strong>
+				<span>انعام</span>
+				<strong>{{ formatMoney(totals.tipAmount || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line" v-if="isNonZero(totals.serviceAmount)">
-				<span>حق سرویس</span
-				><strong>{{ formatMoney(totals.serviceAmount || 0, currency) }}</strong>
+				<span>حق سرویس</span>
+				<strong>{{ formatMoney(totals.serviceAmount || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line payable">
 				<span>مبلغ قابل پرداخت</span>
@@ -240,69 +205,50 @@
 			</div>
 		</div>
 
+		<!-- Actions -->
 		<footer class="checkout-actions">
-			<button
-				type="button"
-				class="save-btn"
-				:disabled="submitting || !cartLines.length"
-				@click="$emit('submit-order')"
-			>
-				{{
-					submitting
-						? "در حال ثبت..."
-						: orderMode === "dine_in"
-							? "افزودن به میز"
-							: "ثبت سفارش"
-				}}
-			</button>
-			<button
-				type="button"
-				class="pay-btn"
-				:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
-				@click="openPaymentPopup"
-			>
-				{{
-					submitting
-						? "در حال پرداخت..."
-						: orderMode === "dine_in"
-							? "تسویه از تب میزها"
-							: "تسویه فاکتور"
-				}}
-			</button>
+			<div class="checkout-btns">
+				<button
+					type="button"
+					class="save-btn"
+					:disabled="submitting || !cartLines.length"
+					@click="$emit('submit-order')"
+				>{{ submitting ? "در حال ثبت..." : orderMode === "dine_in" ? "افزودن به میز" : "ثبت سفارش" }}</button>
+				<button
+					type="button"
+					class="pay-btn"
+					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
+					@click="openPaymentPopup"
+				>{{ submitting ? "در حال پرداخت..." : orderMode === "dine_in" ? "تسویه از تب میزها" : "تسویه فاکتور" }}</button>
+			</div>
 			<button
 				type="button"
 				class="print-btn"
 				:disabled="orderMode === 'dine_in' ? !canPrintTableOrders : !cartLines.length"
 				@click="$emit('print-ticket')"
-			>
-				{{ orderMode === "dine_in" ? "چاپ تاییدشده‌ها" : "چاپ فاکتور" }}
-			</button>
-
-			<label>
-				<input
-					type="checkbox"
-					:checked="Boolean(financial.printProduction)"
-					@change="patchFinancial({ printProduction: $event.target.checked })"
-				/>
-				چاپ صورتحساب تولید
-			</label>
-			<label>
-				<input
-					type="checkbox"
-					:checked="Boolean(financial.createNextInvoice)"
-					@change="patchFinancial({ createNextInvoice: $event.target.checked })"
-				/>
-				ساخت صورتحساب بعدی
-			</label>
+			>{{ orderMode === "dine_in" ? "چاپ تاییدشده‌ها" : "چاپ فاکتور" }}</button>
+			<div class="checkout-opts">
+				<label>
+					<input type="checkbox" :checked="Boolean(financial.printProduction)" @change="patchFinancial({ printProduction: $event.target.checked })" />
+					چاپ صورتحساب تولید
+				</label>
+				<label>
+					<input type="checkbox" :checked="Boolean(financial.createNextInvoice)" @change="patchFinancial({ createNextInvoice: $event.target.checked })" />
+					ساخت صورتحساب بعدی
+				</label>
+			</div>
 		</footer>
 	</section>
 
 	<div v-if="showPaymentPopup" class="pay-popup-backdrop" @click.self="showPaymentPopup = false">
 		<section class="pay-popup" dir="rtl">
 			<header class="pay-popup-head">
-				<h3>تسویه فاکتور</h3>
+				<div class="pay-popup-title">
+					<CreditCard :size="18" :stroke-width="2.2" />
+					<h3>تسویه فاکتور</h3>
+				</div>
 				<button type="button" class="pay-popup-close" @click="showPaymentPopup = false">
-					×
+					<X :size="16" :stroke-width="2.4" />
 				</button>
 			</header>
 
@@ -313,67 +259,65 @@
 
 			<div class="pay-splits">
 				<div v-for="(split, idx) in paymentSplits" :key="idx" class="pay-split-row">
-					<select class="dark-input pay-method-select" v-model="split.method">
-						<option value="cash">💵 نقدی</option>
-						<option value="card" v-if="paymentBoot?.supports_card">💳 کارتخوان</option>
-						<option value="wallet">👛 کیف پول</option>
-					</select>
-					<PersianNumberInput
-						:model-value="split.amount"
-						input-class="pay-amount-input"
-						placeholder="مبلغ"
-						:min="0"
-						show-words
-						@update:model-value="split.amount = $event"
-					/>
-					<button
-						v-if="paymentSplits.length > 1"
-						type="button"
-						class="pay-split-remove"
-						@click="removeSplit(idx)"
-					>
-						×
-					</button>
-					<div v-if="split.method === 'cash'" class="cash-calc-row">
-						<span class="cash-calc-label">دریافتی از مشتری:</span>
-						<PersianNumberInput
-							:model-value="splitReceivedAmounts[idx] || 0"
-							input-class="pay-amount-input cash-received-input"
-							placeholder="مبلغ دریافتی"
-							:min="0"
-							@update:model-value="splitReceivedAmounts[idx] = $event"
-						/>
-						<span
-							v-if="(splitReceivedAmounts[idx] || 0) > 0"
-							class="cash-change-label"
-							:class="{
-								negative:
-									(splitReceivedAmounts[idx] || 0) < Number(split.amount || 0),
-							}"
-						>
-							{{
-								(splitReceivedAmounts[idx] || 0) >= Number(split.amount || 0)
-									? `باقی پول: ${formatMoney((splitReceivedAmounts[idx] || 0) - Number(split.amount || 0), currency)}`
-									: `کم دارد: ${formatMoney(Number(split.amount || 0) - (splitReceivedAmounts[idx] || 0), currency)}`
-							}}
-						</span>
+					<div class="pay-split-card">
+						<div class="pay-split-head">
+							<div class="pay-method-preview">
+								<component :is="paymentMethodIcon(split.method)" :size="16" :stroke-width="2.2" />
+								<span>{{ splitMethodLabel(split) }}</span>
+							</div>
+							<button
+								v-if="paymentSplits.length > 1"
+								type="button"
+								class="pay-split-remove"
+								@click="removeSplit(idx)"
+							>
+								<X :size="14" :stroke-width="2.4" />
+							</button>
+						</div>
+						<div class="pay-split-controls">
+							<select
+								class="dark-input pay-method-select"
+								:value="split.optionKey"
+								@change="updateSplitOption(split, $event.target.value)"
+							>
+								<option
+									v-for="option in paymentOptionList"
+									:key="option.key"
+									:value="option.key"
+								>
+									{{ option.label }}
+								</option>
+							</select>
+							<PersianNumberInput
+								:model-value="split.amount"
+								input-class="pay-amount-input"
+								placeholder="مبلغ"
+								:min="0"
+								show-words
+								@update:model-value="split.amount = $event"
+							/>
+						</div>
+						<p v-if="split.method === 'credit'" class="pay-credit-hint">
+							این بخش بدون ثبت پرداخت نهایی به صورت اعتباری ذخیره می‌شود.
+						</p>
 					</div>
 				</div>
 			</div>
 
 			<button type="button" class="pay-add-split-btn" @click="addSplit">
-				+ افزودن روش پرداخت دیگر
+				<Plus :size="14" :stroke-width="2.5" />
+				<span>افزودن روش پرداخت</span>
 			</button>
 
 			<div
 				class="pay-remaining-row"
-				:class="{ zero: splitRemaining <= 0, over: splitRemaining < 0 }"
+				:class="{ zero: isSplitBalanced, over: isSplitOver }"
 			>
 				<span>{{
-					splitRemaining < 0
+					isSplitOver
 						? "مازاد پرداختی"
-						: splitRemaining === 0
-							? "تسویه کامل ✓"
+						: isSplitBalanced
+							? "تسویه کامل"
 							: "باقیمانده"
 				}}</span>
 				<strong>{{ formatMoney(Math.abs(splitRemaining), currency) }}</strong>
@@ -385,7 +329,10 @@
 					:key="`s-${idx}`"
 					class="pay-split-summary-row"
 				>
-					<span>{{ splitMethodLabel(split.method) }}</span>
+					<span class="pay-split-summary-label">
+						<component :is="paymentMethodIcon(split.method)" :size="14" :stroke-width="2.2" />
+						<span>{{ splitMethodLabel(split) }}</span>
+					</span>
 					<span>{{ formatMoney(split.amount || 0, currency) }}</span>
 				</div>
 			</div>
@@ -409,10 +356,11 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { Banknote, CreditCard, FileClock, Plus, ShoppingCart, X } from "lucide-vue-next";
 import SearchableDropdown from "@/components/SearchableDropdown.vue";
 import PersianNumberInput from "@/components/PersianNumberInput.vue";
 import AmountPercentToggle from "@/components/AmountPercentToggle.vue";
-import { formatMoney, formatStatus } from "@/utils/format";
+import { formatMoney, formatStatus, toPersianNumber } from "@/utils/format";
 
 function isNonZero(value) {
 	const num = Number(value);
@@ -480,6 +428,10 @@ const props = defineProps({
 		type: Object,
 		default: () => ({}),
 	},
+	paymentOptions: {
+		type: Array,
+		default: () => [],
+	},
 	financial: {
 		type: Object,
 		default: () => ({}),
@@ -523,15 +475,16 @@ const emit = defineEmits([
 	"print-confirmed-table",
 ]);
 
-const showAdvancedFinancial = ref(true);
 const showPaymentPopup = ref(false);
-const paymentSplits = ref([{ method: "cash", amount: 0 }]);
-const splitReceivedAmounts = ref([0]);
+const paymentSplits = ref([]);
+const discountInputRef = ref(null);
 
 const splitTotal = computed(() =>
 	paymentSplits.value.reduce((sum, s) => sum + Number(s.amount || 0), 0),
 );
 const splitRemaining = computed(() => Number(props.totals?.payableAmount || 0) - splitTotal.value);
+const isSplitBalanced = computed(() => Math.abs(splitRemaining.value) <= 0.001);
+const isSplitOver = computed(() => splitRemaining.value < -0.001);
 
 const orderModes = [
 	{ value: "dine_in", label: "سالن" },
@@ -558,66 +511,130 @@ const normalizedPlaceOptions = computed(() =>
 	})),
 );
 
-const paymentMethodOptions = computed(() => {
-	const options = [{ value: "cash", label: "نقدی" }];
-	if (Boolean(props.paymentBoot?.supports_card)) {
-		options.push({ value: "card", label: "کارتخوان" });
+const paymentOptionList = computed(() =>
+	Array.isArray(props.paymentOptions) && props.paymentOptions.length
+		? props.paymentOptions
+		: [
+				{
+					key: "cash:نقدی",
+					method: "cash",
+					label: "نقدی",
+					mode_of_payment: "نقدی",
+				},
+		  ],
+);
+
+const defaultPaymentOption = computed(() => {
+	const exactMethod = paymentOptionList.value.find((option) => option.method === props.paymentMethod);
+	if (exactMethod) {
+		return exactMethod;
 	}
-	return options;
+	return (
+		paymentOptionList.value.find((option) => Boolean(option.default)) ||
+		paymentOptionList.value[0] ||
+		null
+	);
 });
 
 watch(
-	() => [props.paymentMethod, Boolean(props.paymentBoot?.supports_card)],
-	([method, supportsCard]) => {
-		if (method === "card" && !supportsCard) {
-			emit("update:paymentMethod", "cash");
-		}
+	() => paymentOptionList.value,
+	() => {
+		paymentSplits.value = paymentSplits.value.map((split) => syncSplitOption(split));
 	},
-	{ immediate: true },
+	{ deep: true },
 );
 
 function patchFinancial(partial) {
 	emit("patch-financial", partial);
 }
 
-function toggleDiscountType() {
-	const next = props.financial.discountType === "fixed" ? "percent" : "fixed";
-	patchFinancial({ discountType: next });
+function resolvePaymentOption(optionKey = "") {
+	return paymentOptionList.value.find((option) => option.key === optionKey) || null;
+}
+
+function buildSplit(optionKey = "", amount = 0) {
+	const option = resolvePaymentOption(optionKey) || defaultPaymentOption.value;
+	return {
+		optionKey: option?.key || "",
+		method: option?.method || "cash",
+		mode_of_payment: option?.mode_of_payment || option?.label || "نقدی",
+		label: option?.label || "نقدی",
+		amount,
+	};
+}
+
+function syncSplitOption(split = {}) {
+	const option = resolvePaymentOption(split.optionKey) || defaultPaymentOption.value;
+	if (!option) {
+		return {
+			optionKey: "",
+			method: "cash",
+			mode_of_payment: "نقدی",
+			label: "نقدی",
+			amount: Number(split.amount || 0),
+		};
+	}
+	return {
+		...split,
+		optionKey: option.key,
+		method: option.method,
+		mode_of_payment: option.mode_of_payment || option.label,
+		label: option.label,
+		amount: Number(split.amount || 0),
+	};
+}
+
+function updateSplitOption(split, optionKey) {
+	Object.assign(split, syncSplitOption({ ...split, optionKey }));
 }
 
 function openPaymentPopup(preferredMethod = null) {
 	const total = Number(props.totals?.payableAmount || 0);
-	const method = preferredMethod || props.paymentMethod || "cash";
-	paymentSplits.value = [{ method, amount: total }];
-	splitReceivedAmounts.value = [0];
+	const preferredOption =
+		paymentOptionList.value.find((option) => option.method === preferredMethod) ||
+		paymentOptionList.value.find((option) => option.method === props.paymentMethod) ||
+		defaultPaymentOption.value;
+	paymentSplits.value = [buildSplit(preferredOption?.key || "", total)];
 	showPaymentPopup.value = true;
 }
 
 function addSplit() {
 	const remaining = Math.max(splitRemaining.value, 0);
-	paymentSplits.value.push({ method: "cash", amount: remaining });
-	splitReceivedAmounts.value.push(0);
+	paymentSplits.value.push(buildSplit(defaultPaymentOption.value?.key || "", remaining));
 }
 
 function removeSplit(idx) {
 	paymentSplits.value.splice(idx, 1);
-	splitReceivedAmounts.value.splice(idx, 1);
 }
 
-function splitMethodLabel(method) {
-	if (method === "card") return "💳 کارتخوان";
-	if (method === "wallet") return "👛 کیف پول";
-	return "💵 نقدی";
+function paymentMethodIcon(method) {
+	if (method === "card") return CreditCard;
+	if (method === "credit") return FileClock;
+	return Banknote;
+}
+
+function splitMethodLabel(split = {}) {
+	return String(split.label || split.mode_of_payment || "").trim() || "نقدی";
 }
 
 function confirmPayment() {
-	const validSplits = paymentSplits.value.filter((s) => Number(s.amount || 0) > 0);
+	const validSplits = paymentSplits.value
+		.map((split) => syncSplitOption(split))
+		.filter((s) => Number(s.amount || 0) > 0);
 	const primary = validSplits.reduce(
 		(a, b) => (Number(b.amount || 0) > Number(a.amount || 0) ? b : a),
-		validSplits[0] || { method: "cash", amount: 0 },
+		validSplits[0] || buildSplit(defaultPaymentOption.value?.key || "", 0),
 	);
 	emit("update:paymentMethod", primary.method);
-	emit("submit-and-pay", { splits: validSplits });
+	emit("submit-and-pay", {
+		splits: validSplits.map((split) => ({
+			optionKey: split.optionKey,
+			method: split.method,
+			mode_of_payment: split.mode_of_payment,
+			label: split.label,
+			amount: Number(split.amount || 0),
+		})),
+	});
 	showPaymentPopup.value = false;
 }
 
@@ -626,17 +643,25 @@ function rowTotal(line) {
 }
 
 function qtyText(value) {
-	return Number(value || 0)
-		.toFixed(3)
-		.replace(/\.000$/, "");
+	const numeric = Number(value || 0);
+	if (!Number.isFinite(numeric)) {
+		return "۰";
+	}
+	if (Math.abs(numeric - Math.round(numeric)) < 0.0001) {
+		return toPersianNumber(Math.round(numeric));
+	}
+	return toPersianNumber(Number(numeric.toFixed(3)), { maximumFractionDigits: 3 });
 }
 
 function formatCompactNumber(value, decimals = 2) {
 	const parsed = Number(value || 0);
 	if (!Number.isFinite(parsed)) {
-		return "0";
+		return "۰";
 	}
-	return parsed.toFixed(decimals).replace(/\.?0+$/, "");
+	const trimmed = parsed.toFixed(decimals).replace(/\.?0+$/, "");
+	return trimmed.includes(".")
+		? trimmed.replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)])
+		: toPersianNumber(Number(trimmed || 0));
 }
 
 function formatDateTime(value) {
@@ -764,391 +789,375 @@ defineExpose({
 </script>
 
 <style scoped>
+/* ─── Panel Shell ─── */
 .cart-panel {
-	border-radius: 18px;
-	border: 1px solid var(--pos-border);
+	border-radius: 16px;
 	background: var(--pos-white);
-	padding: 0.7rem;
-	color: var(--pos-text);
-	display: grid;
-	gap: 0.55rem;
-}
-
-.mode-row {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.35rem;
-}
-
-.mode-row button {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-text);
-	border-radius: 10px;
-	padding: 0.42rem 0.3rem;
-	cursor: pointer;
-}
-
-.mode-row button.active {
-	background: var(--pos-primary);
-	color: var(--pos-white);
-	font-weight: 600;
-}
-
-.field {
-	display: grid;
-	gap: 0.22rem;
-	font-size: 0.76rem;
-}
-
-.field.inline {
-	gap: 0.35rem;
-}
-
-.table-orders-box {
-	border: 1px solid var(--pos-border);
-	border-radius: 12px;
-	padding: 0.5rem;
-	display: grid;
-	gap: 0.45rem;
-	background: var(--pos-soft);
-}
-
-.table-orders-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.4rem;
-}
-
-.table-orders-head h3 {
-	margin: 0;
-	font-size: 0.82rem;
-}
-
-.table-order-columns {
-	display: grid;
-	gap: 0.45rem;
-}
-
-.table-order-column {
-	border: 1px dashed var(--pos-border);
-	border-radius: 10px;
-	padding: 0.4rem;
-	display: grid;
-	gap: 0.35rem;
-}
-
-.table-order-column.confirmed {
-	background: rgb(var(--pos-success-rgb, 11 125 74) / 0.08);
-}
-
-.table-order-column > header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.4rem;
-}
-
-.table-order-list {
-	display: grid;
-	gap: 0.35rem;
-}
-
-.table-order-card {
-	border: 1px solid var(--pos-border);
-	border-radius: 9px;
-	padding: 0.35rem;
-	display: grid;
-	gap: 0.28rem;
-	background: var(--pos-white);
-}
-
-.table-order-card-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.4rem;
-}
-
-.table-order-card ul {
-	margin: 0;
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.1);
 	padding: 0;
-	list-style: none;
-	display: grid;
-	gap: 0.2rem;
-}
-
-.table-order-card li {
+	color: var(--pos-text);
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.35rem;
-	font-size: 0.74rem;
-}
-
-.item-counter {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.2rem;
-}
-
-.item-counter button {
-	width: 22px;
-	height: 22px;
-	border: 1px solid var(--pos-border);
-	border-radius: 7px;
-	background: #fff;
-	color: var(--pos-primary);
-	cursor: pointer;
-}
-
-.cart-head-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-}
-
-.undo-btn {
-	background: var(--pos-accent-soft, rgb(255 152 54 / 0.12));
-	border: 1px solid var(--pos-accent, #ff9836);
-	color: var(--pos-accent, #ff9836);
-	border-radius: 8px;
-	font-size: 0.72rem;
-	font-family: inherit;
-	padding: 0.22rem 0.6rem;
-	cursor: pointer;
-	max-width: 10rem;
+	flex-direction: column;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	flex-shrink: 1;
-	transition: background 0.12s;
 }
 
-.undo-btn:hover {
-	background: var(--pos-accent, #ff9836);
+/* ─── Segmented Control ─── */
+.mode-seg {
+	display: flex;
+	gap: 2px;
+	padding: 0.5rem 0.65rem 0;
+	background: transparent;
+}
+
+.mode-seg button {
+	flex: 1;
+	border: none;
+	background: rgb(var(--pos-primary-rgb) / 0.06);
+	color: rgb(var(--pos-primary-rgb) / 0.6);
+	padding: 0.5rem 0.25rem;
+	font-size: 0.78rem;
+	font-weight: 500;
+	font-family: inherit;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	position: relative;
+}
+
+.mode-seg button:first-child {
+	border-radius: 0 10px 10px 0;
+}
+
+.mode-seg button:last-child {
+	border-radius: 10px 0 0 10px;
+}
+
+.mode-seg button:not(:first-child):not(:last-child) {
+	border-radius: 0;
+}
+
+.mode-seg button.active {
+	background: var(--pos-primary);
 	color: #fff;
+	font-weight: 700;
+	box-shadow: 0 2px 8px rgb(var(--pos-primary-rgb) / 0.25);
 }
 
-.cash-calc-row {
+.mode-seg button:not(.active):hover {
+	background: rgb(var(--pos-primary-rgb) / 0.1);
+	color: var(--pos-primary);
+}
+
+/* ─── Place Field ─── */
+.place-field {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
-	margin-top: 0.4rem;
-	flex-wrap: wrap;
-	font-size: 0.8rem;
-	padding: 0.45rem 0.55rem;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
-	border-radius: 8px;
-	border: 1px dashed var(--pos-border);
+	padding: 0.45rem 0.65rem;
+	border-bottom: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
 }
 
-.cash-calc-label {
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.65);
-	white-space: nowrap;
+.place-label {
+	font-size: 0.74rem;
+	font-weight: 600;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
 	flex-shrink: 0;
 }
 
-.cash-received-input {
-	max-width: 130px;
-}
-
-.cash-change-label {
-	font-weight: 700;
-	color: var(--pos-success, #0b7d4a);
-	white-space: nowrap;
-}
-
-.cash-change-label.negative {
-	color: var(--pos-danger, #ab3535);
+/* ─── Cart Section ─── */
+.cart-section {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .cart-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	padding: 0.55rem 0.65rem 0.35rem;
 }
 
 .cart-head h3 {
 	margin: 0;
-	font-size: 0.86rem;
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: var(--pos-primary);
+}
+
+.cart-head-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.undo-btn {
+	background: none;
+	border: 1px solid rgb(var(--pos-accent-rgb) / 0.3);
+	color: var(--pos-accent);
+	border-radius: 6px;
+	font-size: 0.68rem;
+	font-family: inherit;
+	padding: 0.18rem 0.5rem;
+	cursor: pointer;
+	max-width: 9rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	transition: all 0.15s ease;
+}
+
+.undo-btn:hover {
+	background: var(--pos-accent);
+	border-color: var(--pos-accent);
+	color: #fff;
 }
 
 .clear-btn {
-	border: 1px solid var(--pos-accent);
-	background: var(--pos-accent);
-	color: var(--pos-white);
-	border-radius: 9px;
-	padding: 0.3rem 0.6rem;
+	background: none;
+	border: none;
+	color: rgb(var(--pos-primary-rgb) / 0.4);
+	font-size: 0.72rem;
+	font-family: inherit;
 	cursor: pointer;
+	padding: 0.2rem 0.35rem;
+	border-radius: 6px;
+	transition: all 0.15s ease;
 }
 
+.clear-btn:hover {
+	color: var(--pos-danger);
+	background: rgb(var(--pos-danger-rgb) / 0.08);
+}
+
+/* ─── Cart List ─── */
 .cart-list {
-	display: grid;
-	gap: 0.4rem;
-	max-height: none;
-	overflow: visible;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	padding: 0 0.45rem 0.35rem;
+	flex: 1;
+	min-height: 0;
 }
 
 .cart-row {
-	border-radius: 12px;
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	padding: 0.45rem;
-	display: grid;
-	grid-template-columns: 1fr auto;
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
 	gap: 0.4rem;
+	padding: 0.5rem 0.55rem;
+	border-radius: 10px;
+	background: rgb(var(--pos-primary-rgb) / 0.025);
 	cursor: pointer;
+	transition: all 0.15s ease;
+	border: 1.5px solid transparent;
+}
+
+.cart-row:hover {
+	background: rgb(var(--pos-primary-rgb) / 0.05);
 }
 
 .cart-row.active {
-	border-color: var(--pos-primary);
-	box-shadow: inset 0 0 0 1px var(--pos-primary);
+	background: rgb(var(--pos-primary-rgb) / 0.06);
+	border-color: rgb(var(--pos-primary-rgb) / 0.18);
 }
 
 .line-main {
-	display: grid;
-	gap: 0.15rem;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
 }
 
-.line-main strong {
-	font-size: 0.8rem;
+.line-title-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
 }
 
-.line-main small {
+.line-title-row strong {
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--pos-text);
+}
+
+.line-price {
 	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.8);
-}
-
-.line-note {
-	color: var(--pos-accent) !important;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
+	font-weight: 500;
+	flex-shrink: 0;
 }
 
 .line-custom {
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.92) !important;
+	font-size: 0.66rem;
+	color: rgb(var(--pos-primary-rgb) / 0.5);
+	font-style: italic;
 }
 
 .line-custom-list {
-	margin: 0.1rem 0 0;
-	padding-right: 1rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.86);
-	font-size: 0.7rem;
-	line-height: 1.45;
-	display: grid;
-	gap: 0.12rem;
+	margin: 0;
+	padding-right: 0.6rem;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
+	font-size: 0.66rem;
+	line-height: 1.5;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
 }
 
 .line-custom-list li {
 	list-style: none;
 }
 
+.line-note {
+	font-size: 0.66rem;
+	color: var(--pos-accent);
+}
+
 .line-actions {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+}
+
+.act-btn {
+	width: 26px;
+	height: 26px;
+	border: none;
+	background: rgb(var(--pos-primary-rgb) / 0.06);
+	color: rgb(var(--pos-primary-rgb) / 0.6);
+	border-radius: 7px;
+	cursor: pointer;
+	font-size: 0.78rem;
+	font-family: inherit;
 	display: inline-flex;
 	align-items: center;
-	gap: 0.25rem;
+	justify-content: center;
+	transition: all 0.12s ease;
+	padding: 0;
+}
+
+.act-btn:hover {
+	background: rgb(var(--pos-primary-rgb) / 0.12);
+	color: var(--pos-primary);
+}
+
+.act-btn.bom {
+	width: auto;
+	padding: 0 0.35rem;
+	font-size: 0.62rem;
+	font-weight: 700;
+	color: var(--pos-accent);
+	background: rgb(var(--pos-accent-rgb) / 0.08);
+}
+
+.act-btn.bom:hover {
+	background: rgb(var(--pos-accent-rgb) / 0.18);
+}
+
+.act-btn.remove {
+	color: rgb(var(--pos-danger-rgb) / 0.5);
+}
+
+.act-btn.remove:hover {
+	background: rgb(var(--pos-danger-rgb) / 0.1);
+	color: var(--pos-danger);
 }
 
 .counter {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.22rem;
-}
-
-.counter button,
-.icon,
-.check-btn {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-primary);
+	background: rgb(var(--pos-primary-rgb) / 0.04);
 	border-radius: 8px;
-	cursor: pointer;
+	overflow: hidden;
 }
 
 .counter button {
-	width: 24px;
-	height: 24px;
+	width: 26px;
+	height: 26px;
+	border: none;
+	background: transparent;
+	color: var(--pos-primary);
+	cursor: pointer;
+	font-size: 0.88rem;
+	font-weight: 600;
+	font-family: inherit;
+	transition: background 0.12s ease;
+}
+
+.counter button:hover {
+	background: rgb(var(--pos-primary-rgb) / 0.1);
 }
 
 .counter span {
-	min-width: 38px;
+	min-width: 32px;
 	text-align: center;
 	font-size: 0.76rem;
+	font-weight: 600;
+	color: var(--pos-text);
 }
 
-.icon {
-	width: 24px;
-	height: 24px;
-	padding: 0;
-}
-
-.icon.bom {
-	width: auto;
-	min-width: 34px;
-	padding: 0 0.25rem;
-	font-size: 0.66rem;
-	font-weight: 700;
-	border-color: var(--pos-accent);
-	color: var(--pos-accent);
-}
-
-.icon.danger {
-	color: var(--pos-accent);
-}
-
-.hint {
-	margin: 0;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
-}
-
-.financial-box {
-	border: 1px solid var(--pos-border);
-	border-radius: 12px;
-	padding: 0.5rem 0.6rem;
-	display: grid;
-	gap: 0;
-}
-
-.financial-title {
-	margin: 0;
-	font-size: 0.79rem;
-	color: var(--pos-primary);
-	font-weight: 700;
-}
-
-.financial-head {
+/* ─── Empty State ─── */
+.cart-empty {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	justify-content: space-between;
-	gap: 0.35rem;
-	padding-bottom: 0.4rem;
-	border-bottom: 1px solid var(--pos-border);
-	margin-bottom: 0.3rem;
+	justify-content: center;
+	padding: 2rem 1rem;
+	flex: 1;
 }
 
-/* ردیف‌های مالی */
+.cart-empty-icon {
+	font-size: 1.6rem;
+	opacity: 0.25;
+	margin-bottom: 0.5rem;
+}
+
+.cart-empty p {
+	margin: 0;
+	font-size: 0.78rem;
+	color: rgb(var(--pos-primary-rgb) / 0.35);
+}
+
+/* ─── Financial Section ─── */
+.fin-section {
+	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	padding: 0.5rem 0.65rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+
+.fin-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	background: rgb(var(--pos-primary-rgb) / 0.02);
+	border-radius: 10px;
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	overflow: hidden;
+}
+
+.fin-group .fin-row + .fin-row {
+	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.05);
+}
+
 .fin-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.4rem;
-	padding: 0.28rem 0;
-	border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.07);
-	min-height: 34px;
-}
-
-.fin-row:last-child {
-	border-bottom: 0;
-}
-
-.fin-row-note {
-	align-items: flex-start;
-	padding-top: 0.35rem;
+	gap: 0.5rem;
+	padding: 0.38rem 0.55rem;
+	min-height: 36px;
 }
 
 .fin-label {
-	font-size: 0.74rem;
-	color: var(--pos-primary);
+	font-size: 0.72rem;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
 	font-weight: 600;
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -1162,171 +1171,148 @@ defineExpose({
 }
 
 .fin-checkbox {
-	width: 15px;
-	height: 15px;
+	width: 14px;
+	height: 14px;
 	accent-color: var(--pos-primary);
 	cursor: pointer;
 	flex-shrink: 0;
 }
 
-.fin-value-badge {
-	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.6);
-	background: var(--pos-soft);
-	border: 1px solid var(--pos-border);
-	border-radius: 999px;
-	padding: 0.1rem 0.5rem;
-	white-space: nowrap;
-	transition: all 0.15s;
-}
-
-.fin-value-badge.active {
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.1);
-	color: var(--pos-primary);
-	border-color: var(--pos-primary);
-	font-weight: 700;
-}
-
-.fin-input-group {
+.fin-control {
 	display: flex;
-	align-items: stretch;
-	gap: 0;
+	align-items: center;
+	gap: 0.3rem;
 	flex-shrink: 0;
-	max-width: 160px;
+	max-width: 170px;
 }
 
 .fin-input {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.1);
+	background: rgb(var(--pos-primary-rgb) / 0.03);
 	color: var(--pos-text);
 	border-radius: 8px;
-	padding: 0.28rem 0.45rem;
-	font-size: 0.76rem;
+	padding: 0.32rem 0.5rem;
+	font-size: 0.74rem;
 	font-family: inherit;
 	width: 100%;
 	min-width: 0;
+	height: 30px;
 	outline: none;
-	transition: border-color 0.15s;
+	transition: all 0.15s ease;
 }
 
 .fin-input:focus {
-	border-color: var(--pos-primary);
+	border-color: rgb(var(--pos-primary-rgb) / 0.3);
+	background: var(--pos-white);
+	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.06);
 }
 
 .fin-input:disabled {
-	opacity: 0.45;
+	opacity: 0.35;
 	cursor: not-allowed;
 }
 
-.fin-input-group .fin-input {
-	border-radius: 8px 0 0 8px;
-	border-left: none;
-	flex: 1;
-}
-
-.fin-input-sm {
-	max-width: 110px;
-	flex-shrink: 0;
-}
-
-.fin-type-btn,
-.fin-check-btn {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-soft);
+.fin-action-btn {
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	background: rgb(var(--pos-primary-rgb) / 0.05);
 	color: var(--pos-primary);
-	font-size: 0.78rem;
-	font-weight: 700;
+	font-size: 0.7rem;
+	font-weight: 600;
 	cursor: pointer;
 	flex-shrink: 0;
-	transition: background 0.15s;
+	transition: all 0.15s ease;
 	font-family: inherit;
 	white-space: nowrap;
+	border-radius: 8px;
+	padding: 0.32rem 0.6rem;
+	height: 30px;
 }
 
-.fin-type-btn {
-	border-radius: 0 8px 8px 0;
-	padding: 0 0.55rem;
-	min-width: 32px;
+.fin-action-btn:hover {
+	background: rgb(var(--pos-primary-rgb) / 0.1);
 }
 
-.fin-check-btn {
-	border-radius: 0 8px 8px 0;
-	padding: 0.28rem 0.55rem;
-}
-
-.fin-type-btn:hover,
-.fin-check-btn:hover {
-	background: var(--pos-border);
-}
-
-.fin-service-type {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	flex-shrink: 0;
-}
-
-.fin-radio-group {
-	display: inline-flex;
-	gap: 0.35rem;
-}
-
-.fin-radio {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.2rem;
-	font-size: 0.7rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.8);
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.fin-radio input[type="radio"] {
-	accent-color: var(--pos-primary);
-	width: 13px;
-	height: 13px;
-	cursor: pointer;
+.fin-note-row {
+	margin-top: 0.1rem;
 }
 
 .fin-note-input {
-	flex: 1;
-	min-width: 0;
+	width: 100%;
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+	background: rgb(var(--pos-primary-rgb) / 0.02);
+	color: var(--pos-text);
 	border-radius: 8px;
+	padding: 0.35rem 0.55rem;
+	font-size: 0.72rem;
+	font-family: inherit;
+	height: 30px;
+	outline: none;
+	transition: all 0.15s ease;
 }
 
+.fin-note-input::placeholder {
+	color: rgb(var(--pos-primary-rgb) / 0.3);
+}
+
+.fin-note-input:focus {
+	border-color: rgb(var(--pos-primary-rgb) / 0.25);
+	background: var(--pos-white);
+	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.05);
+}
+
+/* ─── Summary ─── */
 .summary-box {
-	border-radius: 12px;
-	border: 1px solid var(--pos-border);
-	background: var(--pos-soft);
-	padding: 0.5rem;
-	display: grid;
-	gap: 0.28rem;
+	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	padding: 0.5rem 0.65rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.22rem;
 }
 
 .sum-line {
 	display: flex;
 	justify-content: space-between;
-	gap: 0.4rem;
-	font-size: 0.78rem;
+	align-items: center;
+	font-size: 0.74rem;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
+}
+
+.sum-line strong {
+	font-weight: 600;
+	color: var(--pos-text);
+}
+
+.sum-line strong.discount {
+	color: var(--pos-success);
 }
 
 .sum-line.payable {
-	border-top: 1px dashed var(--pos-border);
-	padding-top: 0.38rem;
-	font-size: 0.86rem;
+	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+	margin-top: 0.25rem;
+	padding-top: 0.4rem;
+	font-size: 0.84rem;
+	color: var(--pos-text);
+	font-weight: 500;
 }
 
 .sum-line.payable strong {
+	font-size: 0.92rem;
+	font-weight: 800;
 	color: var(--pos-primary);
 }
 
+/* ─── Checkout Actions ─── */
 .checkout-actions {
-	position: sticky;
-	bottom: 0;
-	background: var(--pos-white);
-	border-top: 1px solid var(--pos-border);
-	padding-top: 0.45rem;
+	padding: 0.5rem 0.65rem 0.6rem;
+	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.checkout-btns {
 	display: grid;
+	grid-template-columns: 1fr 1fr;
 	gap: 0.35rem;
 }
 
@@ -1336,68 +1322,109 @@ defineExpose({
 	border: 0;
 	border-radius: 10px;
 	color: #fff;
-	padding: 0.56rem;
+	padding: 0.55rem 0.5rem;
 	cursor: pointer;
+	font-family: inherit;
+	font-size: 0.78rem;
+	font-weight: 700;
+	transition: all 0.15s ease;
 }
 
 .save-btn {
 	background: var(--pos-primary);
 }
 
+.save-btn:hover:not(:disabled) {
+	box-shadow: 0 4px 12px rgb(var(--pos-primary-rgb) / 0.3);
+}
+
 .pay-btn {
 	background: var(--pos-accent);
 }
 
-.print-btn {
-	background: var(--pos-primary);
+.pay-btn:hover:not(:disabled) {
+	box-shadow: 0 4px 12px rgb(var(--pos-accent-rgb) / 0.3);
 }
 
-.checkout-actions label {
+.print-btn {
+	background: transparent;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	font-weight: 600;
+}
+
+.print-btn:hover:not(:disabled) {
+	background: rgb(var(--pos-primary-rgb) / 0.06);
+	color: var(--pos-primary);
+	border-color: rgb(var(--pos-primary-rgb) / 0.2);
+}
+
+.save-btn:disabled,
+.pay-btn:disabled,
+.print-btn:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
+.checkout-opts {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.checkout-opts label {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.3rem;
-	font-size: 0.74rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.88);
+	font-size: 0.68rem;
+	color: rgb(var(--pos-primary-rgb) / 0.45);
+	cursor: pointer;
+	transition: color 0.12s;
 }
 
-.dark-input {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-text);
+.checkout-opts label:hover {
+	color: rgb(var(--pos-primary-rgb) / 0.7);
 }
 
-.dark-input::placeholder {
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+.checkout-opts input[type="checkbox"] {
+	width: 13px;
+	height: 13px;
+	accent-color: var(--pos-primary);
+	cursor: pointer;
 }
 
+/* ─── Responsive ─── */
 @media (max-width: 980px) {
 	.cart-panel {
 		max-height: none;
 	}
-
-	.checkout-actions {
-		position: static;
-	}
 }
 
+/* ─── Payment Popup ─── */
 .pay-popup-backdrop {
 	position: fixed;
 	inset: 0;
 	z-index: 300;
-	background: rgb(0 0 0 / 0.55);
+	background: rgb(0 0 0 / 0.45);
+	backdrop-filter: blur(4px);
 	display: grid;
 	place-items: center;
 	padding: 1rem;
 }
 
 .pay-popup {
-	background: #fff;
+	background: var(--pos-white);
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
 	border-radius: 20px;
-	width: min(440px, 100%);
-	box-shadow: 0 24px 60px rgb(0 0 0 / 0.22);
-	display: grid;
-	gap: 0.75rem;
-	padding: 1.2rem;
+	width: min(520px, calc(100vw - 2rem));
+	max-height: min(760px, calc(100dvh - 2rem));
+	overflow: auto;
+	box-shadow: 0 24px 60px rgb(15 23 42 / 0.22);
+	display: flex;
+	flex-direction: column;
+	gap: 0.85rem;
+	padding: 1.15rem;
 	color: var(--pos-text);
 }
 
@@ -1407,9 +1434,16 @@ defineExpose({
 	justify-content: space-between;
 }
 
+.pay-popup-title {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--pos-primary);
+}
+
 .pay-popup-head h3 {
 	margin: 0;
-	font-size: 1rem;
+	font-size: 0.95rem;
 	font-weight: 800;
 	color: var(--pos-primary);
 }
@@ -1417,91 +1451,153 @@ defineExpose({
 .pay-popup-close {
 	width: 2rem;
 	height: 2rem;
-	border: 1px solid var(--pos-border);
-	border-radius: 50%;
-	background: #fff;
-	color: var(--pos-text);
+	border: none;
+	border-radius: 8px;
+	background: rgb(var(--pos-primary-rgb) / 0.06);
+	color: rgb(var(--pos-primary-rgb) / 0.5);
 	font-size: 1.1rem;
 	cursor: pointer;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	transition: all 0.12s ease;
+}
+
+.pay-popup-close:hover {
+	background: rgb(var(--pos-primary-rgb) / 0.12);
+	color: var(--pos-text);
 }
 
 .pay-total-banner {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background: var(--pos-soft);
-	border: 1px solid var(--pos-border);
+	background: rgb(var(--pos-primary-rgb) / 0.04);
 	border-radius: 12px;
-	padding: 0.65rem 0.85rem;
-	font-size: 0.82rem;
+	padding: 0.7rem 0.85rem;
+	font-size: 0.8rem;
+	color: rgb(var(--pos-primary-rgb) / 0.6);
 }
 
 .pay-total-banner strong {
 	font-size: 1.05rem;
+	font-weight: 800;
 	color: var(--pos-primary);
 }
 
 .pay-splits {
-	display: grid;
-	gap: 0.45rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
 }
 
 .pay-split-row {
-	display: grid;
-	grid-template-columns: auto 1fr auto;
-	align-items: center;
-	gap: 0.4rem;
+	display: block;
 }
 
-.pay-split-row:has(.pay-split-remove:not(.pay-split-remove)) {
-	grid-template-columns: auto 1fr;
+.pay-split-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+	padding: 0.8rem;
+	border-radius: 14px;
+	background: rgb(var(--pos-primary-rgb) / 0.03);
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+}
+
+.pay-split-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.pay-method-preview {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: var(--pos-primary);
+}
+
+.pay-split-controls {
+	display: grid;
+	grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+	gap: 0.55rem;
+	align-items: start;
 }
 
 .pay-method-select {
 	border-radius: 9px;
-	padding: 0.38rem 0.5rem;
-	font-size: 0.8rem;
-	min-width: 120px;
+	padding: 0.6rem 0.7rem;
+	font-size: 0.78rem;
+	min-width: 0;
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	background: rgb(var(--pos-primary-rgb) / 0.03);
+	color: var(--pos-text);
+	font-family: inherit;
+	height: 44px;
 }
 
 .pay-amount-input {
 	border-radius: 9px;
-	padding: 0.38rem 0.5rem;
-	font-size: 0.88rem;
+	padding: 0.6rem 0.7rem;
+	font-size: 0.85rem;
 	text-align: left;
+	min-height: 44px;
 }
 
 .pay-split-remove {
 	width: 26px;
 	height: 26px;
-	border: 1px solid var(--pos-accent);
-	border-radius: 50%;
-	background: #fff;
-	color: var(--pos-accent);
-	font-size: 1rem;
+	border: none;
+	border-radius: 7px;
+	background: rgb(var(--pos-danger-rgb) / 0.08);
+	color: var(--pos-danger);
+	font-size: 0.95rem;
 	cursor: pointer;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
+	transition: background 0.12s ease;
+}
+
+.pay-credit-hint {
+	margin: 0;
+	font-size: 0.74rem;
+	line-height: 1.6;
+	color: rgb(var(--pos-primary-rgb) / 0.62);
+	background: rgb(var(--pos-accent-rgb) / 0.08);
+	border-radius: 10px;
+	padding: 0.5rem 0.65rem;
+}
+
+.pay-split-remove:hover {
+	background: rgb(var(--pos-danger-rgb) / 0.15);
 }
 
 .pay-add-split-btn {
-	border: 1px dashed var(--pos-border);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	border: 1px dashed rgb(var(--pos-primary-rgb) / 0.15);
 	border-radius: 10px;
 	background: transparent;
-	color: var(--pos-primary);
-	font-size: 0.78rem;
-	padding: 0.4rem;
+	color: rgb(var(--pos-primary-rgb) / 0.5);
+	font-size: 0.76rem;
+	font-family: inherit;
+	padding: 0.42rem;
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: all 0.15s ease;
 }
 
 .pay-add-split-btn:hover {
-	background: var(--pos-soft);
+	background: rgb(var(--pos-primary-rgb) / 0.04);
+	color: var(--pos-primary);
+	border-color: rgb(var(--pos-primary-rgb) / 0.25);
 }
 
 .pay-remaining-row {
@@ -1510,71 +1606,114 @@ defineExpose({
 	justify-content: space-between;
 	padding: 0.55rem 0.75rem;
 	border-radius: 10px;
-	background: rgb(var(--pos-accent-rgb, 201 141 66) / 0.1);
-	border: 1px solid rgb(var(--pos-accent-rgb, 201 141 66) / 0.25);
-	font-size: 0.82rem;
+	background: rgb(var(--pos-accent-rgb) / 0.08);
+	font-size: 0.8rem;
+	font-weight: 600;
 	color: var(--pos-accent);
-	transition: all 0.2s;
+	transition: all 0.2s ease;
 }
 
 .pay-remaining-row.zero {
-	background: rgb(11 125 74 / 0.08);
-	border-color: rgb(11 125 74 / 0.25);
-	color: var(--pos-success-color, #0b7d4a);
+	background: rgb(var(--pos-success-rgb) / 0.08);
+	color: var(--pos-success);
 }
 
 .pay-remaining-row.over {
-	background: rgb(171 53 53 / 0.08);
-	border-color: rgb(171 53 53 / 0.25);
-	color: var(--pos-danger-color, #ab3535);
+	background: rgb(var(--pos-danger-rgb) / 0.08);
+	color: var(--pos-danger);
 }
 
 .pay-split-summary {
-	border: 1px solid var(--pos-border);
-	border-radius: 10px;
-	padding: 0.5rem 0.65rem;
-	display: grid;
-	gap: 0.3rem;
+	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	padding-top: 0.45rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
 }
 
 .pay-split-summary-row {
 	display: flex;
 	justify-content: space-between;
-	font-size: 0.78rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.85);
+	align-items: center;
+	font-size: 0.76rem;
+	color: rgb(var(--pos-primary-rgb) / 0.55);
+}
+
+.pay-split-summary-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
 }
 
 .pay-popup-footer {
 	display: grid;
 	grid-template-columns: 1fr 2fr;
-	gap: 0.5rem;
-	padding-top: 0.25rem;
+	gap: 0.4rem;
+	padding-top: 0.15rem;
 }
 
 .pay-cancel-btn {
-	border: 1px solid var(--pos-border);
-	background: #fff;
-	color: var(--pos-text);
-	border-radius: 11px;
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	background: transparent;
+	color: rgb(var(--pos-primary-rgb) / 0.6);
+	border-radius: 10px;
 	padding: 0.6rem;
 	cursor: pointer;
-	font-size: 0.84rem;
+	font-size: 0.82rem;
+	font-family: inherit;
+	transition: all 0.12s ease;
+}
+
+.pay-cancel-btn:hover {
+	background: rgb(var(--pos-primary-rgb) / 0.05);
+	color: var(--pos-text);
 }
 
 .pay-confirm-btn {
 	border: 0;
-	border-radius: 11px;
+	border-radius: 10px;
 	background: var(--pos-primary);
 	color: #fff;
 	padding: 0.6rem;
 	cursor: pointer;
-	font-size: 0.84rem;
+	font-size: 0.82rem;
 	font-weight: 700;
-	transition: opacity 0.15s;
+	font-family: inherit;
+	transition: all 0.15s ease;
+}
+
+.pay-confirm-btn:hover:not(:disabled) {
+	box-shadow: 0 4px 14px rgb(var(--pos-primary-rgb) / 0.3);
 }
 
 .pay-confirm-btn:disabled {
-	opacity: 0.45;
+	opacity: 0.4;
 	cursor: not-allowed;
+}
+
+.dark-input {
+	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	background: rgb(var(--pos-primary-rgb) / 0.03);
+	color: var(--pos-text);
+}
+
+.dark-input::placeholder {
+	color: rgb(var(--pos-primary-rgb) / 0.35);
+}
+
+@media (max-width: 640px) {
+	.pay-popup {
+		width: min(100vw - 1rem, 100%);
+		padding: 1rem;
+		border-radius: 18px;
+	}
+
+	.pay-split-controls {
+		grid-template-columns: 1fr;
+	}
+
+	.pay-popup-footer {
+		grid-template-columns: 1fr;
+	}
 }
 </style>

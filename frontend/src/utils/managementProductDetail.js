@@ -7,6 +7,67 @@ export const PRODUCT_DETAIL_TABS = [
 	{ value: "reports", label: "گزارش فروش" },
 ];
 
+export const KITCHEN_PRINT_MODE_OPTIONS = [
+	{ value: "parent_only", label: "فقط محصول اصلی" },
+	{ value: "parent_with_components", label: "محصول اصلی + انتخاب‌های مشتری" },
+	{ value: "components_grouped_by_step", label: "انتخاب‌ها به تفکیک مرحله" },
+];
+
+export const STOCK_CONSUMPTION_MODE_OPTIONS = [
+	{ value: "no_stock_deduction", label: "بدون کسر موجودی" },
+	{ value: "consume_selected_components", label: "کسر اقلام انتخاب‌شده" },
+	{ value: "create_dynamic_bom", label: "پیش‌نمایش BOM پویا" },
+	{
+		value: "use_sales_order_exploded_components",
+		label: "استفاده از اقلام بازشده سفارش فروش",
+	},
+	{ value: "manual_kitchen_consumption", label: "مصرف دستی توسط آشپزخانه" },
+];
+
+const KITCHEN_PRINT_MODE_ALIAS_MAP = {
+	full_selections: "parent_with_components",
+	"full detail": "parent_with_components",
+	"step only": "components_grouped_by_step",
+	"option only": "parent_with_components",
+};
+
+const STOCK_CONSUMPTION_MODE_ALIAS_MAP = {
+	from_builder: "consume_selected_components",
+	"per option": "consume_selected_components",
+	"per step": "create_dynamic_bom",
+	fixed: "no_stock_deduction",
+};
+
+function normalizeSelectValue(value, options, aliasMap, fallback = "") {
+	const rawValue = String(value || "").trim();
+	if (!rawValue) return fallback;
+
+	const canonical = rawValue.toLowerCase();
+	if (aliasMap[canonical]) {
+		return aliasMap[canonical];
+	}
+
+	return options.some((option) => option.value === rawValue) ? rawValue : fallback;
+}
+
+export function normalizeKitchenPrintMode(value) {
+	return normalizeSelectValue(
+		value,
+		KITCHEN_PRINT_MODE_OPTIONS,
+		KITCHEN_PRINT_MODE_ALIAS_MAP,
+		"parent_with_components",
+	);
+}
+
+export function normalizeStockConsumptionMode(value) {
+	return normalizeSelectValue(
+		value,
+		STOCK_CONSUMPTION_MODE_OPTIONS,
+		STOCK_CONSUMPTION_MODE_ALIAS_MAP,
+		"consume_selected_components",
+	);
+}
+
 export function createInitialProductSettingsForm() {
 	return {
 		item_code: "",
@@ -117,8 +178,12 @@ export function hydrateProductSettingsForm(form, payload = {}, tagOptions = []) 
 		Number(item.restaurant_show_nutrition_summary || 0) === 1;
 	form.restaurant_show_allergen_warnings =
 		Number(item.restaurant_show_allergen_warnings || 0) === 1;
-	form.restaurant_kitchen_print_mode = item.restaurant_kitchen_print_mode || "";
-	form.restaurant_stock_consumption_mode = item.restaurant_stock_consumption_mode || "";
+	form.restaurant_kitchen_print_mode = normalizeKitchenPrintMode(
+		item.restaurant_kitchen_print_mode,
+	);
+	form.restaurant_stock_consumption_mode = normalizeStockConsumptionMode(
+		item.restaurant_stock_consumption_mode,
+	);
 }
 
 export function serializeProductSettingsState(form, builderConfig = null) {
@@ -166,10 +231,12 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 		restaurant_allow_direct_add: form.restaurant_allow_direct_add ? 1 : 0,
 		restaurant_show_nutrition_summary: form.restaurant_show_nutrition_summary ? 1 : 0,
 		restaurant_show_allergen_warnings: form.restaurant_show_allergen_warnings ? 1 : 0,
-		restaurant_kitchen_print_mode: String(form.restaurant_kitchen_print_mode || "").trim(),
-		restaurant_stock_consumption_mode: String(
-			form.restaurant_stock_consumption_mode || "",
-		).trim(),
+		restaurant_kitchen_print_mode: normalizeKitchenPrintMode(
+			form.restaurant_kitchen_print_mode,
+		),
+		restaurant_stock_consumption_mode: normalizeStockConsumptionMode(
+			form.restaurant_stock_consumption_mode,
+		),
 		product_builder_config: clonePlainObject(builderConfig),
 	});
 }

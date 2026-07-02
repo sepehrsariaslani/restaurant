@@ -2,7 +2,7 @@
 	<section class="products-panel">
 		<div class="customer-search-bar">
 			<div class="customer-search-wrap">
-				<span class="cust-icon">👤</span>
+				<span class="cust-icon"><UserRound :size="15" :stroke-width="2.1" /></span>
 				<input
 					ref="customerInputRef"
 					class="input dark-input cust-input"
@@ -38,7 +38,7 @@
 							<span v-if="customer.is_new" class="cust-new-tag">مشتری جدید</span>
 							<template v-else>
 								<span v-if="customer.mobile">{{ customer.mobile }}</span>
-								<span>{{ customer.orders_count }} خرید</span>
+								<span>{{ Number(customer.orders_count || 0).toLocaleString('fa-IR') }} خرید</span>
 							</template>
 						</span>
 					</button>
@@ -56,14 +56,14 @@
 				@click="$emit('add-customer')"
 				title="مشتری جدید"
 			>
-				+
+				<Plus :size="15" :stroke-width="2.4" />
 			</button>
 		</div>
 
 		<div class="panel-top">
 			<div class="toolbar">
 				<div class="search-box">
-					<span class="icon">⌕</span>
+					<span class="icon"><Search :size="15" :stroke-width="2.2" /></span>
 					<input
 						class="input dark-input product-search-input"
 						:value="searchTerm"
@@ -147,73 +147,129 @@
 		<p class="hint" v-if="loading">در حال دریافت محصولات...</p>
 		<p class="error" v-else-if="error">{{ error }}</p>
 
-		<div v-else class="products-grid" :class="`mode-${productView}`">
-			<template v-if="productView === 'compact'">
-				<button
-					v-for="item in products"
-					:key="item.slug || item.name"
-					type="button"
-					class="compact-card"
-					:class="{ 'has-qty': displayQty(item.slug) !== '0' }"
-					@click="$emit('increment-product', item)"
-				>
-					<span class="compact-name">{{ item.title || item.name }}</span>
-					<span class="compact-price">{{
-						formatMoney(item.base_price || item.standard_rate || 0, currency)
-					}}</span>
-					<span class="compact-qty" v-if="displayQty(item.slug) !== '0'"
-						>× {{ displayQty(item.slug) }}</span
-					>
-				</button>
-			</template>
-
-			<template v-else>
-				<article
-					class="product-card"
-					v-for="item in products"
-					:key="item.slug || item.name"
-				>
-					<button
-						type="button"
-						class="image-btn"
-						@click="$emit('increment-product', item)"
-					>
-						<img
-							class="product-image"
-							:src="item.image || fallbackImage"
-							:alt="item.title || item.name"
-						/>
-					</button>
-
-					<div class="product-body">
-						<h4>{{ item.title || item.name }}</h4>
-						<strong>{{
-							formatMoney(item.base_price || item.standard_rate || 0, currency)
-						}}</strong>
+		<div v-else class="products-sections">
+			<section
+				v-for="category in groupedProductSections"
+				:key="category.key"
+				class="category-section"
+			>
+				<header class="category-section-head">
+					<div class="category-section-copy">
+						<h3>{{ category.title }}</h3>
+						<p>{{ category.countLabel }}</p>
 					</div>
+				</header>
 
-					<div class="product-actions">
-						<div class="counter">
-							<button type="button" @click="$emit('decrement-product', item)">
-								-
-							</button>
-							<span>{{ displayQty(item.slug) }}</span>
-							<button type="button" @click="$emit('increment-product', item)">
-								+
-							</button>
+				<div class="subcategory-stack">
+					<section
+						v-for="group in category.groups"
+						:key="group.key"
+						class="subcategory-section"
+					>
+						<header
+							v-if="group.title"
+							class="subcategory-section-head"
+						>
+							<h4>{{ group.title }}</h4>
+							<span>{{ group.items.length.toLocaleString('fa-IR') }}</span>
+						</header>
+
+						<div class="products-grid" :class="`mode-${productView}`">
+							<template v-if="productView === 'compact'">
+								<article
+									v-for="item in group.items"
+									:key="item.slug || item.name"
+									class="compact-card"
+									:class="{ 'has-qty': quantityValue(item.slug) > 0 }"
+								>
+									<button
+										type="button"
+										class="compact-main-btn"
+										@click="$emit('increment-product', item)"
+										:title="`افزودن سریع ${item.title || item.name}`"
+									>
+										<span class="compact-name">{{ item.title || item.name }}</span>
+										<span class="compact-price">{{
+											formatMoney(item.base_price || item.standard_rate || 0, currency)
+										}}</span>
+										<span class="compact-qty" v-if="quantityValue(item.slug) > 0"
+											>× {{ displayQty(item.slug) }}</span
+										>
+									</button>
+									<div class="compact-actions">
+										<button
+											type="button"
+											class="compact-action-btn compact-action-btn--primary"
+											:title="`افزودن سریع ${item.title || item.name}`"
+											@click="$emit('increment-product', item)"
+										>
+											<Plus :size="14" :stroke-width="2.4" />
+										</button>
+										<button
+											v-if="supportsCustomization(item)"
+											type="button"
+											class="compact-action-btn"
+											:title="`سفارشی سازی ${item.title || item.name}`"
+											@click="$emit('open-bom', item)"
+										>
+											<SlidersHorizontal :size="14" :stroke-width="2.3" />
+										</button>
+									</div>
+								</article>
+							</template>
+
+							<template v-else>
+								<article
+									class="product-card"
+									v-for="item in group.items"
+									:key="item.slug || item.name"
+								>
+									<button
+										type="button"
+										class="image-btn"
+										@click="$emit('increment-product', item)"
+									>
+										<img
+											class="product-image"
+											:src="item.image || fallbackImage"
+											:alt="item.title || item.name"
+										/>
+									</button>
+
+									<div class="product-body">
+										<h4>{{ item.title || item.name }}</h4>
+										<strong>{{
+											formatMoney(item.base_price || item.standard_rate || 0, currency)
+										}}</strong>
+									</div>
+
+									<div class="product-actions">
+										<div class="counter">
+											<button type="button" @click="$emit('decrement-product', item)">
+												-
+											</button>
+											<span>{{ displayQty(item.slug) }}</span>
+											<button type="button" @click="$emit('increment-product', item)">
+												+
+											</button>
+										</div>
+										<button type="button" class="bom-btn" @click="$emit('open-bom', item)">
+											BOM
+										</button>
+									</div>
+								</article>
+							</template>
 						</div>
-						<button type="button" class="bom-btn" @click="$emit('open-bom', item)">
-							BOM
-						</button>
-					</div>
-				</article>
-			</template>
+					</section>
+				</div>
+			</section>
 		</div>
 	</section>
 </template>
 
 <script setup>
 import { computed, ref } from "vue";
+import { Plus, Search, SlidersHorizontal, UserRound } from "lucide-vue-next";
 import { formatMoney } from "@/utils/format";
 
 const props = defineProps({
@@ -296,6 +352,136 @@ const dropdownOptions = computed(() => {
 	return opts;
 });
 
+const groupedProductSections = computed(() => {
+	const productRows = Array.isArray(props.products) ? props.products : [];
+	const categoryRows = Array.isArray(props.categories) ? props.categories : [];
+
+	if (!productRows.length) {
+		return [];
+	}
+
+	const categoryBuckets = [];
+	const categoryMap = new Map();
+
+	function normalizeKey(value) {
+		return String(value || "").trim();
+	}
+
+	function resolveCategoryKey(category = {}, item = {}) {
+		return (
+			normalizeKey(category?.slug) ||
+			normalizeKey(category?.name) ||
+			normalizeKey(item?.category_slug) ||
+			normalizeKey(item?.category) ||
+			normalizeKey(item?.category_title) ||
+			"uncategorized"
+		);
+	}
+
+	function resolveCategoryTitle(category = {}, item = {}) {
+		return (
+			normalizeKey(category?.title) ||
+			normalizeKey(category?.name) ||
+			normalizeKey(item?.category_title) ||
+			normalizeKey(item?.category) ||
+			"سایر محصولات"
+		);
+	}
+
+	function resolveSubcategoryKey(subcategory = {}, item = {}) {
+		return (
+			normalizeKey(subcategory?.slug) ||
+			normalizeKey(subcategory?.name) ||
+			normalizeKey(item?.subcategory_slug) ||
+			normalizeKey(item?.subcategory) ||
+			normalizeKey(item?.subcategory_title)
+		);
+	}
+
+	function resolveSubcategoryTitle(subcategory = {}, item = {}) {
+		return (
+			normalizeKey(subcategory?.title) ||
+			normalizeKey(subcategory?.name) ||
+			normalizeKey(item?.subcategory_title) ||
+			normalizeKey(item?.subcategory)
+		);
+	}
+
+	function ensureCategoryBucket(category = {}, item = {}) {
+		const key = resolveCategoryKey(category, item);
+		if (categoryMap.has(key)) {
+			return categoryMap.get(key);
+		}
+
+		const bucket = {
+			key,
+			title: resolveCategoryTitle(category, item),
+			items: [],
+			groups: [],
+			groupMap: new Map(),
+		};
+		categoryMap.set(key, bucket);
+		categoryBuckets.push(bucket);
+		return bucket;
+	}
+
+	function ensureSubcategoryBucket(categoryBucket, subcategory = {}, item = {}) {
+		const key = resolveSubcategoryKey(subcategory, item) || "__misc__";
+		if (categoryBucket.groupMap.has(key)) {
+			return categoryBucket.groupMap.get(key);
+		}
+
+		const title = key === "__misc__" ? "" : resolveSubcategoryTitle(subcategory, item);
+		const bucket = {
+			key,
+			title,
+			items: [],
+		};
+		categoryBucket.groupMap.set(key, bucket);
+		categoryBucket.groups.push(bucket);
+		return bucket;
+	}
+
+	for (const category of categoryRows) {
+		const categoryBucket = ensureCategoryBucket(category);
+		for (const subcategory of Array.isArray(category?.subcategories) ? category.subcategories : []) {
+			ensureSubcategoryBucket(categoryBucket, subcategory);
+		}
+	}
+
+	for (const item of productRows) {
+		const categoryKey =
+			normalizeKey(item?.category_slug) ||
+			normalizeKey(item?.category) ||
+			normalizeKey(item?.category_title);
+		const matchedCategory =
+			categoryRows.find((row) => resolveCategoryKey(row) === categoryKey) || {};
+		const categoryBucket = ensureCategoryBucket(matchedCategory, item);
+		categoryBucket.items.push(item);
+		const subgroup = ensureSubcategoryBucket(categoryBucket, {}, item);
+		subgroup.items.push(item);
+	}
+
+	return categoryBuckets
+		.filter((category) => category.items.length > 0)
+		.map((category) => {
+			const visibleGroups = category.groups.filter((group) => group.items.length > 0);
+			const showGroupHeading =
+				visibleGroups.length > 1 ||
+				visibleGroups.some((group) => Boolean(String(group.title || "").trim()));
+
+			return {
+				key: category.key,
+				title: category.title,
+				groups: visibleGroups.map((group) => ({
+					...group,
+					title: showGroupHeading ? group.title : "",
+				})),
+				countLabel: `${category.items.length.toLocaleString("fa-IR")} آیتم`,
+			};
+		});
+});
+
 function openDropdown() {
 	dropdownOpen.value = true;
 	activeIndex.value = dropdownOptions.value.length ? 0 : -1;
@@ -336,8 +522,25 @@ function pickCustomer(customer) {
 }
 
 function displayQty(slug) {
-	const raw = Number(props.quantityMap?.[slug] || 0);
-	return raw.toFixed(3).replace(/\.000$/, "");
+	const raw = quantityValue(slug);
+	if (!raw) {
+		return "۰";
+	}
+	if (Math.abs(raw - Math.round(raw)) < 0.0001) {
+		return Math.round(raw).toLocaleString("fa-IR");
+	}
+	return Number(raw.toFixed(3)).toLocaleString("fa-IR", { maximumFractionDigits: 3 });
+}
+
+function quantityValue(slug) {
+	return Number(props.quantityMap?.[slug] || 0);
+}
+
+function supportsCustomization(item = {}) {
+	return Boolean(
+		Number(item?.has_customization || 0) === 1 ||
+		Number(item?.restaurant_builder_active || 0) === 1,
+	);
 }
 </script>
 
@@ -637,9 +840,9 @@ function displayQty(slug) {
 	margin: 0;
 }
 
-.products-grid {
+.products-sections {
 	display: grid;
-	gap: 0.75rem;
+	gap: 0.9rem;
 	overflow-y: auto;
 	overflow-x: hidden;
 	align-content: start;
@@ -647,27 +850,94 @@ function displayQty(slug) {
 	padding-inline-end: 0.25rem;
 }
 
+.category-section {
+	display: grid;
+	gap: 0.7rem;
+}
+
+.category-section-head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 0.65rem;
+	padding-bottom: 0.45rem;
+	border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+}
+
+.category-section-copy {
+	display: grid;
+	gap: 0.18rem;
+}
+
+.category-section-copy h3 {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 800;
+	color: var(--pos-text);
+}
+
+.category-section-copy p {
+	margin: 0;
+	font-size: 0.76rem;
+	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.64);
+}
+
+.subcategory-stack {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.subcategory-section {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.subcategory-section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.65rem;
+}
+
+.subcategory-section-head h4 {
+	margin: 0;
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.84);
+}
+
+.subcategory-section-head span {
+	font-size: 0.72rem;
+	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.58);
+}
+
+.products-grid {
+	display: grid;
+	gap: 0.45rem;
+	align-content: start;
+}
+
 .products-grid.mode-grid {
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
 }
 
 .products-grid.mode-list {
 	grid-template-columns: 1fr;
-	gap: 0.5rem;
+	gap: 0.35rem;
 }
 
 .products-grid.mode-compact {
-	grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-	gap: 0.4rem;
+	grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+	gap: 0.3rem;
 }
 
 .product-card {
 	border: 1px solid var(--pos-border);
-	border-radius: 14px;
+	border-radius: 10px;
 	background: var(--pos-white);
 	display: flex;
 	flex-direction: column;
-	box-shadow: 0 2px 6px rgb(0 0 0 / 0.04);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.03);
 	cursor: pointer;
 	transition:
 		transform 0.15s ease,
@@ -676,14 +946,14 @@ function displayQty(slug) {
 }
 
 .product-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 8px 20px rgb(0 0 0 / 0.1);
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
 	border-color: var(--pos-primary);
 }
 
 .product-card:active {
 	transform: translateY(0);
-	box-shadow: 0 2px 6px rgb(0 0 0 / 0.06);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
 }
 
 .products-grid.mode-list .product-card {
@@ -693,22 +963,22 @@ function displayQty(slug) {
 
 .image-btn {
 	border: 0;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
+	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
 	padding: 0;
 	cursor: pointer;
 	width: 100%;
 	display: block;
-	aspect-ratio: 1 / 1;
+	aspect-ratio: 4 / 3;
 	overflow: hidden;
 	flex-shrink: 0;
 }
 
 .products-grid.mode-list .image-btn {
-	width: 84px;
-	height: 84px;
+	width: 56px;
+	height: 56px;
 	aspect-ratio: 1 / 1;
-	border-radius: 12px;
-	margin: 0.4rem;
+	border-radius: 8px;
+	margin: 0.3rem;
 }
 
 .product-image {
@@ -720,11 +990,11 @@ function displayQty(slug) {
 }
 
 .product-body {
-	padding: 0.55rem 0.7rem 0.3rem;
+	padding: 0.35rem 0.5rem 0.2rem;
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: 0.25rem;
+	gap: 0.15rem;
 	flex: 1;
 	min-width: 0;
 }
@@ -734,25 +1004,25 @@ function displayQty(slug) {
 	align-items: center;
 	justify-content: space-between;
 	flex: 1;
-	padding: 0.5rem 0.7rem;
-	gap: 0.5rem;
+	padding: 0.35rem 0.55rem;
+	gap: 0.4rem;
 }
 
 .product-body h4 {
 	margin: 0;
-	font-size: 0.92rem;
-	line-height: 1.35;
+	font-size: 0.76rem;
+	line-height: 1.3;
 	font-weight: 600;
 	color: var(--pos-text);
 	word-break: break-word;
 }
 
 .products-grid.mode-list .product-body h4 {
-	font-size: 0.95rem;
+	font-size: 0.8rem;
 }
 
 .product-body strong {
-	font-size: 0.92rem;
+	font-size: 0.74rem;
 	font-weight: 700;
 	color: var(--pos-accent);
 	flex-shrink: 0;
@@ -763,13 +1033,13 @@ function displayQty(slug) {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.5rem;
-	padding: 0.4rem 0.6rem 0.55rem;
+	gap: 0.35rem;
+	padding: 0.25rem 0.45rem 0.35rem;
 	margin-top: auto;
 }
 
 .products-grid.mode-list .product-actions {
-	padding: 0.4rem 0.7rem;
+	padding: 0.3rem 0.55rem;
 	margin-top: 0;
 	flex-shrink: 0;
 }
@@ -777,18 +1047,18 @@ function displayQty(slug) {
 .counter {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.25rem;
+	gap: 0.15rem;
 }
 
 .counter button {
-	width: 36px;
-	height: 36px;
-	border-radius: 10px;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
 	border: 1px solid var(--pos-border);
 	background: var(--pos-white);
 	color: var(--pos-primary);
 	cursor: pointer;
-	font-size: 1.1rem;
+	font-size: 0.95rem;
 	font-weight: 600;
 	transition: background 0.12s ease;
 }
@@ -798,9 +1068,9 @@ function displayQty(slug) {
 }
 
 .counter span {
-	min-width: 38px;
+	min-width: 28px;
 	text-align: center;
-	font-size: 0.9rem;
+	font-size: 0.78rem;
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
@@ -809,12 +1079,12 @@ function displayQty(slug) {
 	border: 1px solid var(--pos-accent);
 	background: var(--pos-accent);
 	color: var(--pos-white);
-	border-radius: 10px;
-	padding: 0.45rem 0.8rem;
+	border-radius: 8px;
+	padding: 0.3rem 0.6rem;
 	cursor: pointer;
-	font-size: 0.82rem;
+	font-size: 0.72rem;
 	font-weight: 600;
-	min-height: 36px;
+	min-height: 28px;
 	transition: opacity 0.12s ease;
 }
 
@@ -836,14 +1106,12 @@ function displayQty(slug) {
 	border: 1px solid var(--pos-border);
 	border-radius: 12px;
 	background: var(--pos-white);
-	padding: 0.5rem 0.55rem;
-	cursor: pointer;
-	text-align: right;
 	display: grid;
-	gap: 0.18rem;
+	gap: 0.4rem;
 	transition: all 0.12s;
-	font-family: inherit;
 	position: relative;
+	padding: 0.55rem;
+	min-height: 112px;
 }
 
 .compact-card:hover {
@@ -857,40 +1125,91 @@ function displayQty(slug) {
 }
 
 .compact-name {
-	font-size: 0.8rem;
-	font-weight: 600;
+	font-size: 0.83rem;
+	font-weight: 700;
 	color: var(--pos-primary);
-	line-height: 1.3;
+	line-height: 1.45;
 	display: block;
 }
 
 .compact-price {
-	font-size: 0.72rem;
+	font-size: 0.74rem;
 	color: var(--pos-accent);
 	display: block;
+	font-weight: 700;
 }
 
 .compact-qty {
 	position: absolute;
-	top: 0.3rem;
-	left: 0.35rem;
+	top: 0.45rem;
+	left: 0.45rem;
 	background: var(--pos-primary);
 	color: #fff;
 	border-radius: 999px;
-	font-size: 0.65rem;
-	padding: 0.08rem 0.35rem;
+	font-size: 0.68rem;
+	padding: 0.14rem 0.42rem;
 	font-weight: 700;
+}
+
+.compact-main-btn {
+	border: 0;
+	background: transparent;
+	padding: 0;
+	text-align: right;
+	cursor: pointer;
+	font-family: inherit;
+	display: grid;
+	gap: 0.22rem;
+	align-content: start;
+	min-height: 62px;
+}
+
+.compact-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-top: auto;
+}
+
+.compact-action-btn {
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+	border: 1px solid var(--pos-border);
+	background: color-mix(in srgb, var(--pos-white) 92%, transparent);
+	color: var(--pos-primary);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.15s ease;
+}
+
+.compact-action-btn:hover {
+	background: var(--pos-soft);
+	border-color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.25);
+}
+
+.compact-action-btn--primary {
+	background: var(--pos-primary);
+	color: var(--pos-white);
+	border-color: var(--pos-primary);
+}
+
+.compact-action-btn--primary:hover {
+	filter: brightness(0.96);
+	background: var(--pos-primary);
 }
 
 @media (max-width: 1200px) {
 	.products-grid.mode-grid {
-		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
 	}
 }
 
 @media (max-width: 860px) {
 	.products-grid.mode-grid {
-		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
 	}
 	.products-grid.mode-list .product-card {
 		flex-direction: column;

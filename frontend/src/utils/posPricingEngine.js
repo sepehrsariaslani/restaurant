@@ -13,7 +13,8 @@ export function calculatePosTotals({
   discountValue = 0,
   serviceType = 'fixed',
   serviceValue = 0,
-  taxAmount = 0,
+  taxType = 'fixed',
+  taxValue = 0,
   tipAmount = 0,
   useWallet = false,
   walletBalance = 0,
@@ -36,7 +37,11 @@ export function calculatePosTotals({
   const walletCapacity = Math.max(itemsTotal - discountAmount, 0)
   const walletApplied = useWallet ? clamp(toNumber(walletBalance, 0), 0, walletCapacity) : 0
 
-  const tax = Math.max(toNumber(taxAmount, 0), 0)
+  const cleanTaxValue = Math.max(toNumber(taxValue, 0), 0)
+  const taxableBase = Math.max(itemsTotal - discountAmount - walletApplied + serviceAmount, 0)
+  const fixedTax = taxType === 'fixed' ? cleanTaxValue : 0
+  const percentTax = taxType === 'percent' ? (taxableBase * cleanTaxValue) / 100 : 0
+  const tax = Math.max(fixedTax + percentTax, 0)
   const tip = Math.max(toNumber(tipAmount, 0), 0)
 
   const payableAmount = Math.max(itemsTotal - discountAmount - walletApplied + tax + tip + serviceAmount, 0)

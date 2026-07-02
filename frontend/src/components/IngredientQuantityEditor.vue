@@ -3,7 +3,7 @@
 		<!-- Section Header -->
 		<div class="section-header">
 			<h3 class="section-title">مواد تشکیل‌دهنده</h3>
-			<span class="section-count">{{ ingredients.length }} مورد</span>
+			<span class="section-count">{{ formatNumber(ingredients.length) }} مورد</span>
 		</div>
 
 		<!-- Search -->
@@ -33,7 +33,7 @@
 							{{ ingredient.customer_label || ingredient.name }}
 						</div>
 						<div class="card-qty">
-							{{ ingredient.base_qty }} {{ ingredient.qty_uom || "" }}
+							{{ formatNumber(ingredient.base_qty) }} {{ ingredient.qty_uom || "" }}
 						</div>
 						<div class="card-meta" v-if="hasIngredientMeta(ingredient)">
 							<span class="meta-kcal" v-if="hasPositiveKcal(ingredient)">
@@ -106,7 +106,7 @@
 						>
 							−
 						</button>
-						<span class="qty-val">x{{ getMultiplier(ingredient) }}</span>
+						<span class="qty-val">x{{ formatNumber(getMultiplier(ingredient)) }}</span>
 						<button
 							class="qty-btn"
 							type="button"
@@ -151,26 +151,22 @@
 			<div class="nutrition-grid">
 				<div class="nutrition-item" v-if="totalNutrition.kcal > 0">
 					<span class="nutrition-label">کالری</span>
-					<strong class="nutrition-value">{{ Math.round(totalNutrition.kcal) }}</strong>
+					<strong class="nutrition-value">{{ formatNumber(Math.round(totalNutrition.kcal)) }}</strong>
 					<span class="nutrition-unit">kcal</span>
 				</div>
 				<div class="nutrition-item" v-if="totalNutrition.protein_g > 0">
 					<span class="nutrition-label">پروتئین</span>
-					<strong class="nutrition-value">{{
-						Math.round(totalNutrition.protein_g)
-					}}</strong>
+					<strong class="nutrition-value">{{ formatNumber(Math.round(totalNutrition.protein_g)) }}</strong>
 					<span class="nutrition-unit">g</span>
 				</div>
 				<div class="nutrition-item" v-if="totalNutrition.carb_g > 0">
 					<span class="nutrition-label">کربوهیدرات</span>
-					<strong class="nutrition-value">{{
-						Math.round(totalNutrition.carb_g)
-					}}</strong>
+					<strong class="nutrition-value">{{ formatNumber(Math.round(totalNutrition.carb_g)) }}</strong>
 					<span class="nutrition-unit">g</span>
 				</div>
 				<div class="nutrition-item" v-if="totalNutrition.fat_g > 0">
 					<span class="nutrition-label">چربی</span>
-					<strong class="nutrition-value">{{ Math.round(totalNutrition.fat_g) }}</strong>
+					<strong class="nutrition-value">{{ formatNumber(Math.round(totalNutrition.fat_g)) }}</strong>
 					<span class="nutrition-unit">g</span>
 				</div>
 			</div>
@@ -195,7 +191,7 @@ import {
 	upsertIngredientMultiplier,
 	ingredientQtyStep,
 } from "@/utils/itemConfig";
-import { formatMoney } from "@/utils/format";
+import { formatMoney, toPersianNumber } from "@/utils/format";
 
 const props = defineProps({
 	ingredients: {
@@ -228,6 +224,14 @@ const customization = computed(() =>
 	sanitizeCustomization(props.modelValue || {}, props.ingredients || []),
 );
 const search = ref("");
+
+function formatNumber(value, options = {}) {
+	const numeric = Number(value || 0);
+	if (!Number.isFinite(numeric)) {
+		return "۰";
+	}
+	return toPersianNumber(numeric, options);
+}
 
 function onImageClick(ingredient) {
 	if (ingredient?.image) {

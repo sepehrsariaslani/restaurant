@@ -17,27 +17,19 @@
         </div>
         <button type="button" class="ticket-tab new" @click="createNewTicketTab">+ فاکتور جدید</button>
       </div>
+      <div class="ticket-rail-actions">
+        <button type="button" class="ops-trigger" @click="openOperationsOverlay()">
+          <ShoppingCart :size="16" />
+          <span>عملیات POS</span>
+        </button>
+        <button type="button" class="kbd-help-btn" title="میانبرهای کیبورد (?)" @click="showKeyboardMap = true">
+          <Keyboard :size="16" />
+          <span>میانبرها</span>
+        </button>
+      </div>
     </div>
 
     <section class="pos-shell" dir="rtl">
-      <header class="pos-workspace-head">
-        <div class="workspace-title">
-          <p class="workspace-kicker">داشبورد عملیاتی</p>
-          <h2>POS</h2>
-          <span class="workspace-meta">{{ dateLabel }}</span>
-        </div>
-        <div class="pos-workspace-actions">
-          <button type="button" class="ops-trigger" @click="openOperationsOverlay()">
-            <span>عملیات POS</span>
-            <small>{{ leftPanelTabLabel }}</small>
-          </button>
-          <button type="button" class="kbd-help-btn" title="میانبرهای کیبورد (?)" @click="showKeyboardMap = true">
-            <Keyboard :size="16" />
-            <span>میانبرها</span>
-          </button>
-        </div>
-      </header>
-
       <div class="pos-main-grid">
         <PosProductPanel
           class="products-col"
@@ -87,6 +79,7 @@
             :payment-reference="payment.reference_no"
             :payment-rrn="payment.rrn"
             :payment-boot="paymentBoot"
+            :payment-options="posPaymentOptions"
             :financial="financial"
             :totals="totals"
             :submitting="submitting"
@@ -111,7 +104,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-pay="submitPOSOrder(true)"
+            @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
         </aside>
@@ -119,7 +112,7 @@
 
       <button v-if="!isDesktopViewport" type="button" class="cart-fab" :class="{ 'has-items': cart.length }" title="سبد خرید" @click="cartDrawerOpen = true">
         <ShoppingCart :size="18" />
-        <span v-if="cart.length" class="cart-fab-badge">{{ cart.length }}</span>
+        <span v-if="cart.length" class="cart-fab-badge">{{ toFaDigits(cart.length) }}</span>
       </button>
 
       <div v-if="showKeyboardMap" class="kbd-map-backdrop" @click.self="showKeyboardMap = false">
@@ -167,7 +160,7 @@
                 @click="setLeftPanelTab('tables')"
               >
                 میزها
-                <span class="count-badge" v-if="tableOptions.length">{{ tableOptions.length }}</span>
+                <span class="count-badge" v-if="tableOptions.length">{{ toFaDigits(tableOptions.length) }}</span>
                 <span class="occupied-badge" v-if="occupiedTableCount">{{ occupiedTableCount }} اشغال</span>
               </button>
               <button
@@ -177,7 +170,7 @@
                 @click="setLeftPanelTab('invoices')"
               >
                 فاکتورهای باز
-                <span class="count-badge" v-if="openInvoices.length">{{ openInvoices.length }}</span>
+                <span class="count-badge" v-if="openInvoices.length">{{ toFaDigits(openInvoices.length) }}</span>
               </button>
               <button
                 type="button"
@@ -186,7 +179,7 @@
                 @click="setLeftPanelTab('history')"
               >
                 تراکنش‌های امروز
-                <span class="count-badge" v-if="todayTransactions.length">{{ todayTransactions.length }}</span>
+                <span class="count-badge" v-if="todayTransactions.length">{{ toFaDigits(todayTransactions.length) }}</span>
               </button>
               <button
                 type="button"
@@ -195,7 +188,7 @@
                 @click="setLeftPanelTab('recent')"
               >
                 سفارش‌های اخیر
-                <span class="count-badge" v-if="recentOrders.length">{{ recentOrders.length }}</span>
+                <span class="count-badge" v-if="recentOrders.length">{{ toFaDigits(recentOrders.length) }}</span>
               </button>
             </div>
 
@@ -226,7 +219,7 @@
                     <span v-if="selectedTablePreview?.totals?.session_grand_total">
                       {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
                     </span>
-                    <span v-if="selectedTableCustomer.name">👤 {{ selectedTableCustomer.name }}</span>
+                    <span v-if="selectedTableCustomer.name">مشتری: {{ selectedTableCustomer.name }}</span>
                     <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
                   </div>
                   <div class="table-detail-actions">
@@ -234,11 +227,11 @@
                     <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
                     <template v-if="selectedTablePreview?.session?.name">
                       <div class="tbl-action-row">
-                        <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." tone="dark" />
+                        <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." />
                         <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
                       </div>
                       <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
-                        <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." tone="dark" />
+                        <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." />
                         <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
                       </div>
                       <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
@@ -267,7 +260,7 @@
                     <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
                   </div>
                   <span class="history-method-badge" v-if="tx.payment_method">
-                    {{ tx.payment_method === 'cash' ? '💵 نقدی' : tx.payment_method === 'card' ? '💳 کارتخوان' : tx.payment_method }}
+                    {{ paymentMethodDisplayLabel(tx.payment_method) }}
                   </span>
                 </article>
               </div>
@@ -357,7 +350,7 @@
                   </div>
                   <div class="history-card-footer">
                     <span class="history-method-badge" v-if="order.payment_method">
-                      {{ order.payment_method === 'cash' ? '💵 نقدی' : order.payment_method === 'card' ? '💳 کارتخوان' : order.payment_method }}
+                      {{ paymentMethodDisplayLabel(order.payment_method) }}
                     </span>
                     <span class="order-status-badge" :class="`status-${order.status}`">
                       {{ formatStatus(order.status) }}
@@ -392,6 +385,7 @@
             :payment-reference="payment.reference_no"
             :payment-rrn="payment.rrn"
             :payment-boot="paymentBoot"
+            :payment-options="posPaymentOptions"
             :financial="financial"
             :totals="totals"
             :submitting="submitting"
@@ -416,7 +410,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-pay="submitPOSOrder(true)"
+            @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
         </aside>
@@ -544,11 +538,11 @@
         <p class="error pos-modal-loading" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
         <template v-else-if="orderDetailModal.order">
           <div class="order-detail-meta">
-            <span>👤 {{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
-            <span>🕐 {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}</span>
+            <span>مشتری: {{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
+            <span>زمان: {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}</span>
             <span class="history-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
             <span class="history-method-badge" v-if="orderDetailModal.order.payment_method">
-              {{ orderDetailModal.order.payment_method === 'cash' ? '💵 نقدی' : '💳 کارتخوان' }}
+              {{ paymentMethodDisplayLabel(orderDetailModal.order.payment_method) }}
             </span>
             <span class="order-status-badge" :class="`status-${orderDetailModal.order.status}`">
               {{ formatStatus(orderDetailModal.order.status) }}
@@ -571,8 +565,13 @@
               روش پرداخت
               <select class="input dark-input" v-model="orderDetailModal.editForm.payment_method">
                 <option value="">انتخاب نشده</option>
-                <option value="cash">💵 نقدی</option>
-                <option value="card">💳 کارتخوان</option>
+                <option
+                  v-for="option in editablePaymentMethodOptions"
+                  :key="option.method"
+                  :value="option.method"
+                >
+                  {{ option.label }}
+                </option>
               </select>
             </label>
             <label>
@@ -588,7 +587,7 @@
               @click="openReturnInvoiceModal"
               v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())"
             >
-              📄 فاکتور برگشتی
+              فاکتور برگشتی
             </button>
             <button type="button" class="tbl-btn" @click="closeOrderDetailModal">انصراف</button>
             <button type="button" class="tbl-btn primary" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
@@ -603,7 +602,7 @@
     <div v-if="returnInvoiceModal.open" class="pos-modal-backdrop" @click.self="closeReturnInvoiceModal">
       <section class="pos-modal" dir="rtl">
         <header class="pos-modal-head">
-          <h3>📄 ساخت فاکتور برگشتی</h3>
+          <h3>ساخت فاکتور برگشتی</h3>
           <button type="button" class="pos-modal-close" @click="closeReturnInvoiceModal">×</button>
         </header>
         <div class="return-modal-body">
@@ -654,7 +653,7 @@ import {
   updateManagementOrder,
   createManagementReturnOrder,
 } from '@/utils/api'
-import { formatMoney, formatStatus } from '@/utils/format'
+import { formatMoney, formatStatus, toPersianNumber } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
 import { calculatePosTotals } from '@/utils/posPricingEngine'
 
@@ -692,7 +691,8 @@ function defaultFinancialState() {
     discountType: 'fixed',
     discountValue: 0,
     taxExempt: false,
-    taxAmount: 0,
+    taxType: 'fixed',
+    taxValue: 0,
     tipAmount: 0,
     serviceType: 'fixed',
     serviceValue: 0,
@@ -774,6 +774,7 @@ const posProfileSummary = reactive({
   warehouse: '',
   selling_price_list: '',
   currency: 'IRR',
+  payments: [],
   has_open_shift: false,
   shift_name: '',
   shift_opened_at: '',
@@ -820,6 +821,7 @@ const paymentBoot = reactive({
   provider: 'manual',
   provider_label: 'حالت دستی',
   terminal_id: '',
+  methods: [],
 })
 
 const payment = reactive(defaultPaymentState())
@@ -846,19 +848,6 @@ const customizationSheet = reactive({
 
 const fallbackImage =
   'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=900&auto=format&fit=crop&q=60'
-
-const dateLabel = computed(() => {
-  try {
-    return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long',
-    }).format(new Date())
-  } catch (dateErr) {
-    return 'امروز'
-  }
-})
 
 const leftPanelTabLabel = computed(() => {
   switch (leftPanelTab.value) {
@@ -969,13 +958,6 @@ const filteredProducts = computed(() => {
       name.replace(/\s+/g, '').includes(normalizedQuery)
     )
   })
-  if (!query && Object.keys(popularSlugsMap.value).length) {
-    return [...filtered].sort((a, b) => {
-      const sA = String(a.slug || a.restaurant_slug || a.name || '')
-      const sB = String(b.slug || b.restaurant_slug || b.name || '')
-      return (popularSlugsMap.value[sB] || 0) - (popularSlugsMap.value[sA] || 0)
-    })
-  }
   return filtered
 })
 
@@ -1003,6 +985,104 @@ const occupiedTableCount = computed(() =>
   tableOptions.value.filter((t) => t.status === 'occupied' || t.status === 'waiting').length,
 )
 
+function normalizePaymentMethodKind(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'credit') return 'credit'
+  if (normalized === 'card') return 'card'
+  return 'cash'
+}
+
+function inferPaymentMethodKind(row = {}) {
+  const type = String(row?.type || '').trim().toLowerCase()
+  const mode = String(row?.mode_of_payment || row?.payment_method || '').trim().toLowerCase()
+  const combined = `${type} ${mode}`
+  if (/(credit|receivable|invoice|debt|اعتبار|نسیه|بدهکار)/i.test(combined)) {
+    return 'credit'
+  }
+  if (/(card|pos|terminal|bank|kart|کارت|پوز|پاس|بانک|ترمینال)/i.test(combined)) {
+    return 'card'
+  }
+  return 'cash'
+}
+
+const posPaymentOptions = computed(() => {
+  const dedup = new Map()
+  const profilePayments = Array.isArray(posProfileSummary.payments) ? posProfileSummary.payments : []
+
+  for (const row of profilePayments) {
+    const modeOfPayment = String(row?.mode_of_payment || row?.payment_method || '').trim()
+    if (!modeOfPayment) {
+      continue
+    }
+    const method = inferPaymentMethodKind(row)
+    const key = `${method}:${modeOfPayment}`
+    if (!dedup.has(key)) {
+      dedup.set(key, {
+        key,
+        method,
+        label: modeOfPayment,
+        mode_of_payment: modeOfPayment,
+        default: Boolean(row?.default),
+      })
+    }
+  }
+
+  if (!dedup.size) {
+    dedup.set('cash:نقدی', {
+      key: 'cash:نقدی',
+      method: 'cash',
+      label: 'نقدی',
+      mode_of_payment: 'نقدی',
+      default: true,
+    })
+    dedup.set('card:کارتخوان', {
+      key: 'card:کارتخوان',
+      method: 'card',
+      label: 'کارتخوان',
+      mode_of_payment: 'کارتخوان',
+      default: paymentBoot.supports_card,
+    })
+  }
+
+  if (!dedup.has('credit:اعتباری')) {
+    dedup.set('credit:اعتباری', {
+      key: 'credit:اعتباری',
+      method: 'credit',
+      label: 'اعتباری',
+      mode_of_payment: 'اعتباری',
+      default: false,
+    })
+  }
+
+  return [...dedup.values()]
+})
+
+const editablePaymentMethodOptions = computed(() => {
+  const byMethod = new Map()
+  for (const option of posPaymentOptions.value) {
+    const method = normalizePaymentMethodKind(option.method)
+    if (!byMethod.has(method)) {
+      byMethod.set(method, {
+        method,
+        label: option.label || option.mode_of_payment || method,
+      })
+    }
+  }
+  return [...byMethod.values()]
+})
+
+function paymentMethodDisplayLabel(value) {
+  const method = normalizePaymentMethodKind(value)
+  const matched = editablePaymentMethodOptions.value.find((option) => option.method === method)
+  if (matched) {
+    return matched.label
+  }
+  if (method === 'credit') return 'اعتباری'
+  if (method === 'card') return 'کارتخوان'
+  if (method === 'cash') return 'نقدی'
+  return String(value || '').trim() || '-'
+}
+
 const totals = computed(() =>
   calculatePosTotals({
     cartLines: cart.map((line) => ({
@@ -1013,7 +1093,8 @@ const totals = computed(() =>
     discountValue: financial.discountValue,
     serviceType: financial.serviceType,
     serviceValue: financial.serviceValue,
-    taxAmount: financial.taxExempt ? 0 : financial.taxAmount,
+    taxType: financial.taxExempt ? 'fixed' : financial.taxType,
+    taxValue: financial.taxExempt ? 0 : financial.taxValue,
     tipAmount: financial.tipAmount,
     useWallet: financial.useWallet,
     walletBalance: financial.walletBalance,
@@ -1134,10 +1215,10 @@ function saveActiveTicketSnapshot() {
 function ticketLabel(ticket, index) {
   if (ticket.id === activeTicketId.value) {
     const activeName = String(form.customer_name || '').trim()
-    return activeName && activeName !== 'POS Customer' ? activeName : `فاکتور ${index + 1}`
+    return activeName && activeName !== 'POS Customer' ? activeName : `فاکتور ${toPersianNumber(index + 1)}`
   }
   const ticketName = String(ticket.snapshot?.form?.customer_name || '').trim()
-  return ticketName && ticketName !== 'POS Customer' ? ticketName : `فاکتور ${index + 1}`
+  return ticketName && ticketName !== 'POS Customer' ? ticketName : `فاکتور ${toPersianNumber(index + 1)}`
 }
 
 function switchToTicket(ticketId) {
@@ -1219,6 +1300,16 @@ function applyPOSProfileSummary(summary = {}) {
   posProfileSummary.shift_name = String(summary?.shift_name || '').trim()
   posProfileSummary.shift_opened_at = String(summary?.shift_opened_at || '').trim()
   posProfileSummary.shift_status = String(summary?.shift_status || '').trim()
+  posProfileSummary.payments = Array.isArray(summary?.payments)
+    ? summary.payments
+        .map((row) => ({
+          mode_of_payment: String(row?.mode_of_payment || '').trim(),
+          type: String(row?.type || '').trim(),
+          account: String(row?.account || '').trim(),
+          default: Boolean(row?.default),
+        }))
+        .filter((row) => row.mode_of_payment)
+    : []
 }
 
 function normalizeTableSelector(value) {
@@ -1693,7 +1784,7 @@ function applyOpenInvoiceProfile(order = {}) {
   }
 
   const invoicePaymentMethod = String(order.payment_method || '').trim().toLowerCase()
-  if (invoicePaymentMethod === 'card' || invoicePaymentMethod === 'cash') {
+  if (invoicePaymentMethod === 'card' || invoicePaymentMethod === 'cash' || invoicePaymentMethod === 'credit') {
     payment.method = invoicePaymentMethod
   }
   payment.reference_no = String(order.payment_reference || '').trim()
@@ -2465,7 +2556,7 @@ async function handleScaleBarcodeScan() {
       throw new Error(`کالایی با کد ترازو ${parsed.itemCode} پیدا نشد.`)
     }
     addToCart(item, parsed.qty)
-    scannerFeedback.value = `بارکد وزنی اعمال شد: ${item.title || item.item_name} × ${parsed.qty}`
+    scannerFeedback.value = `بارکد وزنی اعمال شد: ${item.title || item.item_name} × ${formatCompactNumber(parsed.qty)}`
     error.value = ''
   } catch (scanErr) {
     error.value = scanErr.message || 'خطا در تحلیل بارکد وزنی.'
@@ -2496,6 +2587,61 @@ function buildOrderNote() {
   return noteParts.filter(Boolean).join(' | ')
 }
 
+function buildPaymentSplitAuditLine(splits = []) {
+  const normalizedSplits = (splits || [])
+    .map((row) => ({
+      method: normalizePaymentMethodKind(row?.method),
+      amount: Number(row?.amount || 0),
+      label: String(row?.label || row?.mode_of_payment || '').trim(),
+      mode_of_payment: String(row?.mode_of_payment || '').trim(),
+    }))
+    .filter((row) => row.amount > 0)
+
+  if (!normalizedSplits.length) {
+    return ''
+  }
+
+  return normalizedSplits
+    .map((row) => `${row.label || row.mode_of_payment || row.method}: ${formatMoney(row.amount, currency.value)}`)
+    .join(' | ')
+}
+
+function resolvePaymentSubmission(paymentMeta = {}) {
+  const splits = (Array.isArray(paymentMeta?.splits) ? paymentMeta.splits : [])
+    .map((row) => ({
+      method: normalizePaymentMethodKind(row?.method),
+      amount: Number(row?.amount || 0),
+      label: String(row?.label || row?.mode_of_payment || '').trim(),
+      mode_of_payment: String(row?.mode_of_payment || '').trim(),
+      option_key: String(row?.optionKey || row?.option_key || '').trim(),
+    }))
+    .filter((row) => row.amount > 0)
+
+  if (!splits.length) {
+    return {
+      splits: [],
+      primary: {
+        method: normalizePaymentMethodKind(payment.method),
+        amount: Number(totals.value?.payableAmount || 0),
+        label: '',
+        mode_of_payment: '',
+        option_key: '',
+      },
+      auditLine: '',
+    }
+  }
+
+  const creditSplit = splits.find((row) => row.method === 'credit')
+  const cardSplit = splits.find((row) => row.method === 'card')
+  const cashSplit = splits.find((row) => row.method === 'cash')
+
+  return {
+    splits,
+    primary: creditSplit || cardSplit || cashSplit || splits[0],
+    auditLine: buildPaymentSplitAuditLine(splits),
+  }
+}
+
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -2508,9 +2654,13 @@ function escapeHtml(value) {
 function formatCompactNumber(value, decimals = 3) {
   const parsed = Number(value || 0)
   if (!Number.isFinite(parsed)) {
-    return '0'
+    return '۰'
   }
-  return parsed.toFixed(decimals).replace(/\.?0+$/, '')
+  const trimmed = parsed.toFixed(decimals).replace(/\.?0+$/, '')
+  if (trimmed.includes('.')) {
+    return trimmed.replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)])
+  }
+  return toPersianNumber(Number(trimmed || 0))
 }
 
 function formatInvoiceDateTime(value) {
@@ -2531,7 +2681,7 @@ function formatInvoiceDateTime(value) {
 }
 
 function toFaDigits(value) {
-  return Number(value || 0).toLocaleString('fa-IR')
+  return toPersianNumber(value)
 }
 
 function formatOccupiedMinutes(value) {
@@ -2718,7 +2868,7 @@ function buildReceiptPrintableItemsFromLines(lines = []) {
       return `
         <section class="item-row">
           <div class="item-head">
-            <span class="item-index">${index + 1}.</span>
+            <span class="item-index">${toPersianNumber(index + 1)}.</span>
             <span class="item-title">${escapeHtml(line.title || '')}</span>
             <span class="item-total">${escapeHtml(formatMoney(total, currency.value))}</span>
           </div>
@@ -2781,13 +2931,6 @@ function buildReceiptTotalsRowsHtml(totalValues = totals.value) {
     {
       label: 'تخفیف',
       value: totalValues.discountAmount || 0,
-      always: false,
-      negative: true,
-      className: '',
-    },
-    {
-      label: 'کیف پول',
-      value: totalValues.walletApplied || 0,
       always: false,
       negative: true,
       className: '',
@@ -2889,7 +3032,7 @@ function buildCurrentTicketReceiptMarkup() {
   return buildReceiptMarkup({
     printableItems: buildReceiptPrintableItems(),
     totalsRows: buildReceiptTotalsRowsHtml(),
-    paymentLabel: payment.method === 'card' ? 'کارتخوان' : 'نقدی',
+    paymentLabel: paymentMethodDisplayLabel(payment.method),
     customerName: form.customer_name || 'POS Customer',
     mobile: form.mobile || '',
     orderMode: form.order_mode,
@@ -3027,7 +3170,7 @@ function resolveCustomerFromQuery() {
   }
 }
 
-async function submitPOSOrder(payNow = true) {
+async function submitPOSOrder(payNow = true, paymentMeta = {}) {
   if (!cart.length) {
     error.value = 'حداقل یک محصول به سبد اضافه کنید.'
     return
@@ -3075,39 +3218,34 @@ async function submitPOSOrder(payNow = true) {
 
   resolveCustomerFromQuery()
 
-  if (payNow && payment.method === 'card' && !paymentBoot.supports_card) {
-    error.value = 'اتصال کارتخوان غیرفعال است.'
-    return
-  }
-  if (payNow && payment.method === 'card' && paymentBoot.provider === 'local_node' && !hardwareStatus.connected) {
-    const hasManualRef = Boolean(payment.reference_no || payment.rrn)
-    if (!hasManualRef) {
-      error.value = 'نود محلی قطع است. برای ادامه مرجع یا RRN دستی ثبت کنید.'
-      return
-    }
-  }
+  const paymentSelection = resolvePaymentSubmission(paymentMeta)
+  const paymentNoteLine = paymentSelection.auditLine
 
   const paymentPayload = payNow
     ? {
-        method: payment.method,
-        provider: paymentBoot.provider,
+        method: paymentSelection.primary?.method || normalizePaymentMethodKind(payment.method),
+        mode_of_payment: paymentSelection.primary?.mode_of_payment || '',
+        provider: paymentSelection.primary?.method === 'card' ? paymentBoot.provider : 'manual',
         terminal_id: paymentBoot.terminal_id || '',
         reference_no: payment.reference_no || '',
         rrn: payment.rrn || '',
+        splits: paymentSelection.splits,
       }
     : {
-        method: 'card',
+        method: 'credit',
+        mode_of_payment: 'اعتباری',
         provider: 'manual',
         terminal_id: paymentBoot.terminal_id || '',
         reference_no: '',
         rrn: '',
+        splits: [],
       }
 
   const payload = {
     customer_name: form.customer_name || 'POS Customer',
     mobile: form.mobile || '09120000000',
     order_type: form.order_mode,
-    note: buildOrderNote(),
+    note: [buildOrderNote(), paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : ''].filter(Boolean).join(' | '),
     customer_type: form.customer_type,
     guest_count: form.guest_count,
     place: form.place,
@@ -3120,7 +3258,9 @@ async function submitPOSOrder(payNow = true) {
       discount_value: financial.discountValue,
       service_type: financial.serviceType,
       service_value: financial.serviceValue,
-      tax_amount: financial.taxExempt ? 0 : financial.taxAmount,
+      tax_type: financial.taxExempt ? 'fixed' : financial.taxType,
+      tax_value: financial.taxExempt ? 0 : financial.taxValue,
+      tax_amount: totals.value.taxAmount || 0,
       tip_amount: financial.tipAmount,
       use_wallet: financial.useWallet,
       wallet_applied: totals.value.walletApplied,
@@ -3148,10 +3288,14 @@ async function submitPOSOrder(payNow = true) {
   try {
     const result = await createManagementPOSOrder(payload)
     const paymentState = result.payment?.status
+    const paymentMethod = normalizePaymentMethodKind(result.payment?.method || paymentPayload.method)
     if (paymentState === 'paid') {
       successMessage.value = `سفارش ${result.order_code} ثبت و پرداخت شد.`
     } else if (paymentState === 'pending') {
-      successMessage.value = `سفارش ${result.order_code} ثبت شد و در انتظار پرداخت است.`
+      successMessage.value =
+        paymentMethod === 'credit'
+          ? `سفارش ${result.order_code} به صورت اعتباری ثبت شد.`
+          : `سفارش ${result.order_code} ثبت شد و در انتظار پرداخت است.`
     } else if (paymentState === 'failed') {
       successMessage.value = `سفارش ${result.order_code} ثبت شد اما پرداخت ناموفق بود.`
     } else {
@@ -3245,12 +3389,13 @@ async function loadPOSBoot() {
           ? 'وب هوک'
           : 'حالت دستی'
     paymentBoot.terminal_id = bootPayment.terminal_id || ''
+    paymentBoot.methods = [...posPaymentOptions.value]
 
     payment.method = bootPayment.default_method || 'cash'
     bootDefaultPaymentMethod = payment.method
-    if (payment.method === 'card' && !paymentBoot.supports_card) {
-      payment.method = 'cash'
-      bootDefaultPaymentMethod = 'cash'
+    if (!posPaymentOptions.value.some((row) => row.method === payment.method)) {
+      payment.method = posPaymentOptions.value[0]?.method || 'cash'
+      bootDefaultPaymentMethod = payment.method
     }
 
     bootWalletBalance = Number(payload.wallet_balance || bootPayment.wallet_balance || 0)
@@ -3554,10 +3699,10 @@ onBeforeUnmount(() => {
   --pos-success: var(--pos-success-color, #0b7d4a);
   --pos-danger: var(--pos-danger-color, #ab3535);
   --pos-warning: var(--pos-warning-color, #f59e0b);
-  --pos-white: var(--pos-surface-color, #ffffff);
-  --pos-text: var(--pos-primary-color, #015a72);
-  --pos-border: rgb(var(--pos-primary-rgb, 1 90 114) / 0.22);
-  --pos-soft: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
+  --pos-white: var(--pos-surface-color, var(--bg-card, #ffffff));
+  --pos-text: var(--text, var(--pos-primary-color, #015a72));
+  --pos-border: color-mix(in srgb, var(--border, #d6dde8) 88%, transparent);
+  --pos-soft: color-mix(in srgb, var(--bg-soft, #f6f8fb) 92%, transparent);
   --pos-accent-soft: rgb(var(--pos-accent-rgb, 255 152 54) / 0.12);
 }
 
@@ -3950,6 +4095,16 @@ onBeforeUnmount(() => {
   gap: 0.4rem;
   overflow-x: auto;
   padding-bottom: 0.2rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ticket-rail-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  padding-bottom: 0.2rem;
 }
 
 .ticket-tab-group {
@@ -4007,6 +4162,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 0;
   padding: 0.6rem;
+  width: 100%;
   height: 100vh;
   box-sizing: border-box;
   overflow: hidden;
@@ -4027,52 +4183,10 @@ onBeforeUnmount(() => {
 .pos-shell {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  height: calc(100vh - 1.2rem);
+  gap: 0;
+  height: calc(100vh - 0.6rem);
   min-height: 520px;
   overflow: hidden;
-}
-
-.pos-workspace-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.8rem;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #fff 0%, rgb(255 255 255 / 0.96) 100%);
-  box-shadow: 0 8px 20px rgb(15 23 42 / 0.04);
-}
-
-.workspace-title {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.workspace-kicker {
-  margin: 0;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.5);
-}
-
-.workspace-title h2 {
-  margin: 0;
-  font-size: 1.08rem;
-  font-weight: 800;
-  color: var(--pos-text);
-}
-
-.workspace-meta {
-  font-size: 0.74rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
-}
-
-.pos-workspace-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
 }
 
 .pos-main-grid {
@@ -4099,19 +4213,22 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.42rem;
-  min-height: 42px;
+  gap: 0.48rem;
+  min-height: 38px;
   border-radius: 12px;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.16s ease;
+  box-shadow: none;
+  white-space: nowrap;
 }
 
 .ops-trigger {
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.05);
+  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.16);
+  background: color-mix(in srgb, var(--pos-white) 96%, transparent);
   color: var(--pos-primary);
-  padding: 0.55rem 0.85rem;
+  padding: 0.48rem 0.8rem;
+  min-width: 112px;
 }
 
 .ops-trigger span {
@@ -4119,13 +4236,8 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.ops-trigger small {
-  font-size: 0.68rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.56);
-}
-
 .ops-trigger:hover {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
+  background: color-mix(in srgb, var(--pos-white) 100%, transparent);
   border-color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.22);
 }
 
@@ -4262,9 +4374,10 @@ onBeforeUnmount(() => {
 
 .kbd-help-btn {
   border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
-  background: var(--pos-white);
+  background: color-mix(in srgb, var(--pos-white) 96%, transparent);
   color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
-  padding: 0.55rem 0.75rem;
+  padding: 0.48rem 0.8rem;
+  min-width: 112px;
 }
 
 .kbd-help-btn:hover {
@@ -4280,22 +4393,24 @@ onBeforeUnmount(() => {
 .ops-overlay-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 240;
+  z-index: 260;
+  direction: ltr;
   background: rgb(25 20 14 / 0.34);
   backdrop-filter: blur(5px);
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
-  padding: 0.8rem;
+  padding: 0;
 }
 
 .ops-overlay-sheet {
-  width: min(420px, calc(100vw - 1.6rem));
-  height: calc(100vh - 1.6rem);
-  border-radius: 18px;
-  background: rgb(249 248 245 / 0.98);
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
-  box-shadow: 0 24px 48px rgb(15 23 42 / 0.16);
+  width: min(780px, 64vw);
+  max-width: calc(100vw - 5rem);
+  height: 100vh;
+  border-radius: 0 22px 22px 0;
+  background: color-mix(in srgb, var(--pos-white) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
+  box-shadow: 0 28px 56px rgb(15 23 42 / 0.18);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -4357,7 +4472,7 @@ onBeforeUnmount(() => {
 
 .ops-overlay-enter-from .ops-overlay-sheet,
 .ops-overlay-leave-to .ops-overlay-sheet {
-  transform: translateX(-24px);
+  transform: translateX(-40px);
   opacity: 0;
 }
 
@@ -4365,7 +4480,7 @@ onBeforeUnmount(() => {
 .cart-fab {
   position: fixed;
   bottom: 1.2rem;
-  left: 4.4rem;
+  left: 10.4rem;
   z-index: 200;
   background: var(--pos-accent);
   color: #fff;
@@ -4803,15 +4918,6 @@ kbd {
     overflow: visible;
   }
 
-  .pos-workspace-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .pos-workspace-actions {
-    justify-content: space-between;
-  }
-
   .print-editor-grid {
     grid-template-columns: 1fr;
   }
@@ -4848,6 +4954,18 @@ kbd {
   .ops-overlay-sheet {
     width: 100%;
     height: calc(100vh - 0.7rem);
+    border-radius: 16px;
+  }
+
+  .ops-trigger,
+  .kbd-help-btn {
+    min-width: 104px;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .cart-fab {
+    left: 8.8rem;
+    bottom: 0.72rem;
   }
 
   .open-invoices-head,
@@ -4896,6 +5014,12 @@ kbd {
   border-bottom: 2px solid var(--pos-border);
   padding: 0.45rem 1rem 0;
   direction: rtl;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 /* Recent orders panel */
