@@ -128,6 +128,8 @@ website_route_rules = [
 	{"from_route": "/management/menu-groups", "to_route": "management/menu_groups"},
 	{"from_route": "/management/menu-group", "to_route": "management/menu_group"},
 	{"from_route": "/management/site-settings", "to_route": "management/site_settings"},
+	{"from_route": "/management/home-builder", "to_route": "management/home_builder"},
+	{"from_route": "/management/home_builder", "to_route": "management/home_builder"},
 	{"from_route": "/management/boms", "to_route": "management/boms"},
 	{"from_route": "/management/bom", "to_route": "management/bom"},
 	{"from_route": "/management/customers", "to_route": "management/customers"},

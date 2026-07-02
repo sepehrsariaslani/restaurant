@@ -3506,8 +3506,19 @@ def _get_core_menu_boot(branch=None):
 		"checkout_map": _get_checkout_map_settings(),
 		"theme_settings": _load_management_theme_settings(),
 		"loader_settings": _load_management_loader_settings(),
+		"page_layout": _get_boot_page_layout_safe(branch),
 		"user_roles": list(frappe.get_roles(frappe.session.user)) if frappe.session.user != "Guest" else [],
 	}
+
+
+def _get_boot_page_layout_safe(branch=None):
+	"""Return per-company page layout map for boot. Never raises."""
+	try:
+		from restaurant.page_layout import get_boot_page_layout
+
+		return get_boot_page_layout()
+	except Exception:
+		return {}
 
 
 def _get_core_menu_items(
