@@ -1,0 +1,112 @@
+/* Shared design primitives for home page blocks.
+ * Modern / minimal: generous whitespace, soft radius, subtle borders,
+ * one accent, restrained shadows. Uses existing theme CSS variables
+ * with sensible fallbacks so it works even before a full token layer.
+ */
+
+.blk {
+  --blk-radius: 20px;
+  --blk-radius-sm: 12px;
+  --blk-gap: clamp(1rem, 2.5vw, 1.75rem);
+  --blk-pad: clamp(1.25rem, 4vw, 2.75rem);
+  --blk-accent: var(--accent-green, #3b7a57);
+  --blk-ink: var(--ink-900, #1a1410);
+  --blk-ink-soft: var(--ink-700, #5b5248);
+  --blk-surface: #ffffff;
+  --blk-surface-soft: #f7f5f2;
+  --blk-border: rgb(0 0 0 / 0.07);
+  width: min(1160px, calc(100% - 2rem));
+  margin-inline: auto;
+  color: var(--blk-ink);
+  font-family: inherit;
+}
+
+.blk__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: clamp(1.25rem, 3vw, 2rem);
+}
+
+.blk__head--between {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.blk__eyebrow {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--blk-accent);
+  background: color-mix(in srgb, var(--blk-accent) 12%, transparent);
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+}
+
+.blk__title {
+  margin: 0;
+  font-size: clamp(1.35rem, 3.2vw, 2rem);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.blk__subtitle {
+  margin: 0;
+  max-width: 56ch;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--blk-ink-soft);
+}
+
+.blk__more {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--blk-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.blk__more:hover {
+  text-decoration: underline;
+}
+
+/* Buttons */
+.blk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.35rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.blk-btn:hover {
+  transform: translateY(-1px);
+}
+
+.blk-btn--primary {
+  background: var(--blk-accent);
+  color: #fff;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--blk-accent) 30%, transparent);
+}
+
+.blk-btn--ghost {
+  background: transparent;
+  color: var(--blk-ink);
+  border-color: var(--blk-border);
+}
+
+.blk-btn--ghost:hover {
+  background: var(--blk-surface-soft);
+}
