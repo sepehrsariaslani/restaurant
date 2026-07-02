@@ -39,6 +39,7 @@ ALLOWED_BLOCK_TYPES = {
 	"features",
 	"faq",
 	"banner",
+	"popular",
 }
 
 MAX_BLOCKS_PER_PAGE = 40

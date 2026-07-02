@@ -30,6 +30,7 @@ const CategoriesBlock = () => import("@/components/blocks/CategoriesBlock.vue");
 const FeaturesBlock = () => import("@/components/blocks/FeaturesBlock.vue");
 const FaqBlock = () => import("@/components/blocks/FaqBlock.vue");
 const BannerBlock = () => import("@/components/blocks/BannerBlock.vue");
+const PopularBlock = () => import("@/components/blocks/PopularBlock.vue");
 
 let _uid = 0;
 export function makeBlockId(type = "blk") {
@@ -318,6 +319,59 @@ export const BLOCK_TYPES = {
 				moreLabel: str(p.moreLabel, "\u0647\u0645\u0647 \u0633\u0648\u0627\u0644\u0627\u062a"),
 				moreHref: str(p.moreHref, "/faq"),
 				faqs: limit > 0 ? faqs.slice(0, limit) : faqs,
+			};
+		},
+	},
+
+	popular: {
+		type: "popular",
+		label: "\u0645\u062d\u0628\u0648\u0628\u200c\u062a\u0631\u06cc\u0646\u200c\u0647\u0627",
+		icon: "flame",
+		component: markRaw(PopularBlock),
+		single: false,
+		variants: [
+			{ value: "showcase", label: "\u0648\u06cc\u062a\u0631\u06cc\u0646", desc: "\u06cc\u06a9 \u0645\u062d\u0635\u0648\u0644 \u0628\u0632\u0631\u06af + \u0644\u06cc\u0633\u062a \u0631\u062a\u0628\u0647\u200c\u0628\u0646\u062f\u06cc" },
+			{ value: "ranked", label: "\u06af\u0631\u06cc\u062f \u0631\u062a\u0628\u0647\u200c\u062f\u0627\u0631", desc: "\u06a9\u0627\u0631\u062a\u200c\u0647\u0627 \u0628\u0627 \u0634\u0645\u0627\u0631\u0647 \u0645\u062d\u0628\u0648\u0628\u06cc\u062a" },
+		],
+		defaultVariant: "showcase",
+		props: [
+			{ key: "eyebrow", label: "\u0628\u0631\u0686\u0633\u0628 \u0628\u0627\u0644\u0627", type: "text", default: "\u0645\u062d\u0628\u0648\u0628\u200c\u062a\u0631\u06cc\u0646\u200c\u0647\u0627" },
+			{ key: "title", label: "\u0639\u0646\u0648\u0627\u0646", type: "text", default: "\u0645\u062d\u0628\u0648\u0628 \u0645\u0634\u062a\u0631\u06cc\u200c\u0647\u0627" },
+			{ key: "subtitle", label: "\u0632\u06cc\u0631\u0639\u0646\u0648\u0627\u0646", type: "text", default: "" },
+			{ key: "moreLabel", label: "\u0645\u062a\u0646 \u0644\u06cc\u0646\u06a9 \u0628\u06cc\u0634\u062a\u0631", type: "text", default: "\u0645\u0634\u0627\u0647\u062f\u0647 \u0645\u0646\u0648" },
+			{ key: "moreHref", label: "\u0644\u06cc\u0646\u06a9 \u0628\u06cc\u0634\u062a\u0631", type: "link", default: "/menu" },
+			{
+				key: "source",
+				label: "\u0645\u0646\u0628\u0639",
+				type: "select",
+				default: "best_seller",
+				options: [
+					{ value: "best_seller", label: "\u067e\u0631\u0641\u0631\u0648\u0634" },
+					{ value: "featured", label: "\u0648\u06cc\u0698\u0647" },
+				],
+			},
+			{ key: "limit", label: "\u062a\u0639\u062f\u0627\u062f \u0622\u06cc\u062a\u0645", type: "number", default: 5 },
+		],
+		toProps(block, boot) {
+			const p = block.props || {};
+			const source = str(p.source, "best_seller");
+			const highlight = (boot.menu_highlight && boot.menu_highlight.items) || [];
+			let items = [];
+			if (source === "featured") {
+				items = boot.featured_items || [];
+			} else {
+				items = boot.best_seller_items || highlight || boot.featured_items || [];
+			}
+			const limit = num(p.limit, 5);
+			return {
+				variant: str(block.variant, "showcase"),
+				eyebrow: str(p.eyebrow, "\u0645\u062d\u0628\u0648\u0628\u200c\u062a\u0631\u06cc\u0646\u200c\u0647\u0627"),
+				title: str(p.title, "\u0645\u062d\u0628\u0648\u0628 \u0645\u0634\u062a\u0631\u06cc\u200c\u0647\u0627"),
+				subtitle: str(p.subtitle),
+				moreLabel: str(p.moreLabel, "\u0645\u0634\u0627\u0647\u062f\u0647 \u0645\u0646\u0648"),
+				moreHref: str(p.moreHref, "/menu"),
+				items: limit > 0 ? items.slice(0, limit) : items,
+				currency: str(boot.currency, "IRR"),
 			};
 		},
 	},
