@@ -3511,6 +3511,16 @@ def _get_core_menu_boot(branch=None):
 	}
 
 
+def _get_boot_page_layout_safe(branch=None):
+	"""Return per-company page layout map for boot. Never raises."""
+	try:
+		from restaurant.page_layout import get_boot_page_layout
+
+		return get_boot_page_layout()
+	except Exception:
+		return {}
+
+
 def _get_core_menu_items(
 	category_slug=None, subcategory_slug=None, search=None, page=1, page_size=20, branch=None
 ):
