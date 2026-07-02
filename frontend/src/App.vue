@@ -10,6 +10,7 @@
       <ManagementMenuGroupsPage v-else-if="page === 'management-menu-groups'" />
       <ManagementMenuGroupDetailPage v-else-if="page === 'management-menu-group'" />
       <ManagementSiteSettingsPage v-else-if="page === 'management-site-settings'" />
+      <ManagementHomeBuilderPage v-else-if="page === 'management-home-builder'" />
       <ManagementBomsPage v-else-if="page === 'management-boms'" />
       <ManagementBomDetailPage v-else-if="page === 'management-bom'" />
       <ManagementProductDetailPage v-else-if="page === 'management-product'" :boot="boot" />
@@ -158,6 +159,7 @@ import ManagementMenuDesignerPage from './pages/management/ManagementMenuDesigne
 import ManagementMenuGroupsPage from './pages/management/ManagementMenuGroupsPage.vue'
 import ManagementMenuGroupDetailPage from './pages/management/ManagementMenuGroupDetailPage.vue'
 import ManagementSiteSettingsPage from './pages/management/ManagementSiteSettingsPage.vue'
+import ManagementHomeBuilderPage from './pages/management/ManagementHomeBuilderPage.vue'
 import ManagementBomsPage from './pages/management/ManagementBomsPage.vue'
 import ManagementBomDetailPage from './pages/management/ManagementBomDetailPage.vue'
 import ManagementProductDetailPage from './pages/management/ManagementProductDetailPage.vue'
@@ -203,6 +205,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/reports/')) return 'management-report'
     if (pathname.startsWith('/management/reports')) return 'management-reports'
     if (pathname.startsWith('/management/print-formats') || pathname.startsWith('/management/print_formats')) return 'management-print-formats'
+    if (pathname.startsWith('/management/home-builder') || pathname.startsWith('/management/home_builder')) return 'management-home-builder'
     if (pathname.startsWith('/management/site-settings') || pathname.startsWith('/management/site_settings')) return 'management-site-settings'
     if (pathname.startsWith('/management/variant-builder') || pathname.startsWith('/management/variant_builder')) return 'management-variant-builder'
     if (pathname.startsWith('/management/builder-template')) return 'management-builder-templates'
