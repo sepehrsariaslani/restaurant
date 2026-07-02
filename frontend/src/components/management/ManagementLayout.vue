@@ -659,6 +659,15 @@ const navLinks = computed(() => {
 			group: "reports",
 		},
 		{
+			key: "management-home-builder",
+			label: "طراحی صفحه اصلی",
+			shortLabel: "صفحه اصلی",
+			caption: "چیدمان و کامپوننت‌ها",
+			iconComponent: LayoutGridIcon,
+			url: "/management/home-builder",
+			group: "settings",
+		},
+		{
 			key: "management-site-settings",
 			label: "تنظیمات سایت",
 			shortLabel: "سایت",
