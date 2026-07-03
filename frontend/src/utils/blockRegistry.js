@@ -20,17 +20,17 @@
 //   { key, label, type, default, options?, help? }
 // type is one of: text | textarea | image | number | boolean | select | link | features
 
-import { markRaw } from "vue";
+import { defineAsyncComponent, markRaw } from "vue";
 
 // Lazy component imports keep the public bundle small.
-const HeroBlock = () => import("@/components/blocks/HeroBlock.vue");
-const AboutBlock = () => import("@/components/blocks/AboutBlock.vue");
-const ProductsBlock = () => import("@/components/blocks/ProductsBlock.vue");
-const CategoriesBlock = () => import("@/components/blocks/CategoriesBlock.vue");
-const FeaturesBlock = () => import("@/components/blocks/FeaturesBlock.vue");
-const FaqBlock = () => import("@/components/blocks/FaqBlock.vue");
-const BannerBlock = () => import("@/components/blocks/BannerBlock.vue");
-const PopularBlock = () => import("@/components/blocks/PopularBlock.vue");
+const HeroBlock = defineAsyncComponent(() => import("@/components/blocks/HeroBlock.vue"));
+const AboutBlock = defineAsyncComponent(() => import("@/components/blocks/AboutBlock.vue"));
+const ProductsBlock = defineAsyncComponent(() => import("@/components/blocks/ProductsBlock.vue"));
+const CategoriesBlock = defineAsyncComponent(() => import("@/components/blocks/CategoriesBlock.vue"));
+const FeaturesBlock = defineAsyncComponent(() => import("@/components/blocks/FeaturesBlock.vue"));
+const FaqBlock = defineAsyncComponent(() => import("@/components/blocks/FaqBlock.vue"));
+const BannerBlock = defineAsyncComponent(() => import("@/components/blocks/BannerBlock.vue"));
+const PopularBlock = defineAsyncComponent(() => import("@/components/blocks/PopularBlock.vue"));
 
 let _uid = 0;
 export function makeBlockId(type = "blk") {
@@ -65,12 +65,15 @@ export const BLOCK_TYPES = {
 		component: markRaw(HeroBlock),
 		single: false,
 		variants: [
-			{ value: "cover", label: "\u06a9\u0627\u0648\u0631", desc: "\u0639\u06a9\u0633 \u0628\u0632\u0631\u06af\u060c \u0645\u062a\u0646\u060c \u062f\u06a9\u0645\u0647 \u0648 \u0645\u0632\u06cc\u062a\u200c\u0647\u0627" },
-			{ value: "split", label: "\u062f\u0648\u0633\u062a\u0648\u0646\u0647", desc: "\u0645\u062a\u0646 \u062f\u0631 \u06cc\u06a9 \u0633\u0645\u062a\u060c \u062a\u0635\u0648\u06cc\u0631 \u062f\u0631 \u0633\u0645\u062a \u062f\u06cc\u06af\u0631" },
-			{ value: "minimal", label: "\u0645\u06cc\u0646\u06cc\u0645\u0627\u0644", desc: "\u0641\u0642\u0637 \u0639\u0646\u0648\u0627\u0646\u060c \u062a\u0648\u0636\u06cc\u062d \u06a9\u0648\u062a\u0627\u0647 \u0648 \u062f\u06a9\u0645\u0647" },
 			{ value: "slider", label: "\u0627\u0633\u0644\u0627\u06cc\u062f\u0631", desc: "\u0686\u0646\u062f \u0627\u0633\u0644\u0627\u06cc\u062f \u062a\u0635\u0648\u06cc\u0631\u06cc \u0628\u0627 CTA \u0645\u0633\u062a\u0642\u0644" },
+			{ value: "fullscreen", label: "\u062a\u0645\u0627\u0645\u200c\u0635\u0641\u062d\u0647", desc: "\u0628\u0646\u0631 \u0628\u0632\u0631\u06af \u062a\u0645\u0627\u0645 \u0635\u0641\u062d\u0647 \u0628\u0627 \u062a\u0635\u0648\u06cc\u0631 \u067e\u0633\u200c\u0632\u0645\u06cc\u0646\u0647 \u0648 \u0647\u062f\u0631 \u0634\u0641\u0627\u0641" },
+			{ value: "banner", label: "\u0628\u0646\u0631 \u06a9\u0648\u062a\u0627\u0647", desc: "\u0628\u0646\u0631 \u0627\u0641\u0642\u06cc \u062c\u0645\u0639\u200c\u0648\u062c\u0648\u0631 \u0628\u0627 \u0627\u0631\u062a\u0641\u0627\u0639 \u06a9\u0645\u062a\u0631\u060c \u0645\u0646\u0627\u0633\u0628 \u0628\u0631\u0627\u06cc \u0635\u0641\u062d\u0627\u062a \u0645\u06cc\u0646\u06cc\u0645\u0627\u0644" },
+			{ value: "cover", label: "\u06a9\u0627\u0648\u0631 \u0633\u0627\u0644\u0645", desc: "\u0647\u06cc\u0631\u0648 \u0631\u0648\u0634\u0646 \u0634\u0628\u06cc\u0647 \u062a\u0635\u0648\u06cc\u0631 \u0646\u0645\u0648\u0646\u0647\u061b \u0639\u06a9\u0633 \u063a\u0630\u0627\u060c \u0645\u062a\u0646 \u0628\u0632\u0631\u06af\u060c \u062f\u06a9\u0645\u0647\u200c\u0647\u0627 \u0648 \u0645\u0632\u06cc\u062a\u200c\u0647\u0627" },
+			{ value: "foodbar", label: "\u0641\u0648\u062f\u0628\u0627\u0631 \u0645\u062d\u0635\u0648\u0644\u06cc", desc: "\u0647\u06cc\u0631\u0648 \u0645\u062d\u0635\u0648\u0644\u200c\u0645\u062d\u0648\u0631 \u0628\u0627 \u062a\u0635\u0648\u06cc\u0631 \u0628\u0632\u0631\u06af \u0648 \u062a\u0645\u0631\u06a9\u0632 \u0631\u0648\u06cc \u0622\u06cc\u062a\u0645\u200c\u0647\u0627\u06cc \u067e\u0631\u0641\u0631\u0648\u0634" },
+			{ value: "minimal", label: "\u0645\u06cc\u0646\u06cc\u0645\u0627\u0644", desc: "\u0641\u0642\u0637 \u0639\u0646\u0648\u0627\u0646\u060c \u062a\u0648\u0636\u06cc\u062d \u06a9\u0648\u062a\u0627\u0647 \u0648 \u062f\u06a9\u0645\u0647" },
+			{ value: "split", label: "\u062f\u0648\u0633\u062a\u0648\u0646\u0647", desc: "\u0645\u062a\u0646 \u062f\u0631 \u06cc\u06a9 \u0633\u0645\u062a\u060c \u062a\u0635\u0648\u06cc\u0631 \u062f\u0631 \u0633\u0645\u062a \u062f\u06cc\u06af\u0631" },
 		],
-		defaultVariant: "cover",
+		defaultVariant: "fullscreen",
 		props: [
 			{ key: "eyebrow", label: "\u0628\u0631\u0686\u0633\u0628 \u0628\u0627\u0644\u0627", type: "text", default: "" },
 			{ key: "title", label: "\u0639\u0646\u0648\u0627\u0646 \u0627\u0635\u0644\u06cc", type: "text", default: "" },
@@ -409,6 +412,39 @@ export const BLOCK_TYPES = {
 };
 
 export const BLOCK_TYPE_LIST = Object.values(BLOCK_TYPES);
+
+const PAGE_ALIASES = {
+	home: "home",
+	about: "about",
+	faq: "faq",
+	product_groups: "product_groups",
+	"product-groups": "product_groups",
+};
+
+export function normalizePageBuilderKey(page = "home") {
+	return PAGE_ALIASES[String(page || "").trim()] || "home";
+}
+
+export const PAGE_BLOCK_CATALOGS = {
+	home: ["hero", "categories", "products", "popular", "features", "about", "faq", "banner"],
+	about: ["hero", "about", "banner"],
+	faq: ["hero", "faq", "banner"],
+	product_groups: ["hero", "categories", "banner"],
+};
+
+export function getPageBlockCatalog(page = "home") {
+	return PAGE_BLOCK_CATALOGS[normalizePageBuilderKey(page)] || PAGE_BLOCK_CATALOGS.home;
+}
+
+export function getPageBlockPalette(page = "home") {
+	return getPageBlockCatalog(page)
+		.map((type) => getBlockType(type))
+		.filter(Boolean);
+}
+
+export function isBlockAllowedOnPage(page = "home", type = "") {
+	return getPageBlockCatalog(page).includes(String(type || "").trim());
+}
 
 export function getBlockType(type) {
 	return BLOCK_TYPES[String(type || "").trim()] || null;

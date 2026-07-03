@@ -1,25 +1,40 @@
 // Page Layout resolver
 //
-// Turns raw boot data into an ordered array of block instances that the
-// HomePageRenderer can iterate over.
-//
-// Resolution order:
-//   1. If boot.page_layout.home.blocks exists -> use it (new system).
-//   2. Otherwise derive a sensible default layout from the legacy flat
-//      web_settings (hero_section_variant, footer_variant, ...), so
-//      existing restaurants keep working with zero migration.
+// Turns raw boot data into an ordered array of block instances for a
+// specific public page. Stored page layouts win; otherwise we derive a
+// sensible fallback from the existing public page data so legacy pages
+// keep rendering without migration.
 
-import { getBlockType, createBlock, makeBlockId } from "@/utils/blockRegistry";
+import {
+	createBlock,
+	getBlockType,
+	isBlockAllowedOnPage,
+	makeBlockId,
+	normalizePageBuilderKey,
+} from "@/utils/blockRegistry";
 import { resolveBranding, resolveSiteComponents } from "@/utils/siteComponents";
 
 function asArray(value) {
 	return Array.isArray(value) ? value : [];
 }
 
-// Normalize a stored block so it always has the fields the renderer needs.
-function normalizeBlock(raw, index) {
+function safeNumber(value, fallback = 0) {
+	const out = Number(value);
+	return Number.isFinite(out) ? out : fallback;
+}
+
+function text(value, fallback = "") {
+	const out = String(value ?? "").trim();
+	return out || fallback;
+}
+
+function firstActive(rows = []) {
+	return asArray(rows).find((row) => Number(row?.is_active ?? 1) !== 0) || rows[0] || {};
+}
+
+function normalizeBlock(raw, index, page = "home") {
 	const def = getBlockType(raw && raw.type);
-	if (!def) return null;
+	if (!def || !isBlockAllowedOnPage(page, def.type)) return null;
 	return {
 		id: String(raw.id || makeBlockId(def.type)),
 		type: def.type,
@@ -30,37 +45,58 @@ function normalizeBlock(raw, index) {
 	};
 }
 
-export function resolveHomeLayout(boot = {}) {
-	const stored = boot && boot.page_layout && boot.page_layout.home;
+export function hasStoredPageLayout(boot = {}, page = "home") {
+	const pageKey = normalizePageBuilderKey(page);
+	const stored = boot?.page_layout?.[pageKey];
+	return Array.isArray(stored?.blocks) && stored.blocks.length > 0;
+}
+
+export function resolvePageLayout(boot = {}, page = "home") {
+	const pageKey = normalizePageBuilderKey(page);
+	const stored = boot?.page_layout?.[pageKey];
 	const storedBlocks = stored && asArray(stored.blocks);
 
-	if (storedBlocks && storedBlocks.length) {
+	if (storedBlocks.length) {
 		return storedBlocks
-			.map((block, index) => normalizeBlock(block, index))
+			.map((block, index) => normalizeBlock(block, index, pageKey))
 			.filter(Boolean)
 			.filter((block) => block.enabled)
 			.sort((a, b) => a.order - b.order);
 	}
 
-	return buildLegacyLayout(boot);
+	return buildLegacyPageLayout(boot, pageKey);
 }
 
-// Derive a default block layout from the old flat settings.
-export function buildLegacyLayout(boot = {}) {
+export function resolveHomeLayout(boot = {}) {
+	return resolvePageLayout(boot, "home");
+}
+
+export function buildLegacyPageLayout(boot = {}, page = "home") {
+	const pageKey = normalizePageBuilderKey(page);
+	const builders = {
+		home: buildLegacyHomeLayout,
+		about: buildLegacyAboutLayout,
+		faq: buildLegacyFaqLayout,
+		product_groups: buildLegacyProductGroupsLayout,
+	};
+	const build = builders[pageKey] || buildLegacyHomeLayout;
+	return build(boot).map((block, index) => ({ ...block, order: index }));
+}
+
+function buildLegacyHomeLayout(boot = {}) {
 	const branding = resolveBranding(boot);
 	const components = resolveSiteComponents(boot);
-	const web = (boot && boot.web_settings) || {};
+	const web = boot?.web_settings || {};
 	const blocks = [];
 
-	// Hero (map legacy hero_section_variant to a block variant).
 	const heroVariant = components.hero_section_variant;
 	if (heroVariant && heroVariant !== "off") {
 		const variantMap = {
 			cover: "cover",
-			fullscreen: "cover",
-			banner: "minimal",
+			fullscreen: "fullscreen",
+			banner: "banner",
 			slider: "slider",
-			foodbar: "split",
+			foodbar: "foodbar",
 		};
 		blocks.push(
 			createBlock("hero", {
@@ -71,7 +107,7 @@ export function buildLegacyLayout(boot = {}) {
 					description: branding.hero_section_description || branding.hero_subtitle,
 					image: branding.hero_image,
 					ctaLabel:
-						branding.hero_section_cta || branding.primary_cta_label || "\u0645\u0634\u0627\u0647\u062f\u0647 \u0645\u0646\u0648",
+						branding.hero_section_cta || branding.primary_cta_label || "مشاهده منو",
 					ctaHref: "/menu",
 					secondaryLabel: "",
 					secondaryHref: "",
@@ -81,14 +117,12 @@ export function buildLegacyLayout(boot = {}) {
 		);
 	}
 
-	// Categories
 	blocks.push(
 		createBlock("categories", {
 			variant: components.category_rail_variant === "image" ? "circles" : "grid",
 		}),
 	);
 
-	// Featured products (respect legacy highlight toggle when present).
 	const highlightEnabled = Number(web.restaurant_menu_highlight_enabled ?? 1) !== 0;
 	if (highlightEnabled) {
 		blocks.push(
@@ -96,17 +130,15 @@ export function buildLegacyLayout(boot = {}) {
 				variant: "grid",
 				props: {
 					title:
-						String(web.restaurant_menu_highlight_title || "\u0645\u062d\u0628\u0648\u0628\u200c\u062a\u0631\u06cc\u0646 \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0647\u0627").trim() ||
-						"\u0645\u062d\u0628\u0648\u0628\u200c\u062a\u0631\u06cc\u0646 \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0647\u0627",
+						text(web.restaurant_menu_highlight_title, "محبوب‌ترین انتخاب‌ها"),
 					source: "featured",
-					limit: Number(web.restaurant_menu_highlight_featured_limit || 8) || 8,
+					limit: safeNumber(web.restaurant_menu_highlight_featured_limit, 8) || 8,
 					cardVariant: components.card_variant || "classic",
 				},
 			}),
 		);
 	}
 
-	// Popular (best-seller / featured showcase)
 	const hasPopular =
 		asArray(boot.featured_items).length ||
 		(boot.menu_highlight && asArray(boot.menu_highlight.items).length);
@@ -114,18 +146,157 @@ export function buildLegacyLayout(boot = {}) {
 		blocks.push(createBlock("popular", { variant: "showcase" }));
 	}
 
-	// Features
 	blocks.push(createBlock("features", { variant: "cards" }));
 
-	// About
 	if (asArray(boot.about_us_sections).length) {
 		blocks.push(createBlock("about", { variant: "cards" }));
 	}
 
-	// FAQ
 	if (asArray(boot.faq_items).length) {
 		blocks.push(createBlock("faq", { variant: "accordion" }));
 	}
 
-	return blocks.map((block, index) => ({ ...block, order: index }));
+	return blocks;
+}
+
+function buildLegacyAboutLayout(boot = {}) {
+	const branding = resolveBranding(boot);
+	const sections = asArray(boot.about_us_sections).filter((row) => Number(row?.is_active ?? 1) !== 0);
+	const heroSection = firstActive(
+		sections.filter((row) => {
+			const type = text(row?.section_type).toLowerCase();
+			return type === "hero" || type === "story" || type === "history";
+		}),
+	);
+
+	const title = text(heroSection?.title, text(branding.name, "درباره ما"));
+	const description =
+		text(heroSection?.subtitle) ||
+		text(heroSection?.body_text).slice(0, 180) ||
+		"داستان مجموعه، ارزش‌ها و تجربه‌ای که برای مشتری می‌سازیم.";
+
+	const blocks = [
+		createBlock("hero", {
+			variant: "minimal",
+			props: {
+				eyebrow: "درباره ما",
+				title,
+				description,
+				ctaLabel: "مشاهده منو",
+				ctaHref: "/menu",
+				secondaryLabel: "سوالات متداول",
+				secondaryHref: "/faq",
+			},
+		}),
+	];
+
+	if (sections.length) {
+		blocks.push(
+			createBlock("about", {
+				variant: "cards",
+				props: {
+					eyebrow: "درباره ما",
+					title: "داستان رستوران ما",
+					subtitle: text(heroSection?.subtitle),
+					moreLabel: "مشاهده کامل",
+					moreHref: "/about-us",
+					limit: 4,
+				},
+			}),
+		);
+	}
+
+	blocks.push(
+		createBlock("banner", {
+			variant: "solid",
+			props: {
+				title: "برای تجربه کامل، منو را ببینید",
+				description: "از همین‌جا می‌توانید وارد منو شوید و سفارش خود را ثبت کنید.",
+				ctaLabel: "مشاهده منو",
+				ctaHref: "/menu",
+			},
+		}),
+	);
+
+	return blocks;
+}
+
+function buildLegacyFaqLayout(boot = {}) {
+	const branding = resolveBranding(boot);
+	const faqCount = asArray(boot.faq_items).filter((row) => Number(row?.is_active ?? 1) !== 0).length;
+
+	const blocks = [
+		createBlock("hero", {
+			variant: "minimal",
+			props: {
+				eyebrow: "سوالات متداول",
+				title: "هر سوالی درباره سفارش، آماده پاسخ هستیم",
+				description:
+					faqCount > 0
+						? `${faqCount.toLocaleString("fa-IR")} سوال ثبت شده برای پاسخ سریع‌تر به مشتری‌ها.`
+						: `سوالات پرتکرار ${text(branding.name, "رستوران")} را اینجا جمع‌آوری کرده‌ایم.`,
+				ctaLabel: "شروع سفارش",
+				ctaHref: "/menu",
+			},
+		}),
+		createBlock("faq", {
+			variant: "accordion",
+			props: {
+				eyebrow: "سوالات متداول",
+				title: "پاسخ پرسش‌های پرتکرار",
+				moreLabel: "مشاهده همه سوالات",
+				moreHref: "/faq",
+				limit: 12,
+			},
+		}),
+		createBlock("banner", {
+			variant: "solid",
+			props: {
+				title: "هنوز سوالی باقی مانده؟",
+				description: "منو را ببینید یا از تیم فروش برای ثبت سفارش کمک بگیرید.",
+				ctaLabel: "مشاهده منو",
+				ctaHref: "/menu",
+			},
+		}),
+	];
+
+	return blocks;
+}
+
+function buildLegacyProductGroupsLayout(boot = {}) {
+	const branding = resolveBranding(boot);
+	const components = resolveSiteComponents(boot);
+
+	return [
+		createBlock("hero", {
+			variant: "minimal",
+			props: {
+				eyebrow: "منوی دسته‌بندی‌شده",
+				title: text(branding.hero_title, "گروه محصولات را انتخاب کنید"),
+				description:
+					text(branding.hero_subtitle) ||
+					"مشتری روی هر گروه بزند و مستقیم وارد منوی همان گروه شود.",
+				ctaLabel: "مشاهده همه منو",
+				ctaHref: "/menu",
+			},
+		}),
+		createBlock("categories", {
+			variant: components.category_rail_variant === "image" ? "circles" : "grid",
+			props: {
+				eyebrow: "گروه‌های منو",
+				title: "از کدام گروه شروع می‌کنید؟",
+				subtitle: "نمایش دسته‌ها و زیرگروه‌ها بر اساس تنظیمات فعلی منو",
+				limit: 0,
+			},
+		}),
+		createBlock("banner", {
+			variant: "solid",
+			props: {
+				title: "همه آیتم‌ها را یکجا ببینید",
+				description: "اگر دسته‌بندی نمی‌خواهید، مستقیم وارد منوی کامل شوید.",
+				ctaLabel: "رفتن به منو",
+				ctaHref: "/menu",
+			},
+		}),
+	];
 }

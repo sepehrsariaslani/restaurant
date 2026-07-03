@@ -1,5 +1,8 @@
 <template>
-  <div class="product-groups-page" dir="rtl">
+  <div v-if="hasCustomLayout" class="product-groups-builder" dir="rtl">
+    <PageBlocksRenderer page="product_groups" :boot="boot" />
+  </div>
+  <div v-else class="product-groups-page" dir="rtl">
     <GlassShell class="groups-shell" :title="branding.name" subtitle="انتخاب گروه محصول">
       <section class="groups-hero glass-card">
         <div class="groups-hero__copy">
@@ -29,8 +32,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import PageBlocksRenderer from '@/components/blocks/PageBlocksRenderer.vue'
 import GlassShell from '@/components/GlassShell.vue'
 import ProductGroupCard from '@/components/ProductGroupCard.vue'
+import { hasStoredPageLayout } from '@/utils/pageLayout'
 import { resolveBranding } from '@/utils/siteComponents'
 
 const props = defineProps({
@@ -41,6 +46,7 @@ const props = defineProps({
 })
 
 const branding = computed(() => resolveBranding(props.boot))
+const hasCustomLayout = computed(() => hasStoredPageLayout(props.boot, 'product_groups'))
 
 const groups = computed(() => {
   const rows = Array.isArray(props.boot?.categories) ? props.boot.categories : []
@@ -61,6 +67,11 @@ const subtitleText = computed(() => branding.value?.hero_subtitle || 'مشتری
 </script>
 
 <style scoped>
+.product-groups-builder {
+  padding-block: clamp(1.5rem, 4vw, 3rem);
+  background: var(--bg-soft, #f7f5f2);
+}
+
 .product-groups-page {
   padding: 0 0 2rem;
 }

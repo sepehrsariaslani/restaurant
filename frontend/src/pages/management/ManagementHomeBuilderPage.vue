@@ -81,7 +81,7 @@
         </div>
         <div class="hb__stage" :class="`hb__stage--${device}`">
           <div class="hb__viewport">
-            <HomePageRenderer :key="previewKey" :boot="previewBoot" />
+            <RestaurantLandingPage :key="previewKey" :boot="previewBoot" preview-mode />
           </div>
         </div>
       </main>
@@ -117,7 +117,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import HomePageRenderer from '@/components/blocks/HomePageRenderer.vue'
+import RestaurantLandingPage from '@/pages/RestaurantLandingPage.vue'
 import BlockPropsForm from '@/components/management/builder/BlockPropsForm.vue'
 import { BLOCK_TYPE_LIST, getBlockType, createBlock } from '@/utils/blockRegistry'
 import { resolveHomeLayout } from '@/utils/pageLayout'
@@ -183,7 +183,7 @@ function removeBlock(index) {
   const removed = blocks.value[index]
   blocks.value = blocks.value.filter((_, i) => i !== index)
   if (removed && removed.id === selectedId.value) {
-    selectedId.value = ''
+    selectedId.value = blocks.value[0]?.id || ''
   }
   bumpPreview()
 }
@@ -202,6 +202,18 @@ function updateProps(nextProps) {
   if (!selectedBlock.value) return
   selectedBlock.value.props = nextProps
   bumpPreview()
+}
+
+function ensureSelectedBlock() {
+  if (!blocks.value.length) {
+    selectedId.value = ''
+    return
+  }
+
+  const hasSelected = blocks.value.some((block) => block.id === selectedId.value)
+  if (!hasSelected) {
+    selectedId.value = blocks.value[0]?.id || ''
+  }
 }
 
 // --- native drag & drop reordering ---
@@ -246,6 +258,7 @@ async function load() {
       // admin starts from what the site already shows.
       blocks.value = resolveHomeLayout(boot).map((b) => ({ ...b }))
     }
+    ensureSelectedBlock()
     statusText.value = 'بارگذاری شد.'
   } catch (e) {
     error.value = e?.message || 'بارگذاری طراحی ناموفق بود.'
@@ -566,6 +579,18 @@ onMounted(load)
   margin-inline: auto;
   background: var(--bg-soft, #f7f5f2);
   transition: max-width 0.2s ease;
+  position: relative;
+}
+
+.hb__viewport :deep(a),
+.hb__viewport :deep(button) {
+  pointer-events: none;
+}
+
+.hb__viewport :deep(.scroll-reveal) {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
 .hb__stage--desktop .hb__viewport {

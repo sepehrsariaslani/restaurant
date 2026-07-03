@@ -664,7 +664,7 @@ const navLinks = computed(() => {
 			shortLabel: "صفحه اصلی",
 			caption: "چیدمان و کامپوننت‌ها",
 			iconComponent: LayoutGridIcon,
-			url: "/management/home-builder",
+			url: "/management/site-settings?tab=page-builder&page=home",
 			group: "settings",
 		},
 		{
@@ -680,9 +680,9 @@ const navLinks = computed(() => {
 			key: "management-settings",
 			label: "تنظیمات پنل",
 			shortLabel: "تنظیمات",
-			caption: "رنگ‌بندی و ظاهر پنل",
+			caption: "تم، رنگ و ظاهر",
 			iconComponent: SlidersIcon,
-			url: "/management/settings",
+			url: "/management/site-settings?stage=theme",
 			group: "settings",
 		},
 	];

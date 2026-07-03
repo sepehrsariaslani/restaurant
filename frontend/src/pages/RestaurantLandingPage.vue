@@ -1,31 +1,44 @@
 <template>
   <div class="home-page" dir="rtl">
     <PublicHeader
+      v-if="!previewMode"
       :branding="branding"
       :page="'landing'"
       :cart-count="cartCount"
       :header-variant="siteComponents.header_variant"
     />
+    <div v-else class="home-preview-chrome">
+      <div class="home-preview-chrome__inner">
+        <div class="home-preview-brand">
+          <span class="home-preview-brand__mark">{{ previewBrandInitial }}</span>
+          <div class="home-preview-brand__copy">
+            <strong>{{ branding.name }}</strong>
+            <small>{{ branding.tagline || 'پیش‌نمایش صفحه اصلی' }}</small>
+          </div>
+        </div>
+        <span class="home-preview-badge">پیش‌نمایش صفحه اصلی</span>
+      </div>
+    </div>
 
-    <div id="content" class="home-content needs-header-offset">
+    <div id="content" class="home-content" :class="{ 'needs-header-offset': !previewMode }">
       <HomePageRenderer :boot="boot" @quick-add="quickAdd" />
     </div>
 
     <Transition name="home-toast">
-      <div v-if="toastMessage" class="home-toast" role="status" aria-live="polite">
+      <div v-if="!previewMode && toastMessage" class="home-toast" role="status" aria-live="polite">
         {{ toastMessage }}
       </div>
     </Transition>
 
     <Transition name="cart-pop">
-      <a v-if="cartCount > 0" class="home-sticky-cart" href="/cart" aria-label="\u0645\u0634\u0627\u0647\u062f\u0647 \u0633\u0628\u062f \u0633\u0641\u0627\u0631\u0634">
+      <a v-if="!previewMode && cartCount > 0" class="home-sticky-cart" href="/cart" aria-label="\u0645\u0634\u0627\u0647\u062f\u0647 \u0633\u0628\u062f \u0633\u0641\u0627\u0631\u0634">
         <span>\u0633\u0628\u062f \u0633\u0641\u0627\u0631\u0634</span>
         <strong>{{ cartCount }} \u0622\u06cc\u062a\u0645</strong>
       </a>
     </Transition>
 
     <SiteFooter
-      v-if="siteComponents.footer_variant === 'full'"
+      v-if="!previewMode && siteComponents.footer_variant === 'full'"
       :brand-name="branding.name"
       :description="branding.footer_description || branding.hero_subtitle || '\u062a\u062c\u0631\u0628\u0647 \u0633\u0641\u0627\u0631\u0634 \u0622\u0646\u0644\u0627\u06cc\u0646 \u0633\u0631\u06cc\u0639\u060c \u062a\u0627\u0632\u0647 \u0648 \u062e\u0648\u0634\u200c\u0637\u0639\u0645.'"
       :phone="branding.footer_phone"
@@ -36,7 +49,7 @@
       :copyright="branding.footer_copyright"
     />
     <SiteFooterMinimal
-      v-else-if="siteComponents.footer_variant === 'minimal'"
+      v-else-if="!previewMode && siteComponents.footer_variant === 'minimal'"
       :brand-name="branding.name"
       :copyright="branding.footer_copyright"
     />
@@ -57,6 +70,10 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  previewMode: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const toastMessage = ref('')
@@ -66,8 +83,10 @@ const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Nu
 
 const branding = computed(() => resolveBranding(props.boot))
 const siteComponents = computed(() => resolveSiteComponents(props.boot))
+const previewBrandInitial = computed(() => String(branding.value?.name || 'V').trim().charAt(0) || 'V')
 
 function quickAdd(item) {
+  if (props.previewMode) return
   if (!item) return
   upsertLine({
     item_slug: item.slug,
@@ -103,6 +122,82 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 100svh;
+}
+
+.home-preview-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgb(247 245 242 / 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgb(0 0 0 / 0.06);
+}
+
+.home-preview-chrome__inner {
+  width: min(1160px, calc(100% - 2rem));
+  margin: 0 auto;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.home-preview-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.home-preview-brand__mark {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--palette-deep-sapphire, #6f4a31), #9c7454);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.home-preview-brand__copy {
+  min-width: 0;
+}
+
+.home-preview-brand__copy strong,
+.home-preview-brand__copy small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-preview-brand__copy strong {
+  font-size: 0.9rem;
+  color: var(--ink-900, #1c1411);
+}
+
+.home-preview-brand__copy small {
+  font-size: 0.74rem;
+  color: var(--ink-700, #5b5248);
+}
+
+.home-preview-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  background: rgb(111 74 49 / 0.08);
+  color: var(--palette-deep-sapphire, #6f4a31);
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .home-content {
@@ -166,5 +261,16 @@ onUnmounted(() => {
 .cart-pop-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+@media (max-width: 640px) {
+  .home-preview-chrome__inner {
+    min-height: 54px;
+  }
+
+  .home-preview-badge {
+    padding: 0 0.7rem;
+    font-size: 0.71rem;
+  }
 }
 </style>
