@@ -31,6 +31,9 @@ for (const marker of ['export function resolvePageLayout', 'export function hasS
     failures.push(`page layout resolver is missing ${marker}`)
   }
 }
+if (!resolver.includes('const storedBlocks = asArray(stored?.blocks)')) {
+  failures.push('page layout resolver does not safely guard missing stored blocks')
+}
 
 const registry = read('../src/utils/blockRegistry.js')
 for (const marker of [
