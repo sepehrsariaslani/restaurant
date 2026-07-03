@@ -1,7 +1,15 @@
 <template>
-  <section class="blk hero" :class="`hero--${variant}`" dir="rtl">
+  <section class="blk hero" :class="`hero--${resolvedVariant}`" dir="rtl">
     <!-- COVER: big image background, centered copy -->
-    <div v-if="variant === 'cover'" class="hero-cover" :style="coverStyle">
+    <div
+      v-if="['cover', 'fullscreen', 'banner'].includes(resolvedVariant)"
+      class="hero-cover"
+      :class="{
+        'hero-cover--fullscreen': resolvedVariant === 'fullscreen',
+        'hero-cover--banner': resolvedVariant === 'banner',
+      }"
+      :style="coverStyle"
+    >
       <div class="hero-cover__inner">
         <span v-if="eyebrow" class="blk__eyebrow hero-cover__eyebrow">{{ eyebrow }}</span>
         <h1 class="hero-cover__title">{{ title }}</h1>
@@ -14,7 +22,7 @@
     </div>
 
     <!-- SPLIT: copy one side, image other side -->
-    <div v-else-if="variant === 'split'" class="hero-split">
+    <div v-else-if="['split', 'foodbar'].includes(resolvedVariant)" class="hero-split" :class="{ 'hero-split--foodbar': resolvedVariant === 'foodbar' }">
       <div class="hero-split__copy">
         <span v-if="eyebrow" class="blk__eyebrow">{{ eyebrow }}</span>
         <h1 class="hero-split__title">{{ title }}</h1>
@@ -30,7 +38,7 @@
     </div>
 
     <!-- MINIMAL: text only, tight -->
-    <div v-else-if="variant === 'minimal'" class="hero-minimal">
+    <div v-else-if="resolvedVariant === 'minimal'" class="hero-minimal">
       <span v-if="eyebrow" class="blk__eyebrow">{{ eyebrow }}</span>
       <h1 class="hero-minimal__title">{{ title }}</h1>
       <p v-if="description" class="blk__subtitle hero-minimal__desc">{{ description }}</p>
@@ -82,6 +90,14 @@ const props = defineProps({
 const fallbackImage =
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&auto=format&fit=crop&q=70'
 
+const resolvedVariant = computed(() => {
+  const raw = String(props.variant || 'fullscreen').trim()
+  if (['slider', 'fullscreen', 'banner', 'cover', 'foodbar', 'minimal', 'split'].includes(raw)) {
+    return raw
+  }
+  return 'fullscreen'
+})
+
 const coverStyle = computed(() => ({
   backgroundImage: `linear-gradient(180deg, rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.55)), url('${props.image || fallbackImage}')`,
 }))
@@ -124,6 +140,14 @@ const normalizedSlides = computed(() =>
   align-items: center;
 }
 
+.hero-cover--fullscreen {
+  min-height: clamp(420px, 72vh, 680px);
+}
+
+.hero-cover--banner {
+  min-height: clamp(240px, 34vh, 320px);
+}
+
 .hero-cover__inner {
   padding: var(--blk-pad);
   max-width: 44ch;
@@ -155,6 +179,15 @@ const normalizedSlides = computed(() =>
   border-color: rgb(255 255 255 / 0.5);
 }
 
+.hero-cover--banner .hero-cover__title {
+  font-size: clamp(1.5rem, 3.5vw, 2.4rem);
+}
+
+.hero-cover--banner .hero-cover__desc {
+  font-size: 0.92rem;
+  max-width: 52ch;
+}
+
 /* Split */
 .hero-split {
   display: grid;
@@ -176,6 +209,23 @@ const normalizedSlides = computed(() =>
   aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: var(--blk-radius);
+}
+
+.hero-split--foodbar {
+  grid-template-columns: 1.15fr 0.95fr;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border-radius: var(--blk-radius);
+  background: linear-gradient(135deg, rgb(255 251 247), rgb(245 237 228));
+  border: 1px solid var(--blk-border);
+}
+
+.hero-split--foodbar .hero-split__copy {
+  align-self: center;
+}
+
+.hero-split--foodbar .hero-split__media img {
+  aspect-ratio: 1 / 1;
+  box-shadow: 0 18px 32px rgb(32 20 15 / 0.14);
 }
 
 /* Minimal */

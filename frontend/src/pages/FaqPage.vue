@@ -1,5 +1,8 @@
 <template>
-  <GlassShell class="faq-shell" :title="'سوالات متداول'" :subtitle="branding.name || 'پشتیبانی سفارش'">
+  <div v-if="hasCustomLayout" class="faq-builder-shell" dir="rtl">
+    <PageBlocksRenderer page="faq" :boot="boot" />
+  </div>
+  <GlassShell v-else class="faq-shell" :title="'سوالات متداول'" :subtitle="branding.name || 'پشتیبانی سفارش'">
     <section class="faq-container">
       <ScrollReveal>
         <div class="faq-hero glass-card">
@@ -71,8 +74,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import GlassShell from '@/components/GlassShell.vue'
+import PageBlocksRenderer from '@/components/blocks/PageBlocksRenderer.vue'
 import ScrollReveal from '@/components/ScrollReveal.vue'
 import { normalizeFaqPublicRow } from '@/utils/faqMeta'
+import { hasStoredPageLayout } from '@/utils/pageLayout'
 
 const props = defineProps({
   boot: {
@@ -83,6 +88,7 @@ const props = defineProps({
 
 const openIndex = ref('')
 const branding = computed(() => props.boot.branding || {})
+const hasCustomLayout = computed(() => hasStoredPageLayout(props.boot, 'faq'))
 const faqs = computed(() => {
   const rows = Array.isArray(props.boot.faq_items) ? props.boot.faq_items : []
   return rows.map((row) => normalizeFaqPublicRow(row)).filter((row) => row.is_active !== 0)
@@ -109,6 +115,11 @@ function toggle(index) {
 </script>
 
 <style scoped>
+.faq-builder-shell {
+  padding-block: clamp(1.5rem, 4vw, 3rem);
+  background: var(--bg-soft, #f7f5f2);
+}
+
 .faq-shell {
   background: #fff;
 }

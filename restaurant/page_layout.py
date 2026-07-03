@@ -25,7 +25,7 @@ import frappe
 from frappe import _
 
 PAGE_LAYOUT_KEY_PREFIX = "restaurant_page_layout_v1"
-SUPPORTED_PAGES = {"home"}
+SUPPORTED_PAGES = {"home", "about", "faq", "product_groups"}
 DEFAULT_PAGE = "home"
 
 # Block types the backend is willing to store. Kept in sync with the

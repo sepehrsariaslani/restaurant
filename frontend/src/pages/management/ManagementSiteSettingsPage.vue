@@ -2,34 +2,49 @@
   <ManagementPageScaffold title="تنظیمات سایت" subtitle="مدیریت محتوای صفحات عمومی مثل FAQ، درباره ما و اسلایدهای هدر">
     <ManagementSurfaceCard tone="accent">
       <div class="toolbar">
-        <button class="secondary-btn" type="button" :disabled="loading || saving" @click="loadSettings">
-          {{ loading ? 'در حال بارگذاری...' : 'بروزرسانی' }}
-        </button>
-        <button class="primary-btn" type="button" :disabled="loading || saving" @click="saveSettings">
-          {{ saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات سایت' }}
-        </button>
+        <template v-if="!['theme', 'layout'].includes(activeStage)">
+          <button class="secondary-btn" type="button" :disabled="secondaryActionDisabled" @click="handleSecondaryAction">
+            {{ secondaryActionLabel }}
+          </button>
+          <button class="primary-btn" type="button" :disabled="primaryActionDisabled" @click="saveSettings">
+            {{ primaryActionLabel }}
+          </button>
+        </template>
         <span class="muted">{{ statusText }}</span>
+        <span class="muted" v-if="stageSaveHint">{{ stageSaveHint }}</span>
       </div>
     </ManagementSurfaceCard>
 
-    <ManagementSurfaceCard tone="soft">
-      <div class="tabs">
+    <ManagementSurfaceCard tone="soft" title="فرآیند ویرایش سایت" subtitle="تم را انتخاب کن، ظاهر هر صفحه را مشخص کن، بعد چیدمان و محتوا را نهایی کن.">
+      <div class="workflow-stages">
         <button
-          v-for="tab in tabs"
-          :key="tab.value"
+          v-for="stage in workflowStages"
+          :key="stage.value"
           type="button"
-          class="tab-btn"
-          :class="{ active: activeTab === tab.value }"
-          @click="activeTab = tab.value"
+          class="workflow-stage"
+          :class="{ active: activeStage === stage.value }"
+          @click="activeStage = stage.value"
         >
-          {{ tab.label }}
+          <strong>{{ stage.label }}</strong>
+          <small>{{ stage.caption }}</small>
         </button>
       </div>
     </ManagementSurfaceCard>
 
     <p class="error" v-if="error">{{ error }}</p>
 
-    <template v-if="activeTab === 'general'">
+    <template v-if="activeStage === 'identity' && activeTab === 'general'">
+      <ManagementSurfaceCard title="ابزارهای پایه" subtitle="اطلاعات اصلی سایت و Loader را از این مرحله مدیریت کن.">
+        <div class="tabs">
+          <button type="button" class="tab-btn" :class="{ active: activeTab === 'general' }" @click="activeTab = 'general'">
+            اطلاعات سایت
+          </button>
+          <button type="button" class="tab-btn" :class="{ active: activeTab === 'loader' }" @click="activeTab = 'loader'">
+            Loader
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard title="اطلاعات عمومی سایت" subtitle="برند، عنوان هدر و CTA اصلی منوی آنلاین">
         <div class="form-grid">
           <label>
@@ -99,7 +114,46 @@
       </ManagementSurfaceCard>
     </template>
 
-    <template v-else-if="activeTab === 'components'">
+    <template v-else-if="activeStage === 'theme'">
+      <ManagementThemeStudio
+        :initial-settings="themeDraft"
+        save-mode="draft"
+        save-button-label="ذخیره پیش‌نویس تم"
+        @save-draft="saveThemeDraft"
+        @reset-draft="resetThemeDraft"
+      />
+    </template>
+
+    <template v-else-if="activeStage === 'layout' && activeLayoutPanel === 'visual'">
+      <ManagementSurfaceCard title="چیدمان و کامپوننت‌ها" subtitle="کنترل بصری هر صفحه را در همان context واقعی آن ویرایش کن.">
+        <div class="page-switcher">
+          <button
+            v-for="pageItem in builderPageOptions"
+            :key="pageItem.value"
+            type="button"
+            class="page-chip"
+            :class="{ active: activeBuilderPage === pageItem.value }"
+            @click="activeBuilderPage = pageItem.value"
+          >
+            <strong>{{ pageItem.label }}</strong>
+            <small>{{ pageItem.subtitle }}</small>
+          </button>
+        </div>
+        <div class="page-switcher page-switcher--subtle">
+          <button
+            v-for="panel in layoutPanelOptions"
+            :key="panel.value"
+            type="button"
+            class="page-chip"
+            :class="{ active: activeLayoutPanel === panel.value }"
+            @click="activeLayoutPanel = panel.value"
+          >
+            <strong>{{ panel.label }}</strong>
+            <small>{{ panel.caption }}</small>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
       <div class="designer-shell">
         <aside class="designer-preview" aria-label="پیش‌نمایش طراحی صفحه">
           <div class="preview-frame">
@@ -215,6 +269,21 @@
                 </div>
               </template>
 
+              <template v-else-if="activeDesignPage === 'faq'">
+                <div class="faq-preview-card">
+                  <strong>سوالات متداول</strong>
+                  <span>{{ faqItems.length }} سوال در منبع داده فعلی</span>
+                </div>
+              </template>
+
+              <template v-else-if="activeDesignPage === 'product_groups'">
+                <div class="about-preview-card">
+                  <small>گروه‌های محصول</small>
+                  <strong>{{ builderGroupsCount }} گروه آماده نمایش</strong>
+                  <p>چیدمان و نحوه ارائه این گروه‌ها از theme و layout همین صفحه تبعیت می‌کند.</p>
+                </div>
+              </template>
+
               <template v-else-if="activeDesignPage === 'product'">
                 <div class="card-preview-row compact-card-preview">
                   <div class="card-preview-item">
@@ -252,23 +321,7 @@
         </aside>
 
         <section class="designer-panel">
-          <ManagementSurfaceCard title="طراحی صفحات" subtitle="صفحه و کامپوننت را انتخاب کن.">
-            <div class="page-switcher">
-              <button
-                v-for="pageItem in designPages"
-                :key="pageItem.value"
-                type="button"
-                class="page-chip"
-                :class="{ active: activeDesignPage === pageItem.value }"
-                @click="selectDesignPage(pageItem.value)"
-              >
-                <strong>{{ pageItem.label }}</strong>
-                <small>{{ pageItem.count }} بخش</small>
-              </button>
-            </div>
-          </ManagementSurfaceCard>
-
-          <ManagementSurfaceCard>
+          <ManagementSurfaceCard title="کنترل‌های بصری" subtitle="هدر و فوتر همیشه در دسترس‌اند و کنترل‌های اختصاصی صفحه از همین‌جا می‌آیند.">
             <div class="component-list">
               <button
                 v-for="componentItem in currentDesignComponents"
@@ -749,6 +802,48 @@
               </div>
             </template>
 
+            <template v-else-if="activeDesignComponent === 'aboutShell'">
+              <div class="inline-editor">
+                <p class="muted">ظاهر صفحه درباره ما بیشتر از تم و چیدمان همین صفحه می‌آید.</p>
+                <div class="context-actions">
+                  <button class="secondary-btn" type="button" @click="activeStage = 'layout'; activeBuilderPage = 'about'; activeLayoutPanel = 'builder'">
+                    رفتن به چیدمان درباره ما
+                  </button>
+                  <button class="secondary-btn" type="button" @click="activeStage = 'content'; activeBuilderPage = 'about'">
+                    ویرایش محتوای درباره ما
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'faqShell'">
+              <div class="inline-editor">
+                <p class="muted">در FAQ، تم و page builder ظاهر کلی را مشخص می‌کنند و سوال‌ها در مرحله محتوا مدیریت می‌شوند.</p>
+                <div class="context-actions">
+                  <button class="secondary-btn" type="button" @click="activeStage = 'layout'; activeBuilderPage = 'faq'; activeLayoutPanel = 'builder'">
+                    رفتن به چیدمان FAQ
+                  </button>
+                  <button class="secondary-btn" type="button" @click="activeStage = 'content'; activeBuilderPage = 'faq'">
+                    ویرایش سوالات و پاسخ‌ها
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="activeDesignComponent === 'groupsShell'">
+              <div class="inline-editor">
+                <p class="muted">صفحه گروه‌های محصول از تم، category rail و layout همین صفحه تبعیت می‌کند.</p>
+                <div class="context-actions">
+                  <button class="secondary-btn" type="button" @click="activeStage = 'layout'; activeBuilderPage = 'product_groups'; activeLayoutPanel = 'builder'">
+                    رفتن به چیدمان گروه‌ها
+                  </button>
+                  <button class="secondary-btn" type="button" @click="activeStage = 'content'; activeBuilderPage = 'product_groups'">
+                    منبع داده گروه‌ها
+                  </button>
+                </div>
+              </div>
+            </template>
+
             <template v-else>
               <p class="muted">یک کامپوننت را انتخاب کن.</p>
             </template>
@@ -757,7 +852,469 @@
       </div>
     </template>
 
-    <template v-else-if="activeTab === 'loader'">
+    <template v-else-if="activeStage === 'layout' && activeLayoutPanel === 'builder'">
+      <ManagementSurfaceCard title="چیدمان و کامپوننت‌ها" subtitle="انتخاب بلاک، ترتیب، فعال بودن و variantها در همین workspace انجام می‌شود.">
+        <div class="page-switcher">
+          <button
+            v-for="pageItem in builderPageOptions"
+            :key="pageItem.value"
+            type="button"
+            class="page-chip"
+            :class="{ active: activeBuilderPage === pageItem.value }"
+            @click="activeBuilderPage = pageItem.value"
+          >
+            <strong>{{ pageItem.label }}</strong>
+            <small>{{ pageItem.subtitle }}</small>
+          </button>
+        </div>
+        <div class="page-switcher page-switcher--subtle">
+          <button
+            v-for="panel in layoutPanelOptions"
+            :key="panel.value"
+            type="button"
+            class="page-chip"
+            :class="{ active: activeLayoutPanel === panel.value }"
+            @click="activeLayoutPanel = panel.value"
+          >
+            <strong>{{ panel.label }}</strong>
+            <small>{{ panel.caption }}</small>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard>
+        <KeepAlive>
+          <ManagementPageBuilderWorkspace
+            v-if="activeStage === 'layout'"
+            :page="activeBuilderPage"
+            :boot="builderBoot"
+            :load-layout-fn="loadDraftPageLayout"
+            :save-layout-fn="saveDraftPageLayout"
+            :refresh-key="builderWorkspaceRevision"
+          />
+        </KeepAlive>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-if="activeBuilderPage === 'home'"
+        title="منابع محتوای صفحه اصلی"
+        subtitle="اسلایدر هیرو و تنظیمات هدر/فوتر هنوز از تنظیمات سراسری مدیریت می‌شوند."
+      >
+        <div class="context-actions">
+          <button class="secondary-btn" type="button" @click="activeLayoutPanel = 'visual'; activeDesignPage = 'home'; activeDesignComponent = 'homeHero'">
+            ویرایش هیرو و اسلایدر
+          </button>
+          <button class="secondary-btn" type="button" @click="activeLayoutPanel = 'visual'; activeDesignPage = 'home'; activeDesignComponent = 'header'">
+            ویرایش هدر و فوتر
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-else-if="activeBuilderPage === 'about'"
+        title="محتوای درباره ما"
+        subtitle="در این مرحله فقط چیدمان را تعیین کن؛ ویرایش متن‌ها و آیتم‌ها در مرحله محتوا انجام می‌شود."
+      >
+        <div class="context-actions">
+          <span class="muted">{{ aboutSections.length }} بخش محتوایی برای این صفحه ثبت شده است.</span>
+          <button class="secondary-btn" type="button" @click="activeStage = 'content'; activeBuilderPage = 'about'">
+            ویرایش محتوای درباره ما
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-else-if="activeBuilderPage === 'faq'"
+        title="سوالات متداول"
+        subtitle="در این مرحله فقط ترتیب و نمایش سکشن‌ها را بچین؛ سوال‌ها و جواب‌ها در مرحله محتوا مدیریت می‌شوند."
+      >
+        <div class="context-actions">
+          <span class="muted">{{ faqItems.length }} سوال در منبع داده فعلی ثبت شده است.</span>
+          <button class="secondary-btn" type="button" @click="activeStage = 'content'; activeBuilderPage = 'faq'">
+            ویرایش سوالات و پاسخ‌ها
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-else
+        title="منبع داده‌ی گروه‌های محصول"
+        subtitle="چیدمان این صفحه از builder می‌آید، اما خود گروه‌ها از تنظیمات منو خوانده می‌شوند."
+      >
+        <div class="context-actions">
+          <span class="muted">{{ builderGroupsCount }} گروه در داده‌های فعلی منو در دسترس است.</span>
+          <a class="secondary-btn" href="/management/menu-groups">رفتن به مدیریت گروه‌های منو</a>
+        </div>
+      </ManagementSurfaceCard>
+    </template>
+
+    <template v-else-if="activeStage === 'content'">
+      <ManagementSurfaceCard title="محتوای صفحه" subtitle="صفحه موردنظر را انتخاب کن و متن‌ها، آیتم‌ها و داده‌های همان صفحه را ویرایش کن.">
+        <div class="page-switcher">
+          <button
+            v-for="pageItem in builderPageOptions"
+            :key="pageItem.value"
+            type="button"
+            class="page-chip"
+            :class="{ active: activeBuilderPage === pageItem.value }"
+            @click="activeBuilderPage = pageItem.value"
+          >
+            <strong>{{ pageItem.label }}</strong>
+            <small>{{ pageItem.subtitle }}</small>
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-if="activeBuilderPage === 'home'"
+        title="متن‌ها و CTAهای صفحه اصلی"
+        subtitle="نام برند، تیترها و متن‌های اصلی از اینجا کنترل می‌شوند."
+      >
+        <div class="form-grid">
+          <label>
+            نام برند
+            <input class="input" v-model.trim="webSettings.brand_name" />
+          </label>
+          <label>
+            شعار برند
+            <input class="input" v-model.trim="webSettings.brand_tagline" />
+          </label>
+          <label>
+            متن دکمه اصلی
+            <input class="input" v-model.trim="webSettings.primary_cta_label" />
+          </label>
+          <label>
+            ارز پیش فرض
+            <SearchableDropdown
+              v-model="webSettings.default_currency"
+              :options="currencyOptions"
+              placeholder="انتخاب ارز"
+              search-placeholder="جستجوی ارز..."
+            />
+          </label>
+          <label class="span-2">
+            تیتر هدر سایت
+            <input class="input" v-model.trim="webSettings.hero_title" />
+          </label>
+          <label class="span-2">
+            زیرتیتر هدر سایت
+            <textarea class="textarea" v-model.trim="webSettings.hero_subtitle" />
+          </label>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-if="activeBuilderPage === 'home'"
+        :title="activeHeroContentMeta.title"
+        :subtitle="activeHeroContentMeta.hint"
+      >
+        <div class="form-grid">
+          <label class="span-2" v-if="activeHeroContentMeta.fields.includes('title')">
+            {{ activeHeroContentMeta.titleLabel }}
+            <input class="input" v-model.trim="webSettings.hero_section_title" :placeholder="activeHeroContentMeta.titlePlaceholder" />
+          </label>
+          <label class="span-2" v-if="activeHeroContentMeta.fields.includes('description')">
+            {{ activeHeroContentMeta.descriptionLabel }}
+            <textarea class="textarea" v-model.trim="webSettings.hero_section_description" :placeholder="activeHeroContentMeta.descriptionPlaceholder" />
+          </label>
+          <label v-if="activeHeroContentMeta.fields.includes('cta')">
+            متن دکمه اصلی
+            <input class="input" v-model.trim="webSettings.hero_section_cta" :placeholder="activeHeroContentMeta.ctaPlaceholder" />
+          </label>
+          <label v-if="activeHeroContentMeta.fields.includes('image')">
+            {{ activeHeroContentMeta.imageLabel }}
+            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
+            <div class="image-upload-row">
+              <button type="button" class="secondary-btn mini" @click="heroImageInput.click()">انتخاب عکس</button>
+              <button type="button" class="secondary-btn mini danger" v-if="webSettings.hero_image" @click="webSettings.hero_image = ''">حذف</button>
+            </div>
+            <input
+              ref="heroImageInput"
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+              style="display:none"
+              @change="handleHeroImageUpload"
+            />
+            <img v-if="String(webSettings.hero_image || '').trim()" class="image-preview" :src="webSettings.hero_image" alt="Hero bg" />
+          </label>
+          <label v-if="activeHeroContentMeta.fields.includes('imagePosition')">
+            موقعیت تصویر
+            <SearchableDropdown v-model="webSettings.hero_image_position" :options="imagePositionOptions" placeholder="انتخاب موقعیت" />
+          </label>
+        </div>
+
+        <div class="inline-editor hero-slider-editor" v-if="activeHeroContentMeta.usesSlides">
+          <ManagementEditableTable
+            v-model="heroSlides"
+            title="اسلایدر هیرو"
+            subtitle=""
+            tone="accent"
+            :columns="heroColumns"
+            popup-title-add="افزودن اسلاید"
+            popup-title-edit="ویرایش اسلاید"
+            popup-subtitle=""
+            :create-empty-row="createEmptyHeroSlide"
+            :normalize-row="normalizeHeroSlide"
+            :validate-row="validateHeroSlide"
+          >
+            <template #cell-is_active="{ value }">
+              <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
+            </template>
+
+            <template #editor="{ draft }">
+              <div class="editor-grid">
+                <label>
+                  عنوان
+                  <input class="input" v-model.trim="draft.title" />
+                </label>
+                <label>
+                  ترتیب
+                  <input class="input" type="number" min="0" v-model.number="draft.sort_order" />
+                </label>
+                <label class="span-2">
+                  زیرعنوان
+                  <textarea class="textarea" v-model.trim="draft.subtitle" />
+                </label>
+                <label>
+                  تصویر
+                  <input class="input" v-model.trim="draft.image" placeholder="/files/slide.jpg" />
+                  <img v-if="String(draft.image || '').trim()" class="image-preview" :src="draft.image" alt="Slide preview" />
+                </label>
+                <label>
+                  لینک محصول
+                  <input class="input" v-model.trim="draft.linked_item" />
+                </label>
+                <label>
+                  متن دکمه
+                  <input class="input" v-model.trim="draft.cta_label" />
+                </label>
+                <label>
+                  لینک دکمه
+                  <input class="input" v-model.trim="draft.cta_url" placeholder="/menu" />
+                </label>
+                <label>
+                  شعبه
+                  <input class="input" v-model.trim="draft.branch" />
+                </label>
+                <label class="check">
+                  <input type="checkbox" v-model="draft.is_active" :true-value="1" :false-value="0" />
+                  فعال
+                </label>
+              </div>
+            </template>
+          </ManagementEditableTable>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-if="activeBuilderPage === 'home'"
+        title="بخش ویژه و پرفروش"
+        subtitle="تیتر و آیتم‌های این بخش را از اینجا تنظیم کن."
+      >
+        <div class="form-grid">
+          <label class="check span-2">
+            <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_enabled" :true-value="1" :false-value="0" />
+            نمایش بخش ویژه و پرفروش
+          </label>
+          <template v-if="Number(webSettings.restaurant_menu_highlight_enabled || 0) === 1">
+            <label class="span-2">
+              عنوان
+              <input class="input" v-model.trim="webSettings.restaurant_menu_highlight_title" />
+            </label>
+            <label class="check">
+              <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_show_featured" :true-value="1" :false-value="0" />
+              آیتم‌های ویژه
+            </label>
+            <label>
+              تعداد ویژه
+              <input class="input" type="number" min="0" max="50" v-model.number="webSettings.restaurant_menu_highlight_featured_limit" />
+            </label>
+            <label class="check">
+              <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_show_best_seller" :true-value="1" :false-value="0" />
+              پرفروش‌ها
+            </label>
+            <label>
+              تعداد پرفروش
+              <input class="input" type="number" min="0" max="50" v-model.number="webSettings.restaurant_menu_highlight_best_seller_limit" />
+            </label>
+          </template>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-else-if="activeBuilderPage === 'about'"
+        title="محتوای درباره ما"
+        subtitle="بخش‌های این صفحه از همین لیست به بلاک‌های صفحه تزریق می‌شوند."
+      >
+        <div class="section-toolbar">
+          <button class="secondary-btn" type="button" @click="openAboutAdd">افزودن بخش</button>
+        </div>
+        <ManagementListView :columns="aboutColumns" :rows="aboutSections" row-key="name" :row-clickable="true" @row-click="openAboutEdit">
+          <template #cell-is_active="{ value }">
+            <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
+          </template>
+          <template #cell-actions="{ row, rowIndex }">
+            <div class="row-actions">
+              <button class="secondary-btn mini" type="button" @click.stop="openAboutEdit(row)">ویرایش</button>
+              <button class="secondary-btn mini danger" type="button" @click.stop="removeAboutRow(rowIndex)">حذف</button>
+            </div>
+          </template>
+        </ManagementListView>
+
+        <div v-if="aboutEditorOpen" class="inline-editor">
+          <div class="editor-grid">
+            <label>
+              نوع بخش
+              <SearchableDropdown v-model="aboutDraft.section_type" :options="aboutSectionTypeOptions" placeholder="نوع بخش" search-placeholder="جستجو..." />
+            </label>
+            <label>
+              عنوان
+              <input class="input" v-model.trim="aboutDraft.title" />
+            </label>
+            <label>
+              ترتیب
+              <input class="input" type="number" min="0" v-model.number="aboutDraft.sort_order" />
+            </label>
+            <label class="span-2">
+              زیرعنوان
+              <textarea class="textarea" v-model.trim="aboutDraft.subtitle" />
+            </label>
+            <label class="span-2">
+              متن اصلی
+              <textarea class="textarea" v-model.trim="aboutDraft.body_text" />
+            </label>
+            <label>
+              آیکون
+              <input class="input" v-model.trim="aboutDraft.icon" />
+            </label>
+            <label>
+              سال/برچسب
+              <input class="input" v-model.trim="aboutDraft.year_label" />
+            </label>
+            <label>
+              Badge
+              <input class="input" v-model.trim="aboutDraft.badge" />
+            </label>
+            <label>
+              سال تاسیس
+              <input class="input" v-model.trim="aboutDraft.founded_year" />
+            </label>
+            <label class="check">
+              <input type="checkbox" v-model="aboutDraft.highlight" :true-value="1" :false-value="0" />
+              هایلایت
+            </label>
+            <label>
+              تصویر
+              <input class="input" v-model.trim="aboutDraft.image" />
+              <img v-if="String(aboutDraft.image || '').trim()" class="image-preview" :src="aboutDraft.image" alt="About preview" />
+            </label>
+            <label>
+              برچسب آمار
+              <input class="input" v-model.trim="aboutDraft.stat_label" />
+            </label>
+            <label>
+              مقدار آمار
+              <input class="input" v-model.trim="aboutDraft.stat_value" />
+            </label>
+            <label class="check">
+              <input type="checkbox" v-model="aboutDraft.is_active" :true-value="1" :false-value="0" />
+              فعال
+            </label>
+          </div>
+          <div class="editor-actions">
+            <button class="secondary-btn" type="button" @click="closeAboutEditor">انصراف</button>
+            <button class="primary-btn" type="button" @click="saveAboutDraft">ثبت</button>
+          </div>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-else-if="activeBuilderPage === 'faq'"
+        title="سوالات متداول"
+        subtitle="سوال‌ها و پاسخ‌هایی که در صفحه FAQ نمایش داده می‌شوند از همین لیست می‌آیند."
+      >
+        <div class="section-toolbar">
+          <button class="secondary-btn" type="button" @click="openFaqAdd">افزودن سوال</button>
+        </div>
+        <ManagementListView :columns="faqColumns" :rows="faqItems" row-key="name" :row-clickable="true" @row-click="openFaqEdit">
+          <template #cell-is_active="{ value }">
+            <span :class="['state-pill', Number(value) ? 'on' : 'off']">{{ Number(value) ? 'فعال' : 'غیرفعال' }}</span>
+          </template>
+          <template #cell-actions="{ row, rowIndex }">
+            <div class="row-actions">
+              <button class="secondary-btn mini" type="button" @click.stop="openFaqEdit(row)">ویرایش</button>
+              <button class="secondary-btn mini danger" type="button" @click.stop="removeFaqRow(rowIndex)">حذف</button>
+            </div>
+          </template>
+        </ManagementListView>
+
+        <div v-if="faqEditorOpen" class="inline-editor">
+          <div class="editor-grid">
+            <label class="span-2">
+              سوال
+              <input class="input" v-model.trim="faqDraft.question" />
+            </label>
+            <label>
+              دسته‌بندی
+              <input class="input" v-model.trim="faqDraft.category" />
+            </label>
+            <label>
+              آیکون
+              <input class="input" v-model.trim="faqDraft.icon" />
+            </label>
+            <label class="span-2">
+              تصویر
+              <input class="input" v-model.trim="faqDraft.image" />
+              <img v-if="String(faqDraft.image || '').trim()" class="image-preview image-preview-wide" :src="faqDraft.image" alt="FAQ preview" />
+            </label>
+            <label class="span-2">
+              توضیح کوتاه
+              <input class="input" v-model.trim="faqDraft.summary" />
+            </label>
+            <label>
+              ترتیب
+              <input class="input" type="number" min="0" v-model.number="faqDraft.sort_order" />
+            </label>
+            <label class="check">
+              <input type="checkbox" v-model="faqDraft.is_active" :true-value="1" :false-value="0" />
+              فعال
+            </label>
+            <label class="span-2">
+              پاسخ
+              <textarea class="textarea" v-model.trim="faqDraft.answer" />
+            </label>
+          </div>
+          <div class="editor-actions">
+            <button class="secondary-btn" type="button" @click="closeFaqEditor">انصراف</button>
+            <button class="primary-btn" type="button" @click="saveFaqDraft">ثبت</button>
+          </div>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
+        v-else
+        title="منبع داده‌ی گروه‌های محصول"
+        subtitle="این صفحه از گروه‌های واقعی منو تغذیه می‌شود و این مرحله فقط همان منبع را مدیریت می‌کند."
+      >
+        <div class="context-actions">
+          <span class="muted">{{ builderGroupsCount }} گروه در داده‌های فعلی منو در دسترس است.</span>
+          <a class="secondary-btn" href="/management/menu-groups">رفتن به مدیریت گروه‌های منو</a>
+        </div>
+      </ManagementSurfaceCard>
+    </template>
+
+    <template v-else-if="activeStage === 'identity' && activeTab === 'loader'">
+      <ManagementSurfaceCard title="ابزارهای پایه" subtitle="اطلاعات اصلی سایت و Loader را از این مرحله مدیریت کن.">
+        <div class="tabs">
+          <button type="button" class="tab-btn" :class="{ active: activeTab === 'general' }" @click="activeTab = 'general'">
+            اطلاعات سایت
+          </button>
+          <button type="button" class="tab-btn" :class="{ active: activeTab === 'loader' }" @click="activeTab = 'loader'">
+            Loader
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard
         title="تنظیمات Loader داینامیک"
         subtitle="یک لودر پیش‌فرض انتخاب کنید یا کد اختصاصی خودتان را قرار دهید."
@@ -837,6 +1394,55 @@
       </ManagementSurfaceCard>
     </template>
 
+    <template v-else-if="activeStage === 'review'">
+      <ManagementSurfaceCard title="بازبینی و انتشار" subtitle="پیش‌نویس‌های ذخیره‌شده را بررسی کن و فقط وقتی همه‌چیز آماده بود روی سایت منتشر کن.">
+        <div class="review-summary-grid">
+          <article class="review-summary-card" :class="{ changed: hasThemeDraftChanges }">
+            <strong>تم</strong>
+            <small>{{ hasThemeDraftChanges ? 'دارای تغییر draft' : 'بدون تغییر نسبت به نسخه live' }}</small>
+          </article>
+          <article class="review-summary-card" :class="{ changed: hasSiteDraftChanges }">
+            <strong>هویت و محتوا</strong>
+            <small>{{ hasSiteDraftChanges ? 'متن‌ها، loader یا داده‌ها تغییر کرده‌اند' : 'بدون تغییر نسبت به نسخه live' }}</small>
+          </article>
+          <article class="review-summary-card" :class="{ changed: hasLayoutDraftChanges }">
+            <strong>چیدمان صفحات</strong>
+            <small>{{ hasLayoutDraftChanges ? `${changedLayoutPages.length} صفحه دارای draft است` : 'هیچ layout draftی ندارید' }}</small>
+          </article>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="صفحات دارای تغییر" subtitle="این لیست مشخص می‌کند draft کدام صفحه‌ها هنوز منتشر نشده است.">
+        <div class="review-page-list">
+          <article
+            v-for="pageItem in builderPageOptions"
+            :key="pageItem.value"
+            class="review-page-item"
+            :class="{ changed: changedLayoutPages.includes(pageItem.value) }"
+          >
+            <div>
+              <strong>{{ pageItem.label }}</strong>
+              <small>{{ pageItem.subtitle }}</small>
+            </div>
+            <span class="state-pill" :class="changedLayoutPages.includes(pageItem.value) ? 'on' : 'off'">
+              {{ changedLayoutPages.includes(pageItem.value) ? 'دارای draft' : 'بدون draft چیدمان' }}
+            </span>
+          </article>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="انتشار نهایی" subtitle="انتشار، draft تم، محتوای صفحات و layoutهای ذخیره‌شده را به نسخه live تبدیل می‌کند.">
+        <div class="context-actions">
+          <button class="secondary-btn danger" type="button" :disabled="saving || !hasAnyDraftChanges" @click="discardAllDrafts">
+            حذف همه پیش‌نویس‌ها
+          </button>
+          <button class="primary-btn" type="button" :disabled="saving || !hasAnyDraftChanges" @click="publishAllDrafts">
+            {{ saving ? 'در حال انتشار...' : 'انتشار روی سایت' }}
+          </button>
+        </div>
+      </ManagementSurfaceCard>
+    </template>
+
     <template v-else>
       <ManagementSurfaceCard title="تنظیمات سایت">
         <p class="muted">یک تب را برای ویرایش انتخاب کنید.</p>
@@ -858,28 +1464,90 @@ import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
+import ManagementPageBuilderWorkspace from '@/components/management/ManagementPageBuilderWorkspace.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementThemeStudio from '@/components/management/ManagementThemeStudio.vue'
 import MenuItemCard from '@/components/MenuItemCard.vue'
-import { getManagementSiteSettings, setManagementSiteSettings } from '@/utils/api'
+import {
+  getManagementSiteSettings,
+  getManagementThemeSettings,
+  setManagementSiteSettings,
+} from '@/utils/api'
 import { composeFaqAnswer, parseFaqAnswer } from '@/utils/faqMeta'
 import {
   defaultLoaderSettings,
   normalizeLoaderSettings,
   toLoaderWebSettingsPayload,
 } from '@/utils/loaderSettings'
+import { getManagementPageLayout, setManagementPageLayout } from '@/utils/pageLayoutApi'
+import {
+  clearSiteAuthoringDraft,
+  loadSiteAuthoringDraft,
+  readDraftPageLayout,
+  writeDraftPageLayout,
+  writeDraftSiteSettings,
+  writeDraftThemeSettings,
+} from '@/utils/siteAuthoringDraft'
+import {
+  applyThemeSettings,
+  defaultThemeSettings,
+  sanitizeThemeSettings,
+  saveThemeSettingsToServer,
+} from '@/utils/themeSettings'
+
+const props = defineProps({
+  entryMode: {
+    type: String,
+    default: '',
+  },
+})
 
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const statusText = ref('')
+const activeStage = ref('identity')
 const activeTab = ref('general')
+const activeBuilderPage = ref('home')
+const activeLayoutPanel = ref('builder')
 
-const tabs = [
-  { value: 'general', label: 'عمومی' },
-  { value: 'components', label: 'طراحی صفحات' },
-  { value: 'loader', label: 'Loader' },
+const workflowStages = [
+  { value: 'identity', label: 'هویت سایت', caption: 'برند، متن‌های پایه و Loader' },
+  { value: 'theme', label: 'تم', caption: 'رنگ، هویت و ظاهر کلی' },
+  { value: 'layout', label: 'چیدمان و کامپوننت‌ها', caption: 'ساختار صفحه و کنترل‌های بصری' },
+  { value: 'content', label: 'محتوا', caption: 'متن، سوالات، اسلایدها و داده‌ها' },
+  { value: 'review', label: 'بازبینی و انتشار', caption: 'بررسی draft و اعمال روی سایت' },
 ]
+
+const tabStageMap = {
+  general: 'identity',
+  loader: 'identity',
+  theme: 'theme',
+  'page-builder': 'layout',
+  content: 'content',
+  review: 'review',
+}
+
+const stageTabMap = {
+  identity: 'general',
+  theme: 'theme',
+  layout: 'page-builder',
+  content: 'content',
+  review: 'review',
+}
+
+const layoutPanelOptions = [
+  { value: 'builder', label: 'ساختار صفحه', caption: 'بلاک‌ها، ترتیب و variantها' },
+  { value: 'visual', label: 'کنترل‌های بصری', caption: 'ظاهر سکشن‌ها و کامپوننت‌های صفحه' },
+]
+
+const liveThemeSettings = ref({ ...defaultThemeSettings })
+const themeDraft = ref({ ...defaultThemeSettings })
+const liveSiteSettingsPayload = ref(null)
+const livePageLayouts = ref({})
+const draftRevision = ref(0)
+const builderWorkspaceRevision = ref(0)
 
 const webSettings = reactive({
   brand_name: '',
@@ -944,10 +1612,239 @@ const activeDesignPage = ref('global')
 const activeDesignComponent = ref('header')
 const previewDevice = ref('desktop')
 
+const builderPageOptions = [
+  { value: 'home', label: 'صفحه اصلی', subtitle: 'خانه و لندینگ اصلی' },
+  { value: 'about', label: 'درباره ما', subtitle: 'داستان و معرفی برند' },
+  { value: 'faq', label: 'سوالات متداول', subtitle: 'پرسش و پاسخ عمومی' },
+  { value: 'product_groups', label: 'گروه‌های محصول', subtitle: 'ورودی منوی دسته‌بندی‌شده' },
+]
+
 const previewDeviceOptions = [
   { value: 'desktop', label: 'دسکتاپ' },
   { value: 'mobile', label: 'گوشی' },
 ]
+
+const authoringPages = ['home', 'about', 'faq', 'product_groups']
+
+function currentSiteSettingsPayload() {
+  persistActiveHeroContent()
+  const loaderPayload = toLoaderWebSettingsPayload(webSettings)
+
+  return {
+    web_settings: {
+      brand_name: String(webSettings.brand_name || '').trim() || 'Veederakht Restaurant',
+      brand_tagline: String(webSettings.brand_tagline || '').trim(),
+      default_currency: String(webSettings.default_currency || 'IRR').trim() || 'IRR',
+      hero_title: String(webSettings.hero_title || '').trim(),
+      hero_subtitle: String(webSettings.hero_subtitle || '').trim(),
+      hero_image: String(webSettings.hero_image || '').trim(),
+      primary_cta_label: String(webSettings.primary_cta_label || '').trim(),
+      restaurant_menu_highlight_enabled: Number(webSettings.restaurant_menu_highlight_enabled || 0) ? 1 : 0,
+      restaurant_menu_highlight_title: String(webSettings.restaurant_menu_highlight_title || 'ویژه و پرفروش').trim() || 'ویژه و پرفروش',
+      restaurant_menu_highlight_show_featured: Number(webSettings.restaurant_menu_highlight_show_featured || 0) ? 1 : 0,
+      restaurant_menu_highlight_featured_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_featured_limit || 10) || 10, 50)),
+      restaurant_menu_highlight_show_best_seller: Number(webSettings.restaurant_menu_highlight_show_best_seller || 0) ? 1 : 0,
+      restaurant_menu_highlight_best_seller_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_best_seller_limit || 10) || 10, 50)),
+      header_variant: normalizeHeaderSetting(webSettings.header_variant),
+      menu_search_variant: normalizeMenuSearchSetting(webSettings.menu_search_variant),
+      hero_section_variant: String(webSettings.hero_section_variant || 'off').trim() || 'off',
+      card_variant: String(webSettings.card_variant || 'classic').trim() || 'classic',
+      hero_image_position: String(webSettings.hero_image_position || 'center').trim() || 'center',
+      category_rail_variant: webSettings.category_rail_variant === 'image' ? 'image' : 'pill',
+      footer_variant: String(webSettings.footer_variant || 'full').trim() || 'full',
+      hero_section_enabled: webSettings.hero_section_variant !== 'off' ? 1 : 0,
+      footer_enabled: webSettings.footer_variant !== 'off' ? 1 : 0,
+      hero_section_title: String(webSettings.hero_section_title || '').trim(),
+      hero_section_description: String(webSettings.hero_section_description || '').trim(),
+      hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
+      hero_variant_contents: ensureHeroVariantContents(webSettings.hero_variant_contents),
+      footer_description: String(webSettings.footer_description || '').trim(),
+      footer_phone: String(webSettings.footer_phone || '').trim(),
+      footer_email: String(webSettings.footer_email || '').trim(),
+      footer_address: String(webSettings.footer_address || '').trim(),
+      footer_instagram: String(webSettings.footer_instagram || '').trim(),
+      footer_telegram: String(webSettings.footer_telegram || '').trim(),
+      footer_copyright: String(webSettings.footer_copyright || '').trim(),
+      ...loaderPayload,
+    },
+    hero_slides: heroSlides.value.map((row, index) => ({ ...normalizeHeroSlide(row), sort_order: index })),
+    about_sections: aboutSections.value.map((row, index) => ({ ...normalizeAboutSection(row), sort_order: index })),
+    faq_items: faqItems.value.map((row, index) => {
+      const normalized = normalizeFaqItem(row)
+      return {
+        ...normalized,
+        answer: composeFaqAnswer(normalized.answer, {
+          category: normalized.category,
+          icon: normalized.icon,
+          image: normalized.image,
+          summary: normalized.summary,
+        }),
+        sort_order: index,
+      }
+    }),
+  }
+}
+
+function isEqual(left, right) {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right)
+  } catch (_) {
+    return false
+  }
+}
+
+function bumpDraftRevision() {
+  draftRevision.value += 1
+}
+
+function bumpBuilderWorkspaceRevision() {
+  builderWorkspaceRevision.value += 1
+}
+
+const currentThemeDraft = computed(() => sanitizeThemeSettings(themeDraft.value))
+const currentSiteDraft = computed(() => currentSiteSettingsPayload())
+const hasThemeDraftChanges = computed(() => !isEqual(currentThemeDraft.value, sanitizeThemeSettings(liveThemeSettings.value)))
+const hasSiteDraftChanges = computed(() => !isEqual(currentSiteDraft.value, liveSiteSettingsPayload.value || {}))
+const draftPageLayouts = computed(() =>
+  {
+    draftRevision.value
+    return authoringPages.reduce((acc, page) => {
+      const draft = readDraftPageLayout(page)
+      if (draft?.blocks) {
+        acc[page] = draft
+      }
+      return acc
+    }, {})
+  },
+)
+const changedLayoutPages = computed(() =>
+  authoringPages.filter((page) => !isEqual(draftPageLayouts.value?.[page] || livePageLayouts.value?.[page] || { page, blocks: [] }, livePageLayouts.value?.[page] || { page, blocks: [] })),
+)
+const hasLayoutDraftChanges = computed(() => changedLayoutPages.value.length > 0)
+const hasAnyDraftChanges = computed(() => hasThemeDraftChanges.value || hasSiteDraftChanges.value || hasLayoutDraftChanges.value)
+const primaryActionLabel = computed(() => {
+  if (saving.value) {
+    return activeStage.value === 'review' ? 'در حال انتشار...' : 'در حال ذخیره...'
+  }
+  if (activeStage.value === 'review') {
+    return 'انتشار روی سایت'
+  }
+  return 'ذخیره پیش‌نویس'
+})
+const secondaryActionLabel = computed(() => {
+  if (activeStage.value === 'review') {
+    return 'حذف پیش‌نویس‌ها'
+  }
+  return loading.value ? 'در حال بارگذاری...' : 'بازخوانی از سرور'
+})
+const primaryActionDisabled = computed(() => {
+  if (loading.value || saving.value) {
+    return true
+  }
+  if (activeStage.value === 'review') {
+    return !hasAnyDraftChanges.value
+  }
+  return false
+})
+const secondaryActionDisabled = computed(() => {
+  if (loading.value || saving.value) {
+    return true
+  }
+  if (activeStage.value === 'review') {
+    return !hasAnyDraftChanges.value
+  }
+  return false
+})
+
+const stageSaveHint = computed(() => {
+  if (activeStage.value === 'theme') {
+    return 'ذخیره این مرحله به‌صورت draft تم انجام می‌شود.'
+  }
+  if (activeStage.value === 'layout') {
+    return 'ذخیره ساختار صفحه از داخل workspace انجام می‌شود.'
+  }
+  if (activeStage.value === 'review') {
+    return 'در این مرحله draftهای ذخیره‌شده را منتشر می‌کنی.'
+  }
+  return ''
+})
+
+function normalizeStage(value = '') {
+  const normalized = String(value || '').trim()
+  return workflowStages.some((item) => item.value === normalized) ? normalized : 'identity'
+}
+
+function normalizeBuilderPage(value = '') {
+  const normalized = String(value || '').trim()
+  if (normalized === 'product-groups') {
+    return 'product_groups'
+  }
+  return builderPageOptions.some((item) => item.value === normalized) ? normalized : 'home'
+}
+
+function syncSiteSettingsRoute() {
+  if (typeof window === 'undefined' || !window.history?.replaceState) {
+    return
+  }
+
+  const url = new URL(window.location.href)
+  url.pathname = '/management/site-settings'
+
+  url.searchParams.set('stage', activeStage.value)
+
+  if (activeTab.value === 'loader') {
+    url.searchParams.set('panel', 'loader')
+  } else {
+    url.searchParams.delete('panel')
+  }
+
+  if (['layout', 'content'].includes(activeStage.value)) {
+    url.searchParams.set('page', activeBuilderPage.value === 'product_groups' ? 'product-groups' : activeBuilderPage.value)
+  } else {
+    url.searchParams.delete('page')
+  }
+
+  if (activeStage.value === 'layout') {
+    url.searchParams.set('layout_panel', activeLayoutPanel.value)
+  } else {
+    url.searchParams.delete('layout_panel')
+  }
+
+  url.searchParams.delete('tab')
+
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+function applyRouteState() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const params = new URLSearchParams(window.location.search || '')
+  const legacyTab = String(params.get('tab') || '').trim()
+  const requestedStage =
+    props.entryMode === 'home-builder'
+      ? 'layout'
+      : props.entryMode === 'theme-settings'
+        ? 'theme'
+        : normalizeStage(params.get('stage') || tabStageMap[legacyTab] || '')
+  const requestedPage = props.entryMode === 'home-builder' ? 'home' : String(params.get('page') || '').trim()
+  const requestedPanel = String(params.get('panel') || '').trim()
+  const requestedLayoutPanel = String(params.get('layout_panel') || '').trim()
+
+  activeStage.value = requestedStage
+  activeTab.value = stageTabMap[requestedStage] || 'general'
+  if (requestedStage === 'identity' && (requestedPanel === 'loader' || legacyTab === 'loader')) {
+    activeTab.value = 'loader'
+  }
+  activeLayoutPanel.value = requestedLayoutPanel === 'visual' ? 'visual' : 'builder'
+
+  activeBuilderPage.value = normalizeBuilderPage(requestedPage)
+
+  if (props.entryMode === 'home-builder' || props.entryMode === 'theme-settings') {
+    syncSiteSettingsRoute()
+  }
+}
 
 const heroContentDefaults = {
   off: {
@@ -1129,19 +2026,29 @@ const componentRegistry = {
   featuredBlock: { value: 'featuredBlock', label: 'ویژه و پرفروش', status: 'صفحه اصلی' },
   categoryRail: { value: 'categoryRail', label: 'دسته‌بندی‌ها', status: 'صفحه اصلی' },
   productCard: { value: 'productCard', label: 'کارت محصول', status: 'مشترک' },
+  aboutShell: { value: 'aboutShell', label: 'پوسته درباره ما', status: 'درباره ما' },
+  faqShell: { value: 'faqShell', label: 'پوسته FAQ', status: 'سوالات متداول' },
+  groupsShell: { value: 'groupsShell', label: 'پوسته گروه‌ها', status: 'گروه‌های محصول' },
   aboutSections: { value: 'aboutSections', label: 'محتوای درباره ما', status: 'درباره ما' },
-  faqItems: { value: 'faqItems', label: 'سوالات متداول', status: 'درباره ما' },
+  faqItems: { value: 'faqItems', label: 'سوالات متداول', status: 'FAQ' },
 }
 
 const designPages = [
   { value: 'global', label: 'عمومی', components: ['header', 'footer'] },
   { value: 'home', label: 'صفحه اصلی', components: ['homeHero', 'menuSearch', 'featuredBlock', 'categoryRail', 'productCard'] },
-  { value: 'about', label: 'درباره ما', components: ['aboutSections', 'faqItems'] },
+  { value: 'about', label: 'درباره ما', components: ['aboutShell'] },
+  { value: 'faq', label: 'سوالات متداول', components: ['faqShell'] },
+  { value: 'product_groups', label: 'گروه‌های محصول', components: ['groupsShell'] },
   { value: 'product', label: 'جزئیات محصول', components: ['productCard'] },
 ].map((pageItem) => ({ ...pageItem, count: pageItem.components.length }))
 
 const currentDesignPage = computed(() => designPages.find((pageItem) => pageItem.value === activeDesignPage.value) || designPages[0])
-const currentDesignComponents = computed(() => currentDesignPage.value.components.map((key) => componentRegistry[key]).filter(Boolean))
+const currentDesignComponents = computed(() => {
+  const globalComponents = designPages.find((pageItem) => pageItem.value === 'global')?.components || []
+  const pageComponents = currentDesignPage.value.value === 'global' ? [] : currentDesignPage.value.components
+  const keys = [...globalComponents, ...pageComponents]
+  return keys.map((key) => componentRegistry[key]).filter(Boolean)
+})
 const currentDesignComponent = computed(() => componentRegistry[activeDesignComponent.value] || currentDesignComponents.value[0])
 
 function selectDesignPage(value) {
@@ -1177,6 +2084,47 @@ watch(
   () => {
     persistActiveHeroContent()
   },
+)
+
+watch(
+  () => activeStage.value,
+  (nextStage) => {
+    const mappedTab = stageTabMap[nextStage] || 'general'
+    if (nextStage === 'identity') {
+      if (!['general', 'loader'].includes(activeTab.value)) {
+        activeTab.value = 'general'
+      }
+      return
+    }
+    if (activeTab.value !== mappedTab) {
+      activeTab.value = mappedTab
+    }
+  },
+)
+
+watch(
+  () => activeTab.value,
+  (nextTab) => {
+    const mappedStage = tabStageMap[nextTab] || 'identity'
+    if (activeStage.value !== mappedStage) {
+      activeStage.value = mappedStage
+    }
+  },
+)
+
+watch(
+  () => [activeStage.value, activeTab.value, activeBuilderPage.value, activeLayoutPanel.value],
+  () => {
+    syncSiteSettingsRoute()
+  },
+)
+
+watch(
+  () => activeBuilderPage.value,
+  (page) => {
+    selectDesignPage(page)
+  },
+  { immediate: true },
 )
 
 function handleHeroImageUpload(event) {
@@ -1526,6 +2474,149 @@ function syncBootFromWebSettings(payload = {}) {
   }
 }
 
+async function loadLiveThemeSettings() {
+  try {
+    const remote = await getManagementThemeSettings()
+    liveThemeSettings.value = sanitizeThemeSettings(remote)
+  } catch (_) {
+    liveThemeSettings.value = sanitizeThemeSettings(defaultThemeSettings)
+  }
+}
+
+async function loadLivePageLayouts() {
+  const entries = await Promise.all(
+    authoringPages.map(async (page) => {
+      try {
+        const result = await getManagementPageLayout(page)
+        return [page, result || { page, blocks: [] }]
+      } catch (_) {
+        return [page, { page, blocks: [] }]
+      }
+    }),
+  )
+  livePageLayouts.value = Object.fromEntries(entries)
+}
+
+function applyDraftOverlay() {
+  const draft = loadSiteAuthoringDraft()
+
+  themeDraft.value = sanitizeThemeSettings(draft.theme_settings || liveThemeSettings.value || defaultThemeSettings)
+
+  if (draft.site_settings && typeof draft.site_settings === 'object') {
+    const payload = deepCopy(draft.site_settings)
+    const nextWeb = payload.web_settings || {}
+    Object.assign(webSettings, {
+      ...webSettings,
+      ...nextWeb,
+    })
+    webSettings.header_variant = normalizeHeaderSetting(nextWeb.header_variant)
+    webSettings.menu_search_variant = normalizeMenuSearchSetting(nextWeb.menu_search_variant)
+    webSettings.hero_variant_contents = ensureHeroVariantContents(nextWeb.hero_variant_contents || {})
+    webSettings.hero_section_variant = String(nextWeb.hero_section_variant || webSettings.hero_section_variant || 'off').trim() || 'off'
+    webSettings.footer_variant = String(nextWeb.footer_variant || webSettings.footer_variant || 'full').trim() || 'full'
+    webSettings.card_variant = String(nextWeb.card_variant || webSettings.card_variant || 'classic').trim() || 'classic'
+    webSettings.category_rail_variant = nextWeb.category_rail_variant === 'image' ? 'image' : 'pill'
+    applyHeroContentToForm()
+    assignLoaderSettingsToForm(nextWeb)
+    heroSlides.value = (payload.hero_slides || []).map((row) => normalizeHeroSlide(row))
+    aboutSections.value = (payload.about_sections || []).map((row) => normalizeAboutSection(row))
+    faqItems.value = (payload.faq_items || []).map((row) => normalizeFaqItem(row))
+    syncBootFromWebSettings(payload)
+  }
+
+  applyThemeSettings(themeDraft.value)
+}
+
+function saveThemeDraft(settings) {
+  themeDraft.value = sanitizeThemeSettings(settings)
+  writeDraftThemeSettings(themeDraft.value)
+  bumpDraftRevision()
+  applyThemeSettings(themeDraft.value)
+  statusText.value = 'پیش‌نویس تم ذخیره شد.'
+}
+
+function resetThemeDraft(settings) {
+  themeDraft.value = sanitizeThemeSettings(settings)
+  writeDraftThemeSettings(themeDraft.value)
+  bumpDraftRevision()
+  applyThemeSettings(themeDraft.value)
+  statusText.value = 'پیش‌نویس تم به پیش‌فرض برگشت.'
+}
+
+function saveSiteDraft() {
+  const payload = currentSiteDraft.value
+  writeDraftSiteSettings(payload)
+  bumpDraftRevision()
+  statusText.value = 'پیش‌نویس این مرحله ذخیره شد.'
+  syncBootFromWebSettings(payload)
+}
+
+async function loadDraftPageLayout(page, { forceServer = false } = {}) {
+  const pageKey = String(page || 'home').trim() || 'home'
+  if (!forceServer) {
+    const draft = readDraftPageLayout(pageKey)
+    if (draft?.blocks) {
+      return draft
+    }
+  }
+  const live = livePageLayouts.value?.[pageKey]
+  if (live?.blocks) {
+    return live
+  }
+  return getManagementPageLayout(pageKey)
+}
+
+async function saveDraftPageLayout(page, blocks) {
+  const pageKey = String(page || 'home').trim() || 'home'
+  const result = {
+    page: pageKey,
+    blocks,
+    company: String(livePageLayouts.value?.[pageKey]?.company || '').trim(),
+  }
+  writeDraftPageLayout(pageKey, result)
+  bumpDraftRevision()
+  statusText.value = 'پیش‌نویس چیدمان ذخیره شد.'
+  return result
+}
+
+async function discardAllDrafts() {
+  clearSiteAuthoringDraft()
+  bumpDraftRevision()
+  bumpBuilderWorkspaceRevision()
+  await loadSettings()
+  statusText.value = 'همه پیش‌نویس‌ها حذف شدند.'
+}
+
+async function publishAllDrafts() {
+  saving.value = true
+  error.value = ''
+  statusText.value = ''
+
+  try {
+    await saveThemeSettingsToServer(currentThemeDraft.value)
+    const sitePayload = await setManagementSiteSettings(currentSiteDraft.value)
+    for (const page of authoringPages) {
+      const draft = draftPageLayouts.value?.[page]
+      if (draft?.blocks) {
+        await setManagementPageLayout({ page, blocks: draft.blocks })
+      }
+    }
+    clearSiteAuthoringDraft()
+    bumpDraftRevision()
+    bumpBuilderWorkspaceRevision()
+    liveSiteSettingsPayload.value = deepCopy(sitePayload)
+    syncBootFromWebSettings(sitePayload)
+    await loadLiveThemeSettings()
+    await loadLivePageLayouts()
+    applyDraftOverlay()
+    statusText.value = 'تغییرات سایت منتشر شد.'
+  } catch (publishError) {
+    error.value = publishError.message || 'انتشار تغییرات ناموفق بود.'
+  } finally {
+    saving.value = false
+  }
+}
+
 function createEmptyHeroSlide() {
   return {
     title: '',
@@ -1682,6 +2773,30 @@ const previewBranding = computed(() => ({
   footer_telegram: String(webSettings.footer_telegram || '').trim(),
   footer_copyright: String(webSettings.footer_copyright || '').trim(),
 }))
+
+const builderBoot = computed(() => {
+  const baseBoot = typeof window !== 'undefined' && window._BOOT ? window._BOOT : {}
+  return {
+    ...baseBoot,
+    web_settings: {
+      ...(baseBoot.web_settings || {}),
+      ...deepCopy(webSettings),
+    },
+    branding: previewBranding.value,
+    hero_slides: deepCopy(heroSlides.value),
+    about_us_sections: deepCopy(aboutSections.value),
+    faq_items: deepCopy(faqItems.value),
+    currency: String(webSettings.default_currency || baseBoot.currency || 'IRR').trim() || 'IRR',
+    page_layout: {
+      ...(baseBoot.page_layout || {}),
+    },
+  }
+})
+
+const builderGroupsCount = computed(() => {
+  const rows = Array.isArray(builderBoot.value?.categories) ? builderBoot.value.categories : []
+  return rows.length
+})
 
 const previewCardItem = computed(() => ({
   title: 'پیتزا پپرونی',
@@ -1864,6 +2979,7 @@ async function loadSettings() {
 
   try {
     const payload = await getManagementSiteSettings()
+    liveSiteSettingsPayload.value = deepCopy(payload)
     const nextWeb = payload?.web_settings || {}
     webSettings.brand_name = String(nextWeb.brand_name || '').trim()
     webSettings.brand_tagline = String(nextWeb.brand_tagline || '').trim()
@@ -1919,6 +3035,10 @@ async function loadSettings() {
     aboutEditorOpen.value = false
     faqEditorOpen.value = false
     syncBootFromWebSettings(payload)
+    await loadLiveThemeSettings()
+    await loadLivePageLayouts()
+    applyDraftOverlay()
+    bumpBuilderWorkspaceRevision()
     statusText.value = 'تنظیمات سایت بارگذاری شد.'
   } catch (loadError) {
     error.value = loadError.message || 'بارگذاری تنظیمات سایت ناموفق بود.'
@@ -1927,96 +3047,44 @@ async function loadSettings() {
   }
 }
 
+function validateSiteDraft() {
+  persistActiveHeroContent()
+  const loaderPayload = toLoaderWebSettingsPayload(webSettings)
+  if (loaderPayload.loader_enabled && loaderPayload.loader_mode === 'custom' && !String(loaderPayload.loader_custom_code || '').trim()) {
+    throw new Error('برای حالت کد اختصاصی، لطفا کد Loader را وارد کنید.')
+  }
+}
+
+async function handleSecondaryAction() {
+  if (activeStage.value === 'review') {
+    await discardAllDrafts()
+    return
+  }
+  await loadSettings()
+}
+
 async function saveSettings() {
-  saving.value = true
   error.value = ''
   statusText.value = ''
 
   try {
-    persistActiveHeroContent()
-    const loaderPayload = toLoaderWebSettingsPayload(webSettings)
-    if (loaderPayload.loader_enabled && loaderPayload.loader_mode === 'custom' && !String(loaderPayload.loader_custom_code || '').trim()) {
-      throw new Error('برای حالت کد اختصاصی، لطفا کد Loader را وارد کنید.')
+    if (activeStage.value === 'review') {
+      await publishAllDrafts()
+      return
     }
-
-    const normalizedBrandName = String(webSettings.brand_name || '').trim() || 'Veederakht Restaurant'
-    const payload = await setManagementSiteSettings({
-      web_settings: {
-        brand_name: normalizedBrandName,
-        brand_tagline: String(webSettings.brand_tagline || '').trim(),
-        default_currency: String(webSettings.default_currency || 'IRR').trim() || 'IRR',
-        hero_title: String(webSettings.hero_title || '').trim(),
-        hero_subtitle: String(webSettings.hero_subtitle || '').trim(),
-        hero_image: String(webSettings.hero_image || '').trim(),
-        primary_cta_label: String(webSettings.primary_cta_label || '').trim(),
-        restaurant_menu_highlight_enabled: Number(webSettings.restaurant_menu_highlight_enabled || 0) ? 1 : 0,
-        restaurant_menu_highlight_title: String(webSettings.restaurant_menu_highlight_title || 'ویژه و پرفروش').trim() || 'ویژه و پرفروش',
-        restaurant_menu_highlight_show_featured: Number(webSettings.restaurant_menu_highlight_show_featured || 0) ? 1 : 0,
-        restaurant_menu_highlight_featured_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_featured_limit || 10) || 10, 50)),
-        restaurant_menu_highlight_show_best_seller: Number(webSettings.restaurant_menu_highlight_show_best_seller || 0) ? 1 : 0,
-        restaurant_menu_highlight_best_seller_limit: Math.max(0, Math.min(Number(webSettings.restaurant_menu_highlight_best_seller_limit || 10) || 10, 50)),
-        header_variant: normalizeHeaderSetting(webSettings.header_variant),
-        menu_search_variant: normalizeMenuSearchSetting(webSettings.menu_search_variant),
-        hero_section_variant: String(webSettings.hero_section_variant || 'off').trim() || 'off',
-        card_variant: String(webSettings.card_variant || 'classic').trim() || 'classic',
-        hero_image_position: String(webSettings.hero_image_position || 'center').trim() || 'center',
-        category_rail_variant: webSettings.category_rail_variant === 'image' ? 'image' : 'pill',
-        footer_variant: String(webSettings.footer_variant || 'full').trim() || 'full',
-        hero_section_enabled: webSettings.hero_section_variant !== 'off' ? 1 : 0,
-        footer_enabled: webSettings.footer_variant !== 'off' ? 1 : 0,
-        hero_section_title: String(webSettings.hero_section_title || '').trim(),
-        hero_section_description: String(webSettings.hero_section_description || '').trim(),
-        hero_section_cta: String(webSettings.hero_section_cta || '').trim(),
-        hero_variant_contents: ensureHeroVariantContents(webSettings.hero_variant_contents),
-        footer_description: String(webSettings.footer_description || '').trim(),
-        footer_phone: String(webSettings.footer_phone || '').trim(),
-        footer_email: String(webSettings.footer_email || '').trim(),
-        footer_address: String(webSettings.footer_address || '').trim(),
-        footer_instagram: String(webSettings.footer_instagram || '').trim(),
-        footer_telegram: String(webSettings.footer_telegram || '').trim(),
-        footer_copyright: String(webSettings.footer_copyright || '').trim(),
-        ...loaderPayload,
-      },
-      hero_slides: heroSlides.value.map((row, index) => ({ ...normalizeHeroSlide(row), sort_order: index })),
-      about_sections: aboutSections.value.map((row, index) => ({ ...normalizeAboutSection(row), sort_order: index })),
-      faq_items: faqItems.value.map((row, index) => {
-        const normalized = normalizeFaqItem(row)
-        return {
-          ...normalized,
-          answer: composeFaqAnswer(normalized.answer, {
-            category: normalized.category,
-            icon: normalized.icon,
-            image: normalized.image,
-            summary: normalized.summary,
-          }),
-          sort_order: index,
-        }
-      }),
-    })
-
-    const savedWeb = payload?.web_settings || {}
-    webSettings.header_variant = normalizeHeaderSetting(savedWeb.header_variant || webSettings.header_variant)
-    webSettings.menu_search_variant = normalizeMenuSearchSetting(savedWeb.menu_search_variant || webSettings.menu_search_variant)
-    webSettings.hero_section_variant = String(savedWeb.hero_section_variant || webSettings.hero_section_variant || 'off').trim() || 'off'
-    webSettings.hero_variant_contents = ensureHeroVariantContents(savedWeb.hero_variant_contents || webSettings.hero_variant_contents || {})
-    applyHeroContentToForm()
-    webSettings.footer_variant = String(savedWeb.footer_variant || webSettings.footer_variant || 'full').trim() || 'full'
-    webSettings.card_variant = String(savedWeb.card_variant || webSettings.card_variant || 'classic').trim() || 'classic'
-    webSettings.hero_image_position = String(savedWeb.hero_image_position || webSettings.hero_image_position || 'center').trim() || 'center'
-    webSettings.category_rail_variant = savedWeb.category_rail_variant === 'image' ? 'image' : 'pill'
-    heroSlides.value = (payload?.hero_slides || []).map((row) => normalizeHeroSlide(row))
-    aboutSections.value = (payload?.about_sections || []).map((row) => normalizeAboutSection(row))
-    faqItems.value = (payload?.faq_items || []).map((row) => normalizeFaqItem(row))
-    assignLoaderSettingsToForm(savedWeb)
-    syncBootFromWebSettings(payload)
-    statusText.value = 'تنظیمات سایت با موفقیت ذخیره شد.'
+    saving.value = true
+    validateSiteDraft()
+    saveSiteDraft()
   } catch (saveError) {
     error.value = saveError.message || 'ذخیره تنظیمات سایت ناموفق بود.'
   } finally {
-    saving.value = false
+    if (activeStage.value !== 'review') {
+      saving.value = false
+    }
   }
 }
 
+applyRouteState()
 loadSettings()
 </script>
 
@@ -2031,6 +3099,48 @@ loadSettings()
 .tabs {
   display: inline-flex;
   gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.workflow-stages {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.workflow-stage {
+  display: grid;
+  gap: 0.22rem;
+  text-align: right;
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.workflow-stage strong {
+  font-size: 0.88rem;
+}
+
+.workflow-stage small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.workflow-stage.active {
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.42);
+  box-shadow: 0 14px 30px rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  transform: translateY(-1px);
+}
+
+.context-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -2301,6 +3411,10 @@ loadSettings()
   gap: 0.5rem;
 }
 
+.page-switcher--subtle {
+  margin-top: 0.75rem;
+}
+
 .page-chip,
 .component-chip {
   min-height: 44px;
@@ -2338,6 +3452,48 @@ loadSettings()
   border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.45);
   background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
   box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+}
+
+.review-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.review-summary-card,
+.review-page-item {
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border-radius: 16px;
+  background: #fff;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.review-summary-card.changed,
+.review-page-item.changed {
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.38);
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+}
+
+.review-summary-card strong,
+.review-page-item strong {
+  font-size: 0.9rem;
+}
+
+.review-summary-card small,
+.review-page-item small {
+  color: var(--text-muted, #786b61);
+}
+
+.review-page-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.review-page-item {
+  grid-template-columns: 1fr auto;
+  align-items: center;
 }
 
 .inline-editor {
@@ -2660,6 +3816,14 @@ loadSettings()
 
 
 @media (max-width: 900px) {
+  .workflow-stages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .designer-shell {
     grid-template-columns: minmax(0, 1fr);
   }

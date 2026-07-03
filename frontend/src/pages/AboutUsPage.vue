@@ -1,5 +1,8 @@
 <template>
-  <GlassShell class="about-shell" :title="branding.name" :subtitle="'درباره ما'">
+  <div v-if="hasCustomLayout" class="about-builder-shell" dir="rtl">
+    <PageBlocksRenderer page="about" :boot="boot" />
+  </div>
+  <GlassShell v-else class="about-shell" :title="branding.name" :subtitle="'درباره ما'">
     <section class="about-page" dir="rtl">
       <section class="about-wrap">
         <header class="hero-panel glass-card" data-reveal>
@@ -89,6 +92,8 @@
 <script setup>
 import { computed } from 'vue'
 import GlassShell from '@/components/GlassShell.vue'
+import PageBlocksRenderer from '@/components/blocks/PageBlocksRenderer.vue'
+import { hasStoredPageLayout } from '@/utils/pageLayout'
 
 const props = defineProps({
   boot: {
@@ -98,6 +103,7 @@ const props = defineProps({
 })
 
 const branding = computed(() => props.boot.branding || {})
+const hasCustomLayout = computed(() => hasStoredPageLayout(props.boot, 'about'))
 
 const activeSections = computed(() => {
   const rows = Array.isArray(props.boot.about_us_sections) ? props.boot.about_us_sections : []
@@ -150,6 +156,11 @@ function toPersianDigits(value) {
 </script>
 
 <style scoped>
+.about-builder-shell {
+  padding-block: clamp(1.5rem, 4vw, 3rem);
+  background: var(--bg-soft, #f7f5f2);
+}
+
 .about-shell {
   background: #fff;
 }

@@ -10,7 +10,7 @@
       <ManagementMenuGroupsPage v-else-if="page === 'management-menu-groups'" />
       <ManagementMenuGroupDetailPage v-else-if="page === 'management-menu-group'" />
       <ManagementSiteSettingsPage v-else-if="page === 'management-site-settings'" />
-      <ManagementHomeBuilderPage v-else-if="page === 'management-home-builder'" />
+      <ManagementSiteSettingsPage v-else-if="page === 'management-home-builder'" entry-mode="home-builder" />
       <ManagementBomsPage v-else-if="page === 'management-boms'" />
       <ManagementBomDetailPage v-else-if="page === 'management-bom'" />
       <ManagementProductDetailPage v-else-if="page === 'management-product'" :boot="boot" />
@@ -22,7 +22,7 @@
       <ManagementReportsIndexPage v-else-if="page === 'management-reports'" />
       <ManagementReportPage v-else-if="page === 'management-report'" :boot="boot" />
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
-      <ManagementSettingsPage v-else-if="page === 'management-settings'" />
+      <ManagementSiteSettingsPage v-else-if="page === 'management-settings'" entry-mode="theme-settings" />
       <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
       <section v-else-if="page === 'management-login'" class="management-login-placeholder"></section>
       <ManagementDashboardPage v-else />
@@ -159,7 +159,6 @@ import ManagementMenuDesignerPage from './pages/management/ManagementMenuDesigne
 import ManagementMenuGroupsPage from './pages/management/ManagementMenuGroupsPage.vue'
 import ManagementMenuGroupDetailPage from './pages/management/ManagementMenuGroupDetailPage.vue'
 import ManagementSiteSettingsPage from './pages/management/ManagementSiteSettingsPage.vue'
-import ManagementHomeBuilderPage from './pages/management/ManagementHomeBuilderPage.vue'
 import ManagementBomsPage from './pages/management/ManagementBomsPage.vue'
 import ManagementBomDetailPage from './pages/management/ManagementBomDetailPage.vue'
 import ManagementProductDetailPage from './pages/management/ManagementProductDetailPage.vue'
@@ -171,7 +170,6 @@ import ManagementTablesPage from './pages/management/ManagementTablesPage.vue'
 import ManagementReportsIndexPage from './pages/management/ManagementReportsIndexPage.vue'
 import ManagementReportPage from './pages/management/ManagementReportPage.vue'
 import ManagementPrintFormatsPage from './pages/management/ManagementPrintFormatsPage.vue'
-import ManagementSettingsPage from './pages/management/ManagementSettingsPage.vue'
 import ManagementZarinpalSettingsPage from './pages/management/ManagementZarinpalSettingsPage.vue'
 import SiteLoaderOverlay from './components/SiteLoaderOverlay.vue'
 import GlobalSearchModal from './components/GlobalSearchModal.vue'
