@@ -234,7 +234,7 @@ const selectedOptions = computed(() =>
 
 const selectedLabel = computed(() => {
   if (!props.multiple) {
-    return selectedOptions.value[0]?.label || ''
+    return selectedOptions.value[0]?.label || String(props.modelValue ?? '').trim()
   }
 
   if (!selectedOptions.value.length) {

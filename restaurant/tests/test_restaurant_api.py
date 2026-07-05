@@ -1,18 +1,32 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import cint
 
 from restaurant.api import (
-    get_customer_checkout_profile,
-    get_item_detail,
-    get_management_dashboard,
-    get_management_product_detail,
-    get_management_report_product_mix,
-    get_management_report_sales_summary,
-    get_menu_boot,
-    place_order,
-    save_customer_delivery_address,
-    update_management_product_settings,
+	_build_ticket_components,
+	_extract_qty_map_from_ticket,
+	_recalculate_line,
+	_sync_work_order_required_items,
+	get_customer_checkout_profile,
+	get_item_detail,
+	get_related_items,
+	get_management_bom_context,
+	get_management_bom_doc,
+	get_management_dashboard,
+	get_management_modifier_group_detail,
+	get_management_modifier_groups_context,
+	get_management_product_detail,
+	get_management_report_product_mix,
+	get_management_report_sales_summary,
+	get_menu_boot,
+	place_order,
+	save_customer_delivery_address,
+	save_management_modifier_group,
+	set_management_default_price_list,
+	set_management_product_price,
+	update_management_product_settings,
 )
 
 
@@ -20,6 +34,13 @@ class TestRestaurantAPI(FrappeTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls._created_test_price_lists = set()
+        cls._cleanup_docs = []
+        cls._created_test_uoms = set()
+        if frappe.db.exists("DocType", "Selling Settings"):
+            cls._original_selling_price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list") or ""
+        else:
+            cls._original_selling_price_list = ""
 
         cls.company = frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value(
             "Company", {}, "name"
@@ -58,6 +79,7 @@ class TestRestaurantAPI(FrappeTestCase):
         )
         category.insert(ignore_permissions=True)
         cls.category_group = category.name
+        cls._remember_cleanup_doc("Item Group", category.name)
 
         subcategory = frappe.get_doc(
             {
@@ -74,6 +96,7 @@ class TestRestaurantAPI(FrappeTestCase):
         )
         subcategory.insert(ignore_permissions=True)
         cls.subcategory_group = subcategory.name
+        cls._remember_cleanup_doc("Item Group", subcategory.name)
 
         raw_item = frappe.get_doc(
             {
@@ -85,9 +108,11 @@ class TestRestaurantAPI(FrappeTestCase):
                 "is_stock_item": 1,
                 "is_sales_item": 0,
                 "is_purchase_item": 1,
+                "allow_alternative_item": 1,
             }
         )
         raw_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", raw_item.item_code)
         raw_item.db_set("valuation_rate", 100000, update_modified=False)
         if frappe.db.has_column("Item", "restaurant_nutrition_kcal"):
             raw_item.db_set("restaurant_nutrition_kcal", 1650, update_modified=False)
@@ -95,6 +120,25 @@ class TestRestaurantAPI(FrappeTestCase):
             raw_item.db_set("restaurant_nutrition_carb_g", 0, update_modified=False)
             raw_item.db_set("restaurant_nutrition_fat_g", 36, update_modified=False)
         cls.raw_item_code = raw_item.item_code
+
+        alternative_item = frappe.get_doc(
+            {
+                "doctype": "Item",
+                "item_code": f"RAW_ALT_{suffix.upper()}",
+                "item_name": f"Raw Alternative {suffix}",
+                "item_group": cls.category_group,
+                "stock_uom": cls.uom,
+                "is_stock_item": 1,
+                "is_sales_item": 0,
+                "is_purchase_item": 1,
+                "allow_alternative_item": 1,
+            }
+        )
+        alternative_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", alternative_item.item_code)
+        cls.alternative_item_code = alternative_item.item_code
+
+        cls._create_item_alternative(cls.raw_item_code, cls.alternative_item_code)
 
         modifier_item = frappe.get_doc(
             {
@@ -110,7 +154,57 @@ class TestRestaurantAPI(FrappeTestCase):
             }
         )
         modifier_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", modifier_item.item_code)
         cls.modifier_item_code = modifier_item.item_code
+        cls.modifier_group_title = f"Milk Options {suffix}"
+
+        service_modifier_item = frappe.get_doc(
+            {
+                "doctype": "Item",
+                "item_code": f"MOD_SERVICE_{suffix.upper()}",
+                "item_name": f"Modifier Service {suffix}",
+                "item_group": cls.category_group,
+                "stock_uom": cls.uom,
+                "is_stock_item": 0,
+                "is_sales_item": 0,
+                "is_purchase_item": 0,
+            }
+        )
+        service_modifier_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", service_modifier_item.item_code)
+        cls.service_modifier_item_code = service_modifier_item.item_code
+
+        modifier_group = frappe.get_doc(
+            {
+                "doctype": "Restaurant Modifier Group",
+                "title": cls.modifier_group_title,
+                "selection_mode": "single",
+                "required": 0,
+                "min_select": 0,
+                "max_select": 1,
+                "sort_order": 1,
+                "is_active": 1,
+                "options": [
+                    {
+                        "option_name": cls.modifier_item_code,
+                        "action_type": "add_on",
+                        "option_item": cls.modifier_item_code,
+                        "option_qty": 1,
+                        "price_delta": 15000,
+                        "recipe_multiplier": 1,
+                        "min_qty": 1,
+                        "max_qty": 1,
+                        "qty_step": 1,
+                        "is_default": 0,
+                        "sort_order": 1,
+                        "is_active": 1,
+                    }
+                ],
+            }
+        )
+        modifier_group.insert(ignore_permissions=True)
+        cls.modifier_group_name = modifier_group.name
+        cls._remember_cleanup_doc("Restaurant Modifier Group", modifier_group.name)
 
         menu_item = frappe.get_doc(
             {
@@ -135,6 +229,7 @@ class TestRestaurantAPI(FrappeTestCase):
             }
         )
         menu_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", menu_item.item_code)
         if frappe.db.has_column("Item", "restaurant_nutrition_kcal"):
             menu_item.db_set("restaurant_nutrition_kcal", 420, update_modified=False)
             menu_item.db_set("restaurant_nutrition_protein_g", 42, update_modified=False)
@@ -163,6 +258,7 @@ class TestRestaurantAPI(FrappeTestCase):
                         "restaurant_can_remove": 1,
                         "restaurant_is_required": 0,
                         "restaurant_is_editable_qty": 1,
+                        "allow_alternative_item": 1,
                         "restaurant_min_multiplier": 0,
                         "restaurant_max_multiplier": 3,
                         "restaurant_step_multiplier": 0.5,
@@ -176,8 +272,9 @@ class TestRestaurantAPI(FrappeTestCase):
                 "restaurant_modifier_rows",
                 [
                     {
-                        "group_key": "milk-options",
-                        "group_title": "Milk Options",
+                        "modifier_group": cls.modifier_group_name,
+                        "group_key": cls.modifier_group_name,
+                        "group_title": cls.modifier_group_title,
                         "selection_mode": "single",
                         "required": 0,
                         "min_select": 0,
@@ -196,6 +293,8 @@ class TestRestaurantAPI(FrappeTestCase):
             )
         bom.insert(ignore_permissions=True)
         bom.submit()
+        cls.bom_name = bom.name
+        cls._remember_cleanup_doc("BOM", bom.name)
 
         menu_item.db_set("default_bom", bom.name, update_modified=False)
         if frappe.db.has_column("Item", "restaurant_requires_bom"):
@@ -247,6 +346,8 @@ class TestRestaurantAPI(FrappeTestCase):
             }
         )
         no_bom_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", no_bom_item.item_code)
+        cls.no_bom_item_code = no_bom_item.item_code
         if frappe.db.has_column("Item", "restaurant_requires_bom"):
             no_bom_item.db_set("restaurant_requires_bom", 0, update_modified=False)
         cls.no_bom_item_slug = no_bom_item.restaurant_slug
@@ -266,6 +367,7 @@ class TestRestaurantAPI(FrappeTestCase):
             }
         )
         service_item.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item", service_item.item_code)
         if frappe.db.has_column("Item", "restaurant_auto_add_to_order"):
             service_item.db_set("restaurant_auto_add_to_order", 1, update_modified=False)
         if frappe.db.has_column("Item", "restaurant_auto_add_qty"):
@@ -276,6 +378,117 @@ class TestRestaurantAPI(FrappeTestCase):
             service_item.db_set("restaurant_branch", "DEFAULT", update_modified=False)
         cls.service_item_code = service_item.item_code
 
+        frappe.db.commit()
+
+    @classmethod
+    def _remember_cleanup_doc(cls, doctype, name):
+        if not doctype or not name:
+            return
+        cls._cleanup_docs.append((doctype, name))
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls._cleanup_test_transactions()
+            for price_list_name in list(getattr(cls, "_created_test_price_lists", set())):
+                if not frappe.db.exists("Price List", price_list_name):
+                    continue
+                for item_price_name in frappe.get_all(
+                    "Item Price",
+                    filters={"price_list": price_list_name},
+                    pluck="name",
+                ):
+                    frappe.delete_doc("Item Price", item_price_name, force=1, ignore_permissions=True)
+                frappe.delete_doc("Price List", price_list_name, force=1, ignore_permissions=True)
+
+            for uom_name in list(getattr(cls, "_created_test_uoms", set())):
+                if frappe.db.exists("UOM", uom_name):
+                    frappe.delete_doc("UOM", uom_name, force=1, ignore_permissions=True)
+
+            for doctype, name in reversed(getattr(cls, "_cleanup_docs", [])):
+                if not frappe.db.exists(doctype, name):
+                    continue
+                if doctype == "BOM":
+                    doc = frappe.get_doc(doctype, name)
+                    if cint(doc.docstatus) == 1:
+                        doc.cancel()
+                frappe.delete_doc(doctype, name, force=1, ignore_permissions=True)
+            frappe.db.commit()
+        finally:
+            super().tearDownClass()
+
+    @classmethod
+    def _cleanup_test_transactions(cls):
+        item_codes = [
+            code
+            for code in {
+                getattr(cls, "menu_item", ""),
+                getattr(cls, "no_bom_item_code", ""),
+                getattr(cls, "service_item_code", ""),
+            }
+            if code
+        ]
+        if not item_codes:
+            return
+
+        sales_order_names = set(
+            frappe.get_all(
+                "Sales Order Item",
+                filters={"item_code": ["in", item_codes]},
+                pluck="parent",
+                ignore_permissions=True,
+            )
+        )
+
+        work_order_names = set(
+            frappe.get_all(
+                "Work Order",
+                filters={"production_item": ["in", item_codes]},
+                pluck="name",
+                ignore_permissions=True,
+            )
+        )
+
+        ticket_names = set(
+            frappe.get_all(
+                "Restaurant Production Ticket",
+                filters={"menu_item": ["in", item_codes]},
+                pluck="name",
+                ignore_permissions=True,
+            )
+        ) if frappe.db.exists("DocType", "Restaurant Production Ticket") else set()
+
+        for work_order_name in work_order_names:
+            if frappe.db.exists("Work Order", work_order_name):
+                frappe.delete_doc("Work Order", work_order_name, force=1, ignore_permissions=True)
+        for ticket_name in ticket_names:
+            if frappe.db.exists("Restaurant Production Ticket", ticket_name):
+                frappe.delete_doc("Restaurant Production Ticket", ticket_name, force=1, ignore_permissions=True)
+        for sales_order_name in sales_order_names:
+            if frappe.db.exists("Sales Order", sales_order_name):
+                frappe.delete_doc("Sales Order", sales_order_name, force=1, ignore_permissions=True)
+
+    def tearDown(self):
+        super().tearDown()
+        if frappe.db.exists("DocType", "Selling Settings"):
+            frappe.db.set_single_value(
+                "Selling Settings",
+                "selling_price_list",
+                self._original_selling_price_list or "",
+            )
+
+        for price_list_name in list(self._created_test_price_lists):
+            if not frappe.db.exists("Price List", price_list_name):
+                self._created_test_price_lists.discard(price_list_name)
+                continue
+            for item_price_name in frappe.get_all(
+                "Item Price",
+                filters={"price_list": price_list_name},
+                pluck="name",
+            ):
+                frappe.delete_doc("Item Price", item_price_name, force=1, ignore_permissions=True)
+            frappe.delete_doc("Price List", price_list_name, force=1, ignore_permissions=True)
+            self._created_test_price_lists.discard(price_list_name)
         frappe.db.commit()
 
     def _valid_order_items(self):
@@ -295,6 +508,128 @@ class TestRestaurantAPI(FrappeTestCase):
             }
         ]
 
+    def _update_primary_modifier_option(self, **overrides):
+        group_doc = frappe.get_doc("Restaurant Modifier Group", self.modifier_group_name)
+        option_row = (group_doc.options or [None])[0]
+        self.assertIsNotNone(option_row)
+
+        original = {
+            "option_name": option_row.option_name,
+            "action_type": option_row.action_type,
+            "option_item": option_row.option_item,
+            "option_uom": option_row.option_uom,
+            "option_qty": option_row.option_qty,
+            "price_delta": option_row.price_delta,
+            "recipe_multiplier": option_row.recipe_multiplier,
+            "min_qty": option_row.min_qty,
+            "max_qty": option_row.max_qty,
+            "qty_step": option_row.qty_step,
+            "is_default": option_row.is_default,
+            "sort_order": option_row.sort_order,
+            "is_active": option_row.is_active,
+        }
+
+        for fieldname, value in overrides.items():
+            setattr(option_row, fieldname, value)
+
+        group_doc.save(ignore_permissions=True)
+        if "option_uom" in overrides and option_row.name:
+            frappe.db.set_value(
+                "Restaurant Modifier Option",
+                option_row.name,
+                "option_uom",
+                overrides.get("option_uom") or "",
+                update_modified=False,
+            )
+        frappe.db.commit()
+        return original
+
+    def _restore_primary_modifier_option(self, original):
+        group_doc = frappe.get_doc("Restaurant Modifier Group", self.modifier_group_name)
+        option_row = (group_doc.options or [None])[0]
+        if not option_row:
+            return
+        for fieldname, value in (original or {}).items():
+            setattr(option_row, fieldname, value)
+        group_doc.save(ignore_permissions=True)
+        if "option_uom" in (original or {}) and option_row.name:
+            frappe.db.set_value(
+                "Restaurant Modifier Option",
+                option_row.name,
+                "option_uom",
+                (original or {}).get("option_uom") or "",
+                update_modified=False,
+            )
+        frappe.db.commit()
+
+    def _ensure_uom(self, uom_name):
+        uom_name = (uom_name or "").strip()
+        if not uom_name:
+            return ""
+        if frappe.db.exists("UOM", uom_name):
+            return uom_name
+        frappe.get_doc(
+            {
+                "doctype": "UOM",
+                "uom_name": uom_name,
+                "enabled": 1,
+            }
+        ).insert(ignore_permissions=True)
+        self._created_test_uoms.add(uom_name)
+        frappe.db.commit()
+        return uom_name
+
+    def _ensure_test_price_list(self, suffix):
+        price_list_name = f"Modifier Price List {suffix}"
+        if not frappe.db.exists("Price List", price_list_name):
+            price_list = frappe.get_doc(
+                {
+                    "doctype": "Price List",
+                    "price_list_name": price_list_name,
+                    "enabled": 1,
+                    "selling": 1,
+                    "currency": frappe.db.get_value("Company", self.company, "default_currency") or "IRR",
+                }
+            )
+            price_list.insert(ignore_permissions=True)
+        else:
+            price_list = frappe.get_doc("Price List", price_list_name)
+        self._created_test_price_lists.add(price_list.name)
+        set_management_default_price_list(price_list.name)
+        return price_list
+
+    @classmethod
+    def _create_item_alternative(cls, item_code, alternative_item_code):
+        item_code = (item_code or "").strip()
+        alternative_item_code = (alternative_item_code or "").strip()
+        if not item_code or not alternative_item_code:
+            return
+        if not frappe.db.exists("DocType", "Item Alternative"):
+            return
+
+        meta = frappe.get_meta("Item Alternative")
+        payload = {"doctype": "Item Alternative"}
+
+        if meta.get_field("item_code"):
+            payload["item_code"] = item_code
+        if meta.get_field("alternative_item"):
+            payload["alternative_item"] = alternative_item_code
+        elif meta.get_field("alternative_item_code"):
+            payload["alternative_item_code"] = alternative_item_code
+        elif meta.get_field("item_code") and not meta.get_field("parent"):
+            payload["item_code"] = alternative_item_code
+
+        if meta.get_field("parent") and meta.get_field("parenttype"):
+            payload["parent"] = item_code
+            payload["parenttype"] = "Item"
+        if meta.get_field("parentfield"):
+            payload["parentfield"] = "item_alternatives"
+
+        doc = frappe.get_doc(payload)
+        doc.insert(ignore_permissions=True)
+        cls._remember_cleanup_doc("Item Alternative", doc.name)
+        frappe.db.commit()
+
     def test_get_menu_boot_payload(self):
         payload = get_menu_boot()
         self.assertIn("categories", payload)
@@ -307,6 +642,14 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertIsInstance(payload.get("hero_slides"), list)
         self.assertIsInstance(payload.get("about_us_sections"), list)
         self.assertIsInstance(payload.get("faq_items"), list)
+
+    def test_get_management_bom_context_payload(self):
+        payload = get_management_bom_context()
+        self.assertIn("companies", payload)
+        self.assertIn("default_company", payload)
+        self.assertIn("default_currency", payload)
+        self.assertIsInstance(payload.get("companies"), list)
+        self.assertTrue(payload.get("default_company"))
 
     def test_get_menu_boot_filters_inactive_content_rows(self):
         if not frappe.db.exists("DocType", "Restaurant Hero Slide"):
@@ -403,11 +746,826 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertIn("nutrition", payload["item"])
         self.assertIn("nutrition_kcal", ingredient)
 
-    def test_get_item_detail_reads_modifier_options_from_bom_modifier_rows(self):
+    def test_get_item_detail_includes_ingredient_alternative_options(self):
         payload = get_item_detail(self.item_slug)
-        group = next((row for row in payload.get("modifier_groups", []) if row.get("title") == "Milk Options"), None)
+        ingredient = next(row for row in payload["ingredients"] if row["key"] == "مرغ گریل")
+        self.assertEqual(int(ingredient.get("is_replaceable") or 0), 1)
+        alternatives = ingredient.get("alternative_options") or []
+        self.assertTrue(any(row.get("alternative_item") == self.alternative_item_code for row in alternatives))
+
+    def test_get_item_detail_resolves_alternative_price_delta_from_default_item_price(self):
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        set_management_product_price(
+            {
+                "item_name": self.raw_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 12000,
+            }
+        )
+        set_management_product_price(
+            {
+                "item_name": self.alternative_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 18000,
+            }
+        )
+
+        payload = get_item_detail(self.item_slug)
+        ingredient = next(row for row in payload["ingredients"] if row["key"] == "مرغ گریل")
+        option = next(
+            (row for row in (ingredient.get("alternative_options") or []) if row.get("alternative_item") == self.alternative_item_code),
+            None,
+        )
+        self.assertIsNotNone(option)
+        self.assertEqual(option.get("price_status"), "ok")
+        self.assertEqual(option.get("price_source"), "item_price")
+        self.assertEqual(option.get("price_item_code"), self.alternative_item_code)
+        self.assertEqual(option.get("price_list"), price_list.name)
+        self.assertEqual(option.get("comparison_base_price"), 12000)
+        self.assertEqual(option.get("alternative_price"), 18000)
+        self.assertEqual(option.get("price_delta"), 6000)
+
+    def test_get_related_items_returns_same_menu_context(self):
+        rows = get_related_items(self.item_slug, limit=6)
+        slugs = {row.get("slug") for row in rows}
+        self.assertIn(self.no_bom_item_slug, slugs)
+        self.assertNotIn(self.item_slug, slugs)
+
+    def test_get_management_bom_doc_includes_alternative_summary(self):
+        payload = get_management_bom_doc(self.bom_name)
+        item_row = next(row for row in payload.get("items", []) if row.get("item_code") == self.raw_item_code)
+        self.assertEqual(int(item_row.get("allow_alternative_item") or 0), 1)
+        self.assertGreaterEqual(int(item_row.get("alternatives_count") or 0), 1)
+        self.assertTrue(
+            any(
+                row.get("alternative_item") == self.alternative_item_code
+                for row in (item_row.get("alternatives") or [])
+            )
+        )
+
+    def test_get_item_detail_reads_modifier_options_from_bom_modifier_rows(self):
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 15000,
+            }
+        )
+        payload = get_item_detail(self.item_slug)
+        group = next(
+            (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+            None,
+        )
         self.assertIsNotNone(group)
         self.assertTrue(any(opt.get("name") == self.modifier_item_code for opt in group.get("options", [])))
+
+    def test_get_item_detail_keeps_single_modifier_baseline_without_linked_item(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 25000,
+            }
+        )
+
+        group_doc = frappe.get_doc("Restaurant Modifier Group", self.modifier_group_name)
+        original_meta = {
+            "selection_mode": group_doc.selection_mode,
+            "required": group_doc.required,
+            "min_select": group_doc.min_select,
+            "max_select": group_doc.max_select,
+            "sort_order": group_doc.sort_order,
+            "is_active": group_doc.is_active,
+        }
+        original_options = [
+            {
+                "option_name": row.option_name,
+                "action_type": row.action_type,
+                "option_item": row.option_item,
+                "option_uom": row.option_uom,
+                "option_qty": row.option_qty,
+                "price_delta": row.price_delta,
+                "recipe_multiplier": row.recipe_multiplier,
+                "min_qty": row.min_qty,
+                "max_qty": row.max_qty,
+                "qty_step": row.qty_step,
+                "is_default": row.is_default,
+                "sort_order": row.sort_order,
+                "is_active": row.is_active,
+            }
+            for row in (group_doc.options or [])
+        ]
+
+        try:
+            group_doc.selection_mode = "single"
+            group_doc.required = 1
+            group_doc.min_select = 1
+            group_doc.max_select = 1
+            group_doc.set(
+                "options",
+                [
+                    {
+                        "option_name": "سرد",
+                        "action_type": "add_on",
+                        "option_item": "",
+                        "option_uom": "",
+                        "option_qty": 1,
+                        "price_delta": 0,
+                        "recipe_multiplier": 1,
+                        "min_qty": 1,
+                        "max_qty": 1,
+                        "qty_step": 1,
+                        "is_default": 1,
+                        "sort_order": 1,
+                        "is_active": 1,
+                    },
+                    {
+                        "option_name": self.modifier_item_code,
+                        "action_type": "add_on",
+                        "option_item": self.modifier_item_code,
+                        "option_uom": self.uom,
+                        "option_qty": 1,
+                        "price_delta": 0,
+                        "recipe_multiplier": 1,
+                        "min_qty": 1,
+                        "max_qty": 1,
+                        "qty_step": 1,
+                        "is_default": 0,
+                        "sort_order": 2,
+                        "is_active": 1,
+                    },
+                ],
+            )
+            group_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+
+            payload = get_item_detail(self.item_slug)
+            group = next(
+                (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+                None,
+            )
+            self.assertIsNotNone(group)
+            baseline = next((row for row in group.get("options", []) if row.get("name") == "سرد"), None)
+            self.assertIsNotNone(baseline)
+            self.assertEqual(baseline.get("price_delta"), 0)
+            self.assertEqual(baseline.get("price_status"), "ok")
+            self.assertEqual(baseline.get("price_source"), "manual")
+        finally:
+            restore_doc = frappe.get_doc("Restaurant Modifier Group", self.modifier_group_name)
+            for fieldname, value in original_meta.items():
+                setattr(restore_doc, fieldname, value)
+            restore_doc.set("options", original_options)
+            restore_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+
+    def test_get_item_detail_falls_back_to_latest_bom_with_modifier_rows(self):
+        replacement_bom = frappe.get_doc(
+            {
+                "doctype": "BOM",
+                "item": self.menu_item,
+                "company": self.company,
+                "currency": frappe.db.get_value("Company", self.company, "default_currency"),
+                "conversion_rate": 1,
+                "quantity": 1,
+                "is_default": 1,
+                "is_active": 1,
+                "items": [
+                    {
+                        "item_code": self.raw_item_code,
+                        "qty": 1,
+                        "uom": self.uom,
+                        "rate": 100000,
+                        "restaurant_customer_label": "مرغ گریل",
+                        "restaurant_is_included_by_default": 1,
+                        "restaurant_can_remove": 1,
+                        "restaurant_is_required": 0,
+                        "restaurant_is_editable_qty": 1,
+                        "allow_alternative_item": 1,
+                        "restaurant_min_multiplier": 0,
+                        "restaurant_max_multiplier": 3,
+                        "restaurant_step_multiplier": 0.5,
+                        "restaurant_extra_when_added": 0,
+                    }
+                ],
+            }
+        )
+        replacement_bom.insert(ignore_permissions=True)
+        replacement_bom.submit()
+        self._remember_cleanup_doc("BOM", replacement_bom.name)
+        frappe.db.commit()
+
+        payload = get_item_detail(self.item_slug)
+        group = next(
+            (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+            None,
+        )
+        self.assertIsNotNone(group)
+        self.assertTrue(any(opt.get("name") == self.modifier_item_code for opt in group.get("options", [])))
+
+    def test_get_item_detail_resolves_modifier_price_from_default_item_price(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 22000,
+            }
+        )
+
+        payload = get_item_detail(self.item_slug)
+        group = next(
+            (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+            None,
+        )
+        self.assertIsNotNone(group)
+        option = next((row for row in group.get("options", []) if row.get("name") == self.modifier_item_code), None)
+        self.assertIsNotNone(option)
+        self.assertEqual(option.get("price_delta"), 22000)
+        self.assertEqual(option.get("price_status"), "ok")
+        self.assertEqual(option.get("price_source"), "item_price")
+        self.assertEqual(option.get("price_item_code"), self.modifier_item_code)
+        self.assertEqual(option.get("price_list"), price_list.name)
+
+    def test_get_item_detail_resolves_weighted_modifier_base_price_from_default_item_price(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 2200,
+            }
+        )
+
+        original = self._update_primary_modifier_option(
+            option_uom=self.uom,
+            option_qty=15,
+            min_qty=0,
+            max_qty=60,
+            qty_step=15,
+        )
+        try:
+            payload = get_item_detail(self.item_slug)
+            group = next(
+                (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+                None,
+            )
+            self.assertIsNotNone(group)
+            option = next((row for row in group.get("options", []) if row.get("name") == self.modifier_item_code), None)
+            self.assertIsNotNone(option)
+            self.assertEqual(option.get("option_qty"), 15)
+            self.assertEqual(option.get("qty_step"), 15)
+            self.assertEqual(option.get("min_qty"), 0)
+            self.assertEqual(option.get("max_qty"), 60)
+            self.assertEqual(option.get("stock_uom"), self.uom)
+            self.assertEqual(option.get("option_uom"), self.uom)
+            self.assertEqual(option.get("unit_rate"), 2200)
+            self.assertEqual(option.get("conversion_factor"), 1)
+            self.assertEqual(option.get("base_price"), 33000)
+            self.assertEqual(option.get("price_delta"), 33000)
+        finally:
+            self._restore_primary_modifier_option(original)
+
+    def test_get_item_detail_omits_disabled_modifier_option_items(self):
+        modifier_doc = frappe.get_doc("Item", self.modifier_item_code)
+        try:
+            modifier_doc.disabled = 1
+            modifier_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+
+            payload = get_item_detail(self.item_slug)
+            group = next(
+                (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+                None,
+            )
+            self.assertIsNone(group)
+        finally:
+            frappe.db.set_value("Item", self.modifier_item_code, "disabled", 0, update_modified=False)
+            frappe.db.commit()
+
+    def test_management_modifier_context_excludes_disabled_option_items(self):
+        modifier_doc = frappe.get_doc("Item", self.modifier_item_code)
+        try:
+            modifier_doc.disabled = 1
+            modifier_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+
+            context = get_management_modifier_groups_context()
+            item_values = [row.get("value") for row in context.get("item_options", [])]
+            self.assertNotIn(self.modifier_item_code, item_values)
+        finally:
+            frappe.db.set_value("Item", self.modifier_item_code, "disabled", 0, update_modified=False)
+            frappe.db.commit()
+
+    def test_get_item_detail_hides_modifier_option_when_default_price_is_missing(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+
+        item_price_name = frappe.db.get_value(
+            "Item Price",
+            {"item_code": self.modifier_item_code, "price_list": price_list.name},
+            "name",
+        )
+        if item_price_name:
+            frappe.delete_doc("Item Price", item_price_name, force=1, ignore_permissions=True)
+            frappe.db.commit()
+
+        payload = get_item_detail(self.item_slug)
+        group = next(
+            (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+            None,
+        )
+        self.assertIsNone(group)
+
+    def test_place_order_rejects_modifier_when_default_price_is_missing(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+
+        item_price_name = frappe.db.get_value(
+            "Item Price",
+            {"item_code": self.modifier_item_code, "price_list": price_list.name},
+            "name",
+        )
+        if item_price_name:
+            frappe.delete_doc("Item Price", item_price_name, force=1, ignore_permissions=True)
+            frappe.db.commit()
+
+        broken = self._valid_order_items()
+        broken[0]["customization"]["selected_modifiers"] = [
+            {
+                "group": self.modifier_group_title,
+                "option": self.modifier_item_code,
+                "qty": 1,
+            }
+        ]
+
+        with self.assertRaises(frappe.ValidationError):
+            place_order(
+                customer_info={"name": "مودیفایر بدون قیمت", "mobile": "09124445555"},
+                order_type="takeaway",
+                items=broken,
+            )
+
+    def test_get_item_detail_hides_modifier_option_when_uom_conversion_is_missing(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        missing_uom = self._ensure_uom(f"Missing Modifier UOM {suffix}")
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 2200,
+            }
+        )
+        original = self._update_primary_modifier_option(
+            option_uom=missing_uom,
+            option_qty=15,
+            min_qty=0,
+            max_qty=60,
+            qty_step=15,
+        )
+        try:
+            payload = get_item_detail(self.item_slug)
+            group = next(
+                (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+                None,
+            )
+            self.assertIsNone(group)
+
+            detail = get_management_modifier_group_detail(self.modifier_group_name)
+            self.assertEqual(detail["options"][0].get("price_status"), "missing_conversion")
+        finally:
+            self._restore_primary_modifier_option(original)
+
+    def test_recalculate_line_uses_actual_modifier_qty_for_pricing(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 2200,
+            }
+        )
+        original = self._update_primary_modifier_option(
+            option_uom=self.uom,
+            option_qty=15,
+            min_qty=0,
+            max_qty=60,
+            qty_step=15,
+        )
+        try:
+            menu_doc = frappe.get_doc("Item", self.menu_item)
+            line_calc = _recalculate_line(
+                menu_doc,
+                1,
+                {
+                    "ingredient_adjustments": [],
+                    "selected_modifiers": [
+                        {
+                            "group": self.modifier_group_title,
+                            "option": self.modifier_item_code,
+                            "qty": 30,
+                        }
+                    ],
+                },
+                branch_markup_percent=0,
+            )
+            self.assertEqual(line_calc["pricing_breakdown"]["modifier_delta_total"], 66000)
+            self.assertEqual(line_calc["normalized_customization"]["selected_modifiers"][0]["qty"], 30)
+            modifier_component = next(
+                row for row in line_calc["ingredient_components"] if row.get("source_type") == "modifier_add_on"
+            )
+            self.assertEqual(modifier_component.get("selected_base_qty"), 30)
+            self.assertEqual(modifier_component.get("selected_multiplier"), 1)
+        finally:
+            self._restore_primary_modifier_option(original)
+
+    def test_recalculate_line_uses_default_item_price_for_ingredient_alternative_delta(self):
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        set_management_product_price(
+            {
+                "item_name": self.raw_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 12000,
+            }
+        )
+        set_management_product_price(
+            {
+                "item_name": self.alternative_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 18000,
+            }
+        )
+
+        menu_doc = frappe.get_doc("Item", self.menu_item)
+        line_calc = _recalculate_line(
+            menu_doc,
+            1,
+            {
+                "ingredient_adjustments": [],
+                "selected_alternatives": [
+                    {
+                        "ingredient_key": "مرغ گریل",
+                        "alternative_item": self.alternative_item_code,
+                    }
+                ],
+                "selected_modifiers": [],
+            },
+            branch_markup_percent=0,
+        )
+        self.assertEqual(line_calc["pricing_breakdown"]["ingredient_delta_total"], 6000)
+        self.assertEqual(line_calc["unit_price"], 506000)
+        self.assertEqual(
+            line_calc["normalized_customization"]["selected_alternatives"][0]["alternative_item"],
+            self.alternative_item_code,
+        )
+
+    def test_recalculate_line_uses_default_item_price_for_ingredient_quantity_delta(self):
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        set_management_product_price(
+            {
+                "item_name": self.raw_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 12000,
+            }
+        )
+
+        menu_doc = frappe.get_doc("Item", self.menu_item)
+
+        increased_line = _recalculate_line(
+            menu_doc,
+            1,
+            {
+                "ingredient_adjustments": [
+                    {
+                        "ingredient_key": "مرغ گریل",
+                        "multiplier": 2,
+                    }
+                ],
+                "selected_modifiers": [],
+            },
+            branch_markup_percent=0,
+        )
+        self.assertEqual(increased_line["pricing_breakdown"]["ingredient_delta_total"], 12000)
+        self.assertEqual(increased_line["unit_price"], 512000)
+
+        removed_line = _recalculate_line(
+            menu_doc,
+            1,
+            {
+                "ingredient_adjustments": [
+                    {
+                        "ingredient_key": "مرغ گریل",
+                        "multiplier": 0,
+                    }
+                ],
+                "selected_modifiers": [],
+            },
+            branch_markup_percent=0,
+        )
+        self.assertEqual(removed_line["pricing_breakdown"]["ingredient_delta_total"], -12000)
+        self.assertEqual(removed_line["unit_price"], 488000)
+
+    def test_get_item_detail_includes_item_price_metadata_for_ingredients(self):
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        set_management_product_price(
+            {
+                "item_name": self.raw_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 12000,
+            }
+        )
+
+        payload = get_item_detail(self.item_slug)
+        ingredient = next(row for row in payload["ingredients"] if row["key"] == "مرغ گریل")
+        self.assertEqual(ingredient.get("price_source"), "item_price")
+        self.assertEqual(float(ingredient.get("unit_rate") or 0), 12000.0)
+        self.assertEqual(float(ingredient.get("base_price") or 0), 12000.0)
+        self.assertEqual(ingredient.get("price_status"), "ok")
+        self.assertEqual(ingredient.get("price_item_code"), self.raw_item_code)
+
+    def test_build_ticket_components_puts_weighted_modifier_qty_into_qty_map(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 2200,
+            }
+        )
+        original = self._update_primary_modifier_option(
+            option_uom=self.uom,
+            option_qty=15,
+            min_qty=0,
+            max_qty=60,
+            qty_step=15,
+        )
+        try:
+            menu_doc = frappe.get_doc("Item", self.menu_item)
+            bom_doc = frappe.get_doc("BOM", self.bom_name)
+            line_calc = _recalculate_line(
+                menu_doc,
+                1,
+                {
+                    "ingredient_adjustments": [],
+                    "selected_modifiers": [
+                        {
+                            "group": self.modifier_group_title,
+                            "option": self.modifier_item_code,
+                            "qty": 45,
+                        }
+                    ],
+                },
+                branch_markup_percent=0,
+            )
+            _components, qty_map = _build_ticket_components(
+                menu_doc,
+                bom_doc,
+                line_calc,
+                1,
+                1,
+                self.warehouse,
+            )
+            self.assertEqual(float(qty_map.get(self.modifier_item_code) or 0), 45.0)
+        finally:
+            self._restore_primary_modifier_option(original)
+
+    def test_build_ticket_components_expands_modifier_item_bom_components(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        component_item = frappe.get_doc(
+            {
+                "doctype": "Item",
+                "item_code": f"MOD_RAW_{suffix.upper()}",
+                "item_name": f"Modifier Raw {suffix}",
+                "item_group": self.category_group,
+                "stock_uom": self.uom,
+                "is_stock_item": 1,
+                "is_sales_item": 0,
+                "is_purchase_item": 1,
+            }
+        )
+        component_item.insert(ignore_permissions=True)
+        self._remember_cleanup_doc("Item", component_item.item_code)
+
+        modifier_bom = frappe.get_doc(
+            {
+                "doctype": "BOM",
+                "item": self.modifier_item_code,
+                "company": self.company,
+                "currency": frappe.db.get_value("Company", self.company, "default_currency"),
+                "conversion_rate": 1,
+                "quantity": 1,
+                "is_default": 1,
+                "is_active": 1,
+                "items": [
+                    {
+                        "item_code": component_item.item_code,
+                        "qty": 2,
+                        "uom": self.uom,
+                        "rate": 1000,
+                    }
+                ],
+            }
+        )
+        modifier_bom.insert(ignore_permissions=True)
+        modifier_bom.submit()
+        self._remember_cleanup_doc("BOM", modifier_bom.name)
+        frappe.db.commit()
+
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 22000,
+            }
+        )
+
+        menu_doc = frappe.get_doc("Item", self.menu_item)
+        bom_doc = frappe.get_doc("BOM", self.bom_name)
+        line_calc = _recalculate_line(
+            menu_doc,
+            1,
+            {
+                "ingredient_adjustments": [],
+                "selected_modifiers": [
+                    {
+                        "group": self.modifier_group_title,
+                        "option": self.modifier_item_code,
+                        "qty": 1,
+                    }
+                ],
+            },
+            branch_markup_percent=0,
+        )
+
+        components, qty_map = _build_ticket_components(
+            menu_doc,
+            bom_doc,
+            line_calc,
+            1,
+            1,
+            self.warehouse,
+        )
+        self.assertEqual(float(qty_map.get(component_item.item_code) or 0), 2.0)
+        self.assertNotIn(self.modifier_item_code, qty_map)
+        self.assertTrue(
+            any(
+                row.get("item_code") == component_item.item_code
+                and row.get("source_type") == "modifier_bom_item"
+                for row in (components or [])
+            )
+        )
+
+    def test_extract_qty_map_and_work_order_sync_skip_non_stock_components(self):
+        ticket_doc = frappe._dict(
+            {
+                "qty": 1,
+                "components": [
+                    {
+                        "item_code": self.modifier_item_code,
+                        "final_qty": 30,
+                    },
+                    {
+                        "item_code": self.service_modifier_item_code,
+                        "final_qty": 10,
+                    },
+                ],
+            }
+        )
+        qty_map = _extract_qty_map_from_ticket(ticket_doc, target_qty=1)
+        self.assertEqual(float(qty_map.get(self.modifier_item_code) or 0), 30.0)
+        self.assertNotIn(self.service_modifier_item_code, qty_map)
+
+        work_order = frappe.get_doc(
+            {
+                "doctype": "Work Order",
+                "production_item": self.menu_item,
+                "bom_no": self.bom_name,
+                "company": self.company,
+                "qty": 1,
+                "source_warehouse": self.warehouse,
+                "wip_warehouse": self.warehouse,
+                "fg_warehouse": self.warehouse,
+                "use_multi_level_bom": 0,
+                "skip_transfer": 1,
+            }
+        ).insert(ignore_permissions=True)
+        self._remember_cleanup_doc("Work Order", work_order.name)
+
+        _sync_work_order_required_items(work_order.name, qty_map=qty_map, source_warehouse=self.warehouse)
+        required_codes = set(
+            frappe.get_all(
+                "Work Order Item",
+                filters={"parent": work_order.name, "parentfield": "required_items"},
+                pluck="item_code",
+                ignore_permissions=True,
+            )
+        )
+        self.assertIn(self.modifier_item_code, required_codes)
+        self.assertNotIn(self.service_modifier_item_code, required_codes)
+
+    def test_management_modifier_group_save_and_detail(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {
+                "item_name": self.modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 18000,
+            }
+        )
+        context = get_management_modifier_groups_context()
+        self.assertEqual(context.get("default_price_list"), price_list.name)
+
+        saved = save_management_modifier_group(
+            {
+                "title": f"Modifier Group {suffix}",
+                "selection_mode": "multi",
+                "required": 0,
+                "min_select": 0,
+                "max_select": 3,
+                "description": "test group",
+                "sort_order": 4,
+                "is_active": 1,
+                "options": [
+                    {
+                        "option_name": f"Option {suffix}",
+                        "action_type": "add_on",
+                        "option_item": self.modifier_item_code,
+                        "option_qty": 1,
+                        "recipe_multiplier": 1,
+                        "is_default": 0,
+                        "is_active": 1,
+                        "sort_order": 1,
+                    }
+                ],
+            }
+        )
+        self.assertTrue(saved.get("name"))
+
+        detail = get_management_modifier_group_detail(saved.get("name"))
+        self.assertEqual(detail.get("title"), f"Modifier Group {suffix}")
+        self.assertEqual(detail.get("default_price_list"), price_list.name)
+        self.assertEqual(len(detail.get("options") or []), 1)
+        self.assertEqual(detail["options"][0].get("option_item"), self.modifier_item_code)
+
+    def test_modifier_context_prefers_selling_settings_price_list(self):
+        primary_suffix = frappe.generate_hash(length=6).lower()
+        fallback_suffix = frappe.generate_hash(length=6).lower()
+        primary_price_list = self._ensure_test_price_list(primary_suffix)
+        fallback_price_list = self._ensure_test_price_list(fallback_suffix)
+
+        if frappe.db.exists("DocType", "Selling Settings"):
+            original_setting = frappe.db.get_single_value("Selling Settings", "selling_price_list") or ""
+        else:
+            self.skipTest("Selling Settings is not installed.")
+
+        try:
+            frappe.db.set_single_value("Selling Settings", "selling_price_list", primary_price_list.name)
+            if frappe.db.has_column("Price List", "restaurant_is_default_selling"):
+                frappe.db.sql(
+                    "update `tabPrice List` set restaurant_is_default_selling = 0 where selling = 1"
+                )
+                frappe.db.set_value(
+                    "Price List",
+                    fallback_price_list.name,
+                    "restaurant_is_default_selling",
+                    1,
+                    update_modified=False,
+                )
+            frappe.db.commit()
+
+            payload = get_management_modifier_groups_context()
+            self.assertEqual(payload.get("default_price_list"), primary_price_list.name)
+        finally:
+            frappe.db.set_single_value("Selling Settings", "selling_price_list", original_setting)
+            frappe.db.commit()
+
+    def test_set_management_default_price_list_updates_selling_settings(self):
+        if not frappe.db.exists("DocType", "Selling Settings"):
+            self.skipTest("Selling Settings is not installed.")
+
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        original_setting = frappe.db.get_single_value("Selling Settings", "selling_price_list") or ""
+
+        try:
+            payload = set_management_default_price_list(price_list.name)
+            self.assertEqual(payload.get("default_price_list"), price_list.name)
+            self.assertEqual(
+                frappe.db.get_single_value("Selling Settings", "selling_price_list"),
+                price_list.name,
+            )
+        finally:
+            frappe.db.set_single_value("Selling Settings", "selling_price_list", original_setting)
+            frappe.db.commit()
 
     def test_management_product_settings_normalize_legacy_builder_modes(self):
         item_doc = frappe.get_doc("Item", self.menu_item)
@@ -445,6 +1603,106 @@ class TestRestaurantAPI(FrappeTestCase):
             reloaded.get("restaurant_stock_consumption_mode"),
             "consume_selected_components",
         )
+
+    def test_update_management_product_settings_normalizes_builder_option_nutrition_json(self):
+        if not frappe.db.exists("DocType", "Product Builder Template"):
+            self.skipTest("Product Builder Template is not installed.")
+
+        updated = update_management_product_settings(
+            {
+                "item_name": self.menu_item,
+                "restaurant_is_customizable": 1,
+                "restaurant_builder_active": 1,
+                "product_builder_config": {
+                    "title": f"Builder {frappe.generate_hash(length=6).lower()}",
+                    "steps": [
+                        {
+                            "step_title": "Milk",
+                            "step_key": "milk-step",
+                            "selection_mode": "single",
+                            "min_select": 1,
+                            "max_select": 1,
+                            "is_required": 1,
+                            "show_step_price": 1,
+                            "options": [
+                                {
+                                    "option_key": "skim",
+                                    "option_label": "Skim Milk",
+                                    "base_price_delta": 0,
+                                    "price_type": "fixed",
+                                    "price_percentage": 0,
+                                    "is_default": 1,
+                                    "is_available": 1,
+                                    "max_qty": 1,
+                                    "nutrition": {"kcal": 12, "protein_g": 1},
+                                }
+                            ],
+                        }
+                    ],
+                },
+            }
+        )
+        template_name = (updated.get("item", {}) or {}).get("restaurant_builder_template")
+        self.assertTrue(template_name)
+        option_rows = frappe.get_all(
+            "Product Builder Option",
+            filters={"parenttype": "Product Builder Step"},
+            fields=["nutrition_json"],
+            ignore_permissions=True,
+        )
+        self.assertTrue(any((row.get("nutrition_json") or "").strip() for row in option_rows))
+
+    def test_update_management_product_settings_skips_builder_save_when_config_unchanged(self):
+        if not frappe.db.exists("DocType", "Product Builder Template"):
+            self.skipTest("Product Builder Template is not installed.")
+
+        builder_payload = {
+            "title": f"Builder Stable {frappe.generate_hash(length=6).lower()}",
+            "steps": [
+                {
+                    "step_title": "Milk",
+                    "step_key": "milk-step",
+                    "selection_mode": "single",
+                    "min_select": 1,
+                    "max_select": 1,
+                    "is_required": 1,
+                    "show_step_price": 1,
+                    "options": [
+                        {
+                            "option_key": "skim",
+                            "option_label": "Skim Milk",
+                            "base_price_delta": 0,
+                            "price_type": "fixed",
+                            "price_percentage": 0,
+                            "is_default": 1,
+                            "is_available": 1,
+                            "max_qty": 1,
+                            "nutrition": {"kcal": 12},
+                        }
+                    ],
+                }
+            ],
+        }
+        update_management_product_settings(
+            {
+                "item_name": self.menu_item,
+                "restaurant_is_customizable": 1,
+                "restaurant_builder_active": 1,
+                "product_builder_config": builder_payload,
+            }
+        )
+
+        with patch("restaurant.api._build_item_specific_builder_template", side_effect=AssertionError("builder save should be skipped")):
+            updated = update_management_product_settings(
+                {
+                    "item_name": self.menu_item,
+                    "description": "updated without builder change",
+                    "restaurant_is_customizable": 1,
+                    "product_builder_config": builder_payload,
+                }
+            )
+
+        self.assertEqual(updated["item"]["description"], "updated without builder change")
 
     def test_item_save_normalizes_legacy_builder_modes(self):
         item_doc = frappe.get_doc("Item", self.menu_item)

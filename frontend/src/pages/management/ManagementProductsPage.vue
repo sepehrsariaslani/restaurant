@@ -1154,8 +1154,17 @@ async function submitWizard() {
       try {
         const priceLists = await listManagementPriceLists()
         if (priceLists?.price_lists?.length) {
-          const defaultPriceList = priceLists.price_lists[0].name
-          await setManagementProductPrice(itemName, defaultPriceList, Number(wizardForm.value.price))
+          const defaultPriceList =
+            String(priceLists?.default_price_list || '').trim() ||
+            String(priceLists.price_lists.find((row) => Number(row?.is_default || 0) === 1)?.name || '').trim() ||
+            String(priceLists.price_lists[0]?.name || '').trim()
+          if (defaultPriceList) {
+            await setManagementProductPrice({
+              item_name: itemName,
+              price_list: defaultPriceList,
+              price_list_rate: Number(wizardForm.value.price),
+            })
+          }
         }
       } catch (priceErr) {
         console.warn('قیمت‌گذاری ناموفق:', priceErr)

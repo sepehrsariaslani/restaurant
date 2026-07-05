@@ -187,7 +187,9 @@ function openAdd() {
   editorMode.value = 'add'
   editorIndex.value = -1
   editorError.value = ''
-  writeDraft(props.createEmptyRow())
+  const baseRow = cloneValue(props.createEmptyRow())
+  const normalizedBaseRow = props.normalizeRow(cloneValue(baseRow))
+  writeDraft({ ...baseRow, ...normalizedBaseRow })
   editorOpen.value = true
 }
 
@@ -195,7 +197,9 @@ function openEdit(row, index) {
   editorMode.value = 'edit'
   editorIndex.value = Number(index || 0)
   editorError.value = ''
-  writeDraft(row)
+  const rawRow = cloneValue(row)
+  const normalizedRow = props.normalizeRow(cloneValue(rawRow))
+  writeDraft({ ...props.createEmptyRow(), ...rawRow, ...normalizedRow })
   editorOpen.value = true
 }
 

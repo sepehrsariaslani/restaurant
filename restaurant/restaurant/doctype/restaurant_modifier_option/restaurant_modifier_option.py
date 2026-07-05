@@ -15,12 +15,17 @@ class RestaurantModifierOption(Document):
         if self.option_qty <= 0:
             self.option_qty = 1
 
-        self.qty_step = flt(self.qty_step or 1)
+        self.qty_step = flt(self.qty_step or self.option_qty or 1)
         if self.qty_step <= 0:
-            self.qty_step = 1
+            self.qty_step = self.option_qty or 1
 
-        self.min_qty = max(flt(self.min_qty if self.min_qty not in (None, "") else 1), 0)
-        self.max_qty = max(flt(self.max_qty if self.max_qty not in (None, "") else 9), self.min_qty)
+        self.min_qty = max(flt(self.min_qty if self.min_qty not in (None, "") else 0), 0)
+        default_max_qty = max(self.option_qty, self.qty_step, self.option_qty * 4)
+        self.max_qty = max(
+            flt(self.max_qty if self.max_qty not in (None, "") else default_max_qty),
+            self.min_qty,
+            self.option_qty,
+        )
 
         if action_type == "add_on":
             if not self.option_item:
@@ -32,7 +37,8 @@ class RestaurantModifierOption(Document):
                 ["stock_uom", "valuation_rate", "standard_rate"],
                 as_dict=True,
             ) or {}
-            self.option_uom = (item_meta.get("stock_uom") or "").strip()
+            current_option_uom = (self.option_uom or "").strip()
+            self.option_uom = current_option_uom or (item_meta.get("stock_uom") or "").strip()
             self.option_cost_rate = flt(item_meta.get("valuation_rate") or item_meta.get("standard_rate") or 0)
             self.option_cost_amount = flt(self.option_qty) * flt(self.option_cost_rate)
             self.alternative_bom = ""

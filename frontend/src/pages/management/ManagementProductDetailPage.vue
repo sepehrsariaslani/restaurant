@@ -455,10 +455,25 @@
                   <textarea class="textarea" v-model="bomForm.restaurant_recipe_instruction" placeholder="مراحل آماده‌سازی و رسپی محصول را اینجا وارد کنید."></textarea>
                 </label>
 
-                <div class="checks-grid compact-checks">
-                  <ManagementToggleSwitch v-model="bomForm.is_active" label="BOM فعال" compact />
-                  <ManagementToggleSwitch v-model="bomForm.is_default" label="BOM پیش‌فرض" compact />
-                </div>
+                <section class="bom-status-section">
+                  <header class="bom-status-section__head">
+                    <strong>وضعیت این فرمول</strong>
+                    <small>مشخص کنید این BOM فقط ثبت باشد یا فرمول فعال و پیش‌فرض محصول هم باشد.</small>
+                  </header>
+
+                  <div class="checks-grid compact-checks">
+                    <ManagementCheckboxField
+                      v-model="bomForm.is_active"
+                      label="BOM فعال"
+                      hint="در فرمول‌های قابل استفاده محصول قرار بگیرد."
+                    />
+                    <ManagementCheckboxField
+                      v-model="bomForm.is_default"
+                      label="BOM پیش‌فرض"
+                      hint="به عنوان فرمول اصلی همین محصول استفاده شود."
+                    />
+                  </div>
+                </section>
 
                 <div class="inline-actions">
                   <button class="secondary-btn" type="button" @click="addBomItemRow">افزودن ماده اولیه</button>
@@ -470,30 +485,45 @@
                 <p class="error" v-if="bomError">{{ bomError }}</p>
                 <p class="success" v-if="bomSaveSuccess">{{ bomSaveSuccess }}</p>
 
-                <div class="bom-inline-list">
-                  <article v-for="(row, index) in bomItemsSummary" :key="`bom-item-${index}`" class="bom-inline-card">
-                    <label>
-                      ماده اولیه
-                      <SearchableDropdown
-                        :model-value="row.item_code"
-                        :options="bomItemOptions"
-                        placeholder="انتخاب ماده اولیه"
-                        search-placeholder="جستجوی ماده اولیه..."
-                        include-empty-option
-                        empty-label="انتخاب ماده اولیه"
-                        @update:model-value="updateBomItemCode(index, $event)"
-                      />
-                    </label>
-                    <label>
-                      مقدار
-                      <PersianNumberInput v-model="row.qty" :min="0" :allow-float="true" />
-                    </label>
-                    <label>
-                      واحد
-                      <input class="input" v-model="row.uom" placeholder="واحد" />
-                    </label>
-                    <button class="secondary-btn danger-btn" type="button" @click="removeBomItemRow(index)">حذف</button>
-                  </article>
+                <div class="formula-workspace">
+                  <section class="formula-block">
+                    <header class="formula-block__head">
+                      <div>
+                        <strong>جدول مواد BOM</strong>
+                        <small>مواد اولیه، جایگزینی ماده، چاپ و تنظیمات فرمول را یک‌جا ببینید.</small>
+                      </div>
+                      <span class="formula-block__meta">
+                        {{ formatNumber(bomItemsSummary.length) }} ردیف
+                      </span>
+                    </header>
+
+                    <ManagementBomItemsTable
+                      v-model="bomForm.items"
+                      :item-options="bomItemOptions"
+                      :item-catalog="bomItemCatalog"
+                      :disabled="bomLoading || bomSaving"
+                    />
+                  </section>
+
+                  <section class="formula-block">
+                    <header class="formula-block__head">
+                      <div>
+                        <strong>Modifierهای متصل به همین BOM</strong>
+                        <small>گروه‌های انتخاب مشتری که روی همین فرمول اثر می‌گذارند.</small>
+                      </div>
+                      <span class="formula-block__meta">
+                        {{ formatNumber(activeBomModifierGroupsCount) }} گروه
+                      </span>
+                    </header>
+
+                    <ManagementBomModifiersTable
+                      v-model="bomForm.restaurant_modifier_rows"
+                      :modifier-group-options="bomModifierGroupOptions"
+                      :item-options="bomItemOptions"
+                      :bom-options="bomReferenceOptions"
+                      :disabled="bomLoading || bomSaving"
+                    />
+                  </section>
                 </div>
 
                 <ManagementDataTable v-if="productBoms.length" :columns="bomColumns" :rows="productBoms" row-key="name">
@@ -1271,6 +1301,9 @@ import PersianNumberInput from '@/components/PersianNumberInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import BuilderStepCard from '@/components/management/builder/BuilderStepCard.vue'
+import ManagementBomItemsTable from '@/components/management/ManagementBomItemsTable.vue'
+import ManagementBomModifiersTable from '@/components/management/ManagementBomModifiersTable.vue'
+import ManagementCheckboxField from '@/components/management/ManagementCheckboxField.vue'
 import ManagementImageUploaderView from '@/components/management/ManagementImageUploaderView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
@@ -1289,6 +1322,7 @@ import {
   getManagementBomDoc,
   getManagementProductVariantBuilder,
   getManagementProductDetail,
+  listManagementModifierGroups,
   listManagementBomItems,
   listManagementBoms,
   listRestaurantItemTags,
@@ -1402,6 +1436,7 @@ const bomForm = reactive({
   is_default: true,
   restaurant_recipe_instruction: '',
   items: [],
+  restaurant_modifier_rows: [],
 })
 
 const tabOptions = PRODUCT_DETAIL_TABS
@@ -1413,6 +1448,9 @@ const bomColumns = [
   { key: 'modified', label: 'آخرین بروزرسانی' },
   { key: 'actions', label: 'عملیات' },
 ]
+
+const bomModifierGroupOptions = ref([])
+const bomItemCatalog = ref([])
 
 
 
@@ -1461,6 +1499,23 @@ const activeBomRow = computed(() => {
 const bomCompanyOptions = computed(() => (bomContext.value?.companies || []).map((row) => ({ value: row, label: row })))
 const bomCurrencyOptions = computed(() => (bomContext.value?.currencies || []).map((row) => ({ value: row, label: row })))
 const bomItemsSummary = computed(() => Array.isArray(bomForm.items) ? bomForm.items : [])
+const bomModifierRowsSummary = computed(() =>
+  Array.isArray(bomForm.restaurant_modifier_rows) ? bomForm.restaurant_modifier_rows : [],
+)
+const bomReferenceOptions = computed(() =>
+  (productBoms.value || []).map((row) => ({
+    value: String(row?.name || '').trim(),
+    label: String(row?.name || '').trim(),
+  })).filter((row) => row.value),
+)
+const activeBomModifierGroupsCount = computed(() => {
+  const keys = new Set(
+    (bomModifierRowsSummary.value || [])
+      .map((row) => String(row?.group_key || row?.modifier_group || '').trim())
+      .filter(Boolean),
+  )
+  return keys.size
+})
 const priceLists = computed(() => detail.value?.pricing?.price_lists || [])
 const activeCurrency = computed(() => detail.value?.report?.currency || 'IRR')
 const priceListOptions = computed(() =>
@@ -1650,6 +1705,27 @@ function createEmptyBomItemRow() {
     item_code: '',
     qty: 1,
     uom: '',
+    rate: 0,
+    source_warehouse: '',
+    allow_alternative_item: false,
+    show_in_website: true,
+    restaurant_customer_label: '',
+    restaurant_is_included_by_default: true,
+    restaurant_can_remove: false,
+    restaurant_is_required: false,
+    restaurant_is_editable_qty: false,
+    restaurant_min_multiplier: 0,
+    restaurant_max_multiplier: 3,
+    restaurant_step_multiplier: 0.5,
+    restaurant_multiplier_qty: 0,
+    restaurant_extra_when_added: 0,
+    restaurant_nutrition_kcal: 0,
+    restaurant_nutrition_protein_g: 0,
+    restaurant_nutrition_carb_g: 0,
+    restaurant_nutrition_sugar_g: 0,
+    restaurant_nutrition_fat_g: 0,
+    alternatives_count: 0,
+    alternatives: [],
   }
 }
 
@@ -1662,6 +1738,7 @@ function resetBomForm() {
   bomForm.is_default = true
   bomForm.restaurant_recipe_instruction = ''
   bomForm.items = [createEmptyBomItemRow()]
+  bomForm.restaurant_modifier_rows = []
 }
 
 function hydrateBomForm(doc = null) {
@@ -1677,10 +1754,15 @@ function hydrateBomForm(doc = null) {
   bomForm.is_default = Number(doc.is_default ?? 1) === 1
   bomForm.restaurant_recipe_instruction = String(doc.restaurant_recipe_instruction || '').trim()
   bomForm.items = (Array.isArray(doc.items) ? doc.items : []).map((row) => ({
+    ...createEmptyBomItemRow(),
+    ...row,
     item_code: String(row?.item_code || '').trim(),
     qty: Number(row?.qty || 0) || 1,
     uom: String(row?.uom || row?.stock_uom || '').trim(),
   })).filter((row) => row.item_code)
+  bomForm.restaurant_modifier_rows = Array.isArray(doc.restaurant_modifier_rows)
+    ? doc.restaurant_modifier_rows.map((row) => ({ ...row }))
+    : []
   if (!bomForm.items.length) {
     bomForm.items = [createEmptyBomItemRow()]
   }
@@ -2179,6 +2261,7 @@ async function loadProductBoms(itemCode = '') {
 async function searchBomItems(query = '') {
   try {
     const rows = await listManagementBomItems({ search: query, limit: 100 })
+    bomItemCatalog.value = Array.isArray(rows) ? rows : []
     bomItemOptions.value = (Array.isArray(rows) ? rows : []).map((row) => {
       const value = String(row?.item_code || row?.name || '').trim()
       const title = String(row?.item_name || row?.name || value).trim()
@@ -2189,7 +2272,21 @@ async function searchBomItems(query = '') {
       }
     }).filter((row) => row.value)
   } catch {
+    bomItemCatalog.value = []
     bomItemOptions.value = []
+  }
+}
+
+async function loadBomModifierGroupOptions() {
+  try {
+    const rows = await listManagementModifierGroups({ limit: 300 })
+    bomModifierGroupOptions.value = (Array.isArray(rows) ? rows : []).map((row) => {
+      const value = String(row?.name || '').trim()
+      const label = String(row?.title || row?.name || '').trim() || value
+      return { value, label }
+    }).filter((row) => row.value)
+  } catch {
+    bomModifierGroupOptions.value = []
   }
 }
 
@@ -2214,26 +2311,6 @@ function addBomItemRow() {
   bomForm.items.push(createEmptyBomItemRow())
 }
 
-function removeBomItemRow(index) {
-  bomForm.items.splice(index, 1)
-  if (!bomForm.items.length) {
-    bomForm.items.push(createEmptyBomItemRow())
-  }
-}
-
-function updateBomItemCode(index, itemCode) {
-  const normalized = String(itemCode || '').trim()
-  const option = bomItemOptions.value.find((row) => String(row?.value || row?.item_code || '').trim() === normalized)
-  const nextRow = bomForm.items[index]
-  if (!nextRow) {
-    return
-  }
-  nextRow.item_code = normalized
-  if (option?.stock_uom && !nextRow.uom) {
-    nextRow.uom = String(option.stock_uom || '').trim()
-  }
-}
-
 async function saveBomFromProduct() {
   const normalizedItem = String(detail.value?.item?.name || detail.value?.item?.item_code || '').trim()
   if (!normalizedItem) {
@@ -2243,6 +2320,7 @@ async function saveBomFromProduct() {
 
   const normalizedItems = (Array.isArray(bomForm.items) ? bomForm.items : [])
     .map((row) => ({
+      ...row,
       item_code: String(row?.item_code || '').trim(),
       qty: Number(row?.qty || 0),
       uom: String(row?.uom || '').trim(),
@@ -2268,6 +2346,9 @@ async function saveBomFromProduct() {
       is_default: bomForm.is_default,
       restaurant_recipe_instruction: String(bomForm.restaurant_recipe_instruction || '').trim(),
       items: normalizedItems,
+      restaurant_modifier_rows: Array.isArray(bomForm.restaurant_modifier_rows)
+        ? bomForm.restaurant_modifier_rows
+        : [],
     }
 
     if (payload.name) {
@@ -3042,6 +3123,7 @@ onMounted(() => {
   window.addEventListener('keydown', onWindowKeydown)
   setupPreviewViewportListener()
   searchBomItems('')
+  loadBomModifierGroupOptions()
 })
 
 onBeforeUnmount(() => {
@@ -3286,6 +3368,51 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   min-width: 108px;
   min-height: 2.65rem;
   white-space: nowrap;
+}
+
+.formula-workspace {
+  display: grid;
+  gap: 1rem;
+  margin: 0.95rem 0 0.75rem;
+}
+
+.formula-block {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.formula-block__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.formula-block__head strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.formula-block__head small {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--text-muted);
+}
+
+.formula-block__meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.18);
+  background: rgb(var(--palette-eggshell-rgb, 251 248 244) / 0.92);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .bom-inline-list {
@@ -3730,6 +3857,27 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .compact-checks {
   margin: 0;
+}
+
+.bom-status-section {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.1rem 0 0.2rem;
+}
+
+.bom-status-section__head {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.bom-status-section__head strong {
+  font-size: 0.84rem;
+}
+
+.bom-status-section__head small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.6;
 }
 
 .variant-attribute-mobile-card,

@@ -569,6 +569,15 @@ const navLinks = computed(() => {
 			group: "menu",
 		},
 		{
+			key: "management-modifier-groups",
+			label: "مودیفایرها",
+			shortLabel: "Modifier",
+			caption: "گروه‌ها و قیمت‌گذاری",
+			iconComponent: TagsIcon,
+			url: "/management/modifier-groups",
+			group: "menu",
+		},
+		{
 			key: "management-menu-design",
 			label: "طراحی منو",
 			shortLabel: "طراحی",

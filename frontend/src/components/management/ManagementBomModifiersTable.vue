@@ -3,7 +3,7 @@
     <header class="group-toolbar">
       <div class="toolbar-meta">
         <strong>گروه‌های انتخاب مشتری</strong>
-        <small>هر گروه را انتخاب کنید و گزینه‌هایش را در پنجره جداگانه مدیریت کنید.</small>
+        <small>تعریف اصلی گروه‌ها و قیمت‌هایشان در صفحه مدیریت Modifier انجام می‌شود.</small>
       </div>
 
       <div class="toolbar-actions">
@@ -50,7 +50,12 @@
 
       <template #cell-actions="{ row }">
         <div class="row-actions">
-          <button type="button" class="secondary-btn mini" @click="openGroupMeta(row)" :disabled="disabled">ویرایش گروه</button>
+          <a
+            class="secondary-btn mini"
+            :href="`/management/modifier-groups?group=${encodeURIComponent(row.modifier_group || row.group_key || '')}`"
+          >
+            مدیریت Modifier
+          </a>
           <button type="button" class="secondary-btn mini" @click="openGroupOptions(row)" :disabled="disabled">گزینه‌ها</button>
           <button type="button" class="secondary-btn mini danger" @click="removeGroup(row)" :disabled="disabled">حذف گروه</button>
         </div>
@@ -142,14 +147,26 @@
           {{ resolveItemLabel(value) }}
         </template>
 
-        <template #cell-price_delta="{ value }">
-          {{ formatNumber(value) }}
+        <template #cell-price_delta="{ row }">
+          <div class="price-cell">
+            <strong>{{ formatNumber(row.price_delta) }}</strong>
+            <small>{{ row.price_list || 'بدون price list' }}</small>
+          </div>
+        </template>
+
+        <template #cell-price_status="{ row }">
+          <span :class="['chip', priceStatusClass(row.price_status)]">
+            {{ priceStatusLabel(row.price_status) }}
+          </span>
         </template>
 
         <template #cell-state="{ row }">
           <div class="flag-chips">
             <span class="chip" v-if="toBool(row.is_default)">پیش‌فرض</span>
             <span class="chip" v-if="toBool(row.is_active, true)">فعال</span>
+            <span class="chip warning" v-if="String(row.price_status || 'ok') !== 'ok'">
+              نیازمند بررسی
+            </span>
           </div>
         </template>
 
@@ -212,10 +229,20 @@
               <NumericInput v-model="draft.option_qty" input-class="input" />
             </label>
 
-            <label class="field">
-              <span>افزایش قیمت</span>
-              <NumericInput v-model="draft.price_delta" input-class="input" :allow-negative="true" />
-            </label>
+            <div class="field span-2 read-only-price">
+              <span>قیمت فروش</span>
+              <strong>{{ formatNumber(draft.price_delta) }}</strong>
+              <small>
+                {{ priceStatusLabel(draft.price_status) }}
+                <template v-if="draft.unavailable_reason"> - {{ draft.unavailable_reason }}</template>
+              </small>
+              <a
+                class="secondary-btn mini inline-link"
+                :href="`/management/modifier-groups?group=${encodeURIComponent(activeGroupRecord?.modifier_group || activeGroupRecord?.group_key || '')}`"
+              >
+                ویرایش در مدیریت Modifier
+              </a>
+            </div>
 
             <label class="field">
               <span>ضریب دستور</span>
@@ -251,7 +278,7 @@ import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
-import { getManagementModifierGroupDoc } from '@/utils/api'
+import { getManagementModifierGroupDetail } from '@/utils/api'
 
 const props = defineProps({
   modelValue: {
@@ -290,8 +317,8 @@ const groupColumns = [
 const optionColumns = [
   { key: 'option_label', label: 'عنوان گزینه' },
   { key: 'modifier_type', label: 'نوع' },
-  { key: 'option_item', label: 'آیتم' },
-  { key: 'price_delta', label: 'افزایش قیمت' },
+  { key: 'price_delta', label: 'قیمت فروش' },
+  { key: 'price_status', label: 'وضعیت قیمت' },
   { key: 'state', label: 'وضعیت' },
 ]
 
@@ -474,6 +501,11 @@ function createEmptyOptionRow(groupMeta = {}) {
     alternative_bom: '',
     option_qty: 1,
     price_delta: 0,
+    price_status: 'missing_item',
+    price_list: '',
+    unavailable_reason: '',
+    is_selectable: false,
+    disabled: true,
     recipe_multiplier: 1,
     is_default: false,
     sort_order: 0,
@@ -502,6 +534,11 @@ function normalizeOptionRow(row) {
     alternative_bom: String(row?.alternative_bom || '').trim(),
     option_qty: toNumeric(row?.option_qty, 1),
     price_delta: toNumeric(row?.price_delta, 0),
+    price_status: String(row?.price_status || 'ok').trim() || 'ok',
+    price_list: String(row?.price_list || '').trim(),
+    unavailable_reason: String(row?.unavailable_reason || '').trim(),
+    is_selectable: toBool(row?.is_selectable, true),
+    disabled: toBool(row?.disabled),
     recipe_multiplier: toNumeric(row?.recipe_multiplier, 1),
     is_default: toBool(row?.is_default),
     sort_order: Math.floor(toNumeric(row?.sort_order, 0)),
@@ -592,11 +629,11 @@ async function importGroup() {
   importing.value = true
   importError.value = ''
   try {
-    const groupDoc = await getManagementModifierGroupDoc(groupName)
+    const groupDoc = await getManagementModifierGroupDetail(groupName)
 
     const groupMeta = {
-      group_key: groupName,
-      modifier_group: groupName,
+      group_key: String(groupDoc?.name || groupName).trim(),
+      modifier_group: String(groupDoc?.name || groupName).trim(),
       group_title: String(groupDoc?.title || resolveGroupLabel(groupName)).trim(),
       selection_mode: String(groupDoc?.selection_mode || 'single').trim() || 'single',
       required: toBool(groupDoc?.required),
@@ -617,11 +654,16 @@ async function importGroup() {
             ...groupMeta,
             modifier_type: String(option?.action_type || 'add_on').trim() || 'add_on',
             option_key: String(option?.option_name || option?.name || '').trim(),
-            option_label: String(option?.option_name || option?.name || '').trim(),
+            option_label: String(option?.option_name || option?.label || option?.name || '').trim(),
             option_item: String(option?.option_item || '').trim(),
             alternative_bom: String(option?.alternative_bom || '').trim(),
             option_qty: toNumeric(option?.option_qty, 1),
             price_delta: toNumeric(option?.price_delta, 0),
+            price_status: String(option?.price_status || 'ok').trim() || 'ok',
+            price_list: String(option?.price_list || '').trim(),
+            unavailable_reason: String(option?.unavailable_reason || '').trim(),
+            is_selectable: toBool(option?.is_selectable, true),
+            disabled: toBool(option?.disabled),
             recipe_multiplier: toNumeric(option?.recipe_multiplier, 1),
             is_default: toBool(option?.is_default),
             sort_order: Math.floor(toNumeric(option?.sort_order, 0)),
@@ -631,14 +673,29 @@ async function importGroup() {
       }
     }
 
-    replaceGroupRows(groupName, preparedRows)
+    replaceGroupRows(groupMeta.group_key, preparedRows)
     selectedModifierGroup.value = ''
-    openGroupOptions({ group_key: groupName })
+    openGroupOptions({ group_key: groupMeta.group_key })
   } catch (groupErr) {
     importError.value = groupErr.message || 'دریافت اطلاعات گروه ناموفق بود.'
   } finally {
     importing.value = false
   }
+}
+
+function priceStatusLabel(status = '') {
+  const normalized = String(status || '').trim()
+  if (normalized === 'missing_price') return 'بدون قیمت'
+  if (normalized === 'missing_item') return 'بدون آیتم'
+  if (normalized === 'inactive') return 'غیرفعال'
+  return 'آماده'
+}
+
+function priceStatusClass(status = '') {
+  const normalized = String(status || '').trim()
+  if (normalized === 'missing_price' || normalized === 'missing_item') return 'warning'
+  if (normalized === 'inactive') return 'inactive'
+  return 'active'
 }
 </script>
 
@@ -742,6 +799,26 @@ async function importGroup() {
   color: rgb(var(--palette-deep-sapphire-rgb) / 1);
   font-size: 0.68rem;
   padding: 0.1rem 0.42rem;
+}
+
+.chip.warning {
+  background: rgb(var(--palette-deep-saffron-rgb) / 0.18);
+  color: var(--accent-gold);
+}
+
+.price-cell,
+.read-only-price {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.price-cell small,
+.read-only-price small {
+  color: var(--text-muted);
+}
+
+.inline-link {
+  width: fit-content;
 }
 
 .editor-grid {
