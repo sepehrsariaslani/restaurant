@@ -56,6 +56,7 @@
               :ingredients="ingredients"
               :currency="currency"
               variant="preview"
+              :allow-alternative-selection-in-preview="true"
               :model-value="customization"
               @update:model-value="setCustomization"
             />

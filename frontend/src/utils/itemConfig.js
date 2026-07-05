@@ -142,18 +142,25 @@ export function createDefaultCustomization(ingredients = [], modifierGroups = []
   const selectedModifiers = []
 
   for (const group of modifierGroups || []) {
-    const defaults = (group.options || []).filter((option) => Number(option.is_default) === 1)
+    const defaults = (group.options || []).filter(
+      (option) => Number(option.is_default) === 1 && Number(option.is_selectable ?? 1) === 1,
+    )
     const isVariantSelector = Number(group?.is_variant_attribute_selector || 0) === 1
     if (group.selection_mode === 'single') {
       if (defaults[0]) {
-        selectedModifiers.push({ group: group.group_name, option: defaults[0].name, qty: Math.max(Number(defaults[0].min_qty || 1), 1) })
+        const baseQty = Number(defaults[0].base_qty ?? defaults[0].option_qty ?? defaults[0].qty_step ?? 1)
+        selectedModifiers.push({
+          group: group.group_name,
+          option: defaults[0].name,
+          qty: Number.isFinite(baseQty) && baseQty > 0 ? baseQty : 1,
+        })
       } else if (isVariantSelector && Number(group.required || 0) === 1) {
-        const firstOption = (group.options || [])[0]
+        const firstOption = (group.options || []).find((option) => Number(option.is_selectable ?? 1) === 1)
         if (firstOption?.name) {
           selectedModifiers.push({
             group: group.group_name,
             option: firstOption.name,
-            qty: Math.max(Number(firstOption.min_qty || 1), 1),
+            qty: Math.max(Number(firstOption.base_qty ?? firstOption.option_qty ?? 1), 1),
           })
         }
       }
@@ -161,7 +168,12 @@ export function createDefaultCustomization(ingredients = [], modifierGroups = []
     }
 
     for (const option of defaults) {
-      selectedModifiers.push({ group: group.group_name, option: option.name, qty: Math.max(Number(option.min_qty || 1), 1) })
+      const baseQty = Number(option.base_qty ?? option.option_qty ?? option.qty_step ?? 1)
+      selectedModifiers.push({
+        group: group.group_name,
+        option: option.name,
+        qty: Number.isFinite(baseQty) && baseQty > 0 ? baseQty : 1,
+      })
     }
   }
 
@@ -253,6 +265,99 @@ export function ingredientQtyStep(ingredient = {}) {
   return multiplierStep
 }
 
+function resolvedItemPriceTotal({ unitRate = 0, conversionFactor = 0, qty = 0 } = {}) {
+  const rate = numeric(unitRate, 0)
+  const factor = numeric(conversionFactor, 0)
+  const requestedQty = Math.max(numeric(qty, 0), 0)
+  if (!(rate > 0) || !(factor > 0)) {
+    return null
+  }
+  return rate * requestedQty * factor
+}
+
+function ingredientResolvedPriceTotal(ingredient = {}, qty = 0) {
+  return resolvedItemPriceTotal({
+    unitRate: ingredient?.unit_rate,
+    conversionFactor: ingredient?.conversion_factor,
+    qty,
+  })
+}
+
+function alternativeResolvedPriceTotal(option = {}, qty = 0) {
+  return resolvedItemPriceTotal({
+    unitRate: option?.unit_rate,
+    conversionFactor: option?.conversion_factor,
+    qty,
+  })
+}
+
+export function estimateIngredientSelection(ingredient = {}, customization = {}) {
+  const key = String(ingredient.key || ingredient.name || '').trim()
+  const base = ingredientBaseMultiplier(ingredient)
+  const selected = getIngredientMultiplier(customization, ingredient)
+  const baseQty = numeric(ingredient.base_qty, 0)
+  const deltaMultiplier = selected - base
+  const selectedAlternativeMap = new Map(
+    (customization.selected_alternatives || []).map((row) => [
+      String(row.ingredient_key || '').trim(),
+      String(row.alternative_item || '').trim(),
+    ]),
+  )
+  const selectedAlternativeItem = selectedAlternativeMap.get(key) || ''
+  const selectedAlternativeOption = (ingredient.alternative_options || []).find(
+    (option) => String(option?.alternative_item || '').trim() === selectedAlternativeItem,
+  )
+  const selectedAlternativeLabel = String(
+    selectedAlternativeOption?.item_name || selectedAlternativeItem || '',
+  ).trim()
+  const alternativeQtyMultiplier = numeric(selectedAlternativeOption?.qty_multiplier, 1)
+  const alternativeQtyAddition = numeric(selectedAlternativeOption?.qty_addition, 0)
+  const selectedBaseQty = selectedAlternativeOption
+    ? Math.max(0, baseQty * alternativeQtyMultiplier + alternativeQtyAddition)
+    : baseQty
+  const baseComponentQty = baseQty * base
+  const selectedComponentQty = selectedBaseQty * selected
+  const baseTotalPrice = ingredientResolvedPriceTotal(ingredient, baseComponentQty)
+  const selectedTotalPrice = selectedAlternativeOption
+    ? alternativeResolvedPriceTotal(selectedAlternativeOption, selectedComponentQty)
+    : ingredientResolvedPriceTotal(ingredient, selectedComponentQty)
+
+  let delta = 0
+  let priceSource = 'legacy_extra'
+
+  if (baseTotalPrice !== null && selectedTotalPrice !== null) {
+    delta = selectedTotalPrice - baseTotalPrice
+    priceSource = 'item_price'
+  } else if (selectedAlternativeOption) {
+    const alternativeScale = base > 0 ? (selected / base) : (selected > 0 ? selected : 1)
+    delta = numeric(
+      selectedAlternativeOption?.resolved_price_delta ?? selectedAlternativeOption?.price_delta,
+      0,
+    ) * alternativeScale
+    priceSource = numeric(selectedAlternativeOption?.unit_rate, 0) > 0 ? 'item_price' : 'alternative_delta'
+  } else {
+    delta = deltaMultiplier * numeric(ingredient.extra_when_added, 0)
+  }
+
+  return {
+    key,
+    base,
+    selected,
+    baseQty,
+    selectedBaseQty,
+    baseComponentQty,
+    selectedComponentQty,
+    deltaMultiplier,
+    delta,
+    priceSource,
+    selectedAlternativeItem,
+    selectedAlternativeOption,
+    selectedAlternativeLabel,
+    baseTotalPrice,
+    selectedTotalPrice,
+  }
+}
+
 export function upsertIngredientMultiplier(customization = {}, ingredient = {}, nextMultiplier) {
   const key = String(ingredient.key || ingredient.name || '').trim()
   const list = Array.isArray(customization.ingredient_adjustments) ? [...customization.ingredient_adjustments] : []
@@ -279,9 +384,6 @@ export function upsertIngredientMultiplier(customization = {}, ingredient = {}, 
 export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifierGroups = [], customization = {} }) {
   const clean = sanitizeCustomization(customization, ingredients)
   const groupMap = new Map((modifierGroups || []).map((group) => [group.group_name, group]))
-  const selectedAlternativeMap = new Map(
-    (clean.selected_alternatives || []).map((row) => [String(row.ingredient_key || '').trim(), String(row.alternative_item || '').trim()]),
-  )
 
   let unit = Number(basePrice || 0)
   let ingredientDeltaTotal = 0
@@ -293,23 +395,18 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
   const breakdownModifiers = []
   const breakdownDetails = []
   for (const ingredient of ingredients || []) {
-    const key = String(ingredient.key || ingredient.name || '').trim()
-    const base = ingredientBaseMultiplier(ingredient)
-    const selected = getIngredientMultiplier(clean, ingredient)
-    const deltaMultiplier = selected - base
-    const delta = deltaMultiplier * Number(ingredient.extra_when_added || 0)
-    const selectedAlternativeItem = selectedAlternativeMap.get(key) || ''
-    const selectedAlternativeOption = (ingredient.alternative_options || []).find(
-      (option) => String(option?.alternative_item || '').trim() === selectedAlternativeItem,
-    )
-    const selectedAlternativeLabel = String(
-      selectedAlternativeOption?.item_name || selectedAlternativeItem || '',
-    ).trim()
-    const alternativeQtyMultiplier = numeric(selectedAlternativeOption?.qty_multiplier, 1)
-    const alternativeQtyAddition = numeric(selectedAlternativeOption?.qty_addition, 0)
-    const selectedBaseQty = selectedAlternativeOption
-      ? Math.max(0, numeric(ingredient.base_qty, 0) * alternativeQtyMultiplier + alternativeQtyAddition)
-      : numeric(ingredient.base_qty, 0)
+    const selection = estimateIngredientSelection(ingredient, clean)
+    const {
+      key,
+      base,
+      selected,
+      deltaMultiplier,
+      delta,
+      selectedAlternativeItem,
+      selectedAlternativeOption,
+      selectedAlternativeLabel,
+      selectedBaseQty,
+    } = selection
     const nutritionSource = selectedAlternativeOption || ingredient
 
     ingredientDeltaTotal += delta
@@ -337,6 +434,8 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
       delta,
       selectedAlternativeItem,
       selectedAlternativeLabel,
+      alternativeDelta: selectedAlternativeItem ? delta : 0,
+      priceSource: selection.priceSource,
     })
 
     if (Math.abs(deltaMultiplier) > 1e-8) {
@@ -351,7 +450,7 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
       breakdownDetails.push({
         key: `alternative:${key}:${selectedAlternativeItem}`,
         label: `جایگزین ${ingredient.customer_label || ingredient.name || key} با ${selectedAlternativeLabel || selectedAlternativeItem}`,
-        delta: 0,
+        delta,
       })
     }
   }
@@ -367,14 +466,25 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
       continue
     }
 
-    const qtyMultiplier = Math.max(Number(selected.qty || 1), 1)
-    const delta = Number(option.price_delta || 0) * qtyMultiplier
+    const selectedQty = Math.max(Number(selected.qty || 0), 0)
+    if (selectedQty <= 0) {
+      continue
+    }
+    const baseQty = Math.max(numeric(option.base_qty ?? option.option_qty, 1), 1)
+    const conversionFactor = Math.max(numeric(option.conversion_factor, 1), 0)
+    const selectedQtyInStock = selectedQty * conversionFactor
+    const unitRate = numeric(option.unit_rate, 0)
+    const fallbackBasePrice = numeric(option.base_price ?? option.price_delta, 0)
+    const delta = unitRate > 0
+      ? unitRate * selectedQtyInStock
+      : fallbackBasePrice * (selectedQty / baseQty)
     modifierDeltaTotal += delta
     unit += delta
-    const optionQty = Math.max(numeric(option.option_qty, 1), 0)
+    const optionQty = Math.max(numeric(option.base_qty ?? option.option_qty, 1), 0)
     const groupLabel = String(group.title || group.group_name || selected.group || '').trim()
     const optionLabel = String(option.label || option.name || selected.option || '').trim()
-    const qtySuffix = qtyMultiplier > 1 ? ` x${qtyMultiplier}` : ''
+    const optionUom = String(option.option_uom || option.stock_uom || '').trim()
+    const qtySuffix = optionUom ? ` ${selectedQty} ${optionUom}` : ` x${selectedQty}`
 
     addNutrition(
       nutritionPerUnitTotals,
@@ -385,14 +495,14 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
         sugar_g: option?.nutrition_sugar_g,
         fat_g: option?.nutrition_fat_g,
       },
-      optionQty * qtyMultiplier,
+      selectedQtyInStock || optionQty * (selectedQty / baseQty),
     )
 
     breakdownModifiers.push({
       key: `${selected.group}:${selected.option}`,
       group: groupLabel,
       option: optionLabel,
-      qty: qtyMultiplier,
+      qty: selectedQty,
       delta,
       label: `${groupLabel} - ${optionLabel}${qtySuffix}`,
     })
@@ -404,7 +514,7 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
 
     const optionRecipeMultiplier = Number(option.recipe_multiplier || 1)
     if (optionRecipeMultiplier > 0) {
-      recipeMultiplier *= optionRecipeMultiplier ** qtyMultiplier
+      recipeMultiplier *= optionRecipeMultiplier ** (selectedQty / baseQty)
     }
   }
 

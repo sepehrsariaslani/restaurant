@@ -196,6 +196,36 @@
         </template>
       </section>
 
+      <button
+        v-if="displayItems.length && nextCategoryMeta"
+        type="button"
+        class="next-category-card"
+        :class="{ 'next-category-card--image': nextCategoryMeta.image }"
+        @click="goToNextCategory"
+      >
+        <template v-if="nextCategoryMeta.image">
+          <span class="next-category-card__media-full">
+            <img :src="nextCategoryMeta.image" :alt="nextCategoryMeta.title" />
+          </span>
+          <span class="next-category-card__overlay"></span>
+          <span class="next-category-card__copy next-category-card__copy--overlay">
+            <strong>{{ nextCategoryMeta.title }}</strong>
+            <small>{{ nextCategoryMeta.subtitle }}</small>
+          </span>
+          <span class="next-category-card__cta next-category-card__cta--overlay">{{ nextCategoryMeta.actionLabel }}</span>
+        </template>
+        <template v-else>
+          <span class="next-category-card__media next-category-card__media--icon">
+            <component :is="nextCategoryMeta.icon" :size="20" stroke-width="2.1" />
+          </span>
+          <span class="next-category-card__copy">
+            <strong>{{ nextCategoryMeta.title }}</strong>
+            <small>{{ nextCategoryMeta.subtitle }}</small>
+          </span>
+          <span class="next-category-card__cta">{{ nextCategoryMeta.actionLabel }}</span>
+        </template>
+      </button>
+
       <!-- نقطه تشخیص برای infinite scroll -->
       <div ref="infiniteAnchor" class="infinite-anchor"></div>
 
@@ -288,7 +318,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, Teleport } from 'vue'
-import { ChevronDown, ShoppingCart, Utensils } from 'lucide-vue-next'
+import { ChevronDown, ChevronsUp, ShoppingCart, Utensils } from 'lucide-vue-next'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
 import CategoryImageRail from '@/components/CategoryImageRail.vue'
@@ -299,6 +329,7 @@ import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { getMenuItems, getManagementSessionProfile, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
+import { getMenuIconComponent } from '@/utils/menuIcons'
 import { cartState, cartSubtotal, upsertLine, removeLine } from '@/stores/cartStore'
 
 const props = defineProps({
@@ -370,6 +401,14 @@ const railSticky = ref(false)
 const railRef = ref(null)
 let railOffsetTop = 0
 
+function syncHeaderOffset() {
+  const header = document.querySelector('.app-header')
+  const desktopHeader = header?.querySelector?.('.header-inner')
+  const desktopVisible = Boolean(desktopHeader && window.innerWidth >= 920)
+  const offset = desktopVisible ? Math.ceil(header?.getBoundingClientRect?.().height || header?.offsetHeight || 0) : 0
+  document.documentElement.style.setProperty('--menu-header-offset', `${offset}px`)
+}
+
 function handleScroll() {
   if (!railOffsetTop) {
     railOffsetTop = railRef.value?.offsetTop || 0
@@ -397,6 +436,29 @@ function onScroll() {
     })
     scrollTicking = true
   }
+}
+
+function handleResize() {
+  railOffsetTop = railRef.value?.offsetTop || 0
+  syncHeaderOffset()
+}
+
+function getMenuStickyOffset() {
+  const rootStyles = window.getComputedStyle(document.documentElement)
+  const headerOffset = Number.parseFloat(rootStyles.getPropertyValue('--menu-header-offset')) || 0
+  const railHeight = Number(railRef.value?.offsetHeight || 0)
+  return Math.max(0, Math.ceil(headerOffset + railHeight + 10))
+}
+
+function scrollElementIntoMenuView(element, { behavior = 'smooth' } = {}) {
+  if (!element) {
+    return
+  }
+  const targetTop = window.scrollY + element.getBoundingClientRect().top - getMenuStickyOffset()
+  window.scrollTo({
+    top: Math.max(0, targetTop),
+    behavior,
+  })
 }
 
 const pagination = ref({
@@ -480,6 +542,60 @@ const emptyStateAction = computed(() => {
 
 const activeCategory = computed(() => categories.value.find((row) => row.slug === selectedCategorySlug.value) || null)
 const activeCategoryTitle = computed(() => activeCategory.value?.title || 'دسته')
+const activeCategoryIndex = computed(() => categories.value.findIndex((row) => row.slug === selectedCategorySlug.value))
+
+function resolveCategoryIcon(category = null) {
+  if (!category) {
+    return Utensils
+  }
+  return getMenuIconComponent(category.menu_icon || '', Utensils) || Utensils
+}
+
+const nextCategoryMeta = computed(() => {
+  const rows = Array.isArray(categories.value) ? categories.value : []
+  const currentIndex = activeCategoryIndex.value
+  if (!rows.length || currentIndex < 0) {
+    return null
+  }
+
+  if (rows.length === 1) {
+    return {
+      kind: 'top',
+      slug: rows[0]?.slug || '',
+      title: 'بازگشت به ابتدای منو',
+      subtitle: 'برای مرور دوباره همین گروه به بالا برگردید.',
+      actionLabel: 'رفتن به بالا',
+      icon: ChevronsUp,
+      image: '',
+    }
+  }
+
+  const isLast = currentIndex >= rows.length - 1
+  if (isLast) {
+    const firstCategory = rows[0]
+    return {
+      kind: 'restart',
+      slug: String(firstCategory?.slug || '').trim(),
+      title: `بعدی: ${String(firstCategory?.title || 'اولین گروه').trim()}`,
+      subtitle: 'به ابتدای مسیر گروه‌ها برگردید و منو را ادامه دهید.',
+      actionLabel: 'شروع دوباره',
+      icon: resolveCategoryIcon(firstCategory),
+      image: String(firstCategory?.image || '').trim(),
+    }
+  }
+
+  const nextCategory = rows[currentIndex + 1]
+  return {
+    kind: 'next',
+    slug: String(nextCategory?.slug || '').trim(),
+    title: `گروه بعدی: ${String(nextCategory?.title || 'گروه بعدی').trim()}`,
+    subtitle: `${Number(nextCategory?.item_count || 0).toLocaleString('fa-IR')} آیتم دیگر برای دیدن دارید.`,
+    actionLabel: 'نمایش گروه',
+    icon: resolveCategoryIcon(nextCategory),
+    image: String(nextCategory?.image || '').trim(),
+  }
+})
+
 const highlightedItems = computed(() => {
   const payload = menuHighlight.value || {}
   if (Number(payload.enabled || 0) !== 1) {
@@ -782,10 +898,64 @@ function handlePrintShortcut(event) {
 
 watch(selectedTag, () => {
   // Scroll to top of results when tag filter changes
-  resultHeadRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  scrollElementIntoMenuView(resultHeadRef.value)
 })
 
 // ─── بارگذاری آیتم‌ها ──────────────────────────────────────────────
+async function fetchMenuPage(page = 1, pageSize = 12) {
+  return getMenuItems({
+    category_slug: selectedCategorySlug.value,
+    subcategory_slug: '',
+    search: '',
+    page,
+    page_size: pageSize,
+    branch: activeBranch.value,
+  })
+}
+
+async function loadCategoryCatalog() {
+  const pageSize = 100
+  let page = 1
+  let totalPages = 1
+  const collected = []
+  const seen = new Set()
+  let lastPagination = {
+    page: 1,
+    page_size: pageSize,
+    total: 0,
+    total_pages: 1,
+  }
+
+  while (page <= totalPages && page <= 200) {
+    const data = await fetchMenuPage(page, pageSize)
+    const rows = Array.isArray(data?.items) ? data.items : []
+    for (const row of rows) {
+      const key = String(row?.slug || row?.name || '').trim()
+      if (!key || seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      collected.push(row)
+    }
+
+    const paginationPayload = data?.pagination || {}
+    const nextTotalPages = Number(paginationPayload.total_pages || 1)
+    totalPages = Number.isFinite(nextTotalPages) && nextTotalPages > 0 ? nextTotalPages : 1
+    lastPagination = {
+      page,
+      page_size: pageSize,
+      total: Number(paginationPayload.total || collected.length) || collected.length,
+      total_pages: totalPages,
+    }
+    page += 1
+  }
+
+  return {
+    items: collected,
+    pagination: lastPagination,
+  }
+}
+
 async function reloadItems(page = 1) {
   if (page === 1) {
     loading.value = true
@@ -798,24 +968,21 @@ async function reloadItems(page = 1) {
   error.value = ''
 
   try {
-    const data = await getMenuItems({
-      category_slug: selectedCategorySlug.value,
-      subcategory_slug: '',
-      search: '',
-      page,
-      page_size: 12,
-      branch: activeBranch.value,
-    })
+    const data = page === 1 ? await loadCategoryCatalog() : await fetchMenuPage(page, 12)
 
     const newItems = data.items || []
     if (page === 1) {
       items.value = newItems
+      allLoaded.value = true
     } else {
       items.value = [...items.value, ...newItems]
+      allLoaded.value = pagination.value.page >= pagination.value.total_pages
     }
 
     pagination.value = data.pagination || pagination.value
-    allLoaded.value = pagination.value.page >= pagination.value.total_pages
+    if (page !== 1) {
+      allLoaded.value = pagination.value.page >= pagination.value.total_pages
+    }
   } catch (err) {
     error.value = err.message || 'دریافت منو ناموفق بود.'
   } finally {
@@ -858,17 +1025,54 @@ function setupIntersectionObserver() {
 }
 
 // ─── دسته‌بندی ──────────────────────────────────────────────────────
-function selectCategory(slug) {
-  if (selectedCategorySlug.value === slug) return
-  selectedCategorySlug.value = slug
+async function goToCategory(slug, { scrollTarget = 'top' } = {}) {
+  const cleanSlug = String(slug || '').trim()
+  if (!cleanSlug) {
+    return
+  }
+
+  if (selectedCategorySlug.value === cleanSlug) {
+    if (scrollTarget === 'results') {
+      await nextTick()
+      scrollElementIntoMenuView(resultHeadRef.value)
+    } else {
+      scrollToTop()
+    }
+    return
+  }
+
+  selectedCategorySlug.value = cleanSlug
   selectedSubcategorySlug.value = ''
-  selectedTag.value = '' // reset tag filter on category change
+  selectedTag.value = ''
   sortMenuOpen.value = false
-  reloadItems(1)
-  // Scroll to top so the new category content is visible
+  await reloadItems(1)
+  await nextTick()
+
+  if (scrollTarget === 'results') {
+    scrollElementIntoMenuView(resultHeadRef.value)
+    return
+  }
+
   if (window.scrollY > 0) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+}
+
+function selectCategory(slug) {
+  if (selectedCategorySlug.value === slug) return
+  void goToCategory(slug, { scrollTarget: 'top' })
+}
+
+function goToNextCategory() {
+  const next = nextCategoryMeta.value
+  if (!next) {
+    return
+  }
+  if (next.kind === 'top') {
+    scrollToTop()
+    return
+  }
+  void goToCategory(next.slug, { scrollTarget: 'results' })
 }
 
 function getSubcategoryAnchorKey(slug) {
@@ -897,13 +1101,8 @@ async function scrollToSubcategory(slug) {
   }
 
   const target = subcategorySectionRefs.value[anchorKey]
-  if (target?.scrollIntoView) {
-    // First scroll to top so the sticky rail offset is calculated correctly
-    if (window.scrollY > 0) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      await new Promise(r => setTimeout(r, 300))
-    }
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  if (target) {
+    scrollElementIntoMenuView(target)
   }
 }
 
@@ -912,12 +1111,7 @@ async function selectSubcategory(slug) {
   selectedSubcategorySlug.value = cleanSlug
 
   if (!cleanSlug) {
-    // First scroll to top so the sticky rail offset is calculated correctly
-    if (window.scrollY > 0) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      await new Promise(r => setTimeout(r, 300))
-    }
-    resultHeadRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    scrollElementIntoMenuView(resultHeadRef.value)
     return
   }
 
@@ -1220,9 +1414,11 @@ onMounted(async () => {
   setupIntersectionObserver()
   window.addEventListener('keydown', handlePrintShortcut)
   window.addEventListener('scroll', onScroll)
+  window.addEventListener('resize', handleResize)
   // Capture rail offset after DOM is ready
   nextTick(() => {
     railOffsetTop = railRef.value?.offsetTop || 0
+    syncHeaderOffset()
   })
 })
 
@@ -1230,13 +1426,16 @@ onUnmounted(() => {
   intersectionObserver?.disconnect()
   window.removeEventListener('keydown', handlePrintShortcut)
   window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('resize', handleResize)
+  document.documentElement.style.setProperty('--menu-header-offset', '0px')
 })
 </script>
 
 <style scoped>
 .menu-shell {
-  width: min(540px, 100%);
-  padding: 0 0 max(6.5rem, calc(6.5rem + env(safe-area-inset-bottom)));
+  width: min(540px, calc(100% - 1rem));
+  margin: 0 auto;
+  padding: 0 0.5rem max(6.5rem, calc(6.5rem + env(safe-area-inset-bottom)));
 }
 
 /* ─── Sticky Rail (JS-based because overflow:hidden ancestors break CSS sticky) ─── */
@@ -1258,7 +1457,7 @@ onUnmounted(() => {
 
 .category-rail-sticky.is-sticky {
   position: fixed;
-  top: 0;
+  top: var(--menu-header-offset, 0px);
   left: 0;
   right: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -1276,8 +1475,8 @@ onUnmounted(() => {
 }
 
 .menu-toolbar {
-  width: min(540px, calc(100% - 0.75rem));
-  margin: 0.32rem auto 0.28rem;
+  width: min(540px, calc(100% - 1rem));
+  margin: 0.42rem auto 0.34rem;
   position: relative;
   display: flex;
   justify-content: flex-start;
@@ -1344,7 +1543,9 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  padding: 0.5rem 0.2rem;
+  width: min(540px, calc(100% - 1rem));
+  margin: 0 auto 0.25rem;
+  padding: 0.5rem 0.5rem 0;
   margin-bottom: 0.25rem;
 }
 
@@ -1374,7 +1575,7 @@ onUnmounted(() => {
 
 /* ─── سربرگ نتایج ─── */
 .result-head {
-  padding: 0 0.2rem;
+  padding: 0 0.15rem;
   margin-bottom: 0.52rem;
   display: flex;
   align-items: center;
@@ -1458,7 +1659,7 @@ onUnmounted(() => {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0 0.2rem;
+  padding: 0 0.15rem;
 }
 
 .subcategory-head h3 {
@@ -1474,6 +1675,148 @@ onUnmounted(() => {
 
 .product-card-anim {
   animation: cardReveal 0.4s ease both;
+}
+
+.next-category-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.28rem;
+  padding: 0.88rem 0.9rem;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary, #172521);
+  box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  text-align: right;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.next-category-card--image {
+  position: relative;
+  grid-template-columns: 1fr;
+  min-height: 168px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+}
+
+.next-category-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+}
+
+.next-category-card__media-full {
+  position: absolute;
+  inset: 0;
+}
+
+.next-category-card__media-full img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.next-category-card__overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(15 23 42 / 0.72) 0%, rgb(15 23 42 / 0.38) 45%, rgb(15 23 42 / 0.14) 100%),
+    linear-gradient(180deg, rgb(15 23 42 / 0.04) 0%, rgb(15 23 42 / 0.45) 100%);
+}
+
+.next-category-card__media {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.next-category-card__media--icon {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  color: rgb(var(--palette-deep-sapphire-rgb) / 0.92);
+}
+
+.next-category-card__media--image {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+}
+
+.next-category-card__media--image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.next-category-card__copy {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.next-category-card__copy strong {
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.next-category-card__copy small {
+  color: var(--text-muted, #7a6e64);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.next-category-card__copy--overlay {
+  align-self: end;
+  padding: 1rem 1rem 1.15rem;
+  max-width: min(72%, 420px);
+}
+
+.next-category-card__copy--overlay strong {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.next-category-card__copy--overlay small {
+  color: rgb(255 255 255 / 0.82);
+  font-size: 0.76rem;
+}
+
+.next-category-card__cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 0.82rem;
+  border-radius: 999px;
+  background: var(--accent-green20);
+  color: var(--accent-green, #2f6f5c);
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+.next-category-card__cta--overlay {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary, #172521);
+  box-shadow: 0 8px 20px rgb(15 23 42 / 0.14);
 }
 
 @keyframes cardReveal {
@@ -1812,6 +2155,48 @@ onUnmounted(() => {
 
   .skeleton-body {
     padding: 0.7rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .menu-shell {
+    width: calc(100% - 0.8rem);
+    padding-inline: 0.4rem;
+  }
+
+  .menu-toolbar,
+  .tag-filter-row {
+    width: calc(100% - 0.8rem);
+  }
+
+  .next-category-card {
+    grid-template-columns: 38px minmax(0, 1fr);
+    padding: 0.82rem 0.82rem 0.86rem;
+  }
+
+  .next-category-card--image {
+    grid-template-columns: 1fr;
+    min-height: 154px;
+    padding: 0;
+  }
+
+  .next-category-card__cta {
+    grid-column: 1 / -1;
+    justify-content: center;
+    margin-top: 0.15rem;
+  }
+
+  .next-category-card__copy--overlay {
+    max-width: calc(100% - 1.6rem);
+    padding: 0.95rem 0.9rem 1rem;
+  }
+
+  .next-category-card__cta--overlay {
+    left: 0.75rem;
+    bottom: 0.75rem;
+    min-height: 34px;
+    padding-inline: 0.72rem;
+    margin-top: 0;
   }
 }
 

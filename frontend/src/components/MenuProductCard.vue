@@ -22,9 +22,8 @@
 
       <!-- Content Column (center) -->
       <div class="compact-content">
-        <div class="pills-row">
-          <span v-if="item.category_title" class="pill pill--category">{{ item.category_title }}</span>
-          <span v-if="item.subcategory_title" class="pill pill--combo">{{ item.subcategory_title }}</span>
+        <div class="pills-row" v-if="visibleTags.length">
+          <span v-for="tag in visibleTags" :key="`compact-${tag}`" class="pill pill--tag">{{ tag }}</span>
         </div>
         <a class="card-title-link" :href="`/item/${item.slug}`">
           <h3 class="card-title">{{ item.title }}</h3>
@@ -39,12 +38,6 @@
 
       <!-- Actions Column (leftmost in RTL grid) -->
       <div class="compact-actions">
-        <div class="calorie-chip" v-if="kcalValue">
-          <svg class="calorie-chip__icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-          <span>{{ kcalValue }}kcal</span>
-        </div>
         <button v-if="showBomButton" class="bom-btn bom-btn--compact" type="button" :aria-label="`مشاهده BOM ${item.title}`" @click.prevent="handleBomPreview">
           <Layers :size="12" />
           BOM
@@ -75,11 +68,10 @@
           {{ item.prep_time_mins }} دقیقه
         </span>
         <span class="unavailable-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
-        <span class="calorie-badge calorie-badge--featured" v-if="kcalValue"><Flame :size="12" /> {{ kcalValue }} kcal</span>
       </a>
       <div class="featured-body">
-        <div class="tag-row" v-if="item.tags && item.tags.length">
-          <span class="mini-pill tag-pill" v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+        <div class="tag-row" v-if="visibleTags.length">
+          <span class="mini-pill tag-pill" v-for="tag in visibleTags" :key="`featured-${tag}`">{{ tag }}</span>
         </div>
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || 'توضیحی برای این آیتم ثبت نشده است.' }}</p>
@@ -135,15 +127,12 @@
         <span class="unavailable-badge list-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
       </a>
       <div class="list-body">
-        <div class="list-labels">
-          <span class="mini-pill" v-if="item.category_title">{{ item.category_title }}</span>
-          <span class="mini-pill sub" v-if="item.subcategory_title">{{ item.subcategory_title }}</span>
-          <span class="mini-pill tag-pill" v-for="tag in (item.tags || [])" :key="tag">{{ tag }}</span>
+        <div class="list-labels" v-if="visibleTags.length">
+          <span class="mini-pill tag-pill" v-for="tag in visibleTags" :key="`list-${tag}`">{{ tag }}</span>
         </div>
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || '' }}</p>
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
-        <span class="calorie-badge calorie-badge--list" v-if="kcalValue"><Flame :size="12" /> {{ kcalValue }} kcal</span>
         <div class="list-foot">
           <div v-if="isComingSoon">
             <strong class="price soon-label">به‌زودی</strong>
@@ -183,9 +172,6 @@
     <template v-else>
       <a class="grid-cover" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
         <img :src="resolvedImage" :alt="item.title" class="grid-img" loading="lazy" :class="{ 'img-dimmed': isTemporarilyUnavailable }" />
-        <span class="category-badge" v-if="item.subcategory_title || item.category_title">
-          {{ item.subcategory_title || item.category_title }}
-        </span>
         <span class="coming-soon-ribbon" v-if="isComingSoon">به‌زودی</span>
         <span class="prep-badge grid-prep-badge" v-if="item.prep_time_mins">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -195,13 +181,12 @@
         <button class="like-btn grid-like" type="button" :aria-label="`علاقه‌مندی`" @click.prevent="toggleLike">
           <svg width="17" height="17" viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </button>
-        <span class="calorie-badge calorie-badge--grid" v-if="kcalValue"><Flame :size="12" /> {{ kcalValue }} kcal</span>
       </a>
       <div class="grid-body">
         <h3>{{ item.title }}</h3>
         <p class="desc muted">{{ item.short_desc || 'توضیحی ثبت نشده.' }}</p>
-        <div class="tag-row" v-if="item.tags && item.tags.length">
-          <span class="mini-pill tag-pill" v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+        <div class="tag-row" v-if="visibleTags.length">
+          <span class="mini-pill tag-pill" v-for="tag in visibleTags" :key="`grid-${tag}`">{{ tag }}</span>
         </div>
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
         <div class="grid-foot">
@@ -249,7 +234,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { formatMoney } from '@/utils/format'
 import { getReviewCount } from '@/utils/reviewsStore'
-import { Check, Flame, Layers, Minus, Pencil, Plus, Star } from 'lucide-vue-next'
+import { Check, Layers, Minus, Pencil, Plus, Star } from 'lucide-vue-next'
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -335,22 +320,21 @@ const resolvedImage = computed(
   () => props.item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60',
 )
 
+const visibleTags = computed(() => {
+  const rows = Array.isArray(props.item?.tags) ? props.item.tags : []
+  return rows
+    .map((tag) => String(tag || '').trim())
+    .filter(Boolean)
+    .slice(0, 1)
+})
+
 const nutritionText = computed(() => {
   const kcal = Number(props.item?.nutrition?.kcal ?? props.item?.nutrition_kcal ?? 0)
   const protein = Number(props.item?.nutrition?.protein_g ?? props.item?.nutrition_protein_g ?? 0)
-  const carb = Number(props.item?.nutrition?.carb_g ?? props.item?.nutrition_carb_g ?? 0)
-  const sugar = Number(props.item?.nutrition?.sugar_g ?? props.item?.nutrition_sugar_g ?? 0)
   const parts = []
-  if (Number.isFinite(kcal) && kcal > 0) parts.push(`${Math.round(kcal)} kcal`)
-  if (Number.isFinite(protein) && protein > 0) parts.push(`P ${Math.round(protein)}g`)
-  if (Number.isFinite(carb) && carb > 0) parts.push(`C ${Math.round(carb)}g`)
-  if (Number.isFinite(sugar) && sugar > 0) parts.push(`S ${Math.round(sugar)}g`)
+  if (Number.isFinite(kcal) && kcal > 0) parts.push(`${Math.round(kcal).toLocaleString('fa-IR')} کیلوکالری`)
+  if (Number.isFinite(protein) && protein > 0) parts.push(`${Math.round(protein).toLocaleString('fa-IR')} گرم پروتئین`)
   return parts.join(' • ')
-})
-
-const kcalValue = computed(() => {
-  const kcal = Number(props.item?.nutrition?.kcal ?? props.item?.nutrition_kcal ?? 0)
-  return Number.isFinite(kcal) && kcal > 0 ? Math.round(kcal) : 0
 })
 
 const hasCustomization = computed(() => Number(props.item?.has_customization || 0) === 1)
@@ -394,41 +378,7 @@ function handleCustomize() {
 .desc  { margin: 0; font-size: 0.79rem; line-height: 1.55; }
 .muted { color: var(--text-muted, #7a6e64); }
 .foot-actions { display: flex; align-items: center; gap: 0.42rem; }
-.nutrition-line { margin: 0.2rem 0 0; font-size: 0.72rem; color: var(--text-muted, #7a6e64); }
-
-.calorie-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border-radius: 999px;
-  background: rgba(20, 15, 8, 0.72);
-  color: #fff;
-  font-weight: 700;
-  z-index: 2;
-  backdrop-filter: blur(6px);
-}
-
-.calorie-badge--featured {
-  position: absolute;
-  bottom: 0.75rem;
-  left: 0.75rem;
-  padding: 0.28rem 0.72rem;
-  font-size: 0.72rem;
-}
-
-.calorie-badge--list {
-  padding: 0.18rem 0.55rem;
-  font-size: 0.68rem;
-  margin-top: 0.15rem;
-}
-
-.calorie-badge--grid {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  padding: 0.18rem 0.55rem;
-  font-size: 0.68rem;
-}
+.nutrition-line { margin: 0.22rem 0 0; font-size: 0.72rem; color: var(--text-muted, #7a6e64); line-height: 1.6; }
 .in-cart-badge { display: block; margin-top: 0.12rem; font-size: 0.68rem; color: var(--accent-green, #2f6f5c); }
 
 .mini-pill {
@@ -438,7 +388,6 @@ function handleCustomize() {
   font-size: 0.67rem;
   color: var(--ink-600, #4a4038);
 }
-.mini-pill.sub { background: rgb(var(--palette-june-bud-rgb) / 0.34); color: var(--ink-800); }
 .mini-pill.tag-pill { background: rgb(var(--palette-deep-sapphire-rgb) / 0.12); color: rgb(var(--palette-deep-sapphire-rgb) / 1); }
 
 .tag-row { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; }
@@ -604,13 +553,13 @@ function handleCustomize() {
   height: 30px;
 }
 .bom-btn.bom-btn--compact {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   justify-content: center;
-  border-radius: 50%;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  border-radius: 13px;
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.16);
   color: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
   font-size: 0;
 }
@@ -751,7 +700,7 @@ function handleCustomize() {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   align-self: stretch;
 }
@@ -775,14 +724,9 @@ function handleCustomize() {
   flex-shrink: 0;
 }
 
-.pill--category {
-  background: #fff0e8;
-  color: var(--color-primary, var(--accent-gold));
-}
-
-.pill--combo {
-  background: var(--accent-green20);
-  color: var(--color-accent, var(--accent-green));
+.pill--tag {
+  background: rgb(var(--palette-deep-sapphire-rgb) / 0.1);
+  color: rgb(var(--palette-deep-sapphire-rgb) / 1);
 }
 
 /* Title */
@@ -817,15 +761,13 @@ function handleCustomize() {
 
 /* Nutrition row */
 .card-nutrition {
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--color-text-muted, var(--text-muted));
   text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
   max-width: 100%;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  line-height: 1.55;
 }
 
 /* Price */
@@ -838,7 +780,6 @@ function handleCustomize() {
   font-weight: 900;
   color: var(--color-accent, var(--accent-green));
   text-align: right;
-  direction: ltr;
   font-variant-numeric: tabular-nums;
 }
 
@@ -848,33 +789,14 @@ function handleCustomize() {
   font-weight: 600;
 }
 
-/* Calorie chip */
-.calorie-chip {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 4px 6px;
-  border-radius: 999px;
-  background: var(--color-surface-alt, var(--theme-surface-alt));
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--color-text-primary, var(--text-primary));
-}
-
-.calorie-chip__icon {
-  width: 12px;
-  height: 12px;
-  color: var(--color-primary, var(--accent-gold));
-}
-
 /* Add button — compact accent */
 .add-btn {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   background: var(--add-btn-bg, var(--accent-gold));
   color: #ffffff;
   border: none;
-  border-radius: 11px;
+  border-radius: 13px;
   box-shadow: 0 8px 16px rgb(var(--palette-deep-saffron-rgb) / 0.22);
   cursor: pointer;
   display: flex;
@@ -905,7 +827,6 @@ function handleCustomize() {
   font-size: 17px;
   line-height: 1;
   font-weight: 500;
-  transform: translateY(-1px);
 }
 
 /* Unavailable badge */
@@ -961,27 +882,22 @@ function handleCustomize() {
   }
 
   .add-btn {
-    width: 30px;
-    height: 30px;
-    border-radius: 11px;
+    width: 36px;
+    height: 36px;
+    border-radius: 13px;
   }
 
   .add-icon {
     font-size: 17px;
   }
 
-  .calorie-chip {
-    font-size: 9px;
-    padding: 4px 6px;
-  }
-
   .pill {
-    font-size: 9px;
+    font-size: 9.5px;
     padding: 3px 6px;
   }
 
   .card-nutrition {
-    font-size: 9px;
+    font-size: 9.5px;
   }
 }
 
@@ -1133,13 +1049,6 @@ function handleCustomize() {
   transition: transform 0.34s ease;
 }
 .layout--grid:hover .grid-img { transform: scale(1.05); }
-
-.category-badge {
-  position: absolute; top: 0.6rem; right: 0.6rem;
-  border-radius: 999px; padding: 0.18rem 0.55rem;
-  background: #fff;
-  font-size: 0.68rem; font-weight: 600; color: var(--ink-700, #2e2820);
-}
 
 .grid-body {
   padding: 0.9rem; display: flex; flex-direction: column;

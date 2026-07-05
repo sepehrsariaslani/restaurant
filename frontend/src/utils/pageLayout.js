@@ -54,7 +54,7 @@ export function hasStoredPageLayout(boot = {}, page = "home") {
 export function resolvePageLayout(boot = {}, page = "home") {
 	const pageKey = normalizePageBuilderKey(page);
 	const stored = boot?.page_layout?.[pageKey];
-	const storedBlocks = stored && asArray(stored.blocks);
+	const storedBlocks = asArray(stored?.blocks);
 
 	if (storedBlocks.length) {
 		return storedBlocks

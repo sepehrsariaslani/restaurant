@@ -81,6 +81,7 @@ homepage = "restaurant"
 website_route_rules = [
 	# Root redirect → restaurant landing
 	{"from_route": "/", "to_route": "restaurant/index"},
+	{"from_route": "/manifest.webmanifest", "to_route": "manifest_proxy"},
 	# Customer-facing routes (no prefix)
 	{"from_route": "/table/<qr_token>", "to_route": "restaurant/menu"},
 	{"from_route": "/menu", "to_route": "restaurant/menu"},

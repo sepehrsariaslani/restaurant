@@ -977,6 +977,8 @@ async function openEdit(row) {
           restaurant_nutrition_carb_g: Number(itemRow.restaurant_nutrition_carb_g || 0),
           restaurant_nutrition_sugar_g: Number(itemRow.restaurant_nutrition_sugar_g || 0),
           restaurant_nutrition_fat_g: Number(itemRow.restaurant_nutrition_fat_g || 0),
+          alternatives_count: Number(itemRow.alternatives_count || 0),
+          alternatives: Array.isArray(itemRow.alternatives) ? itemRow.alternatives : [],
         }))
       : []
 

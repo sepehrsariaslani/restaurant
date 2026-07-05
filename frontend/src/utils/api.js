@@ -722,6 +722,159 @@ export async function callRestaurantAPI(methodName, args = {}) {
 	return callMethodByPath(`restaurant.api.${methodName}`, args);
 }
 
+function isMissingMethodError(error, methodPath = "") {
+	const message = String(error?.message || "").trim().toLowerCase();
+	const normalizedPath = String(methodPath || "").trim().toLowerCase();
+	if (!message) {
+		return false;
+	}
+	return (
+		message.includes("failed to get method for command") &&
+		(!normalizedPath || message.includes(normalizedPath))
+	);
+}
+
+function normalizeModifierGroupOptionFallback(row = {}) {
+	const actionType = String(row?.action_type || "add_on").trim() || "add_on";
+	const isActive = Number(row?.is_active ?? 1) === 1 || row?.is_active === true;
+	const optionItem = String(row?.option_item || "").trim();
+	const priceDelta = Number(row?.price_delta || 0) || 0;
+	let priceStatus = "ok";
+	if (!isActive) {
+		priceStatus = "inactive";
+	} else if (actionType === "add_on" && !optionItem) {
+		priceStatus = "missing_item";
+	}
+	return {
+		name: String(row?.name || "").trim(),
+		option_name: String(row?.option_name || row?.name || "").trim(),
+		action_type: actionType,
+		option_item: optionItem,
+		option_item_name: String(row?.option_item_name || "").trim(),
+		option_uom: String(row?.option_uom || "").trim(),
+		option_qty: Number(row?.option_qty || 1) || 1,
+		base_qty: Number((row?.base_qty ?? row?.option_qty ?? 1)) || 1,
+		stock_uom: String(row?.stock_uom || "").trim(),
+		option_cost_rate: Number(row?.option_cost_rate || 0) || 0,
+		option_cost_amount: Number(row?.option_cost_amount || 0) || 0,
+		legacy_price_delta: priceDelta,
+		price_delta: priceDelta,
+		base_price: Number((row?.base_price ?? row?.price_delta ?? 0)) || 0,
+		unit_rate: Number(row?.unit_rate || 0) || 0,
+		conversion_factor: Number(row?.conversion_factor || 1) || 1,
+		price_status: priceStatus,
+		price_source: priceStatus === "ok" ? "legacy" : "legacy_unresolved",
+		price_item_code: optionItem,
+		price_list: String(row?.price_list || "").trim(),
+		min_qty: Number(row?.min_qty ?? 0) || 0,
+		max_qty: Number(row?.max_qty ?? 4) || 4,
+		qty_step: Number(row?.qty_step || row?.option_qty || 1) || 1,
+		alternative_bom: String(row?.alternative_bom || "").trim(),
+		recipe_multiplier: Number(row?.recipe_multiplier || 1) || 1,
+		is_default: Number(row?.is_default || 0) === 1 || row?.is_default === true ? 1 : 0,
+		sort_order: Number(row?.sort_order || 0) || 0,
+		is_active: isActive ? 1 : 0,
+		is_selectable: isActive ? 1 : 0,
+		disabled: isActive ? 0 : 1,
+		unavailable_reason:
+			priceStatus === "missing_item"
+				? "برای این گزینه هنوز آیتم قیمت‌گذاری انتخاب نشده است."
+				: priceStatus === "inactive"
+					? "این گزینه غیرفعال است."
+					: "",
+	};
+}
+
+function normalizeModifierGroupDocFallback(doc = {}, defaultPriceList = "") {
+	const options = Array.isArray(doc?.options)
+		? doc.options.map((row) =>
+				normalizeModifierGroupOptionFallback({
+					...row,
+					price_list: row?.price_list || defaultPriceList,
+				}),
+			)
+		: [];
+	const activeOptionsCount = options.filter((row) => Number(row?.is_active ?? 1) === 1).length;
+	const unresolvedCount = options.filter(
+		(row) =>
+			Number(row?.is_active ?? 1) === 1 &&
+			String(row?.price_status || "").trim() !== "ok",
+	).length;
+	return {
+		name: String(doc?.name || "").trim(),
+		title: String(doc?.title || doc?.name || "").trim(),
+		selection_mode: String(doc?.selection_mode || "single").trim() || "single",
+		required: Number(doc?.required || 0) === 1 || doc?.required === true ? 1 : 0,
+		min_select: Number(doc?.min_select || 0) || 0,
+		max_select: Number(doc?.max_select || 1) || 1,
+		description: String(doc?.description || "").trim(),
+		sort_order: Number(doc?.sort_order || 0) || 0,
+		is_active: Number(doc?.is_active ?? 1) === 1 || doc?.is_active === true ? 1 : 0,
+		default_price_list: String(defaultPriceList || "").trim(),
+		options,
+		options_count: options.length,
+		active_options_count: activeOptionsCount,
+		unresolved_options_count: unresolvedCount,
+		has_pricing_issues: unresolvedCount > 0 ? 1 : 0,
+	};
+}
+
+async function getModifierGroupsContextFallback() {
+	let defaultPriceList = "";
+	let priceLists = [];
+	try {
+		const priceListPayload = await callRestaurantAPI("list_management_price_lists", {});
+		defaultPriceList = String(priceListPayload?.default_price_list || "").trim();
+		priceLists = Array.isArray(priceListPayload?.price_lists) ? priceListPayload.price_lists : [];
+	} catch (_) {
+		defaultPriceList = "";
+		priceLists = [];
+	}
+
+	const [itemRows, bomRows, uomRows] = await Promise.all([
+		safeGetList({
+			doctype: "Item",
+			fields: ["name", "item_name"],
+			filters: [["disabled", "=", 0]],
+			order_by: "item_name asc",
+			limit_page_length: 1000,
+		}),
+		safeGetList({
+			doctype: "BOM",
+			fields: ["name", "item"],
+			order_by: "modified desc",
+			limit_page_length: 1000,
+		}),
+		safeGetList({
+			doctype: "UOM",
+			fields: ["name", "uom_name"],
+			order_by: "uom_name asc",
+			limit_page_length: 500,
+		}),
+	]);
+
+	return {
+		default_price_list: defaultPriceList,
+		price_lists: priceLists,
+		item_options: itemRows.map((row) => ({
+			value: String(row?.name || "").trim(),
+			label: String(row?.item_name || row?.name || "").trim(),
+		})),
+		bom_options: bomRows.map((row) => ({
+			value: String(row?.name || "").trim(),
+			label: String(row?.item || row?.name || "").trim(),
+		})),
+		uom_options: uomRows.map((row) => ({
+			value: String(row?.name || "").trim(),
+			label: String(row?.uom_name || row?.name || "").trim(),
+		})),
+		action_type_options: [
+			{ value: "add_on", label: "Add-on" },
+			{ value: "bom_variant", label: "BOM Variant" },
+		],
+	};
+}
+
 export async function getManagementSessionProfile() {
 	try {
 		const user =
@@ -1618,6 +1771,145 @@ export async function getManagementModifierGroupDoc(group_name = "") {
 		throw new Error("گروه مودیفایر نامعتبر است.");
 	}
 	return callMethodByPath("frappe.client.get", {
+		doctype: "Restaurant Modifier Group",
+		name: groupName,
+	});
+}
+
+export async function listManagementModifierGroupsOverview({
+	search = "",
+	include_inactive = 1,
+} = {}) {
+	try {
+		const payload = await callRestaurantAPI("list_management_modifier_groups", {
+			search,
+			include_inactive: Number(include_inactive) ? 1 : 0,
+		});
+		return payload || { groups: [], default_price_list: "" };
+	} catch (error) {
+		if (!isMissingMethodError(error, "restaurant.api.list_management_modifier_groups")) {
+			throw error;
+		}
+		const fallbackContext = await getModifierGroupsContextFallback();
+		const rows = await safeGetList({
+			doctype: "Restaurant Modifier Group",
+			fields: [
+				"name",
+				"title",
+				"selection_mode",
+				"required",
+				"min_select",
+				"max_select",
+				"description",
+				"sort_order",
+				"is_active",
+				"modified",
+			],
+			filters: Number(include_inactive) ? undefined : [["is_active", "=", 1]],
+			or_filters: String(search || "").trim()
+				? [
+						["name", "like", `%${String(search || "").trim()}%`],
+						["title", "like", `%${String(search || "").trim()}%`],
+					]
+				: undefined,
+			order_by: "sort_order asc, modified desc",
+			limit_page_length: 500,
+		});
+		return {
+			groups: rows.map((row) => ({
+				...normalizeModifierGroupDocFallback(row, fallbackContext.default_price_list),
+				modified: row?.modified || "",
+				options: undefined,
+			})),
+			default_price_list: fallbackContext.default_price_list || "",
+		};
+	}
+}
+
+export async function getManagementModifierGroupsContext() {
+	try {
+		const payload = await callRestaurantAPI("get_management_modifier_groups_context", {});
+		return payload || { default_price_list: "", price_lists: [], item_options: [], bom_options: [], uom_options: [] };
+	} catch (error) {
+		if (!isMissingMethodError(error, "restaurant.api.get_management_modifier_groups_context")) {
+			throw error;
+		}
+		return getModifierGroupsContextFallback();
+	}
+}
+
+export async function getManagementModifierGroupDetail(group_name = "") {
+	const groupName = String(group_name || "").trim();
+	if (!groupName) {
+		throw new Error("گروه مودیفایر نامعتبر است.");
+	}
+	try {
+		return await callRestaurantAPI("get_management_modifier_group_detail", { group_name: groupName });
+	} catch (error) {
+		if (!isMissingMethodError(error, "restaurant.api.get_management_modifier_group_detail")) {
+			throw error;
+		}
+		const [doc, context] = await Promise.all([
+			getManagementModifierGroupDoc(groupName),
+			getModifierGroupsContextFallback(),
+		]);
+		return normalizeModifierGroupDocFallback(doc, context.default_price_list);
+	}
+}
+
+export async function saveManagementModifierGroup(payload = {}) {
+	try {
+		return await callRestaurantAPI("save_management_modifier_group", { payload });
+	} catch (error) {
+		if (!isMissingMethodError(error, "restaurant.api.save_management_modifier_group")) {
+			throw error;
+		}
+		const normalizedPayload = payload && typeof payload === "object" ? payload : {};
+		const doc = {
+			doctype: "Restaurant Modifier Group",
+			name: String(normalizedPayload?.name || "").trim() || undefined,
+			title: String(normalizedPayload?.title || "").trim(),
+			selection_mode: String(normalizedPayload?.selection_mode || "single").trim() || "single",
+			required:
+				Number(normalizedPayload?.required || 0) === 1 || normalizedPayload?.required === true ? 1 : 0,
+			min_select: Number(normalizedPayload?.min_select || 0) || 0,
+			max_select: Number(normalizedPayload?.max_select || 1) || 1,
+			description: String(normalizedPayload?.description || "").trim(),
+			sort_order: Number(normalizedPayload?.sort_order || 0) || 0,
+			is_active:
+				Number(normalizedPayload?.is_active ?? 1) === 1 || normalizedPayload?.is_active === true ? 1 : 0,
+			options: Array.isArray(normalizedPayload?.options)
+				? normalizedPayload.options.map((row) => ({
+						doctype: "Restaurant Modifier Option",
+						name: String(row?.name || "").trim() || undefined,
+						option_name: String(row?.option_name || "").trim(),
+						action_type: String(row?.action_type || "add_on").trim() || "add_on",
+						option_item: String(row?.option_item || "").trim(),
+						alternative_bom: String(row?.alternative_bom || "").trim(),
+						option_qty: Number(row?.option_qty || 1) || 1,
+						min_qty: Number(row?.min_qty ?? 1) || 1,
+						max_qty: Number(row?.max_qty ?? 9) || 9,
+						qty_step: Number(row?.qty_step || 1) || 1,
+						recipe_multiplier: Number(row?.recipe_multiplier || 1) || 1,
+						is_default: Number(row?.is_default || 0) === 1 || row?.is_default === true ? 1 : 0,
+						sort_order: Number(row?.sort_order || 0) || 0,
+						is_active: Number(row?.is_active ?? 1) === 1 || row?.is_active === true ? 1 : 0,
+						price_delta: Number(row?.price_delta || 0) || 0,
+					}))
+				: [],
+		};
+		const method = doc.name ? "frappe.client.save" : "frappe.client.insert";
+		const saved = await callMethodByPath(method, { doc });
+		return getManagementModifierGroupDetail(saved?.name || doc.name || doc.title || "");
+	}
+}
+
+export async function deleteManagementModifierGroup(group_name = "") {
+	const groupName = String(group_name || "").trim();
+	if (!groupName) {
+		throw new Error("گروه مودیفایر نامعتبر است.");
+	}
+	return callMethodByPath("frappe.client.delete", {
 		doctype: "Restaurant Modifier Group",
 		name: groupName,
 	});

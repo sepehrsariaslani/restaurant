@@ -126,7 +126,7 @@
             @click="activeTab = 'ingredients'"
             type="button"
           >
-            مواد تشکیل‌دهنده
+            {{ ingredientTabLabel }}
           </button>
           <button
             v-if="isBuilderEnabled"
@@ -150,18 +150,13 @@
 
         <!-- Tab: details -->
         <div class="tab-pane" v-show="activeTab === 'details'">
-          <div class="nutri-row" v-if="nutritionKcal !== '--' || macroCards.length">
-            <div class="nutri-chip" v-if="nutritionKcal !== '--'">
-              <small>کالری</small>
-              <strong>{{ nutritionKcal }} kcal</strong>
-            </div>
-            <div class="nutri-chip" v-if="nutritionProteinPercent !== '--'">
-              <small>پروتئین</small>
-              <strong>{{ nutritionProteinPercent }}%</strong>
-            </div>
-            <div class="nutri-chip" v-for="m in macroCards" :key="m.key">
-              <small>{{ m.label }}</small>
-              <strong>{{ m.value }}</strong>
+          <div class="nutri-row" v-if="nutritionCards.length">
+            <div class="nutri-chip" v-for="card in nutritionCards" :key="card.key">
+              <span class="nutri-chip__icon" :class="`tone-${card.tone}`">
+                <component :is="card.icon" :size="18" stroke-width="2.1" />
+              </span>
+              <small>{{ card.label }}</small>
+              <strong>{{ card.value }}</strong>
             </div>
           </div>
 
@@ -169,7 +164,7 @@
             <span class="tag" v-for="a in allergens" :key="a">{{ a }}</span>
           </div>
 
-          <p class="empty-tab" v-if="nutritionKcal === '--' && !macroCards.length && !allergens.length">
+          <p class="empty-tab" v-if="!nutritionCards.length && !allergens.length">
             اطلاعات تکمیلی برای این محصول ثبت نشده است.
           </p>
         </div>
@@ -271,12 +266,12 @@
         </div>
 
         <!-- Common customization (always visible) -->
-        <section class="detail-section" v-if="hasModifierCustomization">
-          <div class="section-head">
-            <h3>سایز و افزودنی‌ها</h3>
-          </div>
-          <ModifierRecipeImpactSelector
-            :groups="modifierGroups"
+          <section class="detail-section" v-if="hasModifierCustomization">
+            <div class="section-head">
+              <h3>سایز، افزودنی و فرمول</h3>
+            </div>
+            <ModifierRecipeImpactSelector
+              :groups="modifierGroups"
             :currency="currency"
             :model-value="customization.selected_modifiers"
             @update:model-value="setSelectedModifiers"
@@ -375,7 +370,7 @@
                 :class="{ active: activeTab === 'ingredients' }"
                 @click="activeTab = 'ingredients'"
                 type="button"
-              >مواد تشکیل‌دهنده</button>
+              >{{ ingredientTabLabel }}</button>
               <button
                 v-if="isBuilderEnabled"
                 class="detail-tab"
@@ -396,18 +391,13 @@
 
             <!-- Tab content -->
             <div class="tab-pane desktop-pane" v-show="activeTab === 'details'">
-              <div class="nutri-row" v-if="nutritionKcal !== '--' || macroCards.length">
-                <div class="nutri-chip" v-if="nutritionKcal !== '--'">
-                  <small>کالری</small>
-                  <strong>{{ nutritionKcal }} کیلوکالری</strong>
-                </div>
-                <div class="nutri-chip" v-if="nutritionProteinPercent !== '--'">
-                  <small>پروتئین</small>
-                  <strong>{{ nutritionProteinPercent }}%</strong>
-                </div>
-                <div class="nutri-chip" v-for="m in macroCards" :key="m.key">
-                  <small>{{ m.label }}</small>
-                  <strong>{{ m.value }}</strong>
+              <div class="nutri-row" v-if="nutritionCards.length">
+                <div class="nutri-chip" v-for="card in nutritionCards" :key="card.key">
+                  <span class="nutri-chip__icon" :class="`tone-${card.tone}`">
+                    <component :is="card.icon" :size="18" stroke-width="2.1" />
+                  </span>
+                  <small>{{ card.label }}</small>
+                  <strong>{{ card.value }}</strong>
                 </div>
               </div>
 
@@ -415,7 +405,7 @@
                 <span class="tag" v-for="a in allergens" :key="a">{{ a }}</span>
               </div>
 
-              <p class="empty-tab" v-if="nutritionKcal === '--' && !macroCards.length && !allergens.length">
+              <p class="empty-tab" v-if="!nutritionCards.length && !allergens.length">
                 اطلاعات تکمیلی برای این محصول ثبت نشده است.
               </p>
             </div>
@@ -516,7 +506,7 @@
             <!-- Common customization (always visible) -->
             <section class="detail-section" v-if="hasModifierCustomization">
               <div class="section-head">
-                <h3>سایز و افزودنی‌ها</h3>
+                <h3>سایز، افزودنی و فرمول</h3>
               </div>
               <ModifierRecipeImpactSelector
                 :groups="modifierGroups"
@@ -639,6 +629,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Teleport } from 'vue'
+import { Flame, Dumbbell, Wheat, Droplets, Percent } from 'lucide-vue-next'
 import IngredientQuantityEditor from '@/components/IngredientQuantityEditor.vue'
 import ModifierRecipeImpactSelector from '@/components/ModifierRecipeImpactSelector.vue'
 import LivePricingBreakdown from '@/components/LivePricingBreakdown.vue'
@@ -970,6 +961,11 @@ const builderDisplayPrice = computed(() => {
 
 const hasIngredientCustomization = computed(() => Array.isArray(ingredients.value) && ingredients.value.length > 0)
 const hasModifierCustomization = computed(() => Array.isArray(modifierGroups.value) && modifierGroups.value.length > 0)
+const ingredientTabLabel = computed(() =>
+  (ingredients.value || []).some((row) => Number(row?.is_replaceable || 0) === 1)
+    ? 'مواد و جایگزین‌ها'
+    : 'مواد تشکیل‌دهنده',
+)
 
 const nutritionKcal = computed(() => {
   const value = Number(item.value?.nutrition?.kcal ?? item.value?.nutrition_kcal ?? 0)
@@ -1002,6 +998,48 @@ const macroCards = computed(() => {
     .filter(Boolean)
 })
 
+const nutritionCards = computed(() => {
+  const cards = []
+  if (nutritionKcal.value !== '--') {
+    cards.push({
+      key: 'kcal',
+      label: 'کالری',
+      value: `${nutritionKcal.value} kcal`,
+      icon: Flame,
+      tone: 'warm',
+    })
+  }
+  if (nutritionProteinPercent.value !== '--') {
+    cards.push({
+      key: 'protein_percent',
+      label: 'درصد پروتئین',
+      value: `${nutritionProteinPercent.value}%`,
+      icon: Percent,
+      tone: 'cool',
+    })
+  }
+  const iconByKey = {
+    protein_g: Dumbbell,
+    carb_g: Wheat,
+    sugar_g: Percent,
+    fat_g: Droplets,
+  }
+  const toneByKey = {
+    protein_g: 'cool',
+    carb_g: 'soft',
+    sugar_g: 'soft',
+    fat_g: 'warm',
+  }
+  for (const macro of macroCards.value) {
+    cards.push({
+      ...macro,
+      icon: iconByKey[macro.key] || Dumbbell,
+      tone: toneByKey[macro.key] || 'soft',
+    })
+  }
+  return cards
+})
+
 function resolveSlug() {
   const fromBoot = String(props.boot.item_slug || '').trim()
   if (fromBoot) return fromBoot
@@ -1023,10 +1061,30 @@ function normalizeModifierGroups(rawGroups = []) {
     const options = (group.options || []).map((option) => {
       const optionName = String(option?.name || option?.option_name || option?.option_key || '').trim()
       if (!optionName) return null
-      const minQty = Math.max(toNumber(option.min_qty, 1), 0)
-      const maxQty = Math.max(toNumber(option.max_qty, 9), minQty)
-      const qtyStep = Math.max(toNumber(option.qty_step, 1), 0.0001)
-      return { ...option, name: optionName, min_qty: minQty, max_qty: maxQty, qty_step: qtyStep, option_qty: Math.max(toNumber(option.option_qty, 1), 0.0001), price_delta: toNumber(option.price_delta, 0) }
+      const baseQty = Math.max(toNumber(option.base_qty ?? option.option_qty, 1), 0.0001)
+      const minQty = Math.max(toNumber(option.min_qty, 0), 0)
+      const maxQty = Math.max(toNumber(option.max_qty, Math.max(baseQty, baseQty * 4)), minQty, baseQty)
+      const qtyStep = Math.max(toNumber(option.qty_step, baseQty), 0.0001)
+      return {
+        ...option,
+        name: optionName,
+        label: String(option?.label || option?.option_name || optionName).trim() || optionName,
+        min_qty: minQty,
+        max_qty: maxQty,
+        qty_step: qtyStep,
+        option_qty: baseQty,
+        base_qty: baseQty,
+        stock_uom: String(option?.stock_uom || '').trim(),
+        option_uom: String(option?.option_uom || option?.stock_uom || '').trim(),
+        unit_rate: toNumber(option.unit_rate, 0),
+        base_price: toNumber(option.base_price ?? option.price_delta, 0),
+        conversion_factor: Math.max(toNumber(option.conversion_factor, 1), 0),
+        price_delta: toNumber(option.price_delta, 0),
+        is_selectable: Number(option?.is_selectable ?? 1),
+        disabled: Number(option?.disabled ?? 0),
+        price_status: String(option?.price_status || 'ok').trim() || 'ok',
+        unavailable_reason: String(option?.unavailable_reason || '').trim(),
+      }
     }).filter(Boolean)
     return { ...group, group_name: groupName, title: String(group.title || groupName).trim(), selection_mode: String(group.selection_mode || 'single').trim() || 'single', min_select: Math.max(toNumber(group.min_select, 0), 0), max_select: Math.max(toNumber(group.max_select, 1), 1), is_variant_attribute_selector: Number(group.is_variant_attribute_selector || 0), options }
   }).filter(Boolean)
@@ -1042,12 +1100,13 @@ function normalizeSelectedModifiers(selectedRows = [], groups = []) {
     const group = groupMap.get(groupName)
     if (!group) continue
     const option = (group.options || []).find((entry) => entry.name === optionName)
-    if (!option) continue
-    const minQty = Math.max(toNumber(option.min_qty, 1), 0)
-    const maxQty = Math.max(toNumber(option.max_qty, 9), minQty)
-    const step = Math.max(toNumber(option.qty_step, 1), 0.0001)
-    let qty2 = toNumber(row.qty, minQty || 1)
-    if (qty2 <= 0) qty2 = minQty || step
+    if (!option || Number(option.is_selectable ?? 1) !== 1) continue
+    const baseQty = Math.max(toNumber(option.base_qty ?? option.option_qty, 1), 0.0001)
+    const minQty = Math.max(toNumber(option.min_qty, 0), 0)
+    const maxQty = Math.max(toNumber(option.max_qty, Math.max(baseQty, baseQty * 4)), minQty, baseQty)
+    const step = Math.max(toNumber(option.qty_step, baseQty), 0.0001)
+    let qty2 = toNumber(row.qty, baseQty)
+    if (qty2 <= 0) qty2 = baseQty
     const snapped = minQty + Math.round((qty2 - minQty) / step) * step
     const clamped = Math.min(Math.max(snapped, minQty), maxQty)
     deduped.set(`${groupName}::${optionName}`, { group: groupName, option: optionName, qty: Number(clamped.toFixed(4)) })
@@ -1238,7 +1297,29 @@ function addToCart() {
 }
 
 function resolveItemImage(source = null) {
-  const img = String(source?.image || source?.item_image || source?.website_image || '').trim()
+  const extraImages = Array.isArray(source?.extra_images) ? source.extra_images : []
+  const directExtraImage = source?.extra_images?.[0]
+  const firstExtra = extraImages.find((entry) => {
+    if (typeof entry === 'string') return String(entry).trim()
+    return String(entry?.image || entry?.url || entry?.file_url || '').trim()
+  })
+  const normalizedDirectExtra = typeof directExtraImage === 'string'
+    ? String(directExtraImage).trim()
+    : String(directExtraImage?.image || directExtraImage?.url || directExtraImage?.file_url || '').trim()
+  const normalizedExtra = typeof firstExtra === 'string'
+    ? String(firstExtra).trim()
+    : String(firstExtra?.image || firstExtra?.url || firstExtra?.file_url || '').trim()
+  const img = String(
+    source?.image ||
+    source?.item_image ||
+    source?.website_image ||
+    source?.hero_image ||
+    source?.media?.main_image ||
+    source?.thumbnail ||
+    normalizedDirectExtra ||
+    normalizedExtra ||
+    '',
+  ).trim()
   return img || fallbackImage
 }
 
@@ -1273,8 +1354,7 @@ onUnmounted(() => {
   min-height: 100svh;
   background: var(--theme-background, #f6f1ea);
   direction: rtl;
-  /* Space for the add-to-cart bar + the bottom nav on mobile */
-  padding-bottom: calc(env(safe-area-inset-bottom) + 9.5rem);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 6.75rem);
 }
 
 .state-shell {
@@ -1302,13 +1382,15 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   overflow: hidden;
-  background: var(--theme-surface-alt, #f1e7db);
+  background:
+    radial-gradient(circle at top, rgb(255 255 255 / 0.92), transparent 42%),
+    linear-gradient(180deg, rgb(var(--palette-eggshell-rgb) / 0.98), rgb(var(--palette-eggshell-rgb) / 0.86));
 }
 
 .gallery-track {
   display: flex;
   transition: transform 0.35s cubic-bezier(.4,0,.2,1);
-  height: min(380px, 62vw);
+  height: min(390px, 82vw);
 }
 
 .gallery-slide {
@@ -1316,23 +1398,31 @@ onUnmounted(() => {
   min-width: 100%;
   height: 100%;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.1rem 1rem 0.9rem;
+  box-sizing: border-box;
 }
 
 .gallery-img {
-  min-width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+  width: auto;
+  max-width: min(100%, 27rem);
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center center;
   display: block;
   flex-shrink: 0;
 }
 
 @media (max-width: 767px) {
-  .gallery-img { object-fit: cover; }
+  .gallery-img { object-fit: contain; }
 }
 
 @media (max-width: 480px) {
-  .gallery-track { height: 300px; }
+  .gallery-track { height: min(360px, 84vw); }
+  .gallery-slide { padding-inline: 0.8rem; }
+  .gallery-img { max-width: min(100%, 22rem); }
 }
 
 .gallery-arrow {
@@ -1601,17 +1691,40 @@ onUnmounted(() => {
 .nutri-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .nutri-chip {
   flex: 1;
-  min-width: 80px;
-  border-radius: 16px;
-  padding: 0.6rem 0.7rem;
-  background: var(--accent-green40, rgba(111,74,49,0.1));
+  min-width: 108px;
+  border-radius: 18px;
+  padding: 0.72rem 0.78rem;
+  background: linear-gradient(180deg, rgb(var(--palette-eggshell-rgb) / 0.98), rgb(var(--palette-eggshell-rgb) / 0.9));
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  box-shadow: 0 10px 22px rgb(var(--palette-deep-sapphire-rgb) / 0.06);
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.22rem;
   text-align: center;
+  align-items: center;
 }
-.nutri-chip small { font-size: 0.7rem; color: var(--text-muted, #846b58); font-weight: 600; }
-.nutri-chip strong { font-size: 0.88rem; color: var(--text-primary, #3f2a1d); font-variant-numeric: tabular-nums; }
+.nutri-chip__icon {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.1rem;
+  background: rgb(var(--palette-mint-rgb, 126 211 165) / 0.16);
+  color: var(--accent-green, #6f4a31);
+}
+.nutri-chip small {
+  font-size: 0.7rem;
+  color: var(--text-muted, #846b58);
+  font-weight: 700;
+}
+.nutri-chip strong {
+  font-size: 0.9rem;
+  color: var(--text-primary, #3f2a1d);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
 
 /* Sections (common customization) */
 .detail-section {
@@ -1861,11 +1974,11 @@ onUnmounted(() => {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   STICKY ADD-TO-CART BAR (Mobile) — sits above the bottom nav
+   STICKY ADD-TO-CART BAR (Mobile)
    ════════════════════════════════════════════════════════════════ */
 .sticky-bottom-bar {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom) + 5rem);
+  bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
   left: 0.5rem;
   right: 0.5rem;
   background: #fff;
@@ -2441,7 +2554,7 @@ onUnmounted(() => {
    ════════════════════════════════════════════════════════════════ */
 .scroll-top-btn {
   position: fixed;
-  bottom: 10rem;
+  bottom: calc(env(safe-area-inset-bottom) + 7rem);
   left: 1.2rem;
   width: 46px;
   height: 46px;

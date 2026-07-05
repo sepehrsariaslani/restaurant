@@ -13,12 +13,19 @@
         </header>
 
         <div class="options">
-          <label v-for="option in group.options" :key="option.name" class="option-row">
+          <label
+            v-for="option in group.options"
+            :key="option.name"
+            class="option-row"
+            :class="{ disabled: isOptionDisabled(option), selected: isSelected(group.group_name, option.name) }"
+            :title="option.unavailable_reason || ''"
+          >
             <input
               v-if="group.selection_mode === 'single'"
               type="radio"
               :name="group.group_name"
               :checked="isSelected(group.group_name, option.name)"
+              :disabled="isOptionDisabled(option)"
               @change="selectSingle(group, option.name)"
             />
 
@@ -26,14 +33,19 @@
               v-else
               type="checkbox"
               :checked="isSelected(group.group_name, option.name)"
-              :disabled="isMultiDisabled(group, option.name)"
+              :disabled="isMultiDisabled(group, option.name) || isOptionDisabled(option)"
               @change="toggleMulti(group, option.name)"
             />
 
-            <span>
-              {{ option.name }}
+            <span class="option-copy">
+              <span>
+                {{ option.label || option.name }}
+              </span>
               <small class="muted" v-if="Number(option.price_delta)">
                 (+{{ formatMoney(option.price_delta, currency) }})
+              </small>
+              <small class="muted warn" v-else-if="isOptionDisabled(option)">
+                {{ option.unavailable_reason || 'قیمت این گزینه تنظیم نشده است.' }}
               </small>
             </span>
           </label>
@@ -85,12 +97,20 @@ function countByGroup(groupName) {
 }
 
 function selectSingle(group, optionName) {
+  const option = (group.options || []).find((row) => row.name === optionName)
+  if (isOptionDisabled(option)) {
+    return
+  }
   const next = selections.value.filter((row) => row.group !== group.group_name)
   next.push({ group: group.group_name, option: optionName, qty: 1 })
   apply(next)
 }
 
 function toggleMulti(group, optionName) {
+  const option = (group.options || []).find((row) => row.name === optionName)
+  if (isOptionDisabled(option)) {
+    return
+  }
   const selected = isSelected(group.group_name, optionName)
 
   if (selected) {
@@ -110,6 +130,10 @@ function isMultiDisabled(group, optionName) {
     return false
   }
   return countByGroup(group.group_name) >= Number(group.max_select || 1)
+}
+
+function isOptionDisabled(option) {
+  return Number(option?.is_selectable ?? 1) !== 1 || Number(option?.disabled ?? 0) === 1
 }
 </script>
 
@@ -149,5 +173,18 @@ function isMultiDisabled(group, optionName) {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+.option-row.disabled {
+  opacity: 0.58;
+}
+
+.option-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.warn {
+  color: #9a3412;
 }
 </style>

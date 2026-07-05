@@ -6,6 +6,7 @@
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
+      <ManagementModifierGroupsPage v-else-if="page === 'management-modifier-groups'" />
       <ManagementMenuDesignerPage v-else-if="page === 'management-menu-design'" />
       <ManagementMenuGroupsPage v-else-if="page === 'management-menu-groups'" />
       <ManagementMenuGroupDetailPage v-else-if="page === 'management-menu-group'" />
@@ -97,7 +98,7 @@
     />
 
     <MobileBottomNav
-      v-if="!isFullscreenPage && page !== 'kitchen'"
+      v-if="!isFullscreenPage && page !== 'kitchen' && page !== 'item'"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
@@ -155,6 +156,7 @@ import ManagementPosPage from './pages/management/ManagementPosPage.vue'
 import ManagementPosProfilePage from './pages/management/ManagementPosProfilePage.vue'
 import ManagementOrdersPage from './pages/management/ManagementOrdersPage.vue'
 import ManagementProductsPage from './pages/management/ManagementProductsPage.vue'
+import ManagementModifierGroupsPage from './pages/management/ManagementModifierGroupsPage.vue'
 import ManagementMenuDesignerPage from './pages/management/ManagementMenuDesignerPage.vue'
 import ManagementMenuGroupsPage from './pages/management/ManagementMenuGroupsPage.vue'
 import ManagementMenuGroupDetailPage from './pages/management/ManagementMenuGroupDetailPage.vue'
@@ -191,6 +193,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/orders')) return 'management-orders'
     if (pathname.startsWith('/management/products/detail') && variantStudioMode) return 'management-variant-builder'
     if (pathname.startsWith('/management/product') && variantStudioMode) return 'management-variant-builder'
+    if (pathname.startsWith('/management/modifier-groups') || pathname.startsWith('/management/modifier_groups')) return 'management-modifier-groups'
     if (pathname.startsWith('/management/products')) return 'management-products'
     if (pathname.startsWith('/management/product')) return 'management-product'
     if (pathname.startsWith('/management/menu-design') || pathname.startsWith('/management/menu_design')) return 'management-menu-design'

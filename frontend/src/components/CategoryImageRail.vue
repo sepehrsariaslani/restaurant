@@ -11,16 +11,10 @@
         >
           <div class="img-copy">
             <span class="img-label">{{ category.title }}</span>
-            <small v-if="category.item_count" class="img-count">{{ category.item_count }} آیتم</small>
+            <small v-if="category.item_count" class="img-count">{{ toFaCount(category.item_count) }} آیتم</small>
           </div>
-          <div class="img-circle" :class="{ 'has-image': category.image }">
-            <img
-              v-if="category.image"
-              :src="category.image"
-              :alt="category.title"
-              class="cat-img"
-            />
-            <component v-else :is="getCategoryIcon(category)" class="cat-icon" :size="19" stroke-width="1.9" />
+          <div class="img-circle">
+            <component :is="getCategoryIcon(category)" class="cat-icon" :size="19" stroke-width="1.9" />
           </div>
         </button>
       </div>
@@ -89,18 +83,24 @@ function getCategoryIcon(category) {
   const matched = ICON_RULES.find((row) => row.keys.some((key) => title.includes(String(key).toLowerCase())))
   return matched?.icon || Utensils
 }
+
+function toFaCount(value) {
+  const count = Number(value || 0)
+  return Number.isFinite(count) ? count.toLocaleString('fa-IR') : '۰'
+}
 </script>
 
 <style scoped>
 .img-rail-stack {
   margin-bottom: 0;
+  padding-inline: 0.45rem;
 }
 
 .img-rail-wrap {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
   border-radius: 0 0 15px 15px;
-  padding: 0.28rem 0.34rem 0.32rem;
+  padding: 0.35rem 0.42rem 0.38rem;
   box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.06);
 }
 
@@ -125,19 +125,19 @@ function getCategoryIcon(category) {
 
 .img-pill {
   display: grid;
-  grid-template-columns: minmax(56px, 1fr) 34px;
+  grid-template-columns: minmax(58px, 1fr) 36px;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.34rem;
   flex-shrink: 0;
   cursor: pointer;
   background: #fff;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.10);
-  padding: 0.34rem 0.4rem;
+  padding: 0.42rem 0.5rem;
   border-radius: 13px;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   scroll-snap-align: start;
-  min-width: 112px;
-  min-height: 54px;
+  min-width: 118px;
+  min-height: 58px;
   box-shadow: 0 5px 12px rgba(16, 24, 40, 0.03);
   font-family: inherit;
   text-align: right;
@@ -150,8 +150,8 @@ function getCategoryIcon(category) {
 }
 
 .img-circle {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
   background: var(--accent-green20, var(--theme-surface-alt));
   display: flex;
@@ -163,26 +163,10 @@ function getCategoryIcon(category) {
   font-size: 1rem;
 }
 
-.img-circle.has-image {
-  background: transparent;
-  border-color: transparent;
-}
-
 .img-pill.active .img-circle {
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.28);
   transform: scale(1.03);
-}
-
-.img-pill.active .img-circle.has-image {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.cat-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 11px;
 }
 
 .cat-icon {
@@ -200,7 +184,7 @@ function getCategoryIcon(category) {
 }
 
 .img-label {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--text-primary);
   font-weight: 900;
   white-space: nowrap;
@@ -212,7 +196,7 @@ function getCategoryIcon(category) {
 }
 
 .img-count {
-  font-size: 0.55rem;
+  font-size: 0.58rem;
   color: var(--text-muted);
   line-height: 1;
   white-space: nowrap;
@@ -228,9 +212,9 @@ function getCategoryIcon(category) {
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
   border-radius: 999px;
   background: #fff;
-  padding: 0.22rem 0.52rem;
+  padding: 0.28rem 0.6rem;
   white-space: nowrap;
-  font-size: 0.64rem;
+  font-size: 0.68rem;
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
@@ -250,5 +234,22 @@ function getCategoryIcon(category) {
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .img-rail-stack {
+    padding-inline: 0.5rem;
+  }
+
+  .img-rail-wrap,
+  .img-sub-wrap {
+    padding-inline: 0.4rem;
+  }
+
+  .img-pill {
+    min-width: 110px;
+    min-height: 56px;
+    padding: 0.4rem 0.46rem;
+  }
 }
 </style>

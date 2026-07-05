@@ -4,6 +4,7 @@ import os
 import random
 import re
 import string
+import copy
 from base64 import b64decode
 from collections import defaultdict
 from html import escape as html_escape
@@ -185,6 +186,30 @@ def _parse_json(value, default):
 	return default
 
 
+def _stable_json_dumps(value):
+	try:
+		return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+	except Exception:
+		return ""
+
+
+def _normalize_json_text_field(value, default=None):
+	default_value = {} if default is None else default
+	if value in (None, ""):
+		return "" if default_value in (None, "") else _stable_json_dumps(default_value)
+	if isinstance(value, (dict, list)):
+		return _stable_json_dumps(value)
+	if isinstance(value, str):
+		stripped = value.strip()
+		if not stripped:
+			return "" if default_value in (None, "") else _stable_json_dumps(default_value)
+		parsed = _parse_json(stripped, None)
+		if parsed is not None:
+			return _stable_json_dumps(parsed)
+		return stripped
+	return _stable_json_dumps(default_value)
+
+
 def _normalize_theme_hex(color, fallback):
 	raw = (color or "").strip()
 	if not MANAGEMENT_THEME_HEX_RE.match(raw):
@@ -312,14 +337,34 @@ def _optional_float(source, fieldname):
 
 
 def _item_uom_conversion_to_stock(item_code, source_uom):
+	details = _item_uom_conversion_details_to_stock(item_code, source_uom)
+	return flt(details.get("factor") or 0) or 1.0
+
+
+def _item_uom_conversion_details_to_stock(item_code, source_uom):
 	item_code = (item_code or "").strip()
 	source_uom = (source_uom or "").strip()
+	stock_uom = (frappe.db.get_value("Item", item_code, "stock_uom") or "").strip() if item_code else ""
 	if not item_code:
-		return 1.0
+		return {
+			"factor": 1.0,
+			"stock_uom": stock_uom,
+			"source_uom": source_uom,
+			"has_conversion": 0,
+			"is_same_uom": 0,
+		}
 
-	stock_uom = (frappe.db.get_value("Item", item_code, "stock_uom") or "").strip()
-	if not source_uom or not stock_uom or source_uom == stock_uom:
-		return 1.0
+	if not source_uom:
+		source_uom = stock_uom
+
+	if not stock_uom or source_uom == stock_uom:
+		return {
+			"factor": 1.0,
+			"stock_uom": stock_uom,
+			"source_uom": source_uom,
+			"has_conversion": 1 if stock_uom else 0,
+			"is_same_uom": 1 if stock_uom and source_uom == stock_uom else 0,
+		}
 
 	conversion_factor = frappe.db.get_value(
 		"UOM Conversion Detail",
@@ -327,18 +372,66 @@ def _item_uom_conversion_to_stock(item_code, source_uom):
 		"conversion_factor",
 	)
 	if conversion_factor not in (None, ""):
-		return max(flt(conversion_factor), 0)
+		return {
+			"factor": max(flt(conversion_factor), 0),
+			"stock_uom": stock_uom,
+			"source_uom": source_uom,
+			"has_conversion": 1,
+			"is_same_uom": 0,
+		}
 
 	try:
 		from erpnext.stock.doctype.item.item import get_uom_conv_factor
 
 		fallback = get_uom_conv_factor(source_uom, stock_uom)
 		if fallback not in (None, ""):
-			return max(flt(fallback), 0)
+			return {
+				"factor": max(flt(fallback), 0),
+				"stock_uom": stock_uom,
+				"source_uom": source_uom,
+				"has_conversion": 1,
+				"is_same_uom": 0,
+			}
 	except Exception:
 		pass
 
-	return 1.0
+	return {
+		"factor": 0.0,
+		"stock_uom": stock_uom,
+		"source_uom": source_uom,
+		"has_conversion": 0,
+		"is_same_uom": 0,
+	}
+
+
+def _normalize_modifier_option_quantity_rules(option_row=None):
+	option_row = option_row or {}
+	base_qty = flt(option_row.get("option_qty") or 1)
+	if base_qty <= 0:
+		base_qty = 1
+
+	step_raw = option_row.get("qty_step")
+	qty_step = flt(step_raw if step_raw not in (None, "") else base_qty)
+	if qty_step <= 0:
+		qty_step = base_qty
+
+	min_raw = option_row.get("min_qty")
+	min_qty = flt(min_raw if min_raw not in (None, "") else 0)
+	if min_qty < 0:
+		min_qty = 0
+
+	max_default = max(base_qty, qty_step, base_qty * 4)
+	max_raw = option_row.get("max_qty")
+	max_qty = flt(max_raw if max_raw not in (None, "") else max_default)
+	max_qty = max(max_qty, min_qty, base_qty)
+
+	return {
+		"option_qty": base_qty,
+		"base_qty": base_qty,
+		"min_qty": min_qty,
+		"max_qty": max_qty,
+		"qty_step": qty_step,
+	}
 
 
 def _nutrition_factor_from_item_qty(item_code, qty, uom=None):
@@ -2788,6 +2881,369 @@ def _get_default_item_price_rate(row, price_list=None):
 	return None
 
 
+def _resolve_default_selling_item_pricing(item_code, qty, uom=None, price_list=None):
+	item_code = (item_code or "").strip()
+	source_uom = (uom or "").strip()
+	requested_qty = flt(qty or 0)
+	default_price_list = (price_list or _default_selling_price_list() or "").strip()
+	payload = {
+		"item_code": item_code,
+		"price_list": default_price_list,
+		"source_uom": source_uom,
+		"stock_uom": "",
+		"qty": requested_qty,
+		"qty_in_stock_uom": 0.0,
+		"conversion_factor": 1.0,
+		"unit_rate": 0.0,
+		"total_price": 0.0,
+		"price_status": "ok",
+		"is_selectable": 1,
+		"disabled": 0,
+		"item_disabled": 0,
+		"availability_status": "available",
+		"unavailable_reason": "",
+	}
+
+	if not item_code:
+		payload.update(
+			{
+				"price_status": "missing_item",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_item",
+				"unavailable_reason": _("No pricing item is linked."),
+			}
+		)
+		return payload
+
+	if not frappe.db.exists("Item", item_code):
+		payload.update(
+			{
+				"price_status": "missing_item",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_item",
+				"unavailable_reason": _("Item not found: {0}").format(item_code),
+			}
+		)
+		return payload
+
+	item_meta = frappe.db.get_value("Item", item_code, ["stock_uom", "disabled"], as_dict=True) or {}
+	payload["stock_uom"] = (item_meta.get("stock_uom") or "").strip()
+	if not payload["source_uom"]:
+		payload["source_uom"] = payload["stock_uom"]
+
+	if _has_column("Item", "disabled") and cint(item_meta.get("disabled") or 0) == 1:
+		payload.update(
+			{
+				"price_status": "inactive",
+				"is_selectable": 0,
+				"disabled": 1,
+				"item_disabled": 1,
+				"availability_status": "inactive",
+				"unavailable_reason": _("Linked item is disabled in ERPNext."),
+			}
+		)
+		return payload
+
+	conversion = _item_uom_conversion_details_to_stock(item_code, payload["source_uom"])
+	payload["stock_uom"] = (conversion.get("stock_uom") or payload["stock_uom"] or "").strip()
+	payload["source_uom"] = (conversion.get("source_uom") or payload["source_uom"] or "").strip()
+	payload["conversion_factor"] = flt(conversion.get("factor") or 0)
+	if not cint(conversion.get("has_conversion")) or flt(payload["conversion_factor"]) <= 0:
+		payload.update(
+			{
+				"price_status": "missing_conversion",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_conversion",
+				"unavailable_reason": _("No valid UOM conversion found for {0} to {1}.").format(
+					payload["source_uom"] or _("selected UOM"),
+					payload["stock_uom"] or _("stock UOM"),
+				),
+			}
+		)
+		return payload
+
+	payload["qty_in_stock_uom"] = flt(requested_qty * payload["conversion_factor"])
+	if payload["qty_in_stock_uom"] < 0:
+		payload["qty_in_stock_uom"] = 0
+
+	if not default_price_list:
+		payload.update(
+			{
+				"price_status": "missing_price",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_price",
+				"unavailable_reason": _("No default selling price list is configured."),
+			}
+		)
+		return payload
+
+	rate = _get_default_item_price_rate({"item_code": item_code}, price_list=default_price_list)
+	if rate in (None, ""):
+		payload.update(
+			{
+				"price_status": "missing_price",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_price",
+				"unavailable_reason": _("No Item Price found for {0} in {1}.").format(
+					item_code,
+					default_price_list,
+				),
+			}
+		)
+		return payload
+
+	payload["unit_rate"] = flt(rate)
+	payload["total_price"] = flt(payload["unit_rate"] * flt(payload["qty_in_stock_uom"] or 0))
+	return payload
+
+
+def _resolve_ingredient_alternative_pricing(
+	base_item_code,
+	base_qty,
+	base_uom,
+	alternative_item_code,
+	alternative_qty,
+	alternative_uom=None,
+	price_list=None,
+):
+	base_pricing = _resolve_default_selling_item_pricing(
+		base_item_code,
+		base_qty,
+		uom=base_uom,
+		price_list=price_list,
+	)
+	alternative_pricing = _resolve_default_selling_item_pricing(
+		alternative_item_code,
+		alternative_qty,
+		uom=alternative_uom,
+		price_list=price_list,
+	)
+
+	payload = {
+		"price_delta": 0.0,
+		"resolved_price_delta": 0.0,
+		"price_status": "ok",
+		"price_list": alternative_pricing.get("price_list") or base_pricing.get("price_list") or "",
+		"price_source": "item_price",
+		"price_item_code": (alternative_item_code or "").strip(),
+		"is_selectable": 1,
+		"disabled": 0,
+		"item_disabled": cint(alternative_pricing.get("item_disabled") or 0),
+		"unavailable_reason": "",
+		"availability_status": "available",
+		"conversion_factor": flt(alternative_pricing.get("conversion_factor") or 1) or 1,
+		"unit_rate": flt(alternative_pricing.get("unit_rate") or 0),
+		"base_price": flt(alternative_pricing.get("total_price") or 0),
+		"alternative_price": flt(alternative_pricing.get("total_price") or 0),
+		"comparison_base_item_code": (base_item_code or "").strip(),
+		"comparison_base_unit_rate": flt(base_pricing.get("unit_rate") or 0),
+		"comparison_base_price": flt(base_pricing.get("total_price") or 0),
+		"alternative_qty_in_stock_uom": flt(alternative_pricing.get("qty_in_stock_uom") or 0),
+		"base_qty_in_stock_uom": flt(base_pricing.get("qty_in_stock_uom") or 0),
+	}
+
+	if cint(base_pricing.get("is_selectable") or 0) != 1:
+		payload.update(
+			{
+				"price_status": base_pricing.get("price_status") or "missing_price",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": base_pricing.get("availability_status") or "missing_price",
+				"unavailable_reason": base_pricing.get("unavailable_reason")
+				or _("Base ingredient price could not be resolved."),
+			}
+		)
+		return payload
+
+	if cint(alternative_pricing.get("is_selectable") or 0) != 1:
+		payload.update(
+			{
+				"price_status": alternative_pricing.get("price_status") or "missing_price",
+				"is_selectable": 0,
+				"disabled": 1,
+				"item_disabled": cint(alternative_pricing.get("item_disabled") or 0),
+				"availability_status": alternative_pricing.get("availability_status") or "missing_price",
+				"unavailable_reason": alternative_pricing.get("unavailable_reason")
+				or _("Alternative item price could not be resolved."),
+			}
+		)
+		return payload
+
+	delta = flt(alternative_pricing.get("total_price") or 0) - flt(base_pricing.get("total_price") or 0)
+	payload["price_delta"] = delta
+	payload["resolved_price_delta"] = delta
+	return payload
+
+
+def _resolve_modifier_option_pricing(option_row=None, price_list=None):
+	option_row = option_row or {}
+	action_type = (
+		option_row.get("action_type") or option_row.get("modifier_type") or "add_on"
+	).strip() or "add_on"
+	option_item_code = (option_row.get("option_item") or "").strip()
+	legacy_price_delta = flt(option_row.get("price_delta") or 0)
+	active_value = option_row.get("is_active")
+	is_active = 1 if active_value in (None, "") else cint(active_value)
+	default_price_list = (price_list or _default_selling_price_list() or "").strip()
+	qty_rules = _normalize_modifier_option_quantity_rules(option_row)
+	base_qty = flt(qty_rules.get("option_qty") or 1)
+
+	payload = {
+		"price_delta": 0.0,
+		"resolved_price_delta": 0.0,
+		"price_status": "ok",
+		"price_list": default_price_list,
+		"price_source": "item_price",
+		"price_item_code": option_item_code,
+		"is_selectable": 1,
+		"disabled": 0,
+		"item_disabled": 0,
+		"unavailable_reason": "",
+		"availability_status": "available",
+		"stock_uom": "",
+		"option_uom": (option_row.get("option_uom") or "").strip(),
+		"base_qty": base_qty,
+		"conversion_factor": 1.0,
+		"unit_rate": 0.0,
+		"base_price": 0.0,
+		"base_qty_in_stock_uom": base_qty,
+	}
+
+	if not is_active:
+		payload.update(
+			{
+				"price_status": "inactive",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "inactive",
+				"unavailable_reason": _("This modifier is inactive."),
+			}
+		)
+		return payload
+
+	if not option_item_code:
+		if action_type == "bom_variant":
+			return payload
+		if action_type == "add_on":
+			payload.update(
+				{
+					"price_status": "ok",
+					"price_source": "manual",
+					"price_item_code": "",
+					"unit_rate": flt(legacy_price_delta / base_qty) if base_qty > 1e-8 else flt(legacy_price_delta),
+					"base_price": flt(legacy_price_delta),
+					"price_delta": flt(legacy_price_delta),
+					"resolved_price_delta": flt(legacy_price_delta),
+				}
+			)
+			return payload
+		payload.update(
+			{
+				"price_status": "missing_item",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_item",
+				"unavailable_reason": _("No pricing item is linked to this modifier."),
+			}
+		)
+		return payload
+
+	if not frappe.db.exists("Item", option_item_code):
+		payload.update(
+			{
+				"price_status": "missing_item",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_item",
+				"unavailable_reason": _("Modifier pricing item not found: {0}").format(option_item_code),
+			}
+		)
+		return payload
+
+	item_meta = frappe.db.get_value(
+		"Item",
+		option_item_code,
+		["stock_uom", "disabled"],
+		as_dict=True,
+	) or {}
+	payload["stock_uom"] = (item_meta.get("stock_uom") or "").strip()
+	if not payload["option_uom"]:
+		payload["option_uom"] = payload["stock_uom"]
+
+	if _has_column("Item", "disabled") and cint(item_meta.get("disabled") or 0) == 1:
+		payload.update(
+			{
+				"price_status": "inactive",
+				"is_selectable": 0,
+				"disabled": 1,
+				"item_disabled": 1,
+				"availability_status": "inactive",
+				"unavailable_reason": _("Linked modifier item is disabled in ERPNext."),
+			}
+		)
+		return payload
+
+	if action_type == "add_on":
+		conversion = _item_uom_conversion_details_to_stock(option_item_code, payload["option_uom"])
+		payload["stock_uom"] = (conversion.get("stock_uom") or payload["stock_uom"] or "").strip()
+		payload["option_uom"] = (conversion.get("source_uom") or payload["option_uom"] or "").strip()
+		payload["conversion_factor"] = flt(conversion.get("factor") or 0)
+		if not cint(conversion.get("has_conversion")) or flt(payload["conversion_factor"]) <= 0:
+			payload.update(
+				{
+					"price_status": "missing_conversion",
+					"is_selectable": 0,
+					"disabled": 1,
+					"availability_status": "missing_conversion",
+					"unavailable_reason": _("No valid UOM conversion found for {0} to {1}.").format(
+						payload["option_uom"] or _("selected UOM"),
+						payload["stock_uom"] or _("stock UOM"),
+					),
+				}
+			)
+			return payload
+		payload["base_qty_in_stock_uom"] = flt(base_qty * payload["conversion_factor"])
+
+	if not default_price_list:
+		payload.update(
+			{
+				"price_status": "missing_price",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_price",
+				"unavailable_reason": _("No default selling price list is configured."),
+			}
+		)
+		return payload
+
+	rate = _get_default_item_price_rate({"item_code": option_item_code}, price_list=default_price_list)
+	if rate in (None, ""):
+		payload.update(
+			{
+				"price_status": "missing_price",
+				"is_selectable": 0,
+				"disabled": 1,
+				"availability_status": "missing_price",
+				"unavailable_reason": _("No Item Price found for {0} in {1}.").format(
+					option_item_code,
+					default_price_list,
+				),
+			}
+		)
+		return payload
+
+	payload["unit_rate"] = flt(rate)
+	payload["base_price"] = flt(payload["unit_rate"] * flt(payload.get("base_qty_in_stock_uom") or 0))
+	payload["price_delta"] = flt(payload["base_price"])
+	payload["resolved_price_delta"] = flt(payload["base_price"])
+	return payload
+
+
 def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None):
 	category_meta_map = category_meta_map or {}
 	subcategory_meta_map = subcategory_meta_map or {}
@@ -4043,6 +4499,19 @@ def _get_core_item_detail(item_slug, branch=None):
 					"extra_when_added": flt(row.extra_when_added),
 					"is_replaceable": 1 if (cint(row.get("is_replaceable")) or alternative_options) else 0,
 					"alternative_options": alternative_options,
+					"price_status": row.get("price_status") or "",
+					"price_list": row.get("price_list") or "",
+					"price_source": row.get("price_source") or "",
+					"price_item_code": row.get("price_item_code") or ingredient_item,
+					"unit_rate": flt(row.get("unit_rate") or 0),
+					"base_price": flt(row.get("base_price") or 0),
+					"conversion_factor": flt(row.get("conversion_factor") or 0),
+					"source_uom": row.get("source_uom") or row.get("qty_uom") or doc.stock_uom or "",
+					"stock_uom": row.get("stock_uom") or row.get("qty_uom") or doc.stock_uom or "",
+					"qty_in_stock_uom": flt(row.get("qty_in_stock_uom") or 0),
+					"is_selectable": cint(row.get("is_selectable") or 0),
+					"availability_status": row.get("availability_status") or "",
+					"unavailable_reason": row.get("unavailable_reason") or "",
 					"image": ingredient_image or "",
 					"nutrition_kcal": ingredient_nutrition.get("kcal"),
 					"nutrition_protein_g": ingredient_nutrition.get("protein_g"),
@@ -4253,9 +4722,34 @@ def _selling_price_list_filters(currency=None):
 	return filters
 
 
+def _selling_settings_default_price_list(currency=None):
+	if not frappe.db.exists("DocType", "Selling Settings"):
+		return ""
+	meta = frappe.get_meta("Selling Settings")
+	if not meta.get_field("selling_price_list"):
+		return ""
+
+	price_list_name = (frappe.db.get_single_value("Selling Settings", "selling_price_list") or "").strip()
+	if not price_list_name or not frappe.db.exists("Price List", price_list_name):
+		return ""
+	if not cint(frappe.db.get_value("Price List", price_list_name, "selling") or 0):
+		return ""
+	if _has_column("Price List", "enabled") and cint(frappe.db.get_value("Price List", price_list_name, "enabled") or 0) != 1:
+		return ""
+	if currency and _has_column("Price List", "currency"):
+		row_currency = (frappe.db.get_value("Price List", price_list_name, "currency") or "").strip()
+		if row_currency and row_currency != currency:
+			return ""
+	return price_list_name
+
+
 def _get_default_selling_price_list_name(currency=None, set_fallback_default=False):
 	_ensure_default_selling_price_list_field()
 	filters = _selling_price_list_filters(currency=currency)
+
+	from_selling_settings = _selling_settings_default_price_list(currency=currency)
+	if from_selling_settings:
+		return from_selling_settings
 
 	if _has_column("Price List", DEFAULT_SELLING_PRICE_LIST_FIELD):
 		preferred = frappe.db.get_value(
@@ -4861,6 +5355,61 @@ def _build_ticket_components(menu_doc, bom_doc, line_calc, line_qty, recipe_mult
 
 	qty_map = defaultdict(float)
 
+	def _append_component_row(
+		item_code,
+		final_qty,
+		source_type,
+		ingredient_data,
+		base_item_code="",
+		selected_alternative_item="",
+		base_qty=0,
+		selected_base_qty=0,
+		selected_multiplier=1,
+		recipe_multiplier_value=1,
+	):
+		item_code = (item_code or "").strip()
+		if not item_code or final_qty <= 1e-8:
+			return
+
+		item_name = frappe.db.get_value("Item", item_code, "item_name")
+		stock_uom = (
+			ingredient_data.get("stock_uom")
+			if ingredient_data and ingredient_data.get("stock_uom")
+			else frappe.db.get_value("Item", item_code, "stock_uom")
+		)
+		if _item_consumes_stock(item_code):
+			qty_map[item_code] += final_qty
+		components.append(
+			{
+				"item_code": item_code,
+				"item_name": item_name,
+				"base_item_code": (base_item_code or "").strip(),
+				"selected_alternative_item": (selected_alternative_item or "").strip(),
+				"ingredient_key": ingredient_data.get("ingredient_key") or item_code,
+				"ingredient_label": ingredient_data.get("ingredient_label") or item_name or item_code,
+				"stock_uom": stock_uom,
+				"source_warehouse": source_warehouse,
+				"base_qty": base_qty,
+				"selected_base_qty": selected_base_qty,
+				"base_multiplier": flt(ingredient_data.get("base_multiplier") or 0),
+				"selected_multiplier": selected_multiplier,
+				"recipe_multiplier": recipe_multiplier_value,
+				"final_qty": final_qty,
+				"is_required": cint(ingredient_data.get("is_required")),
+				"is_included_by_default": cint(ingredient_data.get("is_included_by_default")),
+				"pricing_rate": flt(ingredient_data.get("pricing_rate") or 0),
+				"pricing_delta": flt(ingredient_data.get("pricing_delta") or 0),
+				"source_type": source_type,
+			}
+		)
+
+	def _get_item_bom_doc(item_code):
+		item_code = (item_code or "").strip()
+		if not item_code or not frappe.db.exists("Item", item_code):
+			return None
+		item_doc = frappe.get_cached_doc("Item", item_code)
+		return _get_bom_doc(item_doc)
+
 	for bom_row in bom_doc.items or []:
 		base_per_serving = flt(bom_row.qty) / bom_qty
 		ingredient_data = ingredient_by_base_item.get(bom_row.item_code)
@@ -4901,7 +5450,8 @@ def _build_ticket_components(menu_doc, bom_doc, line_calc, line_qty, recipe_mult
 		final_qty = selected_base_qty * selected_multiplier * flt(line_qty) * recipe_multiplier
 		if final_qty <= 1e-8:
 			continue
-		qty_map[component_item_code] += final_qty
+		if _item_consumes_stock(component_item_code):
+			qty_map[component_item_code] += final_qty
 
 		payload = {
 			"item_code": component_item_code,
@@ -4950,30 +5500,44 @@ def _build_ticket_components(menu_doc, bom_doc, line_calc, line_qty, recipe_mult
 		final_qty = base_qty * selected_multiplier * flt(line_qty) * recipe_multiplier
 		if final_qty <= 1e-8:
 			continue
-		qty_map[item_code] += final_qty
-		components.append(
-			{
-				"item_code": item_code,
-				"item_name": frappe.db.get_value("Item", item_code, "item_name"),
-				"base_item_code": (ingredient_data.get("base_item_code") or "").strip(),
-				"selected_alternative_item": (ingredient_data.get("selected_alternative_item") or "").strip(),
-				"ingredient_key": ingredient_data.get("ingredient_key") or item_code,
-				"ingredient_label": ingredient_data.get("ingredient_label") or item_code,
-				"stock_uom": ingredient_data.get("stock_uom")
-				or frappe.db.get_value("Item", item_code, "stock_uom"),
-				"source_warehouse": source_warehouse,
-				"base_qty": base_qty,
-				"selected_base_qty": base_qty,
-				"base_multiplier": flt(ingredient_data.get("base_multiplier") or 0),
-				"selected_multiplier": selected_multiplier,
-				"recipe_multiplier": recipe_multiplier,
-				"final_qty": final_qty,
-				"is_required": cint(ingredient_data.get("is_required")),
-				"is_included_by_default": cint(ingredient_data.get("is_included_by_default")),
-				"pricing_rate": flt(ingredient_data.get("pricing_rate") or 0),
-				"pricing_delta": flt(ingredient_data.get("pricing_delta") or 0),
-				"source_type": ingredient_data.get("source_type") or "modifier_add_on",
-			}
+		source_type = ingredient_data.get("source_type") or "modifier_add_on"
+		if source_type == "modifier_add_on":
+			modifier_bom_doc = _get_item_bom_doc(item_code)
+			if modifier_bom_doc and (modifier_bom_doc.items or []):
+				modifier_bom_qty = flt(modifier_bom_doc.quantity or 1)
+				if modifier_bom_qty <= 0:
+					modifier_bom_qty = 1
+				for modifier_bom_row in modifier_bom_doc.items or []:
+					child_item_code = (modifier_bom_row.item_code or "").strip()
+					if not child_item_code:
+						continue
+					child_per_unit = flt(modifier_bom_row.qty or 0) / modifier_bom_qty
+					child_final_qty = child_per_unit * final_qty
+					_append_component_row(
+						child_item_code,
+						child_final_qty,
+						"modifier_bom_item",
+						ingredient_data,
+						base_item_code=item_code,
+						selected_alternative_item="",
+						base_qty=child_per_unit,
+						selected_base_qty=child_per_unit,
+						selected_multiplier=final_qty,
+						recipe_multiplier_value=recipe_multiplier,
+					)
+				continue
+
+		_append_component_row(
+			item_code,
+			final_qty,
+			source_type,
+			ingredient_data,
+			base_item_code=(ingredient_data.get("base_item_code") or "").strip(),
+			selected_alternative_item=(ingredient_data.get("selected_alternative_item") or "").strip(),
+			base_qty=base_qty,
+			selected_base_qty=base_qty,
+			selected_multiplier=selected_multiplier,
+			recipe_multiplier_value=recipe_multiplier,
 		)
 
 	return components, qty_map
@@ -5028,7 +5592,7 @@ def _sync_work_order_required_items(wo_name, qty_map, source_warehouse):
 	for item_code, raw_qty in (qty_map or {}).items():
 		code = (item_code or "").strip()
 		qty = flt(raw_qty)
-		if not code or qty <= 1e-8:
+		if not code or qty <= 1e-8 or not _item_consumes_stock(code):
 			continue
 		normalized_rows.append((code, qty))
 
@@ -5348,13 +5912,61 @@ def _get_bom_doc(menu_item_doc):
 	return frappe.get_doc("BOM", bom_name)
 
 
-def _get_bom_row_alternative_options(bom_doc, bom_row, item_meta_cache=None):
+def _get_modifier_source_bom_doc(menu_item_doc, primary_bom_doc=None):
+	if menu_item_doc.doctype != "Item" or not frappe.db.exists("DocType", "Restaurant BOM Modifier"):
+		return primary_bom_doc
+
+	bom_doc = primary_bom_doc or _get_bom_doc(menu_item_doc)
+	if (bom_doc.get("restaurant_modifier_rows") if bom_doc else None) or []:
+		return bom_doc
+
+	item_code = (menu_item_doc.get("item_code") or menu_item_doc.get("name") or "").strip()
+	if not item_code:
+		return bom_doc
+
+	primary_bom_name = (bom_doc.name if bom_doc else "") or ""
+	fallback_rows = frappe.db.sql(
+		"""
+		SELECT bom.name
+		FROM `tabBOM` bom
+		INNER JOIN `tabRestaurant BOM Modifier` modifier_row
+			ON modifier_row.parent = bom.name
+		WHERE bom.item = %s
+			AND bom.docstatus = 1
+			AND bom.name != %s
+		GROUP BY bom.name, bom.is_active, bom.is_default, bom.modified
+		ORDER BY bom.is_active DESC, bom.is_default DESC, bom.modified DESC
+		LIMIT 1
+		""",
+		(item_code, primary_bom_name),
+		as_dict=True,
+	)
+	if not fallback_rows:
+		return bom_doc
+
+	fallback_bom_name = (fallback_rows[0].get("name") or "").strip()
+	if not fallback_bom_name or not frappe.db.exists("BOM", fallback_bom_name):
+		return bom_doc
+
+	return frappe.get_doc("BOM", fallback_bom_name)
+
+
+def _get_item_alternative_options(
+	base_item,
+	allow_alternative_item=0,
+	item_meta_cache=None,
+	base_qty=0,
+	base_uom="",
+	price_list=None,
+):
 	item_meta_cache = item_meta_cache if item_meta_cache is not None else {}
 	option_map = {}
+	base_item = (base_item or "").strip()
+	base_qty = flt(base_qty or 0)
+	base_uom = (base_uom or "").strip()
 
-	base_item = (bom_row.get("item_code") or "").strip()
 	if (
-		cint(bom_row.get("allow_alternative_item"))
+		cint(allow_alternative_item)
 		and base_item
 		and frappe.db.exists("DocType", "Item Alternative")
 	):
@@ -5364,15 +5976,12 @@ def _get_bom_row_alternative_options(bom_doc, bom_row, item_meta_cache=None):
 		elif _has_column("Item Alternative", "alternative_item_code"):
 			alt_fieldname = "alternative_item_code"
 		elif _has_column("Item Alternative", "item_code"):
-			# Legacy/custom variants may store alternative item as item_code.
 			alt_fieldname = "item_code"
 
 		filters = None
 		if _has_column("Item Alternative", "item_code") and alt_fieldname != "item_code":
-			# ERPNext standard Item Alternative doctype.
 			filters = {"item_code": base_item}
 		elif _has_column("Item Alternative", "parent") and _has_column("Item Alternative", "parenttype"):
-			# Legacy child-table style Item Alternative rows under Item.
 			filters = {"parent": base_item, "parenttype": "Item"}
 		elif _has_column("Item Alternative", "parent"):
 			filters = {"parent": base_item}
@@ -5419,6 +6028,8 @@ def _get_bom_row_alternative_options(bom_doc, bom_row, item_meta_cache=None):
 			fieldname for fieldname in NUTRITION_KEY_FIELD_MAP.values() if _has_column("Item", fieldname)
 		]
 		item_fields = ["name", "item_name", "stock_uom", *nutrition_fields]
+		if _has_column("Item", "disabled"):
+			item_fields.append("disabled")
 		for item_row in frappe.get_all(
 			"Item",
 			filters={"name": ["in", missing_codes]},
@@ -5434,16 +6045,62 @@ def _get_bom_row_alternative_options(bom_doc, bom_row, item_meta_cache=None):
 		option["stock_uom"] = item_meta.get("stock_uom") or option["uom"] or ""
 		if not option["uom"]:
 			option["uom"] = option["stock_uom"]
+		option["item_disabled"] = 1 if cint(item_meta.get("disabled") or 0) == 1 else 0
 		option["nutrition_kcal"] = flt(item_meta.get("restaurant_nutrition_kcal") or 0)
 		option["nutrition_protein_g"] = flt(item_meta.get("restaurant_nutrition_protein_g") or 0)
 		option["nutrition_carb_g"] = flt(item_meta.get("restaurant_nutrition_carb_g") or 0)
 		option["nutrition_sugar_g"] = flt(item_meta.get("restaurant_nutrition_sugar_g") or 0)
 		option["nutrition_fat_g"] = flt(item_meta.get("restaurant_nutrition_fat_g") or 0)
+		option["price_status"] = "ok"
+		option["price_source"] = "item_price"
+		option["price_item_code"] = option["alternative_item"]
+		option["price_list"] = (price_list or _default_selling_price_list() or "").strip()
+		option["price_delta"] = 0.0
+		option["resolved_price_delta"] = 0.0
+		option["is_selectable"] = 1
+		option["disabled"] = 0
+		option["unavailable_reason"] = ""
+		option["availability_status"] = "available"
+		option["unit_rate"] = 0.0
+		option["base_price"] = 0.0
+		option["alternative_price"] = 0.0
+		option["comparison_base_price"] = 0.0
+		option["comparison_base_unit_rate"] = 0.0
+		option["base_qty_in_stock_uom"] = 0.0
+		option["alternative_qty_in_stock_uom"] = 0.0
+		if base_item and base_qty > 0:
+			qty_multiplier = flt(
+				option.get("qty_multiplier") if option.get("qty_multiplier") not in (None, "") else 1
+			)
+			if qty_multiplier < 0:
+				qty_multiplier = 0
+			qty_addition = flt(option.get("qty_addition") or 0)
+			alternative_qty = (base_qty * qty_multiplier) + qty_addition
+			pricing_payload = _resolve_ingredient_alternative_pricing(
+				base_item,
+				base_qty,
+				base_uom,
+				option["alternative_item"],
+				alternative_qty,
+				alternative_uom=option.get("uom") or option.get("stock_uom") or "",
+				price_list=price_list,
+			)
+			option.update(pricing_payload)
 		options.append(option)
 
 	return sorted(
 		options,
 		key=lambda d: (cint(d.get("sort_order") or 0), d.get("item_name") or d.get("alternative_item") or ""),
+	)
+
+
+def _get_bom_row_alternative_options(bom_doc, bom_row, item_meta_cache=None):
+	return _get_item_alternative_options(
+		bom_row.get("item_code"),
+		allow_alternative_item=bom_row.get("allow_alternative_item"),
+		item_meta_cache=item_meta_cache,
+		base_qty=bom_row.get("qty") or 0,
+		base_uom=bom_row.get("uom") or bom_row.get("stock_uom") or "",
 	)
 
 
@@ -5461,6 +6118,15 @@ def _get_bom_ingredient_rows(menu_item_doc):
 			ingredient_image = frappe.db.get_value("Item", ingredient_item_code, "image") or ""
 
 		alternative_options = _get_bom_row_alternative_options(bom_doc, row, item_meta_cache=item_meta_cache)
+		ingredient_pricing = (
+			_resolve_default_selling_item_pricing(
+				ingredient_item_code,
+				row.get("qty") or 0,
+				uom=row.get("uom") or row.get("stock_uom") or "",
+			)
+			if ingredient_item_code
+			else {}
+		)
 		payload = {
 			"ingredient_name": row.get("restaurant_customer_label")
 			or row.get("item_name")
@@ -5485,6 +6151,19 @@ def _get_bom_ingredient_rows(menu_item_doc):
 			"extra_when_added": flt(row.get("restaurant_extra_when_added")),
 			"is_replaceable": cint(row.get("allow_alternative_item")),
 			"alternative_options": alternative_options,
+			"price_status": ingredient_pricing.get("price_status") or "",
+			"price_list": ingredient_pricing.get("price_list") or "",
+			"price_source": "item_price" if ingredient_item_code else "",
+			"price_item_code": ingredient_pricing.get("item_code") or ingredient_item_code,
+			"unit_rate": flt(ingredient_pricing.get("unit_rate") or 0),
+			"base_price": flt(ingredient_pricing.get("total_price") or 0),
+			"conversion_factor": flt(ingredient_pricing.get("conversion_factor") or 0),
+			"source_uom": ingredient_pricing.get("source_uom") or row.get("uom") or row.get("stock_uom") or "",
+			"stock_uom": ingredient_pricing.get("stock_uom") or row.get("stock_uom") or row.get("uom") or "",
+			"qty_in_stock_uom": flt(ingredient_pricing.get("qty_in_stock_uom") or 0),
+			"is_selectable": cint(ingredient_pricing.get("is_selectable") or 0) if ingredient_item_code else 0,
+			"availability_status": ingredient_pricing.get("availability_status") or "",
+			"unavailable_reason": ingredient_pricing.get("unavailable_reason") or "",
 			"show_in_website": _bom_item_show_value(row, default=1),
 			"sort_order": cint(row.get("idx") or 0),
 		}
@@ -5506,7 +6185,7 @@ def _build_modifier_groups(menu_item_doc):
 	if menu_item_doc.doctype != "Item":
 		return groups, group_map, group_title_map
 
-	bom_doc = _get_bom_doc(menu_item_doc)
+	bom_doc = _get_modifier_source_bom_doc(menu_item_doc, primary_bom_doc=_get_bom_doc(menu_item_doc))
 	modifier_rows = sorted(
 		(bom_doc.get("restaurant_modifier_rows") if bom_doc else []) or [],
 		key=lambda d: cint(d.get("idx") or 0),
@@ -5548,6 +6227,12 @@ def _build_modifier_groups(menu_item_doc):
 			action_type = "add_on"
 
 		option_item_code = (option_row.get("option_item") or "").strip()
+		qty_rules = _normalize_modifier_option_quantity_rules(option_row)
+		pricing_payload = _resolve_modifier_option_pricing(option_row)
+		if cint(pricing_payload.get("item_disabled") or 0) == 1:
+			return
+		if action_type == "add_on" and pricing_payload.get("price_status") != "ok":
+			return
 		option_item_nutrition = option_nutrition_cache.get(option_item_code)
 		if option_item_nutrition is None:
 			option_item_nutrition = {}
@@ -5566,7 +6251,7 @@ def _build_modifier_groups(menu_item_doc):
 		option_payload = {
 			"name": option_name,
 			"label": (option_row.get("option_label") or option_name).strip(),
-			"price_delta": flt(option_row.get("price_delta")),
+			"price_delta": flt(pricing_payload.get("price_delta") or 0),
 			"is_default": cint(option_row.get("is_default")),
 			"recipe_multiplier": flt(option_row.get("recipe_multiplier") or 1),
 			"action_type": action_type,
@@ -5577,10 +6262,13 @@ def _build_modifier_groups(menu_item_doc):
 			"option_cost_amount": flt(option_row.get("option_cost_amount") or 0),
 			"replacement_for_item": (option_row.get("replacement_for_item") or "").strip(),
 			"alternative_bom": (option_row.get("alternative_bom") or "").strip(),
-			"option_qty": flt(option_row.get("option_qty") or 1),
-			"min_qty": flt(option_row.get("min_qty") if option_row.get("min_qty") not in (None, "") else 1),
-			"max_qty": flt(option_row.get("max_qty") if option_row.get("max_qty") not in (None, "") else 9),
-			"qty_step": flt(option_row.get("qty_step") or 1),
+			"option_qty": flt(qty_rules.get("option_qty") or 1),
+			"base_qty": flt(qty_rules.get("base_qty") or 1),
+			"min_qty": flt(qty_rules.get("min_qty") or 0),
+			"max_qty": flt(qty_rules.get("max_qty") or 0),
+			"qty_step": flt(qty_rules.get("qty_step") or 1),
+			"legacy_price_delta": flt(option_row.get("price_delta") or 0),
+			**pricing_payload,
 			**option_item_nutrition,
 		}
 		payload_group["options"].append(option_payload)
@@ -5658,6 +6346,8 @@ def _build_modifier_groups(menu_item_doc):
 		grouped.values(),
 		key=lambda d: (cint(d.get("sort_order") or 0), d.get("title") or d.get("group_name") or ""),
 	):
+		if not payload_group["options"]:
+			continue
 		option_map = {opt["name"]: opt for opt in payload_group["options"] if opt.get("name")}
 		groups.append(payload_group)
 		group_map[payload_group["group_name"]] = {
@@ -5711,6 +6401,142 @@ def get_item_detail(item_slug, branch=None):
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "restaurant.api.get_item_detail")
 		raise
+
+
+@frappe.whitelist(allow_guest=True)
+def get_related_items(item_slug, limit=6, branch=None):
+	_ensure_item_tags_field()
+	slug = _normalize_slug(item_slug)
+	if not slug:
+		return []
+
+	limit = max(1, min(cint(limit) or 6, 24))
+	branch = (branch or "").strip()
+
+	item_name = frappe.db.get_value(
+		"Item",
+		{
+			"restaurant_slug": slug,
+			**_core_item_filters(branch),
+		},
+		"name",
+	)
+	source_variant_name = ""
+	if not item_name:
+		item_name, source_variant_name = _resolve_variant_slug_to_context(slug=slug, branch=branch)
+	if not item_name:
+		return []
+
+	template_doc = frappe.get_doc("Item", item_name)
+	display_doc, _fixed_attribute_values = _resolve_display_doc_for_item_detail(
+		template_doc,
+		source_variant_name=source_variant_name,
+		branch=branch,
+	)
+
+	category_meta_map = _get_core_category_meta_map()
+	subcategory_meta_map = _get_core_subcategory_meta_map()
+	current_names = {name for name in {template_doc.name, display_doc.name, source_variant_name} if name}
+	current_slug = _normalize_slug(display_doc.get("restaurant_slug") or template_doc.get("restaurant_slug") or slug)
+	current_tags = {
+		tag.lower()
+		for tag in (
+			_split_tags(getattr(template_doc, "restaurant_item_tags", None))
+			or _get_item_tag_titles(template_doc.name)
+		)
+		if tag
+	}
+
+	image_field = _core_item_image_field()
+	item_fields = [
+		"name",
+		"item_code",
+		"item_name",
+		"restaurant_slug",
+		"restaurant_short_desc",
+		"restaurant_base_price",
+		"standard_rate",
+		f"{image_field} as image",
+		"restaurant_category",
+		"restaurant_subcategory",
+		"restaurant_sort_order",
+	]
+	for fieldname in _available_item_nutrition_fields():
+		if fieldname not in item_fields:
+			item_fields.append(fieldname)
+	if _has_column("Item", "restaurant_coming_soon"):
+		item_fields.append("restaurant_coming_soon")
+
+	template_rows = frappe.get_all(
+		"Item",
+		filters=_core_item_filters(branch),
+		fields=item_fields,
+		ignore_permissions=True,
+		order_by="restaurant_sort_order asc, item_name asc",
+		limit_page_length=5000,
+	)
+
+	expanded_rows = []
+	for row in template_rows:
+		if row.get("name") in current_names:
+			continue
+		expanded_rows.extend(_template_display_row_or_self(row, branch=branch))
+	expanded_rows = _apply_menu_customization_flags(expanded_rows)
+
+	scored_rows = []
+	for row in expanded_rows:
+		row_name = (row.get("name") or "").strip()
+		row_slug = _normalize_slug(row.get("restaurant_slug") or "")
+		if row_name in current_names or (row_slug and row_slug == current_slug):
+			continue
+
+		score = 0
+		if (row.get("restaurant_subcategory") or "").strip() == (display_doc.get("restaurant_subcategory") or "").strip():
+			score += 40
+		if (row.get("restaurant_category") or "").strip() == (display_doc.get("restaurant_category") or "").strip():
+			score += 20
+
+		row_tags = {
+			tag.lower()
+			for tag in (
+				_split_tags(getattr(row, "restaurant_item_tags", None))
+				or _get_item_tag_titles(row_name)
+			)
+			if tag
+		}
+		score += min(len(current_tags & row_tags), 3) * 5
+
+		if score <= 0:
+			continue
+		scored_rows.append((score, row))
+
+	scored_rows.sort(
+		key=lambda entry: (
+			-entry[0],
+			cint(entry[1].get("restaurant_sort_order") or 0),
+			_variant_item_sort_key(entry[1].get("name") or ""),
+			(entry[1].get("item_name") or ""),
+		)
+	)
+
+	items = []
+	seen_slugs = set()
+	for _score, row in scored_rows:
+		payload = _serialize_core_item(
+			row,
+			category_meta_map=category_meta_map,
+			subcategory_meta_map=subcategory_meta_map,
+		)
+		payload_slug = _normalize_slug(payload.get("slug") or "")
+		seen_key = payload_slug or (payload.get("name") or "")
+		if not seen_key or seen_key in seen_slugs:
+			continue
+		seen_slugs.add(seen_key)
+		items.append(payload)
+		if len(items) >= limit:
+			break
+
+	return items
 
 
 @frappe.whitelist(allow_guest=True)
@@ -7367,6 +8193,15 @@ def _valuation_rate_for_item(item_code):
 	return flt(frappe.db.get_value("Item", item_code, "standard_rate") or 0)
 
 
+def _item_consumes_stock(item_code):
+	item_code = (item_code or "").strip()
+	if not item_code or not frappe.db.exists("Item", item_code):
+		return False
+	if not _has_column("Item", "is_stock_item"):
+		return True
+	return cint(frappe.db.get_value("Item", item_code, "is_stock_item") or 0) == 1
+
+
 def _normalize_selected_modifiers(raw_modifiers):
 	rows = []
 	for selected in raw_modifiers or []:
@@ -7891,7 +8726,6 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		selected_item_name = (
 			frappe.db.get_value("Item", ingredient_item, "item_name") if ingredient_item else label
 		)
-		extra_alternative_price = 0.0
 
 		if selected_alternative:
 			selected_item_code = (selected_alternative.get("alternative_item") or "").strip()
@@ -7920,7 +8754,6 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 				or frappe.db.get_value("Item", selected_item_code, "item_name")
 				or selected_item_code
 			)
-			extra_alternative_price = flt(selected_alternative.get("price_delta") or 0)
 			normalized_selected_alternatives.append(
 				{
 					"ingredient_key": ingredient_name,
@@ -7928,17 +8761,61 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 				}
 			)
 
+		delta_multiplier = selected_multiplier - base_multiplier
+		base_component_qty = base_qty * base_multiplier
+		selected_component_qty = selected_base_qty * selected_multiplier
+		base_pricing = (
+			_resolve_default_selling_item_pricing(
+				ingredient_item,
+				base_component_qty,
+				uom=row.get("qty_uom") or "",
+			)
+			if ingredient_item
+			else {}
+		)
+		selected_pricing = (
+			_resolve_default_selling_item_pricing(
+				selected_item_code,
+				selected_component_qty,
+				uom=selected_stock_uom or row.get("qty_uom") or "",
+			)
+			if selected_item_code
+			else {}
+		)
 		base_rate = _valuation_rate_for_item(ingredient_item)
 		selected_rate = _valuation_rate_for_item(selected_item_code)
-		delta_multiplier = selected_multiplier - base_multiplier
+		base_item_price_ok = not ingredient_item or cint(base_pricing.get("is_selectable") or 0) == 1
+		selected_item_price_ok = (
+			not selected_item_code or cint(selected_pricing.get("is_selectable") or 0) == 1
+		)
 		if ingredient_item or selected_item_code:
-			base_component_qty = base_qty * base_multiplier
-			selected_component_qty = selected_base_qty * selected_multiplier
-			base_component_cost = base_component_qty * base_rate if ingredient_item else 0
-			selected_component_cost = selected_component_qty * selected_rate if selected_item_code else 0
-			delta_price = (selected_component_cost - base_component_cost) * markup_factor
-			if selected_alternative:
-				delta_price += extra_alternative_price * selected_multiplier
+			if base_item_price_ok and selected_item_price_ok:
+				base_total_price = flt(base_pricing.get("total_price") or 0)
+				selected_total_price = flt(selected_pricing.get("total_price") or 0)
+				delta_price = selected_total_price - base_total_price
+			elif selected_alternative and ingredient_item and selected_item_code:
+				alternative_pricing = _resolve_ingredient_alternative_pricing(
+					ingredient_item,
+					base_component_qty,
+					row.get("qty_uom") or "",
+					selected_item_code,
+					selected_component_qty,
+					alternative_uom=selected_stock_uom,
+				)
+				if cint(alternative_pricing.get("is_selectable") or 0) != 1:
+					frappe.throw(
+						alternative_pricing.get("unavailable_reason")
+						or _("Alternative item price could not be resolved for {0}.").format(label)
+					)
+				delta_price = flt(alternative_pricing.get("price_delta") or 0)
+			elif flt(row.get("extra_when_added")):
+				delta_price = delta_multiplier * flt(row.get("extra_when_added"))
+			else:
+				base_component_cost = base_component_qty * base_rate if ingredient_item else 0
+				selected_component_cost = (
+					selected_component_qty * selected_rate if selected_item_code else 0
+				)
+				delta_price = (selected_component_cost - base_component_cost) * markup_factor
 		else:
 			delta_price = delta_multiplier * flt(row.get("extra_when_added"))
 
@@ -7986,8 +8863,17 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 				"max_multiplier": max_multiplier,
 				"step_multiplier": step_multiplier,
 				"multiplier_qty": multiplier_qty if multiplier_qty > 0 else 0,
-				"pricing_rate": selected_rate,
+				"pricing_rate": flt(selected_pricing.get("unit_rate") or selected_rate or 0),
 				"pricing_delta": delta_price,
+				"price_status": selected_pricing.get("price_status")
+				or base_pricing.get("price_status")
+				or "",
+				"price_list": selected_pricing.get("price_list")
+				or base_pricing.get("price_list")
+				or "",
+				"price_source": "item_price"
+				if base_item_price_ok and selected_item_price_ok and (ingredient_item or selected_item_code)
+				else "legacy",
 				"stock_uom": selected_stock_uom or row.get("qty_uom") or "",
 				"source_type": "bom_item",
 			}
@@ -8050,24 +8936,33 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		option_item = (option_payload.get("option_item") or "").strip()
 		replacement_for = (option_payload.get("replacement_for_item") or "").strip()
 		alternative_bom = (option_payload.get("alternative_bom") or "").strip()
-		option_qty = flt(option_payload.get("option_qty") or 1)
+		option_qty = flt(option_payload.get("option_qty") or option_payload.get("base_qty") or 1)
 		if option_qty <= 0:
 			option_qty = 1
 
 		option_min_qty = max(
-			flt(option_payload.get("min_qty") if option_payload.get("min_qty") not in (None, "") else 1), 0
+			flt(option_payload.get("min_qty") if option_payload.get("min_qty") not in (None, "") else 0), 0
 		)
 		option_max_qty = max(
-			flt(option_payload.get("max_qty") if option_payload.get("max_qty") not in (None, "") else 9),
+			flt(
+				option_payload.get("max_qty")
+				if option_payload.get("max_qty") not in (None, "")
+				else max(option_qty, option_qty * 4)
+			),
 			option_min_qty,
+			option_qty,
 		)
-		option_step = flt(option_payload.get("qty_step") or 1)
+		option_step = flt(option_payload.get("qty_step") or option_qty or 1)
 		if option_step <= 0:
-			option_step = 1
+			option_step = option_qty if option_qty > 0 else 1
 
-		qty = flt(selected.get("qty") if selected.get("qty") not in (None, "") else option_min_qty or 1)
+		qty = flt(
+			selected.get("qty")
+			if selected.get("qty") not in (None, "")
+			else (option_qty if cint(option_payload.get("is_default")) else option_min_qty)
+		)
 		if qty <= 0:
-			qty = option_min_qty if option_min_qty > 0 else option_step
+			qty = option_qty if option_qty > 0 else option_step
 
 		if qty < option_min_qty - 1e-8 or qty > option_max_qty + 1e-8:
 			frappe.throw(
@@ -8081,7 +8976,17 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		if not _step_valid(qty, option_min_qty, option_step):
 			frappe.throw(_("Modifier qty for {0} must follow step {1}.").format(option_label, option_step))
 
-		delta = flt(option_payload.get("price_delta")) * qty
+		if cint(option_payload.get("is_selectable") if option_payload.get("is_selectable") not in (None, "") else 1) != 1:
+			raise_reason = (
+				option_payload.get("unavailable_reason")
+				or _("Modifier option {0} is not available for ordering.").format(option_label)
+			)
+			frappe.throw(raise_reason, frappe.ValidationError)
+
+		conversion_factor = flt(option_payload.get("conversion_factor") or 1)
+		selected_qty_in_stock_uom = qty * conversion_factor
+		delta = flt(option_payload.get("unit_rate") or 0) * selected_qty_in_stock_uom
+		qty_ratio = qty / option_qty if option_qty > 1e-8 else 1
 
 		if modifier_type == "bom_variant" and alternative_bom:
 			bom_meta = frappe.db.get_value(
@@ -8116,32 +9021,39 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 					"item_name": frappe.db.get_value("Item", option_item, "item_name") or option_label,
 					"base_item_code": "",
 					"selected_alternative_item": "",
-					"base_qty": option_qty,
-					"selected_base_qty": option_qty,
+					"base_qty": flt(option_payload.get("base_qty_in_stock_uom") or selected_qty_in_stock_uom),
+					"selected_base_qty": selected_qty_in_stock_uom,
 					"base_multiplier": 0,
-					"selected_multiplier": qty,
+					"selected_multiplier": 1,
 					"is_required": 0,
 					"is_included_by_default": 0,
 					"can_remove": 1,
 					"is_editable_qty": 1,
-					"min_multiplier": option_min_qty,
-					"max_multiplier": option_max_qty,
-					"step_multiplier": option_step,
+					"min_multiplier": option_min_qty * conversion_factor,
+					"max_multiplier": option_max_qty * conversion_factor,
+					"step_multiplier": option_step * conversion_factor,
 					"pricing_rate": _valuation_rate_for_item(option_item),
 					"pricing_delta": delta,
 					"stock_uom": option_stock_uom,
+					"authoring_uom": option_payload.get("option_uom") or "",
+					"authoring_base_qty": option_qty,
+					"selected_authoring_qty": qty,
 					"source_type": "modifier_add_on",
 				}
 			)
 			option_item_doc = frappe.get_cached_doc("Item", option_item)
 			option_nutrition = _nutrition_per_unit_payload(option_item_doc)
-			option_factor = _nutrition_factor_from_item_qty(option_item, option_qty * qty, option_stock_uom)
+			option_factor = _nutrition_factor_from_item_qty(
+				option_item,
+				qty,
+				option_payload.get("option_uom") or option_stock_uom,
+			)
 			_add_nutrition_to_totals(nutrition_totals, option_nutrition, option_factor)
 
 		unit_price += delta
 		modifier_delta_total += delta
 		selected_by_group[group_name] += 1
-		line_recipe_multiplier *= math.pow(recipe_multiplier, qty)
+		line_recipe_multiplier *= math.pow(recipe_multiplier, qty_ratio)
 		normalized_selected_modifiers.append(
 			{
 				"group": group_name,
@@ -8154,7 +9066,9 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 			}
 		)
 
-		label_suffix = f" x{qty:g}" if abs(flt(qty) - 1) > 1e-8 else ""
+		qty_label = f"{qty:g}"
+		uom_label = (option_payload.get("option_uom") or "").strip()
+		label_suffix = f" {qty_label} {uom_label}".rstrip() if qty > 0 else ""
 		selections.append(
 			{
 				"kind": "modifier",
@@ -9667,7 +10581,7 @@ def _extract_qty_map_from_ticket(ticket_doc, target_qty=None):
 	for row in ticket_doc.get("components") or []:
 		item_code = (row.get("item_code") or "").strip()
 		final_qty = flt(row.get("final_qty") or 0)
-		if not item_code or final_qty <= 1e-8:
+		if not item_code or final_qty <= 1e-8 or not _item_consumes_stock(item_code):
 			continue
 		qty_map[item_code] += final_qty * scale_factor
 	return qty_map
@@ -14356,7 +15270,144 @@ def _management_list_selling_price_lists(currency=None):
 				"is_default": 1 if row.name == default_name else 0,
 			}
 		)
+	payload.sort(key=lambda row: (0 if row.get("is_default") else 1, row.get("title") or row.get("name") or ""))
 	return payload, default_name
+
+
+def _normalize_management_modifier_group_option(row=None, idx=0):
+	row = row or {}
+	action_type = (row.get("action_type") or row.get("modifier_type") or "add_on").strip() or "add_on"
+	if action_type not in {"add_on", "bom_variant"}:
+		action_type = "add_on"
+
+	option_name = (
+		row.get("option_name")
+		or row.get("option_label")
+		or row.get("option_key")
+		or row.get("name")
+		or row.get("option_item")
+		or row.get("alternative_bom")
+		or ""
+	).strip()
+	if not option_name:
+		return None
+
+	option_item = (row.get("option_item") or "").strip()
+	qty_rules = _normalize_modifier_option_quantity_rules(row)
+	option_qty = flt(qty_rules.get("option_qty") or 1) or 1
+	option_cost_rate = 0
+	option_uom = (row.get("option_uom") or "").strip()
+	if action_type == "add_on" and option_item and frappe.db.exists("Item", option_item):
+		option_cost_rate = flt(frappe.db.get_value("Item", option_item, "valuation_rate") or 0)
+		option_uom = option_uom or (frappe.db.get_value("Item", option_item, "stock_uom") or "")
+
+	return {
+		"option_name": option_name,
+		"action_type": action_type,
+		"option_item": option_item,
+		"option_uom": option_uom,
+		"option_qty": option_qty,
+		"option_cost_rate": option_cost_rate,
+		"option_cost_amount": flt(option_cost_rate * option_qty),
+		"price_delta": flt(row.get("price_delta") or 0),
+		"min_qty": flt(qty_rules.get("min_qty") or 0),
+		"max_qty": flt(qty_rules.get("max_qty") or 0),
+		"qty_step": flt(qty_rules.get("qty_step") or 1),
+		"alternative_bom": (row.get("alternative_bom") or "").strip(),
+		"recipe_multiplier": flt(row.get("recipe_multiplier") or 1) or 1,
+		"is_default": cint(row.get("is_default")),
+		"sort_order": cint(row.get("sort_order") or idx or 0),
+		"is_active": cint(row.get("is_active") if row.get("is_active") not in (None, "") else 1),
+	}
+
+
+def _serialize_management_modifier_group(group_doc, price_list=None):
+	if isinstance(group_doc, str):
+		group_doc = frappe.get_doc("Restaurant Modifier Group", group_doc)
+
+	default_price_list = (price_list or _default_selling_price_list() or "").strip()
+	options = []
+	unresolved_count = 0
+	active_options_count = 0
+
+	for idx, option_row in enumerate(
+		sorted(group_doc.get("options") or [], key=lambda d: (cint(d.get("sort_order") or 0), cint(d.get("idx") or 0))),
+		start=1,
+	):
+		normalized_option = _normalize_management_modifier_group_option(option_row, idx=idx)
+		if not normalized_option:
+			continue
+		pricing = _resolve_modifier_option_pricing(normalized_option, price_list=default_price_list)
+		option_item = normalized_option.get("option_item") or ""
+		if cint(normalized_option.get("is_active") if normalized_option.get("is_active") not in (None, "") else 1):
+			active_options_count += 1
+			if pricing.get("price_status") not in {"ok"}:
+				unresolved_count += 1
+
+		options.append(
+			{
+				"name": option_row.get("name") or "",
+				"option_name": normalized_option.get("option_name"),
+				"action_type": normalized_option.get("action_type"),
+				"option_item": option_item,
+				"option_item_name": frappe.db.get_value("Item", option_item, "item_name") if option_item else "",
+				"option_uom": normalized_option.get("option_uom") or "",
+				"option_qty": flt(normalized_option.get("option_qty") or 1),
+				"base_qty": flt(normalized_option.get("option_qty") or 1),
+				"option_cost_rate": flt(normalized_option.get("option_cost_rate") or 0),
+				"option_cost_amount": flt(normalized_option.get("option_cost_amount") or 0),
+				"legacy_price_delta": flt(normalized_option.get("price_delta") or 0),
+				"min_qty": flt(normalized_option.get("min_qty") or 0),
+				"max_qty": flt(normalized_option.get("max_qty") or 0),
+				"qty_step": flt(normalized_option.get("qty_step") or 1),
+				"alternative_bom": normalized_option.get("alternative_bom") or "",
+				"recipe_multiplier": flt(normalized_option.get("recipe_multiplier") or 1),
+				"is_default": cint(normalized_option.get("is_default")),
+				"sort_order": cint(normalized_option.get("sort_order") or 0),
+				"is_active": cint(normalized_option.get("is_active") if normalized_option.get("is_active") not in (None, "") else 1),
+				**pricing,
+			}
+		)
+
+	return {
+		"name": group_doc.name,
+		"title": group_doc.get("title") or group_doc.name,
+		"selection_mode": group_doc.get("selection_mode") or "single",
+		"required": cint(group_doc.get("required")),
+		"min_select": cint(group_doc.get("min_select") or 0),
+		"max_select": cint(group_doc.get("max_select") or 1),
+		"description": group_doc.get("description") or "",
+		"sort_order": cint(group_doc.get("sort_order") or 0),
+		"is_active": cint(group_doc.get("is_active") if group_doc.get("is_active") not in (None, "") else 1),
+		"default_price_list": default_price_list,
+		"options": options,
+		"options_count": len(options),
+		"active_options_count": active_options_count,
+		"unresolved_options_count": unresolved_count,
+		"has_pricing_issues": 1 if unresolved_count > 0 else 0,
+	}
+
+
+def _validate_management_modifier_group_options(is_group_active, options=None, price_list=None):
+	options = options or []
+	default_price_list = (price_list or _default_selling_price_list() or "").strip()
+	issues = []
+	for idx, row in enumerate(options, start=1):
+		normalized = _normalize_management_modifier_group_option(row, idx=idx)
+		if not normalized:
+			continue
+		if not cint(normalized.get("is_active") if normalized.get("is_active") not in (None, "") else 1):
+			continue
+		pricing = _resolve_modifier_option_pricing(normalized, price_list=default_price_list)
+		if is_group_active and pricing.get("price_status") not in {"ok"}:
+			issues.append(
+				{
+					"option_name": normalized.get("option_name") or _("Option #{0}").format(idx),
+					"reason": pricing.get("unavailable_reason")
+					or _("Modifier option pricing could not be resolved."),
+				}
+			)
+	return issues
 
 
 def _management_get_item_price_history(item_code, limit=30):
@@ -14720,6 +15771,177 @@ def _management_build_product_analytics(item_doc, date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+def get_management_modifier_groups_context():
+	_ensure_management_access()
+	price_lists, default_price_list = _management_list_selling_price_lists()
+	item_filters = {"disabled": 0} if _has_column("Item", "disabled") else {}
+	bom_filters = {"is_active": 1} if _has_column("BOM", "is_active") else {}
+	return {
+		"default_price_list": default_price_list or "",
+		"price_lists": price_lists,
+		"item_options": _named_doc_options("Item", label_fields=("item_name",), filters=item_filters, limit=1000),
+		"bom_options": _named_doc_options("BOM", label_fields=("item",), filters=bom_filters, limit=1000),
+		"uom_options": _named_doc_options("UOM", label_fields=("uom_name",), limit=500),
+		"action_type_options": [
+			{"value": "add_on", "label": _("Add-on")},
+			{"value": "bom_variant", "label": _("BOM Variant")},
+		],
+	}
+
+
+@frappe.whitelist()
+def list_management_modifier_groups(search=None, include_inactive=1):
+	_ensure_management_access()
+	search = (search or "").strip()
+	include_inactive = cint(include_inactive)
+	filters = {}
+	if not include_inactive and _has_column("Restaurant Modifier Group", "is_active"):
+		filters["is_active"] = 1
+
+	rows = frappe.get_all(
+		"Restaurant Modifier Group",
+		fields=[
+			"name",
+			"title",
+			"selection_mode",
+			"required",
+			"min_select",
+			"max_select",
+			"description",
+			"sort_order",
+			"is_active",
+			"modified",
+		],
+		filters=filters,
+		or_filters=(
+			[
+				["name", "like", f"%{search}%"],
+				["title", "like", f"%{search}%"],
+			]
+			if search
+			else None
+		),
+		order_by="sort_order asc, modified desc",
+		ignore_permissions=True,
+		limit_page_length=500,
+	)
+	default_price_list = _default_selling_price_list()
+	payload = []
+	for row in rows:
+		serialized = _serialize_management_modifier_group(row.name, price_list=default_price_list)
+		payload.append(
+			{
+				"name": serialized.get("name"),
+				"title": serialized.get("title"),
+				"selection_mode": serialized.get("selection_mode"),
+				"required": serialized.get("required"),
+				"min_select": serialized.get("min_select"),
+				"max_select": serialized.get("max_select"),
+				"description": serialized.get("description"),
+				"sort_order": serialized.get("sort_order"),
+				"is_active": serialized.get("is_active"),
+				"modified": row.get("modified"),
+				"options_count": serialized.get("options_count"),
+				"active_options_count": serialized.get("active_options_count"),
+				"unresolved_options_count": serialized.get("unresolved_options_count"),
+				"has_pricing_issues": serialized.get("has_pricing_issues"),
+				"default_price_list": serialized.get("default_price_list") or "",
+			}
+		)
+	return {
+		"groups": payload,
+		"default_price_list": default_price_list or "",
+	}
+
+
+@frappe.whitelist()
+def get_management_modifier_group_detail(group_name):
+	_ensure_management_access()
+	group_name = (group_name or "").strip()
+	if not group_name:
+		frappe.throw(_("Modifier Group name is required."))
+	if not frappe.db.exists("Restaurant Modifier Group", group_name):
+		frappe.throw(_("Modifier Group not found."), frappe.DoesNotExistError)
+	return _serialize_management_modifier_group(group_name)
+
+
+@frappe.whitelist()
+def save_management_modifier_group(payload=None):
+	_ensure_management_access()
+	parsed_payload = payload
+	if isinstance(parsed_payload, str):
+		parsed_payload = _parse_json(parsed_payload, {})
+	if not isinstance(parsed_payload, dict):
+		frappe.throw(_("Invalid payload format."))
+
+	group_name = (parsed_payload.get("name") or parsed_payload.get("group_name") or "").strip()
+	title = (parsed_payload.get("title") or "").strip()
+	if not title:
+		frappe.throw(_("Modifier Group title is required."))
+
+	if group_name:
+		if not frappe.db.exists("Restaurant Modifier Group", group_name):
+			frappe.throw(_("Modifier Group not found."), frappe.DoesNotExistError)
+		group_doc = frappe.get_doc("Restaurant Modifier Group", group_name)
+	else:
+		group_doc = frappe.new_doc("Restaurant Modifier Group")
+
+	group_doc.title = title
+	group_doc.selection_mode = (parsed_payload.get("selection_mode") or "single").strip() or "single"
+	group_doc.required = cint(parsed_payload.get("required"))
+	group_doc.min_select = cint(parsed_payload.get("min_select") or 0)
+	group_doc.max_select = max(cint(parsed_payload.get("max_select") or 1), 1)
+	group_doc.description = (parsed_payload.get("description") or "").strip()
+	group_doc.sort_order = cint(parsed_payload.get("sort_order") or 0)
+	group_doc.is_active = cint(parsed_payload.get("is_active") if parsed_payload.get("is_active") not in (None, "") else 1)
+
+	raw_options = parsed_payload.get("options") if isinstance(parsed_payload.get("options"), list) else []
+	normalized_options = []
+	for idx, row in enumerate(raw_options, start=1):
+		normalized = _normalize_management_modifier_group_option(row, idx=idx)
+		if normalized:
+			normalized_options.append(normalized)
+	if not normalized_options:
+		frappe.throw(_("At least one modifier option is required."))
+
+	issues = _validate_management_modifier_group_options(group_doc.is_active, normalized_options)
+	if issues:
+		first_issue = issues[0]
+		frappe.throw(
+			_("Cannot save active modifier group because option {0} is unresolved: {1}").format(
+				first_issue.get("option_name"),
+				first_issue.get("reason"),
+			),
+			frappe.ValidationError,
+		)
+
+	group_doc.set("options", [])
+	for idx, row in enumerate(normalized_options, start=1):
+		row["idx"] = idx
+		group_doc.append("options", row)
+
+	if group_doc.is_new():
+		group_doc.insert(ignore_permissions=True)
+	else:
+		group_doc.save(ignore_permissions=True)
+
+	for child_row, source_row in zip(group_doc.get("options") or [], normalized_options):
+		option_uom = (source_row.get("option_uom") or "").strip()
+		if child_row.name and child_row.get("option_uom") != option_uom:
+			frappe.db.set_value(
+				"Restaurant Modifier Option",
+				child_row.name,
+				"option_uom",
+				option_uom,
+				update_modified=False,
+			)
+
+	frappe.db.commit()
+	frappe.clear_cache(doctype="Restaurant Modifier Group")
+	return _serialize_management_modifier_group(group_doc.name)
+
+
+@frappe.whitelist()
 def list_management_price_lists(currency=None):
 	_ensure_management_access()
 	rows, default_name = _management_list_selling_price_lists(currency=(currency or "").strip() or None)
@@ -14745,6 +15967,11 @@ def set_management_default_price_list(price_list_name):
 	is_selling = cint(frappe.db.get_value("Price List", price_list_name, "selling"))
 	if not is_selling:
 		frappe.throw(_("Selected price list must be a selling price list."))
+
+	if frappe.db.exists("DocType", "Selling Settings"):
+		selling_settings_meta = frappe.get_meta("Selling Settings")
+		if selling_settings_meta.get_field("selling_price_list"):
+			frappe.db.set_single_value("Selling Settings", "selling_price_list", price_list_name)
 
 	fieldname = DEFAULT_SELLING_PRICE_LIST_FIELD
 	frappe.db.sql(
@@ -14847,8 +16074,108 @@ def _management_builder_templates_summary():
 	return templates
 
 
+def _normalize_builder_template_payload(payload=None):
+	source = frappe.parse_json(payload) if isinstance(payload, str) else payload
+	if not isinstance(source, dict):
+		return {}
+	normalized = copy.deepcopy(source)
+	for step in normalized.get("steps") or []:
+		if not isinstance(step, dict):
+			continue
+		step["conditional_logic"] = _parse_json(step.get("conditional_logic"), {})
+		for fieldname in ("is_required", "show_step_price"):
+			if fieldname in step:
+				step[fieldname] = bool(cint(step.get(fieldname)))
+		for option in step.get("options") or []:
+			if not isinstance(option, dict):
+				continue
+			for fieldname in ("is_default", "is_available"):
+				if fieldname in option:
+					option[fieldname] = bool(cint(option.get(fieldname)))
+			option["nutrition_json"] = _normalize_json_text_field(
+				option.get("nutrition_json", option.get("nutrition")),
+				{},
+			)
+			option["stock_impact_json"] = _normalize_json_text_field(
+				option.get("stock_impact_json", option.get("stock_impact")),
+				{},
+			)
+			option["disable_if"] = _normalize_json_text_field(
+				option.get("disable_if", option.get("disabled_if")),
+				[],
+			)
+			option.pop("nutrition", None)
+			option.pop("stock_impact", None)
+			option.pop("disabled_if", None)
+	return normalized
+
+
+def _builder_payload_signature(payload=None):
+	normalized = _normalize_builder_template_payload(payload)
+	return _stable_json_dumps(normalized)
+
+
+def _merge_builder_payload_defaults(incoming=None, existing=None):
+	incoming_payload = _normalize_builder_template_payload(incoming)
+	existing_payload = _normalize_builder_template_payload(existing)
+	if not existing_payload:
+		return incoming_payload
+	if not incoming_payload:
+		return existing_payload
+
+	merged = copy.deepcopy(existing_payload)
+	for key, value in incoming_payload.items():
+		if key == "steps":
+			continue
+		merged[key] = value
+
+	existing_steps = existing_payload.get("steps") or []
+	incoming_steps = incoming_payload.get("steps") or []
+	step_map = {
+		StringKey: step
+		for StringKey, step in [
+			(
+				str((step or {}).get("step_key") or index),
+				copy.deepcopy(step or {}),
+			)
+			for index, step in enumerate(existing_steps)
+			if isinstance(step, dict)
+		]
+	}
+	merged_steps = []
+	for index, step in enumerate(incoming_steps):
+		if not isinstance(step, dict):
+			continue
+		step_key = str(step.get("step_key") or index)
+		base_step = copy.deepcopy(step_map.get(step_key) or {})
+		for key, value in step.items():
+			if key == "options":
+				continue
+			base_step[key] = value
+
+		existing_options = (step_map.get(step_key) or {}).get("options") or []
+		option_map = {
+			str((opt or {}).get("option_key") or opt_index): copy.deepcopy(opt or {})
+			for opt_index, opt in enumerate(existing_options)
+			if isinstance(opt, dict)
+		}
+		merged_options = []
+		for opt_index, option in enumerate(step.get("options") or []):
+			if not isinstance(option, dict):
+				continue
+			option_key = str(option.get("option_key") or opt_index)
+			base_option = copy.deepcopy(option_map.get(option_key) or {})
+			base_option.update(option)
+			merged_options.append(base_option)
+		base_step["options"] = merged_options
+		merged_steps.append(base_step)
+
+	merged["steps"] = merged_steps
+	return merged
+
+
 def _build_item_specific_builder_template(item_doc, builder_payload, selected_template_name=None):
-	payload = frappe.parse_json(builder_payload) if isinstance(builder_payload, str) else builder_payload
+	payload = _normalize_builder_template_payload(builder_payload)
 	if not isinstance(payload, dict):
 		frappe.throw(_("Invalid product builder config."))
 
@@ -14890,6 +16217,9 @@ def _build_item_specific_builder_template(item_doc, builder_payload, selected_te
 			or f"Item-specific builder for {item_doc.get('item_name') or item_doc.name}"
 		).strip()
 		result = save_builder_template(template_data=frappe.as_json(payload))
+		if (result or {}).get("status") != "success":
+			error = (result or {}).get("error") or {}
+			frappe.throw(error.get("message") or _("Failed to create item-specific builder template."))
 		data = (result or {}).get("data") or {}
 		template_name = data.get("name")
 		if not template_name:
@@ -14899,6 +16229,9 @@ def _build_item_specific_builder_template(item_doc, builder_payload, selected_te
 	payload["name"] = template_name
 	payload["title"] = title
 	result = save_builder_template(template_data=frappe.as_json(payload))
+	if (result or {}).get("status") != "success":
+		error = (result or {}).get("error") or {}
+		frappe.throw(error.get("message") or _("Failed to update item-specific builder template."))
 	data = (result or {}).get("data") or {}
 	return data.get("name") or template_name
 
@@ -15216,17 +16549,33 @@ def update_management_product_settings(payload=None):
 	if builder_config_payload and cint(
 		parsed_payload.get("restaurant_is_customizable") or item_doc.get("restaurant_is_customizable") or 0
 	):
-		template_name = _build_item_specific_builder_template(
-			item_doc,
+		current_template_name = (item_doc.get("restaurant_builder_template") or "").strip()
+		current_builder_config = None
+		if current_template_name and frappe.db.exists("Product Builder Template", current_template_name):
+			try:
+				current_builder_config = _serialize_management_builder_template(
+					frappe.get_doc("Product Builder Template", current_template_name)
+				)
+			except Exception:
+				current_builder_config = None
+		merged_builder_config = _merge_builder_payload_defaults(
 			builder_config_payload,
-			selected_template_name=selected_builder_template,
+			current_builder_config,
 		)
-		if (
-			_has_column("Item", "restaurant_builder_template")
-			and (item_doc.get("restaurant_builder_template") or "") != template_name
-		):
-			item_doc.set("restaurant_builder_template", template_name)
-			changed = True
+		incoming_signature = _builder_payload_signature(merged_builder_config)
+		current_signature = _builder_payload_signature(current_builder_config)
+		if incoming_signature and incoming_signature != current_signature:
+			template_name = _build_item_specific_builder_template(
+				item_doc,
+				merged_builder_config,
+				selected_template_name=selected_builder_template,
+			)
+			if (
+				_has_column("Item", "restaurant_builder_template")
+				and (item_doc.get("restaurant_builder_template") or "") != template_name
+			):
+				item_doc.set("restaurant_builder_template", template_name)
+				changed = True
 
 	default_price_list = (parsed_payload.get("default_price_list") or "").strip()
 	if default_price_list:
@@ -15317,9 +16666,12 @@ def set_management_product_price(payload=None):
 def get_management_bom_context():
 	_ensure_management_access()
 	default_company = (frappe.db.get_single_value("Global Defaults", "default_company") or "").strip()
+	company_filters = {}
+	if _has_column("Company", "disabled"):
+		company_filters["disabled"] = 0
 	companies = frappe.get_all(
 		"Company",
-		filters={"disabled": 0},
+		filters=company_filters,
 		fields=["name", "default_currency", "abbr"],
 		ignore_permissions=True,
 		order_by="name asc",
@@ -15390,7 +16742,26 @@ def get_management_bom_doc(bom_name=""):
 		frappe.throw(_("BOM name is required."))
 	if not frappe.db.exists("BOM", bom_name):
 		frappe.throw(_("BOM not found."), frappe.DoesNotExistError)
-	return frappe.get_doc("BOM", bom_name).as_dict()
+	doc = frappe.get_doc("BOM", bom_name).as_dict()
+	item_meta_cache = {}
+	for item_row in doc.get("items") or []:
+		if not isinstance(item_row, dict):
+			continue
+		alternatives = _get_item_alternative_options(
+			item_row.get("item_code"),
+			allow_alternative_item=item_row.get("allow_alternative_item"),
+			item_meta_cache=item_meta_cache,
+		)
+		item_row["alternatives_count"] = len(alternatives)
+		item_row["alternatives"] = [
+			{
+				"alternative_item": option.get("alternative_item") or "",
+				"item_name": option.get("item_name") or option.get("alternative_item") or "",
+				"stock_uom": option.get("stock_uom") or option.get("uom") or "",
+			}
+			for option in alternatives
+		]
+	return doc
 
 
 @frappe.whitelist()
@@ -19295,6 +20666,11 @@ def save_builder_template(template_data=None, template=None):
 				options = step.pop("options", []) or []
 				step_payload = {k: v for k, v in step.items() if k not in ("name", "idx")}
 				step_payload["sort_order"] = step_index
+				if "conditional_logic" in step_payload:
+					step_payload["conditional_logic"] = _normalize_json_text_field(
+						step_payload.get("conditional_logic"),
+						{},
+					)
 				step_key = step_payload.get("step_key") or f"step-{frappe.generate_hash(length=8)}"
 				step_payload["step_key"] = step_key
 				step_options_by_key[step_key] = options
@@ -19324,6 +20700,18 @@ def save_builder_template(template_data=None, template=None):
 					frappe.throw(_("Option keys must be unique within each builder step."))
 				for option_index, option in enumerate(options or []):
 					option_payload = {k: v for k, v in dict(option or {}).items() if k not in ("name", "idx")}
+					option_payload["nutrition_json"] = _normalize_json_text_field(
+						option_payload.get("nutrition_json"),
+						{},
+					)
+					option_payload["stock_impact_json"] = _normalize_json_text_field(
+						option_payload.get("stock_impact_json"),
+						{},
+					)
+					option_payload["disable_if"] = _normalize_json_text_field(
+						option_payload.get("disable_if"),
+						[],
+					)
 					option_payload.update(
 						{
 							"doctype": "Product Builder Option",
