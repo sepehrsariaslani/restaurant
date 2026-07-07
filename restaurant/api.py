@@ -1873,24 +1873,47 @@ def _pos_shift_settings():
 
 
 def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=True):
-	"""Create Stock Entry for a Work Order - handles 'already transferred' gracefully."""
+	"""Create Stock Entry for a Work Order - no make_stock_entry at all"""
 	wo = frappe.get_doc("Work Order", work_order_name)
+	se = frappe.new_doc("Stock Entry")
+	se.flags.ignore_permissions = True
+	se.company = wo.company
+	se.work_order = work_order_name
+	se.from_bom = 1
+	se.bom_no = wo.bom_no
+	se.fg_completed_qty = flt(qty)
+	se.use_multi_level_bom = 0
+	se.set_process_loss = 0
 	
-	# For Material Transfer - سعی کن make_stock_entry رو صدا بزنی
-	# اگه ارور "already transferred" داد، نادیده بگیر و برو مرحله بعد
+	if purpose == "Material Transfer for Manufacture":
+		se.stock_entry_type = "Material Transfer for Manufacture"
+		se.purpose = "Material Transfer for Manufacture"
+		se.to_warehouse = wo.wip_warehouse or wo.source_warehouse
+		se.insert()
+		# Remove finished items, keep only raw material items
+		to_remove = []
+		for item in se.get("items") or []:
+			if item.is_finished_item:
+				to_remove.append(item)
+			else:
+				if not item.s_warehouse:
+					item.s_warehouse = wo.source_warehouse
+				if item.t_warehouse:
+					item.t_warehouse = None
+		for item in to_remove:
+			se.items.remove(item)
+		se.flags.ignore_validate = True
+		if submit_doc:
+			if not se.items:
+				return "already_done_no_items"
+			se.submit()
+		else:
+			se.save()
+		return se.name
+	
 	if purpose == "Manufacture":
-		# Build Manufacture SE directly
-		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Manufacture"
 		se.purpose = "Manufacture"
-		se.work_order = work_order_name
-		se.company = wo.company
-		se.from_bom = 1
-		se.bom_no = wo.bom_no
-		se.fg_completed_qty = flt(qty)
-		se.use_multi_level_bom = 0
-		se.set_process_loss = 0
-		se.flags.ignore_permissions = True
 		se.insert()
 		for item in se.get("items") or []:
 			if item.is_finished_item:
@@ -1909,33 +1932,8 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 		else:
 			se.save()
 		return se.name
-	
-	# For Material Transfer - try make_stock_entry, catch errors gracefully
-	try:
-		make_stock_entry_fn = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
-		payload = make_stock_entry_fn(work_order_name, purpose, qty=qty)
-		if payload is None:
-			# Already transferred - just return
-			return "already_done"
-		if hasattr(payload, "as_dict"):
-			payload = payload.as_dict()
-		if not isinstance(payload, dict):
-			return "already_done"
-		if not payload.get("doctype"):
-			payload["doctype"] = "Stock Entry"
-		stock_entry_doc = frappe.get_doc(payload)
-		stock_entry_doc.flags.ignore_permissions = True
-		stock_entry_doc.insert()
-		if submit_doc:
-			stock_entry_doc.submit()
-		return stock_entry_doc.name
-	except Exception as e:
-		err_msg = str(e)
-		# If "already transferred" - skip gracefully
-		if any(x in err_msg for x in ["قبلا", "already", "transferred", "Duplicate"]):
-			return "already_done"
-		# Otherwise re-raise
-		frappe.throw(_("Stock Entry creation failed: {0}").format(err_msg))
+	else:
+		frappe.throw(_("Unknown purpose: {0}").format(purpose))
 
 def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 	if not so_name or not frappe.db.exists("DocType", "Delivery Note Item"):
