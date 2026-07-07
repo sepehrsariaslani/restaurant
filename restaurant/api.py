@@ -14039,6 +14039,84 @@ def deliver_pos_order(order_name):
     return result
 
 @frappe.whitelist()
+def produce_and_deliver_pos_order(order_name):
+    # تولید هوشمند + تحویل
+    # چک میکنه اگه محصول تو انبار هست -> نهایج به تولید -> فقط رسید تحویل
+    # اگه تو انبار نیست و BOM داره -> تولید کن بعد رسید تحویل
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    
+    so_doc = frappe.get_doc("Sales Order", so_name)
+    result = {"sales_order": so_name, "produced": [], "skipped_production": [], "already_in_stock": []}
+    
+    # برا هر آیتم تو SO چک کن
+    needs_any_production = False
+    for item in so_doc.items:
+        item_code = item.item_code
+        item_doc = frappe.get_doc("Item", item_code)
+        
+        if not _item_requires_production(item_doc):
+            result["skipped_production"].append({"item": item_code, "reason": "no_bom_required"})
+            continue
+        
+        # چک کردن موجودی انبار
+        has_bom = frappe.db.exists("BOM", {"item": item_code, "is_active": 1, "docstatus": 1})
+        if not has_bom:
+            result["skipped_production"].append({"item": item_code, "reason": "no_active_bom"})
+            continue
+        
+        # موجودی فعلی
+        warehouse = None
+        default_warehouse = frappe.db.get_value("Item Default", {"parent": item_code, "company": so_doc.company}, "default_warehouse")
+        if default_warehouse:
+            warehouse = default_warehouse
+        else:
+            warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
+        
+        actual_qty = 0
+        if warehouse and frappe.db.exists("DocType", "Bin"):
+            bin_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")
+            if bin_data:
+                actual_qty = flt(bin_data)
+        
+        required_qty = flt(item.qty)
+        
+        if actual_qty >= required_qty:
+            result["already_in_stock"].append({"item": item_code, "qty": actual_qty, "required": required_qty})
+            continue
+        
+        needs_any_production = True
+        result["produced"].append({"item": item_code, "available": actual_qty, "required": required_qty})
+    
+    # اگه نیاز به تولید داره، اجراش کن
+    if needs_any_production:
+        try:
+            auto_result = _run_sales_order_auto_flow(so_name, trigger="order_submit", force=True)
+            result["automation"] = auto_result
+            _set_restaurant_order_status(so_name, "preparing", force=True)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "ProduceAndDeliver AutoFlow")
+            frappe.throw(_("Production auto flow failed."))
+    
+    # رسید تحویل
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if dn_name:
+            result["delivery_note"] = dn_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "ProduceAndDeliver DN")
+        frappe.throw(_("Delivery Note creation failed."))
+    
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+    _append_sales_order_note(so_name, "[PRODUCE_DELIVER] Produced (if needed) and delivered.")
+    frappe.db.commit()
+    return result
+
+@frappe.whitelist()
 def create_and_settle_pos_order(payload):
     # ثبت + تسویه یکجا (وقتی مشتری همونجا پول میده)
     _ensure_management_access()

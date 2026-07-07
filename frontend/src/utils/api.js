@@ -1312,6 +1312,11 @@ export async function deliverPOSOrder(order_name = "") {
 	return callRestaurantAPI("deliver_pos_order", { order_name });
 }
 
+export async function produceAndDeliverPOSOrder(order_name = "") {
+	return callRestaurantAPI("produce_and_deliver_pos_order", { order_name });
+}
+
+
 export async function createAndSettlePOSOrder(payload = {}) {
 	return callRestaurantAPI("create_and_settle_pos_order", { payload });
 }

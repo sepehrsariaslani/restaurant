@@ -363,6 +363,15 @@
                     >
                       ثبت و تسویه
                     </button>
+                    <button
+                      v-if="canDeliverOrder(order)"
+                      type="button"
+                      class="deliver-order-btn"
+                      @click.stop="deliverOrder(order)"
+                      title="تولید و تحویل"
+                    >
+                      🏭 تحویل
+                    </button>
                   </div>
                 </article>
               </div>
@@ -697,6 +706,7 @@ import {
   producePOSOrder,
   settlePOSOrder,
   deliverPOSOrder,
+  produceAndDeliverPOSOrder,
   createAndSettlePOSOrder,
   mergeTableSessions,
   moveTableSession,
@@ -1042,6 +1052,34 @@ const filteredRecentOrders = computed(() => {
     String(o.customer_name || '').toLowerCase().includes(q)
   )
 })
+
+function canDeliverOrder(order) {
+  if (!order) return false
+  const status = String(order.status || '').toLowerCase()
+  const canDeliverStatuses = ['confirmed', 'preparing', 'ready', 'paid', 'served']
+  return canDeliverStatuses.includes(status)
+}
+
+async function deliverOrder(order) {
+  if (!order?.name) {
+    error.value = 'سفارشی انتخاب نشده.'
+    return
+  }
+  const confirmed = window.confirm(`سفارش ${order.order_code || order.name} تولید و تحویل داده شود؟`)
+  if (!confirmed) return
+  error.value = ''
+  successMessage.value = ''
+  try {
+    const result = await produceAndDeliverPOSOrder(order.name)
+    const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+    const prodInfo = result.produced?.length ? ` (${result.produced.length} آیتم تولید شد)` : ''
+    successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${prodInfo}`
+    await loadRecentOrders()
+    await loadOpenInvoices()
+  } catch (err) {
+    error.value = err.message || 'تولید و تحویل ناموفق بود.'
+  }
+}
 
 function canSettleOrder(order) {
   if (!order) return false
@@ -5774,6 +5812,23 @@ kbd {
   padding: 8px 12px;
   text-align: center;
   color: #9ca3af;
+}
+
+
+.deliver-order-btn {
+  margin-right: auto;
+  padding: 4px 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.deliver-order-btn:hover {
+  background: #bfdbfe;
 }
 
 </style>
