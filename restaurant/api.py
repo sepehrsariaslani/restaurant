@@ -13999,6 +13999,38 @@ def create_and_pay_pos_order(payload):
     
     return result
 
+def _resolve_pos_mode_of_payment(method):
+    """گرفتن نام نحوه پرداخت واقعی از داده باسی"""
+    if not frappe.db.exists("DocType", "Mode of Payment"):
+        return method
+    mode_map = {
+        "cash": {"نقد", "نقدی", "Cash", "cash", "نقدی"},
+        "card": {"کارت", "کارت خوان", "پوز", "Card", "card", "کارت خوان"},
+        "credit": {"اعتبار", "اعتباری", "Credit", "credit", "اعتباری"},
+        "bank": {"حواله", "بانک", "Bank", "bank", "حواله بانکی"},
+    }
+    # اول از داده باسی بگیر
+    all_modes = frappe.get_all("Mode of Payment", fields=["name", "type"], ignore_permissions=True)
+    
+    # اگر method خودش یکی از موجودهاست
+    for m in all_modes:
+        if m.name.lower() == method.lower():
+            return m.name
+    
+    # ورنه بر اساس type بجستجو کن
+    candidate_types = mode_map.get(method, set())
+    for m in all_modes:
+        mtype = (m.type or "").strip().lower()
+        if mtype in candidate_types or m.name.lower() in candidate_types:
+            return m.name
+    
+    # اگر هیچکدام پیدا نشد، اولین موجود رو برگردان
+    if all_modes:
+        return all_modes[0].name
+    
+    return method
+
+
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
@@ -14012,13 +14044,11 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     method = _normalize_payment_method(payment.get("method") or "cash")
     manual_ref = (reference_no or payment.get("reference_no") or "").strip()
     result = {"sales_order": so_name}
-    mode_map = {"cash": "نقدي", "card": "کارت خوان", "credit": "اعتباري", "bank": "حواله بانکي"}
-    # 1. Sales Invoice from SO (مستقیم با داکیومنت)
+    # 1. Sales Invoice from SO
     try:
         make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
         si_doc = make_si(so_name)
         if hasattr(si_doc, "as_dict"):
-            # Document object - set fields directly
             si_doc.is_pos = 1
             si_doc.update_stock = 0
         elif isinstance(si_doc, dict):
@@ -14030,7 +14060,9 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
             si_doc.is_pos = 1
 
         grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
-        mode_of_payment = mode_map.get(method, "نقدي")
+
+        # گرفتن نحوه پرداخت واقعی از داده باسی (به جای هاردکد)
+        mode_of_payment = _resolve_pos_mode_of_payment(method)
 
         # Set payment on SI before insert
         if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
