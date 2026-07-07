@@ -16,7 +16,7 @@
 		</nav>
 
 		<!-- Place Selector -->
-		<div class="place-field">
+		<div class="place-field" v-if="normalizedPlaceOptions.length > 1">
 			<span class="place-label">جایگاه</span>
 			<SearchableDropdown
 				:model-value="place"

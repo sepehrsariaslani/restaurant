@@ -551,6 +551,15 @@ const navLinks = computed(() => {
 			group: "sales",
 		},
 		{
+			key: "management-pos-defaults",
+			label: "پیش‌فرض‌های POS",
+			shortLabel: "پیش‌فرض",
+			caption: "مشتری و جایگاه پیش‌فرض",
+			iconComponent: SettingsIcon,
+			url: "/management/pos-defaults",
+			group: "sales",
+		},
+		{
 			key: "management-orders",
 			label: "سفارش‌ها",
 			shortLabel: "سفارش",

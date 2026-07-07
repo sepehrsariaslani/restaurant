@@ -659,16 +659,21 @@ import { calculatePosTotals } from '@/utils/posPricingEngine'
 
 let bootWalletBalance = 0
 let bootDefaultPaymentMethod = 'cash'
+let bootPosConfig = null
 const RECEIPT_SETTINGS_STORAGE_KEY = 'restaurant-pos-receipt-settings-v1'
 
 function defaultFormState() {
+  const cfg = bootPosConfig || {}
+  const defaultMode = cfg.default_order_mode || 'dine_in'
+  const defaultCustomers = cfg.default_customers || {}
+  const modeCustomer = defaultCustomers[defaultMode] || {}
   return {
     customer_query: '',
-    customer_name: 'POS Customer',
-    mobile: '09120000000',
+    customer_name: modeCustomer.name || 'POS Customer',
+    mobile: modeCustomer.mobile || '09120000000',
     customer_type: 'normal',
     guest_count: 1,
-    order_mode: 'dine_in',
+    order_mode: defaultMode,
     place: '',
     note: '',
   }
@@ -864,6 +869,7 @@ const leftPanelTabLabel = computed(() => {
 })
 
 const placeOptions = computed(() => {
+  const cfg = bootPosConfig || {}
   if (form.order_mode === 'dine_in') {
     if (tableOptions.value.length) {
       return tableOptions.value.map((row) => row.label)
@@ -871,9 +877,11 @@ const placeOptions = computed(() => {
     return ['میز 1', 'میز 2', 'میز 3', 'میز 4', 'میز VIP']
   }
   if (form.order_mode === 'delivery') {
-    return ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
+    const places = cfg.delivery_places
+    return Array.isArray(places) && places.length ? places : ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
   }
-  return ['بیرون بر حضوری', 'تحویل کنار سالن']
+  const places = cfg.takeaway_places
+  return Array.isArray(places) && places.length ? places : ['بیرون بر حضوری', 'تحویل کنار سالن']
 })
 
 const selectedDineInTable = computed(() => {
@@ -1629,7 +1637,22 @@ function printConfirmedTableOrders() {
 
 function setOrderMode(mode) {
   form.order_mode = mode
-  form.place = placeOptions.value[0] || ''
+  const cfg = bootPosConfig || {}
+  if (mode === 'takeaway') {
+    form.place = cfg.default_takeaway_place || (placeOptions.value[0] || '')
+  } else if (mode === 'delivery') {
+    form.place = cfg.default_delivery_place || (placeOptions.value[0] || '')
+  } else {
+    form.place = placeOptions.value[0] || ''
+  }
+  const defaultCustomers = cfg.default_customers || {}
+  const modeCustomer = defaultCustomers[mode] || {}
+  if (modeCustomer.name) {
+    form.customer_name = modeCustomer.name
+  }
+  if (modeCustomer.mobile) {
+    form.mobile = modeCustomer.mobile
+  }
 }
 
 function setLeftPanelTab(tab) {
@@ -3377,6 +3400,18 @@ async function loadPOSBoot() {
     categories.value = payload.categories || []
     currency.value = payload.currency || 'IRR'
     applyPOSProfileSummary(payload.pos_profile || {})
+
+    bootPosConfig = payload.pos_config || null
+    if (bootPosConfig) {
+      const cfg = bootPosConfig
+      const defaultOrderMode = cfg.default_order_mode || 'dine_in'
+      const defaultCustomers = cfg.default_customers || {}
+      const modeCustomer = defaultCustomers[defaultOrderMode] || {}
+
+      form.order_mode = defaultOrderMode
+      form.customer_name = modeCustomer.name || 'POS Customer'
+      form.mobile = modeCustomer.mobile || '09120000000'
+    }
 
     const bootPayment = payload.payment || {}
     paymentBoot.enabled = Boolean(bootPayment.enabled)
