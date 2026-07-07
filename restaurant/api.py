@@ -1873,7 +1873,7 @@ def _pos_shift_settings():
 
 
 def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=True):
-	"""Create Stock Entry for a Work Order - no make_stock_entry at all"""
+	"""Create Stock Entry for a Work Order - uses get_items() before insert()"""
 	wo = frappe.get_doc("Work Order", work_order_name)
 	se = frappe.new_doc("Stock Entry")
 	se.flags.ignore_permissions = True
@@ -1889,8 +1889,17 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 		se.stock_entry_type = "Material Transfer for Manufacture"
 		se.purpose = "Material Transfer for Manufacture"
 		se.to_warehouse = wo.wip_warehouse or wo.source_warehouse
-		se.insert()
-		# Remove finished items, keep only raw material items
+	elif purpose == "Manufacture":
+		se.stock_entry_type = "Manufacture"
+		se.purpose = "Manufacture"
+	else:
+		se.stock_entry_type = purpose
+		se.purpose = purpose
+	
+	# Get items from BOM BEFORE insert
+	se.get_items()
+	
+	if purpose == "Material Transfer for Manufacture":
 		to_remove = []
 		for item in se.get("items") or []:
 			if item.is_finished_item:
@@ -1902,19 +1911,9 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 					item.t_warehouse = None
 		for item in to_remove:
 			se.items.remove(item)
-		se.flags.ignore_validate = True
-		if submit_doc:
-			if not se.items:
-				return "already_done_no_items"
-			se.submit()
-		else:
-			se.save()
-		return se.name
-	
-	if purpose == "Manufacture":
-		se.stock_entry_type = "Manufacture"
-		se.purpose = "Manufacture"
-		se.insert()
+		if not se.get("items"):
+			return "already_done_no_items"
+	elif purpose == "Manufacture":
 		for item in se.get("items") or []:
 			if item.is_finished_item:
 				if not item.t_warehouse and wo.fg_warehouse:
@@ -1926,15 +1925,14 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 					item.s_warehouse = wo.wip_warehouse or wo.source_warehouse
 				if item.t_warehouse:
 					item.t_warehouse = None
-		se.flags.ignore_validate = True
-		if submit_doc:
-			se.submit()
-		else:
-			se.save()
-		return se.name
+	
+	se.flags.ignore_validate = True
+	se.insert()
+	if submit_doc:
+		se.submit()
 	else:
-		frappe.throw(_("Unknown purpose: {0}").format(purpose))
-
+		se.save()
+	return se.name
 def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 	if not so_name or not frappe.db.exists("DocType", "Delivery Note Item"):
 		return ""
