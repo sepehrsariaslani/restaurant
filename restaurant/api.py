@@ -14141,20 +14141,24 @@ def deliver_pos_order(order_name):
         if wo.docstatus != 1:
             continue
 
-        # Material Transfer
-        pending = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
-        if pending > 1e-8:
-            se = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending, submit_doc=True)
+        # Material Transfer - فقط اگه هنوز انتقال پیدا نکرده
+        pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
+        if pending_transfer > 1e-8:
+            se = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
             if se:
                 result.setdefault("stock_entries_material", []).append(se)
+        else:
+            result.setdefault("stock_entries_material", []).append("already_transferred")
 
-        # Manufacture
+        # Manufacture - تولید محصول نهایی (اگه هنوز تولید نشده)
         wo = frappe.get_doc("Work Order", wo.name)
-        pending = max(flt(wo.qty) - flt(wo.produced_qty), 0)
-        if pending > 1e-8:
-            se = _create_work_order_stock_entry(wo.name, "Manufacture", pending, submit_doc=True)
+        pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
+        if pending_manufacture > 1e-8:
+            se = _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
             if se:
                 result.setdefault("stock_entries_manufacture", []).append(se)
+        else:
+            result.setdefault("stock_entries_manufacture", []).append("already_manufactured")
 
         # Update WO
         wo = frappe.get_doc("Work Order", wo.name)
@@ -14293,7 +14297,7 @@ def produce_and_deliver_pos_order(order_name):
         if wo.docstatus != 1:
             continue
 
-        # Material Transfer for Manufacture (مواد اولیه به خط تولید)
+        # Material Transfer for Manufacture - فقط اگه انتقال کامل نشده
         pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
         if pending_transfer > 1e-8:
             se_name = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
@@ -14301,7 +14305,7 @@ def produce_and_deliver_pos_order(order_name):
                 se_list.append(se_name)
                 result.setdefault("stock_entries_material", []).append(se_name)
 
-        # Manufacture (تولید محصول نهایی)
+        # Manufacture - فقط اگه تولید کامل نشده
         wo = frappe.get_doc("Work Order", wo.name)
         pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
         if pending_manufacture > 1e-8:
@@ -14381,13 +14385,13 @@ def create_and_settle_pos_order(payload):
                 wo = frappe.get_doc("Work Order", wo.name)
             if wo.docstatus != 1:
                 continue
-            pending = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
-            if pending > 1e-8:
-                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending, submit_doc=True)
+            pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
+            if pending_transfer > 1e-8:
+                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
             wo = frappe.get_doc("Work Order", wo.name)
-            pending = max(flt(wo.qty) - flt(wo.produced_qty), 0)
-            if pending > 1e-8:
-                _create_work_order_stock_entry(wo.name, "Manufacture", pending, submit_doc=True)
+            pending_mfg = max(flt(wo.qty) - flt(wo.produced_qty), 0)
+            if pending_mfg > 1e-8:
+                _create_work_order_stock_entry(wo.name, "Manufacture", pending_mfg, submit_doc=True)
             wo = frappe.get_doc("Work Order", wo.name)
             if hasattr(wo, "update_work_order_qty"):
                 try: wo.update_work_order_qty()
