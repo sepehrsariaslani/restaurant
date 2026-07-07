@@ -14446,7 +14446,15 @@ def create_and_settle_pos_order(payload):
     order_result = create_pos_order(payload)
     so_name = order_result.get("order_id", "")
 
-    # 2. تولید (اگه نیاز باشه)
+    # 2. رسید تحویل - بلافاصله بعد از SO (قبل از تولید و SI)
+    # (چون SI و تولید میتونن delivered_qty روی SO رو تغییر بدن)
+    dn_name = None
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error")
+
+    # 3. تولید (اگه نیاز باشه)
     prod_result = {}
     try:
         so_doc = frappe.get_doc("Sales Order", so_name)
@@ -14490,14 +14498,7 @@ def create_and_settle_pos_order(payload):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "CreateAndSettle Production")
 
-    # 3. رسید تحویل (اول بساز قبل از SI چون SI delivered_qty رو آپدیت میکنه)
-    dn_name = None
-    try:
-        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
-        if not dn_name:
-            frappe.log_error("DN returned empty - no pending items", "CreateAndSettle DN")
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error")
+    # 3. (رسید تحویل قبلاً در مرحله ۲ ساخته شد)
 
     # 4. تسویه (SI + Payment) - بعد از DN
     payment = payload.get("payment", {})
