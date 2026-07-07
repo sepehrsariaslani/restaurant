@@ -298,7 +298,7 @@
                     </div>
                     <div class="accordion-footer">
                       <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
-                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click.stop="settleSelectedInvoice(invoice)">
+                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click.stop="openSettlePaymentModal(invoice)">
                         {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
                       </button>
                     </div>
@@ -665,6 +665,54 @@
           <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal">انصراف</button>
           <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.loading" @click="confirmCreateReturnInvoice">
             {{ returnInvoiceModal.loading ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Settle Payment Modal -->
+    <div v-if="settlePaymentModal.open" class="pos-modal-backdrop" @click.self="closeSettlePaymentModal">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <div>
+            <h3>تسویه فاکتور</h3>
+            <small v-if="settlePaymentModal.invoice">{{ settlePaymentModal.invoice.order_code }}</small>
+          </div>
+          <button type="button" class="pos-modal-close" @click="closeSettlePaymentModal">×</button>
+        </header>
+        <div class="settle-modal-body">
+          <div class="settle-row">
+            <label class="settle-label">روش پرداخت:</label>
+            <select class="input dark-input settle-select" v-model="settlePaymentModal.method">
+              <option value="">انتخاب کنید</option>
+              <option
+                v-for="option in editablePaymentMethodOptions"
+                :key="option.method"
+                :value="option.method"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="settle-row" v-if="['card','pos','bank','terminal'].includes(settlePaymentModal.method)">
+            <label class="settle-label">شماره مرجع:</label>
+            <input class="input dark-input settle-input" v-model="settlePaymentModal.reference" placeholder="شماره پیگیری کارتخوان" />
+          </div>
+          <div class="settle-row">
+            <label class="settle-label">مبلغ:</label>
+            <span class="settle-amount">{{ formatMoney(settlePaymentModal.invoice?.grand_total || 0, currency) }}</span>
+          </div>
+          <p class="error" v-if="settlePaymentModal.error">{{ settlePaymentModal.error }}</p>
+        </div>
+        <div class="pos-modal-actions">
+          <button type="button" class="tbl-btn" @click="closeSettlePaymentModal">انصراف</button>
+          <button
+            type="button"
+            class="tbl-btn primary"
+            :disabled="settlePaymentModal.saving || !settlePaymentModal.method"
+            @click="confirmSettlePayment"
+          >
+            {{ settlePaymentModal.saving ? 'در حال ثبت...' : '✓ تایید پرداخت' }}
           </button>
         </div>
       </section>
@@ -2006,53 +2054,129 @@ async function selectAndLoadInvoice(invoice) {
     // Clear existing cart
     clearCart()
     
-    // Load items into cart
+    // Reset financial state
+    Object.assign(financial, defaultFinancialState())
+    
+    // Load items into cart with full pricing
     const items = order?.items || []
     for (const item of items) {
       const qty = Number(item.qty || 1)
       if (qty <= 0) continue
       
-      // Add item to cart using the increment method
-      incrementProduct({
-        slug: item.slug || item.item_code || item.title,
-        title: item.title || 'آیتم',
+      addToCart({
+        slug: item.slug || item.item_code || item.name || item.title,
+        title: item.title || item.item_name || 'آیتم',
+        item_name: item.title || item.item_name || 'آیتم',
+        name: item.item_code || item.name || '',
+        base_price: Number(item.unit_price || item.price || 0),
+        standard_rate: Number(item.unit_price || item.price || 0),
         price: Number(item.unit_price || item.price || 0),
-        qty: qty,
-        note: item.note || '',
-      })
+        image: item.image || '',
+      }, qty)
     }
     
-    successMessage.value = `فاکتور ${order.order_code || invoice.order_code} بارگذاری شد.`
+    // Apply financial modifiers from order if available
+    const fm = order.financial_modifiers || order.totals || {}
+    if (fm.discount_value > 0 || order.discount_amount > 0) {
+      financial.discountValue = Number(fm.discount_value || order.discount_amount || 0)
+      financial.discountType = fm.discount_type === 'percent' ? 'percent' : 'fixed'
+    }
+    if (fm.service_value > 0 || order.service_amount > 0) {
+      financial.serviceValue = Number(fm.service_value || order.service_amount || 0)
+      financial.serviceType = fm.service_type === 'percent' ? 'percent' : 'fixed'
+    }
+    if (fm.tip_amount > 0 || order.tip_amount > 0) {
+      financial.tipAmount = Number(fm.tip_amount || order.tip_amount || 0)
+    }
+    if (fm.coupon_code || order.coupon_code) {
+      financial.couponCode = String(fm.coupon_code || order.coupon_code || '').trim()
+    }
+    
+    // Set payment info
+    if (order.payment_method) {
+      payment.method = order.payment_method
+    }
+    if (order.payment_reference || order.reference_no) {
+      payment.reference_no = String(order.payment_reference || order.reference_no || '').trim()
+    }
+    if (order.payment_rrn || order.rrn) {
+      payment.rrn = String(order.payment_rrn || order.rrn || '').trim()
+    }
+    
+    successMessage.value = `فاکتور ${order.order_code || invoice.order_code} با اطلاعات کامل بارگذاری شد.`
     expandedInvoiceKey.value = ''
   } catch (err) {
     error.value = err.message || 'بارگذاری فاکتور ناموفق بود.'
   }
 }
 
-async function settleSelectedInvoice(invoice) {
-  if (!invoice?.name) {
-    error.value = 'ابتدا یک فاکتور را انتخاب کنید.'
+const settlePaymentModal = reactive({
+  open: false,
+  invoice: null,
+  method: '',
+  reference: '',
+  rrn: '',
+  error: '',
+  saving: false,
+})
+
+function openSettlePaymentModal(invoice) {
+  if (!invoice?.name) return
+  settlePaymentModal.invoice = invoice
+  settlePaymentModal.method = invoice.payment_method || ''
+  settlePaymentModal.reference = invoice.payment_reference || ''
+  settlePaymentModal.rrn = invoice.payment_rrn || ''
+  settlePaymentModal.error = ''
+  settlePaymentModal.saving = false
+  settlePaymentModal.open = true
+}
+
+function closeSettlePaymentModal() {
+  settlePaymentModal.open = false
+  settlePaymentModal.invoice = null
+  settlePaymentModal.method = ''
+  settlePaymentModal.reference = ''
+  settlePaymentModal.rrn = ''
+  settlePaymentModal.error = ''
+  settlePaymentModal.saving = false
+}
+
+async function confirmSettlePayment() {
+  const inv = settlePaymentModal.invoice
+  if (!inv?.name) {
+    settlePaymentModal.error = 'فاکتوری انتخاب نشده.'
     return
   }
-  settlingOpenInvoice.value = true
-  error.value = ''
+  if (!settlePaymentModal.method) {
+    settlePaymentModal.error = 'روش پرداخت را انتخاب کنید.'
+    return
+  }
+  settlePaymentModal.saving = true
+  settlePaymentModal.error = ''
   try {
     await markManagementOrderPaid({
-      order_name: invoice.name,
-      reference_no: payment.reference_no || '',
-      rrn: payment.rrn || '',
+      order_name: inv.name,
+      reference_no: settlePaymentModal.reference || '',
+      rrn: settlePaymentModal.rrn || '',
       provider_payload: {
         source: 'management-pos-open-invoice',
+        method: settlePaymentModal.method,
       },
     })
-    successMessage.value = `پرداخت فاکتور ${invoice.order_code} ثبت شد.`
+    successMessage.value = `پرداخت فاکتور ${inv.order_code} ثبت شد.`
+    closeSettlePaymentModal()
     await loadOpenInvoices(true)
     expandedInvoiceKey.value = ''
   } catch (payErr) {
-    error.value = payErr.message || 'ثبت پرداخت فاکتور باز ناموفق بود.'
+    settlePaymentModal.error = payErr.message || 'ثبت پرداخت ناموفق بود.'
   } finally {
-    settlingOpenInvoice.value = false
+    settlePaymentModal.saving = false
   }
+}
+
+function settleSelectedInvoice(invoice) {
+  // Open the payment modal for settlement
+  openSettlePaymentModal(invoice)
 }
 
 function selectCustomerFromHistory(customer) {
