@@ -1059,10 +1059,9 @@ function canDeliverOrder(order) {
   const status = String(order.status || '').toLowerCase()
   // اگه تحویل شده یا کنسل شده => قطعاً دکمه نمایش نده
   if (['delivered', 'completed', 'cancelled'].includes(status)) return false
-  // اگه وضعیت paid داره (یعنی فاکتور خورده) و payment_method داره => نمایش نده
-  if (status === 'paid' && order.payment_method) return false
-  // اگه وضعیت confirmed ولی payment_method داره (یعنی تسویه از راه دیگه شده) => نمایش نده
-  if (order.payment_method) return false
+  // اگه وضعیت paid با روش پرداخت واقعی (نقد/کارت) => تسویه کامل شده => دکمه نمایش نده
+  if (status === 'paid' && order.payment_method && order.payment_method !== 'credit') return false
+  // اعتباری همیشه دکمه تحویل داشته باشه چون هنوز تحویل داده نشده
   return true
 }
 
