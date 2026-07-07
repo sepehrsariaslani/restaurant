@@ -58,7 +58,9 @@ def build_kitchen_ticket_context(sales_order_name, sales_order_item_name=None):
             "print_mode": effective_mode,
             "builder_selections": builder_selections,
             "selection_json": _safe_json_loads(
-                item.get("restaurant_builder_selection_json"), {}
+                item.get("restaurant_builder_selection_json")
+                or item.get("restaurant_customization_json"),
+                {},
             ),
             "builder_selection_name": item.get("restaurant_builder_selection"),
             "table": (item.get("table") or "").strip(),
@@ -181,7 +183,8 @@ def resolve_builder_stock_deductions(sales_order_name, sales_order_item_name=Non
             item_mode = "no_stock_deduction"
 
         selection_name = item.get("restaurant_builder_selection")
-        if not selection_name:
+        selection_items = _get_order_item_builder_selections(item)
+        if not selection_name and not selection_items:
             item_mode = "no_stock_deduction"
 
         entry = {
@@ -201,7 +204,6 @@ def resolve_builder_stock_deductions(sales_order_name, sales_order_item_name=Non
             results[item.name] = entry
             continue
 
-        selection_items = []
         base_price = flt(item.rate or 0)
         if selection_name:
             try:
@@ -260,10 +262,13 @@ def _resolve_consume_selected(item, selection_items):
     warnings = []
 
     for sel in selection_items:
-        qty = sel.get("qty", 1) or 1
+        qty = flt(sel.get("qty", 1) or 1)
+        linked_item = (sel.get("item") or "").strip()
+        resolved_stock_qty = flt(sel.get("resolved_stock_qty") or 0)
+        stock_uom = (sel.get("stock_uom") or "").strip()
         opt = _lookup_option(sel.get("step_key"), sel.get("option_key"))
 
-        if not opt:
+        if not opt and not linked_item:
             warnings.append(
                 _("Option not found: step={0} option={1}.").format(
                     sel.get("step_key"), sel.get("option_key")
@@ -271,22 +276,24 @@ def _resolve_consume_selected(item, selection_items):
             )
             continue
 
-        impact_raw = opt.get("stock_impact_json") or "{}"
+        impact_raw = (opt or {}).get("stock_impact_json") or "{}"
         try:
             impact = json.loads(impact_raw) if isinstance(impact_raw, str) else impact_raw
         except Exception:
             impact = {}
 
         consumes = impact.get("consumes", [])
-        opt_label = opt.get("option_label") or sel.get("option_label")
+        opt_label = (opt or {}).get("option_label") or sel.get("option_label")
 
         if not consumes:
-            linked_item = opt.get("item")
+            linked_item = linked_item or ((opt or {}).get("item") or "")
             if linked_item:
+                if cint(frappe.db.get_value("Item", linked_item, "is_stock_item") or 0) != 1:
+                    continue
                 deductions.append({
                     "item_code": linked_item,
-                    "qty": qty,
-                    "uom": frappe.db.get_value("Item", linked_item, "stock_uom") or "Unit",
+                    "qty": resolved_stock_qty if resolved_stock_qty > 0 else qty,
+                    "uom": stock_uom or frappe.db.get_value("Item", linked_item, "stock_uom") or "Unit",
                     "source": "direct_option",
                     "option_label": opt_label,
                     "step_key": sel.get("step_key"),
@@ -295,6 +302,8 @@ def _resolve_consume_selected(item, selection_items):
             for consume in consumes:
                 linked_item = consume.get("item_code")
                 if not linked_item:
+                    continue
+                if cint(frappe.db.get_value("Item", linked_item, "is_stock_item") or 0) != 1:
                     continue
                 per_qty = flt(consume.get("qty_per_selection", 1))
                 uom = consume.get("uom", "Unit")
@@ -319,10 +328,11 @@ def _resolve_dynamic_bom(item, selection_items, base_price):
     warnings = []
 
     for sel in selection_items:
-        qty = sel.get("qty", 1) or 1
+        qty = flt(sel.get("qty", 1) or 1)
         opt = _lookup_option(sel.get("step_key"), sel.get("option_key"))
 
-        if not opt:
+        linked_item_code = (sel.get("item") or "").strip() or ((opt or {}).get("item") or "")
+        if not opt and not linked_item_code:
             warnings.append(
                 _("Option {0}/{1} not found in template.").format(
                     sel.get("step_key"), sel.get("option_key")
@@ -330,12 +340,15 @@ def _resolve_dynamic_bom(item, selection_items, base_price):
             )
             continue
 
-        linked_item_code = opt.get("item")
         if not linked_item_code:
             continue
+        if cint(frappe.db.get_value("Item", linked_item_code, "is_stock_item") or 0) != 1:
+            continue
 
-        bom_qty = qty
-        bom_rate = flt(opt.get("base_price_delta") or 0)
+        bom_qty = flt(sel.get("resolved_stock_qty") or 0) or qty
+        bom_rate = flt(sel.get("unit_rate") or 0)
+        if bom_rate == 0:
+            bom_rate = flt((opt or {}).get("base_price_delta") or 0)
         if bom_rate == 0:
             bom_rate = flt(
                 frappe.db.get_value("Item", linked_item_code, "standard_rate") or 0
@@ -343,13 +356,13 @@ def _resolve_dynamic_bom(item, selection_items, base_price):
 
         bom_items.append({
             "item_code": linked_item_code,
-            "item_name": opt.get("option_label") or linked_item_code,
+            "item_name": sel.get("item_name") or (opt or {}).get("option_label") or linked_item_code,
             "qty": bom_qty,
             "rate": bom_rate,
             "amount": flt(bom_qty * bom_rate),
-            "uom": frappe.db.get_value("Item", linked_item_code, "stock_uom") or "Unit",
+            "uom": sel.get("stock_uom") or frappe.db.get_value("Item", linked_item_code, "stock_uom") or "Unit",
             "step_key": sel.get("step_key"),
-            "option_label": opt.get("option_label"),
+            "option_label": (opt or {}).get("option_label") or sel.get("option_label"),
         })
 
     return {
@@ -371,13 +384,14 @@ def _resolve_exploded_components(item, selection_items):
     deductions = []
 
     for sel in selection_items:
-        qty = sel.get("qty", 1) or 1
+        qty = flt(sel.get("qty", 1) or 1)
         opt = _lookup_option(sel.get("step_key"), sel.get("option_key"))
-        if opt and opt.get("item"):
+        linked_item = (sel.get("item") or "").strip() or ((opt or {}).get("item") or "")
+        if linked_item and cint(frappe.db.get_value("Item", linked_item, "is_stock_item") or 0) == 1:
             deductions.append({
-                "item_code": opt["item"],
-                "qty": qty,
-                "uom": frappe.db.get_value("Item", opt["item"], "stock_uom") or "Unit",
+                "item_code": linked_item,
+                "qty": flt(sel.get("resolved_stock_qty") or 0) or qty,
+                "uom": sel.get("stock_uom") or frappe.db.get_value("Item", linked_item, "stock_uom") or "Unit",
                 "source": "so_exploded",
                 "option_label": sel.get("option_label"),
                 "step_key": sel.get("step_key"),
@@ -393,13 +407,14 @@ def _resolve_manual_kitchen(item, selection_items):
     """Kitchen staff manually deduct stock. Return suggested deductions only."""
     deductions = []
     for sel in selection_items:
-        qty = sel.get("qty", 1) or 1
+        qty = flt(sel.get("qty", 1) or 1)
         opt = _lookup_option(sel.get("step_key"), sel.get("option_key"))
-        if opt and opt.get("item"):
+        linked_item = (sel.get("item") or "").strip() or ((opt or {}).get("item") or "")
+        if linked_item and cint(frappe.db.get_value("Item", linked_item, "is_stock_item") or 0) == 1:
             deductions.append({
-                "item_code": opt["item"],
-                "qty": qty,
-                "uom": frappe.db.get_value("Item", opt["item"], "stock_uom") or "Unit",
+                "item_code": linked_item,
+                "qty": flt(sel.get("resolved_stock_qty") or 0) or qty,
+                "uom": sel.get("stock_uom") or frappe.db.get_value("Item", linked_item, "stock_uom") or "Unit",
                 "source": "manual_suggestion",
                 "option_label": sel.get("option_label"),
                 "step_key": sel.get("step_key"),
@@ -635,7 +650,7 @@ def get_builder_selection_for_so_item(sales_order_item_name):
     so_item = frappe.db.get_value(
         "Sales Order Item",
         sales_order_item_name,
-        ["restaurant_builder_selection", "restaurant_builder_selection_json"],
+        ["restaurant_builder_selection", "restaurant_builder_selection_json", "restaurant_customization_json"],
         as_dict=True,
     )
     if not so_item:
@@ -644,7 +659,9 @@ def get_builder_selection_for_so_item(sales_order_item_name):
     result = {
         "selection_name": so_item.get("restaurant_builder_selection"),
         "selection_json": _safe_json_loads(
-            so_item.get("restaurant_builder_selection_json"), {}
+            so_item.get("restaurant_builder_selection_json")
+            or so_item.get("restaurant_customization_json"),
+            {},
         ),
     }
 
@@ -708,37 +725,77 @@ def _get_order_item_builder_selections(so_item):
                 {
                     "step_key": s.step_key,
                     "step_title": s.step_title,
-                    "option_key": s.option_key,
-                    "option_label": s.option_label,
-                    "qty": s.qty,
-                    "price_delta": s.price_delta,
-                }
-                for s in sel_doc.selections
-            ]
+                        "option_key": s.option_key,
+                        "option_label": s.option_label,
+                        "qty": s.qty,
+                        "portion_count": s.get("portion_count") or s.qty,
+                        "portion_qty": s.get("portion_qty") or 0,
+                        "portion_uom": s.get("portion_uom") or "",
+                        "resolved_stock_qty": s.get("resolved_stock_qty") or 0,
+                        "stock_uom": s.get("stock_uom") or "",
+                        "conversion_factor": s.get("conversion_factor") or 1,
+                        "unit_rate": s.get("unit_rate") or 0,
+                        "item": s.get("item") or "",
+                        "item_name": s.get("item_name") or "",
+                        "price_delta": s.price_delta,
+                        "total_price": s.get("total_price") or s.price_delta,
+                    }
+                    for s in sel_doc.selections
+                ]
         except Exception:
             pass
 
-    raw = so_item.get("restaurant_builder_selection_json")
-    if raw:
+    for raw in [
+        so_item.get("restaurant_builder_selection_json"),
+        so_item.get("restaurant_customization_json"),
+    ]:
+        if not raw:
+            continue
         try:
             parsed = json.loads(raw) if isinstance(raw, str) else raw
+            portion_rows = parsed.get("builder_portion_rows") or []
+            if portion_rows:
+                return [
+                    {
+                        "step_key": row.get("step_key", ""),
+                        "step_title": row.get("step_title") or row.get("step_key", ""),
+                        "option_key": row.get("option_key", ""),
+                        "option_label": row.get("option_label") or row.get("option_key", ""),
+                        "qty": flt(row.get("portion_count") or row.get("qty") or 0),
+                        "portion_count": flt(row.get("portion_count") or row.get("qty") or 0),
+                        "portion_qty": flt(row.get("portion_qty") or 0),
+                        "portion_uom": row.get("portion_uom") or "",
+                        "resolved_stock_qty": flt(row.get("resolved_stock_qty") or 0),
+                        "stock_uom": row.get("stock_uom") or "",
+                        "conversion_factor": flt(row.get("conversion_factor") or 1),
+                        "unit_rate": flt(row.get("unit_rate") or 0),
+                        "item": row.get("item") or "",
+                        "item_name": row.get("item_name") or "",
+                        "price_delta": flt(row.get("delta") or row.get("price_delta") or 0),
+                        "total_price": flt(row.get("total_price") or row.get("delta") or 0),
+                    }
+                    for row in portion_rows
+                    if row.get("step_key") and row.get("option_key")
+                ]
+
             steps = parsed.get("steps", [])
-            flat = []
-            for step in steps:
-                step_key = step.get("step_key", "")
-                step_title = step.get("step_title", step_key)
-                for opt in step.get("options", []):
-                    flat.append({
-                        "step_key": step_key,
-                        "step_title": step_title,
-                        "option_key": opt.get("option_key", ""),
-                        "option_label": opt.get("label") or opt.get("option_label", ""),
-                        "qty": opt.get("qty", 1) or 1,
-                        "price_delta": flt(opt.get("price_delta") or 0),
-                    })
-            return flat
+            if steps:
+                flat = []
+                for step in steps:
+                    step_key = step.get("step_key", "")
+                    step_title = step.get("step_title", step_key)
+                    for opt in step.get("options", []):
+                        flat.append({
+                            "step_key": step_key,
+                            "step_title": step_title,
+                            "option_key": opt.get("option_key", ""),
+                            "option_label": opt.get("label") or opt.get("option_label", ""),
+                            "qty": flt(opt.get("qty", 1) or 1),
+                            "price_delta": flt(opt.get("price_delta") or 0),
+                        })
+                return flat
         except Exception:
-            return []
+            continue
 
     return []
 

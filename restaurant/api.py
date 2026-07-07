@@ -5015,6 +5015,34 @@ def _create_sales_order(
 			row_payload["restaurant_customization_json"] = frappe.as_json(
 				line_calc["normalized_customization"]
 			)
+		builder_selection_payload = (
+			line_calc.get("normalized_customization", {}).get("builder_selection") or {}
+		)
+		if builder_selection_payload and _has_column("Sales Order Item", "restaurant_builder_selection_json"):
+			row_payload["restaurant_builder_selection_json"] = frappe.as_json(
+				line_calc["normalized_customization"]
+			)
+		if builder_selection_payload and _has_column("Sales Order Item", "restaurant_builder_summary"):
+			row_payload["restaurant_builder_summary"] = (
+				line_calc.get("normalized_customization", {}).get("builder_summary") or ""
+			)
+		if builder_selection_payload and _has_column("Sales Order Item", "restaurant_builder_price_delta"):
+			row_payload["restaurant_builder_price_delta"] = flt(
+				line_calc.get("pricing_breakdown", {}).get("builder_total")
+				or line_calc.get("pricing_breakdown", {}).get("options_total")
+				or line_calc.get("extra_charge")
+				or 0
+			)
+		if builder_selection_payload and _has_column(
+			"Sales Order Item", "restaurant_builder_stock_consumption_json"
+		):
+			row_payload["restaurant_builder_stock_consumption_json"] = frappe.as_json(
+				line_calc.get("ingredient_components") or []
+			)
+		if builder_selection_payload and _has_column("Sales Order Item", "restaurant_builder_nutrition_json"):
+			row_payload["restaurant_builder_nutrition_json"] = frappe.as_json(
+				line_calc.get("nutrition_totals") or {}
+			)
 		if _has_column("Sales Order Item", "restaurant_selection_summary"):
 			row_payload["restaurant_selection_summary"] = frappe.as_json(line_calc["selections"])
 		if _has_column("Sales Order Item", "restaurant_pricing_breakdown_json"):
@@ -5501,7 +5529,7 @@ def _build_ticket_components(menu_doc, bom_doc, line_calc, line_qty, recipe_mult
 		if final_qty <= 1e-8:
 			continue
 		source_type = ingredient_data.get("source_type") or "modifier_add_on"
-		if source_type == "modifier_add_on":
+		if source_type in ("modifier_add_on", "builder_component"):
 			modifier_bom_doc = _get_item_bom_doc(item_code)
 			if modifier_bom_doc and (modifier_bom_doc.items or []):
 				modifier_bom_qty = flt(modifier_bom_doc.quantity or 1)
@@ -8164,6 +8192,11 @@ def _extract_customization(raw):
 	payload.setdefault("nutrition", {})
 	payload.setdefault("nutrition_totals", {})
 	payload.setdefault("variant_fixed_attributes", {})
+	payload.setdefault("builder_selection", {})
+	payload.setdefault("builder_summary", "")
+	payload.setdefault("builder_pricing_breakdown", {})
+	payload.setdefault("builder_portion_rows", [])
+	payload.setdefault("builder_template", "")
 	return payload
 
 
@@ -8611,6 +8644,57 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 	variant_doc = _resolve_variant_item_for_customization(menu_doc, customization or {})
 	if variant_doc:
 		menu_doc = variant_doc
+
+	builder_enabled = bool(
+		cint(menu_doc.get("restaurant_is_customizable") or 0)
+		and cint(menu_doc.get("restaurant_builder_active") or 0)
+	)
+	builder_payload = _extract_builder_selection_payload(customization or {})
+	if builder_enabled and builder_payload.get("rows"):
+		builder_calc = _compute_builder_selection_data(
+			menu_doc.item_code,
+			builder_payload.get("rows") or [],
+			base_price=_menu_doc_config(menu_doc).get("base_price"),
+			template_name=builder_payload.get("template") or menu_doc.get("restaurant_builder_template") or "",
+			strict=True,
+		)
+		line_qty = max(flt(quantity or 1), 1)
+		unit_price = flt(builder_calc["final_price"] or 0)
+		line_total = unit_price * line_qty
+		nutrition_totals = {
+			key: round(flt(builder_calc["nutrition"].get(key) or 0) * line_qty, 4)
+			for key in NUTRITION_KEY_FIELD_MAP
+		}
+		normalized_customization = dict(builder_calc["normalized_customization"] or {})
+		normalized_customization["nutrition"] = _nutrition_payload_from_totals(nutrition_totals)
+		normalized_customization["nutrition_totals"] = _normalize_nutrition_totals(nutrition_totals)
+		pricing_breakdown = dict(builder_calc["pricing_breakdown"] or {})
+		pricing_breakdown.update(
+			{
+				"unit_price": unit_price,
+				"line_total": line_total,
+				"qty": line_qty,
+				"extra_charge": unit_price - flt(builder_calc["base_price"] or 0),
+				"nutrition": builder_calc["nutrition"],
+				"nutrition_totals": _normalize_nutrition_totals(nutrition_totals),
+				"ingredients": builder_calc["ingredient_components"],
+				"modifiers": [],
+				"selected_alternatives": [],
+			}
+		)
+		return {
+			"qty": line_qty,
+			"unit_price": unit_price,
+			"line_total": line_total,
+			"selections": builder_calc["selections_summary"],
+			"extra_charge": unit_price - flt(builder_calc["base_price"] or 0),
+			"normalized_customization": normalized_customization,
+			"pricing_breakdown": pricing_breakdown,
+			"ingredient_components": builder_calc["ingredient_components"],
+			"recipe_multiplier": 1.0,
+			"nutrition": builder_calc["nutrition"],
+			"nutrition_totals": _normalize_nutrition_totals(nutrition_totals),
+		}
 
 	quantity = max(flt(quantity or 1), 1)
 	cfg = _menu_doc_config(menu_doc)
@@ -19921,6 +20005,11 @@ def _get_builder_step_options(step_name):
 			"option_description",
 			"sort_order",
 			"item",
+			"portion_qty",
+			"portion_uom",
+			"min_portions",
+			"max_portions",
+			"portion_step",
 			"base_price_delta",
 			"price_type",
 			"price_percentage",
@@ -19938,6 +20027,516 @@ def _get_builder_step_options(step_name):
 		order_by="sort_order asc, idx asc",
 		ignore_permissions=True,
 	)
+
+
+def _builder_template_for_item(item_code):
+	item_code = (item_code or "").strip()
+	if not item_code:
+		return "", None
+	item = frappe.db.get_value(
+		"Item",
+		{"name": item_code},
+		["name", "restaurant_builder_template", "restaurant_builder_active", "restaurant_is_customizable"],
+		as_dict=True,
+	)
+	if not item:
+		return "", None
+	return (item.get("restaurant_builder_template") or "").strip(), item
+
+
+def _resolve_builder_base_price(item_code, item_doc=None):
+	item_doc = item_doc or (frappe.get_doc("Item", item_code) if item_code and frappe.db.exists("Item", item_code) else None)
+	if item_doc:
+		cfg = _menu_doc_config(item_doc)
+		if flt(cfg.get("base_price") or 0) > 0:
+			return flt(cfg.get("base_price") or 0)
+	item_pricing = _resolve_default_selling_item_pricing(
+		item_code,
+		1,
+		uom=(item_doc.get("stock_uom") if item_doc else "") or "",
+	)
+	if cint(item_pricing.get("is_selectable") or 0) == 1 and flt(item_pricing.get("total_price") or 0) > 0:
+		return flt(item_pricing.get("total_price") or 0)
+	if item_doc:
+		return flt(item_doc.get("standard_rate") or 0)
+	return flt(frappe.db.get_value("Item", item_code, "standard_rate") or 0)
+
+
+def _builder_option_portion_meta(option_row):
+	option_item = (option_row.get("item") or "").strip()
+	item_name = frappe.db.get_value("Item", option_item, "item_name") if option_item else ""
+	stock_uom = frappe.db.get_value("Item", option_item, "stock_uom") if option_item else ""
+	portion_qty = flt(
+		option_row.get("portion_qty")
+		if option_row.get("portion_qty") not in (None, "")
+		else option_row.get("option_qty") or 1
+	)
+	if portion_qty <= 0:
+		portion_qty = 1
+	portion_uom = (
+		(option_row.get("portion_uom") or "").strip()
+		or (option_row.get("option_uom") or "").strip()
+		or (stock_uom or "").strip()
+	)
+	min_portions = max(
+		flt(
+			option_row.get("min_portions")
+			if option_row.get("min_portions") not in (None, "")
+			else 0
+		),
+		0,
+	)
+	max_portions = flt(
+		option_row.get("max_portions")
+		if option_row.get("max_portions") not in (None, "")
+		else option_row.get("max_qty") or 1
+	)
+	if max_portions <= 0:
+		max_portions = 1
+	if max_portions < min_portions:
+		max_portions = min_portions
+	portion_step = flt(
+		option_row.get("portion_step")
+		if option_row.get("portion_step") not in (None, "")
+		else 1
+	)
+	if portion_step <= 0:
+		portion_step = 1
+	return {
+		"item": option_item,
+		"item_name": item_name or option_item,
+		"stock_uom": stock_uom or "",
+		"portion_qty": portion_qty,
+		"portion_uom": portion_uom,
+		"min_portions": min_portions,
+		"max_portions": max_portions,
+		"portion_step": portion_step,
+	}
+
+
+def _serialize_builder_option(option_row, include_unavailable=False):
+	import json
+
+	meta = _builder_option_portion_meta(option_row)
+	price_payload = None
+	price_delta = flt(option_row.get("base_price_delta") or 0)
+	price_source = "legacy_manual"
+	price_status = "ok"
+	availability_status = "available"
+	unavailable_reason = ""
+	unit_rate = 0.0
+	conversion_factor = 1.0
+	resolved_stock_qty = 0.0
+	price_list = ""
+	is_available = cint(option_row.get("is_available") if option_row.get("is_available") not in (None, "") else 1) == 1
+
+	if meta["item"]:
+		price_payload = _resolve_default_selling_item_pricing(
+			meta["item"],
+			meta["portion_qty"],
+			uom=meta["portion_uom"],
+		)
+		price_delta = flt(price_payload.get("total_price") or 0)
+		price_source = "item_price"
+		price_status = (price_payload.get("price_status") or "").strip() or "ok"
+		availability_status = (price_payload.get("availability_status") or "").strip() or "available"
+		unavailable_reason = (price_payload.get("unavailable_reason") or "").strip()
+		unit_rate = flt(price_payload.get("unit_rate") or 0)
+		conversion_factor = flt(price_payload.get("conversion_factor") or 1)
+		resolved_stock_qty = flt(price_payload.get("qty_in_stock_uom") or 0)
+		price_list = (price_payload.get("price_list") or "").strip()
+		if cint(price_payload.get("is_selectable") or 0) != 1:
+			is_available = False
+
+	if not is_available and not include_unavailable:
+		return None
+
+	return {
+		"option_key": option_row.get("option_key"),
+		"option_label": option_row.get("option_label"),
+		"option_description": option_row.get("option_description") or "",
+		"sort_order": cint(option_row.get("sort_order") or 0),
+		"item": meta["item"],
+		"item_name": meta["item_name"] or "",
+		"stock_uom": meta["stock_uom"] or "",
+		"portion_qty": meta["portion_qty"],
+		"portion_uom": meta["portion_uom"] or "",
+		"min_portions": meta["min_portions"],
+		"max_portions": meta["max_portions"],
+		"portion_step": meta["portion_step"],
+		"price_delta": price_delta,
+		"resolved_price_delta": price_delta,
+		"base_price_delta": flt(option_row.get("base_price_delta") or 0),
+		"price_type": option_row.get("price_type") or "fixed",
+		"price_percentage": flt(option_row.get("price_percentage") or 0),
+		"is_default": cint(option_row.get("is_default") or 0),
+		"is_available": bool(is_available),
+		"image": option_row.get("image") or "",
+		"color_code": option_row.get("color_code") or "",
+		"nutrition": json.loads(option_row.get("nutrition_json")) if option_row.get("nutrition_json") else {},
+		"allergens": [a.strip() for a in (option_row.get("allergen_tags") or "").split(",") if a.strip()],
+		"max_qty": cint(option_row.get("max_qty") or 1),
+		"portion_count_default": 1 if cint(option_row.get("is_default") or 0) else 0,
+		"conversion_factor": conversion_factor,
+		"resolved_stock_qty": resolved_stock_qty,
+		"unit_rate": unit_rate,
+		"price_status": price_status,
+		"price_list": price_list,
+		"price_source": price_source,
+		"availability_status": availability_status,
+		"unavailable_reason": unavailable_reason,
+	}
+
+
+def _normalize_builder_selection_rows(raw_rows):
+	rows = []
+	if isinstance(raw_rows, dict):
+		for step_key, step_rows in (raw_rows or {}).items():
+			for row in step_rows or []:
+				if not isinstance(row, dict):
+					continue
+				payload = dict(row)
+				payload.setdefault("step_key", (row.get("step_key") or step_key or "").strip())
+				rows.extend(_normalize_builder_selection_rows([payload]))
+		return rows
+	for row in raw_rows or []:
+		if not isinstance(row, dict):
+			continue
+		step_key = (row.get("step_key") or row.get("step") or "").strip()
+		option_key = (row.get("option_key") or row.get("option") or "").strip()
+		if not step_key or not option_key:
+			continue
+		qty = flt(
+			row.get("qty")
+			if row.get("qty") not in (None, "")
+			else row.get("portion_count") or row.get("count") or 0
+		)
+		if qty <= 0:
+			continue
+		rows.append(
+			{
+				"step_key": step_key,
+				"step_title": (row.get("step_title") or "").strip(),
+				"option_key": option_key,
+				"option_label": (row.get("option_label") or "").strip(),
+				"qty": qty,
+			}
+		)
+	return rows
+
+
+def _extract_builder_selection_payload(customization):
+	if not isinstance(customization, dict):
+		return {}
+	builder_selection = customization.get("builder_selection") or {}
+	if not isinstance(builder_selection, dict):
+		builder_selection = {}
+	rows = _normalize_builder_selection_rows(
+		builder_selection.get("selections")
+		or customization.get("builder_portion_rows")
+		or []
+	)
+	return {
+		"template": (builder_selection.get("template") or customization.get("builder_template") or "").strip(),
+		"rows": rows,
+		"summary": (customization.get("builder_summary") or builder_selection.get("summary") or "").strip(),
+	}
+
+
+def _build_builder_template_catalog(template_name):
+	template_doc = frappe.get_doc("Product Builder Template", template_name)
+	steps = []
+	step_map = {}
+	option_map = {}
+	for step in sorted(template_doc.steps or [], key=lambda row: row.sort_order or 0):
+		options = []
+		for option_row in _get_builder_step_options(step.name):
+			serialized = _serialize_builder_option(option_row, include_unavailable=True)
+			if not serialized:
+				continue
+			options.append(serialized)
+			option_map[(step.step_key, serialized["option_key"])] = serialized
+		step_payload = {
+			"step_key": step.step_key,
+			"step_title": step.step_title,
+			"selection_mode": step.selection_mode or "multiple",
+			"min_select": flt(step.min_select or 0),
+			"max_select": flt(step.max_select or 0),
+			"is_required": cint(step.is_required or 0),
+			"options": options,
+		}
+		steps.append(step_payload)
+		step_map[step.step_key] = step_payload
+	return template_doc, steps, step_map, option_map
+
+
+def _compute_builder_selection_data(item_code, selections, base_price=None, template_name=None, strict=True):
+	template_name = (template_name or "").strip()
+	if not template_name:
+		template_name, _item_meta = _builder_template_for_item(item_code)
+	if not template_name:
+		frappe.throw(_("No active builder template found for this item."))
+
+	item_doc = frappe.get_doc("Item", item_code)
+	template_doc, steps, step_map, option_map = _build_builder_template_catalog(template_name)
+	base_price_value = flt(base_price if base_price not in (None, "") else _resolve_builder_base_price(item_code, item_doc))
+	rows = _normalize_builder_selection_rows(selections)
+	if strict and not rows:
+		frappe.throw(_("At least one builder selection is required."))
+
+	step_totals = defaultdict(float)
+	breakdown = []
+	selection_items = []
+	ingredient_components = []
+	selections_summary = []
+	nutrition_totals = {key: 0.0 for key in NUTRITION_KEY_FIELD_MAP}
+	options_total = 0.0
+
+	for row in rows:
+		step_key = row["step_key"]
+		option_key = row["option_key"]
+		step_payload = step_map.get(step_key)
+		option_payload = option_map.get((step_key, option_key))
+		if not step_payload or not option_payload:
+			frappe.throw(_("Invalid builder selection: {0} / {1}").format(step_key, option_key))
+		if not option_payload.get("is_available"):
+			frappe.throw(
+				option_payload.get("unavailable_reason")
+				or _("Builder option {0} is not available.").format(option_payload.get("option_label"))
+			)
+
+		qty = flt(row.get("qty") or 0)
+		min_portions = flt(option_payload.get("min_portions") or 0)
+		max_portions = flt(option_payload.get("max_portions") or 0)
+		portion_step = flt(option_payload.get("portion_step") or 1)
+		if qty < min_portions - 1e-8 or (max_portions > 0 and qty > max_portions + 1e-8):
+			frappe.throw(
+				_("Portion count for {0} must be between {1} and {2}.").format(
+					option_payload.get("option_label"),
+					min_portions,
+					max_portions,
+				)
+			)
+		if not _step_valid(qty, min_portions, portion_step):
+			frappe.throw(
+				_("Portion count for {0} must follow step {1}.").format(
+					option_payload.get("option_label"),
+					portion_step,
+				)
+			)
+
+		step_totals[step_key] += qty
+		portion_qty = flt(option_payload.get("portion_qty") or 1)
+		portion_uom = option_payload.get("portion_uom") or option_payload.get("stock_uom") or ""
+		pricing = None
+		total_price = 0.0
+		unit_rate = 0.0
+		conversion_factor = 1.0
+		resolved_stock_qty = 0.0
+		price_status = option_payload.get("price_status") or "ok"
+		price_list = option_payload.get("price_list") or ""
+		price_source = option_payload.get("price_source") or "legacy_manual"
+
+		if option_payload.get("item"):
+			requested_qty = qty * portion_qty
+			pricing = _resolve_default_selling_item_pricing(
+				option_payload.get("item"),
+				requested_qty,
+				uom=portion_uom,
+			)
+			if cint(pricing.get("is_selectable") or 0) != 1:
+				frappe.throw(
+					pricing.get("unavailable_reason")
+					or _("Builder option {0} is not selectable.").format(option_payload.get("option_label"))
+				)
+			total_price = flt(pricing.get("total_price") or 0)
+			unit_rate = flt(pricing.get("unit_rate") or 0)
+			conversion_factor = flt(pricing.get("conversion_factor") or 1)
+			resolved_stock_qty = flt(pricing.get("qty_in_stock_uom") or 0)
+			price_status = pricing.get("price_status") or price_status
+			price_list = pricing.get("price_list") or price_list
+			price_source = "item_price"
+			ingredient_components.append(
+				{
+					"ingredient_key": option_key,
+					"ingredient_label": option_payload.get("option_label") or option_key,
+					"item_code": option_payload.get("item"),
+					"item_name": option_payload.get("item_name")
+					or frappe.db.get_value("Item", option_payload.get("item"), "item_name")
+					or option_payload.get("item"),
+					"base_item_code": "",
+					"selected_alternative_item": "",
+					"base_qty": resolved_stock_qty,
+					"selected_base_qty": resolved_stock_qty,
+					"base_multiplier": 0,
+					"selected_multiplier": 1,
+					"is_required": 0,
+					"is_included_by_default": 0,
+					"can_remove": 1,
+					"is_editable_qty": 1,
+					"min_multiplier": 0,
+					"max_multiplier": max_portions,
+					"step_multiplier": portion_step,
+					"pricing_rate": unit_rate,
+					"pricing_delta": total_price,
+					"stock_uom": pricing.get("stock_uom") or option_payload.get("stock_uom") or "",
+					"authoring_uom": portion_uom,
+					"authoring_base_qty": portion_qty,
+					"selected_authoring_qty": qty * portion_qty,
+					"source_type": "builder_component",
+				}
+			)
+			option_item_doc = frappe.get_cached_doc("Item", option_payload.get("item"))
+			option_nutrition = _nutrition_per_unit_payload(option_item_doc)
+			option_factor = _nutrition_factor_from_item_qty(
+				option_payload.get("item"),
+				qty * portion_qty,
+				portion_uom,
+			)
+			_add_nutrition_to_totals(nutrition_totals, option_nutrition, option_factor)
+		else:
+			total_price = flt(option_payload.get("base_price_delta") or option_payload.get("price_delta") or 0) * qty
+
+		options_total += total_price
+		breakdown.append(
+			{
+				"step_key": step_key,
+				"step_title": step_payload.get("step_title") or step_key,
+				"option_key": option_key,
+				"option_label": option_payload.get("option_label") or option_key,
+				"portion_count": qty,
+				"portion_qty": portion_qty,
+				"portion_uom": portion_uom,
+				"resolved_stock_qty": resolved_stock_qty,
+				"stock_uom": (pricing or {}).get("stock_uom") or option_payload.get("stock_uom") or "",
+				"conversion_factor": conversion_factor,
+				"unit_rate": unit_rate,
+				"delta": total_price,
+				"total_price": total_price,
+				"price_status": price_status,
+				"price_list": price_list,
+				"price_source": price_source,
+				"item": option_payload.get("item") or "",
+				"item_name": option_payload.get("item_name") or "",
+			}
+		)
+		selection_items.append(
+			{
+				"step_key": step_key,
+				"step_title": step_payload.get("step_title") or step_key,
+				"option_key": option_key,
+				"option_label": option_payload.get("option_label") or option_key,
+				"qty": qty,
+				"portion_count": qty,
+				"portion_qty": portion_qty,
+				"portion_uom": portion_uom,
+				"resolved_stock_qty": resolved_stock_qty,
+				"stock_uom": (pricing or {}).get("stock_uom") or option_payload.get("stock_uom") or "",
+				"conversion_factor": conversion_factor,
+				"unit_rate": unit_rate,
+				"price_delta": total_price,
+				"total_price": total_price,
+				"price_status": price_status,
+				"price_list": price_list,
+				"price_source": price_source,
+				"item": option_payload.get("item") or "",
+				"sort_order": cint(option_payload.get("sort_order") or 0),
+			}
+		)
+		selections_summary.append(
+			{
+				"kind": "builder_component",
+				"label": _("{0}: {1} × {2:g}").format(
+					step_payload.get("step_title") or step_key,
+					option_payload.get("option_label") or option_key,
+					qty,
+				),
+				"delta_price": total_price,
+				"qty": qty,
+			}
+		)
+
+	for step_payload in steps:
+		total = flt(step_totals.get(step_payload["step_key"]) or 0)
+		min_required = flt(step_payload.get("min_select") or 0)
+		max_allowed = flt(step_payload.get("max_select") or 0)
+		if cint(step_payload.get("is_required") or 0) and total < max(min_required, 1) - 1e-8:
+			frappe.throw(
+				_("Builder step {0} requires at least {1:g} portion(s).").format(
+					step_payload.get("step_title") or step_payload["step_key"],
+					max(min_required, 1),
+				)
+			)
+		if total < min_required - 1e-8:
+			frappe.throw(
+				_("Builder step {0} requires at least {1:g} portion(s).").format(
+					step_payload.get("step_title") or step_payload["step_key"],
+					min_required,
+				)
+			)
+		if max_allowed > 0 and total > max_allowed + 1e-8:
+			frappe.throw(
+				_("Builder step {0} exceeds the maximum of {1:g} portions.").format(
+					step_payload.get("step_title") or step_payload["step_key"],
+					max_allowed,
+				)
+			)
+
+	final_price = base_price_value + options_total
+	nutrition_unit = _nutrition_payload_from_totals(nutrition_totals)
+	pricing_breakdown = {
+		"base_price": base_price_value,
+		"builder_total": options_total,
+		"options_total": options_total,
+		"unit_price": final_price,
+		"line_total": final_price,
+		"qty": 1,
+		"builder_portion_rows": breakdown,
+		"nutrition": nutrition_unit,
+		"nutrition_totals": _normalize_nutrition_totals(nutrition_totals),
+	}
+	builder_summary = "، ".join(
+		[
+			"{0}: {1} × {2:g}".format(row["step_title"], row["option_label"], row["portion_count"])
+			for row in breakdown
+		]
+	)
+	return {
+		"template": template_doc,
+		"base_price": base_price_value,
+		"options_total": options_total,
+		"final_price": final_price,
+		"breakdown": breakdown,
+		"selection_items": selection_items,
+		"normalized_customization": {
+			"ingredient_adjustments": [],
+			"selected_modifiers": [],
+			"selected_alternatives": [],
+			"removed_ingredients": [],
+			"added_ingredients": [],
+			"nutrition": nutrition_unit,
+			"nutrition_totals": _normalize_nutrition_totals(nutrition_totals),
+			"variant_fixed_attributes": {},
+			"builder_selection": {
+				"template": template_doc.name,
+				"selections": [
+					{"step_key": row["step_key"], "option_key": row["option_key"], "qty": row["portion_count"]}
+					for row in breakdown
+				],
+				"summary": builder_summary,
+			},
+			"builder_summary": builder_summary,
+			"builder_pricing_breakdown": pricing_breakdown,
+			"builder_portion_rows": breakdown,
+			"builder_template": template_doc.name,
+		},
+		"pricing_breakdown": pricing_breakdown,
+		"ingredient_components": ingredient_components,
+		"selections_summary": selections_summary,
+		"builder_summary": builder_summary,
+		"nutrition": nutrition_unit,
+		"nutrition_totals": _normalize_nutrition_totals(nutrition_totals),
+	}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -20010,29 +20609,18 @@ def get_builder_template(item_code=None, template_slug=None):
 				},
 			}
 
+		item_doc = frappe.get_doc("Item", item_code) if item_code and frappe.db.exists("Item", item_code) else None
+		base_price = _resolve_builder_base_price(item_code, item_doc=item_doc) if item_doc else 0
+
 		# Build steps with options
 		steps_data = []
 		for step in sorted(template.steps, key=lambda s: s.sort_order or 0):
 			options_data = []
 			for opt in _get_builder_step_options(step.name):
-				if not opt.is_available:
+				serialized = _serialize_builder_option(opt, include_unavailable=False)
+				if not serialized:
 					continue
-				options_data.append(
-					{
-						"option_key": opt.option_key,
-						"option_label": opt.option_label,
-						"option_description": opt.option_description or "",
-						"price_delta": opt.base_price_delta or 0,
-						"price_type": opt.price_type,
-						"price_percentage": opt.price_percentage or 0,
-						"is_default": opt.is_default,
-						"image": opt.image or "",
-						"color_code": opt.color_code or "",
-						"nutrition": json.loads(opt.nutrition_json) if opt.nutrition_json else {},
-						"allergens": [a.strip() for a in (opt.allergen_tags or "").split(",") if a.strip()],
-						"max_qty": opt.max_qty or 1,
-					}
-				)
+				options_data.append(serialized)
 
 			steps_data.append(
 				{
@@ -20064,6 +20652,7 @@ def get_builder_template(item_code=None, template_slug=None):
 					"allow_go_back": template.allow_go_back,
 					"require_all_required": template.require_all_required,
 					"max_total_selections": template.max_total_selections or 0,
+					"base_price": base_price,
 					"steps": steps_data,
 				}
 			},
@@ -20101,76 +20690,20 @@ def compute_builder_price(item_code, selections):
 		}
 
 	try:
-		# Get item price
-		item_price = frappe.db.get_value("Item", item_code, "standard_rate") or 0
-
-		# Recompute prices from template definitions
-		total_delta = 0
-		breakdown = []
-
-		for sel in selections:
-			step_key = sel.get("step_key")
-			option_key = sel.get("option_key")
-			qty = sel.get("qty", 1) or 1
-
-			# Look up the option in the template to get authoritative pricing
-			# We need to find the template via the item
-			item = frappe.db.get_value("Item", item_code, ["restaurant_builder_template"], as_dict=True)
-			if not item or not item.get("restaurant_builder_template"):
-				continue
-
-			# Query the option's price from the template
-			option_price = frappe.db.sql(
-				"""SELECT pbo.base_price_delta, pbo.price_type, pbo.price_percentage
-                FROM `tabProduct Builder Option` pbo
-                INNER JOIN `tabProduct Builder Step` pbs ON pbs.name = pbo.parent
-                INNER JOIN `tabProduct Builder Template` pbt ON pbt.name = pbs.parent
-                WHERE pbt.name = %s AND pbs.step_key = %s AND pbo.option_key = %s
-                AND pbo.is_available = 1
-                LIMIT 1""",
-				(item.restaurant_builder_template, step_key, option_key),
-				as_dict=True,
-			)
-
-			if option_price:
-				opt = option_price[0]
-				delta = opt.base_price_delta or 0
-				price_type = opt.price_type or "fixed"
-				percentage = opt.price_percentage or 0
-
-				if price_type == "fixed":
-					line_delta = delta * qty
-				elif price_type == "percentage":
-					line_delta = (item_price * percentage / 100) * qty
-				elif price_type == "multiply":
-					line_delta = item_price * delta * qty
-				else:
-					line_delta = delta * qty
-			else:
-				line_delta = 0
-
-			total_delta += line_delta
-			breakdown.append(
-				{
-					"step_key": step_key,
-					"option_key": option_key,
-					"label": sel.get("option_label", option_key),
-					"delta": line_delta,
-				}
-			)
-
-		final_price = item_price + total_delta
-
+		computed = _compute_builder_selection_data(item_code, selections, strict=True)
 		currency = frappe.db.get_default("currency") or "IRR"
 
 		return {
 			"status": "success",
 			"data": {
-				"base_price": item_price,
-				"options_total": total_delta,
-				"final_price": final_price,
+				"base_price": computed["base_price"],
+				"options_total": computed["options_total"],
+				"final_price": computed["final_price"],
 				"currency": currency,
-				"breakdown": breakdown,
+				"breakdown": computed["breakdown"],
+				"builder_summary": computed["builder_summary"],
+				"builder_portion_rows": computed["breakdown"],
+				"builder_pricing_breakdown": computed["pricing_breakdown"],
 			},
 		}
 
@@ -20234,74 +20767,21 @@ def save_builder_selection(
 				},
 			}
 
-		# Get authoritative item price
-		item_price = frappe.db.get_value("Item", item, "standard_rate") or base_price or 0
-
-		# Build selection items with server-side pricing
-		selection_items = []
-		for sel in selections:
-			step_key = sel.get("step_key")
-			option_key = sel.get("option_key")
-
-			# Look up option for authoritative pricing
-			option_data = frappe.db.sql(
-				"""SELECT pbo.base_price_delta, pbo.price_type, pbo.price_percentage, pbo.option_label
-                FROM `tabProduct Builder Option` pbo
-                INNER JOIN `tabProduct Builder Step` pbs ON pbs.name = pbo.parent
-                WHERE pbs.parent = %s AND pbs.step_key = %s AND pbo.option_key = %s
-                LIMIT 1""",
-				(template, step_key, option_key),
-				as_dict=True,
-			)
-
-			price_delta = 0
-			option_label = sel.get("option_label", option_key)
-			if option_data:
-				opt = option_data[0]
-				delta = opt.base_price_delta or 0
-				price_type = opt.price_type or "fixed"
-				percentage = opt.price_percentage or 0
-				qty = sel.get("qty", 1) or 1
-				option_label = opt.option_label or option_label
-
-				if price_type == "fixed":
-					price_delta = delta * qty
-				elif price_type == "percentage":
-					price_delta = (item_price * percentage / 100) * qty
-				elif price_type == "multiply":
-					price_delta = item_price * delta * qty
-				else:
-					price_delta = delta * qty
-
-			selection_items.append(
-				{
-					"step_key": step_key,
-					"step_title": sel.get("step_title", ""),
-					"option_key": option_key,
-					"option_label": option_label,
-					"qty": sel.get("qty", 1) or 1,
-					"price_delta": price_delta,
-				}
-			)
-
-		# Compute totals
-		options_total = sum(s["price_delta"] for s in selection_items)
-		final_price = item_price + options_total
+		computed = _compute_builder_selection_data(
+			item,
+			selections,
+			base_price=base_price,
+			template_name=template,
+			strict=True,
+		)
+		item_price = computed["base_price"]
+		selection_items = computed["selection_items"]
+		options_total = computed["options_total"]
+		final_price = computed["final_price"]
 
 		# Build selection JSON if not provided
 		if not selection_json:
-			selection_json = {
-				"template": template,
-				"template_title": tpl.title,
-				"item": item,
-				"base_price": item_price,
-				"steps": [],
-				"pricing": {
-					"base_price": item_price,
-					"options_total": options_total,
-					"final_price": final_price,
-				},
-			}
+			selection_json = computed["normalized_customization"].get("builder_selection") or {}
 
 		# Create the selection document
 		sel_doc = frappe.get_doc(
@@ -20330,6 +20810,9 @@ def save_builder_selection(
 				"selection_id": sel_doc.name,
 				"final_price": final_price,
 				"summary": sel_doc.summary_text,
+				"builder_summary": computed["builder_summary"],
+				"builder_portion_rows": computed["breakdown"],
+				"builder_pricing_breakdown": computed["pricing_breakdown"],
 			},
 		}
 
@@ -20377,7 +20860,18 @@ def get_builder_selection(selection_id):
 							"option_key": s.option_key,
 							"option_label": s.option_label,
 							"qty": s.qty,
+							"portion_count": s.get("portion_count") or s.qty,
+							"portion_qty": s.get("portion_qty") or 0,
+							"portion_uom": s.get("portion_uom") or "",
+							"resolved_stock_qty": s.get("resolved_stock_qty") or 0,
+							"stock_uom": s.get("stock_uom") or "",
+							"conversion_factor": s.get("conversion_factor") or 1,
+							"unit_rate": s.get("unit_rate") or 0,
 							"price_delta": s.price_delta,
+							"total_price": s.get("total_price") or s.price_delta,
+							"price_status": s.get("price_status") or "",
+							"price_list": s.get("price_list") or "",
+							"price_source": s.get("price_source") or "",
 						}
 						for s in sel.selections
 					],
@@ -20475,7 +20969,7 @@ def get_builder_template_detail(name):
 		for step in sorted(template.steps or [], key=lambda s: s.sort_order or 0):
 			options_data = []
 			for opt in _get_builder_step_options(step.name):
-				item_name = frappe.db.get_value("Item", opt.item, "item_name") if opt.item else ""
+				serialized = _serialize_builder_option(opt, include_unavailable=True) or {}
 				options_data.append(
 					{
 						"name": opt.name,
@@ -20484,7 +20978,21 @@ def get_builder_template_detail(name):
 						"option_description": opt.option_description or "",
 						"sort_order": opt.sort_order or 0,
 						"item": opt.item or "",
-						"item_name": item_name or "",
+						"item_name": serialized.get("item_name") or "",
+						"stock_uom": serialized.get("stock_uom") or "",
+						"portion_qty": serialized.get("portion_qty") or 1,
+						"portion_uom": serialized.get("portion_uom") or "",
+						"min_portions": serialized.get("min_portions") or 0,
+						"max_portions": serialized.get("max_portions") or 1,
+						"portion_step": serialized.get("portion_step") or 1,
+						"resolved_price_delta": serialized.get("resolved_price_delta") or 0,
+						"unit_rate": serialized.get("unit_rate") or 0,
+						"conversion_factor": serialized.get("conversion_factor") or 1,
+						"price_status": serialized.get("price_status") or "",
+						"availability_status": serialized.get("availability_status") or "",
+						"unavailable_reason": serialized.get("unavailable_reason") or "",
+						"price_list": serialized.get("price_list") or "",
+						"price_source": serialized.get("price_source") or "",
 						"base_price_delta": opt.base_price_delta or 0,
 						"price_type": opt.price_type or "fixed",
 						"price_percentage": opt.price_percentage or 0,
@@ -20595,10 +21103,20 @@ def list_builder_option_items(search=None, limit=50):
 				if item.get(image_field):
 					image = item.get(image_field)
 					break
-			price = (
-				item.get("restaurant_base_price")
-				if item.get("restaurant_base_price") is not None
-				else item.get("standard_rate")
+			stock_uom = item.get("stock_uom") or ""
+			pricing = _resolve_default_selling_item_pricing(
+				item.get("name"),
+				1,
+				uom=stock_uom,
+			)
+			default_price = (
+				pricing.get("unit_rate")
+				if pricing.get("price_status") == "ok"
+				else (
+					item.get("restaurant_base_price")
+					if item.get("restaurant_base_price") is not None
+					else item.get("standard_rate")
+				)
 			)
 			label = item.get("item_name") or item.get("item_code") or item.get("name")
 			rows.append(
@@ -20608,8 +21126,12 @@ def list_builder_option_items(search=None, limit=50):
 					"name": item.get("name"),
 					"item_code": item.get("item_code") or item.get("name"),
 					"item_name": item.get("item_name") or label,
-					"stock_uom": item.get("stock_uom") or "",
-					"standard_rate": price or 0,
+					"stock_uom": stock_uom,
+					"standard_rate": default_price or 0,
+					"price_list": pricing.get("price_list") or "",
+					"price_status": pricing.get("price_status") or "",
+					"is_selectable": cint(pricing.get("is_selectable") or 0),
+					"unavailable_reason": pricing.get("unavailable_reason") or "",
 					"item_group": item.get("item_group") or "",
 					"image": image or "",
 				}
@@ -20811,6 +21333,11 @@ def duplicate_builder_template(name):
 						"option_label": opt.option_label,
 						"option_description": opt.option_description,
 						"item": opt.item,
+						"portion_qty": opt.get("portion_qty") if hasattr(opt, "get") else getattr(opt, "portion_qty", 1),
+						"portion_uom": opt.get("portion_uom") if hasattr(opt, "get") else getattr(opt, "portion_uom", ""),
+						"min_portions": opt.get("min_portions") if hasattr(opt, "get") else getattr(opt, "min_portions", 0),
+						"max_portions": opt.get("max_portions") if hasattr(opt, "get") else getattr(opt, "max_portions", 1),
+						"portion_step": opt.get("portion_step") if hasattr(opt, "get") else getattr(opt, "portion_step", 1),
 						"base_price_delta": opt.base_price_delta,
 						"price_type": opt.price_type,
 						"price_percentage": opt.price_percentage,

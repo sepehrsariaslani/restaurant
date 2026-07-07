@@ -104,7 +104,7 @@
 
         <!-- Base price -->
         <div class="price-block">
-          <span class="base-price">{{ isComingSoon ? 'به‌زودی' : formatMoney(item.base_price, currency) }}</span>
+          <span class="base-price">{{ isComingSoon ? 'به‌زودی' : displayBasePriceText }}</span>
         </div>
 
         <!-- Description -->
@@ -346,7 +346,7 @@
             <div class="desktop-meta-row">
               <div class="desktop-price-row">
                 <span class="desktop-price-label">قیمت:</span>
-                <span class="desktop-price">{{ isComingSoon ? 'به‌زودی' : formatMoney(item.base_price, currency) }}</span>
+                <span class="desktop-price">{{ isComingSoon ? 'به‌زودی' : displayBasePriceText }}</span>
               </div>
               <div class="prep-badge" v-if="prepTimeText">
                 <span class="prep-icon">⏱</span>
@@ -597,6 +597,8 @@
         :base-price="Number(item.base_price || 0)"
         :currency="currency"
         :loading-price="builderPriceLoading"
+        :initial-selections="builderInitialSelections"
+        :editing="isEditing"
         @close="builderOpen = false"
         @selection-change="handleBuilderSelectionChange"
         @add-to-cart="handleBuilderAddToCart"
@@ -923,6 +925,21 @@ function formatReviewDate(dateStr = '') {
 const query = parseQuery()
 const editLineId = ref((props.boot.edit_line || query.edit || '').trim())
 const isEditing = computed(() => Boolean(editLineId.value))
+const editingLine = computed(() => (editLineId.value ? getLineById(editLineId.value) : null))
+const builderInitialSelections = computed(() => {
+  const customizationPayload = editingLine.value?.customization || {}
+  const nested = customizationPayload.builder_selection || {}
+  const rows = Array.isArray(nested.selections)
+    ? nested.selections
+    : Array.isArray(customizationPayload.builder_portion_rows)
+      ? customizationPayload.builder_portion_rows
+      : []
+  return rows.map((row) => ({
+    step_key: row.step_key,
+    option_key: row.option_key,
+    qty: Number(row.qty ?? row.portion_count ?? 0),
+  })).filter((row) => row.step_key && row.option_key && row.qty > 0)
+})
 const isComingSoon = computed(() => Number(item.value?.coming_soon ?? item.value?.restaurant_coming_soon ?? 0) === 1)
 const activeBranch = ref(
   String(props.boot.active_branch || props.boot?.table_context?.table?.branch || query.branch || '').trim(),
@@ -957,6 +974,10 @@ const builderSummary = computed(() => {
 
 const builderDisplayPrice = computed(() => {
   return Number(builderPriceData.value?.final_price || item.value?.base_price || 0)
+})
+const displayBasePriceText = computed(() => {
+  const basePrice = formatMoney(item.value?.base_price || 0, currency.value)
+  return isBuilderEnabled.value ? `از ${basePrice}` : basePrice
 })
 
 const hasIngredientCustomization = computed(() => Array.isArray(ingredients.value) && ingredients.value.length > 0)
@@ -1212,12 +1233,38 @@ async function primaryAddAction() {
 function handleBuilderAddToCart(payload) {
   if (!item.value) return
 
-  const finalPrice = Number(builderPriceData.value?.final_price ?? payload?.final_price ?? item.value.base_price ?? 0)
-  const optionsTotal = Number(payload?.options_total || 0)
+  const finalPrice = Number(
+    payload?.builder_pricing_breakdown?.final_price ??
+    builderPriceData.value?.final_price ??
+    payload?.final_price ??
+    item.value.base_price ??
+    0,
+  )
+  const optionsTotal = Number(
+    payload?.builder_pricing_breakdown?.options_total ??
+    payload?.options_total ??
+    builderPriceData.value?.options_total ??
+    0,
+  )
   const builderSelections = Array.isArray(payload?.selections) ? payload.selections : []
-  const builderSummaryText = builderSelections.map((row) => `${row.option_label}${row.qty > 1 ? ` × ${row.qty}` : ''}`).join('، ')
+  const builderSummaryText = String(
+    payload?.builder_summary ||
+    builderSelections
+      .map((row) => {
+        const count = Number(row?.portion_count ?? row?.qty ?? 0)
+        return `${row.option_label}${count > 1 ? ` × ${count}` : ''}`
+      })
+      .join('، '),
+  ).trim()
+  const builderPricingBreakdown = payload?.builder_pricing_breakdown || {
+    base_price: Number(item.value.base_price || 0),
+    options_total: optionsTotal,
+    final_price: finalPrice,
+    builder_portion_rows: builderSelections,
+  }
 
   upsertLine({
+    id: editLineId.value || undefined,
     item_slug: item.value.slug,
     item_title: item.value.title,
     item_image: resolveItemImage(item.value),
@@ -1235,6 +1282,10 @@ function handleBuilderAddToCart(payload) {
         final_price: finalPrice,
         summary: builderSummaryText,
       },
+      builder_summary: builderSummaryText,
+      builder_pricing_breakdown: builderPricingBreakdown,
+      builder_portion_rows: Array.isArray(payload?.builder_portion_rows) ? payload.builder_portion_rows : builderSelections,
+      builder_template: payload?.template || builderTemplate.value?.name || '',
     },
     ingredient_catalog: [],
     modifier_groups_catalog: [],
@@ -1265,10 +1316,10 @@ async function loadItem() {
     await refreshReviews()
     loadRelatedItems()
     await loadBuilderTemplate()
-    if (isBuilderEnabled.value && builderTemplate.value && !editLineId.value && !builderAutoOpened.value) {
+    if (isBuilderEnabled.value && builderTemplate.value && !builderAutoOpened.value) {
       activeTab.value = 'builder'
       builderAutoOpened.value = true
-      builderOpen.value = true
+      builderOpen.value = !editLineId.value || builderInitialSelections.value.length > 0
     }
   } catch (err) {
     error.value = err.message || 'دریافت جزئیات آیتم ناموفق بود.'

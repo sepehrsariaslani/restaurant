@@ -12,17 +12,30 @@ class ProductBuilderSelection(Document):
 
     def _compute_pricing(self):
         self.options_total = sum(
-            (s.price_delta or 0) * (s.qty or 1) for s in self.selections
+            (s.get("total_price") if hasattr(s, "get") else None)
+            or ((s.price_delta or 0) * (s.qty or 1))
+            for s in self.selections
         )
         self.final_price = (self.base_price or 0) + self.options_total
 
     def _build_summary(self):
         lines = []
         for sel in self.selections:
-            qty_str = " x{0}".format(sel.qty) if sel.qty and sel.qty > 1 else ""
+            portion_count = sel.get("portion_count") if hasattr(sel, "get") else getattr(sel, "portion_count", 0)
+            portion_qty = sel.get("portion_qty") if hasattr(sel, "get") else getattr(sel, "portion_qty", 0)
+            portion_uom = sel.get("portion_uom") if hasattr(sel, "get") else getattr(sel, "portion_uom", "")
+            qty_value = portion_count or sel.qty or 0
+            qty_str = " x{0}".format(qty_value) if qty_value and qty_value > 1 else ""
+            if portion_qty:
+                portion_label = "{0:g} {1}".format(portion_qty, portion_uom or "").strip()
+                if portion_label:
+                    qty_str = "{0} ({1})".format(qty_str or "", portion_label).strip()
             price_str = ""
-            if sel.price_delta and sel.price_delta > 0:
-                price_str = " (+{0:,.0f})".format(sel.price_delta)
+            total_price = (
+                sel.get("total_price") if hasattr(sel, "get") else getattr(sel, "total_price", None)
+            )
+            if (total_price or sel.price_delta) and (total_price or sel.price_delta) > 0:
+                price_str = " (+{0:,.0f})".format(total_price or sel.price_delta)
             lines.append(
                 "{0}: {1}{2}{3}".format(
                     sel.step_title, sel.option_label, qty_str, price_str

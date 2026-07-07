@@ -2,14 +2,16 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import cint
+from frappe.utils import cint, flt
 
 from restaurant.api import (
 	_build_ticket_components,
 	_extract_qty_map_from_ticket,
 	_recalculate_line,
 	_sync_work_order_required_items,
+	compute_builder_price,
 	get_customer_checkout_profile,
+	get_builder_template,
 	get_item_detail,
 	get_related_items,
 	get_management_bom_context,
@@ -23,6 +25,7 @@ from restaurant.api import (
 	get_menu_boot,
 	place_order,
 	save_customer_delivery_address,
+	save_builder_selection,
 	save_management_modifier_group,
 	set_management_default_price_list,
 	set_management_product_price,
@@ -597,6 +600,175 @@ class TestRestaurantAPI(FrappeTestCase):
         self._created_test_price_lists.add(price_list.name)
         set_management_default_price_list(price_list.name)
         return price_list
+
+    def _set_builder_item_flags(self, item_code, template_name):
+        updates = {}
+        if frappe.db.has_column("Item", "restaurant_is_customizable"):
+            updates["restaurant_is_customizable"] = 1
+        if frappe.db.has_column("Item", "restaurant_builder_active"):
+            updates["restaurant_builder_active"] = 1
+        if frappe.db.has_column("Item", "restaurant_builder_template"):
+            updates["restaurant_builder_template"] = template_name
+        if frappe.db.has_column("Item", "restaurant_allow_direct_add"):
+            updates["restaurant_allow_direct_add"] = 0
+        if frappe.db.has_column("Item", "restaurant_requires_bom"):
+            updates["restaurant_requires_bom"] = 1
+        if updates:
+            frappe.db.set_value("Item", item_code, updates, update_modified=False)
+
+    def _make_builder_product_fixture(self, suffix):
+        base_component = frappe.get_doc(
+            {
+                "doctype": "Item",
+                "item_code": f"BUILDER_BASE_{suffix.upper()}",
+                "item_name": f"Builder Base {suffix}",
+                "item_group": self.category_group,
+                "stock_uom": self.uom,
+                "is_stock_item": 1,
+                "is_sales_item": 0,
+                "is_purchase_item": 1,
+            }
+        )
+        base_component.insert(ignore_permissions=True)
+        self._remember_cleanup_doc("Item", base_component.item_code)
+
+        template = frappe.get_doc(
+            {
+                "doctype": "Product Builder Template",
+                "title": f"Protein Bowl {suffix}",
+                "slug": f"protein-bowl-{suffix}",
+                "is_active": 1,
+                "show_price_live": 1,
+                "steps": [
+                    {
+                        "step_title": "پروتئین",
+                        "step_key": "protein",
+                        "sort_order": 0,
+                        "selection_mode": "multiple",
+                        "min_select": 1,
+                        "max_select": 3,
+                        "is_required": 1,
+                        "show_step_price": 1,
+                        "options": [
+                            {
+                                "option_label": "مرغ",
+                                "option_key": "chicken",
+                                "sort_order": 0,
+                                "item": self.raw_item_code,
+                                "portion_qty": 120,
+                                "portion_uom": self.uom,
+                                "min_portions": 0,
+                                "max_portions": 3,
+                                "portion_step": 1,
+                                "price_type": "fixed",
+                                "is_available": 1,
+                            },
+                            {
+                                "option_label": "میگو",
+                                "option_key": "shrimp",
+                                "sort_order": 1,
+                                "item": self.alternative_item_code,
+                                "portion_qty": 120,
+                                "portion_uom": self.uom,
+                                "min_portions": 0,
+                                "max_portions": 3,
+                                "portion_step": 1,
+                                "price_type": "fixed",
+                                "is_available": 1,
+                            },
+                        ],
+                    },
+                    {
+                        "step_title": "افزودنی خدماتی",
+                        "step_key": "service_addon",
+                        "sort_order": 1,
+                        "selection_mode": "multiple",
+                        "min_select": 0,
+                        "max_select": 1,
+                        "is_required": 0,
+                        "show_step_price": 1,
+                        "options": [
+                            {
+                                "option_label": "سس ویژه",
+                                "option_key": "service_sauce",
+                                "sort_order": 0,
+                                "item": self.service_modifier_item_code,
+                                "portion_qty": 1,
+                                "portion_uom": self.uom,
+                                "min_portions": 0,
+                                "max_portions": 1,
+                                "portion_step": 1,
+                                "price_type": "fixed",
+                                "is_available": 1,
+                            }
+                        ],
+                    },
+                ],
+            }
+        )
+        template.insert(ignore_permissions=True)
+        self._remember_cleanup_doc("Product Builder Template", template.name)
+
+        item_code = f"REST_BUILDER_{suffix.upper()}"
+        item_slug = f"builder-item-{suffix}"
+        builder_item = frappe.get_doc(
+            {
+                "doctype": "Item",
+                "item_code": item_code,
+                "item_name": f"Builder Item {suffix}",
+                "item_group": self.subcategory_group,
+                "stock_uom": self.uom,
+                "is_stock_item": 0,
+                "is_sales_item": 1,
+                "is_purchase_item": 0,
+                "standard_rate": 500000,
+                "restaurant_enabled": 1,
+                "restaurant_slug": item_slug,
+                "restaurant_category": self.category_group,
+                "restaurant_subcategory": self.subcategory_group,
+                "restaurant_short_desc": "builder test item",
+                "restaurant_long_desc": "builder test item",
+                "restaurant_base_price": 500000,
+                "restaurant_branch": "DEFAULT",
+            }
+        )
+        builder_item.insert(ignore_permissions=True)
+        self._remember_cleanup_doc("Item", builder_item.item_code)
+        self._set_builder_item_flags(builder_item.item_code, template.name)
+
+        bom = frappe.get_doc(
+            {
+                "doctype": "BOM",
+                "item": builder_item.item_code,
+                "company": self.company,
+                "currency": frappe.db.get_value("Company", self.company, "default_currency"),
+                "conversion_rate": 1,
+                "quantity": 1,
+                "is_default": 1,
+                "is_active": 1,
+                "items": [
+                    {
+                        "item_code": base_component.item_code,
+                        "qty": 1,
+                        "uom": self.uom,
+                        "rate": 0,
+                    }
+                ],
+            }
+        )
+        bom.insert(ignore_permissions=True)
+        bom.submit()
+        self._remember_cleanup_doc("BOM", bom.name)
+        frappe.db.set_value("Item", builder_item.item_code, "default_bom", bom.name, update_modified=False)
+        frappe.db.commit()
+
+        return {
+            "template": template,
+            "item_code": builder_item.item_code,
+            "item_slug": item_slug,
+            "base_component_code": base_component.item_code,
+            "bom_name": bom.name,
+        }
 
     @classmethod
     def _create_item_alternative(cls, item_code, alternative_item_code):
@@ -1852,3 +2024,141 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertIn("summary", report)
         self.assertIn("rows", report)
         self.assertIn("tables", report)
+
+    def test_get_builder_template_resolves_portion_pricing_from_default_price_list(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        fixture = self._make_builder_product_fixture(suffix)
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {"item_name": self.raw_item_code, "price_list": price_list.name, "price_list_rate": 1000}
+        )
+        set_management_product_price(
+            {"item_name": self.alternative_item_code, "price_list": price_list.name, "price_list_rate": 2000}
+        )
+        set_management_product_price(
+            {
+                "item_name": self.service_modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 15000,
+            }
+        )
+
+        payload = get_builder_template(item_code=fixture["item_code"])
+        self.assertEqual(payload.get("status"), "success")
+        template = payload["data"]["template"]
+        protein_step = next(row for row in template["steps"] if row["step_key"] == "protein")
+        chicken = next(row for row in protein_step["options"] if row["option_key"] == "chicken")
+        shrimp = next(row for row in protein_step["options"] if row["option_key"] == "shrimp")
+
+        self.assertEqual(chicken.get("price_source"), "item_price")
+        self.assertEqual(chicken.get("price_status"), "ok")
+        self.assertEqual(chicken.get("portion_qty"), 120)
+        self.assertEqual(chicken.get("portion_uom"), self.uom)
+        self.assertEqual(chicken.get("price_delta"), 120000)
+        self.assertEqual(chicken.get("resolved_price_delta"), 120000)
+        self.assertEqual(chicken.get("unit_rate"), 1000)
+        self.assertEqual(chicken.get("price_list"), price_list.name)
+        self.assertEqual(shrimp.get("price_delta"), 240000)
+
+    def test_compute_builder_price_enforces_stage_portion_capacity_and_persists_rows(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        fixture = self._make_builder_product_fixture(suffix)
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {"item_name": self.raw_item_code, "price_list": price_list.name, "price_list_rate": 1000}
+        )
+        set_management_product_price(
+            {"item_name": self.alternative_item_code, "price_list": price_list.name, "price_list_rate": 2000}
+        )
+
+        payload = compute_builder_price(
+            fixture["item_code"],
+            [
+                {"step_key": "protein", "option_key": "chicken", "qty": 2},
+                {"step_key": "protein", "option_key": "shrimp", "qty": 1},
+            ],
+        )
+        self.assertEqual(payload.get("status"), "success")
+        data = payload["data"]
+        self.assertEqual(data.get("base_price"), 500000)
+        self.assertEqual(data.get("options_total"), 480000)
+        self.assertEqual(data.get("final_price"), 980000)
+        self.assertEqual(len(data.get("builder_portion_rows") or []), 2)
+        first_row = data["builder_portion_rows"][0]
+        self.assertEqual(first_row.get("portion_count"), 2)
+        self.assertEqual(first_row.get("resolved_stock_qty"), 240)
+        self.assertEqual(first_row.get("total_price"), 240000)
+
+        invalid_payload = compute_builder_price(
+            fixture["item_code"],
+            [
+                {"step_key": "protein", "option_key": "chicken", "qty": 2},
+                {"step_key": "protein", "option_key": "shrimp", "qty": 2},
+            ],
+        )
+        self.assertEqual(invalid_payload.get("status"), "error")
+        self.assertIn("maximum", (invalid_payload.get("error") or {}).get("message", "").lower())
+
+        saved = save_builder_selection(
+            template=fixture["template"].name,
+            item=fixture["item_code"],
+            base_price=500000,
+            selections=[
+                {"step_key": "protein", "option_key": "chicken", "qty": 2},
+                {"step_key": "protein", "option_key": "shrimp", "qty": 1},
+            ],
+        )
+        self.assertEqual(saved.get("status"), "success")
+        selection_doc = frappe.get_doc("Product Builder Selection", saved["data"]["selection_id"])
+        self.assertEqual(int(selection_doc.options_total or 0), 480000)
+        first = selection_doc.selections[0]
+        self.assertEqual(flt(first.get("portion_count") or 0), 2)
+        self.assertEqual(flt(first.get("portion_qty") or 0), 120)
+        self.assertEqual(flt(first.get("resolved_stock_qty") or 0), 240)
+        self.assertEqual(flt(first.get("total_price") or 0), 240000)
+
+    def test_builder_selection_components_join_base_bom_and_skip_non_stock_deduction(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        fixture = self._make_builder_product_fixture(suffix)
+        price_list = self._ensure_test_price_list(suffix)
+        set_management_product_price(
+            {"item_name": self.raw_item_code, "price_list": price_list.name, "price_list_rate": 1000}
+        )
+        set_management_product_price(
+            {
+                "item_name": self.service_modifier_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 15000,
+            }
+        )
+
+        custom_item = frappe.get_doc("Item", fixture["item_code"])
+        line_calc = _recalculate_line(
+            custom_item,
+            1,
+            {
+                "builder_selection": {
+                    "template": fixture["template"].name,
+                    "selections": [
+                        {"step_key": "protein", "option_key": "chicken", "qty": 2},
+                        {"step_key": "service_addon", "option_key": "service_sauce", "qty": 1},
+                    ],
+                }
+            },
+        )
+        bom_doc = frappe.get_doc("BOM", fixture["bom_name"])
+        components, qty_map = _build_ticket_components(
+            custom_item,
+            bom_doc,
+            line_calc,
+            1,
+            1,
+            self.warehouse,
+        )
+
+        self.assertTrue(any(row.get("item_code") == fixture["base_component_code"] for row in components))
+        self.assertTrue(any(row.get("item_code") == self.raw_item_code for row in components))
+        self.assertTrue(any(row.get("item_code") == self.service_modifier_item_code for row in components))
+        self.assertIn(fixture["base_component_code"], qty_map)
+        self.assertIn(self.raw_item_code, qty_map)
+        self.assertNotIn(self.service_modifier_item_code, qty_map)

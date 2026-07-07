@@ -45,23 +45,23 @@
       <ManagementToggleSwitch
         v-model="localStep.is_required"
         label="مرحله اجباری"
-        hint="مشتری باید حداقل یک گزینه از این مرحله انتخاب کند"
+        hint="مشتری باید حداقل پورشن لازم از این مرحله را کامل کند"
         @update:model-value="emitUpdate"
       />
       <label>
-        حداقل انتخاب
+        حداقل پورشن مرحله
         <PersianNumberInput v-model="localStep.min_select" :min="0" @input="emitUpdate" />
       </label>
       <label>
-        حداکثر انتخاب
+        حداکثر پورشن مرحله
         <PersianNumberInput v-model="localStep.max_select" :min="1" @input="emitUpdate" />
       </label>
       <label>
         حالت انتخاب
         <select class="input" v-model="localStep.selection_mode" @change="emitUpdate">
           <option value="single">تک انتخاب</option>
-          <option value="multiple">چند انتخاب</option>
-          <option value="quantity">تعداد</option>
+          <option value="multiple">چند انتخاب پورشنی</option>
+          <option value="quantity">پورشن افزایشی</option>
         </select>
       </label>
     </div>
@@ -115,6 +115,17 @@
         <template #cell.base_price_delta="{ row }">
           <PersianNumberInput v-model="row.base_price_delta" :min="0" @input="emitUpdate" />
         </template>
+        <template #cell.portion_qty="{ row }">
+          <PersianNumberInput v-model="row.portion_qty" :min="0.01" @input="emitUpdate" />
+        </template>
+        <template #cell.portion_uom="{ row }">
+          <input class="input table-input" v-model="row.portion_uom" placeholder="مثلاً گرم" @input="emitUpdate" />
+        </template>
+        <template #cell.portion_limits="{ row }">
+          <span class="item-detail">
+            {{ formatPortionLimit(row.min_portions, row.max_portions, row.portion_step) }}
+          </span>
+        </template>
         <template #cell.is_default="{ row }">
           <input type="checkbox" v-model="row.is_default" @change="toggleDefault(row)" />
         </template>
@@ -150,8 +161,28 @@
               <input class="input" v-model="draft.option_label" placeholder="نام گزینه" />
             </label>
             <label>
-              افزودن قیمت (اضافه به قیمت پایه)
+              افزودن قیمت دستی
               <PersianNumberInput v-model="draft.base_price_delta" :min="0" />
+            </label>
+            <label>
+              مقدار هر پورشن
+              <PersianNumberInput v-model="draft.portion_qty" :min="0.01" />
+            </label>
+            <label>
+              واحد پورشن
+              <input class="input" v-model="draft.portion_uom" placeholder="مثلاً گرم، عدد، میلی‌لیتر" />
+            </label>
+            <label>
+              حداقل پورشن این گزینه
+              <PersianNumberInput v-model="draft.min_portions" :min="0" />
+            </label>
+            <label>
+              حداکثر پورشن این گزینه
+              <PersianNumberInput v-model="draft.max_portions" :min="1" />
+            </label>
+            <label>
+              گام پورشن
+              <PersianNumberInput v-model="draft.portion_step" :min="0.01" />
             </label>
             <label>
               برچسب آلرژی
@@ -161,10 +192,13 @@
               یک محصول انتخاب کنید تا اطلاعات آن به‌صورت خودکار پر شود.
             </p>
             <p v-else-if="getLinkedItem(draft.item)" class="muted small">
-              قیمت پایه: {{ formatPrice(getLinkedItem(draft.item).standard_rate || 0) }}
+              نرخ لیست قیمت پیش‌فرض: {{ formatPrice(getLinkedItem(draft.item).standard_rate || 0) }}
               <span v-if="getLinkedItem(draft.item).stock_uom">
                 / {{ getLinkedItem(draft.item).stock_uom }}
               </span>
+            </p>
+            <p v-if="draft.item && getLinkedItem(draft.item)?.price_status && getLinkedItem(draft.item)?.price_status !== 'ok'" class="error-text">
+              {{ getLinkedItem(draft.item)?.unavailable_reason || 'برای این آیتم قیمت یا تبدیل واحد معتبر پیدا نشد.' }}
             </p>
           </div>
         </template>
@@ -196,18 +230,41 @@
           <input class="input" v-model="newOption.option_label" placeholder="نام گزینه" />
         </label>
         <label>
-          افزودن قیمت (اضافه به قیمت پایه)
+          افزودن قیمت دستی
           <PersianNumberInput v-model="newOption.base_price_delta" :min="0" />
+        </label>
+        <label>
+          مقدار هر پورشن
+          <PersianNumberInput v-model="newOption.portion_qty" :min="0.01" />
+        </label>
+        <label>
+          واحد پورشن
+          <input class="input" v-model="newOption.portion_uom" placeholder="مثلاً گرم، عدد، میلی‌لیتر" />
+        </label>
+        <label>
+          حداقل پورشن این گزینه
+          <PersianNumberInput v-model="newOption.min_portions" :min="0" />
+        </label>
+        <label>
+          حداکثر پورشن این گزینه
+          <PersianNumberInput v-model="newOption.max_portions" :min="1" />
+        </label>
+        <label>
+          گام پورشن
+          <PersianNumberInput v-model="newOption.portion_step" :min="0.01" />
         </label>
         <label>
           برچسب آلرژی
           <input class="input" v-model="newOption.allergen_tags" placeholder="مثلاً: گلوتن، لبنیات" />
         </label>
         <p v-if="newOption.item && getLinkedItem(newOption.item)" class="muted small">
-          قیمت پایه: {{ formatPrice(getLinkedItem(newOption.item).standard_rate || 0) }}
+          نرخ لیست قیمت پیش‌فرض: {{ formatPrice(getLinkedItem(newOption.item).standard_rate || 0) }}
           <span v-if="getLinkedItem(newOption.item).stock_uom">
             / {{ getLinkedItem(newOption.item).stock_uom }}
           </span>
+        </p>
+        <p v-if="newOption.item && getLinkedItem(newOption.item)?.price_status && getLinkedItem(newOption.item)?.price_status !== 'ok'" class="error-text">
+          {{ getLinkedItem(newOption.item)?.unavailable_reason || 'برای این آیتم قیمت یا تبدیل واحد معتبر پیدا نشد.' }}
         </p>
         <div class="popup-actions">
           <button class="primary-btn" type="button" @click="addOption">افزودن</button>
@@ -289,6 +346,9 @@ const hasError = computed(() => Object.keys(errors.value).length > 0)
 const optionColumns = [
   { key: 'item', label: 'محصول' },
   { key: 'option_label', label: 'نام گزینه' },
+  { key: 'portion_qty', label: 'هر پورشن' },
+  { key: 'portion_uom', label: 'واحد' },
+  { key: 'portion_limits', label: 'محدوده پورشن' },
   { key: 'base_price_delta', label: 'افزودن قیمت' },
   { key: 'is_default', label: 'پیش‌فرض' },
   { key: 'image', label: 'تصویر' },
@@ -300,6 +360,11 @@ const newOption = reactive({
   item: '',
   option_label: '',
   base_price_delta: 0,
+  portion_qty: 1,
+  portion_uom: '',
+  min_portions: 0,
+  max_portions: 1,
+  portion_step: 1,
   is_default: false,
   allergen_tags: '',
   image: '',
@@ -318,6 +383,13 @@ function formatPrice(value) {
   return num.toLocaleString('fa-IR')
 }
 
+function formatPortionLimit(min, max, step) {
+  const minValue = Number(min || 0)
+  const maxValue = Number(max || 0)
+  const stepValue = Number(step || 1)
+  return `${minValue.toLocaleString('fa-IR')} تا ${maxValue.toLocaleString('fa-IR')} • گام ${stepValue.toLocaleString('fa-IR')}`
+}
+
 function applyItemToOption(option, itemValue) {
   const selectedItem = findItemOption(itemValue)
   option.item = itemValue || ''
@@ -328,7 +400,9 @@ function applyItemToOption(option, itemValue) {
   if (!option.image) {
     option.image = selectedItem.image || ''
   }
-  option.base_price_delta = Number(selectedItem.standard_rate) || 0
+  if (!option.portion_uom) {
+    option.portion_uom = selectedItem.stock_uom || ''
+  }
 }
 
 function createEmptyOption() {
@@ -337,6 +411,11 @@ function createEmptyOption() {
     option_label: '',
     option_key: `opt-${Date.now()}`,
     base_price_delta: 0,
+    portion_qty: 1,
+    portion_uom: '',
+    min_portions: 0,
+    max_portions: 1,
+    portion_step: 1,
     price_type: 'fixed',
     price_percentage: 0,
     is_default: false,
@@ -359,6 +438,11 @@ function normalizeOptionRow(row) {
   normalized.option_label = String(normalized.option_label || '').trim()
   normalized.option_key = String(normalized.option_key || `opt-${Date.now()}`).trim()
   normalized.base_price_delta = Number(normalized.base_price_delta) || 0
+  normalized.portion_qty = Math.max(Number(normalized.portion_qty) || 1, 0.01)
+  normalized.portion_uom = String(normalized.portion_uom || getLinkedItem(normalized.item)?.stock_uom || '').trim()
+  normalized.min_portions = Math.max(Number(normalized.min_portions) || 0, 0)
+  normalized.max_portions = Math.max(Number(normalized.max_portions) || 1, 1)
+  normalized.portion_step = Math.max(Number(normalized.portion_step) || 1, 0.01)
   normalized.price_percentage = Number(normalized.price_percentage) || 0
   normalized.max_qty = Math.max(Number(normalized.max_qty) || 1, 1)
   normalized.is_default = Boolean(normalized.is_default)
@@ -384,6 +468,15 @@ function validateOptionRow(row) {
   if (!String(row?.option_label || '').trim()) {
     return 'نام گزینه نمی‌تواند خالی باشد.'
   }
+  if (Number(row?.portion_qty || 0) <= 0) {
+    return 'مقدار هر پورشن باید بیشتر از صفر باشد.'
+  }
+  if (Number(row?.max_portions || 0) < Number(row?.min_portions || 0)) {
+    return 'حداکثر پورشن نمی‌تواند کمتر از حداقل پورشن باشد.'
+  }
+  if (Number(row?.portion_step || 0) <= 0) {
+    return 'گام پورشن باید بیشتر از صفر باشد.'
+  }
   return ''
 }
 
@@ -404,6 +497,11 @@ function resetNewOption() {
   newOption.item = ''
   newOption.option_label = ''
   newOption.base_price_delta = 0
+  newOption.portion_qty = 1
+  newOption.portion_uom = ''
+  newOption.min_portions = 0
+  newOption.max_portions = 1
+  newOption.portion_step = 1
   newOption.allergen_tags = ''
   newOption.image = ''
 }
@@ -415,7 +513,12 @@ function addOption() {
     option_label: newOption.option_label || selectedItem?.item_name || newOption.item,
     option_key: `opt-${Date.now()}`,
     item: newOption.item,
-    base_price_delta: Number(selectedItem?.standard_rate) || 0,
+    base_price_delta: Number(newOption.base_price_delta || 0),
+    portion_qty: Number(newOption.portion_qty || 1),
+    portion_uom: String(newOption.portion_uom || selectedItem?.stock_uom || '').trim(),
+    min_portions: Number(newOption.min_portions || 0),
+    max_portions: Math.max(Number(newOption.max_portions || 1), 1),
+    portion_step: Number(newOption.portion_step || 1),
     price_type: 'fixed',
     price_percentage: 0,
     is_default: false,

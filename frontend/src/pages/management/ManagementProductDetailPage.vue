@@ -848,7 +848,8 @@
               <ManagementToggleSwitch
                 v-model="settingsForm.restaurant_allow_direct_add"
                 label="اجازه افزودن مستقیم"
-                hint="مشتری می‌تواند محصول پایه را بدون سفارشی‌سازی سفارش دهد"
+                :disabled="settingsForm.restaurant_is_customizable && settingsForm.restaurant_builder_active"
+                :hint="settingsForm.restaurant_is_customizable && settingsForm.restaurant_builder_active ? 'در محصول‌های builder-driven این گزینه اعمال نمی‌شود و کاربر همیشه اول وارد سازنده می‌شود.' : 'مشتری می‌تواند محصول پایه را بدون سفارشی‌سازی سفارش دهد'"
               />
               <ManagementToggleSwitch
                 v-model="settingsForm.restaurant_show_nutrition_summary"
@@ -2924,6 +2925,10 @@ function loadBuilderItemOptions() {
         image: r.image || '',
         standard_rate: Number(r.standard_rate) || 0,
         stock_uom: r.stock_uom || '',
+        price_list: r.price_list || '',
+        price_status: r.price_status || '',
+        is_selectable: Number(r.is_selectable ?? 1) === 1,
+        unavailable_reason: r.unavailable_reason || '',
         item_group: r.item_group || '',
       }))
     })
