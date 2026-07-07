@@ -13957,8 +13957,10 @@ def produce_pos_order(order_name):
 
 @frappe.whitelist()
 @frappe.whitelist()
+
+@frappe.whitelist()
 def create_and_pay_pos_order(payload):
-    """ثبت + تسویه (بدون تولید): SO + SI + Payment یکجا"""
+    """ثبت + تسویه: SO ساخته میشه بعد SI + Payment یکجا"""
     _ensure_management_access()
     payload = _parse_json(payload, {})
     if not isinstance(payload, dict):
@@ -13969,63 +13971,33 @@ def create_and_pay_pos_order(payload):
     address = (payload.get("address") or "").strip()
     note = (payload.get("note") or "").strip()
     items = payload.get("items") or []
-    payment = _parse_json(payload.get("payment"), {})
-    result = place_order(
-        customer_info={"name": customer_name, "mobile": mobile},
-        order_type=order_type, items=items,
-        address=address, note=note,
-        include_service_items=1,
-    )
-    so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
-    method = _normalize_payment_method(payment.get("method") or "cash")
-    manual_ref = (payment.get("reference_no") or "").strip()
-    settle_result = {"sales_order": so_name}
-    mode_map = {"cash": "نقدي", "card": "کارت خوان", "credit": "اعتباري", "bank": "حواله بانکي"}
+    payment_info = _parse_json(payload.get("payment"), {})
+    
+    # یکی از همون API کاری که قبلا کار میکرد استفاده کن
+    order_result = create_management_pos_order(payload)
+    
+    so_name = _resolve_sales_order_name(order_result.get("order_id") or order_result.get("name") or "")
+    so_order_code = order_result.get("order_code") or ""
+    method = _normalize_payment_method(payment_info.get("method") or "cash")
+    manual_ref = (payment_info.get("reference_no") or "").strip()
+    
+    result = {
+        "order_id": so_name,
+        "order_code": so_order_code,
+        "status": "success",
+    }
+    
+    # از همون settle_pos_order استفاده کن که SI+Payment میسازه
     try:
-        make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
-        si_doc = make_si(so_name)
-        if hasattr(si_doc, "as_dict"):
-            si_doc.is_pos = 1
-            si_doc.update_stock = 0
-        elif isinstance(si_doc, dict):
-            si_doc["is_pos"] = 1; si_doc["update_stock"] = 0
-            si_doc = frappe.get_doc(si_doc)
-        else:
-            si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
-            si_doc.is_pos = 1
-        grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
-        mode_of_payment = mode_map.get(method, "نقدي")
-        if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
-            si_doc.payments = []
-        si_doc.append("payments", {"mode_of_payment": mode_of_payment, "amount": grand_total if grand_total > 0 else 1, "default": 1})
-        si_doc.flags.ignore_permissions = True
-        si_doc.insert()
-        si_doc.submit()
-        settle_result["sales_invoice"] = si_doc.name
-        if method != "credit" and si_doc.docstatus == 1:
-            try:
-                from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
-                pe = get_payment_entry("Sales Invoice", si_doc.name)
-                pe.reference_no = manual_ref or si_doc.name
-                pe.reference_date = today()
-                pe.mode_of_payment = mode_of_payment
-                pe.paid_amount = grand_total
-                pe.received_amount = grand_total
-                pe.flags.ignore_permissions = True
-                pe.insert()
-                pe.submit()
-                frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
-                frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
-                settle_result["payment_entry"] = pe.name
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "CreateAndPay SI Payment")
+        settle_result = settle_pos_order(
+            order_name=so_name,
+            payment={"method": method, "reference_no": manual_ref},
+        )
+        result["sales_invoice"] = settle_result.get("sales_invoice", "")
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "CreateAndPay POS SI")
-        settle_result["invoice_error"] = "SI creation failed"
-    _set_restaurant_order_status(so_name, "paid", force=True)
-    _append_sales_order_note(so_name, "[ORDER+PAY] Order created and paid.")
-    frappe.db.commit()
-    return {"order_id": so_name, "order_code": result.get("order_code") or "", "sales_invoice": settle_result.get("sales_invoice", "")}
+        frappe.log_error(frappe.get_traceback(), "CreateAndPay Settle")
+    
+    return result
 
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
