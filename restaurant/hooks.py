@@ -121,6 +121,8 @@ website_route_rules = [
 	{"from_route": "/management/pos", "to_route": "management/pos"},
 	{"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
 	{"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
+	{"from_route": "/management/pos-defaults", "to_route": "management/pos_defaults"},
+	{"from_route": "/management/pos_defaults", "to_route": "management/pos_defaults"},
 	{"from_route": "/management/orders", "to_route": "management/orders"},
 	{"from_route": "/management/products", "to_route": "management/products"},
 	{"from_route": "/management/product", "to_route": "management/product"},

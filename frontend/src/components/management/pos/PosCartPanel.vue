@@ -16,7 +16,7 @@
 		</nav>
 
 		<!-- Place Selector -->
-		<div class="place-field">
+		<div class="place-field" v-if="normalizedPlaceOptions.length > 1">
 			<span class="place-label">جایگاه</span>
 			<SearchableDropdown
 				:model-value="place"
@@ -214,6 +214,12 @@
 					:disabled="submitting || !cartLines.length"
 					@click="$emit('submit-order')"
 				>{{ submitting ? "در حال ثبت..." : orderMode === "dine_in" ? "افزودن به میز" : "ثبت سفارش" }}</button>
+				<button
+					type="button"
+					class="settle-btn-custom"
+					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
+					@click="$emit('submit-and-settle')"
+				>{{ submitting ? "در حال ثبت..." : "ثبت و تسویه فاکتور" }}</button>
 				<button
 					type="button"
 					class="pay-btn"
@@ -467,6 +473,7 @@ const emit = defineEmits([
 	"edit-line-customization",
 	"clear-cart",
 	"submit-order",
+	"submit-and-settle",
 	"submit-and-pay",
 	"print-ticket",
 	"verify-credit",
@@ -1336,6 +1343,29 @@ defineExpose({
 
 .save-btn:hover:not(:disabled) {
 	box-shadow: 0 4px 12px rgb(var(--pos-primary-rgb) / 0.3);
+}
+
+.settle-btn-custom {
+	background: #16a34a;
+	color: #fff;
+	border: none;
+	padding: 12px 16px;
+	border-radius: 10px;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+	transition: all 0.15s;
+}
+.settle-btn-custom:hover:not(:disabled) {
+	background: #15803d;
+}
+.settle-btn-custom:disabled {
+	background: #86efac;
+	cursor: not-allowed;
+	opacity: 0.6;
 }
 
 .pay-btn {

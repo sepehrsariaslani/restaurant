@@ -13768,6 +13768,64 @@ def report_management_pos_hardware_event(
 
 
 @frappe.whitelist()
+def get_management_pos_config():
+    """Get POS default configuration (order mode defaults, place presets)."""
+    _ensure_management_access()
+    raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            raw = "{}"
+    try:
+        config = json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        config = {}
+    
+    defaults = {
+        "default_order_mode": config.get("default_order_mode", "dine_in"),
+        "default_customers": config.get("default_customers", {
+            "dine_in": {"name": "POS Customer", "mobile": "09120000000"},
+            "takeaway": {"name": "POS Customer", "mobile": "09120000000"},
+            "delivery": {"name": "POS Customer", "mobile": "09120000000"},
+        }),
+        "takeaway_places": config.get("takeaway_places", ["بیرون بر حضوری", "تحویل کنار سالن"]),
+        "default_takeaway_place": config.get("default_takeaway_place", "بیرون بر حضوری"),
+        "delivery_places": config.get("delivery_places", ["پیک 1", "پیک 2", "پیک 3", "ارسال اکسپرس"]),
+        "default_delivery_place": config.get("default_delivery_place", "پیک 1"),
+    }
+    return defaults
+
+
+@frappe.whitelist()
+def set_management_pos_config(payload=None):
+    """Save POS default configuration for the current user/operator."""
+    _ensure_management_access()
+    data = _parse_json(payload, {})
+    if not isinstance(data, dict):
+        frappe.throw(_("Invalid payload format."))
+    
+    raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            raw = "{}"
+    try:
+        current = json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        current = {}
+    
+    for key in ("default_order_mode", "default_customers", "takeaway_places",
+                "default_takeaway_place", "delivery_places", "default_delivery_place"):
+        if key in data:
+            current[key] = data[key]
+    
+    frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
+    frappe.db.commit()
+    return {"status": "success", "config": get_management_pos_config()}
+
+
+
+@frappe.whitelist()
 def get_management_pos_boot(branch=None):
 	_ensure_management_access()
 	branch = (branch or "").strip()
@@ -13834,12 +13892,14 @@ def get_management_pos_boot(branch=None):
 		}
 		for key, value in category_meta_map.items()
 	]
+	config = get_management_pos_config()
 	return {
 		"currency": _get_currency(),
 		"items": items,
 		"categories": sorted(categories, key=lambda row: row.get("title") or ""),
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),
+		"pos_config": config,
 	}
 
 

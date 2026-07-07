@@ -1263,6 +1263,14 @@ export function getManagementPOSBoot({ branch = "" } = {}) {
 	return callRestaurantAPI("get_management_pos_boot", { branch });
 }
 
+export function getManagementPOSConfig() {
+	return callRestaurantAPI("get_management_pos_config", {});
+}
+
+export function setManagementPOSConfig(payload = {}) {
+	return callRestaurantAPI("set_management_pos_config", { payload });
+}
+
 export function getManagementPOSHardwareStatus() {
 	return callRestaurantAPI("get_management_pos_hardware_status");
 }

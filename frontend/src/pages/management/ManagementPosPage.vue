@@ -104,6 +104,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
+            @submit-and-settle="submitPOSOrder(true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -355,6 +356,15 @@
                     <span class="order-status-badge" :class="`status-${order.status}`">
                       {{ formatStatus(order.status) }}
                     </span>
+                    <button
+                      v-if="canSettleOrder(order)"
+                      type="button"
+                      class="settle-order-btn"
+                      @click.stop="quickSettleOrder(order)"
+                      title="ثبت و تسویه"
+                    >
+                      ثبت و تسویه
+                    </button>
                   </div>
                 </article>
               </div>
@@ -410,6 +420,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
+            @submit-and-settle="submitPOSOrder(true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -580,6 +591,44 @@
             </label>
           </div>
           <p class="error pos-modal-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
+          
+          <div class="order-settle-section" v-if="orderDetailModal.canSettle">
+            <h4>تسویه سفارش</h4>
+            <div class="settle-row">
+              <label class="settle-label">روش پرداخت:</label>
+              <select class="input dark-input settle-select" v-model="orderDetailModal.settleMethod">
+                <option value="">انتخاب کنید</option>
+                <option
+                  v-for="option in editablePaymentMethodOptions"
+                  :key="option.method"
+                  :value="option.method"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+            <div class="settle-row" v-if="['card','pos','bank','terminal'].includes(orderDetailModal.settleMethod)">
+              <label class="settle-label">شماره مرجع:</label>
+              <input class="input dark-input settle-input" v-model="orderDetailModal.settleReference" placeholder="شماره پیگیری" />
+            </div>
+            <div class="settle-row">
+              <label class="settle-label">مبلغ:</label>
+              <span class="settle-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
+            </div>
+            <p class="error" v-if="orderDetailModal.settleError">{{ orderDetailModal.settleError }}</p>
+            <div class="settle-actions">
+              <button
+                type="button"
+                class="tbl-btn success settle-btn"
+                :disabled="orderDetailModal.settling || !orderDetailModal.settleMethod"
+                @click="confirmSettleOrder"
+              >
+                <span v-if="orderDetailModal.settling">...</span>
+                <span v-else>&check; ثبت و تسویه</span>
+              </button>
+            </div>
+          </div>
+
           <div class="pos-modal-actions">
             <button
               type="button"
@@ -659,16 +708,21 @@ import { calculatePosTotals } from '@/utils/posPricingEngine'
 
 let bootWalletBalance = 0
 let bootDefaultPaymentMethod = 'cash'
+let bootPosConfig = null
 const RECEIPT_SETTINGS_STORAGE_KEY = 'restaurant-pos-receipt-settings-v1'
 
 function defaultFormState() {
+  const cfg = bootPosConfig || {}
+  const defaultMode = cfg.default_order_mode || 'dine_in'
+  const defaultCustomers = cfg.default_customers || {}
+  const modeCustomer = defaultCustomers[defaultMode] || {}
   return {
     customer_query: '',
-    customer_name: 'POS Customer',
-    mobile: '09120000000',
+    customer_name: modeCustomer.name || 'POS Customer',
+    mobile: modeCustomer.mobile || '09120000000',
     customer_type: 'normal',
     guest_count: 1,
-    order_mode: 'dine_in',
+    order_mode: defaultMode,
     place: '',
     note: '',
   }
@@ -752,6 +806,11 @@ const orderDetailModal = reactive({
   loadError: '',
   saveError: '',
   order: null,
+  canSettle: false,
+  settleMethod: '',
+  settleReference: '',
+  settleError: '',
+  settling: false,
   editForm: {
     payment_method: '',
     note: '',
@@ -864,6 +923,7 @@ const leftPanelTabLabel = computed(() => {
 })
 
 const placeOptions = computed(() => {
+  const cfg = bootPosConfig || {}
   if (form.order_mode === 'dine_in') {
     if (tableOptions.value.length) {
       return tableOptions.value.map((row) => row.label)
@@ -871,9 +931,11 @@ const placeOptions = computed(() => {
     return ['میز 1', 'میز 2', 'میز 3', 'میز 4', 'میز VIP']
   }
   if (form.order_mode === 'delivery') {
-    return ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
+    const places = cfg.delivery_places
+    return Array.isArray(places) && places.length ? places : ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
   }
-  return ['بیرون بر حضوری', 'تحویل کنار سالن']
+  const places = cfg.takeaway_places
+  return Array.isArray(places) && places.length ? places : ['بیرون بر حضوری', 'تحویل کنار سالن']
 })
 
 const selectedDineInTable = computed(() => {
@@ -969,6 +1031,13 @@ const filteredRecentOrders = computed(() => {
     String(o.customer_name || '').toLowerCase().includes(q)
   )
 })
+
+function canSettleOrder(order) {
+  if (!order) return false
+  const status = String(order.status || '').toLowerCase()
+  const settledStatuses = ['paid', 'delivered', 'completed', 'cancelled']
+  return !settledStatuses.includes(status)
+}
 
 const productQtyMap = computed(() => {
   return cart.reduce((acc, line) => {
@@ -1629,7 +1698,22 @@ function printConfirmedTableOrders() {
 
 function setOrderMode(mode) {
   form.order_mode = mode
-  form.place = placeOptions.value[0] || ''
+  const cfg = bootPosConfig || {}
+  if (mode === 'takeaway') {
+    form.place = cfg.default_takeaway_place || (placeOptions.value[0] || '')
+  } else if (mode === 'delivery') {
+    form.place = cfg.default_delivery_place || (placeOptions.value[0] || '')
+  } else {
+    form.place = placeOptions.value[0] || ''
+  }
+  const defaultCustomers = cfg.default_customers || {}
+  const modeCustomer = defaultCustomers[mode] || {}
+  if (modeCustomer.name) {
+    form.customer_name = modeCustomer.name
+  }
+  if (modeCustomer.mobile) {
+    form.mobile = modeCustomer.mobile
+  }
 }
 
 function setLeftPanelTab(tab) {
@@ -2224,6 +2308,11 @@ async function openOrderDetailModal(tx) {
   orderDetailModal.loadError = ''
   orderDetailModal.saveError = ''
   orderDetailModal.order = null
+  orderDetailModal.canSettle = false
+  orderDetailModal.settleMethod = ''
+  orderDetailModal.settleReference = ''
+  orderDetailModal.settleError = ''
+  orderDetailModal.settling = false
   orderDetailModal.editForm.payment_method = ''
   orderDetailModal.editForm.note = ''
   orderDetailModal.editForm.customer_name = ''
@@ -2234,6 +2323,8 @@ async function openOrderDetailModal(tx) {
     const payload = await getManagementOrderDetail(orderName)
     orderDetailModal.order = payload?.order || null
     if (orderDetailModal.order) {
+      orderDetailModal.canSettle = canSettleOrder(orderDetailModal.order)
+      orderDetailModal.settleMethod = orderDetailModal.order.payment_method || ''
       orderDetailModal.editForm.payment_method = orderDetailModal.order.payment_method || ''
       orderDetailModal.editForm.note = orderDetailModal.order.note || ''
       orderDetailModal.editForm.customer_name = orderDetailModal.order.customer_name || ''
@@ -2252,6 +2343,11 @@ function closeOrderDetailModal() {
   orderDetailModal.loadError = ''
   orderDetailModal.saveError = ''
   orderDetailModal.order = null
+  orderDetailModal.canSettle = false
+  orderDetailModal.settleMethod = ''
+  orderDetailModal.settleReference = ''
+  orderDetailModal.settleError = ''
+  orderDetailModal.settling = false
 }
 
 async function saveOrderDetailEdit() {
@@ -2279,6 +2375,49 @@ async function saveOrderDetailEdit() {
     orderDetailModal.saveError = err.message || 'ویرایش سفارش ناموفق بود.'
   } finally {
     orderDetailModal.saving = false
+  }
+}
+
+async function quickSettleOrder(order) {
+  if (!order?.name) return
+  await openOrderDetailModal(order)
+  if (orderDetailModal.canSettle) {
+    orderDetailModal.settleMethod = orderDetailModal.editForm.payment_method || 'cash'
+  }
+}
+
+async function confirmSettleOrder() {
+  if (!orderDetailModal.order?.name) {
+    orderDetailModal.settleError = 'سفارشی انتخاب نشده.'
+    return
+  }
+  if (!orderDetailModal.settleMethod) {
+    orderDetailModal.settleError = 'روش پرداخت را انتخاب کنید.'
+    return
+  }
+  orderDetailModal.settling = true
+  orderDetailModal.settleError = ''
+  try {
+    await markManagementOrderPaid({
+      order_name: orderDetailModal.order.name,
+      reference_no: orderDetailModal.settleReference || '',
+      rrn: '',
+      provider_payload: {
+        source: 'management-pos-settle',
+        method: orderDetailModal.settleMethod,
+      },
+    })
+    successMessage.value = `سفارش ${orderDetailModal.order.order_code} با موفقیت تسویه شد.`
+    closeOrderDetailModal()
+    if (leftPanelTab.value === 'history') {
+      await loadTodayTransactions()
+    } else if (leftPanelTab.value === 'recent') {
+      await loadRecentOrders()
+    }
+  } catch (err) {
+    orderDetailModal.settleError = err.message || 'ثبت پرداخت ناموفق بود.'
+  } finally {
+    orderDetailModal.settling = false
   }
 }
 
@@ -3310,6 +3449,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
       window.location.href = '/management/orders'
     }
 
+    loadOpenInvoices()
+    loadRecentOrders()
     await refreshHardwareStatus()
   } catch (submitErr) {
     error.value = submitErr.message || 'ثبت سفارش POS ناموفق بود.'
@@ -3377,6 +3518,18 @@ async function loadPOSBoot() {
     categories.value = payload.categories || []
     currency.value = payload.currency || 'IRR'
     applyPOSProfileSummary(payload.pos_profile || {})
+
+    bootPosConfig = payload.pos_config || null
+    if (bootPosConfig) {
+      const cfg = bootPosConfig
+      const defaultOrderMode = cfg.default_order_mode || 'dine_in'
+      const defaultCustomers = cfg.default_customers || {}
+      const modeCustomer = defaultCustomers[defaultOrderMode] || {}
+
+      form.order_mode = defaultOrderMode
+      form.customer_name = modeCustomer.name || 'POS Customer'
+      form.mobile = modeCustomer.mobile || '09120000000'
+    }
 
     const bootPayment = payload.payment || {}
     paymentBoot.enabled = Boolean(bootPayment.enabled)
@@ -5264,4 +5417,70 @@ kbd {
   background: #dc2626;
   border-color: #dc2626;
 }
+
+.order-settle-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+}
+.order-settle-section h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #166534;
+}
+.settle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.settle-label {
+  font-size: 13px;
+  color: #374151;
+  min-width: 100px;
+}
+.settle-select, .settle-input {
+  flex: 1;
+  max-width: 250px;
+}
+.settle-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #166534;
+}
+.settle-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.settle-btn:disabled {
+  background: #86efac;
+  cursor: not-allowed;
+}
+.tbl-btn.success {
+  background: #16a34a;
+  color: white;
+  border: 1px solid #15803d;
+}
+.tbl-btn.success:hover:not(:disabled) {
+  background: #15803d;
+}
+.settle-order-btn {
+  margin-right: auto;
+  padding: 4px 10px;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.settle-order-btn:hover {
+  background: #bbf7d0;
+}
+
 </style>
