@@ -13946,209 +13946,117 @@ def create_management_pos_order(payload):
 
 
 @frappe.whitelist()
-def submit_and_settle_pos_order(payload):
-	"""Full POS order flow: Create SO -> Auto Flow -> SI -> DN -> Payment"""
-	_ensure_management_access()
-	payload = _parse_json(payload, {})
-	if not isinstance(payload, dict):
-		payload = {}
+def create_and_produce_pos_order(payload):
+    # Create SO + Start Production
 
-	customer_name = (payload.get("customer_name") or "POS Customer").strip()
-	mobile = (payload.get("mobile") or "09120000000").strip()
-	order_type = (payload.get("order_type") or "takeaway").strip()
-	address = (payload.get("address") or "").strip()
-	note = (payload.get("note") or "").strip()
-	items = payload.get("items") or []
-	payment = _parse_json(payload.get("payment"), {})
-	cancel_previous = (payload.get("cancel_previous_order_name") or "").strip()
-
-	result = {}
-
-	# 1. Cancel previous order if editing
-	if cancel_previous:
-		try:
-			prev_so = _resolve_sales_order_name(cancel_previous)
-			if prev_so and frappe.db.exists("Sales Order", prev_so):
-				prev_doc = frappe.get_doc("Sales Order", prev_so)
-				if prev_doc.docstatus == 1:
-					prev_doc.flags.ignore_permissions = True
-					prev_doc.cancel()
-				if _has_column("Sales Order", "restaurant_status"):
-					frappe.db.set_value("Sales Order", prev_so, "restaurant_status", "cancelled", update_modified=False)
-				result["cancelled_previous"] = prev_so
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), "SubmitSettle Cancel Previous")
-
-	# 2. Create Sales Order
-	order_result = place_order(
-		customer_info={"name": customer_name, "mobile": mobile},
-		order_type=order_type,
-		items=items,
-		address=address,
-		note=note,
-		include_service_items=1,
-	)
-	so_name = _resolve_sales_order_name(order_result.get("order_id") or order_result.get("name") or "")
-	result["sales_order"] = so_name
-	result["order_code"] = order_result.get("order_code") or ""
-
-	# 3. Run production auto flow
-	try:
-		auto_result = _run_sales_order_auto_flow(so_name, trigger="payment", force=True)
-		result["automation"] = auto_result
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "SubmitSettle Auto Flow")
-
-	# 4. Process payment
-	try:
-		payment_result = _process_management_pos_payment(order_result, payment)
-		result["payment"] = payment_result
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "SubmitSettle Payment")
-		payment_result = {"method": "credit", "provider": "manual", "status": "failed", "reference_no": "", "rrn": "", "message": "Payment failed", "provider_payload": {}}
-		result["payment"] = payment_result
-
-	payment_method = payment_result.get("method", "credit")
-	payment_status = payment_result.get("status", "pending")
-
-	# 5. Create SI + DN if paid
-	if payment_status == "paid":
-		try:
-			if frappe.db.exists("DocType", "Sales Invoice"):
-				si_name = _create_si_from_so(so_name, payment_result)
-				result["sales_invoice"] = si_name
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), "SubmitSettle SI")
-
-		try:
-			if frappe.db.exists("DocType", "Delivery Note"):
-				dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
-				if dn_name:
-					result["delivery_note"] = dn_name
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), "SubmitSettle DN")
-
-		if payment_method != "credit":
-			_set_restaurant_order_status(so_name, "delivered", force=True)
-		else:
-			_set_restaurant_order_status(so_name, "paid", force=True)
-	else:
-		_set_restaurant_order_status(so_name, "paid", force=True)
-
-	_append_sales_order_note(so_name, "[SETTLE] Order submitted and settled.")
-	frappe.db.commit()
-	return result
-
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+    if not isinstance(payload, dict):
+        payload = {}
+    customer_name = (payload.get("customer_name") or "POS Customer").strip()
+    mobile = (payload.get("mobile") or "09120000000").strip()
+    order_type = (payload.get("order_type") or "takeaway").strip()
+    address = (payload.get("address") or "").strip()
+    note = (payload.get("note") or "").strip()
+    items = payload.get("items") or []
+    result = place_order(
+        customer_info={"name": customer_name, "mobile": mobile},
+        order_type=order_type, items=items,
+        address=address, note=note,
+        include_service_items=1,
+    )
+    so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
+    try:
+        _run_sales_order_auto_flow(so_name, trigger="order_submit", force=True)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "CreateAndProduce AutoFlow")
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    _append_sales_order_note(so_name, "[ORDER] Order submitted to production.")
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "order_id": so_name,
+        "order_code": result.get("order_code") or "",
+    }
 
 @frappe.whitelist()
-def _create_si_from_so(so_name, payment_result=None):
-	"""Convert Sales Order to Sales Invoice"""
-	if not so_name or not frappe.db.exists("Sales Order", so_name):
-		return ""
-	try:
-		make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
-		si = make_si(so_name)
-		if hasattr(si, "as_dict"):
-			si = si.as_dict()
-		if not isinstance(si, dict):
-			si = si or {"doctype": "Sales Invoice"}
-		si["is_pos"] = 1
-		si["update_stock"] = 1
-		si_doc = frappe.get_doc(si)
-		si_doc.flags.ignore_permissions = True
-		si_doc.insert()
-		if si_doc.docstatus == 0:
-			si_doc.submit()
-		if payment_result and payment_result.get("method") != "credit":
-			_mark_si_paid(si_doc.name, payment_result)
-		return si_doc.name
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), f"Create SI {so_name}")
-		return ""
-
-
-def _mark_si_paid(si_name, payment_result=None):
-	"""Mark Sales Invoice as paid"""
-	if not si_name or not frappe.db.exists("Sales Invoice", si_name):
-		return
-	try:
-		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
-		pe = get_payment_entry("Sales Invoice", si_name)
-		pe.reference_no = (payment_result or {}).get("reference_no", "") or si_name
-		pe.reference_date = today()
-		pe.mode_of_payment = {"cash": "نقدی", "card": "کارت خوان", "credit": "اعتباری"}.get(
-			(payment_result or {}).get("method", "cash"), "نقدی")
-		pe.flags.ignore_permissions = True
-		pe.insert()
-		pe.submit()
-		frappe.db.set_value("Sales Invoice", si_name, "outstanding_amount", 0, update_modified=False)
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), f"Mark SI Paid {si_name}")
-
+def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
+    # Settle: SI (POS) + Payment + DN
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    payment = _parse_json(payment, {})
+    method = _normalize_payment_method(payment.get("method") or "cash")
+    manual_ref = (reference_no or payment.get("reference_no") or "").strip()
+    result = {"sales_order": so_name}
+    mode_map = {"cash": "نقدي", "card": "کارت خوان", "credit": "اعتباري", "bank": "حواله بانکي"}
+    # 1. Sales Invoice from SO
+    try:
+        make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
+        si = make_si(so_name)
+        if hasattr(si, "as_dict"):
+            si = si.as_dict()
+        if not isinstance(si, dict):
+            si = {"doctype": "Sales Invoice"}
+        si["is_pos"] = 1
+        si["update_stock"] = 0
+        si_doc = frappe.get_doc(si)
+        si_doc.flags.ignore_permissions = True
+        si_doc.insert()
+        if si_doc.docstatus == 0 and hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
+            si_doc.payments[0].mode_of_payment = mode_map.get(method, "نقدي")
+            si_doc.payments[0].amount = si_doc.grand_total or si_doc.total or 0
+        si_doc.submit()
+        result["sales_invoice"] = si_doc.name
+        # 2. Payment Entry if not credit
+        if method != "credit" and si_doc.docstatus == 1:
+            try:
+                from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+                pe = get_payment_entry("Sales Invoice", si_doc.name)
+                pe.reference_no = manual_ref or si_doc.name
+                pe.reference_date = today()
+                pe.mode_of_payment = mode_map.get(method, "نقدي")
+                pe.flags.ignore_permissions = True
+                pe.insert()
+                pe.submit()
+                frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Settle SI Payment")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Settle POS SI")
+        result["invoice_error"] = "SI creation failed"
+    # 3. Delivery Note
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if dn_name:
+            result["delivery_note"] = dn_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Settle POS DN")
+    # 4. Mark delivered
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+    _append_sales_order_note(so_name, "[SETTLE] Order settled")
+    frappe.db.commit()
+    return result
 
 @frappe.whitelist()
-def cancel_and_reset_pos_order(order_name, reason=None):
-	"""Cancel a Sales Order and related docs"""
-	_ensure_management_access()
-	if not order_name:
-		frappe.throw(_("Order name is required."))
-	so_name = _resolve_sales_order_name(order_name)
-	if not so_name or not frappe.db.exists("Sales Order", so_name):
-		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
-
-	changes = {"cancelled": [], "errors": []}
-
-	# Cancel DNs
-	dn_items = frappe.get_all("Delivery Note Item", filters={"against_sales_order": so_name, "docstatus": 1}, fields=["parent"], ignore_permissions=True)
-	for d in dn_items:
-		try:
-			doc = frappe.get_doc("Delivery Note", d.parent)
-			doc.flags.ignore_permissions = True
-			doc.cancel()
-			changes["cancelled"].append(f"DN: {d.parent}")
-		except Exception:
-			changes["errors"].append(f"Could not cancel DN {d.parent}")
-
-	# Cancel SIs
-	si_items = frappe.get_all("Sales Invoice Item", filters={"sales_order": so_name, "docstatus": 1}, fields=["parent"], ignore_permissions=True)
-	for s in si_items:
-		try:
-			doc = frappe.get_doc("Sales Invoice", s.parent)
-			doc.flags.ignore_permissions = True
-			doc.cancel()
-			changes["cancelled"].append(f"SI: {s.parent}")
-		except Exception:
-			changes["errors"].append(f"Could not cancel SI {s.parent}")
-
-	# Cancel SEs + WOs
-	for wo_name in frappe.get_all("Work Order", filters={"sales_order": so_name, "docstatus": 1}, pluck="name", ignore_permissions=True):
-		try:
-			for se_name in frappe.get_all("Stock Entry", filters={"work_order": wo_name, "docstatus": 1}, pluck="name", ignore_permissions=True):
-				doc = frappe.get_doc("Stock Entry", se_name)
-				doc.flags.ignore_permissions = True
-				doc.cancel()
-				changes["cancelled"].append(f"SE: {se_name}")
-			doc = frappe.get_doc("Work Order", wo_name)
-			doc.flags.ignore_permissions = True
-			doc.cancel()
-			changes["cancelled"].append(f"WO: {wo_name}")
-		except Exception:
-			changes["errors"].append(f"Could not cancel WO {wo_name}")
-
-	# Cancel SO
-	so_doc = frappe.get_doc("Sales Order", so_name)
-	if so_doc.docstatus == 1:
-		so_doc.flags.ignore_permissions = True
-		so_doc.cancel()
-		changes["cancelled"].append(f"SO: {so_name}")
-	if _has_column("Sales Order", "restaurant_status"):
-		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
-
-	if reason:
-		_append_sales_order_note(so_name, f"[RESET] {reason}")
-	frappe.db.commit()
-	return {"status": "success" if not changes["errors"] else "partial", "order_name": so_name, "changes": changes}
-
+def create_and_settle_pos_order(payload):
+    # Combined: Create + Produce + Settle
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+    order_result = create_and_produce_pos_order(payload)
+    so_name = order_result.get("order_id", "")
+    payment = payload.get("payment", {})
+    settle_result = settle_pos_order(order_name=so_name, payment=payment)
+    return {
+        "status": "success",
+        "order_id": so_name,
+        "order_code": order_result.get("order_code", ""),
+        "sales_invoice": settle_result.get("sales_invoice", ""),
+        "delivery_note": settle_result.get("delivery_note", ""),
+    }
 
 
 @frappe.whitelist()

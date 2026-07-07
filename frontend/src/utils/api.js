@@ -1296,28 +1296,16 @@ export function confirmManagementPOSPayment({
 }
 
 
-export async function submitAndSettlePOSOrder(payload = {}) {
-	try {
-		return await callRestaurantAPI("submit_and_settle_pos_order", { payload });
-	} catch (error) {
-		const message = String(error?.message || "");
-		if (!message.includes("Invalid Server Response")) {
-			throw error;
-		}
-		return await callRestaurantAPI("submit_and_settle_pos_order", { payload });
-	}
+export async function createAndProducePOSOrder(payload = {}) {
+	return callRestaurantAPI("create_and_produce_pos_order", { payload });
 }
 
-export async function cancelAndResetPOSOrder(order_name, reason = "") {
-	try {
-		return await callRestaurantAPI("cancel_and_reset_pos_order", { order_name, reason });
-	} catch (error) {
-		const message = String(error?.message || "");
-		if (!message.includes("Invalid Server Response")) {
-			throw error;
-		}
-		return await callRestaurantAPI("cancel_and_reset_pos_order", { order_name, reason });
-	}
+export async function settlePOSOrder(order_name, payment = {}) {
+	return callRestaurantAPI("settle_pos_order", { order_name, payment });
+}
+
+export async function createAndSettlePOSOrder(payload = {}) {
+	return callRestaurantAPI("create_and_settle_pos_order", { payload });
 }
 
 export async function markManagementOrderPaid({

@@ -693,8 +693,9 @@ import {
   getItemDetail,
   listManagementOrders,
   markManagementOrderPaid,
-  submitAndSettlePOSOrder,
-  cancelAndResetPOSOrder,
+  createAndProducePOSOrder,
+  settlePOSOrder,
+  createAndSettlePOSOrder,
   mergeTableSessions,
   moveTableSession,
   getManagementPOSBoot,
@@ -3611,33 +3612,20 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
   successMessage.value = ''
 
   try {
-    // If settling (payNow) AND has payment method, use full submit & settle flow
+    // If settling (payNow), use full submit & settle flow
     let result
     if (payNow) {
-      const settlePayload = {
-        ...payload,
-        cancel_previous_order_name: editingOriginalOrder.isEditing ? editingOriginalOrder.name : '',
-      }
-      result = await submitAndSettlePOSOrder(settlePayload)
+      result = await createAndSettlePOSOrder(payload)
     } else {
-      result = await createManagementPOSOrder(payload)
+      result = await createAndProducePOSOrder(payload)
     }
-    const paymentState = result.payment?.status
-    const paymentMethod = normalizePaymentMethodKind(result.payment?.method || paymentPayload.method)
     let orderCode = result.order_code || ''
-    if (paymentState === 'paid') {
+    if (payNow) {
       const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
       const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
       successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}${dnInfo}`
-    } else if (paymentState === 'pending') {
-      successMessage.value =
-        paymentMethod === 'credit'
-          ? `سفارش ${orderCode} به صورت اعتباری ثبت شد.`
-          : `سفارش ${orderCode} ثبت شد و در انتظار پرداخت است.`
-    } else if (paymentState === 'failed') {
-      successMessage.value = `سفارش ${orderCode} ثبت شد اما پرداخت ناموفق بود.`
     } else {
-      successMessage.value = `سفارش ${orderCode} ثبت شد.`
+      successMessage.value = `سفارش ${orderCode} به تولید ارسال شد.`
     }
 
     if (editingOriginalOrder.isEditing) {
