@@ -693,6 +693,8 @@ import {
   getItemDetail,
   listManagementOrders,
   markManagementOrderPaid,
+  submitAndSettlePOSOrder,
+  cancelAndResetPOSOrder,
   mergeTableSessions,
   moveTableSession,
   getManagementPOSBoot,
@@ -3609,20 +3611,33 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
   successMessage.value = ''
 
   try {
-    const result = await createManagementPOSOrder(payload)
+    // If settling (payNow) AND has payment method, use full submit & settle flow
+    let result
+    if (payNow) {
+      const settlePayload = {
+        ...payload,
+        cancel_previous_order_name: editingOriginalOrder.isEditing ? editingOriginalOrder.name : '',
+      }
+      result = await submitAndSettlePOSOrder(settlePayload)
+    } else {
+      result = await createManagementPOSOrder(payload)
+    }
     const paymentState = result.payment?.status
     const paymentMethod = normalizePaymentMethodKind(result.payment?.method || paymentPayload.method)
+    let orderCode = result.order_code || ''
     if (paymentState === 'paid') {
-      successMessage.value = `سفارش ${result.order_code} ثبت و پرداخت شد.`
+      const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+      const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+      successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}${dnInfo}`
     } else if (paymentState === 'pending') {
       successMessage.value =
         paymentMethod === 'credit'
-          ? `سفارش ${result.order_code} به صورت اعتباری ثبت شد.`
-          : `سفارش ${result.order_code} ثبت شد و در انتظار پرداخت است.`
+          ? `سفارش ${orderCode} به صورت اعتباری ثبت شد.`
+          : `سفارش ${orderCode} ثبت شد و در انتظار پرداخت است.`
     } else if (paymentState === 'failed') {
-      successMessage.value = `سفارش ${result.order_code} ثبت شد اما پرداخت ناموفق بود.`
+      successMessage.value = `سفارش ${orderCode} ثبت شد اما پرداخت ناموفق بود.`
     } else {
-      successMessage.value = `سفارش ${result.order_code} ثبت شد.`
+      successMessage.value = `سفارش ${orderCode} ثبت شد.`
     }
 
     if (editingOriginalOrder.isEditing) {
