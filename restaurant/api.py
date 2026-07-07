@@ -1960,26 +1960,50 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 	if existing:
 		return existing
 
-	make_delivery_note = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_delivery_note")
-	payload = make_delivery_note(so_name)
-	if hasattr(payload, "as_dict"):
-		payload = payload.as_dict()
-	if not isinstance(payload, dict):
-		payload = {"doctype": "Delivery Note", **(payload or {})}
+	so = frappe.get_doc("Sales Order", so_name)
+	dn = frappe.new_doc("Delivery Note")
+	dn.company = so.company
+	dn.customer = so.customer
+	dn.selling_price_list = so.selling_price_list
+	dn.currency = so.currency
+	dn.set_posting_time = 1
+	dn.posting_date = today()
+	dn.posting_time = frappe.utils.nowtime()
+	dn.flags.ignore_permissions = True
 
-	delivery_doc = frappe.get_doc(payload)
-	fg_warehouse_map = fg_warehouse_map or {}
-	for row in delivery_doc.items or []:
-		if row.get("warehouse"):
+	# Copy items from SO directly
+	for item in so.items:
+		pending_qty = flt(item.qty) - flt(item.delivered_qty)
+		if pending_qty <= 0:
 			continue
+		dn.append("items", {
+			"item_code": item.item_code,
+			"item_name": item.item_name,
+			"description": item.description,
+			"qty": pending_qty,
+			"rate": item.rate,
+			"amount": pending_qty * item.rate,
+			"uom": item.uom,
+			"stock_uom": item.stock_uom,
+			"conversion_factor": item.conversion_factor,
+			"warehouse": "",
+			"against_sales_order": so_name,
+			"so_detail": item.name,
+		})
+
+	if not dn.items:
+		return ""
+
+	fg_warehouse_map = fg_warehouse_map or {}
+	for row in dn.items:
 		mapped_warehouse = fg_warehouse_map.get(row.get("item_code"))
 		if mapped_warehouse:
 			row.warehouse = mapped_warehouse
 
-	delivery_doc.insert(ignore_permissions=True)
+	dn.insert()
 	if submit_doc:
-		delivery_doc.submit()
-	return delivery_doc.name
+		dn.submit()
+	return dn.name
 
 
 def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None, force=False):
