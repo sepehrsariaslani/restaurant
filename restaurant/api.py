@@ -1941,9 +1941,7 @@ def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 	if not so_name or not frappe.db.exists("DocType", "Delivery Note Item"):
 		return ""
 
-	filters = {"against_sales_order": so_name}
-	if submitted_only:
-		filters["docstatus"] = 1
+	filters = {"against_sales_order": so_name, "docstatus": 1}
 	row = frappe.get_all(
 		"Delivery Note Item",
 		filters=filters,
@@ -1952,41 +1950,58 @@ def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 		limit_page_length=1,
 		ignore_permissions=True,
 	)
-	return (row[0].parent if row else "") or ""
+	if row:
+		# Double-check the parent actually IS a Delivery Note (not SI)
+		parent = row[0].parent
+		if frappe.db.exists("Delivery Note", parent):
+			return parent
+	return ""
 
 
 def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit_doc=True):
-	existing = _existing_delivery_note_for_sales_order(so_name, submitted_only=submit_doc)
-	if existing:
-		return existing
+	"""Create Delivery Note from SO - forces qty regardless of delivered_qty"""
+	# Check if a DN already exists
+	if so_name and frappe.db.exists("DocType", "Delivery Note Item"):
+		row = frappe.get_all("Delivery Note Item",
+			filters={"against_sales_order": so_name, "docstatus": ["!=", 2]},
+			fields=["parent"], limit=1, ignore_permissions=True)
+		if row and frappe.db.exists("Delivery Note", row[0].parent):
+			return row[0].parent
 
 	so = frappe.get_doc("Sales Order", so_name)
 	dn = frappe.new_doc("Delivery Note")
 	dn.company = so.company
 	dn.customer = so.customer
-	dn.selling_price_list = so.selling_price_list
-	dn.currency = so.currency
 	dn.set_posting_time = 1
 	dn.posting_date = today()
 	dn.posting_time = frappe.utils.nowtime()
 	dn.flags.ignore_permissions = True
 
-	# Copy items from SO directly
+	# Get default warehouse
+	default_wh = frappe.db.get_single_value("Stock Settings", "default_warehouse") or ""
+
 	for item in so.items:
 		pending_qty = flt(item.qty) - flt(item.delivered_qty)
 		if pending_qty <= 0:
 			continue
+		warehouse = item.warehouse or default_wh
+		if not warehouse:
+			item_default = frappe.get_all("Item Default",
+				filters={"parent": item.item_code, "company": so.company},
+				fields=["default_warehouse"], limit=1, ignore_permissions=True)
+			if item_default:
+				warehouse = item_default[0].default_warehouse or ""
 		dn.append("items", {
 			"item_code": item.item_code,
 			"item_name": item.item_name,
-			"description": item.description,
+			"description": item.description or "",
 			"qty": pending_qty,
 			"rate": item.rate,
-			"amount": pending_qty * item.rate,
+			"amount": pending_qty * flt(item.rate),
 			"uom": item.uom,
-			"stock_uom": item.stock_uom,
-			"conversion_factor": item.conversion_factor,
-			"warehouse": item.warehouse or fg_warehouse_map.get(item.item_code, "") or "",
+			"stock_uom": item.stock_uom or item.uom,
+			"conversion_factor": item.conversion_factor or 1,
+			"warehouse": warehouse,
 			"against_sales_order": so_name,
 			"so_detail": item.name,
 		})
@@ -1994,31 +2009,10 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 	if not dn.items:
 		return ""
 
-	fg_warehouse_map = fg_warehouse_map or {}
-	# Try to get default warehouse from item defaults if not set
-	for row in dn.items:
-		if not row.warehouse:
-			# Check Item Default for this company
-			item_default = frappe.get_all("Item Default",
-				filters={"parent": row.item_code, "company": so.company},
-				fields=["default_warehouse"],
-				limit=1,
-				ignore_permissions=True)
-			if item_default and item_default[0].default_warehouse:
-				row.warehouse = item_default[0].default_warehouse
-			else:
-				# Fall back to company default warehouse
-				row.warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
-		mapped_warehouse = fg_warehouse_map.get(row.get("item_code"))
-		if mapped_warehouse:
-			row.warehouse = mapped_warehouse
-
 	dn.insert()
 	if submit_doc:
 		dn.submit()
 	return dn.name
-
-
 def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None, force=False):
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
@@ -14446,8 +14440,7 @@ def create_and_settle_pos_order(payload):
     order_result = create_pos_order(payload)
     so_name = order_result.get("order_id", "")
 
-    # 2. رسید تحویل - بلافاصله بعد از SO (قبل از تولید و SI)
-    # (چون SI و تولید میتونن delivered_qty روی SO رو تغییر بدن)
+    # 2. رسید تحویل - سعی کن اول بساز (اگر ساخت که عالیه)
     dn_name = None
     try:
         dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
@@ -14498,11 +14491,18 @@ def create_and_settle_pos_order(payload):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "CreateAndSettle Production")
 
-    # 3. (رسید تحویل قبلاً در مرحله ۲ ساخته شد)
-
-    # 4. تسویه (SI + Payment) - بعد از DN
+    # 4. تسویه (SI + Payment)
     payment = payload.get("payment", {})
     settle_result = settle_pos_order(order_name=so_name, payment=payment)
+
+    # 5. اگر رسید تحویل ساخته نشد (مرحله ۲)، دوباره تلاش کن
+    if not dn_name:
+        try:
+            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+            if dn_name:
+                frappe.log_error(f"DN created at retry: {dn_name}", "CreateAndSettle DN Retry")
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Retry Error")
 
     # Set delivered after all steps complete
     _set_restaurant_order_status(so_name, "delivered", force=True)
