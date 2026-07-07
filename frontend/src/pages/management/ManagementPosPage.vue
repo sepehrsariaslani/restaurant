@@ -1057,12 +1057,11 @@ const filteredRecentOrders = computed(() => {
 function canDeliverOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  // اگه پرداخت شده و روش پرداخت داره => قبلاً تسویه شده => دکمه تحویل نمایش نده
-  if (status === 'paid' && order.payment_method) return false
-  // اگه تحویل داده شده => نمایش نده
-  if (status === 'delivered' || status === 'completed' || status === 'cancelled') return false
-  const canDeliverStatuses = ['confirmed', 'preparing', 'ready', 'paid', 'served']
-  return canDeliverStatuses.includes(status)
+  // اگه فاکتور فروش/رسید تحویل خورده یا کنسل شده => دکمه تحویل نمایش نده
+  if (['delivered', 'completed', 'cancelled', 'paid'].includes(status)) return false
+  // اگه status ناشناخته یا خالی هست => نمایش نده
+  if (!status || status === 'new') return false
+  return true
 }
 
 async function deliverOrder(order) {
@@ -1092,10 +1091,10 @@ async function deliverOrder(order) {
 function canSettleOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  // اگه روش پرداخت داره یعنی قبلاً تسویه شده
+  // اگه روش پرداخت داره یا وضعیت تسویه/تحویل شده => دکمه تسویه نمایش نده
   if (order.payment_method) return false
-  const settledStatuses = ['paid', 'delivered', 'completed', 'cancelled']
-  return !settledStatuses.includes(status)
+  if (['paid', 'delivered', 'completed', 'cancelled'].includes(status)) return false
+  return true
 }
 
 const productQtyMap = computed(() => {
