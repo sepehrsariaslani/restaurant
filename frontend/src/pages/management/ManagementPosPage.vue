@@ -707,6 +707,7 @@ import {
   settlePOSOrder,
   deliverPOSOrder,
   produceAndDeliverPOSOrder,
+  createAndPayPOSOrder,
   createAndSettlePOSOrder,
   mergeTableSessions,
   moveTableSession,
@@ -3669,10 +3670,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         // "ثبت و تسویه فاکتور": SO + تولید + SI + Payment + DN
         result = await createAndSettlePOSOrder(payload)
       } else {
-        // "تسویه فاکتور": فقط SO + SI + Payment (بدون تولید، بدون تحویل)
-        const soResult = await createPOSOrder(payload)
-        result = await settlePOSOrder(soResult.order_id, payload.payment)
-        result.order_code = soResult.order_code
+        // "تسویه فاکتور": فقط SO + SI + Payment (بدون تولید، بدون تحویل) - یکجا
+        result = await createAndPayPOSOrder(payload)
       }
     } else {
       // فقط ثبت سفارش (بدون تولید، بدون پرداخت)

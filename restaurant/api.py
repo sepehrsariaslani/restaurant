@@ -13956,6 +13956,77 @@ def produce_pos_order(order_name):
     }
 
 @frappe.whitelist()
+@frappe.whitelist()
+def create_and_pay_pos_order(payload):
+    """ثبت + تسویه (بدون تولید): SO + SI + Payment یکجا"""
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+    if not isinstance(payload, dict):
+        payload = {}
+    customer_name = (payload.get("customer_name") or "POS Customer").strip()
+    mobile = (payload.get("mobile") or "09120000000").strip()
+    order_type = (payload.get("order_type") or "takeaway").strip()
+    address = (payload.get("address") or "").strip()
+    note = (payload.get("note") or "").strip()
+    items = payload.get("items") or []
+    payment = _parse_json(payload.get("payment"), {})
+    result = place_order(
+        customer_info={"name": customer_name, "mobile": mobile},
+        order_type=order_type, items=items,
+        address=address, note=note,
+        include_service_items=1,
+    )
+    so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
+    method = _normalize_payment_method(payment.get("method") or "cash")
+    manual_ref = (payment.get("reference_no") or "").strip()
+    settle_result = {"sales_order": so_name}
+    mode_map = {"cash": "نقدي", "card": "کارت خوان", "credit": "اعتباري", "bank": "حواله بانکي"}
+    try:
+        make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
+        si_doc = make_si(so_name)
+        if hasattr(si_doc, "as_dict"):
+            si_doc.is_pos = 1
+            si_doc.update_stock = 0
+        elif isinstance(si_doc, dict):
+            si_doc["is_pos"] = 1; si_doc["update_stock"] = 0
+            si_doc = frappe.get_doc(si_doc)
+        else:
+            si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
+            si_doc.is_pos = 1
+        grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
+        mode_of_payment = mode_map.get(method, "نقدي")
+        if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
+            si_doc.payments = []
+        si_doc.append("payments", {"mode_of_payment": mode_of_payment, "amount": grand_total if grand_total > 0 else 1, "default": 1})
+        si_doc.flags.ignore_permissions = True
+        si_doc.insert()
+        si_doc.submit()
+        settle_result["sales_invoice"] = si_doc.name
+        if method != "credit" and si_doc.docstatus == 1:
+            try:
+                from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+                pe = get_payment_entry("Sales Invoice", si_doc.name)
+                pe.reference_no = manual_ref or si_doc.name
+                pe.reference_date = today()
+                pe.mode_of_payment = mode_of_payment
+                pe.paid_amount = grand_total
+                pe.received_amount = grand_total
+                pe.flags.ignore_permissions = True
+                pe.insert()
+                pe.submit()
+                frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
+                frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
+                settle_result["payment_entry"] = pe.name
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "CreateAndPay SI Payment")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "CreateAndPay POS SI")
+        settle_result["invoice_error"] = "SI creation failed"
+    _set_restaurant_order_status(so_name, "paid", force=True)
+    _append_sales_order_note(so_name, "[ORDER+PAY] Order created and paid.")
+    frappe.db.commit()
+    return {"order_id": so_name, "order_code": result.get("order_code") or "", "sales_invoice": settle_result.get("sales_invoice", "")}
+
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
     _ensure_management_access()
