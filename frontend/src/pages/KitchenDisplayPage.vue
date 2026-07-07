@@ -2,648 +2,207 @@
   <div class="kds-page" dir="rtl">
     <header class="kds-header">
       <div class="kds-brand">
-        <span class="kds-icon">🍳</span>
+        <div class="kds-logo">🍳</div>
         <div>
-          <h1>صفحه نمایش آشپزخانه</h1>
+          <h1>آشپزخانه <span class="kds-title-light">KDS</span></h1>
           <p class="kds-time">{{ currentTime }}</p>
         </div>
       </div>
       <div class="kds-controls">
-        <span class="online-badge" :class="{ offline: !isOnline }">
-          {{ isOnline ? '● آنلاین' : '● آفلاین' }}
-        </span>
-        <button class="refresh-btn" type="button" @click="fetchOrders" :disabled="loading">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-          بروز‌رسانی
-        </button>
-        <button class="sound-btn" type="button" @click="soundEnabled = !soundEnabled" :title="soundEnabled ? 'صدا خاموش' : 'صدا روشن'">
-          {{ soundEnabled ? '🔔' : '🔕' }}
-        </button>
+        <span class="kds-online" :class="{ offline: !isOnline }">{{ isOnline ? '● آنلاین' : '● آفلاین' }}</span>
+        <input v-model="searchQuery" placeholder="جستجو..." class="kds-search" />
+        <div class="kds-views">
+          <button class="kds-view-btn" :class="{ active: viewMode === 'cols' }" @click="viewMode = 'cols'">⊞</button>
+          <button class="kds-view-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">⊡</button>
+        </div>
+        <button class="kds-refresh" @click="fetchOrders" :disabled="loading">↻ {{ loading ? '...' : 'بروز' }}</button>
+        <button class="kds-sound" :class="{ muted: !soundEnabled }" @click="soundEnabled = !soundEnabled">{{ soundEnabled ? '🔊' : '🔇' }}</button>
       </div>
     </header>
 
-    <p v-if="errorMsg" class="kds-error">⚠️ {{ errorMsg }}</p>
+    <div v-if="errorMsg" class="kds-error">⚠️ {{ errorMsg }}</div>
 
-    <!-- Stats bar -->
-    <div class="stats-bar">
-      <div class="stat-pill stat-pending">
-        <strong>{{ pending.length }}</strong>
-        <span>در انتظار</span>
+    <div class="kds-stats">
+      <div class="kds-stat" :class="{ active: filterStatus === 'new' }" @click="filterStatus = 'new'">
+        <strong>{{ cntFilter('new') }}</strong><span>جدید</span>
       </div>
-      <div class="stat-pill stat-inprogress">
-        <strong>{{ inProgress.length }}</strong>
-        <span>در حال آماده‌سازی</span>
+      <div class="kds-stat" :class="{ active: filterStatus === 'preparing' }" @click="filterStatus = 'preparing'">
+        <strong>{{ cntFilter('preparing') }}</strong><span>تولید</span>
       </div>
-      <div class="stat-pill stat-ready">
-        <strong>{{ ready.length }}</strong>
-        <span>آماده تحویل</span>
+      <div class="kds-stat" :class="{ active: filterStatus === 'ready' }" @click="filterStatus = 'ready'">
+        <strong>{{ cntFilter('ready') }}</strong><span>آماده</span>
+      </div>
+      <div class="kds-stat" :class="{ active: !filterStatus }" @click="filterStatus = ''">
+        <strong>{{ orders.length }}</strong><span>کل</span>
+      </div>
+      <div class="kds-stat kds-stat-avg">
+        <strong>{{ avgTime }}<small>د</small></strong><span>میانگین</span>
       </div>
     </div>
 
-    <div v-if="loading && !orders.length" class="kds-loader">
-      <div class="loader-spinner"></div>
-      <p>در حال دریافت سفارش‌ها...</p>
-    </div>
-
-    <div v-else class="kds-columns">
-
-      <!-- Pending -->
-      <div class="kds-col">
-        <div class="col-header col-header--pending">
-          <span class="col-dot"></span>
-          در انتظار پردازش
-          <span class="col-count">{{ pending.length }}</span>
-        </div>
-        <div class="orders-list" :class="{ 'orders-list--empty': !pending.length }">
-          <div v-if="!pending.length" class="col-empty">
-            <span>🎉</span>
-            <p>سفارشی در انتظار نیست</p>
-          </div>
-          <KdsOrderCard
-            v-for="order in pending"
-            :key="order.name"
-            :order="order"
-            status="pending"
-            @accept="acceptOrder(order)"
-            @reject="rejectOrder(order)"
-          />
-        </div>
+    <div class="kds-body">
+      <div v-if="loading && !orders.length" class="kds-loading">
+        <div class="kds-spinner"></div><p>در حال بارگذاری...</p>
       </div>
-
-      <!-- In Progress -->
-      <div class="kds-col">
-        <div class="col-header col-header--inprogress">
-          <span class="col-dot"></span>
-          در حال آماده‌سازی
-          <span class="col-count">{{ inProgress.length }}</span>
-        </div>
-        <div class="orders-list" :class="{ 'orders-list--empty': !inProgress.length }">
-          <div v-if="!inProgress.length" class="col-empty">
-            <span>🍽️</span>
-            <p>سفارشی در حال آماده‌سازی نیست</p>
-          </div>
-          <KdsOrderCard
-            v-for="order in inProgress"
-            :key="order.name"
-            :order="order"
-            status="inprogress"
-            @done="markReady(order)"
-          />
-        </div>
+      <div v-else-if="!shown.length" class="kds-empty">
+        <span>✅</span><h3>همه سفارش‌ها انجام شد!</h3>
       </div>
-
-      <!-- Ready -->
-      <div class="kds-col">
-        <div class="col-header col-header--ready">
-          <span class="col-dot"></span>
-          آماده تحویل
-          <span class="col-count">{{ ready.length }}</span>
-        </div>
-        <div class="orders-list" :class="{ 'orders-list--empty': !ready.length }">
-          <div v-if="!ready.length" class="col-empty">
-            <span>📦</span>
-            <p>سفارشی آماده نیست</p>
+      <template v-else-if="viewMode === 'cols'">
+        <div class="kds-cols">
+          <div class="kds-col">
+            <div class="kds-ch kds-ch-new">🆕 جدید <span class="kds-cb">{{ colNew.length }}</span></div>
+            <div class="kds-cbdy"><KitchenOrder v-for="o in colNew" :key="o.name" :order="o" type="new" @click="acceptOrder(o)" /></div>
           </div>
-          <KdsOrderCard
-            v-for="order in ready"
-            :key="order.name"
-            :order="order"
-            status="ready"
-            @close="closeOrder(order)"
-          />
+          <div class="kds-col">
+            <div class="kds-ch kds-ch-prep">🔧 تولید <span class="kds-cb">{{ colPrep.length }}</span></div>
+            <div class="kds-cbdy"><KitchenOrder v-for="o in colPrep" :key="o.name" :order="o" type="prep" @click="markReady(o)" /></div>
+          </div>
+          <div class="kds-col">
+            <div class="kds-ch kds-ch-ready">✅ آماده <span class="kds-cb">{{ colReady.length }}</span></div>
+            <div class="kds-cbdy"><KitchenOrder v-for="o in colReady" :key="o.name" :order="o" type="ready" @click="closeOrder(o)" /></div>
+          </div>
         </div>
+      </template>
+      <div v-else class="kds-grid">
+        <KitchenOrder v-for="o in shown" :key="o.name" :order="o" :type="orderType(o)" @click="handleAction(o)" />
       </div>
-
     </div>
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { callMethodByPathGET, callMethodByPath } from '@/utils/api'
+<script>
+import KitchenOrder from '@/components/KitchenOrder.vue'
 
-const KdsOrderCard = {
-  name: 'KdsOrderCard',
-  props: {
-    order: { type: Object, required: true },
-    status: { type: String, default: 'pending' },
-  },
-  emits: ['accept', 'reject', 'done', 'close'],
-  setup(props, { emit }) {
-    function elapsedMin() {
-      const created = props.order.creation || props.order.created_at || ''
-      if (!created) return 0
-      const diff = Date.now() - new Date(created).getTime()
-      return Math.floor(diff / 60000)
+export default {
+  components: { KitchenOrder },
+  data() {
+    return {
+      orders: [], loading: false, errorMsg: '', soundEnabled: true, isOnline: true,
+      searchQuery: '', viewMode: 'cols', filterStatus: '', currentTime: '',
+      pollTimer: null, clockTimer: null
     }
-    const elapsed = ref(elapsedMin())
-    const timer = setInterval(() => { elapsed.value = elapsedMin() }, 30000)
-    onUnmounted(() => clearInterval(timer))
-    return { elapsed, emit }
   },
-  template: `
-  <div class="kds-card" :class="'kds-card--' + status">
-    <div class="kds-card-header">
-      <div class="kds-card-code">
-        <span class="channel-badge">{{ order.channel || order.delivery_mode || 'آنلاین' }}</span>
-        <strong>{{ order.order_code || order.name }}</strong>
-      </div>
-      <span class="elapsed-time" :class="{ urgent: elapsed >= 20 }">{{ elapsed }} دقیقه</span>
-    </div>
-
-    <div class="kds-card-customer" v-if="order.customer_name">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      {{ order.customer_name }}
-    </div>
-
-    <div class="kds-items">
-      <div v-for="(item, idx) in (order.items || [])" :key="idx" class="kds-item">
-        <span class="item-qty">{{ item.qty }}×</span>
-        <span class="item-name">{{ item.title || item.item_name }}</span>
-        <span v-if="item.note" class="item-note">{{ item.note }}</span>
-      </div>
-    </div>
-
-    <div v-if="order.note" class="kds-note">
-      📝 {{ order.note }}
-    </div>
-
-    <div class="kds-card-actions">
-      <template v-if="status === 'pending'">
-        <button class="kds-btn kds-btn--accept" @click="$emit('accept')">✓ قبول</button>
-        <button class="kds-btn kds-btn--reject" @click="$emit('reject')">✗ رد</button>
-      </template>
-      <template v-else-if="status === 'inprogress'">
-        <button class="kds-btn kds-btn--done" @click="$emit('done')">✓ آماده شد</button>
-      </template>
-      <template v-else>
-        <button class="kds-btn kds-btn--close" @click="$emit('close')">✓ تحویل داده شد</button>
-      </template>
-    </div>
-  </div>
-  `,
-}
-
-const orders = ref([])
-const loading = ref(false)
-const errorMsg = ref('')
-const soundEnabled = ref(true)
-const isOnline = ref(navigator.onLine)
-const currentTime = ref(formatTime())
-let pollInterval = null
-let clockInterval = null
-const prevOrderCount = ref(0)
-
-function formatTime() {
-  return new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-const pending = computed(() =>
-  orders.value.filter(o => ['Pending', 'Draft', 'Open', 'pending', 'draft', 'open'].includes(o.status || o.docstatus))
-)
-const inProgress = computed(() =>
-  orders.value.filter(o => ['In Progress', 'Accepted', 'Cooking', 'in_progress', 'accepted', 'cooking'].includes(o.status))
-)
-const ready = computed(() =>
-  orders.value.filter(o => ['Ready', 'Prepared', 'ready', 'prepared'].includes(o.status))
-)
-
-async function fetchOrders() {
-  loading.value = true
-  errorMsg.value = ''
-  try {
-    const result = await callMethodByPathGET('restaurant.api.get_kitchen_orders', { limit: 50 })
-    const list = Array.isArray(result) ? result : (Array.isArray(result?.orders) ? result.orders : [])
-    const hadNew = list.length > prevOrderCount.value && prevOrderCount.value > 0
-    orders.value = list
-    prevOrderCount.value = list.length
-    if (hadNew && soundEnabled.value) playAlert()
-    isOnline.value = true
-  } catch (err) {
-    isOnline.value = !err.message?.includes('Failed to fetch')
-    if (!orders.value.length) {
-      errorMsg.value = 'اتصال به سرور برقرار نشد. در حالت آفلاین هستید.'
-      orders.value = getMockOrders()
+  computed: {
+    shown() {
+      let l = this.orders
+      if (this.filterStatus) l = l.filter(o => this._match(o, this.filterStatus))
+      if (this.searchQuery.trim()) {
+        const q = this.searchQuery.trim().toLowerCase()
+        l = l.filter(o => (o.order_code||'').toLowerCase().includes(q) || (o.customer_name||'').toLowerCase().includes(q))
+      }
+      return l
+    },
+    colNew() { return this.shown.filter(o => this._match(o, 'new')) },
+    colPrep() { return this.shown.filter(o => this._match(o, 'preparing')) },
+    colReady() { return this.shown.filter(o => this._match(o, 'ready')) },
+    avgTime() {
+      if (!this.orders.length) return 0
+      const now = Date.now()
+      return Math.round(this.orders.reduce((s, o) => s + Math.floor((now - new Date(o.created_at||o.creation||now).getTime())/60000), 0) / this.orders.length)
     }
-  } finally {
-    loading.value = false
+  },
+  methods: {
+    _match(o, s) {
+      const st = (o.status||'').toLowerCase()
+      if (s === 'new') return ['new','confirmed'].includes(st)
+      if (s === 'preparing') return ['preparing','in_progress'].includes(st)
+      if (s === 'ready') return ['ready','paid'].includes(st)
+      return true
+    },
+    cntFilter(s) { return this.orders.filter(o => this._match(o, s)).length },
+    orderType(o) {
+      return this._match(o, 'new') ? 'new' : this._match(o, 'preparing') ? 'prep' : 'ready'
+    },
+    handleAction(o) {
+      const t = this.orderType(o)
+      if (t === 'new') this.acceptOrder(o)
+      else if (t === 'prep') this.markReady(o)
+      else this.closeOrder(o)
+    },
+    async fetchOrders() {
+      this.loading = true; this.errorMsg = ''
+      try {
+        const res = await (await fetch('/api/method/restaurant.api.get_kitchen_display_orders?limit=50')).json()
+        const list = res?.message?.orders || []
+        if (list.length > this.orders.length && this.soundEnabled && list.some(o => ['new','confirmed'].includes((o.status||'').toLowerCase()))) this.playAlert()
+        this.orders = list; this.isOnline = true
+      } catch(_) { this.isOnline = false; if (!this.orders.length) this.errorMsg = 'خطا در ارتباط' }
+      finally { this.loading = false }
+    },
+    playAlert() {
+      try {
+        const c = new (window.AudioContext||window.webkitAudioContext)()
+        const o = c.createOscillator(), g = c.createGain()
+        o.connect(g); g.connect(c.destination); o.type = 'sine'
+        o.frequency.setValueAtTime(800,c.currentTime); o.frequency.setValueAtTime(600,c.currentTime+0.15)
+        g.gain.setValueAtTime(0.2,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.4)
+        o.start(c.currentTime); o.stop(c.currentTime+0.4)
+      } catch(_) {}
+    },
+    async acceptOrder(o) { const p=o.status; o.status='preparing'; try{await fetch('/api/method/restaurant.api.update_kitchen_order_status',{method:'POST',headers:{'Content-Type':'application/json','X-Frappe-CSRF-Token':window.csrf_token||''},body:JSON.stringify({order_name:o.name,status:'preparing'})})}catch(_){o.status=p} },
+    async markReady(o) { const p=o.status; o.status='ready'; try{await fetch('/api/method/restaurant.api.update_kitchen_order_status',{method:'POST',headers:{'Content-Type':'application/json','X-Frappe-CSRF-Token':window.csrf_token||''},body:JSON.stringify({order_name:o.name,status:'ready'})})}catch(_){o.status=p} },
+    async closeOrder(o) { this.orders=this.orders.filter(x=>x.name!==o.name); try{await fetch('/api/method/restaurant.api.update_kitchen_order_status',{method:'POST',headers:{'Content-Type':'application/json','X-Frappe-CSRF-Token':window.csrf_token||''},body:JSON.stringify({order_name:o.name,status:'delivered'})})}catch(_){} }
+  },
+  mounted() {
+    this.currentTime = new Date().toLocaleTimeString('fa-IR')
+    this.fetchOrders()
+    this.pollTimer = setInterval(() => this.fetchOrders(), 15000)
+    this.clockTimer = setInterval(() => { this.currentTime = new Date().toLocaleTimeString('fa-IR') }, 1000)
+    window.addEventListener('online', () => this.isOnline = true)
+    window.addEventListener('offline', () => this.isOnline = false)
+  },
+  unmounted() {
+    clearInterval(this.pollTimer); clearInterval(this.clockTimer)
   }
 }
-
-function getMockOrders() {
-  return [
-    { name: 'ORD-001', order_code: '1001', status: 'Pending', channel: 'آنلاین', customer_name: 'علی محمدی', creation: new Date(Date.now() - 5 * 60000).toISOString(), items: [{ qty: 2, item_name: 'پیتزا مارگاریتا' }, { qty: 1, item_name: 'نوشابه' }], note: '' },
-    { name: 'ORD-002', order_code: '1002', status: 'In Progress', channel: 'تیک‌اوت', customer_name: 'سارا احمدی', creation: new Date(Date.now() - 12 * 60000).toISOString(), items: [{ qty: 1, item_name: 'برگر کلاسیک' }, { qty: 1, item_name: 'سیب زمینی' }], note: 'بدون سس مایو' },
-    { name: 'ORD-003', order_code: '1003', status: 'Ready', channel: 'آنلاین', customer_name: 'رضا کریمی', creation: new Date(Date.now() - 22 * 60000).toISOString(), items: [{ qty: 3, item_name: 'چلو کباب' }], note: '' },
-  ]
-}
-
-function playAlert() {
-  try {
-    const ctx = new AudioContext()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.frequency.setValueAtTime(880, ctx.currentTime)
-    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.15)
-    gain.gain.setValueAtTime(0.3, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.4)
-  } catch (_) {}
-}
-
-async function acceptOrder(order) {
-  try {
-    await callMethodByPath('restaurant.api.update_order_status', { order_name: order.name, status: 'In Progress' })
-    order.status = 'In Progress'
-  } catch (_) {
-    order.status = 'In Progress'
-  }
-}
-
-async function rejectOrder(order) {
-  if (!confirm(`سفارش ${order.order_code || order.name} رد شود؟`)) return
-  try {
-    await callMethodByPath('restaurant.api.update_order_status', { order_name: order.name, status: 'Cancelled' })
-    orders.value = orders.value.filter(o => o.name !== order.name)
-  } catch (_) {
-    orders.value = orders.value.filter(o => o.name !== order.name)
-  }
-}
-
-async function markReady(order) {
-  try {
-    await callMethodByPath('restaurant.api.update_order_status', { order_name: order.name, status: 'Ready' })
-    order.status = 'Ready'
-  } catch (_) {
-    order.status = 'Ready'
-  }
-}
-
-async function closeOrder(order) {
-  try {
-    await callMethodByPath('restaurant.api.update_order_status', { order_name: order.name, status: 'Completed' })
-    orders.value = orders.value.filter(o => o.name !== order.name)
-  } catch (_) {
-    orders.value = orders.value.filter(o => o.name !== order.name)
-  }
-}
-
-onMounted(() => {
-  fetchOrders()
-  pollInterval = setInterval(fetchOrders, 30000)
-  clockInterval = setInterval(() => { currentTime.value = formatTime() }, 1000)
-  window.addEventListener('online', () => { isOnline.value = true; fetchOrders() })
-  window.addEventListener('offline', () => { isOnline.value = false })
-})
-
-onUnmounted(() => {
-  clearInterval(pollInterval)
-  clearInterval(clockInterval)
-})
 </script>
 
 <style scoped>
-.kds-page {
-  min-height: 100vh;
-  background: #1a1108;
-  color: #f7f0e8;
-  font-family: inherit;
-  dir: rtl;
-  display: flex;
-  flex-direction: column;
-}
-
-.kds-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.5rem;
-  background: #2a1c0e;
-  border-bottom: 1px solid #3d2912;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.kds-brand { display: flex; align-items: center; gap: 0.85rem; }
-.kds-icon { font-size: 1.8rem; }
-
-.kds-brand h1 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #f7f0e8;
-  margin: 0;
-}
-
-.kds-time { font-size: 0.82rem; color: #9e8878; margin: 0.15rem 0 0; dir: ltr; }
-
-.kds-controls { display: flex; align-items: center; gap: 0.75rem; }
-
-.online-badge {
-  font-size: 0.8rem;
-  color: #4ade80;
-  font-weight: 600;
-  background: rgba(74,222,128,0.12);
-  padding: 0.3rem 0.7rem;
-  border-radius: 20px;
-}
-
-.online-badge.offline { color: #f87171; background: rgba(248,113,113,0.12); }
-
-.refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #f7f0e8;
-  border-radius: 8px;
-  padding: 0.45rem 0.85rem;
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.refresh-btn:hover { background: rgba(255,255,255,0.14); }
-.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.sound-btn {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 8px;
-  padding: 0.45rem 0.6rem;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.sound-btn:hover { background: rgba(255,255,255,0.14); }
-
-.kds-error {
-  background: rgba(248,113,113,0.15);
-  color: #fca5a5;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.88rem;
-  margin: 0;
-}
-
-.stats-bar {
-  display: flex;
-  gap: 0.75rem;
-  padding: 0.75rem 1.5rem;
-  background: #221508;
-  border-bottom: 1px solid #3d2912;
-  overflow-x: auto;
-}
-
-.stat-pill {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.stat-pill strong { font-size: 1.1rem; font-weight: 800; }
-.stat-pending { background: rgba(251,191,36,0.15); color: #fbbf24; }
-.stat-inprogress { background: rgba(99,179,237,0.15); color: #63b3ed; }
-.stat-ready { background: rgba(74,222,128,0.15); color: #4ade80; }
-
-.kds-loader {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  color: #9e8878;
-}
-
-.loader-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255,255,255,0.1);
-  border-top-color: #6f4a31;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.kds-columns {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  flex: 1;
-  min-height: 0;
-}
-
-.kds-col {
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid #3d2912;
-  min-height: calc(100vh - 170px);
-}
-
-.kds-col:last-child { border-left: none; }
-
-.col-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.88rem;
-  font-weight: 700;
-  border-bottom: 2px solid;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-.col-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.col-count {
-  margin-right: auto;
-  background: rgba(255,255,255,0.12);
-  border-radius: 20px;
-  padding: 0.1rem 0.55rem;
-  font-size: 0.8rem;
-}
-
-.col-header--pending {
-  background: #2a200a;
-  border-color: #fbbf24;
-  color: #fbbf24;
-}
-
-.col-header--pending .col-dot { background: #fbbf24; }
-
-.col-header--inprogress {
-  background: #0a1a2a;
-  border-color: #63b3ed;
-  color: #63b3ed;
-}
-
-.col-header--inprogress .col-dot { background: #63b3ed; }
-
-.col-header--ready {
-  background: #0a2010;
-  border-color: #4ade80;
-  color: #4ade80;
-}
-
-.col-header--ready .col-dot { background: #4ade80; }
-
-.orders-list {
-  flex: 1;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  overflow-y: auto;
-}
-
-.orders-list--empty {
-  justify-content: center;
-  align-items: center;
-}
-
-.col-empty {
-  text-align: center;
-  color: #4a3525;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-}
-
-.col-empty span { font-size: 2rem; }
-
-/* KDS Card (inline component styles via deep) */
-:deep(.kds-card) {
-  background: #2a1c0e;
-  border-radius: 12px;
-  padding: 0.9rem;
-  border: 1.5px solid #3d2912;
-  animation: slideIn 0.25s ease;
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-:deep(.kds-card--inprogress) { border-color: #2563eb44; }
-:deep(.kds-card--ready) { border-color: #16a34a44; }
-
-:deep(.kds-card-header) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.55rem;
-}
-
-:deep(.kds-card-code) { display: flex; align-items: center; gap: 0.5rem; }
-
-:deep(.channel-badge) {
-  font-size: 0.7rem;
-  background: rgba(255,255,255,0.08);
-  padding: 0.15rem 0.5rem;
-  border-radius: 6px;
-  color: #9e8878;
-}
-
-:deep(.kds-card-code strong) { font-size: 0.95rem; color: #f7f0e8; }
-
-:deep(.elapsed-time) { font-size: 0.78rem; color: #9e8878; }
-:deep(.elapsed-time.urgent) { color: #fca5a5; font-weight: 700; }
-
-:deep(.kds-card-customer) {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.82rem;
-  color: #c4a882;
-  margin-bottom: 0.6rem;
-}
-
-:deep(.kds-items) {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 0.6rem;
-}
-
-:deep(.kds-item) {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  font-size: 0.88rem;
-  color: #f7f0e8;
-}
-
-:deep(.item-qty) {
-  background: #6f4a31;
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.1rem 0.35rem;
-  border-radius: 5px;
-  flex-shrink: 0;
-}
-
-:deep(.item-note) {
-  font-size: 0.75rem;
-  color: #fbbf24;
-  font-style: italic;
-}
-
-:deep(.kds-note) {
-  background: rgba(251,191,36,0.1);
-  border-right: 2px solid #fbbf24;
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  color: #fbbf24;
-  margin-bottom: 0.6rem;
-}
-
-:deep(.kds-card-actions) {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.1rem;
-}
-
-:deep(.kds-btn) {
-  flex: 1;
-  padding: 0.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-:deep(.kds-btn:hover) { opacity: 0.85; }
-
-:deep(.kds-btn--accept) { background: #16a34a; color: #fff; }
-:deep(.kds-btn--reject) { background: #dc2626; color: #fff; }
-:deep(.kds-btn--done) { background: #2563eb; color: #fff; }
-:deep(.kds-btn--close) { background: #4ade80; color: #14532d; }
-
-@media (max-width: 768px) {
-  .kds-columns {
-    grid-template-columns: 1fr;
-    min-height: auto;
-  }
-  .kds-col { min-height: 300px; border-left: none; border-bottom: 1px solid #3d2912; }
-}
+.kds-page{min-height:100vh;background:#0d0d0d;color:#f0e6d9;display:flex;flex-direction:column;direction:rtl;font-family:inherit}
+.kds-header{display:flex;align-items:center;justify-content:space-between;padding:0.65rem 1.25rem;background:#161616;border-bottom:1px solid #252525;gap:0.75rem;flex-wrap:wrap}
+.kds-brand{display:flex;align-items:center;gap:0.6rem}
+.kds-logo{font-size:1.5rem}
+.kds-brand h1{margin:0;font-size:1rem;font-weight:800}
+.kds-title-light{color:#e8964a;font-weight:400}
+.kds-time{font-size:0.7rem;color:#6a5a4a;margin:0;direction:ltr}
+.kds-controls{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap}
+.kds-online{font-size:0.7rem;color:#4ade80;font-weight:600;white-space:nowrap}
+.kds-online.offline{color:#f87171}
+.kds-search{background:#202020;border:1px solid #2a2a2a;border-radius:6px;padding:0.3rem 0.6rem;color:#f0e6d9;font-size:0.75rem;width:100px;outline:none;font-family:inherit}
+.kds-search::placeholder{color:#444}
+.kds-views{display:flex;gap:1px}
+.kds-view-btn{background:#1a1a1a;border:1px solid #2a2a2a;color:#6a5a4a;padding:0.2rem 0.4rem;cursor:pointer;font-size:0.9rem;line-height:1}
+.kds-view-btn:first-child{border-radius:5px 0 0 5px}
+.kds-view-btn:last-child{border-radius:0 5px 5px 0}
+.kds-view-btn.active{background:#e8964a22;border-color:#e8964a;color:#e8964a}
+.kds-refresh{background:#202020;border:1px solid #2a2a2a;color:#c4b5a5;border-radius:6px;padding:0.3rem 0.6rem;cursor:pointer;font-size:0.75rem;font-family:inherit}
+.kds-sound{background:#202020;border:1px solid #2a2a2a;color:#c4b5a5;border-radius:6px;padding:0.3rem 0.4rem;cursor:pointer;font-size:0.8rem;line-height:1;background:none;border:none}
+.kds-sound.muted{opacity:0.4}
+.kds-error{background:rgba(239,68,68,0.1);color:#fca5a5;padding:0.4rem 1.25rem;font-size:0.78rem}
+.kds-stats{display:flex;gap:0.35rem;padding:0.45rem 1.25rem;background:#101010;border-bottom:1px solid #1e1e1e;overflow-x:auto}
+.kds-stat{display:flex;flex-direction:column;align-items:center;gap:0;padding:0.25rem 0.7rem;border-radius:8px;cursor:pointer;border:1px solid transparent;background:rgba(255,255,255,0.03);white-space:nowrap;transition:0.15s}
+.kds-stat.active,.kds-stat:hover{border-color:#3a3a3a}
+.kds-stat strong{font-size:0.95rem;font-weight:800;color:#f0e6d9}
+.kds-stat strong small{font-size:0.55rem;font-weight:400;color:#6a5a4a}
+.kds-stat span{font-size:0.58rem;color:#6a5a4a}
+.kds-stat-avg{cursor:default}
+.kds-stat.active{background:rgba(232,150,74,0.08);border-color:#e8964a}
+.kds-body{flex:1;min-height:0;display:flex}
+.kds-loading{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.75rem;color:#555}
+.kds-spinner{width:30px;height:30px;border:3px solid #222;border-top-color:#e8964a;border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kds-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.3rem;color:#555}
+.kds-empty span{font-size:2.5rem}
+.kds-empty h3{margin:0;font-size:1rem;color:#7a6a5a}
+.kds-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:0;flex:1}
+.kds-col{display:flex;flex-direction:column;border-left:1px solid #1e1e1e;min-height:calc(100vh-170px)}
+.kds-col:last-child{border-left:none}
+.kds-ch{display:flex;align-items:center;gap:0.4rem;padding:0.45rem 0.75rem;font-size:0.8rem;font-weight:700;border-bottom:2px solid;position:sticky;top:0;z-index:2}
+.kds-cb{background:rgba(0,0,0,0.25);border-radius:20px;padding:0.05rem 0.35rem;font-size:0.7rem}
+.kds-ch-new{background:#1a1402;border-color:#fbbf24;color:#fbbf24}
+.kds-ch-prep{background:#020e1a;border-color:#63b3ed;color:#63b3ed}
+.kds-ch-ready{background:#021a08;border-color:#4ade80;color:#4ade80}
+.kds-cbdy{flex:1;padding:0.45rem;display:flex;flex-direction:column;gap:0.4rem;overflow-y:auto}
+.kds-grid{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0.45rem;padding:0.5rem;align-content:start}
+@media(max-width:768px){.kds-cols{grid-template-columns:1fr}.kds-col{min-height:auto;border-left:none;border-bottom:1px solid #1e1e1e}}
 </style>

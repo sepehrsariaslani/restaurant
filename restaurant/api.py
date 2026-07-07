@@ -22688,3 +22688,116 @@ def get_session_roles():
 		"is_admin": _is_restaurant_admin(user),
 		"has_employee_record": has_employee,
 	}
+
+
+@frappe.whitelist()
+def get_kitchen_display_orders(limit=50):
+    """Get production-ready orders for kitchen display"""
+    _ensure_management_access()
+    limit = cint(limit) or 50
+    orders = []
+    
+    if not frappe.db.exists("DocType", "Sales Order"):
+        return {"orders": []}
+    
+    # Get SOs with production tickets
+    today_str = today()
+    rows = frappe.get_all("Sales Order",
+        fields=["name", "customer_name", "transaction_date", "creation"],
+        filters={
+            "docstatus": 1,
+            "restaurant_status": ["in", ["new", "confirmed", "preparing", "ready"]]
+        } if _has_column("Sales Order", "restaurant_status") else {
+            "docstatus": 1,
+            "status": ["!=", "Cancelled"]
+        },
+        order_by="creation desc",
+        limit=limit,
+        ignore_permissions=True,
+    )
+    
+    for so in rows:
+        so_name = so.name
+        items = []
+        tickets = []
+        
+        # Get items from SO
+        so_items = frappe.get_all("Sales Order Item",
+            fields=["item_code", "item_name", "qty", "rate", "restaurant_note"],
+            filters={"parent": so_name},
+            ignore_permissions=True
+        )
+        for item in so_items:
+            items.append({
+                "item_code": item.item_code,
+                "title": item.item_name,
+                "qty": flt(item.qty),
+                "note": item.get("restaurant_note") or "",
+            })
+        
+        # Get production tickets
+        if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+            tickets = frappe.get_all("Restaurant Production Ticket",
+                fields=["name", "menu_item", "qty", "status", "work_order"],
+                filters={"sales_order": so_name},
+                ignore_permissions=True
+            )
+        
+        status = "new"
+        if _has_column("Sales Order", "restaurant_status"):
+            status = frappe.db.get_value("Sales Order", so_name, "restaurant_status") or "new"
+        
+        channel = ""
+        if _has_column("Sales Order", "restaurant_order_type"):
+            channel = frappe.db.get_value("Sales Order", so_name, "restaurant_order_type") or ""
+        
+        order_code = so_name
+        if _has_column("Sales Order", "restaurant_order_code"):
+            order_code = frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name
+        
+        orders.append({
+            "name": so_name,
+            "order_code": order_code,
+            "customer_name": so.customer_name or "POS Customer",
+            "status": status,
+            "channel": channel or "حضوری",
+            "items": items,
+            "production_tickets": tickets,
+            "creation": str(so.creation or ""),
+            "created_at": str(so.transaction_date or so.creation or ""),
+        })
+    
+    return {"orders": orders}
+
+
+@frappe.whitelist()
+def update_kitchen_order_status(order_name, status):
+    """Update kitchen order status"""
+    _ensure_management_access()
+    if not order_name or not status:
+        frappe.throw(_("Order name and status are required."))
+    
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    
+    if _has_column("Sales Order", "restaurant_status"):
+        _set_restaurant_order_status(so_name, status, force=True)
+    
+    # Update production tickets
+    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+        tickets = frappe.get_all("Restaurant Production Ticket",
+            filters={"sales_order": so_name},
+            pluck="name",
+            ignore_permissions=True
+        )
+        for ticket_name in tickets:
+            ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
+            if status == "ready":
+                ticket.db_set("status", "completed", update_modified=False)
+            elif status == "preparing":
+                ticket.db_set("status", "in_progress", update_modified=False)
+    
+    _append_sales_order_note(so_name, f"[KITCHEN] Status changed to: {status}")
+    frappe.db.commit()
+    return {"status": "success"}

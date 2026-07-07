@@ -3459,6 +3459,16 @@ function closePrintEditor() {
   printEditorOpen.value = false
 }
 
+function autoPrintReceipt() {
+  // چاپ خودکار رسید بعد از تسویه
+  if (!cart.length) {
+    // Try building from last receipt info
+    printCurrentTicket()
+    return
+  }
+  printCurrentTicket()
+}
+
 function printCurrentTicket() {
   if (!cart.length) {
     error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
@@ -3713,6 +3723,11 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
       editingOriginalOrder.order_code = ''
+    }
+
+    // Auto-print receipt after successful settlement
+    if (payNow && result?.sales_invoice) {
+      autoPrintReceipt()
     }
 
     if (financial.createNextInvoice) {
