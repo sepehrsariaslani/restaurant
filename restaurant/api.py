@@ -1986,7 +1986,7 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 			"uom": item.uom,
 			"stock_uom": item.stock_uom,
 			"conversion_factor": item.conversion_factor,
-			"warehouse": "",
+			"warehouse": item.warehouse or fg_warehouse_map.get(item.item_code, "") or "",
 			"against_sales_order": so_name,
 			"so_detail": item.name,
 		})
@@ -1995,7 +1995,20 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 		return ""
 
 	fg_warehouse_map = fg_warehouse_map or {}
+	# Try to get default warehouse from item defaults if not set
 	for row in dn.items:
+		if not row.warehouse:
+			# Check Item Default for this company
+			item_default = frappe.get_all("Item Default",
+				filters={"parent": row.item_code, "company": so.company},
+				fields=["default_warehouse"],
+				limit=1,
+				ignore_permissions=True)
+			if item_default and item_default[0].default_warehouse:
+				row.warehouse = item_default[0].default_warehouse
+			else:
+				# Fall back to company default warehouse
+				row.warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
 		mapped_warehouse = fg_warehouse_map.get(row.get("item_code"))
 		if mapped_warehouse:
 			row.warehouse = mapped_warehouse
@@ -14481,8 +14494,10 @@ def create_and_settle_pos_order(payload):
     dn_name = None
     try:
         dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if not dn_name:
+            frappe.log_error("DN returned empty - no pending items", "CreateAndSettle DN")
     except Exception:
-        pass
+        frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error")
 
     # 4. تسویه (SI + Payment) - بعد از DN
     payment = payload.get("payment", {})
