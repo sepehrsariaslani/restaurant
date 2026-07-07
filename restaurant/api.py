@@ -1887,15 +1887,29 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 		se.fg_completed_qty = flt(qty)
 		se.use_multi_level_bom = 0
 		se.flags.ignore_permissions = True
+		# Set proper warehouses for manufacture
+		# s_warehouse = wip_warehouse (مواد از انبار خط تولید)
+		# t_warehouse = fg_warehouse (محصول نهایی به انبار)
+		se.set_process_loss = 0
 		se.insert()
-		# Get raw materials from BOM
+		# تصحیح انبارها
 		for item in se.get("items") or []:
-			if not item.s_warehouse and wo.source_warehouse:
-				item.s_warehouse = wo.source_warehouse
-			if not item.t_warehouse and wo.fg_warehouse:
-				item.t_warehouse = wo.fg_warehouse
+			if item.is_finished_item:
+				if not item.t_warehouse and wo.fg_warehouse:
+					item.t_warehouse = wo.fg_warehouse
+				if item.s_warehouse:
+					item.s_warehouse = None
+			else:
+				# مواد اولیه - از wip_warehouse بردار
+				if not item.s_warehouse:
+					item.s_warehouse = wo.wip_warehouse or wo.source_warehouse
+				if item.t_warehouse:
+					item.t_warehouse = None
+		se.flags.ignore_validate = True
 		if submit_doc:
 			se.submit()
+		else:
+			se.save()
 		return se.name
 	else:
 		make_stock_entry_fn = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
