@@ -14477,16 +14477,16 @@ def create_and_settle_pos_order(payload):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "CreateAndSettle Production")
 
-    # 3. تسویه (SI + Payment)
-    payment = payload.get("payment", {})
-    settle_result = settle_pos_order(order_name=so_name, payment=payment)
-
-    # 4. رسید تحویل
+    # 3. رسید تحویل (اول بساز قبل از SI چون SI delivered_qty رو آپدیت میکنه)
     dn_name = None
     try:
         dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
     except Exception:
         pass
+
+    # 4. تسویه (SI + Payment) - بعد از DN
+    payment = payload.get("payment", {})
+    settle_result = settle_pos_order(order_name=so_name, payment=payment)
 
     # Set delivered after all steps complete
     _set_restaurant_order_status(so_name, "delivered", force=True)
