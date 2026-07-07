@@ -1873,23 +1873,47 @@ def _pos_shift_settings():
 
 
 def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=True):
-	make_stock_entry_fn = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
-	payload = make_stock_entry_fn(work_order_name, purpose, qty=qty)
-	if payload is None:
-		frappe.throw(_("Could not create stock entry for work order {0}. Check BOM and stock.").format(work_order_name))
-	if hasattr(payload, "as_dict"):
-		payload = payload.as_dict()
-	if not isinstance(payload, dict):
-		payload = payload or {}
-	if not payload.get("doctype"):
-		payload["doctype"] = "Stock Entry"
-
-	stock_entry_doc = frappe.get_doc(payload)
-	stock_entry_doc.flags.ignore_permissions = True
-	stock_entry_doc.insert()
-	if submit_doc:
-		stock_entry_doc.submit()
-	return stock_entry_doc.name
+	"""Create Stock Entry for a Work Order.
+	For Manufacture purpose, builds SE manually (bypasses make_stock_entry which can error on re-manufacture)."""
+	if purpose == "Manufacture":
+		wo = frappe.get_doc("Work Order", work_order_name)
+		se = frappe.new_doc("Stock Entry")
+		se.stock_entry_type = "Manufacture"
+		se.purpose = "Manufacture"
+		se.work_order = work_order_name
+		se.company = wo.company
+		se.from_bom = 1
+		se.bom_no = wo.bom_no
+		se.fg_completed_qty = flt(qty)
+		se.use_multi_level_bom = 0
+		se.flags.ignore_permissions = True
+		se.insert()
+		# Get raw materials from BOM
+		for item in se.get("items") or []:
+			if not item.s_warehouse and wo.source_warehouse:
+				item.s_warehouse = wo.source_warehouse
+			if not item.t_warehouse and wo.fg_warehouse:
+				item.t_warehouse = wo.fg_warehouse
+		if submit_doc:
+			se.submit()
+		return se.name
+	else:
+		make_stock_entry_fn = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
+		payload = make_stock_entry_fn(work_order_name, purpose, qty=qty)
+		if payload is None:
+			frappe.throw(_("Could not create stock entry for work order {0}.").format(work_order_name))
+		if hasattr(payload, "as_dict"):
+			payload = payload.as_dict()
+		if not isinstance(payload, dict):
+			payload = payload or {}
+		if not payload.get("doctype"):
+			payload["doctype"] = "Stock Entry"
+		stock_entry_doc = frappe.get_doc(payload)
+		stock_entry_doc.flags.ignore_permissions = True
+		stock_entry_doc.insert()
+		if submit_doc:
+			stock_entry_doc.submit()
+		return stock_entry_doc.name
 
 
 def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
