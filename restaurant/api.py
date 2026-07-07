@@ -13960,44 +13960,29 @@ def produce_pos_order(order_name):
 
 @frappe.whitelist()
 def create_and_pay_pos_order(payload):
-    """ثبت + تسویه: SO ساخته میشه بعد SI + Payment یکجا"""
+    """ثبت + تسویه: SO ساخته میشه بعد SI + Payment یکجا (بدون تولید)"""
     _ensure_management_access()
     payload = _parse_json(payload, {})
     if not isinstance(payload, dict):
         payload = {}
-    customer_name = (payload.get("customer_name") or "POS Customer").strip()
-    mobile = (payload.get("mobile") or "09120000000").strip()
-    order_type = (payload.get("order_type") or "takeaway").strip()
-    address = (payload.get("address") or "").strip()
-    note = (payload.get("note") or "").strip()
-    items = payload.get("items") or []
+    
+    # 1. فقط SO بساز (بدون پرداخت)
+    order_result = create_pos_order(payload)
+    so_name = order_result.get("order_id", "")
+    
+    # 2. از روی همون SO, SI + Payment بزن
     payment_info = _parse_json(payload.get("payment"), {})
+    settle_result = settle_pos_order(
+        order_name=so_name,
+        payment=payment_info,
+    )
     
-    # یکی از همون API کاری که قبلا کار میکرد استفاده کن
-    order_result = create_management_pos_order(payload)
-    
-    so_name = _resolve_sales_order_name(order_result.get("order_id") or order_result.get("name") or "")
-    so_order_code = order_result.get("order_code") or ""
-    method = _normalize_payment_method(payment_info.get("method") or "cash")
-    manual_ref = (payment_info.get("reference_no") or "").strip()
-    
-    result = {
+    return {
         "order_id": so_name,
-        "order_code": so_order_code,
+        "order_code": order_result.get("order_code", ""),
         "status": "success",
+        "sales_invoice": settle_result.get("sales_invoice", ""),
     }
-    
-    # از همون settle_pos_order استفاده کن که SI+Payment میسازه
-    try:
-        settle_result = settle_pos_order(
-            order_name=so_name,
-            payment={"method": method, "reference_no": manual_ref},
-        )
-        result["sales_invoice"] = settle_result.get("sales_invoice", "")
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "CreateAndPay Settle")
-    
-    return result
 
 def _resolve_pos_mode_of_payment(method):
     """گرفتن نام نحوه پرداخت واقعی از داده باسی"""
