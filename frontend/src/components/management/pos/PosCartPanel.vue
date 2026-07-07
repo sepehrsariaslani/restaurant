@@ -216,16 +216,16 @@
 				>{{ submitting ? "در حال ثبت..." : orderMode === "dine_in" ? "افزودن به میز" : "ثبت سفارش" }}</button>
 				<button
 					type="button"
-					class="settle-btn-custom"
-					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
-					@click="$emit('submit-and-settle')"
-				>{{ submitting ? "در حال ثبت..." : "ثبت و تسویه فاکتور" }}</button>
-				<button
-					type="button"
 					class="pay-btn"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
 					@click="openPaymentPopup"
 				>{{ submitting ? "در حال پرداخت..." : orderMode === "dine_in" ? "تسویه از تب میزها" : "تسویه فاکتور" }}</button>
+				<button
+					type="button"
+					class="settle-btn-custom"
+					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
+					@click="$emit('submit-and-settle')"
+				>{{ submitting ? "در حال ثبت..." : "ثبت و تسویه فاکتور" }}</button>
 			</div>
 			<button
 				type="button"

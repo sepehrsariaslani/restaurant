@@ -274,43 +274,41 @@
               <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
               <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
               <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
-              <template v-else>
-                <div class="open-invoice-strip">
-                  <article
-                    v-for="invoice in openInvoices"
-                    :key="invoice.invoice_key"
-                    class="open-invoice-card"
-                    :class="{ active: selectedOpenInvoice?.invoice_key === invoice.invoice_key }"
-                    @click="selectOpenInvoice(invoice)"
-                  >
+              <div v-else class="open-invoice-accordion">
+                <article
+                  v-for="invoice in openInvoices"
+                  :key="invoice.invoice_key"
+                  class="accordion-card"
+                  :class="{ expanded: expandedInvoiceKey === invoice.invoice_key }"
+                >
+                  <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
                     <strong>{{ invoice.order_code }}</strong>
-                    <small>{{ invoice.customer_name || 'POS Customer' }}</small>
-                    <small>{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
-                    <small>{{ formatInvoiceDateTime(invoice.created_at) }}</small>
-                  </article>
-                </div>
-                <div class="open-invoice-detail" v-if="selectedOpenInvoiceDetail?.order">
-                  <header>
-                    <div>
-                      <strong>{{ selectedOpenInvoiceDetail.order.order_code }}</strong>
-                      <small>{{ formatStatus(selectedOpenInvoiceDetail.order.status) }}</small>
+                    <small class="accordion-customer">{{ invoice.customer_name || 'POS Customer' }}</small>
+                    <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
+                    <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
+                    <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
+                  </div>
+                  <div class="accordion-body" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.detail">
+                    <div class="accordion-items">
+                      <div v-for="(item, idx) in (invoice.detail?.order?.items || invoice.detail?.items || [])" :key="idx" class="accordion-item">
+                        <span class="accordion-item-title">{{ item.title }}</span>
+                        <span class="accordion-item-qty">× {{ formatCompactNumber(item.qty, 2) }}</span>
+                        <span class="accordion-item-total">{{ formatMoney(item.line_total || 0, currency) }}</span>
+                      </div>
                     </div>
-                    <div class="open-invoice-actions">
-                      <button type="button" class="tbl-btn" @click="applySelectedOpenInvoiceProfile">انتخاب</button>
-                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click="settleSelectedOpenInvoice">
+                    <div class="accordion-footer">
+                      <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
+                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click.stop="settleSelectedInvoice(invoice)">
                         {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
                       </button>
                     </div>
-                  </header>
-                  <ul>
-                    <li v-for="(item, idx) in selectedOpenInvoiceDetail.order.items || []" :key="`${idx}-${item.title}`">
-                      <span>{{ item.title }}</span>
-                      <span>{{ formatCompactNumber(item.qty, 2) }}</span>
-                      <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
-                    </li>
-                  </ul>
-                </div>
-              </template>
+                  </div>
+                  <div class="accordion-loading" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
+                    <small>در حال دریافت...</small>
+                  </div>
+                  <small class="error" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.loadError">{{ invoice.loadError }}</small>
+                </article>
+              </div>
             </section>
 
             <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
@@ -851,6 +849,7 @@ const openInvoiceError = ref('')
 const selectedOpenInvoiceKey = ref('')
 const selectedOpenInvoiceDetail = ref(null)
 const settlingOpenInvoice = ref(false)
+const expandedInvoiceKey = ref('')
 const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
 const cart = reactive([])
 const detailCache = new Map()
@@ -1964,6 +1963,91 @@ async function settleSelectedOpenInvoice() {
     })
     successMessage.value = `پرداخت فاکتور ${selectedOpenInvoice.value.order_code} ثبت شد.`
     await loadOpenInvoices(true)
+  } catch (payErr) {
+    error.value = payErr.message || 'ثبت پرداخت فاکتور باز ناموفق بود.'
+  } finally {
+    settlingOpenInvoice.value = false
+  }
+}
+
+async function toggleInvoiceAccordion(invoice) {
+  if (expandedInvoiceKey.value === invoice.invoice_key) {
+    expandedInvoiceKey.value = ''
+    return
+  }
+  expandedInvoiceKey.value = invoice.invoice_key
+  if (!invoice.detail && !invoice.loading) {
+    invoice.loading = true
+    invoice.loadError = ''
+    try {
+      const detail = await getManagementOrderDetail(invoice.name, invoice.source || 'web')
+      invoice.detail = detail
+    } catch (err) {
+      invoice.loadError = err.message || 'خطا در دریافت جزئیات'
+    } finally {
+      invoice.loading = false
+    }
+  }
+}
+
+async function selectAndLoadInvoice(invoice) {
+  if (!invoice?.name) {
+    error.value = 'ابتدا یک فاکتور را انتخاب کنید.'
+    return
+  }
+  closeOperationsOverlay()
+  try {
+    const detail = invoice.detail || await getManagementOrderDetail(invoice.name, invoice.source || 'web')
+    const order = detail?.order || detail
+    
+    // Apply customer/order info to form
+    applyOpenInvoiceProfile(order)
+    
+    // Clear existing cart
+    clearCart()
+    
+    // Load items into cart
+    const items = order?.items || []
+    for (const item of items) {
+      const qty = Number(item.qty || 1)
+      if (qty <= 0) continue
+      
+      // Add item to cart using the increment method
+      incrementProduct({
+        slug: item.slug || item.item_code || item.title,
+        title: item.title || 'آیتم',
+        price: Number(item.unit_price || item.price || 0),
+        qty: qty,
+        note: item.note || '',
+      })
+    }
+    
+    successMessage.value = `فاکتور ${order.order_code || invoice.order_code} بارگذاری شد.`
+    expandedInvoiceKey.value = ''
+  } catch (err) {
+    error.value = err.message || 'بارگذاری فاکتور ناموفق بود.'
+  }
+}
+
+async function settleSelectedInvoice(invoice) {
+  if (!invoice?.name) {
+    error.value = 'ابتدا یک فاکتور را انتخاب کنید.'
+    return
+  }
+  settlingOpenInvoice.value = true
+  error.value = ''
+  try {
+    await markManagementOrderPaid({
+      order_name: invoice.name,
+      reference_no: payment.reference_no || '',
+      rrn: payment.rrn || '',
+      provider_payload: {
+        source: 'management-pos-open-invoice',
+      },
+    })
+    successMessage.value = `پرداخت فاکتور ${invoice.order_code} ثبت شد.`
+    await loadOpenInvoices(true)
+    expandedInvoiceKey.value = ''
   } catch (payErr) {
     error.value = payErr.message || 'ثبت پرداخت فاکتور باز ناموفق بود.'
   } finally {
@@ -5481,6 +5565,100 @@ kbd {
 }
 .settle-order-btn:hover {
   background: #bbf7d0;
+}
+
+
+.open-invoice-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+.accordion-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  transition: box-shadow 0.15s;
+}
+.accordion-card.expanded {
+  border-color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+}
+.accordion-header {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  align-items: center;
+  user-select: none;
+}
+.accordion-header strong {
+  font-size: 13px;
+  color: #111827;
+}
+.accordion-customer {
+  font-size: 11px;
+  color: #6b7280;
+}
+.accordion-amount {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  direction: ltr;
+  text-align: left;
+}
+.accordion-time {
+  font-size: 10px;
+  color: #9ca3af;
+}
+.accordion-chevron {
+  font-size: 10px;
+  color: #9ca3af;
+  text-align: center;
+}
+.accordion-body {
+  border-top: 1px solid #e5e7eb;
+  padding: 8px 12px;
+}
+.accordion-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.accordion-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+.accordion-item-title {
+  flex: 1;
+  color: #374151;
+}
+.accordion-item-qty {
+  color: #6b7280;
+  min-width: 30px;
+  text-align: center;
+}
+.accordion-item-total {
+  font-weight: 600;
+  color: #111827;
+  direction: ltr;
+}
+.accordion-footer {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+.accordion-loading {
+  padding: 8px 12px;
+  text-align: center;
+  color: #9ca3af;
 }
 
 </style>
