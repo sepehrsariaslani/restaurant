@@ -14458,6 +14458,9 @@ def create_and_settle_pos_order(payload):
     except Exception:
         pass
 
+    # Set delivered after all steps complete
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+
     return {
         "status": "success",
         "order_id": so_name,

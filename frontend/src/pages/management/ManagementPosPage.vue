@@ -1057,6 +1057,10 @@ const filteredRecentOrders = computed(() => {
 function canDeliverOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
+  // اگه پرداخت شده و روش پرداخت داره => قبلاً تسویه شده => دکمه تحویل نمایش نده
+  if (status === 'paid' && order.payment_method) return false
+  // اگه تحویل داده شده => نمایش نده
+  if (status === 'delivered' || status === 'completed' || status === 'cancelled') return false
   const canDeliverStatuses = ['confirmed', 'preparing', 'ready', 'paid', 'served']
   return canDeliverStatuses.includes(status)
 }
@@ -1074,6 +1078,9 @@ async function deliverOrder(order) {
     const result = await deliverPOSOrder(order.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
     const woInfo = result.submitted_work_orders?.length ? ` (${result.submitted_work_orders.length} دستور کار)` : ''
+    // Update local status so buttons hide immediately
+    order.status = 'delivered'
+    order.payment_method = order.payment_method || ''
     successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${woInfo}`
     await loadRecentOrders()
     await loadOpenInvoices()
@@ -1085,6 +1092,8 @@ async function deliverOrder(order) {
 function canSettleOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
+  // اگه روش پرداخت داره یعنی قبلاً تسویه شده
+  if (order.payment_method) return false
   const settledStatuses = ['paid', 'delivered', 'completed', 'cancelled']
   return !settledStatuses.includes(status)
 }
