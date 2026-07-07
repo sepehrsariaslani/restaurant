@@ -852,6 +852,11 @@ const selectedOpenInvoiceKey = ref('')
 const selectedOpenInvoiceDetail = ref(null)
 const settlingOpenInvoice = ref(false)
 const expandedInvoiceKey = ref('')
+const editingOriginalOrder = reactive({
+  name: '',
+  order_code: '',
+  isEditing: false,
+})
 const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
 const cart = reactive([])
 const detailCache = new Map()
@@ -1352,6 +1357,9 @@ function closeTicketTab(ticketId) {
 }
 
 function resetCurrentInvoiceState() {
+  editingOriginalOrder.isEditing = false
+  editingOriginalOrder.name = ''
+  editingOriginalOrder.order_code = ''
   applyTicketSnapshot(createEmptyTicketSnapshot())
 }
 
@@ -2003,6 +2011,11 @@ async function selectAndLoadInvoice(invoice) {
     const order = detail?.order || detail
     
     // Apply customer/order info to form
+    // Store original order info for editing continuation
+    editingOriginalOrder.name = order.name || invoice.name || ''
+    editingOriginalOrder.order_code = order.order_code || invoice.order_code || ''
+    editingOriginalOrder.isEditing = true
+    
     applyOpenInvoiceProfile(order)
     
     // Clear existing cart
@@ -2359,6 +2372,9 @@ function clearCart() {
   if (!confirmed) {
     return
   }
+  editingOriginalOrder.isEditing = false
+  editingOriginalOrder.name = ''
+  editingOriginalOrder.order_code = ''
   cart.splice(0, cart.length)
   selectedCartLineId.value = ''
   lastRemovedLine.value = null
@@ -3487,6 +3503,38 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
     return
   }
 
+  // Pay original invoice directly when editing
+  if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+    submitting.value = true
+    error.value = ''
+    successMessage.value = ''
+    try {
+      await markManagementOrderPaid({
+        order_name: editingOriginalOrder.name,
+        reference_no: payment.reference_no || '',
+        rrn: payment.rrn || '',
+        provider_payload: { source: 'management-pos-settle-editing' },
+      })
+      const code = editingOriginalOrder.order_code
+      editingOriginalOrder.isEditing = false
+      editingOriginalOrder.name = ''
+      editingOriginalOrder.order_code = ''
+      successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.`
+      if (financial.createNextInvoice) {
+        resetCurrentInvoiceState()
+        saveActiveTicketSnapshot()
+      }
+      loadOpenInvoices()
+      loadRecentOrders()
+      await refreshHardwareStatus()
+    } catch (err) {
+      error.value = err.message || 'تسویه فاکتور ناموفق بود.'
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+
   resolveCustomerFromQuery()
 
   const paymentSelection = resolvePaymentSubmission(paymentMeta)
@@ -3516,7 +3564,11 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
     customer_name: form.customer_name || 'POS Customer',
     mobile: form.mobile || '09120000000',
     order_type: form.order_mode,
-    note: [buildOrderNote(), paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : ''].filter(Boolean).join(' | '),
+    note: [
+      buildOrderNote(),
+      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.order_code}` : '',
+      paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : '',
+    ].filter(Boolean).join(' | '),
     customer_type: form.customer_type,
     guest_count: form.guest_count,
     place: form.place,
@@ -3571,6 +3623,15 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
       successMessage.value = `سفارش ${result.order_code} ثبت شد اما پرداخت ناموفق بود.`
     } else {
       successMessage.value = `سفارش ${result.order_code} ثبت شد.`
+    }
+
+    if (editingOriginalOrder.isEditing) {
+      successMessage.value = editingOriginalOrder.order_code
+        ? `آیتم‌ها به فاکتور ${editingOriginalOrder.order_code} اضافه شد.`
+        : 'آیتم‌ها به فاکتور اضافه شد.'
+      editingOriginalOrder.isEditing = false
+      editingOriginalOrder.name = ''
+      editingOriginalOrder.order_code = ''
     }
 
     if (financial.createNextInvoice) {
