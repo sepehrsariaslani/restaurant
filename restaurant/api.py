@@ -14027,6 +14027,7 @@ def create_and_pay_pos_order(payload):
     frappe.db.commit()
     return {"order_id": so_name, "order_code": result.get("order_code") or "", "sales_invoice": settle_result.get("sales_invoice", "")}
 
+@frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
     _ensure_management_access()
