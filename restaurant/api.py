@@ -13904,51 +13904,8 @@ def get_management_pos_boot(branch=None):
 
 
 @frappe.whitelist()
-def create_management_pos_order(payload):
-	_ensure_management_access()
-	payload = _parse_json(payload, {})
-	if not isinstance(payload, dict):
-		payload = {}
-
-	customer_name = (payload.get("customer_name") or "POS Customer").strip()
-	mobile = (payload.get("mobile") or "09120000000").strip()
-	order_type = (payload.get("order_type") or "takeaway").strip()
-	address = (payload.get("address") or "").strip()
-	note = (payload.get("note") or "").strip()
-	items = payload.get("items") or []
-	payment = _parse_json(payload.get("payment"), {})
-
-	result = place_order(
-		customer_info={"name": customer_name, "mobile": mobile},
-		order_type=order_type,
-		items=items,
-		address=address,
-		note=note,
-		include_service_items=1,
-	)
-
-	try:
-		result["payment"] = _process_management_pos_payment(result, payment)
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "Management POS Payment Error")
-		result["payment"] = {
-			"method": _normalize_payment_method((payment or {}).get("method")),
-			"provider": ((payment or {}).get("provider") or "manual").strip().lower() or "manual",
-			"status": "failed",
-			"reference_no": "",
-			"rrn": "",
-			"message": _("Order was created, but payment integration failed."),
-			"provider_payload": {},
-		}
-
-	frappe.db.commit()
-	return result
-
-
-@frappe.whitelist()
-def create_and_produce_pos_order(payload):
-    # Create SO + Start Production
-
+def create_pos_order(payload):
+    # ثبت سفارش: فقط SO بساز (بدون تولید، بدون پرداخت)
     _ensure_management_access()
     payload = _parse_json(payload, {})
     if not isinstance(payload, dict):
@@ -13966,12 +13923,8 @@ def create_and_produce_pos_order(payload):
         include_service_items=1,
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
-    try:
-        _run_sales_order_auto_flow(so_name, trigger="order_submit", force=True)
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "CreateAndProduce AutoFlow")
-    _set_restaurant_order_status(so_name, "preparing", force=True)
-    _append_sales_order_note(so_name, "[ORDER] Order submitted to production.")
+    _set_restaurant_order_status(so_name, "confirmed", force=True)
+    _append_sales_order_note(so_name, "[ORDER] Order created.")
     frappe.db.commit()
     return {
         "status": "success",
@@ -13980,8 +13933,31 @@ def create_and_produce_pos_order(payload):
     }
 
 @frappe.whitelist()
+def produce_pos_order(order_name):
+    # شروع تولید: Auto Flow (WO + SE) برا کالاهای BOM دار
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    try:
+        auto_result = _run_sales_order_auto_flow(so_name, trigger="order_submit", force=True)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "ProducePOS AutoFlow")
+        frappe.throw(_("Production auto flow failed."))
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    _append_sales_order_note(so_name, "[PRODUCE] Production started.")
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "order_id": so_name,
+        "automation": auto_result if isinstance(auto_result, dict) else {},
+    }
+
+@frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
-    # Settle: SI (POS) + Payment + DN
+    # تسویه: SI (POS) + Payment + DN
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
@@ -14028,25 +14004,46 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Settle POS SI")
         result["invoice_error"] = "SI creation failed"
-    # 3. Delivery Note
+    # 3. Try DN
     try:
         dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
         if dn_name:
             result["delivery_note"] = dn_name
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Settle POS DN")
-    # 4. Mark delivered
     _set_restaurant_order_status(so_name, "delivered", force=True)
     _append_sales_order_note(so_name, "[SETTLE] Order settled")
     frappe.db.commit()
     return result
 
 @frappe.whitelist()
+def deliver_pos_order(order_name):
+    # تحویل: فقط رسید تحویل بساز (DN از روی SO)
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    result = {"sales_order": so_name}
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if dn_name:
+            result["delivery_note"] = dn_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Deliver POS DN")
+        frappe.throw(_("Delivery Note creation failed."))
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+    _append_sales_order_note(so_name, "[DELIVER] Delivery Note created.")
+    frappe.db.commit()
+    return result
+
+@frappe.whitelist()
 def create_and_settle_pos_order(payload):
-    # Combined: Create + Produce + Settle
+    # ثبت + تسویه یکجا (وقتی مشتری همونجا پول میده)
     _ensure_management_access()
     payload = _parse_json(payload, {})
-    order_result = create_and_produce_pos_order(payload)
+    order_result = create_pos_order(payload)
     so_name = order_result.get("order_id", "")
     payment = payload.get("payment", {})
     settle_result = settle_pos_order(order_name=so_name, payment=payment)
@@ -14058,7 +14055,43 @@ def create_and_settle_pos_order(payload):
         "delivery_note": settle_result.get("delivery_note", ""),
     }
 
+@frappe.whitelist()
+def create_management_pos_order(payload):
+	_ensure_management_access()
+	payload = _parse_json(payload, {})
+	if not isinstance(payload, dict):
+		payload = {}
 
+	customer_name = (payload.get("customer_name") or "POS Customer").strip()
+	mobile = (payload.get("mobile") or "09120000000").strip()
+	order_type = (payload.get("order_type") or "takeaway").strip()
+	address = (payload.get("address") or "").strip()
+	note = (payload.get("note") or "").strip()
+	items = payload.get("items") or []
+	payment = _parse_json(payload.get("payment"), {})
+
+	result = place_order(
+		customer_info={"name": customer_name, "mobile": mobile},
+		order_type=order_type,
+		items=items,
+		address=address,
+		note=note,
+		include_service_items=1,
+	)
+
+	try:
+		result["payment"] = _process_management_pos_payment(result, payment)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Management POS Payment Error")
+		result["payment"] = {
+			"method": _normalize_payment_method((payment or {}).get("method")),
+			"provider": ((payment or {}).get("provider") or "manual").strip().lower() or "manual",
+			"status": "failed",
+			"reference_no": "",
+			"rrn": "",
+			"message": _("Order was created, but payment integration failed."),
+			"provider_payload": {},
+		}
 @frappe.whitelist()
 def confirm_management_pos_payment(
 	order_name, status="paid", reference_no=None, rrn=None, provider_payload=None

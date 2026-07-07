@@ -693,8 +693,10 @@ import {
   getItemDetail,
   listManagementOrders,
   markManagementOrderPaid,
-  createAndProducePOSOrder,
+  createPOSOrder,
+  producePOSOrder,
   settlePOSOrder,
+  deliverPOSOrder,
   createAndSettlePOSOrder,
   mergeTableSessions,
   moveTableSession,
@@ -3612,12 +3614,13 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
   successMessage.value = ''
 
   try {
-    // If settling (payNow), use full submit & settle flow
     let result
     if (payNow) {
+      // ثبت + تسویه یکجا
       result = await createAndSettlePOSOrder(payload)
     } else {
-      result = await createAndProducePOSOrder(payload)
+      // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
+      result = await createPOSOrder(payload)
     }
     let orderCode = result.order_code || ''
     if (payNow) {
