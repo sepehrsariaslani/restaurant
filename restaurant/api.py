@@ -14432,7 +14432,7 @@ def produce_and_deliver_pos_order(order_name):
 
 @frappe.whitelist()
 def create_and_settle_pos_order(payload):
-    # ثبت + تولید + تسویه + تحویل یکجا
+    # تسویه و تحویل: SO + Production + SI + DN + Payment - همه چیز
     _ensure_management_access()
     payload = _parse_json(payload, {})
 

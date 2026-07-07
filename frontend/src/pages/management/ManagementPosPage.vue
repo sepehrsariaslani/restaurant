@@ -359,9 +359,9 @@
                       type="button"
                       class="settle-order-btn"
                       @click.stop="quickSettleOrder(order)"
-                      title="ثبت و تسویه"
+                      title="تسویه و تحویل"
                     >
-                      ثبت و تسویه
+                      تسویه و تحویل
                     </button>
                     <button
                       v-if="canDeliverOrder(order)"
@@ -3693,7 +3693,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         // ثبت و تسویه یکجا (همه چی)
         const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
         const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-        successMessage.value = `سفارش ${orderCode} ثبت و تسویه کامل شد.${siInfo}${dnInfo}`
+        successMessage.value = `سفارش ${orderCode} تسویه و تحویل شد.${siInfo}${dnInfo}`
       } else if (editingOriginalOrder.isEditing) {
         // تسویه از فاکتور باز
         successMessage.value = `فاکتور ${orderCode} تسویه شد.`
