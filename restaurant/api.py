@@ -14139,9 +14139,10 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
         result["invoice_error"] = "SI creation failed"
     _set_restaurant_order_status(so_name, "paid", force=True)
     _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
+    # Save normalized method (cash/card/credit) not Persian name
     if _has_column("Sales Order", "restaurant_payment_method"):
         so_doc = frappe.get_doc("Sales Order", so_name)
-        so_doc.restaurant_payment_method = mode_of_payment
+        so_doc.restaurant_payment_method = method
         so_doc.save(ignore_permissions=True)
     frappe.db.commit()
     return result

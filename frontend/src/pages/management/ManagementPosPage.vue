@@ -1057,12 +1057,12 @@ const filteredRecentOrders = computed(() => {
 function canDeliverOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  // اگه تحویل/تکمیل/کنسل شده => دکمه تحویل نمایش نده
+  // اگه تحویل شده یا کنسل شده => قطعاً دکمه نمایش نده
   if (['delivered', 'completed', 'cancelled'].includes(status)) return false
-  // اگه status ناشناخته یا خالی هست => نمایش نده
-  if (!status || status === 'new') return false
-  // اگه پرداخت واقعی (نقدی/کارتی/بانکی نه اعتباری) شده و وضعیت paid هست => یعنی تسویه کامل، نمایش نده
-  if (status === 'paid' && order.payment_method && order.payment_method !== 'credit') return false
+  // اگه وضعیت paid داره (یعنی فاکتور خورده) و payment_method داره => نمایش نده
+  if (status === 'paid' && order.payment_method) return false
+  // اگه وضعیت confirmed ولی payment_method داره (یعنی تسویه از راه دیگه شده) => نمایش نده
+  if (order.payment_method) return false
   return true
 }
 
