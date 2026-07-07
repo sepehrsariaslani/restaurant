@@ -13994,11 +13994,11 @@ def _resolve_pos_mode_of_payment(method):
     if not frappe.db.exists("DocType", "Mode of Payment"):
         return method
     all_modes = frappe.get_all("Mode of Payment", fields=["name", "type"], ignore_permissions=True)
-    # Filter to only modes that have a default account configured
+    # Filter to only modes that have an account configured
     valid_modes = []
     for m in all_modes:
         accts = frappe.get_all("Mode of Payment Account",
-            filters={"parent": m.name, "default": 1},
+            filters={"parent": m.name},
             fields=["default_account"],
             ignore_permissions=True, limit=1)
         if accts and accts[0].get("default_account"):
