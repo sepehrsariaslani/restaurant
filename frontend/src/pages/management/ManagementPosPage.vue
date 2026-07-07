@@ -1057,6 +1057,8 @@ const filteredRecentOrders = computed(() => {
 function canDeliverOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
+  // اگه روش پرداخت داره یعنی قبلاً تسویه/فاکتور/تحویل کامل شده => دکمه تحویل نمایش نده
+  if (order.payment_method || order.sales_invoice) return false
   // اگه فاکتور فروش/رسید تحویل خورده یا کنسل شده => دکمه تحویل نمایش نده
   if (['delivered', 'completed', 'cancelled', 'paid'].includes(status)) return false
   // اگه status ناشناخته یا خالی هست => نمایش نده
@@ -1091,8 +1093,8 @@ async function deliverOrder(order) {
 function canSettleOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  // اگه روش پرداخت داره یا وضعیت تسویه/تحویل شده => دکمه تسویه نمایش نده
-  if (order.payment_method) return false
+  // اگه روش پرداخت داره یعنی قبلاً تسویه شده => دکمه تسویه نمایش نده
+  if (order.payment_method || order.sales_invoice) return false
   if (['paid', 'delivered', 'completed', 'cancelled'].includes(status)) return false
   return true
 }

@@ -14138,6 +14138,12 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
         result["invoice_error"] = "SI creation failed"
     _set_restaurant_order_status(so_name, "paid", force=True)
     _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
+    if _has_column("Sales Order", "restaurant_payment_method"):
+        so_doc = frappe.get_doc("Sales Order", so_name)
+        payment_method = mode_map.get(method, "")
+        if payment_method:
+            so_doc.restaurant_payment_method = payment_method
+            so_doc.save(ignore_permissions=True)
     frappe.db.commit()
     return result
 
@@ -14460,6 +14466,7 @@ def create_and_settle_pos_order(payload):
 
     # Set delivered after all steps complete
     _set_restaurant_order_status(so_name, "delivered", force=True)
+    frappe.db.commit()
 
     return {
         "status": "success",
