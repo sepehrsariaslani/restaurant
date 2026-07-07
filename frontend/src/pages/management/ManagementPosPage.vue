@@ -1070,10 +1070,10 @@ async function deliverOrder(order) {
   error.value = ''
   successMessage.value = ''
   try {
-    const result = await produceAndDeliverPOSOrder(order.name)
+    const result = await deliverPOSOrder(order.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-    const prodInfo = result.produced?.length ? ` (${result.produced.length} آیتم تولید شد)` : ''
-    successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${prodInfo}`
+    const woInfo = result.submitted_work_orders?.length ? ` (${result.submitted_work_orders.length} دستور کار)` : ''
+    successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${woInfo}`
     await loadRecentOrders()
     await loadOpenInvoices()
   } catch (err) {
@@ -3664,9 +3664,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
     if (payNow) {
       const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
       const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-      successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}${dnInfo}`
+      successMessage.value = `سفارش ${orderCode} ثبت و تسویه کامل شد.${siInfo}${dnInfo}`
     } else {
-      successMessage.value = `سفارش ${orderCode} به تولید ارسال شد.`
+      successMessage.value = `سفارش ${orderCode} ثبت شد (آماده تولید).`
     }
 
     if (editingOriginalOrder.isEditing) {
