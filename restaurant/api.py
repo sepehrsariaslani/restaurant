@@ -13969,24 +13969,39 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     manual_ref = (reference_no or payment.get("reference_no") or "").strip()
     result = {"sales_order": so_name}
     mode_map = {"cash": "نقدي", "card": "کارت خوان", "credit": "اعتباري", "bank": "حواله بانکي"}
-    # 1. Sales Invoice from SO
+    # 1. Sales Invoice from SO (مستقیم با داکیومنت)
     try:
         make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
-        si = make_si(so_name)
-        if hasattr(si, "as_dict"):
-            si = si.as_dict()
-        if not isinstance(si, dict):
-            si = {"doctype": "Sales Invoice"}
-        si["is_pos"] = 1
-        si["update_stock"] = 0
-        si_doc = frappe.get_doc(si)
+        si_doc = make_si(so_name)
+        if hasattr(si_doc, "as_dict"):
+            # Document object - set fields directly
+            si_doc.is_pos = 1
+            si_doc.update_stock = 0
+        elif isinstance(si_doc, dict):
+            si_doc["is_pos"] = 1
+            si_doc["update_stock"] = 0
+            si_doc = frappe.get_doc(si_doc)
+        else:
+            si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
+            si_doc.is_pos = 1
+
+        grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
+        mode_of_payment = mode_map.get(method, "نقدي")
+
+        # Set payment on SI before insert
+        if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
+            si_doc.payments = []
+        si_doc.append("payments", {
+            "mode_of_payment": mode_of_payment,
+            "amount": grand_total if grand_total > 0 else 1,
+            "default": 1,
+        })
+
         si_doc.flags.ignore_permissions = True
         si_doc.insert()
-        if si_doc.docstatus == 0 and hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
-            si_doc.payments[0].mode_of_payment = mode_map.get(method, "نقدي")
-            si_doc.payments[0].amount = si_doc.grand_total or si_doc.total or 0
         si_doc.submit()
         result["sales_invoice"] = si_doc.name
+
         # 2. Payment Entry if not credit
         if method != "credit" and si_doc.docstatus == 1:
             try:
@@ -13994,11 +14009,15 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
                 pe = get_payment_entry("Sales Invoice", si_doc.name)
                 pe.reference_no = manual_ref or si_doc.name
                 pe.reference_date = today()
-                pe.mode_of_payment = mode_map.get(method, "نقدي")
+                pe.mode_of_payment = mode_of_payment
+                pe.paid_amount = grand_total
+                pe.received_amount = grand_total
                 pe.flags.ignore_permissions = True
                 pe.insert()
                 pe.submit()
                 frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
+                frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
+                result["payment_entry"] = pe.name
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "Settle SI Payment")
     except Exception:
