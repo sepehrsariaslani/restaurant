@@ -1057,12 +1057,12 @@ const filteredRecentOrders = computed(() => {
 function canDeliverOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  // اگه روش پرداخت داره یعنی قبلاً تسویه/فاکتور/تحویل کامل شده => دکمه تحویل نمایش نده
-  if (order.payment_method || order.sales_invoice) return false
-  // اگه فاکتور فروش/رسید تحویل خورده یا کنسل شده => دکمه تحویل نمایش نده
-  if (['delivered', 'completed', 'cancelled', 'paid'].includes(status)) return false
+  // اگه تحویل/تکمیل/کنسل شده => دکمه تحویل نمایش نده
+  if (['delivered', 'completed', 'cancelled'].includes(status)) return false
   // اگه status ناشناخته یا خالی هست => نمایش نده
   if (!status || status === 'new') return false
+  // اگه پرداخت واقعی (نقدی/کارتی/بانکی نه اعتباری) شده و وضعیت paid هست => یعنی تسویه کامل، نمایش نده
+  if (status === 'paid' && order.payment_method && order.payment_method !== 'credit') return false
   return true
 }
 
@@ -1093,9 +1093,10 @@ async function deliverOrder(order) {
 function canSettleOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  // اگه روش پرداخت داره یعنی قبلاً تسویه شده => دکمه تسویه نمایش نده
-  if (order.payment_method || order.sales_invoice) return false
-  if (['paid', 'delivered', 'completed', 'cancelled'].includes(status)) return false
+  // اگه تحویل/تکمیل/کنسل شده => دکمه تسویه نمایش نده
+  if (['delivered', 'completed', 'cancelled'].includes(status)) return false
+  // اگه وضعیت paid و روش پرداخت واقعی (غیر اعتباری) داره => قبلاً تسویه کامل شده
+  if (status === 'paid' && order.payment_method && order.payment_method !== 'credit') return false
   return true
 }
 
