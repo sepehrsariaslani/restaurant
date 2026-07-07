@@ -160,7 +160,8 @@ const stepIsValid = computed(() => {
   const min = Number(currentStep.value.min_select) || 0
   const isRequired = Number(currentStep.value.is_required) || 0
   if (!isRequired) return true
-  return currentSelections.value.length >= min
+  const selectedPortions = currentSelections.value.reduce((sum, row) => sum + Number(row?.qty || 0), 0)
+  return selectedPortions >= min
 })
 
 const displayPrice = computed(() => {
@@ -288,7 +289,7 @@ function buildSummaryText() {
     const sels = selections.value[step.step_key] || []
     for (const sel of sels) {
       const opt = step.options?.find(o => o.option_key === sel.option_key)
-      if (opt) parts.push(opt.option_label)
+      if (opt) parts.push(`${opt.option_label}${Number(sel.qty || 0) > 1 ? ` × ${Number(sel.qty || 0).toLocaleString('fa-IR')}` : ''}`)
     }
   }
   return parts.join(' + ')
@@ -313,18 +314,44 @@ async function addToCart() {
 
     const finalPrice = result?.data?.final_price ?? result?.final_price ?? displayPrice.value
 
+    const builderSelection = {
+      selection_id: result?.data?.selection_id || result?.selection_id || '',
+      template: template.value.name,
+      selections: Object.entries(selections.value).flatMap(([stepKey, rows]) =>
+        (rows || []).map((row) => ({
+          step_key: stepKey,
+          option_key: row.option_key,
+          qty: Number(row.qty || 0),
+        })),
+      ),
+      summary: result?.data?.builder_summary || buildSummaryText(),
+    }
+
     upsertLine({
       item_slug: productSlug.value,
       item_title: template.value.title || template.value.name || productSlug.value,
       item_image: template.value.preview_image || '',
-      base_price: finalPrice,
+      base_price: Number(template.value.base_price || 0),
       qty: 1,
       unit_price_preview: finalPrice,
       line_total_preview: finalPrice,
       customization: {
-        builder_selection_id: result?.data?.selection_id || result?.selection_id || '',
-        builder_selections: buildSelectionsPayload(),
-        builder_summary: buildSummaryText(),
+        ingredient_adjustments: [],
+        selected_modifiers: [],
+        selected_alternatives: [],
+        builder_selection: builderSelection,
+        builder_summary: result?.data?.builder_summary || buildSummaryText(),
+        builder_pricing_breakdown:
+          result?.data?.builder_pricing_breakdown ||
+          result?.builder_pricing_breakdown || {
+            base_price: Number(template.value.base_price) || 0,
+            options_total: Number(finalPrice || 0) - (Number(template.value.base_price) || 0),
+            final_price: finalPrice,
+          },
+        builder_portion_rows:
+          result?.data?.builder_portion_rows ||
+          result?.builder_portion_rows || [],
+        builder_template: template.value.name,
       },
       ingredient_catalog: [],
       modifier_groups_catalog: [],

@@ -17,6 +17,9 @@ def compute_builder_price(base_price, selections, pricing_mode="additive"):
     options_total = 0
 
     for sel in selections:
+        if sel.get("total_price") not in (None, ""):
+            options_total += sel.get("total_price", 0) or 0
+            continue
         delta = sel.get("price_delta", 0) or 0
         price_type = sel.get("price_type", "fixed")
         qty = sel.get("qty", 1) or 1

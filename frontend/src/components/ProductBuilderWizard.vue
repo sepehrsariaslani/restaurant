@@ -108,7 +108,8 @@
                   <ImageIcon v-else class="option-placeholder" />
                 </span>
                 <strong>{{ option.option_label }}</strong>
-                <small v-if="option.option_description">{{ option.option_description }}</small>
+                <small v-if="option.portion_qty">{{ option.portion_qty }} {{ option.portion_uom || option.stock_uom }}</small>
+                <small v-else-if="option.option_description">{{ option.option_description }}</small>
                 <small v-else-if="option.allergens?.length">آلرژی: {{ option.allergens.join('، ') }}</small>
               </button>
 
@@ -213,6 +214,8 @@ const props = defineProps({
   basePrice: { type: Number, default: 0 },
   currency: { type: String, default: 'TOMAN' },
   loadingPrice: { type: Boolean, default: false },
+  initialSelections: { type: Array, default: () => [] },
+  editing: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'cart', 'add-to-cart', 'selection-change'])
@@ -255,16 +258,31 @@ const selectedRows = computed(() => Object.entries(selections)
   .filter(([, row]) => row.qty > 0)
   .map(([key, row]) => ({
     step_key: row.option.parent_step_key,
+    step_title: row.option.parent_step_title || '',
     option_key: key,
     option_label: row.option.option_label,
     qty: row.qty,
-    price_delta: Number(row.option.price_delta || 0),
+    portion_count: row.qty,
+    portion_qty: Number(row.option.portion_qty || 1),
+    portion_uom: row.option.portion_uom || row.option.stock_uom || '',
+    resolved_stock_qty: Number(row.option.portion_qty || 1) * row.qty * Number(row.option.conversion_factor || 1),
+    stock_uom: row.option.stock_uom || '',
+    conversion_factor: Number(row.option.conversion_factor || 1),
+    price_delta: Number(row.option.price_delta || row.option.resolved_price_delta || 0),
+    total_price: Number(row.option.price_delta || row.option.resolved_price_delta || 0) * row.qty,
     price_type: row.option.price_type || 'fixed',
     price_percentage: Number(row.option.price_percentage || 0),
+    unit_rate: Number(row.option.unit_rate || 0),
+    price_status: row.option.price_status || 'ok',
+    price_list: row.option.price_list || '',
+    price_source: row.option.price_source || 'item_price',
+    item: row.option.item || '',
+    item_name: row.option.item_name || '',
     image: row.option.image || '',
   })))
 
 const optionsTotal = computed(() => selectedRows.value.reduce((sum, row) => {
+  if (row.total_price) return sum + row.total_price
   if (row.price_type === 'percentage') return sum + ((props.basePrice || 0) * row.price_percentage / 100) * row.qty
   if (row.price_type === 'multiply') return sum + (props.basePrice || 0) * row.price_delta * row.qty
   return sum + row.price_delta * row.qty
@@ -292,9 +310,10 @@ function shortStepTitle(title = '', index = 0) {
 function stepHelpText(step) {
   const min = Number(step.min_select || 0)
   const max = Number(step.max_select || 0)
-  if (step.selection_mode === 'quantity') return max ? `حداقل ${min} تا ${max} مورد` : `حداقل ${min} مورد`
-  if (step.selection_mode === 'multiple') return max ? `انتخاب ${min} تا ${max} مورد` : `حداقل ${min} مورد را انتخاب کنید`
-  return step.is_required ? 'یک گزینه را انتخاب کنید' : 'انتخاب این مرحله اختیاری است'
+  if (step.selection_mode === 'single') return step.is_required ? 'یک انتخاب انجام دهید' : 'این مرحله اختیاری است'
+  if (max) return `حداقل ${min} و حداکثر ${max} پورشن`
+  if (min) return `حداقل ${min} پورشن انتخاب کنید`
+  return 'بر اساس پورشن انتخاب کنید'
 }
 
 function filteredStepOptions(step) {
@@ -305,9 +324,13 @@ function filteredStepOptions(step) {
 }
 
 function isStepComplete(step) {
-  const selectedCount = (step.options || []).filter((option) => getQty(option) > 0).length
+  const selectedCount = stepSelectionTotal(step)
   const min = Number(step.min_select || (step.is_required ? 1 : 0))
   return selectedCount >= min
+}
+
+function stepSelectionTotal(step) {
+  return (step.options || []).reduce((sum, option) => sum + getQty(option), 0)
 }
 
 function canGoToStep(index) {
@@ -338,7 +361,15 @@ function getQty(option) {
 }
 
 function maxOptionQty(option) {
-  return Math.max(Number(option.max_qty || 1), 1)
+  return Math.max(Number(option.max_portions || option.max_qty || 1), 1)
+}
+
+function minOptionQty(option) {
+  return Math.max(Number(option.min_portions || 0), 0)
+}
+
+function optionStep(option) {
+  return Math.max(Number(option.portion_step || 1), 1)
 }
 
 function toggleOption(option, step = currentStep.value) {
@@ -361,14 +392,24 @@ function toggleOption(option, step = currentStep.value) {
     }
   }
 
-  selections[key] = { qty: 1, option }
+  selections[key] = { qty: Math.max(minOptionQty(option), 1), option }
   emitSelectionChange()
 }
 
 function changeQty(option, delta) {
   const key = option.option_key
   if (!selections[key]) selections[key] = { qty: 0, option }
-  const next = Math.min(Math.max(Number(selections[key].qty || 0) + delta, 0), maxOptionQty(option))
+  const step = optionStep(option)
+  const current = Number(selections[key].qty || 0)
+  const baseNext = current + (delta * step)
+  const next = Math.min(Math.max(baseNext, 0), maxOptionQty(option))
+  const parentStep = steps.value.find((row) => row.step_key === option.parent_step_key)
+  if (parentStep) {
+    const currentTotal = stepSelectionTotal(parentStep)
+    const proposedTotal = currentTotal - current + next
+    const maxForStep = Number(parentStep.max_select || 0)
+    if (maxForStep > 0 && proposedTotal > maxForStep) return
+  }
   selections[key].qty = next
   emitSelectionChange()
 }
@@ -397,6 +438,14 @@ function submitOrder() {
     final_price: finalPrice.value,
     options_total: Math.round(optionsTotal.value),
     selections: selectedRows.value,
+    builder_summary: selectedRows.value.map((row) => `${row.option_label} × ${row.portion_count}`).join('، '),
+    builder_portion_rows: selectedRows.value,
+    builder_pricing_breakdown: {
+      base_price: props.basePrice,
+      options_total: Math.round(optionsTotal.value),
+      final_price: finalPrice.value,
+      builder_portion_rows: selectedRows.value,
+    },
   }
   emit('add-to-cart', payload)
   showSuccess.value = true
@@ -461,6 +510,16 @@ watch(
     currentStepIndex.value = 0
     stepError.value = ''
     for (const key of Object.keys(selections)) delete selections[key]
+    for (const row of props.initialSelections || []) {
+      const stepKey = String(row?.step_key || '').trim()
+      const optionKey = String(row?.option_key || '').trim()
+      const qty = Number(row?.qty ?? row?.portion_count ?? 0)
+      if (!stepKey || !optionKey || qty <= 0) continue
+      const step = steps.value.find((entry) => entry.step_key === stepKey)
+      const option = (step?.options || []).find((entry) => entry.option_key === optionKey)
+      if (!option) continue
+      selections[optionKey] = { qty, option }
+    }
     emitSelectionChange()
   },
   { deep: true },

@@ -1323,7 +1323,29 @@ async function handleBuilderSelectionChange(selections) {
 
 function handleBuilderAddToCart(payload) {
   if (!builderItem.value) return
-  const finalPrice = Number(builderPriceData.value?.final_price ?? payload?.final_price ?? builderItem.value.base_price ?? 0)
+  const builderRows = Array.isArray(payload?.builder_portion_rows)
+    ? payload.builder_portion_rows
+    : Array.isArray(payload?.selections)
+      ? payload.selections
+      : []
+  const builderSelection = {
+    selection_id: String(payload?.selection_id || '').trim(),
+    template: payload?.template || builderTemplate.value?.name || '',
+    selections: builderRows.map((row) => ({
+      step_key: row.step_key,
+      option_key: row.option_key,
+      qty: Number(row.portion_count ?? row.qty ?? 0),
+    })),
+    summary: payload?.builder_summary || '',
+  }
+  const builderPricingBreakdown = payload?.builder_pricing_breakdown || builderPriceData.value || {}
+  const finalPrice = Number(
+    builderPricingBreakdown?.final_price ??
+    builderPriceData.value?.final_price ??
+    payload?.final_price ??
+    builderItem.value.base_price ??
+    0,
+  )
   upsertLine({
     item_slug: builderItem.value.slug,
     item_title: builderItem.value.title || builderItem.value.item_name,
@@ -1335,15 +1357,14 @@ function handleBuilderAddToCart(payload) {
     customization: {
       ingredient_adjustments: [],
       selected_modifiers: [],
-      builder_selection: {
-        template: payload?.template || builderTemplate.value?.name || '',
-        selections: Array.isArray(payload?.selections) ? payload.selections : [],
-        options_total: Number(payload?.options_total || 0),
+      selected_alternatives: [],
+      builder_selection: builderSelection,
+      builder_summary: payload?.builder_summary || builderSelection.summary || '',
+      builder_pricing_breakdown: {
+        ...builderPricingBreakdown,
         final_price: finalPrice,
-        summary: (Array.isArray(payload?.selections) ? payload.selections : [])
-          .map((row) => `${row.option_label}${row.qty > 1 ? ` × ${row.qty}` : ''}`)
-          .join('، '),
       },
+      builder_portion_rows: builderRows,
       builder_template: builderTemplate.value?.name || payload?.template || '',
     },
   })

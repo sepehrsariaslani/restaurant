@@ -68,27 +68,44 @@ const lineItemImage = computed(
 
 const isBuilderItem = computed(() => {
   const c = props.line?.customization || {}
-  return Boolean(c.builder_selection_id && c.builder_summary)
+  const nested = c.builder_selection || {}
+  return Boolean(
+    c.builder_summary ||
+    nested.summary ||
+    nested.selection_id ||
+    (Array.isArray(c.builder_portion_rows) && c.builder_portion_rows.length),
+  )
 })
 
 const builderSummaryText = computed(() => {
   const c = props.line?.customization || {}
-  return c.builder_summary || 'سفارشی‌سازی بیلدر'
+  const nested = c.builder_selection || {}
+  return c.builder_summary || nested.summary || 'سفارشی‌سازی بیلدر'
 })
 
 const builderDetails = computed(() => {
   const c = props.line?.customization || {}
-  if (!c.builder_selections || !Array.isArray(c.builder_selections)) return []
-  return c.builder_selections.map((s) => {
+  const rows = Array.isArray(c.builder_portion_rows)
+    ? c.builder_portion_rows
+    : Array.isArray(c.builder_selections)
+      ? c.builder_selections
+      : Array.isArray(c.builder_selection?.selections)
+        ? c.builder_selection.selections
+        : []
+  if (!rows.length) return []
+  return rows.map((s) => {
     const label = s.step_title || s.step_key || ''
     const option = s.option_label || s.option_key || ''
-    return label && option ? `${label}: ${option}` : label || option || ''
+    const qty = Number(s.portion_count ?? s.qty ?? 0)
+    const suffix = qty > 0 ? ` × ${qty.toLocaleString('fa-IR')}` : ''
+    return label && option ? `${label}: ${option}${suffix}` : `${label || option || ''}${suffix}`
   }).filter(Boolean)
 })
 
 const builderEditUrl = computed(() => {
   const c = props.line?.customization || {}
-  const editId = c.builder_selection_id || ''
+  const nested = c.builder_selection || {}
+  const editId = nested.selection_id || c.builder_selection_id || ''
   return `/item/${props.line.item_slug}?edit=${props.line.id}&builder_edit=${editId}`
 })
 </script>

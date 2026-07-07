@@ -32,7 +32,7 @@
         <span v-if="nutritionText" class="card-nutrition">{{ nutritionText }}</span>
         <div class="card-price-row">
           <span v-if="isComingSoon" class="card-price soon-label">به‌زودی</span>
-          <span v-else class="card-price">{{ formatMoney(item.base_price, currency) }}</span>
+          <span v-else class="card-price">{{ displayBasePriceText }}</span>
         </div>
       </div>
 
@@ -80,7 +80,7 @@
           <div>
             <small class="muted" v-if="!isComingSoon">قیمت</small>
             <strong class="price soon-label" v-if="isComingSoon">به‌زودی</strong>
-            <strong class="price" v-else :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ formatMoney(item.base_price, currency) }}</strong>
+            <strong class="price" v-else :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ displayBasePriceText }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
           <div class="foot-actions">
@@ -93,19 +93,10 @@
               <strong>{{ cartQty }}</strong>
               <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
             </div>
-            <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+            <button v-if="isCustomizable && !isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
               <span>بساز</span>
               <span class="add-circle"><Pencil :size="14" /></span>
             </button>
-            <template v-else-if="isCustomizable && allowDirectAdd">
-              <button v-if="!isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-                <span>بساز</span>
-              </button>
-              <button v-if="!isUnavailable" class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
-                <span>{{ justAdded ? 'افزوده شد' : 'افزودن به سبد' }}</span>
-                <span class="add-circle"><Check v-if="justAdded" :size="15" /><Plus v-else :size="16" /></span>
-              </button>
-            </template>
             <button v-else-if="!isUnavailable" class="add-btn add-btn--pill" type="button" :class="{ added: justAdded }" :aria-label="`افزودن به سبد`" @click.prevent="handleAdd">
               <span>{{ justAdded ? 'افزوده شد' : 'افزودن به سبد' }}</span>
               <span class="add-circle"><Check v-if="justAdded" :size="15" /><Plus v-else :size="16" /></span>
@@ -138,7 +129,7 @@
             <strong class="price soon-label">به‌زودی</strong>
           </div>
           <div v-else>
-            <strong class="price" :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ formatMoney(item.base_price, currency) }}</strong>
+            <strong class="price" :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ displayBasePriceText }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
           <div class="qty-pill compact" v-if="cartQty > 0 && !hasCustomization && !isUnavailable">
@@ -150,17 +141,9 @@
             <Layers :size="13" />
             BOM
           </button>
-          <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+          <button v-if="isCustomizable && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
             <span class="add-icon"><Pencil :size="15" /></span>
           </button>
-          <template v-else-if="isCustomizable && allowDirectAdd">
-            <button v-if="!isTemporarilyUnavailable" class="add-btn customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-              <span class="add-icon"><Pencil :size="15" /></span>
-            </button>
-            <button v-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
-              <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
-            </button>
-          </template>
           <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
             <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
           </button>
@@ -194,7 +177,7 @@
             <strong class="price soon-label">به‌زودی</strong>
           </div>
           <div v-else>
-            <strong class="price" :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ formatMoney(item.base_price, currency) }}</strong>
+            <strong class="price" :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ displayBasePriceText }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
           </div>
           <div class="foot-actions">
@@ -208,17 +191,9 @@
               <strong>{{ cartQty }}</strong>
               <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
             </div>
-            <button v-if="isCustomizable && !allowDirectAdd && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+            <button v-if="isCustomizable && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
               <span class="add-icon"><Pencil :size="15" /></span>
             </button>
-            <template v-else-if="isCustomizable && allowDirectAdd">
-              <button v-if="!isTemporarilyUnavailable" class="add-btn customize-btn btn-sm" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
-                <span class="add-icon"><Pencil :size="15" /></span>
-              </button>
-              <button v-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
-                <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
-              </button>
-            </template>
             <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
               <span class="add-icon"><Check v-if="justAdded" :size="16" /><Plus v-else :size="17" /></span>
             </button>
@@ -351,7 +326,10 @@ const isCustomizable = computed(() =>
   Number(props.item?.restaurant_is_customizable || 0) === 1 &&
   Number(props.item?.restaurant_builder_active || 1) === 1,
 )
-const allowDirectAdd = computed(() => Number(props.item?.restaurant_allow_direct_add || 0) === 1)
+const displayBasePriceText = computed(() => {
+  const basePrice = formatMoney(props.item?.base_price || 0, props.currency)
+  return isCustomizable.value ? `از ${basePrice}` : basePrice
+})
 
 function handleCustomize() {
   if (!props.item?.slug) return

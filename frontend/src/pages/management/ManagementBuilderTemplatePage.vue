@@ -156,7 +156,7 @@ function createEmptyStep(index) {
     step_key: `step-${Date.now()}-${index}`,
     step_description: '',
     sort_order: index,
-    selection_mode: 'single',
+    selection_mode: 'multiple',
     min_select: 1,
     max_select: 1,
     is_required: true,
@@ -335,6 +335,10 @@ async function loadItemOptions() {
       image: r.image || '',
       standard_rate: Number(r.standard_rate) || 0,
       stock_uom: r.stock_uom || '',
+      price_list: r.price_list || '',
+      price_status: r.price_status || '',
+      is_selectable: Number(r.is_selectable ?? 1) === 1,
+      unavailable_reason: r.unavailable_reason || '',
       item_group: r.item_group || '',
     }))
   } catch {

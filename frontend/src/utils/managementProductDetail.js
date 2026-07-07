@@ -248,6 +248,8 @@ export function buildProductSettingsPayload({ itemName = "", form, builderConfig
 	const shouldKeepBuilderEnabled = Boolean(
 		parsed.restaurant_is_customizable || hasBuilderTemplate || hasProductBuilderConfig,
 	);
+	const shouldForceBuilderFlow =
+		shouldKeepBuilderEnabled && Number(parsed.restaurant_builder_active || 0) === 1;
 
 	return {
 		name: itemName,
@@ -256,6 +258,9 @@ export function buildProductSettingsPayload({ itemName = "", form, builderConfig
 		restaurant_builder_active: shouldKeepBuilderEnabled
 			? 1
 			: Number(parsed.restaurant_builder_active || 0),
+		restaurant_allow_direct_add: shouldForceBuilderFlow
+			? 0
+			: Number(parsed.restaurant_allow_direct_add || 0),
 		product_builder_config: clonePlainObject(builderConfig),
 		show_in_website: Number(parsed.show_in_print || 0) ? 1 : 0,
 	};
@@ -279,7 +284,7 @@ export function createEmptyBuilderStep(index) {
 		step_key: `step-${Date.now()}-${index}`,
 		step_description: "",
 		sort_order: index,
-		selection_mode: "single",
+		selection_mode: "multiple",
 		min_select: 1,
 		max_select: 1,
 		is_required: true,
