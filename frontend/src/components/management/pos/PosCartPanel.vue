@@ -224,7 +224,7 @@
 					type="button"
 					class="settle-btn-custom"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
-					@click="$emit('submit-and-settle')"
+					@click="openPaymentPopup()"
 				>{{ submitting ? "در حال ثبت..." : "ثبت و تسویه فاکتور" }}</button>
 			</div>
 			<button
