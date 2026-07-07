@@ -104,7 +104,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true)"
+            @submit-and-settle="submitPOSOrder(true, {}, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -274,43 +274,41 @@
               <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
               <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
               <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
-              <template v-else>
-                <div class="open-invoice-strip">
-                  <article
-                    v-for="invoice in openInvoices"
-                    :key="invoice.invoice_key"
-                    class="open-invoice-card"
-                    :class="{ active: selectedOpenInvoice?.invoice_key === invoice.invoice_key }"
-                    @click="selectOpenInvoice(invoice)"
-                  >
+              <div v-else class="open-invoice-accordion">
+                <article
+                  v-for="invoice in openInvoices"
+                  :key="invoice.invoice_key"
+                  class="accordion-card"
+                  :class="{ expanded: expandedInvoiceKey === invoice.invoice_key }"
+                >
+                  <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
                     <strong>{{ invoice.order_code }}</strong>
-                    <small>{{ invoice.customer_name || 'POS Customer' }}</small>
-                    <small>{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
-                    <small>{{ formatInvoiceDateTime(invoice.created_at) }}</small>
-                  </article>
-                </div>
-                <div class="open-invoice-detail" v-if="selectedOpenInvoiceDetail?.order">
-                  <header>
-                    <div>
-                      <strong>{{ selectedOpenInvoiceDetail.order.order_code }}</strong>
-                      <small>{{ formatStatus(selectedOpenInvoiceDetail.order.status) }}</small>
+                    <small class="accordion-customer">{{ invoice.customer_name || 'POS Customer' }}</small>
+                    <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
+                    <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
+                    <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
+                  </div>
+                  <div class="accordion-body" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.detail">
+                    <div class="accordion-items">
+                      <div v-for="(item, idx) in (invoice.detail?.order?.items || invoice.detail?.items || [])" :key="idx" class="accordion-item">
+                        <span class="accordion-item-title">{{ item.title }}</span>
+                        <span class="accordion-item-qty">× {{ formatCompactNumber(item.qty, 2) }}</span>
+                        <span class="accordion-item-total">{{ formatMoney(item.line_total || 0, currency) }}</span>
+                      </div>
                     </div>
-                    <div class="open-invoice-actions">
-                      <button type="button" class="tbl-btn" @click="applySelectedOpenInvoiceProfile">انتخاب</button>
-                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click="settleSelectedOpenInvoice">
+                    <div class="accordion-footer">
+                      <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
+                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click.stop="settleSelectedInvoice(invoice)">
                         {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
                       </button>
                     </div>
-                  </header>
-                  <ul>
-                    <li v-for="(item, idx) in selectedOpenInvoiceDetail.order.items || []" :key="`${idx}-${item.title}`">
-                      <span>{{ item.title }}</span>
-                      <span>{{ formatCompactNumber(item.qty, 2) }}</span>
-                      <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
-                    </li>
-                  </ul>
-                </div>
-              </template>
+                  </div>
+                  <div class="accordion-loading" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
+                    <small>در حال دریافت...</small>
+                  </div>
+                  <small class="error" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.loadError">{{ invoice.loadError }}</small>
+                </article>
+              </div>
             </section>
 
             <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
@@ -361,9 +359,18 @@
                       type="button"
                       class="settle-order-btn"
                       @click.stop="quickSettleOrder(order)"
-                      title="ثبت و تسویه"
+                      title="تسویه و تحویل"
                     >
-                      ثبت و تسویه
+                      تسویه و تحویل
+                    </button>
+                    <button
+                      v-if="canDeliverOrder(order)"
+                      type="button"
+                      class="deliver-order-btn"
+                      @click.stop="deliverOrder(order)"
+                      title="تولید و تحویل"
+                    >
+                      🏭 تحویل
                     </button>
                   </div>
                 </article>
@@ -420,7 +427,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true)"
+            @submit-and-settle="submitPOSOrder(true, {}, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -671,6 +678,8 @@
         </div>
       </section>
     </div>
+
+
   </section>
 </template>
 
@@ -693,6 +702,13 @@ import {
   getItemDetail,
   listManagementOrders,
   markManagementOrderPaid,
+  createPOSOrder,
+  producePOSOrder,
+  settlePOSOrder,
+  deliverPOSOrder,
+  produceAndDeliverPOSOrder,
+  createAndPayPOSOrder,
+  createAndSettlePOSOrder,
   mergeTableSessions,
   moveTableSession,
   getManagementPOSBoot,
@@ -851,6 +867,12 @@ const openInvoiceError = ref('')
 const selectedOpenInvoiceKey = ref('')
 const selectedOpenInvoiceDetail = ref(null)
 const settlingOpenInvoice = ref(false)
+const expandedInvoiceKey = ref('')
+const editingOriginalOrder = reactive({
+  name: '',
+  order_code: '',
+  isEditing: false,
+})
 const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
 const cart = reactive([])
 const detailCache = new Map()
@@ -1032,11 +1054,49 @@ const filteredRecentOrders = computed(() => {
   )
 })
 
+function canDeliverOrder(order) {
+  if (!order) return false
+  const status = String(order.status || '').toLowerCase()
+  // اگه تحویل شده یا کنسل شده => قطعاً دکمه نمایش نده
+  if (['delivered', 'completed', 'cancelled'].includes(status)) return false
+  // اگه وضعیت paid با روش پرداخت واقعی (نقد/کارت) => تسویه کامل شده => دکمه نمایش نده
+  if (status === 'paid' && order.payment_method && order.payment_method !== 'credit') return false
+  // اعتباری همیشه دکمه تحویل داشته باشه چون هنوز تحویل داده نشده
+  return true
+}
+
+async function deliverOrder(order) {
+  if (!order?.name) {
+    error.value = 'سفارشی انتخاب نشده.'
+    return
+  }
+  const confirmed = window.confirm(`سفارش ${order.order_code || order.name} تولید و تحویل داده شود؟`)
+  if (!confirmed) return
+  error.value = ''
+  successMessage.value = ''
+  try {
+    const result = await deliverPOSOrder(order.name)
+    const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+    const woInfo = result.submitted_work_orders?.length ? ` (${result.submitted_work_orders.length} دستور کار)` : ''
+    // Update local status so buttons hide immediately
+    order.status = 'delivered'
+    order.payment_method = order.payment_method || ''
+    successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${woInfo}`
+    await loadRecentOrders()
+    await loadOpenInvoices()
+  } catch (err) {
+    error.value = err.message || 'تولید و تحویل ناموفق بود.'
+  }
+}
+
 function canSettleOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
-  const settledStatuses = ['paid', 'delivered', 'completed', 'cancelled']
-  return !settledStatuses.includes(status)
+  // اگه تحویل/تکمیل/کنسل شده => دکمه تسویه نمایش نده
+  if (['delivered', 'completed', 'cancelled'].includes(status)) return false
+  // اگه وضعیت paid و روش پرداخت واقعی (غیر اعتباری) داره => قبلاً تسویه کامل شده
+  if (status === 'paid' && order.payment_method && order.payment_method !== 'credit') return false
+  return true
 }
 
 const productQtyMap = computed(() => {
@@ -1351,6 +1411,9 @@ function closeTicketTab(ticketId) {
 }
 
 function resetCurrentInvoiceState() {
+  editingOriginalOrder.isEditing = false
+  editingOriginalOrder.name = ''
+  editingOriginalOrder.order_code = ''
   applyTicketSnapshot(createEmptyTicketSnapshot())
 }
 
@@ -1971,6 +2034,142 @@ async function settleSelectedOpenInvoice() {
   }
 }
 
+async function toggleInvoiceAccordion(invoice) {
+  if (expandedInvoiceKey.value === invoice.invoice_key) {
+    expandedInvoiceKey.value = ''
+    return
+  }
+  expandedInvoiceKey.value = invoice.invoice_key
+  if (!invoice.detail && !invoice.loading) {
+    invoice.loading = true
+    invoice.loadError = ''
+    try {
+      const detail = await getManagementOrderDetail(invoice.name, invoice.source || 'web')
+      invoice.detail = detail
+    } catch (err) {
+      invoice.loadError = err.message || 'خطا در دریافت جزئیات'
+    } finally {
+      invoice.loading = false
+    }
+  }
+}
+
+async function selectAndLoadInvoice(invoice) {
+  if (!invoice?.name) {
+    error.value = 'ابتدا یک فاکتور را انتخاب کنید.'
+    return
+  }
+  closeOperationsOverlay()
+  try {
+    const detail = invoice.detail || await getManagementOrderDetail(invoice.name, invoice.source || 'web')
+    const order = detail?.order || detail
+    
+    // Apply customer/order info to form
+    // Store original order info for editing continuation
+    editingOriginalOrder.name = order.name || invoice.name || ''
+    editingOriginalOrder.order_code = order.order_code || invoice.order_code || ''
+    editingOriginalOrder.isEditing = true
+    
+    applyOpenInvoiceProfile(order)
+    
+    // Clear existing cart
+    clearCart()
+    
+    // Reset financial state
+    Object.assign(financial, defaultFinancialState())
+    
+    // Build a lookup map from loaded products (keyed by item code / name)
+    const productByItemCode = {}
+    for (const p of products.value) {
+      const code = String(p.name || '').trim().toLowerCase()
+      if (code) productByItemCode[code] = p
+      const slug = String(p.slug || p.restaurant_slug || '').trim().toLowerCase()
+      if (slug) productByItemCode[slug] = p
+    }
+    
+    // Load items into cart with correct slug and pricing
+    const items = order?.items || []
+    for (const item of items) {
+      const qty = Number(item.qty || 1)
+      if (qty <= 0) continue
+      
+      const itemCode = String(item.item_code || item.name || item.title || '').trim()
+      const matchedProduct = productByItemCode[itemCode.toLowerCase()]
+      
+      if (matchedProduct) {
+        // Use the real product with correct slug from loaded products
+        const unitPrice = Number(item.unit_price || item.price || matchedProduct.base_price || matchedProduct.standard_rate || 0)
+        addToCart({
+          slug: matchedProduct.slug || matchedProduct.restaurant_slug,
+          name: matchedProduct.name,
+          title: matchedProduct.title || matchedProduct.item_name || item.title,
+          item_name: matchedProduct.item_name || matchedProduct.title || item.title,
+          base_price: unitPrice,
+          standard_rate: unitPrice,
+          price: unitPrice,
+          image: matchedProduct.image || item.image || '',
+        }, qty, null, false, unitPrice)
+      } else {
+        // Fallback: use item_code as-is and just set price
+        const unitPrice = Number(item.unit_price || item.price || 0)
+        addToCart({
+          slug: itemCode,
+          name: itemCode,
+          title: item.title || item.item_name || itemCode || 'آیتم',
+          item_name: item.title || item.item_name || itemCode || 'آیتم',
+          base_price: unitPrice,
+          standard_rate: unitPrice,
+          price: unitPrice,
+          image: item.image || '',
+        }, qty, null, false, unitPrice)
+      }
+    }
+    
+    // Apply financial modifiers from order if available
+    const fm = order.financial_modifiers || order.totals || {}
+    if (fm.discount_value > 0 || order.discount_amount > 0) {
+      financial.discountValue = Number(fm.discount_value || order.discount_amount || 0)
+      financial.discountType = fm.discount_type === 'percent' ? 'percent' : 'fixed'
+    }
+    if (fm.service_value > 0 || order.service_amount > 0) {
+      financial.serviceValue = Number(fm.service_value || order.service_amount || 0)
+      financial.serviceType = fm.service_type === 'percent' ? 'percent' : 'fixed'
+    }
+    if (fm.tip_amount > 0 || order.tip_amount > 0) {
+      financial.tipAmount = Number(fm.tip_amount || order.tip_amount || 0)
+    }
+    if (fm.coupon_code || order.coupon_code) {
+      financial.couponCode = String(fm.coupon_code || order.coupon_code || '').trim()
+    }
+    
+    // Set payment info
+    if (order.payment_method) {
+      payment.method = order.payment_method
+    }
+    if (order.payment_reference || order.reference_no) {
+      payment.reference_no = String(order.payment_reference || order.reference_no || '').trim()
+    }
+    if (order.payment_rrn || order.rrn) {
+      payment.rrn = String(order.payment_rrn || order.rrn || '').trim()
+    }
+    
+    successMessage.value = `فاکتور ${order.order_code || invoice.order_code} با اطلاعات کامل بارگذاری شد.`
+    expandedInvoiceKey.value = ''
+  } catch (err) {
+    error.value = err.message || 'بارگذاری فاکتور ناموفق بود.'
+  }
+}
+
+async function settleSelectedInvoice(invoice) {
+  // Load invoice items into cart first, then open payment popup
+  if (!invoice?.name) return
+  await selectAndLoadInvoice(invoice)
+  // Close side panel and open payment popup
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup()
+}
+
 function selectCustomerFromHistory(customer) {
   if (!customer) {
     return
@@ -2182,7 +2381,7 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     title: item.title || item.item_name || item.name,
     image: item.image || fallbackImage,
     qty: Number(Number(qty || 1).toFixed(3)),
-    price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? 0),
+    price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? item.price ?? 0),
     item_code: item.name,
     note: '',
     has_customization: Boolean(hasCustomization),
@@ -2227,6 +2426,9 @@ function clearCart() {
   if (!confirmed) {
     return
   }
+  editingOriginalOrder.isEditing = false
+  editingOriginalOrder.name = ''
+  editingOriginalOrder.order_code = ''
   cart.splice(0, cart.length)
   selectedCartLineId.value = ''
   lastRemovedLine.value = null
@@ -3309,7 +3511,7 @@ function resolveCustomerFromQuery() {
   }
 }
 
-async function submitPOSOrder(payNow = true, paymentMeta = {}) {
+async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {
   if (!cart.length) {
     error.value = 'حداقل یک محصول به سبد اضافه کنید.'
     return
@@ -3355,6 +3557,40 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
     return
   }
 
+  // Pay original invoice directly when editing (just SI + Payment, no production)
+  if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+    submitting.value = true
+    error.value = ''
+    successMessage.value = ''
+    try {
+      const paymentMethod = normalizePaymentMethodKind(payment.method)
+      const payResult = await settlePOSOrder(editingOriginalOrder.name, {
+        method: paymentMethod,
+        reference_no: payment.reference_no || '',
+      })
+      const code = editingOriginalOrder.order_code
+      editingOriginalOrder.isEditing = false
+      editingOriginalOrder.name = ''
+      editingOriginalOrder.order_code = ''
+      const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
+      successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
+      if (financial.createNextInvoice) {
+        resetCurrentInvoiceState()
+        saveActiveTicketSnapshot()
+      } else {
+        saveActiveTicketSnapshot()
+      }
+      loadOpenInvoices()
+      loadRecentOrders()
+      await refreshHardwareStatus()
+    } catch (err) {
+      error.value = err.message || 'تسویه فاکتور ناموفق بود.'
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+
   resolveCustomerFromQuery()
 
   const paymentSelection = resolvePaymentSubmission(paymentMeta)
@@ -3384,7 +3620,11 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
     customer_name: form.customer_name || 'POS Customer',
     mobile: form.mobile || '09120000000',
     order_type: form.order_mode,
-    note: [buildOrderNote(), paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : ''].filter(Boolean).join(' | '),
+    note: [
+      buildOrderNote(),
+      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.order_code}` : '',
+      paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : '',
+    ].filter(Boolean).join(' | '),
     customer_type: form.customer_type,
     guest_count: form.guest_count,
     place: form.place,
@@ -3425,20 +3665,54 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
   successMessage.value = ''
 
   try {
-    const result = await createManagementPOSOrder(payload)
-    const paymentState = result.payment?.status
-    const paymentMethod = normalizePaymentMethodKind(result.payment?.method || paymentPayload.method)
-    if (paymentState === 'paid') {
-      successMessage.value = `سفارش ${result.order_code} ثبت و پرداخت شد.`
-    } else if (paymentState === 'pending') {
-      successMessage.value =
-        paymentMethod === 'credit'
-          ? `سفارش ${result.order_code} به صورت اعتباری ثبت شد.`
-          : `سفارش ${result.order_code} ثبت شد و در انتظار پرداخت است.`
-    } else if (paymentState === 'failed') {
-      successMessage.value = `سفارش ${result.order_code} ثبت شد اما پرداخت ناموفق بود.`
+    let result
+    if (payNow) {
+      if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+        // از فاکتور باز اومدیم: فقط SI + Payment رو SO موجود
+        result = await settlePOSOrder(editingOriginalOrder.name, {
+          method: normalizePaymentMethodKind(payment.method),
+          reference_no: payment.reference_no || '',
+        })
+        editingOriginalOrder.isEditing = false
+        editingOriginalOrder.name = ''
+        editingOriginalOrder.order_code = ''
+      } else if (withProduction) {
+        // "ثبت و تسویه فاکتور": SO + تولید + SI + Payment + DN
+        result = await createAndSettlePOSOrder(payload)
+      } else {
+        // "تسویه فاکتور": فقط SO + SI + Payment (بدون تولید، بدون تحویل) - یکجا
+        result = await createAndPayPOSOrder(payload)
+      }
     } else {
-      successMessage.value = `سفارش ${result.order_code} ثبت شد.`
+      // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
+      result = await createPOSOrder(payload)
+    }
+    let orderCode = result.order_code || ''
+    if (payNow) {
+      if (withProduction) {
+        // ثبت و تسویه یکجا (همه چی)
+        const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+        const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+        successMessage.value = `سفارش ${orderCode} تسویه و تحویل شد.${siInfo}${dnInfo}`
+      } else if (editingOriginalOrder.isEditing) {
+        // تسویه از فاکتور باز
+        successMessage.value = `فاکتور ${orderCode} تسویه شد.`
+      } else {
+        // تسویه فاکتور (SO + SI + Payment)
+        const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+        successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}`
+      }
+    } else {
+      successMessage.value = `سفارش ${orderCode} ثبت شد (آماده تولید).`
+    }
+
+    if (editingOriginalOrder.isEditing) {
+      successMessage.value = editingOriginalOrder.order_code
+        ? `آیتم‌ها به فاکتور ${editingOriginalOrder.order_code} اضافه شد.`
+        : 'آیتم‌ها به فاکتور اضافه شد.'
+      editingOriginalOrder.isEditing = false
+      editingOriginalOrder.name = ''
+      editingOriginalOrder.order_code = ''
     }
 
     if (financial.createNextInvoice) {
@@ -5481,6 +5755,117 @@ kbd {
 }
 .settle-order-btn:hover {
   background: #bbf7d0;
+}
+
+
+.open-invoice-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+.accordion-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  transition: box-shadow 0.15s;
+}
+.accordion-card.expanded {
+  border-color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+}
+.accordion-header {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  align-items: center;
+  user-select: none;
+}
+.accordion-header strong {
+  font-size: 13px;
+  color: #111827;
+}
+.accordion-customer {
+  font-size: 11px;
+  color: #6b7280;
+}
+.accordion-amount {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  direction: ltr;
+  text-align: left;
+}
+.accordion-time {
+  font-size: 10px;
+  color: #9ca3af;
+}
+.accordion-chevron {
+  font-size: 10px;
+  color: #9ca3af;
+  text-align: center;
+}
+.accordion-body {
+  border-top: 1px solid #e5e7eb;
+  padding: 8px 12px;
+}
+.accordion-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.accordion-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+.accordion-item-title {
+  flex: 1;
+  color: #374151;
+}
+.accordion-item-qty {
+  color: #6b7280;
+  min-width: 30px;
+  text-align: center;
+}
+.accordion-item-total {
+  font-weight: 600;
+  color: #111827;
+  direction: ltr;
+}
+.accordion-footer {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+.accordion-loading {
+  padding: 8px 12px;
+  text-align: center;
+  color: #9ca3af;
+}
+
+
+.deliver-order-btn {
+  margin-right: auto;
+  padding: 4px 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.deliver-order-btn:hover {
+  background: #bfdbfe;
 }
 
 </style>

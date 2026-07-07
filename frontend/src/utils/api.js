@@ -1295,6 +1295,36 @@ export function confirmManagementPOSPayment({
 	});
 }
 
+
+export async function createPOSOrder(payload = {}) {
+	return callRestaurantAPI("create_pos_order", { payload });
+}
+
+export async function producePOSOrder(order_name = "") {
+	return callRestaurantAPI("produce_pos_order", { order_name });
+}
+
+export async function settlePOSOrder(order_name, payment = {}) {
+	return callRestaurantAPI("settle_pos_order", { order_name, payment });
+}
+
+export async function deliverPOSOrder(order_name = "") {
+	return callRestaurantAPI("deliver_pos_order", { order_name });
+}
+
+export async function produceAndDeliverPOSOrder(order_name = "") {
+	return callRestaurantAPI("produce_and_deliver_pos_order", { order_name });
+}
+
+
+export async function createAndPayPOSOrder(payload = {}) {
+	return callRestaurantAPI("create_and_pay_pos_order", { payload });
+}
+
+export async function createAndSettlePOSOrder(payload = {}) {
+	return callRestaurantAPI("create_and_settle_pos_order", { payload });
+}
+
 export async function markManagementOrderPaid({
 	order_name = "",
 	reference_no = "",

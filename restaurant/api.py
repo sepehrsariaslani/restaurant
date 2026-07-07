@@ -1873,27 +1873,75 @@ def _pos_shift_settings():
 
 
 def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=True):
-	make_stock_entry = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
-	payload = make_stock_entry(work_order_name, purpose, qty=qty)
-	if hasattr(payload, "as_dict"):
-		payload = payload.as_dict()
-	if not isinstance(payload, dict):
-		frappe.throw(_("Could not create stock entry payload for work order {0}.").format(work_order_name))
-
-	stock_entry_doc = frappe.get_doc(payload)
-	stock_entry_doc.insert(ignore_permissions=True)
+	"""Create Stock Entry for a Work Order - uses get_items() before insert()"""
+	wo = frappe.get_doc("Work Order", work_order_name)
+	se = frappe.new_doc("Stock Entry")
+	se.flags.ignore_permissions = True
+	se.company = wo.company
+	se.work_order = work_order_name
+	se.from_bom = 1
+	se.bom_no = wo.bom_no
+	se.fg_completed_qty = flt(qty)
+	se.use_multi_level_bom = 0
+	se.set_process_loss = 0
+	
+	if purpose == "Material Transfer for Manufacture":
+		se.stock_entry_type = "Material Transfer for Manufacture"
+		se.purpose = "Material Transfer for Manufacture"
+		se.to_warehouse = wo.wip_warehouse or wo.source_warehouse
+	elif purpose == "Manufacture":
+		se.stock_entry_type = "Manufacture"
+		se.purpose = "Manufacture"
+	else:
+		se.stock_entry_type = purpose
+		se.purpose = purpose
+	
+	# Get items from BOM BEFORE insert
+	se.get_items()
+	
+	# Allow zero valuation rate for all items (مواد اولیه ممکنه قیمت نداشته باشن)
+	for item in se.get("items") or []:
+		item.allow_zero_valuation_rate = 1
+	
+	if purpose == "Material Transfer for Manufacture":
+		to_remove = []
+		for item in se.get("items") or []:
+			if item.is_finished_item:
+				to_remove.append(item)
+			else:
+				if not item.s_warehouse:
+					item.s_warehouse = wo.source_warehouse
+				if item.t_warehouse:
+					item.t_warehouse = None
+		for item in to_remove:
+			se.items.remove(item)
+		if not se.get("items"):
+			return "already_done_no_items"
+	elif purpose == "Manufacture":
+		for item in se.get("items") or []:
+			if item.is_finished_item:
+				if not item.t_warehouse and wo.fg_warehouse:
+					item.t_warehouse = wo.fg_warehouse
+				if item.s_warehouse:
+					item.s_warehouse = None
+			else:
+				if not item.s_warehouse:
+					item.s_warehouse = wo.wip_warehouse or wo.source_warehouse
+				if item.t_warehouse:
+					item.t_warehouse = None
+	
+	se.flags.ignore_validate = True
+	se.insert()
 	if submit_doc:
-		stock_entry_doc.submit()
-	return stock_entry_doc.name
-
-
+		se.submit()
+	else:
+		se.save()
+	return se.name
 def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 	if not so_name or not frappe.db.exists("DocType", "Delivery Note Item"):
 		return ""
 
-	filters = {"against_sales_order": so_name}
-	if submitted_only:
-		filters["docstatus"] = 1
+	filters = {"against_sales_order": so_name, "docstatus": 1}
 	row = frappe.get_all(
 		"Delivery Note Item",
 		filters=filters,
@@ -1902,36 +1950,69 @@ def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 		limit_page_length=1,
 		ignore_permissions=True,
 	)
-	return (row[0].parent if row else "") or ""
+	if row:
+		# Double-check the parent actually IS a Delivery Note (not SI)
+		parent = row[0].parent
+		if frappe.db.exists("Delivery Note", parent):
+			return parent
+	return ""
 
 
 def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit_doc=True):
-	existing = _existing_delivery_note_for_sales_order(so_name, submitted_only=submit_doc)
-	if existing:
-		return existing
+	"""Create Delivery Note from SO - forces qty regardless of delivered_qty"""
+	# Check if a DN already exists
+	if so_name and frappe.db.exists("DocType", "Delivery Note Item"):
+		row = frappe.get_all("Delivery Note Item",
+			filters={"against_sales_order": so_name, "docstatus": ["!=", 2]},
+			fields=["parent"], limit=1, ignore_permissions=True)
+		if row and frappe.db.exists("Delivery Note", row[0].parent):
+			return row[0].parent
 
-	make_delivery_note = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_delivery_note")
-	payload = make_delivery_note(so_name)
-	if hasattr(payload, "as_dict"):
-		payload = payload.as_dict()
-	if not isinstance(payload, dict):
-		payload = {"doctype": "Delivery Note", **(payload or {})}
+	so = frappe.get_doc("Sales Order", so_name)
+	dn = frappe.new_doc("Delivery Note")
+	dn.company = so.company
+	dn.customer = so.customer
+	dn.set_posting_time = 1
+	dn.posting_date = today()
+	dn.posting_time = frappe.utils.nowtime()
+	dn.flags.ignore_permissions = True
 
-	delivery_doc = frappe.get_doc(payload)
-	fg_warehouse_map = fg_warehouse_map or {}
-	for row in delivery_doc.items or []:
-		if row.get("warehouse"):
+	# Get default warehouse
+	default_wh = frappe.db.get_single_value("Stock Settings", "default_warehouse") or ""
+
+	for item in so.items:
+		pending_qty = flt(item.qty) - flt(item.delivered_qty)
+		if pending_qty <= 0:
 			continue
-		mapped_warehouse = fg_warehouse_map.get(row.get("item_code"))
-		if mapped_warehouse:
-			row.warehouse = mapped_warehouse
+		warehouse = item.warehouse or default_wh
+		if not warehouse:
+			item_default = frappe.get_all("Item Default",
+				filters={"parent": item.item_code, "company": so.company},
+				fields=["default_warehouse"], limit=1, ignore_permissions=True)
+			if item_default:
+				warehouse = item_default[0].default_warehouse or ""
+		dn.append("items", {
+			"item_code": item.item_code,
+			"item_name": item.item_name,
+			"description": item.description or "",
+			"qty": pending_qty,
+			"rate": item.rate,
+			"amount": pending_qty * flt(item.rate),
+			"uom": item.uom,
+			"stock_uom": item.stock_uom or item.uom,
+			"conversion_factor": item.conversion_factor or 1,
+			"warehouse": warehouse,
+			"against_sales_order": so_name,
+			"so_detail": item.name,
+		})
 
-	delivery_doc.insert(ignore_permissions=True)
+	if not dn.items:
+		return ""
+
+	dn.insert()
 	if submit_doc:
-		delivery_doc.submit()
-	return delivery_doc.name
-
-
+		dn.submit()
+	return dn.name
 def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None, force=False):
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
@@ -13904,6 +13985,538 @@ def get_management_pos_boot(branch=None):
 
 
 @frappe.whitelist()
+def create_pos_order(payload):
+    # ثبت سفارش: فقط SO بساز (بدون تولید، بدون پرداخت)
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+    if not isinstance(payload, dict):
+        payload = {}
+    customer_name = (payload.get("customer_name") or "POS Customer").strip()
+    mobile = (payload.get("mobile") or "09120000000").strip()
+    order_type = (payload.get("order_type") or "takeaway").strip()
+    address = (payload.get("address") or "").strip()
+    note = (payload.get("note") or "").strip()
+    items = payload.get("items") or []
+    result = place_order(
+        customer_info={"name": customer_name, "mobile": mobile},
+        order_type=order_type, items=items,
+        address=address, note=note,
+        include_service_items=1,
+    )
+    so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
+    _set_restaurant_order_status(so_name, "confirmed", force=True)
+    _append_sales_order_note(so_name, "[ORDER] Order created.")
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "order_id": so_name,
+        "order_code": result.get("order_code") or "",
+    }
+
+@frappe.whitelist()
+def produce_pos_order(order_name):
+    # شروع تولید: Auto Flow (WO + SE) برا کالاهای BOM دار
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    try:
+        auto_result = _run_sales_order_auto_flow(so_name, trigger="order_submit", force=True)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "ProducePOS AutoFlow")
+        frappe.throw(_("Production auto flow failed."))
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    _append_sales_order_note(so_name, "[PRODUCE] Production started.")
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "order_id": so_name,
+        "automation": auto_result if isinstance(auto_result, dict) else {},
+    }
+
+@frappe.whitelist()
+@frappe.whitelist()
+
+@frappe.whitelist()
+def create_and_pay_pos_order(payload):
+    """ثبت + تسویه: SO ساخته میشه بعد SI + Payment یکجا (بدون تولید)"""
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+    if not isinstance(payload, dict):
+        payload = {}
+    
+    # 1. فقط SO بساز (بدون پرداخت)
+    order_result = create_pos_order(payload)
+    so_name = order_result.get("order_id", "")
+    
+    # 2. از روی همون SO, SI + Payment بزن
+    payment_info = _parse_json(payload.get("payment"), {})
+    settle_result = settle_pos_order(
+        order_name=so_name,
+        payment=payment_info,
+    )
+    
+    return {
+        "order_id": so_name,
+        "order_code": order_result.get("order_code", ""),
+        "status": "success",
+        "sales_invoice": settle_result.get("sales_invoice", ""),
+    }
+
+def _resolve_pos_mode_of_payment(method):
+    """Get mode of payment from DB that has a default account"""
+    if not frappe.db.exists("DocType", "Mode of Payment"):
+        return method
+    all_modes = frappe.get_all("Mode of Payment", fields=["name", "type"], ignore_permissions=True)
+    # Filter to only modes that have an account configured
+    valid_modes = []
+    for m in all_modes:
+        accts = frappe.get_all("Mode of Payment Account",
+            filters={"parent": m.name},
+            fields=["default_account"],
+            ignore_permissions=True, limit=1)
+        if accts and accts[0].get("default_account"):
+            valid_modes.append(m)
+    if not valid_modes:
+        valid_modes = all_modes
+    # Try exact match first
+    for m in valid_modes:
+        if m.name.lower() == method.lower():
+            return m.name
+    # Try type match
+    mode_type_map = {"cash": "Cash", "card": "Bank", "credit": "Credit", "bank": "Bank"}
+    expected_type = mode_type_map.get(method)
+    if expected_type:
+        for m in valid_modes:
+            if (m.type or "").strip() == expected_type:
+                return m.name
+    # First available
+    if valid_modes:
+        return valid_modes[0].name
+    if all_modes:
+        return all_modes[0].name
+    return method
+
+@frappe.whitelist()
+def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
+    # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    payment = _parse_json(payment, {})
+    method = _normalize_payment_method(payment.get("method") or "cash")
+    manual_ref = (reference_no or payment.get("reference_no") or "").strip()
+    result = {"sales_order": so_name}
+    # 1. Sales Invoice from SO
+    mode_of_payment = method
+    try:
+        make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
+        si_doc = make_si(so_name)
+        if hasattr(si_doc, "as_dict"):
+            si_doc.is_pos = 1
+            si_doc.update_stock = 0
+        elif isinstance(si_doc, dict):
+            si_doc["is_pos"] = 1
+            si_doc["update_stock"] = 0
+            si_doc = frappe.get_doc(si_doc)
+        else:
+            si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
+            si_doc.is_pos = 1
+
+        grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
+
+        # گرفتن نحوه پرداخت واقعی از داده باسی (به جای هاردکد)
+        mode_of_payment = _resolve_pos_mode_of_payment(method)
+
+        # Set payment on SI before insert
+        if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
+            si_doc.payments = []
+        si_doc.append("payments", {
+            "mode_of_payment": mode_of_payment,
+            "amount": grand_total if grand_total > 0 else 1,
+            "default": 1,
+        })
+
+        si_doc.flags.ignore_permissions = True
+        si_doc.insert()
+        si_doc.submit()
+        result["sales_invoice"] = si_doc.name
+
+        # 2. Payment Entry if not credit
+        if method != "credit" and si_doc.docstatus == 1:
+            try:
+                from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+                pe = get_payment_entry("Sales Invoice", si_doc.name)
+                pe.reference_no = manual_ref or si_doc.name
+                pe.reference_date = today()
+                pe.mode_of_payment = mode_of_payment
+                pe.paid_amount = grand_total
+                pe.received_amount = grand_total
+                pe.flags.ignore_permissions = True
+                pe.insert()
+                pe.submit()
+                frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
+                frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
+                result["payment_entry"] = pe.name
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Settle SI Payment")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Settle POS SI")
+        result["invoice_error"] = "SI creation failed"
+    _set_restaurant_order_status(so_name, "paid", force=True)
+    _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
+    # Save normalized method (cash/card/credit) not Persian name
+    if _has_column("Sales Order", "restaurant_payment_method"):
+        so_doc = frappe.get_doc("Sales Order", so_name)
+        so_doc.restaurant_payment_method = method
+        so_doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    return result
+
+@frappe.whitelist()
+def deliver_pos_order(order_name):
+    # تولید و تحویل: WO → SE → Finish WO → DN
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+
+    so_doc = frappe.get_doc("Sales Order", so_name)
+    result = {"sales_order": so_name}
+
+    # ایجاد Production Ticket
+    ticket_names = []
+    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+        ticket_names = frappe.get_all(
+            "Restaurant Production Ticket",
+            filters={"sales_order": so_name},
+            pluck="name", ignore_permissions=True, order_by="creation asc"
+        )
+    if not ticket_names:
+        cp = _create_production_for_sales_order(so_doc)
+        ticket_names = cp.get("production_tickets") or []
+        result["tickets_created"] = ticket_names
+
+    # اجرای تولید کامل
+    for ticket_name in ticket_names:
+        if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
+            continue
+        ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
+        wo_name = ticket.get("work_order") or ""
+        if not wo_name or not frappe.db.exists("Work Order", wo_name):
+            continue
+
+        wo = frappe.get_doc("Work Order", wo_name)
+        if wo.docstatus == 0:
+            wo.flags.ignore_permissions = True
+            wo.submit()
+            wo = frappe.get_doc("Work Order", wo.name)
+            result.setdefault("submitted_work_orders", []).append(wo.name)
+
+        if wo.docstatus != 1:
+            continue
+
+        # Material Transfer - فقط اگه هنوز انتقال پیدا نکرده
+        pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
+        if pending_transfer > 1e-8:
+            se = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
+            if se:
+                result.setdefault("stock_entries_material", []).append(se)
+        else:
+            result.setdefault("stock_entries_material", []).append("already_transferred")
+
+        # Manufacture - تولید محصول نهایی (اگه هنوز تولید نشده)
+        wo = frappe.get_doc("Work Order", wo.name)
+        pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
+        if pending_manufacture > 1e-8:
+            se = _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
+            if se:
+                result.setdefault("stock_entries_manufacture", []).append(se)
+        else:
+            result.setdefault("stock_entries_manufacture", []).append("already_manufactured")
+
+        # Update WO
+        wo = frappe.get_doc("Work Order", wo.name)
+        if hasattr(wo, "update_work_order_qty"):
+            try: wo.update_work_order_qty()
+            except: pass
+        if hasattr(wo, "update_status"):
+            try: wo.update_status()
+            except: pass
+        if flt(wo.produced_qty) >= flt(wo.qty) - 1e-8:
+            if ticket.get("status") != "completed":
+                ticket.db_set("status", "completed", update_modified=False)
+
+    # رسید تحویل
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if dn_name:
+            result["delivery_note"] = dn_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Deliver POS DN")
+        frappe.throw(_("Delivery Note creation failed."))
+
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+    _append_sales_order_note(so_name, "[DELIVER] Production and delivery completed.")
+    frappe.db.commit()
+    return result
+
+@frappe.whitelist()
+def produce_and_deliver_pos_order(order_name):
+    # تولید هوشمند + تحویل (بدون وابستگی به تنظیمات - همه مراحل رو اجباری اجرا میکنه)
+    # 1) چک میکنه اگه محصول تو انبار هست -> نیازی به تولید نیست
+    # 2) اگه تو انبار نیست و BOM داره -> تولید کامل (WO + SE Material Transfer + SE Manufacture)
+    # 3) رسید تحویل (DN)
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+
+    so_doc = frappe.get_doc("Sales Order", so_name)
+    result = {"sales_order": so_name}
+
+    # برا هر آیتم چک کن که تو انبار هست یا نیاز به تولید داره
+    needs_any_production = False
+    skip_items = []
+    stock_items = []
+    for item in so_doc.items:
+        item_code = item.item_code
+        item_doc = frappe.get_doc("Item", item_code)
+
+        # اگر BOM نداره -> تولید نمیخواد
+        if not _item_requires_production(item_doc):
+            skip_items.append({"item": item_code, "reason": "no_production_required"})
+            continue
+
+        has_bom = frappe.db.exists("BOM", {"item": item_code, "is_active": 1, "docstatus": 1})
+        if not has_bom:
+            skip_items.append({"item": item_code, "reason": "no_active_bom"})
+            continue
+
+        # موجودی انبار رو چک کن
+        warehouse = None
+        default_wh = frappe.db.get_value("Item Default", {"parent": item_code, "company": so_doc.company}, "default_warehouse")
+        if default_wh:
+            warehouse = default_wh
+        else:
+            warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
+
+        actual_qty = 0
+        if warehouse and frappe.db.exists("DocType", "Bin"):
+            bin_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")
+            if bin_data:
+                actual_qty = flt(bin_data)
+
+        required_qty = flt(item.qty)
+
+        if actual_qty >= required_qty:
+            # تو انبار هست -> نیازی به تولید نداره
+            stock_items.append({"item": item_code, "available": actual_qty, "required": required_qty})
+            continue
+
+        needs_any_production = True
+
+    result["in_stock_skip"] = stock_items
+    result["production_skip"] = skip_items
+    result["needs_production"] = needs_any_production
+
+    if not needs_any_production:
+        # اگه هیچی نیاز به تولید نداره، فقط برو رسید تحویل
+        try:
+            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+            if dn_name:
+                result["delivery_note"] = dn_name
+        except Exception:
+            pass
+        _set_restaurant_order_status(so_name, "delivered", force=True)
+        _append_sales_order_note(so_name, "[PRODUCE_DELIVER] All items in stock. Delivered directly.")
+        frappe.db.commit()
+        return result
+
+    # 1. ایجاد Production Ticket (اگه وجود نداره)
+    ticket_names = []
+    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+        ticket_names = frappe.get_all(
+            "Restaurant Production Ticket",
+            filters={"sales_order": so_name},
+            pluck="name", ignore_permissions=True, order_by="creation asc"
+        )
+
+    if not ticket_names:
+        creation_payload = _create_production_for_sales_order(so_doc)
+        ticket_names = creation_payload.get("production_tickets") or []
+        result["tickets_created"] = ticket_names
+
+    # 2. اجرای کامل تولید برای هر تیکت
+    se_list = []
+    for ticket_name in ticket_names:
+        if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
+            continue
+        ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
+        wo_name = ticket.get("work_order") or ""
+
+        if not wo_name or not frappe.db.exists("Work Order", wo_name):
+            continue
+
+        wo = frappe.get_doc("Work Order", wo_name)
+
+        # Submit Work Order (اگه هنوز submit نشده)
+        if wo.docstatus == 0:
+            wo.flags.ignore_permissions = True
+            wo.submit()
+            wo = frappe.get_doc("Work Order", wo.name)
+            result.setdefault("submitted_work_orders", []).append(wo.name)
+
+        if wo.docstatus != 1:
+            continue
+
+        # Material Transfer for Manufacture - فقط اگه انتقال کامل نشده
+        pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
+        if pending_transfer > 1e-8:
+            se_name = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
+            if se_name:
+                se_list.append(se_name)
+                result.setdefault("stock_entries_material", []).append(se_name)
+
+        # Manufacture - فقط اگه تولید کامل نشده
+        wo = frappe.get_doc("Work Order", wo.name)
+        pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
+        if pending_manufacture > 1e-8:
+            se_name = _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
+            if se_name:
+                se_list.append(se_name)
+                result.setdefault("stock_entries_manufacture", []).append(se_name)
+
+        # به‌روزرسانی Work Order
+        wo = frappe.get_doc("Work Order", wo.name)
+        if hasattr(wo, "update_work_order_qty"):
+            try:
+                wo.update_work_order_qty()
+            except Exception:
+                pass
+        if hasattr(wo, "update_status"):
+            try:
+                wo.update_status()
+            except Exception:
+                pass
+
+        # Mark ticket as completed
+        if flt(wo.produced_qty) >= flt(wo.qty) - 1e-8:
+            if ticket.get("status") or "" != "completed":
+                ticket.db_set("status", "completed", update_modified=False)
+
+    result["stock_entries"] = se_list
+
+    # 3. رسید تحویل
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if dn_name:
+            result["delivery_note"] = dn_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "ProduceAndDeliver DN")
+        frappe.throw(_("Delivery Note creation failed."))
+
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+    _append_sales_order_note(so_name, "[PRODUCE_DELIVER] Full production and delivery completed.")
+    frappe.db.commit()
+    return result
+
+@frappe.whitelist()
+def create_and_settle_pos_order(payload):
+    # تسویه و تحویل: SO + Production + SI + DN + Payment - همه چیز
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+
+    # 1. ثبت سفارش
+    order_result = create_pos_order(payload)
+    so_name = order_result.get("order_id", "")
+
+    # 2. رسید تحویل - سعی کن اول بساز (اگر ساخت که عالیه)
+    dn_name = None
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error")
+
+    # 3. تولید (اگه نیاز باشه)
+    prod_result = {}
+    try:
+        so_doc = frappe.get_doc("Sales Order", so_name)
+        ticket_names = []
+        if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+            ticket_names = frappe.get_all(
+                "Restaurant Production Ticket", filters={"sales_order": so_name},
+                pluck="name", ignore_permissions=True, order_by="creation asc"
+            )
+        if not ticket_names:
+            cp = _create_production_for_sales_order(so_doc)
+            ticket_names = cp.get("production_tickets") or []
+        for ticket_name in ticket_names:
+            if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
+                continue
+            ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
+            wo_name = ticket.get("work_order") or ""
+            if not wo_name or not frappe.db.exists("Work Order", wo_name):
+                continue
+            wo = frappe.get_doc("Work Order", wo_name)
+            if wo.docstatus == 0:
+                wo.flags.ignore_permissions = True
+                wo.submit()
+                wo = frappe.get_doc("Work Order", wo.name)
+            if wo.docstatus != 1:
+                continue
+            pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
+            if pending_transfer > 1e-8:
+                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
+            wo = frappe.get_doc("Work Order", wo.name)
+            pending_mfg = max(flt(wo.qty) - flt(wo.produced_qty), 0)
+            if pending_mfg > 1e-8:
+                _create_work_order_stock_entry(wo.name, "Manufacture", pending_mfg, submit_doc=True)
+            wo = frappe.get_doc("Work Order", wo.name)
+            if hasattr(wo, "update_work_order_qty"):
+                try: wo.update_work_order_qty()
+                except: pass
+            if hasattr(wo, "update_status"):
+                try: wo.update_status()
+                except: pass
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "CreateAndSettle Production")
+
+    # 4. تسویه (SI + Payment)
+    payment = payload.get("payment", {})
+    settle_result = settle_pos_order(order_name=so_name, payment=payment)
+
+    # 5. اگر رسید تحویل ساخته نشد (مرحله ۲)، دوباره تلاش کن
+    if not dn_name:
+        try:
+            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+            if dn_name:
+                frappe.log_error(f"DN created at retry: {dn_name}", "CreateAndSettle DN Retry")
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Retry Error")
+
+    # Set delivered after all steps complete
+    _set_restaurant_order_status(so_name, "delivered", force=True)
+    frappe.db.commit()
+
+    return {
+        "status": "success",
+        "order_id": so_name,
+        "order_code": order_result.get("order_code", ""),
+        "sales_invoice": settle_result.get("sales_invoice", ""),
+        "delivery_note": dn_name or "",
+    }
+
+@frappe.whitelist()
 def create_management_pos_order(payload):
 	_ensure_management_access()
 	payload = _parse_json(payload, {})
@@ -13940,11 +14553,6 @@ def create_management_pos_order(payload):
 			"message": _("Order was created, but payment integration failed."),
 			"provider_payload": {},
 		}
-
-	frappe.db.commit()
-	return result
-
-
 @frappe.whitelist()
 def confirm_management_pos_payment(
 	order_name, status="paid", reference_no=None, rrn=None, provider_payload=None
