@@ -14082,6 +14082,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     manual_ref = (reference_no or payment.get("reference_no") or "").strip()
     result = {"sales_order": so_name}
     # 1. Sales Invoice from SO
+    mode_of_payment = method
     try:
         make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
         si_doc = make_si(so_name)
@@ -14140,10 +14141,8 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
     if _has_column("Sales Order", "restaurant_payment_method"):
         so_doc = frappe.get_doc("Sales Order", so_name)
-        payment_method = mode_map.get(method, "")
-        if payment_method:
-            so_doc.restaurant_payment_method = payment_method
-            so_doc.save(ignore_permissions=True)
+        so_doc.restaurant_payment_method = mode_of_payment
+        so_doc.save(ignore_permissions=True)
     frappe.db.commit()
     return result
 
