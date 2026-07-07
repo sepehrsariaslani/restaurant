@@ -13957,7 +13957,7 @@ def produce_pos_order(order_name):
 
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
-    # تسویه: SI (POS) + Payment + DN
+    # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
