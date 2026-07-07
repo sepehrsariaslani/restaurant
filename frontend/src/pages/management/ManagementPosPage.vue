@@ -2011,22 +2011,51 @@ async function selectAndLoadInvoice(invoice) {
     // Reset financial state
     Object.assign(financial, defaultFinancialState())
     
-    // Load items into cart with full pricing
+    // Build a lookup map from loaded products (keyed by item code / name)
+    const productByItemCode = {}
+    for (const p of products.value) {
+      const code = String(p.name || '').trim().toLowerCase()
+      if (code) productByItemCode[code] = p
+      const slug = String(p.slug || p.restaurant_slug || '').trim().toLowerCase()
+      if (slug) productByItemCode[slug] = p
+    }
+    
+    // Load items into cart with correct slug and pricing
     const items = order?.items || []
     for (const item of items) {
       const qty = Number(item.qty || 1)
       if (qty <= 0) continue
       
-      addToCart({
-        slug: item.slug || item.item_code || item.name || item.title,
-        title: item.title || item.item_name || 'آیتم',
-        item_name: item.title || item.item_name || 'آیتم',
-        name: item.item_code || item.name || '',
-        base_price: Number(item.unit_price || item.price || 0),
-        standard_rate: Number(item.unit_price || item.price || 0),
-        price: Number(item.unit_price || item.price || 0),
-        image: item.image || '',
-      }, qty)
+      const itemCode = String(item.item_code || item.name || item.title || '').trim()
+      const matchedProduct = productByItemCode[itemCode.toLowerCase()]
+      
+      if (matchedProduct) {
+        // Use the real product with correct slug from loaded products
+        const unitPrice = Number(item.unit_price || item.price || matchedProduct.base_price || matchedProduct.standard_rate || 0)
+        addToCart({
+          slug: matchedProduct.slug || matchedProduct.restaurant_slug,
+          name: matchedProduct.name,
+          title: matchedProduct.title || matchedProduct.item_name || item.title,
+          item_name: matchedProduct.item_name || matchedProduct.title || item.title,
+          base_price: unitPrice,
+          standard_rate: unitPrice,
+          price: unitPrice,
+          image: matchedProduct.image || item.image || '',
+        }, qty, null, false, unitPrice)
+      } else {
+        // Fallback: use item_code as-is and just set price
+        const unitPrice = Number(item.unit_price || item.price || 0)
+        addToCart({
+          slug: itemCode,
+          name: itemCode,
+          title: item.title || item.item_name || itemCode || 'آیتم',
+          item_name: item.title || item.item_name || itemCode || 'آیتم',
+          base_price: unitPrice,
+          standard_rate: unitPrice,
+          price: unitPrice,
+          image: item.image || '',
+        }, qty, null, false, unitPrice)
+      }
     }
     
     // Apply financial modifiers from order if available
@@ -2285,7 +2314,7 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     title: item.title || item.item_name || item.name,
     image: item.image || fallbackImage,
     qty: Number(Number(qty || 1).toFixed(3)),
-    price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? 0),
+    price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? item.price ?? 0),
     item_code: item.name,
     note: '',
     has_customization: Boolean(hasCustomization),
