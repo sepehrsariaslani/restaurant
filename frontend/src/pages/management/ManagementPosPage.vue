@@ -104,7 +104,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true)"
+            @submit-and-settle="submitPOSOrder(true, {}, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -427,7 +427,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true)"
+            @submit-and-settle="submitPOSOrder(true, {}, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -3500,7 +3500,7 @@ function resolveCustomerFromQuery() {
   }
 }
 
-async function submitPOSOrder(payNow = true, paymentMeta = {}) {
+async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {
   if (!cart.length) {
     error.value = 'حداقل یک محصول به سبد اضافه کنید.'
     return
@@ -3546,25 +3546,27 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
     return
   }
 
-  // Pay original invoice directly when editing
+  // Pay original invoice directly when editing (just SI + Payment, no production)
   if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
     submitting.value = true
     error.value = ''
     successMessage.value = ''
     try {
-      await markManagementOrderPaid({
-        order_name: editingOriginalOrder.name,
+      const paymentMethod = normalizePaymentMethodKind(payment.method)
+      const payResult = await settlePOSOrder(editingOriginalOrder.name, {
+        method: paymentMethod,
         reference_no: payment.reference_no || '',
-        rrn: payment.rrn || '',
-        provider_payload: { source: 'management-pos-settle-editing' },
       })
       const code = editingOriginalOrder.order_code
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
       editingOriginalOrder.order_code = ''
-      successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.`
+      const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
+      successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
       if (financial.createNextInvoice) {
         resetCurrentInvoiceState()
+        saveActiveTicketSnapshot()
+      } else {
         saveActiveTicketSnapshot()
       }
       loadOpenInvoices()
@@ -3654,17 +3656,43 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}) {
   try {
     let result
     if (payNow) {
-      // ثبت + تسویه یکجا
-      result = await createAndSettlePOSOrder(payload)
+      if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+        // از فاکتور باز اومدیم: فقط SI + Payment رو SO موجود
+        result = await settlePOSOrder(editingOriginalOrder.name, {
+          method: normalizePaymentMethodKind(payment.method),
+          reference_no: payment.reference_no || '',
+        })
+        editingOriginalOrder.isEditing = false
+        editingOriginalOrder.name = ''
+        editingOriginalOrder.order_code = ''
+      } else if (withProduction) {
+        // "ثبت و تسویه فاکتور": SO + تولید + SI + Payment + DN
+        result = await createAndSettlePOSOrder(payload)
+      } else {
+        // "تسویه فاکتور": فقط SO + SI + Payment (بدون تولید، بدون تحویل)
+        const soResult = await createPOSOrder(payload)
+        result = await settlePOSOrder(soResult.order_id, payload.payment)
+        result.order_code = soResult.order_code
+      }
     } else {
       // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
       result = await createPOSOrder(payload)
     }
     let orderCode = result.order_code || ''
     if (payNow) {
-      const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
-      const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-      successMessage.value = `سفارش ${orderCode} ثبت و تسویه کامل شد.${siInfo}${dnInfo}`
+      if (withProduction) {
+        // ثبت و تسویه یکجا (همه چی)
+        const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+        const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+        successMessage.value = `سفارش ${orderCode} ثبت و تسویه کامل شد.${siInfo}${dnInfo}`
+      } else if (editingOriginalOrder.isEditing) {
+        // تسویه از فاکتور باز
+        successMessage.value = `فاکتور ${orderCode} تسویه شد.`
+      } else {
+        // تسویه فاکتور (SO + SI + Payment)
+        const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+        successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}`
+      }
     } else {
       successMessage.value = `سفارش ${orderCode} ثبت شد (آماده تولید).`
     }
