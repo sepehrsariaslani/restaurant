@@ -1899,6 +1899,10 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 	# Get items from BOM BEFORE insert
 	se.get_items()
 	
+	# Allow zero valuation rate for all items (مواد اولیه ممکنه قیمت نداشته باشن)
+	for item in se.get("items") or []:
+		item.allow_zero_valuation_rate = 1
+	
 	if purpose == "Material Transfer for Manufacture":
 		to_remove = []
 		for item in se.get("items") or []:
