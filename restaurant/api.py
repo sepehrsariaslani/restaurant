@@ -1873,15 +1873,20 @@ def _pos_shift_settings():
 
 
 def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=True):
-	make_stock_entry = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
-	payload = make_stock_entry(work_order_name, purpose, qty=qty)
+	make_stock_entry_fn = frappe.get_attr("erpnext.manufacturing.doctype.work_order.work_order.make_stock_entry")
+	payload = make_stock_entry_fn(work_order_name, purpose, qty=qty)
+	if payload is None:
+		frappe.throw(_("Could not create stock entry for work order {0}. Check BOM and stock.").format(work_order_name))
 	if hasattr(payload, "as_dict"):
 		payload = payload.as_dict()
 	if not isinstance(payload, dict):
-		frappe.throw(_("Could not create stock entry payload for work order {0}.").format(work_order_name))
+		payload = payload or {}
+	if not payload.get("doctype"):
+		payload["doctype"] = "Stock Entry"
 
 	stock_entry_doc = frappe.get_doc(payload)
-	stock_entry_doc.insert(ignore_permissions=True)
+	stock_entry_doc.flags.ignore_permissions = True
+	stock_entry_doc.insert()
 	if submit_doc:
 		stock_entry_doc.submit()
 	return stock_entry_doc.name
@@ -13985,36 +13990,38 @@ def create_and_pay_pos_order(payload):
     }
 
 def _resolve_pos_mode_of_payment(method):
-    """گرفتن نام نحوه پرداخت واقعی از داده باسی"""
+    """Get mode of payment from DB that has a default account"""
     if not frappe.db.exists("DocType", "Mode of Payment"):
         return method
-    mode_map = {
-        "cash": {"نقد", "نقدی", "Cash", "cash", "نقدی"},
-        "card": {"کارت", "کارت خوان", "پوز", "Card", "card", "کارت خوان"},
-        "credit": {"اعتبار", "اعتباری", "Credit", "credit", "اعتباری"},
-        "bank": {"حواله", "بانک", "Bank", "bank", "حواله بانکی"},
-    }
-    # اول از داده باسی بگیر
     all_modes = frappe.get_all("Mode of Payment", fields=["name", "type"], ignore_permissions=True)
-    
-    # اگر method خودش یکی از موجودهاست
+    # Filter to only modes that have a default account configured
+    valid_modes = []
     for m in all_modes:
+        accts = frappe.get_all("Mode of Payment Account",
+            filters={"parent": m.name, "default": 1},
+            fields=["default_account"],
+            ignore_permissions=True, limit=1)
+        if accts and accts[0].get("default_account"):
+            valid_modes.append(m)
+    if not valid_modes:
+        valid_modes = all_modes
+    # Try exact match first
+    for m in valid_modes:
         if m.name.lower() == method.lower():
             return m.name
-    
-    # ورنه بر اساس type بجستجو کن
-    candidate_types = mode_map.get(method, set())
-    for m in all_modes:
-        mtype = (m.type or "").strip().lower()
-        if mtype in candidate_types or m.name.lower() in candidate_types:
-            return m.name
-    
-    # اگر هیچکدام پیدا نشد، اولین موجود رو برگردان
+    # Try type match
+    mode_type_map = {"cash": "Cash", "card": "Bank", "credit": "Credit", "bank": "Bank"}
+    expected_type = mode_type_map.get(method)
+    if expected_type:
+        for m in valid_modes:
+            if (m.type or "").strip() == expected_type:
+                return m.name
+    # First available
+    if valid_modes:
+        return valid_modes[0].name
     if all_modes:
         return all_modes[0].name
-    
     return method
-
 
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
