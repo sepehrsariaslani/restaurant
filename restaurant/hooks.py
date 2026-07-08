@@ -146,7 +146,7 @@ website_route_rules = [
 		"to_route": "management/builder_template",
 	},
 	{"from_route": "/management/builder-template/new", "to_route": "management/builder_template"},
-	{"from_route": "/kitchen", "to_route": "kitchen"},
+	{"from_route": "/management/kitchen", "to_route": "management/kitchen"},
 ]
 
 # Jinja

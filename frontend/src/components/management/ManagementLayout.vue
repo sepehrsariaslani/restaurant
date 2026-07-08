@@ -577,7 +577,7 @@ const navLinks = computed(() => {
 			shortLabel: "آشپز",
 			caption: "نمایشگر تولید",
 			iconComponent: KitchenIcon,
-			url: "/kitchen",
+			url: "/management/kitchen",
 			target: "_blank",
 			group: "sales",
 		},

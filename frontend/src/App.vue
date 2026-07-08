@@ -249,7 +249,7 @@ function resolveInitialPage() {
     }
     if (pathname.startsWith('/checkout')) return 'checkout'
     if (pathname.startsWith('/payment/fail') || pathname.startsWith('/payment-fail')) return 'payment-fail'
-    if (pathname.startsWith('/kitchen')) return 'kitchen'
+    if (pathname.startsWith('/management/kitchen')) return 'kitchen'
     if (pathname.startsWith('/payment/callback')) return 'payment-callback'
     if (pathname.startsWith('/payment/')) return 'payment'
     if (pathname.startsWith('/bom-preview/')) return 'bom-preview'
