@@ -2652,16 +2652,12 @@ async function confirmSettleOrder() {
   orderDetailModal.settling = true
   orderDetailModal.settleError = ''
   try {
-    await markManagementOrderPaid({
-      order_name: orderDetailModal.order.name,
+    const result = await settlePOSOrder(orderDetailModal.order.name, {
+      method: orderDetailModal.settleMethod,
       reference_no: orderDetailModal.settleReference || '',
-      rrn: '',
-      provider_payload: {
-        source: 'management-pos-settle',
-        method: orderDetailModal.settleMethod,
-      },
     })
-    successMessage.value = `سفارش ${orderDetailModal.order.order_code} با موفقیت تسویه شد.`
+    const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+    successMessage.value = `سفارش ${orderDetailModal.order.order_code} تسویه شد.${siInfo}`
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
       await loadTodayTransactions()
