@@ -545,115 +545,112 @@
     />
 
     <!-- Order Detail / Edit Modal -->
-    <div v-if="orderDetailModal.open" class="pos-modal-backdrop" @click.self="closeOrderDetailModal">
-      <section class="pos-modal" dir="rtl">
-        <header class="pos-modal-head">
-          <div>
-            <h3>جزئیات سفارش</h3>
-            <small v-if="orderDetailModal.order">{{ orderDetailModal.order.order_code }}</small>
+    <div v-if="orderDetailModal.open" class="od-modal-overlay" @click.self="closeOrderDetailModal">
+      <div class="od-modal">
+        <div class="od-header">
+          <div class="od-header-info">
+            <span class="od-badge" :class="`od-badge-${orderDetailModal.order?.status || ''}`">
+              {{ formatStatus(orderDetailModal.order?.status || '') }}
+            </span>
+            <h3>{{ orderDetailModal.order?.order_code || 'جزئیات سفارش' }}</h3>
+            <span class="od-time" v-if="orderDetailModal.order?.created_at">
+              {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}
+            </span>
           </div>
-          <button type="button" class="pos-modal-close" @click="closeOrderDetailModal">×</button>
-        </header>
-        <p class="muted pos-modal-loading" v-if="orderDetailModal.loading">در حال دریافت...</p>
-        <p class="error pos-modal-loading" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
+          <button class="od-close" @click="closeOrderDetailModal">✕</button>
+        </div>
+
+        <p class="od-loading" v-if="orderDetailModal.loading">در حال دریافت...</p>
+        <p class="od-error" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
+
         <template v-else-if="orderDetailModal.order">
-          <div class="order-detail-meta">
-            <span>مشتری: {{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
-            <span>زمان: {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}</span>
-            <span class="history-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
-            <span class="history-method-badge" v-if="orderDetailModal.order.payment_method">
-              {{ paymentMethodDisplayLabel(orderDetailModal.order.payment_method) }}
-            </span>
-            <span class="order-status-badge" :class="`status-${orderDetailModal.order.status}`">
-              {{ formatStatus(orderDetailModal.order.status) }}
-            </span>
-          </div>
-          <ul class="order-detail-items">
-            <li v-for="(item, idx) in orderDetailModal.order.items || []" :key="idx">
-              <span>{{ item.title }}</span>
-              <span>× {{ formatCompactNumber(item.qty, 2) }}</span>
-              <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
-            </li>
-          </ul>
-          <div class="order-detail-edit-form">
-            <h4>ویرایش اطلاعات</h4>
-            <label>
-              نام مشتری
-              <input class="input dark-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
-            </label>
-            <label>
-              روش پرداخت
-              <select class="input dark-input" v-model="orderDetailModal.editForm.payment_method">
-                <option value="">انتخاب نشده</option>
-                <option
-                  v-for="option in editablePaymentMethodOptions"
-                  :key="option.method"
-                  :value="option.method"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <label>
-              یادداشت
-              <textarea class="input dark-input" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت سفارش..."></textarea>
-            </label>
-          </div>
-          <p class="error pos-modal-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
           
-          <div class="order-settle-section" v-if="orderDetailModal.canSettle">
-            <h4>تسویه سفارش</h4>
-            <div class="settle-row">
-              <label class="settle-label">روش پرداخت:</label>
-              <select class="input dark-input settle-select" v-model="orderDetailModal.settleMethod">
-                <option value="">انتخاب کنید</option>
-                <option
-                  v-for="option in editablePaymentMethodOptions"
-                  :key="option.method"
-                  :value="option.method"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-            <div class="settle-row" v-if="['card','pos','bank','terminal'].includes(orderDetailModal.settleMethod)">
-              <label class="settle-label">شماره مرجع:</label>
-              <input class="input dark-input settle-input" v-model="orderDetailModal.settleReference" placeholder="شماره پیگیری" />
-            </div>
-            <div class="settle-row">
-              <label class="settle-label">مبلغ:</label>
-              <span class="settle-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
-            </div>
-            <p class="error" v-if="orderDetailModal.settleError">{{ orderDetailModal.settleError }}</p>
-            <div class="settle-actions">
-              <button
-                type="button"
-                class="tbl-btn success settle-btn"
-                :disabled="orderDetailModal.settling || !orderDetailModal.settleMethod"
-                @click="confirmSettleOrder"
-              >
-                <span v-if="orderDetailModal.settling">...</span>
-                <span v-else>&check; ثبت و تسویه</span>
-              </button>
+          <!-- Customer & Payment Summary -->
+          <div class="od-summary">
+            <div class="od-summary-row">
+              <div class="od-summary-item">
+                <span class="od-label">مشتری</span>
+                <span class="od-value">{{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
+              </div>
+              <div class="od-summary-item">
+                <span class="od-label">روش پرداخت</span>
+                <span class="od-value" v-if="orderDetailModal.order.payment_method">{{ paymentMethodDisplayLabel(orderDetailModal.order.payment_method) }}</span>
+                <span class="od-value muted" v-else>ثبت نشده</span>
+              </div>
+              <div class="od-summary-item">
+                <span class="od-label">مبلغ کل</span>
+                <span class="od-value od-price">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="pos-modal-actions">
-            <button
-              type="button"
-              class="tbl-btn danger"
-              @click="openReturnInvoiceModal"
-              v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())"
-            >
-              فاکتور برگشتی
-            </button>
-            <button type="button" class="tbl-btn" @click="closeOrderDetailModal">انصراف</button>
-            <button type="button" class="tbl-btn primary" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
-              {{ orderDetailModal.saving ? '...' : 'ذخیره تغییرات' }}
-            </button>
+          <!-- Items -->
+          <div class="od-items">
+            <div class="od-items-head">
+              <span>آیتم‌ها</span>
+              <span class="od-items-count">{{ (orderDetailModal.order.items || []).length }} عنوان</span>
+            </div>
+            <div v-for="(item, idx) in orderDetailModal.order.items || []" :key="idx" class="od-item">
+              <div class="od-item-info">
+                <span class="od-item-name">{{ item.title }}</span>
+                <span class="od-item-qty">×{{ formatCompactNumber(item.qty, 2) }}</span>
+              </div>
+              <span class="od-item-price">{{ formatMoney(item.line_total || 0, currency) }}</span>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="od-note" v-if="orderDetailModal.order.note">
+            <span class="od-label">یادداشت</span>
+            <p>{{ orderDetailModal.order.note }}</p>
+          </div>
+
+          <!-- Actions -->
+          <div class="od-actions">
+            
+            <!-- Settle Section (for unpaid orders) -->
+            <div class="od-settle" v-if="orderDetailModal.canSettle">
+              <div class="od-settle-row">
+                <select class="od-select" v-model="orderDetailModal.settleMethod">
+                  <option value="">روش پرداخت...</option>
+                  <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
+                </select>
+                <input class="od-input" v-if="['card','pos','bank','terminal'].includes(orderDetailModal.settleMethod)" v-model="orderDetailModal.settleReference" placeholder="شماره پیگیری" />
+              </div>
+              <p class="od-err" v-if="orderDetailModal.settleError">{{ orderDetailModal.settleError }}</p>
+              <button class="od-btn od-btn-primary" :disabled="orderDetailModal.settling || !orderDetailModal.settleMethod" @click="confirmSettleOrder">
+                {{ orderDetailModal.settling ? '...' : '✓ تسویه سفارش' }}
+              </button>
+            </div>
+
+            <!-- Edit Section (collapsible) -->
+            <div class="od-edit-toggle" @click="editExpanded = !editExpanded">
+              <span>✎ ویرایش اطلاعات</span>
+              <span class="od-chevron" :class="{ open: editExpanded }">▼</span>
+            </div>
+            <div class="od-edit" v-if="editExpanded">
+              <input class="od-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
+              <select class="od-select" v-model="orderDetailModal.editForm.payment_method">
+                <option value="">روش پرداخت...</option>
+                <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
+              </select>
+              <textarea class="od-textarea" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت..."></textarea>
+              <p class="od-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
+              <button class="od-btn" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
+                {{ orderDetailModal.saving ? '...' : 'ذخیره' }}
+              </button>
+            </div>
+
+            <!-- Bottom Actions -->
+            <div class="od-bottom">
+              <button class="od-btn od-btn-danger" @click="openReturnInvoiceModal" v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())">
+                فاکتور برگشتی
+              </button>
+              <button class="od-btn" @click="closeOrderDetailModal">بستن</button>
+            </div>
           </div>
         </template>
-      </section>
+      </div>
     </div>
 
     <!-- Return Invoice Confirmation Modal -->
@@ -818,6 +815,7 @@ const recentOrdersError = ref('')
 const recentOrdersSearch = ref('')
 const recentOrdersDateFrom = ref(new Date().toISOString().split('T')[0])
 
+const editExpanded = ref(false)
 const orderDetailModal = reactive({
   open: false,
   loading: false,
@@ -4695,7 +4693,8 @@ onBeforeUnmount(() => {
 }
 
 .cart-desktop-col :deep(.cart-panel) {
-  height: 100%;
+  height: 95%;
+  width: 100%;
 }
 
 .ops-trigger,
@@ -5944,6 +5943,106 @@ kbd {
 }
 .deliver-order-btn:hover {
   background: #bfdbfe;
+}
+
+
+/* ─── Redesigned Order Detail Modal ─── */
+.od-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.5); display: flex;
+  align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.od-modal {
+  background: var(--pos-card, #fff); color: var(--pos-text, #1a1a1a);
+  border-radius: 16px; width: 100%; max-width: 480px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  direction: rtl;
+}
+.od-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1rem 1.25rem 0.5rem; gap: 1rem;
+}
+.od-header-info { display: flex; flex-direction: column; gap: 0.25rem; }
+.od-header-info h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+.od-badge {
+  display: inline-flex; align-items: center;
+  font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.5rem;
+  border-radius: 20px; width: fit-content;
+}
+.od-badge-pending { background: #fef3c7; color: #92400e; }
+.od-badge-confirmed { background: #dbeafe; color: #1e40af; }
+.od-badge-preparing { background: #fef3c7; color: #92400e; }
+.od-badge-ready { background: #d1fae5; color: #065f46; }
+.od-badge-paid { background: #d1fae5; color: #065f46; }
+.od-badge-delivered { background: #e0e7ff; color: #3730a3; }
+.od-badge-cancelled { background: #fce4ec; color: #c62828; }
+.od-time { font-size: 0.72rem; color: var(--pos-muted, #9ca3af); }
+.od-close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--pos-muted, #9ca3af); padding: 0.25rem; line-height: 1; }
+.od-loading, .od-error { padding: 1.25rem; text-align: center; color: var(--pos-muted, #9ca3af); }
+.od-error { color: #dc2626; }
+
+.od-summary { margin: 0.5rem 1.25rem; }
+.od-summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+.od-summary-item { display: flex; flex-direction: column; gap: 0.15rem; }
+.od-label { font-size: 0.65rem; color: var(--pos-muted, #9ca3af); }
+.od-value { font-size: 0.82rem; font-weight: 600; color: var(--pos-text, #1a1a1a); }
+.od-value.muted { color: var(--pos-muted, #9ca3af); }
+.od-price { direction: ltr; text-align: left; }
+
+.od-items { margin: 0.75rem 1.25rem; }
+.od-items-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--pos-muted, #9ca3af); }
+.od-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.35rem 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.od-item:last-child { border-bottom: none; }
+.od-item-info { display: flex; align-items: center; gap: 0.4rem; }
+.od-item-name { font-size: 0.82rem; }
+.od-item-qty { font-size: 0.68rem; color: var(--pos-muted, #9ca3af); }
+.od-item-price { font-size: 0.78rem; font-weight: 600; direction: ltr; }
+
+.od-note { margin: 0 1.25rem 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.03); border-radius: 8px; }
+.od-note p { margin: 0.2rem 0 0; font-size: 0.78rem; }
+
+.od-actions { padding: 0.75rem 1.25rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.od-settle { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 0.75rem; }
+.od-settle-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.od-select, .od-input, .od-textarea {
+  background: var(--pos-card, #fff); border: 1px solid #d1d5db;
+  border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.78rem;
+  font-family: inherit; color: var(--pos-text, #1a1a1a); outline: none;
+  flex: 1; min-width: 100px;
+}
+.od-input::placeholder, .od-textarea::placeholder { color: #9ca3af; }
+.od-textarea { resize: vertical; }
+.od-err { font-size: 0.72rem; color: #dc2626; margin: 0.3rem 0; }
+.od-btn {
+  background: var(--pos-hover, #f3f4f6); border: 1px solid #d1d5db;
+  color: var(--pos-text, #1a1a1a); border-radius: 8px; padding: 0.5rem 1rem;
+  font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.od-btn-primary { background: #16a34a; color: white; border-color: #15803d; }
+.od-btn-primary:hover { background: #15803d; }
+.od-btn-primary:disabled { background: #86efac; cursor: not-allowed; }
+.od-btn-danger { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+.od-btn-danger:hover { background: #fecaca; }
+.od-edit-toggle {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.4rem 0.5rem; cursor: pointer; border-radius: 6px;
+  font-size: 0.78rem; color: var(--pos-muted, #9ca3af);
+}
+.od-edit-toggle:hover { background: rgba(0,0,0,0.03); }
+.od-chevron { transition: transform 0.2s; font-size: 0.6rem; }
+.od-chevron.open { transform: rotate(180deg); }
+.od-edit { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem; background: rgba(0,0,0,0.02); border-radius: 8px; }
+.od-bottom { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.25rem; }
+
+@media (max-width: 500px) {
+  .od-summary-row { grid-template-columns: 1fr 1fr; }
+  .od-modal { max-width: 100%; margin: 0.5rem; border-radius: 12px; }
 }
 
 </style>
