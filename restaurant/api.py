@@ -5310,9 +5310,6 @@ def _create_sales_order(
 		"order_code": so_doc.get("restaurant_order_code") or order_code,
 		"grand_total": flt(so_doc.grand_total or subtotal) + flt(order_context.get("delivery_fee") or 0),
 		"pricing_breakdown": payload_snapshot,
-
-		"production_skipped_items": production_payload.get("skipped_items") or [],
-		"automation": automation_payload or {},
 	}
 
 
