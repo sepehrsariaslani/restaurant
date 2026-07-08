@@ -298,9 +298,9 @@
                     </div>
                     <div class="accordion-footer">
                       <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
-                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click.stop="settleSelectedInvoice(invoice)">
-                        {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
-                      </button>
+                      <button type="button" class="tbl-btn" @click.stop="settleSelectedInvoice(invoice)">پرداخت</button>
+                      <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)">تسویه و تحویل</button>
+                      <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)">تحویل</button>
                     </div>
                   </div>
                   <div class="accordion-loading" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
@@ -2168,6 +2168,47 @@ async function settleSelectedInvoice(invoice) {
   closeOperationsOverlay()
   await nextTick()
   cartPanelRef.value?.openPaymentPopup()
+}
+
+async function settleAndDeliverFromInvoice(invoice) {
+  if (!invoice?.name) return
+  const method = window.prompt('روش پرداخت را وارد کنید (cash / card / credit):', 'cash')
+  if (!method) return
+  error.value = ''
+  successMessage.value = ''
+  try {
+    // 1. تسویه (SI + Payment)
+    const settleResult = await settlePOSOrder(invoice.name, { method })
+    const siInfo = settleResult.sales_invoice ? ` | فاکتور: ${settleResult.sales_invoice}` : ''
+    // 2. تحویل (تولید + DN)
+    const deliverResult = await deliverPOSOrder(invoice.name)
+    const dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
+    successMessage.value = `فاکتور ${invoice.order_code} تسویه و تحویل شد.${siInfo}${dnInfo}`
+    invoice.status = 'delivered'
+    invoice.payment_method = method
+    await loadOpenInvoices()
+    await loadRecentOrders()
+  } catch (err) {
+    error.value = err.message || 'تسویه و تحویل ناموفق بود.'
+  }
+}
+
+async function deliverFromInvoice(invoice) {
+  if (!invoice?.name) return
+  const confirmed = window.confirm(`فاکتور ${invoice.order_code || invoice.name} تحویل داده شود؟`)
+  if (!confirmed) return
+  error.value = ''
+  successMessage.value = ''
+  try {
+    const result = await deliverPOSOrder(invoice.name)
+    const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+    successMessage.value = `فاکتور ${invoice.order_code} تحویل شد.${dnInfo}`
+    invoice.status = 'delivered'
+    await loadOpenInvoices()
+    await loadRecentOrders()
+  } catch (err) {
+    error.value = err.message || 'تحویل ناموفق بود.'
+  }
 }
 
 function selectCustomerFromHistory(customer) {
@@ -5755,6 +5796,21 @@ kbd {
 }
 .tbl-btn.success:hover:not(:disabled) {
   background: #15803d;
+}
+.deliver-acc-btn {
+  background: #3b82f6;
+  color: white;
+  border: 1px solid #2563eb;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.deliver-acc-btn:hover:not(:disabled) {
+  background: #2563eb;
 }
 .settle-order-btn {
   margin-right: auto;
