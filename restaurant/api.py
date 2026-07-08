@@ -14971,7 +14971,7 @@ def create_management_return_order(order_name, reason=None):
 	if _has_column("Sales Order", "restaurant_payment_status"):
 		return_doc.restaurant_payment_status = "paid"
 	if _has_column("Sales Order", "restaurant_status"):
-		return_doc.restaurant_status = "returned"
+		return_doc.restaurant_status = "confirmed"
 
 	for row in doc.items or []:
 		return_doc.append(
@@ -15006,7 +15006,7 @@ def create_management_return_order(order_name, reason=None):
 		)
 
 	if _has_column("Sales Order", "restaurant_status"):
-		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "returned", update_modified=False)
+		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
 
 	_append_sales_order_note(so_name, f"[RETURN] فاکتور برگشتی ساخته شد: {return_doc.name} ({return_code})")
 	frappe.db.commit()
