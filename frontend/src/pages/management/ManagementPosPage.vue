@@ -37,8 +37,8 @@
           :selected-category="selectedCategory"
           @update:selected-category="selectedCategory = $event"
           :products="filteredProducts"
-          :loading="loading"
-          :error="loading ? '' : productError"
+          :بارگذاری="بارگذاری"
+          :error="بارگذاری ? '' : productError"
           :search-term="search"
           :scanner-input="scannerInput"
           :scanner-feedback="scannerFeedback"
@@ -71,7 +71,7 @@
             :place="form.place"
             :place-options="placeOptions"
             :table-orders="selectedDineInOrders"
-            :table-preview-loading="tablePreviewLoading"
+            :table-preview-بارگذاری="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
             :can-print-table-orders="confirmedDineInOrders.length > 0"
             :note="form.note"
@@ -211,7 +211,7 @@
                   <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
                 </article>
               </div>
-              <p class="muted" v-if="tablePreviewLoading">در حال دریافت...</p>
+              <p class="muted" v-if="tablePreviewبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
               <template v-else-if="selectedDineInTable">
                 <div class="table-detail-bar">
@@ -240,14 +240,14 @@
                   </div>
                 </div>
               </template>
-              <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
+              <p class="muted" v-else-if="!tablePreviewبارگذاری && !tablePreviewError">یک میز را انتخاب کنید.</p>
             </section>
 
             <section v-if="leftPanelTab === 'history'" class="history-panel">
               <div class="tab-panel-toolbar">
                 <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions" title="بروزرسانی">↻</button>
               </div>
-              <p class="muted" v-if="todayTransactionsLoading">در حال دریافت...</p>
+              <p class="muted" v-if="todayTransactionsبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
               <p class="muted" v-else-if="!todayTransactions.length">هنوز تراکنشی امروز ثبت نشده.</p>
               <div v-else class="history-list">
@@ -257,7 +257,7 @@
                     <span class="history-time">{{ formatInvoiceDateTime(tx.created_at) }}</span>
                   </div>
                   <div class="history-card-body">
-                    <span>{{ tx.customer_name || 'POS Customer' }}</span>
+                    <span>{{ tx.customer_name || 'مشتری POS' }}</span>
                     <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
                   </div>
                   <span class="history-method-badge" v-if="tx.payment_method">
@@ -271,7 +271,7 @@
               <div class="tab-panel-toolbar">
                 <button type="button" class="icon-refresh-btn" @click="loadOpenInvoices" title="بروزرسانی">↻</button>
               </div>
-              <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
+              <p class="muted" v-if="openInvoicesبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
               <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
               <div v-else class="open-invoice-accordion">
@@ -283,7 +283,8 @@
                 >
                   <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
                     <strong>{{ invoice.order_code }}</strong>
-                    <small class="accordion-customer">{{ invoice.customer_name || 'POS Customer' }}</small>
+                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت">🖨</button>
+                    <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
                     <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
                     <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
                     <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
@@ -305,7 +306,7 @@
                       </template>
                     </div>
                   </div>
-                  <div class="accordion-loading" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
+                  <div class="accordion-بارگذاری" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
                     <small>در حال دریافت...</small>
                   </div>
                   <small class="error" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.loadError">{{ invoice.loadError }}</small>
@@ -331,7 +332,7 @@
                   @change="loadRecentOrders"
                 />
               </div>
-              <p class="muted" v-if="recentOrdersLoading">در حال دریافت...</p>
+              <p class="muted" v-if="recentOrdersبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="recentOrdersError">{{ recentOrdersError }}</p>
               <p class="muted" v-else-if="!filteredRecentOrders.length">سفارشی یافت نشد.</p>
               <div v-else class="history-list">
@@ -344,9 +345,15 @@
                   <div class="history-card-head">
                     <strong>{{ order.order_code || order.name }}</strong>
                     <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
+                    <button
+                      type="button"
+                      class="print-icon-btn"
+                      @click.stop="printOrderReceipt(order)"
+                      title="پرینت فاکتور"
+                    >🖨</button>
                   </div>
                   <div class="history-card-body">
-                    <span>{{ order.customer_name || 'POS Customer' }}</span>
+                    <span>{{ order.customer_name || 'مشتری POS' }}</span>
                     <span class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</span>
                   </div>
                   <div class="history-card-footer">
@@ -396,7 +403,7 @@
             :place="form.place"
             :place-options="placeOptions"
             :table-orders="selectedDineInOrders"
-            :table-preview-loading="tablePreviewLoading"
+            :table-preview-بارگذاری="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
             :can-print-table-orders="confirmedDineInOrders.length > 0"
             :note="form.note"
@@ -439,7 +446,7 @@
 
     <PosBomSheet
       :open="customizationSheet.open"
-      :loading="customizationSheet.loading"
+      :بارگذاری="customizationSheet.بارگذاری"
       :error="customizationSheet.error"
       :item="customizationSheet.item"
       :ingredients="customizationSheet.ingredients"
@@ -560,7 +567,7 @@
           <button class="od-close" @click="closeOrderDetailModal">✕</button>
         </div>
 
-        <p class="od-loading" v-if="orderDetailModal.loading">در حال دریافت...</p>
+        <p class="od-بارگذاری" v-if="orderDetailModal.بارگذاری">در حال دریافت...</p>
         <p class="od-error" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
 
         <template v-else-if="orderDetailModal.order">
@@ -570,7 +577,7 @@
             <div class="od-summary-row">
               <div class="od-summary-item">
                 <span class="od-label">مشتری</span>
-                <span class="od-value">{{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
+                <span class="od-value">{{ orderDetailModal.order.customer_name || 'مشتری POS' }}</span>
               </div>
               <div class="od-summary-item">
                 <span class="od-label">روش پرداخت</span>
@@ -608,11 +615,11 @@
           <!-- Actions -->
           <div class="od-actions">
             
-            <!-- Settle Section (for unpaid orders) -->
+            <!-- تسویه Section (for unpaid orders) -->
             <div class="od-settle" v-if="orderDetailModal.canSettle">
               <div class="od-settle-row">
                 <select class="od-select" v-model="orderDetailModal.settleMethod">
-                  <option value="">روش پرداخت...</option>
+                  <option value="">انتخاب روش پرداخت</option>
                   <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
                 </select>
                 <input class="od-input" v-if="['card','pos','bank','terminal'].includes(orderDetailModal.settleMethod)" v-model="orderDetailModal.settleReference" placeholder="شماره پیگیری" />
@@ -631,7 +638,7 @@
             <div class="od-edit" v-if="editExpanded">
               <input class="od-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
               <select class="od-select" v-model="orderDetailModal.editForm.payment_method">
-                <option value="">روش پرداخت...</option>
+                <option value="">انتخاب روش پرداخت</option>
                 <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
               </select>
               <textarea class="od-textarea" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت..."></textarea>
@@ -671,8 +678,8 @@
         </div>
         <div class="pos-modal-actions">
           <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal">انصراف</button>
-          <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.loading" @click="confirmCreateReturnInvoice">
-            {{ returnInvoiceModal.loading ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
+          <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.بارگذاری" @click="confirmCreateReturnInvoice">
+            {{ returnInvoiceModal.بارگذاری ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
           </button>
         </div>
       </section>
@@ -734,7 +741,7 @@ function defaultFormState() {
   const modeCustomer = defaultCustomers[defaultMode] || {}
   return {
     customer_query: '',
-    customer_name: modeCustomer.name || 'POS Customer',
+    customer_name: modeCustomer.name || 'مشتری POS',
     mobile: modeCustomer.mobile || '09120000000',
     customer_type: 'normal',
     guest_count: 1,
@@ -771,9 +778,9 @@ function defaultFinancialState() {
   }
 }
 
-const loading = ref(false)
+const بارگذاری = ref(false)
 const submitting = ref(false)
-const hardwareLoading = ref(false)
+const hardwareبارگذاری = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const scannerFeedback = ref('')
@@ -807,10 +814,10 @@ const operationsOverlayOpen = ref(false)
 const cartDrawerOpen = ref(false)
 const isDesktopViewport = ref(typeof window === 'undefined' ? true : window.innerWidth >= 1180)
 const todayTransactions = ref([])
-const todayTransactionsLoading = ref(false)
+const todayTransactionsبارگذاری = ref(false)
 const todayTransactionsError = ref('')
 const recentOrders = ref([])
-const recentOrdersLoading = ref(false)
+const recentOrdersبارگذاری = ref(false)
 const recentOrdersError = ref('')
 const recentOrdersSearch = ref('')
 const recentOrdersDateFrom = ref(new Date().toISOString().split('T')[0])
@@ -818,15 +825,15 @@ const recentOrdersDateFrom = ref(new Date().toISOString().split('T')[0])
 const editExpanded = ref(false)
 const orderDetailModal = reactive({
   open: false,
-  loading: false,
+  بارگذاری: false,
   saving: false,
-  loadError: '',
-  saveError: '',
+  loadخطا: '',
+  saveخطا: '',
   order: null,
-  canSettle: false,
-  settleMethod: '',
-  settleReference: '',
-  settleError: '',
+  canتسویه: false,
+  تسویهMethod: '',
+  تسویهReference: '',
+  تسویهخطا: '',
   settling: false,
   editForm: {
     payment_method: '',
@@ -837,8 +844,8 @@ const orderDetailModal = reactive({
 
 const returnInvoiceModal = reactive({
   open: false,
-  loading: false,
-  error: '',
+  بارگذاری: false,
+  خطا: '',
   reason: '',
 })
 
@@ -857,13 +864,13 @@ const posProfileSummary = reactive({
   shift_status: '',
 })
 const selectedTablePreview = ref(null)
-const tablePreviewLoading = ref(false)
+const tablePreviewبارگذاری = ref(false)
 const tablePreviewError = ref('')
 const moveTableTarget = ref('')
 const mergeTableTarget = ref('')
 const showSplitBill = ref(false)
 const openInvoices = ref([])
-const openInvoicesLoading = ref(false)
+const openInvoicesبارگذاری = ref(false)
 const openInvoiceError = ref('')
 const selectedOpenInvoiceKey = ref('')
 const selectedOpenInvoiceDetail = ref(null)
@@ -915,8 +922,8 @@ const financial = reactive(defaultFinancialState())
 
 const customizationSheet = reactive({
   open: false,
-  loading: false,
-  error: '',
+  بارگذاری: false,
+  خطا: '',
   item: null,
   ingredients: [],
   modifierGroups: [],
@@ -1091,6 +1098,57 @@ async function deliverOrder(order) {
   }
 }
 
+async function printOrderReceipt(order) {
+  if (!order?.name) return
+  try {
+    const detail = await getManagementOrderDetail(order.name)
+    const orderData = detail?.order || detail
+    const items = orderData?.items || []
+    const customer = order.customer_name || 'مشتری POS'
+    const orderCode = order.order_code || order.name
+    const total = formatMoney(order.grand_total || 0, currency.value || currency || 'IRR')
+    const method = order.payment_method || '-'
+
+    let rows = items.map(item => `
+      <tr>
+        <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right">${item.title || item.item_name}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:center">${formatCompactNumber(item.qty, 2)}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:left">${formatMoney(item.line_total || 0, currency.value || currency || 'IRR')}</td>
+      </tr>
+    `).join('')
+
+    const html = `
+      <!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+      <style>
+        body{font-family:Tahoma,sans-serif;padding:20px;color:#333;direction:rtl}
+        h2{text-align:center;margin-bottom:4px}
+        .meta{font-size:12px;color:#666;margin-bottom:10px;text-align:center}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th{background:#f5f5f5;padding:6px 8px;border-bottom:2px solid #ddd;text-align:center}
+        .total{font-size:15px;font-weight:bold;text-align:left;margin-top:10px}
+        .footer{font-size:11px;color:#999;text-align:center;margin-top:20px;border-top:1px dashed #ddd;padding-top:10px}
+      </style></head><body>
+        <h2>${receiptSettings.store_name || 'فاکتور فروش'}</h2>
+        <div class="meta">
+          <p>شماره: ${orderCode}</p>
+          <p>مشتری: ${customer} | پرداخت: ${method}</p>
+        </div>
+        <table><tr><th>کالا</th><th>تعداد</th><th>قیمت</th></tr>${rows}</table>
+        <div class="total">مبلغ کل: ${total}</div>
+        <div class="footer">تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}</div>
+      </body></html>`
+
+    const w = window.open('', '_blank', 'width=380,height=600')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print() }, 200)
+  } catch(err) {
+    error.value = 'خطا در پرینت: ' + (err.message || '')
+  }
+}
+
 function canSettleOrder(order) {
   if (!order) return false
   const status = String(order.status || '').toLowerCase()
@@ -1248,7 +1306,7 @@ const sheetPreview = computed(() => {
 })
 
 const productError = computed(() => {
-  if (!filteredProducts.value.length && !loading.value) {
+  if (!filteredProducts.value.length && !بارگذاری.value) {
     return 'محصولی با این فیلتر پیدا نشد.'
   }
   return ''
@@ -1346,10 +1404,10 @@ function saveActiveTicketSnapshot() {
 function ticketLabel(ticket, index) {
   if (ticket.id === activeTicketId.value) {
     const activeName = String(form.customer_name || '').trim()
-    return activeName && activeName !== 'POS Customer' ? activeName : `فاکتور ${toPersianNumber(index + 1)}`
+    return activeName && activeName !== 'مشتری POS' ? activeName : `فاکتور ${toPersianNumber(index + 1)}`
   }
   const ticketName = String(ticket.snapshot?.form?.customer_name || '').trim()
-  return ticketName && ticketName !== 'POS Customer' ? ticketName : `فاکتور ${toPersianNumber(index + 1)}`
+  return ticketName && ticketName !== 'مشتری POS' ? ticketName : `فاکتور ${toPersianNumber(index + 1)}`
 }
 
 function switchToTicket(ticketId) {
@@ -1513,7 +1571,7 @@ async function refreshSelectedDineInTableOrders() {
   if (form.order_mode !== 'dine_in') {
     selectedTablePreview.value = null
     tablePreviewError.value = ''
-    tablePreviewLoading.value = false
+    tablePreviewبارگذاری.value = false
     return
   }
 
@@ -1521,14 +1579,14 @@ async function refreshSelectedDineInTableOrders() {
   if (!selectedTable?.name) {
     selectedTablePreview.value = null
     tablePreviewError.value = ''
-    tablePreviewLoading.value = false
+    tablePreviewبارگذاری.value = false
     moveTableTarget.value = ''
     mergeTableTarget.value = ''
     showSplitBill.value = false
     return
   }
 
-  tablePreviewLoading.value = true
+  tablePreviewبارگذاری.value = true
   tablePreviewError.value = ''
   try {
     selectedTablePreview.value = await getTableDetail(selectedTable.name)
@@ -1536,7 +1594,7 @@ async function refreshSelectedDineInTableOrders() {
     selectedTablePreview.value = null
     tablePreviewError.value = tableErr.message || 'دریافت سفارش‌های میز ناموفق بود.'
   } finally {
-    tablePreviewLoading.value = false
+    tablePreviewبارگذاری.value = false
   }
 }
 
@@ -1995,7 +2053,7 @@ function applySelectedOpenInvoiceProfile() {
 }
 
 async function loadOpenInvoices(preserveSelection = true) {
-  openInvoicesLoading.value = true
+  openInvoicesبارگذاری.value = true
   openInvoiceError.value = ''
   try {
     const orderPayload = await listManagementOrders({ source: 'web' })
@@ -2013,7 +2071,7 @@ async function loadOpenInvoices(preserveSelection = true) {
     selectedOpenInvoiceKey.value = ''
     selectedOpenInvoiceDetail.value = null
   } finally {
-    openInvoicesLoading.value = false
+    openInvoicesبارگذاری.value = false
   }
 }
 
@@ -2048,8 +2106,8 @@ async function toggleInvoiceAccordion(invoice) {
     return
   }
   expandedInvoiceKey.value = invoice.invoice_key
-  if (!invoice.detail && !invoice.loading) {
-    invoice.loading = true
+  if (!invoice.detail && !invoice.بارگذاری) {
+    invoice.بارگذاری = true
     invoice.loadError = ''
     try {
       const detail = await getManagementOrderDetail(invoice.name, invoice.source || 'web')
@@ -2057,7 +2115,7 @@ async function toggleInvoiceAccordion(invoice) {
     } catch (err) {
       invoice.loadError = err.message || 'خطا در دریافت جزئیات'
     } finally {
-      invoice.loading = false
+      invoice.بارگذاری = false
     }
   }
 }
@@ -2245,7 +2303,7 @@ function createCustomerFromQuery(payload) {
     resolvedName = ''
   }
   if (!resolvedName) {
-    resolvedName = normalizedMobile ? `مشتری ${normalizedMobile.slice(-4)}` : 'POS Customer'
+    resolvedName = normalizedMobile ? `مشتری ${normalizedMobile.slice(-4)}` : 'مشتری POS'
   }
 
   if (payload?.is_new) {
@@ -2254,7 +2312,7 @@ function createCustomerFromQuery(payload) {
       return
     }
     const cleanedName = String(nameInput || '').trim()
-    resolvedName = cleanedName || 'POS Customer'
+    resolvedName = cleanedName || 'مشتری POS'
 
     const mobileInput = window.prompt('شماره تماس مشتری جدید را وارد کنید (اختیاری):', normalizedMobile || '')
     if (mobileInput === null) {
@@ -2297,7 +2355,7 @@ function addQuickCustomer() {
   if (mobile === null) {
     return
   }
-  form.customer_name = String(name || '').trim() || 'POS Customer'
+  form.customer_name = String(name || '').trim() || 'مشتری POS'
   form.mobile = String(mobile || '').trim() || form.mobile
   form.customer_query = `${form.customer_name} - ${form.mobile}`
 }
@@ -2522,8 +2580,8 @@ function recordPopularItem(slug, qty) {
 }
 
 async function loadTodayTransactions() {
-  if (todayTransactionsLoading.value) return
-  todayTransactionsLoading.value = true
+  if (todayTransactionsبارگذاری.value) return
+  todayTransactionsبارگذاری.value = true
   todayTransactionsError.value = ''
   try {
     const today = new Date().toISOString().split('T')[0]
@@ -2534,13 +2592,13 @@ async function loadTodayTransactions() {
   } catch (err) {
     todayTransactionsError.value = err.message || 'خطا در بارگذاری تراکنش‌های امروز'
   } finally {
-    todayTransactionsLoading.value = false
+    todayTransactionsبارگذاری.value = false
   }
 }
 
 async function loadRecentOrders() {
-  if (recentOrdersLoading.value) return
-  recentOrdersLoading.value = true
+  if (recentOrdersبارگذاری.value) return
+  recentOrdersبارگذاری.value = true
   recentOrdersError.value = ''
   try {
     const dateFrom = recentOrdersDateFrom.value || new Date().toISOString().split('T')[0]
@@ -2549,14 +2607,14 @@ async function loadRecentOrders() {
   } catch (err) {
     recentOrdersError.value = err.message || 'خطا در بارگذاری سفارش‌های اخیر'
   } finally {
-    recentOrdersLoading.value = false
+    recentOrdersبارگذاری.value = false
   }
 }
 
 async function openOrderDetailModal(tx) {
   if (!tx) return
   orderDetailModal.open = true
-  orderDetailModal.loading = true
+  orderDetailModal.بارگذاری = true
   orderDetailModal.loadError = ''
   orderDetailModal.saveError = ''
   orderDetailModal.order = null
@@ -2584,13 +2642,13 @@ async function openOrderDetailModal(tx) {
   } catch (err) {
     orderDetailModal.loadError = err.message || 'خطا در بارگذاری جزئیات سفارش'
   } finally {
-    orderDetailModal.loading = false
+    orderDetailModal.بارگذاری = false
   }
 }
 
 function closeOrderDetailModal() {
   orderDetailModal.open = false
-  orderDetailModal.loading = false
+  orderDetailModal.بارگذاری = false
   orderDetailModal.saving = false
   orderDetailModal.loadError = ''
   orderDetailModal.saveError = ''
@@ -2672,21 +2730,21 @@ async function confirmSettleOrder() {
 function openReturnInvoiceModal() {
   if (!orderDetailModal.order?.name) return
   returnInvoiceModal.open = true
-  returnInvoiceModal.loading = false
+  returnInvoiceModal.بارگذاری = false
   returnInvoiceModal.error = ''
   returnInvoiceModal.reason = ''
 }
 
 function closeReturnInvoiceModal() {
   returnInvoiceModal.open = false
-  returnInvoiceModal.loading = false
+  returnInvoiceModal.بارگذاری = false
   returnInvoiceModal.error = ''
   returnInvoiceModal.reason = ''
 }
 
 async function confirmCreateReturnInvoice() {
   if (!orderDetailModal.order?.name) return
-  returnInvoiceModal.loading = true
+  returnInvoiceModal.بارگذاری = true
   returnInvoiceModal.error = ''
   try {
     const result = await createManagementReturnOrder({
@@ -2704,13 +2762,13 @@ async function confirmCreateReturnInvoice() {
   } catch (err) {
     returnInvoiceModal.error = err.message || 'ساخت فاکتور برگشتی ناموفق بود.'
   } finally {
-    returnInvoiceModal.loading = false
+    returnInvoiceModal.بارگذاری = false
   }
 }
 
 function closeCustomizationSheet() {
   customizationSheet.open = false
-  customizationSheet.loading = false
+  customizationSheet.بارگذاری = false
   customizationSheet.error = ''
   customizationSheet.item = null
   customizationSheet.ingredients = []
@@ -2753,7 +2811,7 @@ async function openCustomizationSheet(item, options = {}) {
 
   const sourceItem = resolveProductBySlug(itemSlug, item || editingLine || {})
   customizationSheet.open = true
-  customizationSheet.loading = true
+  customizationSheet.بارگذاری = true
   customizationSheet.error = ''
   customizationSheet.item = sourceItem
   customizationSheet.qty = 1
@@ -2784,7 +2842,7 @@ async function openCustomizationSheet(item, options = {}) {
   } catch (sheetErr) {
     customizationSheet.error = sheetErr.message || 'دریافت تنظیمات BOM ناموفق بود.'
   } finally {
-    customizationSheet.loading = false
+    customizationSheet.بارگذاری = false
   }
 }
 
@@ -3394,7 +3452,7 @@ function buildReceiptMarkup({
 
       <div class="meta-row"><span>تاریخ</span><span>${escapeHtml(printDate)}</span></div>
       <div class="meta-row"><span>شماره فاکتور</span><span>${escapeHtml(invoiceNo)}</span></div>
-      <div class="meta-row"><span>مشتری</span><span>${escapeHtml(customerName || 'POS Customer')}</span></div>
+      <div class="meta-row"><span>مشتری</span><span>${escapeHtml(customerName || 'مشتری POS')}</span></div>
       <div class="meta-row"><span>موبایل مشتری</span><span>${escapeHtml(mobileLabel)}</span></div>
       <div class="meta-row"><span>نوع سفارش</span><span>${escapeHtml(orderMode)}</span></div>
       <div class="meta-row"><span>جایگاه</span><span>${escapeHtml(placeLabel)}</span></div>
@@ -3420,7 +3478,7 @@ function buildCurrentTicketReceiptMarkup() {
     printableItems: buildReceiptPrintableItems(),
     totalsRows: buildReceiptTotalsRowsHtml(),
     paymentLabel: paymentMethodDisplayLabel(payment.method),
-    customerName: form.customer_name || 'POS Customer',
+    customerName: form.customer_name || 'مشتری POS',
     mobile: form.mobile || '',
     orderMode: form.order_mode,
     place: form.place,
@@ -3673,7 +3731,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       }
 
   const payload = {
-    customer_name: form.customer_name || 'POS Customer',
+    customer_name: form.customer_name || 'مشتری POS',
     mobile: form.mobile || '09120000000',
     order_type: form.order_mode,
     note: [
@@ -3771,7 +3829,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       editingOriginalOrder.order_code = ''
     }
 
-    // Auto-print receipt after successful settlement
+    // Auto-print receipt after successful تسویهment
     if (payNow && result?.sales_invoice) {
       autoPrintReceipt()
     }
@@ -3829,7 +3887,7 @@ function updateNetworkState() {
 }
 
 async function refreshHardwareStatus() {
-  hardwareLoading.value = true
+  hardwareبارگذاری.value = true
   try {
     const payload = await getManagementPOSHardwareStatus()
     hardwareStatus.connected = Boolean(payload.connected)
@@ -3839,12 +3897,12 @@ async function refreshHardwareStatus() {
     hardwareStatus.connected = false
     hardwareStatus.message = statusErr.message || 'بررسی وضعیت سخت افزار ناموفق بود.'
   } finally {
-    hardwareLoading.value = false
+    hardwareبارگذاری.value = false
   }
 }
 
 async function loadPOSBoot() {
-  loading.value = true
+  بارگذاری.value = true
   error.value = ''
   popularSlugsMap.value = buildPopularSlugsMapFromLocalStorage()
   try {
@@ -3862,7 +3920,7 @@ async function loadPOSBoot() {
       const modeCustomer = defaultCustomers[defaultOrderMode] || {}
 
       form.order_mode = defaultOrderMode
-      form.customer_name = modeCustomer.name || 'POS Customer'
+      form.customer_name = modeCustomer.name || 'مشتری POS'
       form.mobile = modeCustomer.mobile || '09120000000'
     }
 
@@ -3935,7 +3993,7 @@ async function loadPOSBoot() {
   } catch (bootErr) {
     error.value = bootErr.message || 'بارگذاری POS ناموفق بود.'
   } finally {
-    loading.value = false
+    بارگذاری.value = false
   }
 }
 
@@ -5645,7 +5703,7 @@ kbd {
   color: var(--pos-text, #1a2233);
 }
 
-.pos-modal-loading {
+.pos-modal-بارگذاری {
   padding: 1.5rem 1.2rem;
   text-align: center;
 }
@@ -5754,39 +5812,39 @@ kbd {
   border-color: #dc2626;
 }
 
-.order-settle-section {
+.order-تسویه-section {
   margin-top: 16px;
   padding: 16px;
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
   border-radius: 8px;
 }
-.order-settle-section h4 {
+.order-تسویه-section h4 {
   margin: 0 0 12px;
   font-size: 15px;
   color: #166534;
 }
-.settle-row {
+.تسویه-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
 }
-.settle-label {
+.تسویه-label {
   font-size: 13px;
   color: #374151;
   min-width: 100px;
 }
-.settle-select, .settle-input {
+.تسویه-select, .تسویه-input {
   flex: 1;
   max-width: 250px;
 }
-.settle-amount {
+.تسویه-amount {
   font-size: 16px;
   font-weight: 700;
   color: #166534;
 }
-.settle-actions {
+.تسویه-actions {
   margin-top: 12px;
   display: flex;
   gap: 8px;
@@ -5853,8 +5911,9 @@ kbd {
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
 }
 .accordion-header {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   gap: 6px;
   padding: 10px 12px;
   cursor: pointer;
@@ -5922,7 +5981,7 @@ kbd {
   padding-top: 8px;
   border-top: 1px solid #f3f4f6;
 }
-.accordion-loading {
+.accordion-بارگذاری {
   padding: 8px 12px;
   text-align: center;
   color: #9ca3af;
@@ -5980,7 +6039,7 @@ kbd {
 .od-badge-cancelled { background: #fce4ec; color: #c62828; }
 .od-time { font-size: 0.72rem; color: var(--pos-muted, #9ca3af); }
 .od-close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--pos-muted, #9ca3af); padding: 0.25rem; line-height: 1; }
-.od-loading, .od-error { padding: 1.25rem; text-align: center; color: var(--pos-muted, #9ca3af); }
+.od-بارگذاری, .od-error { padding: 1.25rem; text-align: center; color: var(--pos-muted, #9ca3af); }
 .od-error { color: #dc2626; }
 
 .od-summary { margin: 0.5rem 1.25rem; }
@@ -6044,5 +6103,14 @@ kbd {
   .od-summary-row { grid-template-columns: 1fr 1fr; }
   .od-modal { max-width: 100%; margin: 0.5rem; border-radius: 12px; }
 }
+
+
+.print-icon-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.85rem; padding: 2px 6px; border-radius: 4px;
+  opacity: 0.5; transition: all 0.15s; line-height: 1;
+  margin-right: auto;
+}
+.print-icon-btn:hover { opacity: 1; background: rgba(0,0,0,0.05); }
 
 </style>
