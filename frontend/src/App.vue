@@ -76,7 +76,7 @@
       <CustomerTableSelectPage v-else-if="page === 'customer-table-select'" />
       <CheckoutPage v-else-if="page === 'checkout'" />
       <PaymentFailPage v-else-if="page === 'payment-fail'" />
-      <KitchenDisplayPage v-else-if="page === 'kitchen'" />
+      <KitchenDisplayPage v-else-if="page === 'kitchen' || page === 'management-kitchen'" />
       <NotFoundPage v-else-if="page === 'not-found'" />
       <NotFoundPage v-else />
     </main>
