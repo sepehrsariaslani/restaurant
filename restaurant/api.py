@@ -14935,7 +14935,7 @@ def update_management_order(order_name, payment_method=None, note=None, customer
 
 @frappe.whitelist()
 def create_management_return_order(order_name, reason=None):
-    """ساخت فاکتور برگشتی کامل: SO برگشتی + SI برگشتی + DN برگشتی + کنسل WO"""
+    """ساخت فاکتور برگشتی کامل: SI برگشتی + DN برگشتی + کنسل WO (بدون SO جدید)"""
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
@@ -14958,76 +14958,33 @@ def create_management_return_order(order_name, reason=None):
         "original_order_code": original_code,
     }
 
-    # 1. ساخت SO برگشتی (با آیتم‌های منفی)
-    return_so = frappe.new_doc("Sales Order")
-    return_so.customer = doc.customer
-    return_so.company = doc.company
-    return_so.currency = doc.currency
-    return_so.selling_price_list = doc.selling_price_list
-    return_so.transaction_date = frappe.utils.today()
-    return_so.delivery_date = frappe.utils.today()
-
-    if _has_column("Sales Order", "restaurant_note"):
-        return_so.restaurant_note = f"[RETURN] {reason_text} | برگشت از: {original_code}"
-    if _has_column("Sales Order", "restaurant_order_type"):
-        return_so.restaurant_order_type = doc.get("restaurant_order_type") or "takeaway"
-    if _has_column("Sales Order", "restaurant_customer_mobile"):
-        return_so.restaurant_customer_mobile = doc.get("restaurant_customer_mobile") or ""
-    if _has_column("Sales Order", "restaurant_payment_method"):
-        return_so.restaurant_payment_method = doc.get("restaurant_payment_method") or "cash"
-    if _has_column("Sales Order", "restaurant_payment_status"):
-        return_so.restaurant_payment_status = "paid"
-    if _has_column("Sales Order", "restaurant_status"):
-        return_so.restaurant_status = "confirmed"
-
-    for row in doc.items or []:
-        return_so.append("items", {
-            "item_code": row.item_code,
-            "item_name": row.item_name,
-            "qty": flt(row.qty),
-            "rate": flt(row.rate),
-            "warehouse": row.warehouse,
-            "uom": row.uom,
-            "stock_uom": row.stock_uom,
-            "conversion_factor": flt(row.conversion_factor) or 1,
-            "delivery_date": frappe.utils.today(),
-        })
-
-    return_so.flags.ignore_permissions = True
-    return_so.flags.ignore_mandatory = True
-    return_so.flags.ignore_validate = True
-    return_so.insert()
-    
-    return_code = f"RET-{original_code}"
-    if _has_column("Sales Order", "restaurant_order_code"):
-        frappe.db.set_value("Sales Order", return_so.name, "restaurant_order_code", return_code, update_modified=False)
-
-    result["return_so"] = return_so.name
-    result["return_code"] = return_code
-
-    # 2. ساخت SI برگشتی (اگه فاکتور فروش خورده)
+    # 1. ساخت SI برگشتی از روی فاکتور فروش اصلی
     try:
         si_name = _existing_si_for_so(so_name)
         if si_name:
             return_si = _create_return_si(si_name, reason_text)
             if return_si:
                 result["return_si"] = return_si
+        else:
+            result["return_si"] = "no_si_found"
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Return SI Creation")
         result["return_si_error"] = "SI creation failed"
 
-    # 3. ساخت DN برگشتی (اگه رسید تحویل خورده)
+    # 2. ساخت DN برگشتی از روی رسید تحویل اصلی
     try:
         dn_name = _existing_delivery_note_for_sales_order(so_name)
         if dn_name:
             return_dn = _create_return_dn(dn_name, reason_text)
             if return_dn:
                 result["return_dn"] = return_dn
+        else:
+            result["return_dn"] = "no_dn_found"
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Return DN Creation")
         result["return_dn_error"] = "DN creation failed"
 
-    # 4. کنسل کردن دستور کارهای فعال
+    # 3. کنسل کردن دستور کارهای فعال
     try:
         if frappe.db.exists("DocType", "Work Order"):
             wo_names = frappe.get_all("Work Order",
@@ -15035,7 +14992,6 @@ def create_management_return_order(order_name, reason=None):
                 pluck="name", ignore_permissions=True)
             for wo_name in wo_names:
                 wo = frappe.get_doc("Work Order", wo_name)
-                # اول کنسل کردن SEها
                 se_names = frappe.get_all("Stock Entry",
                     filters={"work_order": wo_name, "docstatus": 1},
                     pluck="name", ignore_permissions=True)
@@ -15043,7 +14999,6 @@ def create_management_return_order(order_name, reason=None):
                     se = frappe.get_doc("Stock Entry", se_name)
                     se.flags.ignore_permissions = True
                     se.cancel()
-                # بعد کنسل کردن WO
                 wo.flags.ignore_permissions = True
                 wo.cancel()
             result["cancelled_work_orders"] = wo_names
@@ -15051,11 +15006,20 @@ def create_management_return_order(order_name, reason=None):
         frappe.log_error(frappe.get_traceback(), "Return Cancel WO")
         result["wo_cancel_error"] = "Work Order cancellation failed"
 
-    # 5. به‌روزرسانی وضعیت سفارش اصلی
+    # 4. کنسل کردن سفارش فروش اصلی
+    if doc.docstatus == 1:
+        try:
+            doc.flags.ignore_permissions = True
+            doc.cancel()
+            result["cancelled_so"] = so_name
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Return Cancel SO")
+            result["so_cancel_error"] = "SO cancellation failed"
+
     if _has_column("Sales Order", "restaurant_status"):
         frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
 
-    _append_sales_order_note(so_name, f"[RETURN] برگشت کامل: {return_so.name} ({return_code})")
+    _append_sales_order_note(so_name, f"[RETURN] برگشت کامل انجام شد. {reason_text}")
     frappe.db.commit()
 
     result.update({
@@ -15064,87 +15028,6 @@ def create_management_return_order(order_name, reason=None):
         "grand_total": flt(doc.grand_total or doc.total or 0),
     })
     return result
-
-
-def _existing_si_for_so(so_name):
-    """پیدا کردن فاکتور فروش مربوط به یه سفارش فروش"""
-    if not so_name or not frappe.db.exists("DocType", "Sales Invoice Item"):
-        return ""
-    si_items = frappe.get_all("Sales Invoice Item",
-        filters={"sales_order": so_name, "docstatus": 1},
-        fields=["parent"], limit=1, ignore_permissions=True)
-    return si_items[0].parent if si_items else ""
-
-
-def _create_return_si(si_name, reason=""):
-    """ساخت فاکتور فروش برگشتی از روی فاکتور اصلی"""
-    if not si_name or not frappe.db.exists("Sales Invoice", si_name):
-        return ""
-    
-    si = frappe.get_doc("Sales Invoice", si_name)
-    return_si = frappe.new_doc("Sales Invoice")
-    return_si.customer = si.customer
-    return_si.company = si.company
-    return_si.currency = si.currency
-    return_si.is_return = 1
-    return_si.return_against = si_name
-    return_si.update_stock = 1
-    return_si.is_pos = 1
-    
-    if reason:
-        return_si.remarks = f"[RETURN] {reason}"
-    
-    for item in si.items:
-        return_si.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "qty": abs(flt(item.qty)) * -1,  # منفی
-            "rate": flt(item.rate),
-            "uom": item.uom,
-            "stock_uom": item.stock_uom,
-            "conversion_factor": flt(item.conversion_factor) or 1,
-            "warehouse": item.warehouse,
-        })
-    
-    return_si.flags.ignore_permissions = True
-    return_si.flags.ignore_mandatory = True
-    return_si.flags.ignore_validate = True
-    return_si.insert()
-    return_si.submit()
-    return return_si.name
-
-
-def _create_return_dn(dn_name, reason=""):
-    """ساخت رسید تحویل برگشتی از روی رسید اصلی"""
-    if not dn_name or not frappe.db.exists("Delivery Note", dn_name):
-        return ""
-    
-    dn = frappe.get_doc("Delivery Note", dn_name)
-    return_dn = frappe.new_doc("Delivery Note")
-    return_dn.customer = dn.customer
-    return_dn.company = dn.company
-    return_dn.currency = dn.currency
-    return_dn.is_return = 1
-    return_dn.return_against = dn_name
-    
-    for item in dn.items:
-        return_dn.append("items", {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "qty": abs(flt(item.qty)) * -1,  # منفی
-            "rate": flt(item.rate),
-            "uom": item.uom,
-            "stock_uom": item.stock_uom,
-            "conversion_factor": flt(item.conversion_factor) or 1,
-            "warehouse": item.warehouse,
-        })
-    
-    return_dn.flags.ignore_permissions = True
-    return_dn.flags.ignore_mandatory = True
-    return_dn.flags.ignore_validate = True
-    return_dn.insert()
-    return_dn.submit()
-    return return_dn.name
 
 def _management_resolve_item_name(item_name):
 	raw_value = (item_name or "").strip()
