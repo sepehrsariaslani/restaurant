@@ -144,6 +144,7 @@
 									v-for="item in group.items"
 									:key="`mobile-item-${item.key}`"
 									:href="item.url"
+									:target="item.target || '_self'"
 									class="nav-item"
 									:class="{ active: isLinkActive(item.key) }"
 									@click="closeMobileMenu"
@@ -268,6 +269,7 @@
 								v-for="item in group.items"
 								:key="item.key"
 								:href="item.url"
+								:target="item.target || '_self'"
 								class="nav-item"
 								:class="{ active: isLinkActive(item.key) }"
 								:title="item.label"
@@ -454,6 +456,7 @@ import {
 	PanelRightOpen as PanelRightOpenIcon,
 	SlidersHorizontal as SlidersIcon,
 	Store as StoreIcon,
+	UtensilsCrossed as KitchenIcon,
 } from "lucide-vue-next";
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
@@ -566,6 +569,16 @@ const navLinks = computed(() => {
 			caption: "وضعیت و تحویل",
 			iconComponent: OrdersIcon,
 			url: "/management/orders",
+			group: "sales",
+		},
+		{
+			key: "management-kitchen",
+			label: "آشپزخانه",
+			shortLabel: "آشپز",
+			caption: "نمایشگر تولید",
+			iconComponent: KitchenIcon,
+			url: "/kitchen",
+			target: "_blank",
 			group: "sales",
 		},
 		{
