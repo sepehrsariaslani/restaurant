@@ -283,7 +283,7 @@
                 >
                   <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
                     <strong>{{ invoice.order_code }}</strong>
-                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت">🖨</button>
+                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت">پرینت</button>
                     <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
                     <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
                     <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
@@ -350,7 +350,7 @@
                       class="print-icon-btn"
                       @click.stop="printOrderReceipt(order)"
                       title="پرینت فاکتور"
-                    >🖨</button>
+                    >پرینت</button>
                   </div>
                   <div class="history-card-body">
                     <span>{{ order.customer_name || 'مشتری POS' }}</span>
@@ -379,7 +379,7 @@
                       @click.stop="deliverOrder(order)"
                       title="تولید و تحویل"
                     >
-                      🏭 تحویل
+                      تحویل
                     </button>
                   </div>
                 </article>
@@ -1106,44 +1106,54 @@ async function printOrderReceipt(order) {
     const items = orderData?.items || []
     const customer = order.customer_name || 'مشتری POS'
     const orderCode = order.order_code || order.name
-    const total = formatMoney(order.grand_total || 0, currency.value || currency || 'IRR')
-    const method = order.payment_method || '-'
+    const total = order.grand_total || 0
+    
+    // Build receipt using the same format as POS
+    const printableItems = buildReceiptPrintableItemsFromLines(items.map(item => ({
+      title: item.title || item.item_name || '',
+      qty: item.qty || 1,
+      price: item.unit_price || item.price || 0,
+      note: item.note || '',
+      customization_ingredients: [],
+      customization: {}
+    })))
+    
+    const totalsRows = buildReceiptTotalsRowsHtml({
+      itemsTotal: Number(total || 0),
+      discountAmount: 0,
+      walletApplied: 0,
+      taxAmount: 0,
+      tipAmount: 0,
+      serviceAmount: 0,
+      payableAmount: Number(total || 0),
+    })
+    
+    const paymentLabel = order.payment_method 
+      ? (paymentMethodDisplayLabel(order.payment_method) || order.payment_method)
+      : '-'
+    
+    const html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>' +
+      '<style>' + receiptStylesCss() + '</style></head><body>' +
+      buildReceiptMarkup({
+        printableItems,
+        totalsRows,
+        paymentLabel,
+        customerName: customer,
+        mobile: order.mobile || '',
+        orderMode: order.channel || 'takeaway',
+        place: order.place || '-',
+        note: order.note || '',
+        invoiceNo: orderCode,
+        heading: 'فیش فروش POS',
+      }) +
+      '</body></html>'
 
-    let rows = items.map(item => `
-      <tr>
-        <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right">${item.title || item.item_name}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:center">${formatCompactNumber(item.qty, 2)}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:left">${formatMoney(item.line_total || 0, currency.value || currency || 'IRR')}</td>
-      </tr>
-    `).join('')
-
-    const html = `
-      <!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
-      <style>
-        body{font-family:Tahoma,sans-serif;padding:20px;color:#333;direction:rtl}
-        h2{text-align:center;margin-bottom:4px}
-        .meta{font-size:12px;color:#666;margin-bottom:10px;text-align:center}
-        table{width:100%;border-collapse:collapse;font-size:13px}
-        th{background:#f5f5f5;padding:6px 8px;border-bottom:2px solid #ddd;text-align:center}
-        .total{font-size:15px;font-weight:bold;text-align:left;margin-top:10px}
-        .footer{font-size:11px;color:#999;text-align:center;margin-top:20px;border-top:1px dashed #ddd;padding-top:10px}
-      </style></head><body>
-        <h2>${receiptSettings.store_name || 'فاکتور فروش'}</h2>
-        <div class="meta">
-          <p>شماره: ${orderCode}</p>
-          <p>مشتری: ${customer} | پرداخت: ${method}</p>
-        </div>
-        <table><tr><th>کالا</th><th>تعداد</th><th>قیمت</th></tr>${rows}</table>
-        <div class="total">مبلغ کل: ${total}</div>
-        <div class="footer">تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}</div>
-      </body></html>`
-
-    const w = window.open('', '_blank', 'width=380,height=600')
+    const w = window.open('', '_blank', 'width=380,height=700')
     if (!w) return
     w.document.write(html)
     w.document.close()
     w.focus()
-    setTimeout(() => { w.print() }, 200)
+    setTimeout(() => { w.print() }, 300)
   } catch(err) {
     error.value = 'خطا در پرینت: ' + (err.message || '')
   }
