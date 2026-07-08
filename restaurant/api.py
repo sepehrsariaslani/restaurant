@@ -5302,12 +5302,6 @@ def _create_sales_order(
 	if _has_column("Sales Order", "restaurant_status"):
 		so_doc.db_set("restaurant_status", "confirmed", update_modified=False)
 
-	production_payload = _create_production_for_sales_order(so_doc)
-	automation_payload = _run_sales_order_auto_flow(
-		so_doc.name,
-		trigger="order_submit",
-		payment_status="",
-	)
 	frappe.db.commit()
 
 	return {
@@ -5316,8 +5310,7 @@ def _create_sales_order(
 		"order_code": so_doc.get("restaurant_order_code") or order_code,
 		"grand_total": flt(so_doc.grand_total or subtotal) + flt(order_context.get("delivery_fee") or 0),
 		"pricing_breakdown": payload_snapshot,
-		"production_tickets": production_payload["production_tickets"],
-		"work_orders": production_payload["work_orders"],
+
 		"production_skipped_items": production_payload.get("skipped_items") or [],
 		"automation": automation_payload or {},
 	}
@@ -14035,9 +14028,6 @@ def produce_pos_order(order_name):
         "order_id": so_name,
         "automation": auto_result if isinstance(auto_result, dict) else {},
     }
-
-@frappe.whitelist()
-@frappe.whitelist()
 
 @frappe.whitelist()
 def create_and_pay_pos_order(payload):
