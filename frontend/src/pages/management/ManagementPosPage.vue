@@ -283,7 +283,7 @@
                 >
                   <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
                     <strong>{{ invoice.order_code }}</strong>
-                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت">پرینت</button>
+                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت"><Printer :size="14" /></button>
                     <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
                     <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
                     <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
@@ -298,11 +298,11 @@
                       </div>
                     </div>
                     <div class="accordion-footer">
-                      <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
-                      <button type="button" class="tbl-btn" @click.stop="settleSelectedInvoice(invoice)">پرداخت</button>
+                      <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)"><Download :size="13" /> انتخاب و بارگذاری</button>
+                      <button type="button" class="tbl-btn" @click.stop="settleSelectedInvoice(invoice)"><CreditCard :size="13" /> پرداخت</button>
                       <template v-if="!invoice.delivery_exists">
-                        <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)">تسویه و تحویل</button>
-                        <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)">تحویل</button>
+                        <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)"><CheckCheck :size="13" /> تسویه و تحویل</button>
+                        <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)"><Truck :size="13" /> تحویل</button>
                       </template>
                     </div>
                   </div>
@@ -350,7 +350,7 @@
                       class="print-icon-btn"
                       @click.stop="printOrderReceipt(order)"
                       title="پرینت فاکتور"
-                    >پرینت</button>
+                    ><Printer :size="14" /></button>
                   </div>
                   <div class="history-card-body">
                     <span>{{ order.customer_name || 'مشتری POS' }}</span>
@@ -379,7 +379,7 @@
                       @click.stop="deliverOrder(order)"
                       title="تولید و تحویل"
                     >
-                      تحویل
+                      <Truck :size="13" /> تحویل
                     </button>
                   </div>
                 </article>
@@ -471,7 +471,7 @@
             <p>از همین صفحه می توانید آیتم ها را ویرایش کنید و بعد چاپ بگیرید.</p>
           </div>
           <div class="print-editor-actions">
-            <button type="button" class="secondary-btn" @click="closePrintEditor">بستن</button>
+            <button type="button" class="secondary-btn" @click="closePrintEditor"><X :size="14" /> بستن</button>
             <button type="button" class="primary-btn" :disabled="!cart.length" @click="printCurrentTicket">چاپ نهایی</button>
           </div>
         </header>
@@ -644,7 +644,7 @@
               <textarea class="od-textarea" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت..."></textarea>
               <p class="od-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
               <button class="od-btn" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
-                {{ orderDetailModal.saving ? '...' : 'ذخیره' }}
+                <Save :size="14" v-if="!orderDetailModal.saving" /> {{ orderDetailModal.saving ? '...' : 'ذخیره' }}
               </button>
             </div>
 
@@ -653,7 +653,7 @@
               <button class="od-btn od-btn-danger" @click="openReturnInvoiceModal" v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())">
                 فاکتور برگشتی
               </button>
-              <button class="od-btn" @click="closeOrderDetailModal">بستن</button>
+              <button class="od-btn" @click="closeOrderDetailModal"><X :size="14" /> بستن</button>
             </div>
           </div>
         </template>
@@ -677,9 +677,9 @@
           <p class="error" v-if="returnInvoiceModal.error">{{ returnInvoiceModal.error }}</p>
         </div>
         <div class="pos-modal-actions">
-          <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal">انصراف</button>
+          <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal"><X :size="14" /> انصراف</button>
           <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.بارگذاری" @click="confirmCreateReturnInvoice">
-            {{ returnInvoiceModal.بارگذاری ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
+            <RefreshCw :size="14" v-if="!returnInvoiceModal.بارگذاری" /> {{ returnInvoiceModal.بارگذاری ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
           </button>
         </div>
       </section>
@@ -691,7 +691,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Keyboard, ShoppingCart } from 'lucide-vue-next'
+import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
