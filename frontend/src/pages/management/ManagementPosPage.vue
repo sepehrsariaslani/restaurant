@@ -706,6 +706,7 @@ import {
   producePOSOrder,
   settlePOSOrder,
   deliverPOSOrder,
+  deliverInvoiceOnly,
   produceAndDeliverPOSOrder,
   createAndPayPOSOrder,
   createAndSettlePOSOrder,
@@ -2195,15 +2196,14 @@ async function settleAndDeliverFromInvoice(invoice) {
 
 async function deliverFromInvoice(invoice) {
   if (!invoice?.name) return
-  const confirmed = window.confirm(`فاکتور ${invoice.order_code || invoice.name} تحویل داده شود؟`)
+  const confirmed = window.confirm(`فاکتور ${invoice.order_code || invoice.name} تحویل داده شود؟ (پرداخت نشده باقی می‌ماند)`)
   if (!confirmed) return
   error.value = ''
   successMessage.value = ''
   try {
-    const result = await deliverPOSOrder(invoice.name)
+    const result = await deliverInvoiceOnly(invoice.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-    successMessage.value = `فاکتور ${invoice.order_code} تحویل شد.${dnInfo}`
-    invoice.status = 'delivered'
+    successMessage.value = `فاکتور ${invoice.order_code} تحویل شد (بدون پرداخت).${dnInfo}`
     await loadOpenInvoices()
     await loadRecentOrders()
   } catch (err) {

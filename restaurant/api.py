@@ -14165,6 +14165,30 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     frappe.db.commit()
     return result
 
+
+@frappe.whitelist()
+def deliver_invoice_only(order_name):
+    """فقط رسید تحویل بزن بدون تغییر وضعیت (فاکتور باز میمونه)"""
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    
+    result = {"sales_order": so_name}
+    try:
+        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        if dn_name:
+            result["delivery_note"] = dn_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "DeliverInvoiceOnly DN")
+        frappe.throw(_("Delivery Note creation failed."))
+    
+    _append_sales_order_note(so_name, "[DELIVER_ONLY] Delivery Note created. Invoice remains open.")
+    frappe.db.commit()
+    return result
+
 @frappe.whitelist()
 def deliver_pos_order(order_name):
     # تولید و تحویل: WO → SE → Finish WO → DN
