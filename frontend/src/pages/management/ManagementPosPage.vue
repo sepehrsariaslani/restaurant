@@ -299,8 +299,10 @@
                     <div class="accordion-footer">
                       <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
                       <button type="button" class="tbl-btn" @click.stop="settleSelectedInvoice(invoice)">پرداخت</button>
-                      <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)">تسویه و تحویل</button>
-                      <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)">تحویل</button>
+                      <template v-if="!invoice.delivery_exists">
+                        <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)">تسویه و تحویل</button>
+                        <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)">تحویل</button>
+                      </template>
                     </div>
                   </div>
                   <div class="accordion-loading" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
@@ -2203,6 +2205,7 @@ async function deliverFromInvoice(invoice) {
   try {
     const result = await deliverInvoiceOnly(invoice.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+    invoice.delivery_exists = true
     successMessage.value = `فاکتور ${invoice.order_code} تحویل شد (بدون پرداخت).${dnInfo}`
     await loadOpenInvoices()
     await loadRecentOrders()
