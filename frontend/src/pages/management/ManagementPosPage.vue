@@ -870,6 +870,7 @@ const openInvoiceError = ref('')
 const selectedOpenInvoiceKey = ref('')
 const selectedOpenInvoiceDetail = ref(null)
 const settlingOpenInvoice = ref(false)
+const deliveredInvoices = reactive(new Set())
 const expandedInvoiceKey = ref('')
 const editingOriginalOrder = reactive({
   name: '',
@@ -1896,7 +1897,11 @@ function isUnpaidOpenInvoice(row) {
   if (['delivered', 'cancelled'].includes(status)) {
     return false
   }
-  return paymentStatus !== 'paid'
+  // اگه فقط تحویل شده (payment_method نداره) ولی DN خورده => باز هم فاکتور رو نمایش بده
+  if (status === 'paid' && row.payment_method) {
+    return false
+  }
+  return true
 }
 
 function buildOpenInvoices(rows = []) {
@@ -1906,6 +1911,8 @@ function buildOpenInvoices(rows = []) {
     .map((row) => ({
       ...row,
       invoice_key: openInvoiceKey(row),
+      // بررسی اینکه آیا این فاکتور از قبل تحویل داده شده (با چک کردن existing DN توی response)
+      delivery_exists: deliveredInvoices.has(row.name) || row.dn_exists || false,
     }))
 }
 
@@ -2206,6 +2213,7 @@ async function deliverFromInvoice(invoice) {
     const result = await deliverInvoiceOnly(invoice.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
     invoice.delivery_exists = true
+    deliveredInvoices.add(invoice.name)
     successMessage.value = `فاکتور ${invoice.order_code} تحویل شد (بدون پرداخت).${dnInfo}`
     await loadOpenInvoices()
     await loadRecentOrders()
