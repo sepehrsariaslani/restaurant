@@ -22691,17 +22691,32 @@ def get_kitchen_display_orders(limit=50):
         return {"orders": []}
     
     has_restaurant_status = _has_column("Sales Order", "restaurant_status")
+    has_restaurant_note = _has_column("Sales Order Item", "restaurant_note")
+    has_order_type = _has_column("Sales Order", "restaurant_order_type")
+    has_order_code = _has_column("Sales Order", "restaurant_order_code")
+    has_prod_ticket = frappe.db.exists("DocType", "Restaurant Production Ticket")
+    
     filters = {"docstatus": 1}
     if has_restaurant_status:
         filters["restaurant_status"] = ["in", ["new", "confirmed", "preparing", "ready"]]
     
+    so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
+    if has_order_code:
+        so_fields.append("restaurant_order_code")
+    if has_order_type:
+        so_fields.append("restaurant_order_type")
+    
     rows = frappe.get_all("Sales Order",
-        fields=["name", "customer_name", "customer", "transaction_date", "creation"],
+        fields=so_fields,
         filters=filters,
         order_by="creation desc",
         limit=limit,
         ignore_permissions=True,
     )
+    
+    so_item_fields = ["item_code", "item_name", "qty", "rate", "description"]
+    if has_restaurant_note:
+        so_item_fields.append("restaurant_note")
     
     for so in rows:
         so_name = so.name
@@ -22709,23 +22724,22 @@ def get_kitchen_display_orders(limit=50):
         tickets = []
         
         so_items = frappe.get_all("Sales Order Item",
-            fields=["item_code", "item_name", "qty", "rate", "description", "restaurant_note"],
+            fields=so_item_fields,
             filters={"parent": so_name},
             order_by="idx asc",
             ignore_permissions=True
         )
         for item in so_items:
-            note = item.restaurant_note if _has_column("Sales Order Item", "restaurant_note") else ""
             items.append({
                 "item_code": item.item_code,
                 "title": item.item_name,
                 "description": item.description or "",
                 "qty": flt(item.qty),
                 "rate": flt(item.rate),
-                "note": note or "",
+                "note": item.restaurant_note if has_restaurant_note else "",
             })
         
-        if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+        if has_prod_ticket:
             tickets = frappe.get_all("Restaurant Production Ticket",
                 fields=["name", "menu_item", "qty", "status", "work_order"],
                 filters={"sales_order": so_name},
@@ -22736,15 +22750,8 @@ def get_kitchen_display_orders(limit=50):
         if has_restaurant_status:
             status = frappe.db.get_value("Sales Order", so_name, "restaurant_status") or "new"
         
-        channel = ""
-        has_ot = _has_column("Sales Order", "restaurant_order_type")
-        if has_ot:
-            channel = frappe.db.get_value("Sales Order", so_name, "restaurant_order_type") or ""
-        
-        order_code = so_name
-        has_oc = _has_column("Sales Order", "restaurant_order_code")
-        if has_oc:
-            order_code = frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name
+        channel = so.restaurant_order_type if has_order_type else ""
+        order_code = so.restaurant_order_code if has_order_code else so_name
         
         orders.append({
             "name": so_name,
