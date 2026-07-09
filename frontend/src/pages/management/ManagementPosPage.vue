@@ -2143,7 +2143,7 @@ async function selectAndLoadInvoice(invoice) {
     // Apply customer/order info to form
     // Store original order info for editing continuation
     editingOriginalOrder.name = order.name || invoice.name || ''
-    editingOriginalOrder.name = order.order_code || invoice.order_code || ''
+    editingOriginalOrder.order_code = order.name
     editingOriginalOrder.isEditing = true
     
     applyOpenInvoiceProfile(order)
@@ -3815,22 +3815,11 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       }
     } else {
       if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
-        // ویرایش فاکتور موجود - SO جدید نساز، فقط وضعیت رو بروز کن
-        result = { order_id: editingOriginalOrder.name }
-        successMessage.value = `تغییرات فاکتور ${editingOriginalOrder.name} ذخیره شد.`
-        editingOriginalOrder.isEditing = false
-        editingOriginalOrder.name = ''
-        editingOriginalOrder.name = ''
-        resetCurrentInvoiceState()
-        saveActiveTicketSnapshot()
-        loadOpenInvoices()
-        loadRecentOrders()
-        submitting.value = false
-        return
-      } else {
-        // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
-        result = await createPOSOrder(payload)
+        // ویرایش فاکتور موجود: SO جدید با یادداشت ادامه فاکتور قبلی
+        payload.note = (payload.note || '') + ` | ادامه فاکتور ${editingOriginalOrder.name}`
       }
+      // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
+      result = await createPOSOrder(payload)
     }
     let orderCode = result.order_id || ''
     if (payNow) {
@@ -3852,12 +3841,15 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     }
 
     if (editingOriginalOrder.isEditing) {
-      successMessage.value = editingOriginalOrder.name
-        ? `آیتم‌ها به فاکتور ${editingOriginalOrder.name} اضافه شد.`
-        : 'آیتم‌ها به فاکتور اضافه شد.'
+      const oldName = editingOriginalOrder.name
+      successMessage.value = oldName
+        ? `فاکتور جدید با یادداشت ادامه فاکتور ${oldName} ساخته شد.`
+        : 'فاکتور جدید ساخته شد.'
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
       editingOriginalOrder.name = ''
+      loadOpenInvoices()
+      loadRecentOrders()
     }
 
     // Save order code to ticket snapshot for receipt numbering
