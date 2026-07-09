@@ -713,6 +713,7 @@ import {
   settlePOSOrder,
   deliverPOSOrder,
   deliverInvoiceOnly,
+  voidManagementPOSOrder,
   produceAndDeliverPOSOrder,
   createAndPayPOSOrder,
   createAndSettlePOSOrder,
@@ -3815,7 +3816,13 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       }
     } else {
       if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
-        // ویرایش فاکتور موجود: SO جدید با یادداشت ادامه فاکتور قبلی
+        // ویرایش فاکتور موجود: کنسل کردن فاکتور قبلی + ساخت فاکتور جدید
+        try {
+          await voidManagementPOSOrder(editingOriginalOrder.name, 'ادامه فاکتور در POS')
+        } catch (voidErr) {
+          // اگه کنسل نشد، ادامه بده
+          console.warn('Could not void previous order:', voidErr)
+        }
         payload.note = (payload.note || '') + ` | ادامه فاکتور ${editingOriginalOrder.name}`
       }
       // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
