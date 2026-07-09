@@ -3814,8 +3814,23 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         result = await createAndPayPOSOrder(payload)
       }
     } else {
-      // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
-      result = await createPOSOrder(payload)
+      if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+        // ویرایش فاکتور موجود - SO جدید نساز، فقط وضعیت رو بروز کن
+        result = { order_id: editingOriginalOrder.name }
+        successMessage.value = `تغییرات فاکتور ${editingOriginalOrder.name} ذخیره شد.`
+        editingOriginalOrder.isEditing = false
+        editingOriginalOrder.name = ''
+        editingOriginalOrder.name = ''
+        resetCurrentInvoiceState()
+        saveActiveTicketSnapshot()
+        loadOpenInvoices()
+        loadRecentOrders()
+        submitting.value = false
+        return
+      } else {
+        // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
+        result = await createPOSOrder(payload)
+      }
     }
     let orderCode = result.order_id || ''
     if (payNow) {
