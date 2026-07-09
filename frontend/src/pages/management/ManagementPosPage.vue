@@ -3293,10 +3293,16 @@ const receiptInvoiceNumber = computed(() => {
   if (manualValue) {
     return manualValue
   }
-  const now = new Date()
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  // Try to use the last created order code from ordersAPI or form
+  const ticket = getTicketSessionById(activeTicketId.value)
+  const snapshotCode = ticket?.snapshot?.lastOrderCode || ''
+  if (snapshotCode) return snapshotCode
+  // Fallback: use form data if available
+  const formCode = editingOriginalOrder.order_code || ''
+  if (formCode) return formCode
+  // Last resort: temporary code
   const ticketPart = String(activeTicketId.value || 'ticket-1').replace(/^ticket-/, '')
-  return `POS-${datePart}-${ticketPart}`
+  return ticketPart
 })
 
 function buildReceiptPrintableItems() {
@@ -3839,7 +3845,16 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       editingOriginalOrder.order_code = ''
     }
 
-    // Auto-print receipt after successful تسویهment
+    // Save order code to ticket snapshot for receipt numbering
+    if (orderCode) {
+      const ticket = getTicketSessionById(activeTicketId.value)
+      if (ticket) {
+        if (!ticket.snapshot) ticket.snapshot = {}
+        ticket.snapshot.lastOrderCode = orderCode
+      }
+    }
+
+    // Auto-print receipt after successful settlement
     if (payNow && result?.sales_invoice) {
       autoPrintReceipt()
     }
