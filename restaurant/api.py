@@ -4733,15 +4733,6 @@ def _core_order_status(sales_order_doc):
 	return CORE_ORDER_STATUS_MAP.get((sales_order_doc.status or "").strip().lower(), "new")
 
 
-def _generate_order_code():
-	while True:
-		code = "R" + "".join(random.choices(string.digits, k=7))
-		in_sales = False
-		if _has_column("Sales Order", "restaurant_order_code"):
-			in_sales = frappe.db.exists("Sales Order", {"restaurant_order_code": code})
-		if not in_sales:
-			return code
-
 
 def _default_company():
 	return frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value(
@@ -5009,8 +5000,6 @@ def _create_sales_order(
 	if not selling_price_list:
 		frappe.throw(_("Please configure at least one selling price list."))
 	uom_fallback = _default_uom()
-	order_code = _generate_order_code()
-
 	delivery_payload = delivery_payload if isinstance(delivery_payload, dict) else {}
 	coupon = coupon if isinstance(coupon, dict) else {}
 	_ensure_checkout_sales_order_fields()
@@ -5026,8 +5015,7 @@ def _create_sales_order(
 		"ignore_pricing_rule": 1,
 		"items": [],
 	}
-	if _has_column("Sales Order", "restaurant_order_code"):
-		doc_payload["restaurant_order_code"] = order_code
+
 	if _has_column("Sales Order", "restaurant_customer_mobile"):
 		doc_payload["restaurant_customer_mobile"] = mobile
 	if _has_column("Sales Order", "restaurant_order_type"):
@@ -5307,7 +5295,7 @@ def _create_sales_order(
 	return {
 		"status": "success",
 		"order_id": so_doc.name,
-		"order_code": so_doc.get("restaurant_order_code") or order_code,
+		"order_code": so_doc.name,
 		"grand_total": flt(so_doc.grand_total or subtotal) + flt(order_context.get("delivery_fee") or 0),
 		"pricing_breakdown": payload_snapshot,
 	}
@@ -5667,10 +5655,7 @@ def _create_work_order_for_ticket(
 		updates["restaurant_sales_order"] = sales_order_doc.name
 	if _has_column("Work Order", "restaurant_sales_order_item"):
 		updates["restaurant_sales_order_item"] = so_item_row.name
-	if _has_column("Work Order", "restaurant_order_code"):
-		updates["restaurant_order_code"] = (
-			sales_order_doc.get("restaurant_order_code") or sales_order_doc.name
-		)
+	# Use sales_order name as identifier
 	if _has_column("Work Order", "restaurant_production_ticket"):
 		updates["restaurant_production_ticket"] = ticket_doc.name
 	if _has_column("Work Order", "restaurant_customization_json"):
@@ -5847,7 +5832,7 @@ def _create_production_for_sales_order(so_doc):
 				"doctype": "Restaurant Production Ticket",
 				"sales_order": so_doc.name,
 				"sales_order_item": row.name,
-				"order_code": so_doc.get("restaurant_order_code") or so_doc.name,
+				"order_code": so_doc.name,
 				"company": so_doc.company,
 				"branch": settings.branch,
 				"menu_item": menu_doc.name,
@@ -5973,7 +5958,7 @@ def _get_sales_order_payload(so_name):
 
 	order_payload = {
 		"name": doc.name,
-		"order_code": doc.get("restaurant_order_code") or doc.name,
+		"order_code": doc.name,
 		"customer_name": doc.customer_name,
 		"mobile": doc.get("restaurant_customer_mobile") or "",
 		"order_type": resolved_order_type,
@@ -10625,7 +10610,7 @@ def get_order(order_code, mobile):
 	so_name = frappe.db.get_value(
 		"Sales Order",
 		{
-			"restaurant_order_code": order_code,
+
 			"restaurant_customer_mobile": mobile,
 		},
 		"name",
@@ -10645,7 +10630,7 @@ def get_order_production_status(order_code, mobile):
 	so_name = frappe.db.get_value(
 		"Sales Order",
 		{
-			"restaurant_order_code": order_code,
+
 			"restaurant_customer_mobile": mobile,
 		},
 		"name",
@@ -10718,8 +10703,7 @@ def _resolve_sales_order_name(order_name):
 		return ""
 	if frappe.db.exists("Sales Order", so_name):
 		return so_name
-	if _has_column("Sales Order", "restaurant_order_code"):
-		mapped = frappe.db.get_value("Sales Order", {"restaurant_order_code": so_name}, "name")
+
 		if mapped:
 			return mapped
 	return ""
@@ -10827,16 +10811,7 @@ def sync_work_order_required_items_from_ticket(doc, method=None):
 		and not (doc.get("restaurant_sales_order_item") or "").strip()
 	):
 		updates["restaurant_sales_order_item"] = (doc.get("sales_order_item") or "").strip()
-	if (
-		_has_column("Work Order", "restaurant_order_code")
-		and not (doc.get("restaurant_order_code") or "").strip()
-	):
-		order_code = (
-			frappe.db.get_value("Sales Order", doc.get("sales_order"), "restaurant_order_code")
-			if doc.get("sales_order")
-			else ""
-		) or ""
-		updates["restaurant_order_code"] = order_code or (doc.get("sales_order") or "")
+
 	if updates:
 		frappe.db.set_value("Work Order", doc.name, updates, update_modified=False)
 
@@ -11980,7 +11955,6 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	if cashier:
 		filters["owner"] = cashier
 
-	has_order_code = _has_column("Sales Order", "restaurant_order_code")
 	has_mobile = _has_column("Sales Order", "restaurant_customer_mobile")
 	has_order_type = _has_column("Sales Order", "restaurant_order_type")
 	has_note = _has_column("Sales Order", "restaurant_note")
@@ -12002,8 +11976,6 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	]
 	if has_transaction_date:
 		fields.append("transaction_date")
-	if has_order_code:
-		fields.append("restaurant_order_code")
 	if has_mobile:
 		fields.append("restaurant_customer_mobile")
 	if has_order_type:
@@ -12116,7 +12088,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"source": "web",
 				"doctype": "Sales Order",
 				"name": row.name,
-				"order_code": (row.restaurant_order_code if has_order_code else "") or row.name,
+				"order_code": row.name,
 				"customer_name": row.customer_name or "POS Customer",
 				"mobile": (row.restaurant_customer_mobile if has_mobile else "")
 				or mobile_by_customer.get(row.customer, ""),
@@ -13569,7 +13541,6 @@ def _management_operational_metrics(date_from=None, date_to=None):
 	]
 	rating_field = next((field for field in rating_candidates if _has_column("Sales Order", field)), "")
 	delivery_field = next((field for field in delivery_candidates if _has_column("Sales Order", field)), "")
-	has_order_code = _has_column("Sales Order", "restaurant_order_code")
 	if not rating_field and not delivery_field:
 		return metrics
 
@@ -13577,8 +13548,6 @@ def _management_operational_metrics(date_from=None, date_to=None):
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_transaction_date = _has_column("Sales Order", "transaction_date")
 	fields = ["name"]
-	if has_order_code:
-		fields.append("restaurant_order_code")
 	if has_transaction_date:
 		fields.append("transaction_date")
 	if rating_field:
@@ -13618,7 +13587,7 @@ def _management_operational_metrics(date_from=None, date_to=None):
 				if delivery_value > max_delivery_value:
 					max_delivery_value = delivery_value
 					max_delivery_order = (
-						row.get("restaurant_order_code") if has_order_code else ""
+						row.name
 					) or row.get("name")
 
 	if ratings:
@@ -14601,7 +14570,7 @@ def confirm_management_pos_payment(
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 		"payment": payment_result,
 		"automation": automation_payload or {},
 	}
@@ -14653,7 +14622,7 @@ def mark_management_order_paid(order_name, reference_no=None, rrn=None, provider
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 		"payment": payment_result,
 		"restaurant_status": _core_order_status(frappe.get_doc("Sales Order", so_name)),
 	}
@@ -14684,7 +14653,7 @@ def complete_management_order(order_name, reference_no=None, rrn=None, provider_
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 		"payment": payment_result,
 		"restaurant_status": _core_order_status(frappe.get_doc("Sales Order", so_name)),
 	}
@@ -14697,8 +14666,7 @@ def void_management_pos_order(order_name, reason=None):
 		frappe.throw(_("Order name is required."))
 
 	so_name = order_name
-	if not frappe.db.exists("Sales Order", so_name) and _has_column("Sales Order", "restaurant_order_code"):
-		so_name = frappe.db.get_value("Sales Order", {"restaurant_order_code": order_name}, "name")
+
 	if not so_name or not frappe.db.exists("Sales Order", so_name):
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
@@ -14723,7 +14691,7 @@ def void_management_pos_order(order_name, reason=None):
 	return {
 		"status": "success",
 		"order_name": doc.name,
-		"order_code": doc.get("restaurant_order_code") or doc.name,
+		"order_code": doc.name,
 		"state": "cancelled",
 	}
 
@@ -14765,8 +14733,7 @@ def get_management_order_detail(order_name, source=None):
 		so_name = None
 		if frappe.db.exists("Sales Order", order_name):
 			so_name = order_name
-		elif _has_column("Sales Order", "restaurant_order_code"):
-			so_name = frappe.db.get_value("Sales Order", {"restaurant_order_code": order_name}, "name")
+
 
 		if so_name:
 			doc = frappe.get_doc("Sales Order", so_name)
@@ -14794,7 +14761,7 @@ def get_management_order_detail(order_name, source=None):
 					"source": "web",
 					"doctype": "Sales Order",
 					"name": doc.name,
-					"order_code": doc.get("restaurant_order_code") or doc.name,
+					"order_code": doc.name,
 					"customer_name": doc.customer_name,
 					"mobile": doc.get("restaurant_customer_mobile") or "",
 					"channel": doc.get("restaurant_order_type") or "takeaway",
@@ -14929,7 +14896,7 @@ def update_management_order(order_name, payment_method=None, note=None, customer
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 	}
 
 
@@ -14951,7 +14918,7 @@ def create_management_return_order(order_name, reason=None):
         frappe.throw(_("فقط سفارش‌های پرداخت‌شده یا تحویل‌شده قابل برگشت هستند."))
 
     reason_text = (reason or "درخواست مشتری").strip()
-    original_code = doc.get("restaurant_order_code") or doc.name
+    original_code = doc.name
     
     result = {
         "original_order_name": so_name,
@@ -22721,7 +22688,6 @@ def get_kitchen_display_orders(limit=50):
     has_restaurant_status = _has_column("Sales Order", "restaurant_status")
     has_restaurant_note = _has_column("Sales Order Item", "restaurant_note")
     has_order_type = _has_column("Sales Order", "restaurant_order_type")
-    has_order_code = _has_column("Sales Order", "restaurant_order_code")
     has_prod_ticket = frappe.db.exists("DocType", "Restaurant Production Ticket")
     
     filters = {"docstatus": 1}
@@ -22729,8 +22695,6 @@ def get_kitchen_display_orders(limit=50):
         filters["restaurant_status"] = ["in", ["new", "confirmed", "preparing", "ready"]]
     
     so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
-    if has_order_code:
-        so_fields.append("restaurant_order_code")
     if has_order_type:
         so_fields.append("restaurant_order_type")
     
@@ -22779,7 +22743,7 @@ def get_kitchen_display_orders(limit=50):
             status = frappe.db.get_value("Sales Order", so_name, "restaurant_status") or "new"
         
         channel = so.restaurant_order_type if has_order_type else ""
-        order_code = so.restaurant_order_code if has_order_code else so_name
+        order_code = so_name
         
         orders.append({
             "name": so_name,

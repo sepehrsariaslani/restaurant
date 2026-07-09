@@ -282,7 +282,7 @@
                   :class="{ expanded: expandedInvoiceKey === invoice.invoice_key }"
                 >
                   <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
-                    <strong>{{ invoice.order_code }}</strong>
+                    <strong>{{ invoice.name }}</strong>
                     <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت"><Printer :size="14" /></button>
                     <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
                     <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
@@ -343,7 +343,7 @@
                   @click="openOrderDetailModal(order)"
                 >
                   <div class="history-card-head">
-                    <strong>{{ order.order_code || order.name }}</strong>
+                    <strong>{{ order.name }}</strong>
                     <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
                     <button
                       type="button"
@@ -1079,7 +1079,7 @@ async function deliverOrder(order) {
     error.value = 'سفارشی انتخاب نشده.'
     return
   }
-  const confirmed = window.confirm(`سفارش ${order.order_code || order.name} تولید و تحویل داده شود؟`)
+  const confirmed = window.confirm(`سفارش ${order.name} تولید و تحویل داده شود؟`)
   if (!confirmed) return
   error.value = ''
   successMessage.value = ''
@@ -1090,7 +1090,7 @@ async function deliverOrder(order) {
     // Update local status so buttons hide immediately
     order.status = 'delivered'
     order.payment_method = order.payment_method || ''
-    successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${woInfo}`
+    successMessage.value = `سفارش ${order.name} تحویل شد.${dnInfo}${woInfo}`
     await loadRecentOrders()
     await loadOpenInvoices()
   } catch (err) {
@@ -1105,7 +1105,7 @@ async function printOrderReceipt(order) {
     const orderData = detail?.order || detail
     const items = orderData?.items || []
     const customer = order.customer_name || 'مشتری POS'
-    const orderCode = order.order_code || order.name
+    const orderCode = order.name
     const total = order.grand_total || 0
     
     // Build receipt using the same format as POS
@@ -1483,7 +1483,7 @@ function closeTicketTab(ticketId) {
 function resetCurrentInvoiceState() {
   editingOriginalOrder.isEditing = false
   editingOriginalOrder.name = ''
-  editingOriginalOrder.order_code = ''
+  editingOriginalOrder.name = ''
   applyTicketSnapshot(createEmptyTicketSnapshot())
 }
 
@@ -2143,7 +2143,7 @@ async function selectAndLoadInvoice(invoice) {
     // Apply customer/order info to form
     // Store original order info for editing continuation
     editingOriginalOrder.name = order.name || invoice.name || ''
-    editingOriginalOrder.order_code = order.order_code || invoice.order_code || ''
+    editingOriginalOrder.name = order.order_code || invoice.order_code || ''
     editingOriginalOrder.isEditing = true
     
     applyOpenInvoiceProfile(order)
@@ -2271,7 +2271,7 @@ async function settleAndDeliverFromInvoice(invoice) {
 
 async function deliverFromInvoice(invoice) {
   if (!invoice?.name) return
-  const confirmed = window.confirm(`فاکتور ${invoice.order_code || invoice.name} تحویل داده شود؟ (پرداخت نشده باقی می‌ماند)`)
+  const confirmed = window.confirm(`فاکتور ${invoice.name} تحویل داده شود؟ (پرداخت نشده باقی می‌ماند)`)
   if (!confirmed) return
   error.value = ''
   successMessage.value = ''
@@ -2546,7 +2546,7 @@ function clearCart() {
   }
   editingOriginalOrder.isEditing = false
   editingOriginalOrder.name = ''
-  editingOriginalOrder.order_code = ''
+  editingOriginalOrder.name = ''
   cart.splice(0, cart.length)
   selectedCartLineId.value = ''
   lastRemovedLine.value = null
@@ -3298,7 +3298,7 @@ const receiptInvoiceNumber = computed(() => {
   const snapshotCode = ticket?.snapshot?.lastOrderCode || ''
   if (snapshotCode) return snapshotCode
   // Fallback: use form data if available
-  const formCode = editingOriginalOrder.order_code || ''
+  const formCode = editingOriginalOrder.name || ''
   if (formCode) return formCode
   // Last resort: temporary code
   const ticketPart = String(activeTicketId.value || 'ticket-1').replace(/^ticket-/, '')
@@ -3508,7 +3508,7 @@ function buildConfirmedTableReceiptContext() {
   const flatLines = []
   const noteParts = []
   for (const order of confirmedDineInOrders.value) {
-    const orderCode = String(order.order_code || order.name || '').trim()
+    const orderCode = String(order.name || '').trim()
     if (order.note) {
       noteParts.push(`${orderCode || 'سفارش'}: ${String(order.note).trim()}`)
     }
@@ -3698,10 +3698,10 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         method: paymentMethod,
         reference_no: payment.reference_no || '',
       })
-      const code = editingOriginalOrder.order_code
+      const code = editingOriginalOrder.name
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
-      editingOriginalOrder.order_code = ''
+      editingOriginalOrder.name = ''
       const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
       successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
       if (financial.createNextInvoice) {
@@ -3752,7 +3752,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     order_type: form.order_mode,
     note: [
       buildOrderNote(),
-      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.order_code}` : '',
+      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.name}` : '',
       paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : '',
     ].filter(Boolean).join(' | '),
     customer_type: form.customer_type,
@@ -3805,7 +3805,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         })
         editingOriginalOrder.isEditing = false
         editingOriginalOrder.name = ''
-        editingOriginalOrder.order_code = ''
+        editingOriginalOrder.name = ''
       } else if (withProduction) {
         // "ثبت و تسویه فاکتور": SO + تولید + SI + Payment + DN
         result = await createAndSettlePOSOrder(payload)
@@ -3817,7 +3817,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
       result = await createPOSOrder(payload)
     }
-    let orderCode = result.order_code || ''
+    let orderCode = result.order_id || ''
     if (payNow) {
       if (withProduction) {
         // ثبت و تسویه یکجا (همه چی)
@@ -3830,19 +3830,19 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       } else {
         // تسویه فاکتور (SO + SI + Payment)
         const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
-        successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}`
+        successMessage.value = `سفارش ${orderName} ثبت و تسویه شد.${siInfo}`
       }
     } else {
       successMessage.value = `سفارش ${orderCode} ثبت شد (آماده تولید).`
     }
 
     if (editingOriginalOrder.isEditing) {
-      successMessage.value = editingOriginalOrder.order_code
-        ? `آیتم‌ها به فاکتور ${editingOriginalOrder.order_code} اضافه شد.`
+      successMessage.value = editingOriginalOrder.name
+        ? `آیتم‌ها به فاکتور ${editingOriginalOrder.name} اضافه شد.`
         : 'آیتم‌ها به فاکتور اضافه شد.'
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
-      editingOriginalOrder.order_code = ''
+      editingOriginalOrder.name = ''
     }
 
     // Save order code to ticket snapshot for receipt numbering
