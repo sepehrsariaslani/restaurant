@@ -18775,7 +18775,7 @@ def _get_session_request_docs(session_name):
 def _refresh_session_total_confirmed_amount(session_name):
 	rows = frappe.get_all(
 		"Restaurant Table Order",
-		fields=["sum(grand_total) as total"],
+		fields=[{"sum": "grand_total", "as": "total"}],
 		filters={
 			"session": session_name,
 			"status": ["in", list(TABLE_ORDER_BILLING_STATUSES)],

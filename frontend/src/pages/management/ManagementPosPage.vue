@@ -196,47 +196,70 @@
             <section v-if="leftPanelTab === 'tables'" class="table-session-preview">
               <div class="tab-panel-toolbar">
                 <button type="button" class="icon-refresh-btn" @click="loadPOSBoot" title="بروزرسانی">↻</button>
+                <span class="tables-stats">
+                  <span class="ts-item"><span class="ts-dot free"></span>{{ freeTablesCount }} آزاد</span>
+                  <span class="ts-item"><span class="ts-dot occ"></span>{{ occupiedTableCount }} اشغال</span>
+                </span>
               </div>
-              <div class="table-grid">
-                <article
+              
+              <div class="table-modern-grid">
+                <div
                   v-for="table in tableOptions"
                   :key="table.name"
-                  class="table-cell"
-                  :class="[`status-${String(table.status || '').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
+                  class="table-modern-card"
+                  :class="[`tm-${String(table.status || 'empty').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
                   @click="selectDineInTable(table)"
                 >
-                  <span class="table-cell-name">{{ table.label }}</span>
-                  <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
-                  <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
-                  <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
-                </article>
+                  <div class="tm-top">
+                    <span class="tm-name">{{ table.label }}</span>
+                    <span class="tm-status-badge" :class="`tms-${String(table.status || 'empty').toLowerCase()}`">
+                      {{ table.status === 'empty' ? 'آزاد' : table.status === 'occupied' ? 'اشغال' : table.status }}
+                    </span>
+                  </div>
+                  <div class="tm-body" v-if="table.status !== 'empty'">
+                    <span class="tm-meta" v-if="table.occupied_minutes">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      {{ formatOccupiedMinutes(table.occupied_minutes) }}
+                    </span>
+                    <span class="tm-meta" v-if="table.pending_orders">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                      {{ toFaDigits(table.pending_orders) }} سفارش
+                    </span>
+                  </div>
+                </div>
               </div>
+              
               <p class="muted" v-if="tablePreviewبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
+              
               <template v-else-if="selectedDineInTable">
-                <div class="table-detail-bar">
-                  <div class="table-detail-info">
-                    <strong>{{ selectedDineInTable.label }}</strong>
-                    <span v-if="selectedTablePreview?.totals?.session_grand_total">
-                      {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
-                    </span>
-                    <span v-if="selectedTableCustomer.name">مشتری: {{ selectedTableCustomer.name }}</span>
-                    <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
+                <div class="table-detail-modern" v-if="selectedTablePreview?.session?.name">
+                  <div class="tdm-head">
+                    <div class="tdm-brand">
+                      <strong>{{ selectedDineInTable.label }}</strong>
+                      <span class="tdm-total">{{ formatMoney(selectedTablePreview.totals?.session_grand_total || 0, currency) }}</span>
+                    </div>
+                    <div class="tdm-meta">
+                      <span v-if="selectedTableCustomer.name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> {{ selectedTableCustomer.name }}</span>
+                      <span v-if="selectedTableCustomer.guest_count"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> {{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
+                    </div>
                   </div>
-                  <div class="table-detail-actions">
-                    <button type="button" class="tbl-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
-                    <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
-                    <template v-if="selectedTablePreview?.session?.name">
-                      <div class="tbl-action-row">
-                        <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." />
-                        <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
-                      </div>
-                      <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
-                        <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." />
-                        <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
-                      </div>
-                      <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
-                    </template>
+                  
+                  <div class="tdm-actions">
+                    <button class="tdm-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
+                    <button class="tdm-btn tdm-danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن میز</button>
+                  </div>
+                  
+                  <div class="tdm-adv-actions">
+                    <div class="tdm-row">
+                      <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." />
+                      <button class="tdm-btn tdm-primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
+                    </div>
+                    <div class="tdm-row" v-if="mergeableTableDropdownOptions.length">
+                      <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." />
+                      <button class="tdm-btn tdm-primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
+                    </div>
+                    <button v-if="confirmedDineInOrders.length" class="tdm-btn tdm-split" @click="showSplitBill = true">تقسیم صورتحساب</button>
                   </div>
                 </div>
               </template>
@@ -1181,6 +1204,7 @@ const productQtyMap = computed(() => {
   }, {})
 })
 
+const freeTablesCount = computed(() => tableOptions.value.filter(t => String(t.status || '').toLowerCase() === 'empty').length)
 const occupiedTableCount = computed(() =>
   tableOptions.value.filter((t) => t.status === 'occupied' || t.status === 'waiting').length,
 )
@@ -6151,5 +6175,60 @@ kbd {
   margin-right: auto;
 }
 .print-icon-btn:hover { opacity: 1; background: rgba(0,0,0,0.05); }
+
+
+/* ─── Modern Table Cards ─── */
+.tables-stats { display: flex; gap: 0.5rem; margin-right: auto; font-size: 0.75rem; color: var(--pos-muted, #9ca3af); }
+.ts-item { display: flex; align-items: center; gap: 0.3rem; }
+.ts-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ts-dot.free { background: #4ade80; }
+.ts-dot.occ { background: #f59e0b; }
+
+.table-modern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
+.table-modern-card {
+  background: var(--pos-card); border: 1.5px solid var(--pos-border);
+  border-radius: 10px; padding: 0.55rem; cursor: pointer;
+  transition: all 0.15s; display: flex; flex-direction: column; gap: 0.25rem;
+}
+.table-modern-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.table-modern-card.active { border-color: var(--pos-primary); box-shadow: 0 0 0 2px rgba(var(--pos-primary-rgb), 0.15); }
+.tm-empty { border-color: #e5e7eb; }
+.tm-occupied { border-color: #fbbf24; background: #fffbeb; }
+.tm-occupied .tm-name { color: #92400e; }
+:global(.dark) .tm-occupied { background: #1a1402; }
+.tm-top { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+.tm-name { font-size: 0.85rem; font-weight: 700; color: var(--pos-text); }
+.tm-status-badge { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+.tms-empty { background: #dcfce7; color: #166534; }
+.tms-occupied { background: #fef3c7; color: #92400e; }
+.tm-body { display: flex; flex-direction: column; gap: 0.15rem; }
+.tm-meta { display: flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; color: var(--pos-muted, #9ca3af); direction: ltr; }
+
+.table-detail-modern { padding: 0.65rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.tdm-head { display: flex; flex-direction: column; gap: 0.35rem; }
+.tdm-brand { display: flex; align-items: center; justify-content: space-between; }
+.tdm-brand strong { font-size: 1rem; color: var(--pos-text); }
+.tdm-total { font-size: 1.1rem; font-weight: 800; color: var(--pos-primary); direction: ltr; }
+.tdm-meta { display: flex; gap: 0.75rem; font-size: 0.75rem; color: var(--pos-muted, #9ca3af); }
+.tdm-meta span { display: flex; align-items: center; gap: 0.25rem; }
+.tdm-actions { display: flex; gap: 0.4rem; }
+.tdm-adv-actions { display: flex; flex-direction: column; gap: 0.4rem; }
+.tdm-row { display: flex; gap: 0.4rem; }
+.tdm-row :deep(.search-dropdown) { flex: 1; min-width: 0; }
+.tdm-btn {
+  flex: 1; padding: 0.4rem 0.65rem; border: 1px solid var(--pos-border);
+  border-radius: 6px; background: var(--pos-card); color: var(--pos-text);
+  font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: all 0.15s; white-space: nowrap;
+}
+.tdm-btn:hover { background: var(--pos-hover); }
+.tdm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tdm-primary { background: var(--pos-primary); color: white; border-color: var(--pos-primary); }
+.tdm-danger { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
+.tdm-split { background: #8b5cf6; color: white; border-color: #7c3aed; }
+
+@media (max-width: 768px) {
+  .table-modern-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+}
 
 </style>
