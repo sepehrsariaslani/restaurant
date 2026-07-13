@@ -673,6 +673,9 @@
 
             <!-- Bottom Actions -->
             <div class="od-bottom">
+              <button class="od-btn od-btn-danger" style="margin-left: auto;" @click="openPurgeModal">
+                <Trash2 :size="14" /> لغو و حذف کامل
+              </button>
               <button class="od-btn od-btn-danger" @click="openReturnInvoiceModal" v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())">
                 فاکتور برگشتی
               </button>
@@ -681,6 +684,30 @@
           </div>
         </template>
       </div>
+    </div>
+
+    <!-- Purge Order Confirmation Modal -->
+    <div v-if="purgeModal.open" class="pos-modal-backdrop" @click.self="closePurgeModal">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <h3>لغو و حذف کامل سفارش</h3>
+          <button type="button" class="pos-modal-close" @click="closePurgeModal">×</button>
+        </header>
+        <div class="return-modal-body">
+          <p>شما در حال لغو و حذف کامل سفارش <strong>{{ purgeModal.orderCode }}</strong> هستید.</p>
+          <p class="muted" style="color: #dc2626; font-weight: bold; margin-top: 10px;">
+            توجه: این عملیات تمامی رکوردهای مرتبط شامل اسناد فروش، حواله‌های تحویل، اسناد تولید، ورود و خروج انبار و گزارش‌های پرداخت این سفارش را در صورت امکان حذف و یا باطل خواهد کرد. این عملیات قابل بازگشت نیست.
+          </p>
+          <p class="error" v-if="purgeModal.error">{{ purgeModal.error }}</p>
+          <p class="success" v-if="purgeModal.success" style="color: #16a34a; font-size: 0.85rem; margin-top: 10px;">{{ purgeModal.success }}</p>
+        </div>
+        <div class="pos-modal-actions">
+          <button type="button" class="tbl-btn" @click="closePurgeModal" :disabled="purgeModal.loading">انصراف</button>
+          <button type="button" class="tbl-btn danger" :disabled="purgeModal.loading || purgeModal.success" @click="executePurgeOrder">
+            <Trash2 :size="14" v-if="!purgeModal.loading" /> {{ purgeModal.loading ? 'در حال حذف...' : 'تایید و حذف کامل' }}
+          </button>
+        </div>
+      </section>
     </div>
 
     <!-- Return Invoice Confirmation Modal -->
@@ -714,7 +741,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw } from 'lucide-vue-next'
+import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
@@ -737,6 +764,7 @@ import {
   deliverPOSOrder,
   deliverInvoiceOnly,
   voidManagementPOSOrder,
+  purgeManagementPOSOrder,
   produceAndDeliverPOSOrder,
   createAndPayPOSOrder,
   createAndSettlePOSOrder,
@@ -864,6 +892,15 @@ const orderDetailModal = reactive({
     note: '',
     customer_name: '',
   },
+})
+
+const purgeModal = reactive({
+  open: false,
+  loading: false,
+  error: '',
+  success: '',
+  orderCode: '',
+  orderName: '',
 })
 
 const returnInvoiceModal = reactive({
@@ -2768,6 +2805,53 @@ function openReturnInvoiceModal() {
   returnInvoiceModal.بارگذاری = false
   returnInvoiceModal.error = ''
   returnInvoiceModal.reason = ''
+}
+
+function openPurgeModal() {
+  if (!orderDetailModal.order?.name) return
+  purgeModal.open = true
+  purgeModal.loading = false
+  purgeModal.error = ''
+  purgeModal.success = ''
+  purgeModal.orderCode = orderDetailModal.order.order_code || orderDetailModal.order.name
+  purgeModal.orderName = orderDetailModal.order.name
+}
+
+function closePurgeModal() {
+  if (purgeModal.loading) return
+  purgeModal.open = false
+  purgeModal.loading = false
+  purgeModal.error = ''
+  purgeModal.success = ''
+  purgeModal.orderCode = ''
+  purgeModal.orderName = ''
+}
+
+async function executePurgeOrder() {
+  if (!purgeModal.orderName) return
+  purgeModal.loading = true
+  purgeModal.error = ''
+  try {
+    const result = await purgeManagementPOSOrder(purgeModal.orderName)
+    const summary = result.summary?.cleaned_records || {}
+    const deletedTypes = Object.keys(summary).filter(k => summary[k].length > 0).join(', ')
+    purgeModal.success = 'سفارش و اطلاعات مرتبط (' + (deletedTypes || 'فقط سفارش') + ') با موفقیت لغو و حذف شد.'
+    
+    // Refresh all affected POS lists after success
+    await loadOpenInvoices()
+    await loadTodayTransactions()
+    await loadRecentOrders()
+    
+    // Close modals after a short delay
+    setTimeout(() => {
+      closePurgeModal()
+      closeOrderDetailModal()
+    }, 2000)
+    
+  } catch (err) {
+    purgeModal.error = err.message || 'حذف کامل سفارش ناموفق بود.'
+    purgeModal.loading = false
+  }
 }
 
 function closeReturnInvoiceModal() {

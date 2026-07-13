@@ -1415,6 +1415,10 @@ export function voidManagementPOSOrder(order_name, reason = "") {
 	return callRestaurantAPI("void_management_pos_order", { order_name, reason });
 }
 
+export function purgeManagementPOSOrder(order_name) {
+	return callRestaurantAPI("purge_management_pos_order", { order_name });
+}
+
 export function listManagementPOSOrders({
 	date_from = "",
 	date_to = "",
