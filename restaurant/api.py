@@ -4387,7 +4387,7 @@ def _get_menu_items_public_fallback(
 				"slug": slug,
 				"title": item_name,
 				"short_desc": short_desc,
-				"base_price": flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0),
+				"base_price": _get_default_item_price_rate(row) if _get_default_item_price_rate(row) is not None else flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0),
 				"image": (row.get("item_image") or row.get("image") or "").strip(),
 				"category": category_name,
 				"category_title": category_title,
@@ -4716,9 +4716,13 @@ def _get_core_item_detail(item_slug, branch=None):
 
 
 def _menu_doc_config(menu_doc):
+	item_price = _get_default_item_price_rate(menu_doc)
+	base_price = (
+		item_price if item_price is not None else (flt(menu_doc.restaurant_base_price) or flt(menu_doc.standard_rate))
+	)
 	return {
 		"title": menu_doc.item_name,
-		"base_price": flt(menu_doc.restaurant_base_price or menu_doc.standard_rate),
+		"base_price": base_price,
 		"slug": menu_doc.restaurant_slug,
 		"short_desc": menu_doc.restaurant_short_desc,
 		"long_desc": menu_doc.restaurant_long_desc or menu_doc.description,
@@ -5150,7 +5154,8 @@ def _create_sales_order(
 				continue
 
 			service_code = service_item.get("item_code") or service_item.get("name")
-			unit_price = flt(service_item.get("restaurant_base_price") or service_item.get("standard_rate"))
+			_service_item_price = _get_default_item_price_rate(service_item)
+			unit_price = _service_item_price if _service_item_price is not None else flt(service_item.get("restaurant_base_price") or service_item.get("standard_rate") or 0)
 			line_total = qty * unit_price
 			line_requires_production = _item_requires_production(service_item)
 
@@ -15606,9 +15611,7 @@ def _management_template_variants_payload(template_doc):
 				else (0 if cint(row.get("disabled") or 0) else 1),
 				"is_disabled": cint(row.get("disabled") or 0),
 				"show_in_website": cint(row.get("show_in_website") or 0) if has_show_in_website else 1,
-				"base_price": flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0)
-				if has_restaurant_base_price
-				else flt(row.get("standard_rate") or 0),
+				"base_price": _get_default_item_price_rate(row) if _get_default_item_price_rate(row) is not None else (flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0) if has_restaurant_base_price else flt(row.get("standard_rate") or 0)),
 				"attributes": attribute_rows,
 			}
 		)
