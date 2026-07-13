@@ -327,6 +327,7 @@
                         <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)"><CheckCheck :size="13" /> تسویه و تحویل</button>
                         <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)"><Truck :size="13" /> تحویل</button>
                       </template>
+                      <button type="button" class="tbl-btn danger" style="margin-right: auto;" @click.stop="openPurgeModalFromList(invoice)"><Trash2 :size="13" /> حذف کامل</button>
                     </div>
                   </div>
                   <div class="accordion-بارگذاری" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
@@ -403,6 +404,16 @@
                       title="تولید و تحویل"
                     >
                       <Truck :size="13" /> تحویل
+                    </button>
+                    <button
+                      v-if="order.status !== 'cancelled'"
+                      type="button"
+                      class="tbl-btn danger"
+                      style="margin-right: auto;"
+                      @click.stop="openPurgeModalFromList(order)"
+                      title="لغو و حذف کامل"
+                    >
+                      <Trash2 :size="13" /> حذف
                     </button>
                   </div>
                 </article>
@@ -2820,6 +2831,16 @@ function openReturnInvoiceModal() {
   returnInvoiceModal.reason = ''
 }
 
+function openPurgeModalFromList(order) {
+  if (!order?.name) return
+  purgeModal.open = true
+  purgeModal.loading = false
+  purgeModal.error = ''
+  purgeModal.success = ''
+  purgeModal.orderCode = order.order_code || order.name
+  purgeModal.orderName = order.name
+}
+
 function openPurgeModal() {
   if (!orderDetailModal.order?.name) return
   purgeModal.open = true
@@ -2844,8 +2865,14 @@ async function executePurgeOrder() {
   if (!purgeModal.orderName) return
   purgeModal.loading = true
   purgeModal.error = ''
+  purgeModal.success = ''
   try {
     const result = await purgeManagementPOSOrder(purgeModal.orderName)
+    
+    // Safety check objects
+    const summary = result.summary?.cleaned_records || {}
+    const errors = result.summary?.errors || []
+
     // Update local state instead of full refetch
     const orderName = purgeModal.orderName
     
