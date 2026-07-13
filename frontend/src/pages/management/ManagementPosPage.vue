@@ -2177,7 +2177,7 @@ async function settleSelectedOpenInvoice() {
       },
     })
     successMessage.value = `پرداخت فاکتور ${selectedOpenInvoice.value.order_code} ثبت شد.`
-    await loadOpenInvoices(true)
+    loadOpenInvoices(true)
   } catch (payErr) {
     error.value = payErr.message || 'ثبت پرداخت فاکتور باز ناموفق بود.'
   } finally {
@@ -2774,9 +2774,9 @@ async function saveOrderDetailEdit() {
     orderDetailModal.order.customer_name = orderDetailModal.editForm.customer_name
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
-      await loadTodayTransactions()
+      loadTodayTransactions(true)
     } else if (leftPanelTab.value === 'recent') {
-      await loadRecentOrders()
+      loadRecentOrders(true)
     }
   } catch (err) {
     orderDetailModal.saveError = err.message || 'ویرایش سفارش ناموفق بود.'
@@ -2813,9 +2813,9 @@ async function confirmSettleOrder() {
     successMessage.value = `سفارش ${orderDetailModal.order.order_code} تسویه شد.${siInfo}`
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
-      await loadTodayTransactions()
+      loadTodayTransactions(true)
     } else if (leftPanelTab.value === 'recent') {
-      await loadRecentOrders()
+      loadRecentOrders(true)
     }
   } catch (err) {
     orderDetailModal.settleError = err.message || 'ثبت پرداخت ناموفق بود.'
@@ -2942,9 +2942,9 @@ async function confirmCreateReturnInvoice() {
     closeReturnInvoiceModal()
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
-      await loadTodayTransactions()
+      loadTodayTransactions(true)
     } else if (leftPanelTab.value === 'recent') {
-      await loadRecentOrders()
+      loadRecentOrders(true)
     }
   } catch (err) {
     returnInvoiceModal.error = err.message || 'ساخت فاکتور برگشتی ناموفق بود.'
