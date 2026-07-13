@@ -104,7 +104,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true, {}, true)"
+            @submit-and-settle="submitPOSOrder(true, $event, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -470,7 +470,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true, {}, true)"
+            @submit-and-settle="submitPOSOrder(true, $event, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -3894,7 +3894,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         recentOrders.value[recentIdx].status = 'paid'
         recentOrders.value[recentIdx].payment_method = paymentMethod
       }
-      await refreshHardwareStatus()
+      window.setTimeout(() => {
+        refreshHardwareStatus()
+      }, 0)
     } catch (err) {
       error.value = err.message || 'تسویه فاکتور ناموفق بود.'
     } finally {
@@ -4022,7 +4024,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       } else {
         // تسویه فاکتور (SO + SI + Payment)
         const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
-        successMessage.value = `سفارش ${orderName} ثبت و تسویه شد.${siInfo}`
+        successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد.${siInfo}`
       }
     } else {
       successMessage.value = `سفارش ${orderCode} ثبت شد (آماده تولید).`
@@ -4065,7 +4067,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     // Refresh only open invoices to keep the badge up to date.
     // Recent orders and today transactions will fetch when their tabs are opened.
     loadOpenInvoices()
-    await refreshHardwareStatus()
+    window.setTimeout(() => {
+      refreshHardwareStatus()
+    }, 0)
   } catch (submitErr) {
     error.value = submitErr.message || 'ثبت سفارش POS ناموفق بود.'
   } finally {

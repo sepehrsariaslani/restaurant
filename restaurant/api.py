@@ -12055,6 +12055,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 					"item_code": item.item_code or "",
 					"title": item.item_name or "",
 					"qty": flt(item.qty),
+					"unit_price": flt(item.rate),
 					"line_total": line_total,
 					"customization_json": item.restaurant_customization_json
 					if has_item_customization
@@ -14849,8 +14850,10 @@ def get_management_order_detail(order_name, source=None):
 					amount = row.get("base_amount")
 				items.append(
 					{
+						"item_code": row.item_code or "",
 						"title": row.item_name,
 						"qty": flt(row.qty),
+						"unit_price": flt(row.rate),
 						"line_total": flt(
 							amount if amount not in (None, "") else flt(row.rate) * flt(row.qty)
 						),

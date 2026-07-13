@@ -224,7 +224,7 @@
 					type="button"
 					class="settle-btn-custom"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
-					@click="$emit('submit-and-settle')"
+					@click="openPaymentPopup(null, 'settle')"
 				>{{ submitting ? "در حال ثبت..." : "تسویه و تحویل" }}</button>
 			</div>
 			<button
@@ -483,6 +483,7 @@ const emit = defineEmits([
 ]);
 
 const showPaymentPopup = ref(false);
+const paymentPopupIntent = ref("pay");
 const paymentSplits = ref([]);
 const discountInputRef = ref(null);
 
@@ -595,13 +596,14 @@ function updateSplitOption(split, optionKey) {
 	Object.assign(split, syncSplitOption({ ...split, optionKey }));
 }
 
-function openPaymentPopup(preferredMethod = null) {
+function openPaymentPopup(preferredMethod = null, intent = "pay") {
 	const total = Number(props.totals?.payableAmount || 0);
 	const preferredOption =
 		paymentOptionList.value.find((option) => option.method === preferredMethod) ||
 		paymentOptionList.value.find((option) => option.method === props.paymentMethod) ||
 		defaultPaymentOption.value;
 	paymentSplits.value = [buildSplit(preferredOption?.key || "", total)];
+	paymentPopupIntent.value = intent === "settle" ? "settle" : "pay";
 	showPaymentPopup.value = true;
 }
 
@@ -633,7 +635,7 @@ function confirmPayment() {
 		validSplits[0] || buildSplit(defaultPaymentOption.value?.key || "", 0),
 	);
 	emit("update:paymentMethod", primary.method);
-	emit("submit-and-pay", {
+	const payload = {
 		splits: validSplits.map((split) => ({
 			optionKey: split.optionKey,
 			method: split.method,
@@ -641,8 +643,14 @@ function confirmPayment() {
 			label: split.label,
 			amount: Number(split.amount || 0),
 		})),
-	});
+	};
+	if (paymentPopupIntent.value === "settle") {
+		emit("submit-and-settle", payload);
+	} else {
+		emit("submit-and-pay", payload);
+	}
 	showPaymentPopup.value = false;
+	paymentPopupIntent.value = "pay";
 }
 
 function rowTotal(line) {
