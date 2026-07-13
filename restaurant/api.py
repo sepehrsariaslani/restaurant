@@ -4706,12 +4706,21 @@ def _get_core_item_detail(item_slug, branch=None):
 		"tags": _split_tags(getattr(doc, "restaurant_item_tags", None)),
 	}
 
+	
+	variants_mapping = []
+	if cint(template_doc.get("has_variants")):
+		try:
+			variants_mapping = _management_template_variants_payload(template_doc)
+		except Exception:
+			pass
+			
 	return {
 		"item": item_payload,
 		"ingredients": ingredients,
 		"modifier_groups": modifier_groups,
 		"allergens": _split_tags(doc.restaurant_allergen_tags),
 		"currency": _get_currency(),
+		"variants_mapping": variants_mapping,
 	}
 
 

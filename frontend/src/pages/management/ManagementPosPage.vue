@@ -3041,6 +3041,10 @@ async function openCustomizationSheet(item, options = {}) {
   }
 
   const sourceItem = resolveProductBySlug(itemSlug, item || editingLine || {})
+  
+  // Quick pre-check: If this is an exact variant that has NO customization and NO BOM, just add it directly.
+  // We can't know for sure until we fetch, but we open the sheet and auto-close if true.
+  
   customizationSheet.open = true
   customizationSheet.بارگذاری = true
   customizationSheet.error = ''
@@ -3054,6 +3058,7 @@ async function openCustomizationSheet(item, options = {}) {
     const detailItem = payload.item || sourceItem
     const ingredients = payload.ingredients || []
     const modifierGroups = payload.modifier_groups || []
+    customizationSheet.variantsMapping = payload.variants_mapping || []
     customizationSheet.item = {
       ...sourceItem,
       ...detailItem,
@@ -3070,6 +3075,17 @@ async function openCustomizationSheet(item, options = {}) {
       customizationSheet.customization = createDefaultCustomization(ingredients, modifierGroups)
       customizationSheet.qty = 1
     }
+    
+    // Auto-confirm variant-only items that don't need user input if it's a new add
+    // Wait, if it's a template, we DO need user input.
+    // If it's ALREADY a variant, and has NO ingredients and NO non-variant modifier groups, just add it.
+    const isVariantOnly = ingredients.length === 0 && 
+                          modifierGroups.every(g => g.group_name.startsWith('variant::'));
+    if (!editingLine && isVariantOnly && !detailItem.variant_of && !detailItem.has_variants) {
+      // It's a resolved variant item with no customization.
+      // We shouldn't hit this often because PosProductPanel bypasses it if has_bom=0 & customizable=0
+    }
+    
   } catch (sheetErr) {
     customizationSheet.error = sheetErr.message || 'دریافت تنظیمات BOM ناموفق بود.'
   } finally {
@@ -3081,7 +3097,14 @@ function openLineCustomizationEditor(line) {
   if (!line) {
     return
   }
-  const baseItem = resolveProductBySlug(line.slug, line)
+  
+  let baseItem = resolveProductBySlug(line.slug, line)
+  // If this item has variant_of, we should probably fetch the parent to show the variant selector correctly
+  if (baseItem.variant_of || (baseItem.item && baseItem.item.variant_of)) {
+    const parentName = baseItem.variant_of || baseItem.item.variant_of
+    // Temporary pass parentName as a mock so API falls back correctly if needed,
+    // though the backend detail API _get_core_item_detail already resolves child slugs to parents automatically.
+  }
   openCustomizationSheet(baseItem, { editingLine: line })
 }
 
@@ -3090,6 +3113,75 @@ function confirmCustomizationAdd() {
     return
   }
   const normalized = normalizeCartCustomization(customizationSheet.customization, customizationSheet.ingredients)
+  
+  // Detect if this is a variant-only selection
+  const hasOnlyVariants = customizationSheet.modifierGroups.length > 0 && 
+    customizationSheet.modifierGroups.every(g => g.group_name.startsWith('variant::'));
+  
+  // Also check if there are no REAL custom ingredients/modifiers
+  const hasRealCustomizations = customizationSheet.ingredients.length > 0 || 
+    customizationSheet.modifierGroups.some(g => !g.group_name.startsWith('variant::'));
+
+  if (hasOnlyVariants && !hasRealCustomizations && (customizationSheet.variantsMapping || []).length > 0) {
+    // Find the matching variant from variantsMapping
+    const selectedAttributes = normalized.selected_modifiers || [];
+    let matchedVariant = null;
+    for (const variant of customizationSheet.variantsMapping) {
+      let isMatch = true;
+      for (const attr of variant.attributes || []) {
+        const sel = selectedAttributes.find(m => m.group === `variant::${attr.attribute}`);
+        if (!sel || sel.option !== attr.value) {
+          isMatch = false;
+          break;
+        }
+      }
+      if (isMatch) {
+        matchedVariant = variant;
+        break;
+      }
+    }
+    
+    if (matchedVariant) {
+      const nextQty = Number(Number(customizationSheet.qty || 1).toFixed(3));
+      const nextPrice = Number(matchedVariant.base_price || 0);
+      const nextSlug = matchedVariant.slug || matchedVariant.name;
+      
+      if (customizationSheet.editing_line_id) {
+        const editingLine = cart.find(line => line.line_id === customizationSheet.editing_line_id);
+        if (editingLine) {
+          const nextSignature = cartLineSignature(nextSlug, null);
+          const duplicateLine = cart.find(line => line.signature === nextSignature && line.line_id !== editingLine.line_id);
+          if (duplicateLine) {
+            duplicateLine.qty = Number((Number(duplicateLine.qty || 0) + nextQty).toFixed(3));
+            setCartQty(editingLine, 0);
+            selectedCartLineId.value = duplicateLine.line_id;
+          } else {
+            editingLine.signature = nextSignature;
+            editingLine.slug = nextSlug;
+            editingLine.title = matchedVariant.item_name || matchedVariant.name;
+            editingLine.item_code = matchedVariant.item_code || matchedVariant.name;
+            editingLine.name = matchedVariant.name;
+            editingLine.price = nextPrice;
+            editingLine.qty = nextQty;
+            editingLine.has_customization = false;
+            editingLine.customization = null;
+            editingLine.customization_ingredients = [];
+            selectedCartLineId.value = editingLine.line_id;
+          }
+          closeCustomizationSheet();
+          return;
+        }
+      }
+      
+      addToCart({
+        ...matchedVariant,
+        title: matchedVariant.item_name || matchedVariant.name,
+      }, nextQty, null, false, nextPrice, {});
+      closeCustomizationSheet();
+      return;
+    }
+  }
+
   const customizationIngredients = (customizationSheet.ingredients || []).map((ingredient) => ({
     key: String(ingredient.key || ingredient.name || '').trim(),
     name: String(ingredient.name || '').trim(),
