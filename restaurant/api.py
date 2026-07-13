@@ -17948,9 +17948,54 @@ def delete_management_product(item_name=None, allow_archive_on_link=1, force_del
 def list_management_customers(search=None, date_from=None, date_to=None):
 	_ensure_management_access()
 	search_text = (search or "").strip().lower()
-	orders = _management_fetch_web_orders(date_from=date_from, date_to=date_to)
+	
+	# Fetch all ERPNext Customers
+	fields = ["name", "customer_name"]
+	if _has_column("Customer", "mobile_no"):
+		fields.append("mobile_no")
+	if _has_column("Customer", "customer_primary_mobile"):
+		fields.append("customer_primary_mobile")
+		
+	filters = {"disabled": 0}
+	or_filters = {}
+	if search_text:
+		or_filters = {
+			"customer_name": ["like", f"%{search_text}%"],
+			"name": ["like", f"%{search_text}%"]
+		}
+		if _has_column("Customer", "mobile_no"):
+			or_filters["mobile_no"] = ["like", f"%{search_text}%"]
+		if _has_column("Customer", "customer_primary_mobile"):
+			or_filters["customer_primary_mobile"] = ["like", f"%{search_text}%"]
 
+	get_all_kwargs = {
+		"doctype": "Customer",
+		"fields": fields,
+		"filters": filters,
+		"ignore_permissions": True,
+		"limit_page_length": 5000
+	}
+	if or_filters:
+		get_all_kwargs["or_filters"] = or_filters
+	customer_docs = frappe.get_all(**get_all_kwargs)
+	
 	grouped = {}
+	for doc in customer_docs:
+		customer_name = (doc.get("customer_name") or doc.get("name") or "").strip()
+		mobile = (doc.get("mobile_no") or doc.get("customer_primary_mobile") or "").strip()
+		if search_text and search_text not in f"{customer_name} {mobile}".lower():
+			continue
+		key = f"{customer_name}::{mobile}"
+		grouped[key] = {
+			"customer_name": customer_name,
+			"mobile": mobile,
+			"orders_count": 0,
+			"total_spent": 0.0,
+			"last_order_at": None,
+		}
+
+	# Fetch orders for stats
+	orders = _management_fetch_web_orders(date_from=date_from, date_to=date_to)
 	for order in orders:
 		if not _is_revenue_order(order):
 			continue

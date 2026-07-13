@@ -768,6 +768,7 @@ import {
   getTableOverview,
   getItemDetail,
   listManagementOrders,
+  listManagementCustomers,
   markManagementOrderPaid,
   createPOSOrder,
   producePOSOrder,
@@ -1954,12 +1955,20 @@ function syncViewportMode() {
   }
 }
 
+let customerSearchTimeout = null
 function setCustomerQuery(value) {
   form.customer_query = value
   const digits = String(value || '').replace(/\D/g, '')
   if (digits.length >= 10) {
     form.mobile = digits.startsWith('0') ? digits : `0${digits.slice(-10)}`
   }
+  
+  if (customerSearchTimeout) clearTimeout(customerSearchTimeout)
+  customerSearchTimeout = setTimeout(() => {
+    if (value && value.length > 1) {
+      loadCustomers(value)
+    }
+  }, 400)
 }
 
 function normalizeCustomerMobile(value) {
@@ -1974,6 +1983,42 @@ function toComparableDate(value) {
   const date = new Date(value || '')
   const time = Number(date.getTime())
   return Number.isFinite(time) ? time : 0
+}
+
+async function loadCustomers(search = '') {
+  try {
+    const payload = await listManagementCustomers({ search })
+    const customers = payload?.customers || []
+    const mapped = customers.map(c => {
+      const mobile = c.mobile || ''
+      const name = c.customer_name || 'مشتری'
+      return {
+        key: mobile || name.toLowerCase(),
+        label: name,
+        mobile: mobile,
+        orders_count: c.orders_count || 0,
+        total_sales: c.total_spent || 0,
+        last_order_at: c.last_order_at,
+      }
+    })
+    
+    if (search) {
+      // Merge results preserving existing
+      const existing = [...customerOptions.value]
+      const existingKeys = new Set(existing.map(r => r.key))
+      for (const row of mapped) {
+        if (!existingKeys.has(row.key)) {
+          existing.unshift(row)
+          existingKeys.add(row.key)
+        }
+      }
+      customerOptions.value = existing
+    } else {
+      customerOptions.value = mapped
+    }
+  } catch (err) {
+    console.error('Failed to load customers:', err)
+  }
 }
 
 function buildCustomerOptions(orders = []) {
@@ -2143,7 +2188,6 @@ async function loadOpenInvoices(preserveSelection = true) {
   try {
     const orderPayload = await listManagementOrders({ source: 'web' })
     const allOrders = orderPayload?.orders || []
-    customerOptions.value = buildCustomerOptions(allOrders)
     setOpenInvoices(allOrders, preserveSelection)
     if (selectedOpenInvoiceKey.value) {
       await loadSelectedOpenInvoiceDetail(false)
@@ -4184,8 +4228,8 @@ async function loadPOSBoot() {
     try {
       const orderPayload = await listManagementOrders({ source: 'web' })
       const allOrders = orderPayload?.orders || []
-      customerOptions.value = buildCustomerOptions(allOrders)
       setOpenInvoices(allOrders, true)
+      loadCustomers()
       if (selectedOpenInvoiceKey.value) {
         await loadSelectedOpenInvoiceDetail(false)
       } else {
