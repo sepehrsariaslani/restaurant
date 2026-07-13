@@ -714,7 +714,7 @@
         </div>
         <div class="pos-modal-actions">
           <button type="button" class="tbl-btn" @click="closePurgeModal" :disabled="purgeModal.loading">انصراف</button>
-          <button type="button" class="tbl-btn danger" :disabled="purgeModal.loading || purgeModal.success" @click="executePurgeOrder">
+          <button type="button" class="tbl-btn danger" :disabled="purgeModal.loading || !!purgeModal.success" @click="executePurgeOrder">
             <Trash2 :size="14" v-if="!purgeModal.loading" /> {{ purgeModal.loading ? 'در حال حذف...' : 'تایید و حذف کامل' }}
           </button>
         </div>
