@@ -4926,13 +4926,19 @@ def _get_auto_order_service_items(branches=None):
 
 
 def _ensure_customer(customer_name, mobile):
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	existing = _find_customer_by_mobile(mobile)
 	if existing:
-		if _has_column("Customer", "mobile_no"):
+		if normalized_mobile and _has_column("Customer", "mobile_no"):
 			current_mobile = frappe.db.get_value("Customer", existing, "mobile_no")
 			if not current_mobile:
-				frappe.db.set_value("Customer", existing, "mobile_no", mobile, update_modified=False)
+				frappe.db.set_value("Customer", existing, "mobile_no", normalized_mobile, update_modified=False)
 		return existing
+
+	if not normalized_mobile:
+		existing_by_name = frappe.db.get_value("Customer", {"customer_name": customer_name, "disabled": 0}, "name")
+		if existing_by_name:
+			return existing_by_name
 
 	customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or frappe.db.get_value(
 		"Customer Group", {}, "name"
@@ -4953,7 +4959,7 @@ def _ensure_customer(customer_name, mobile):
 			"customer_type": "Individual",
 			"customer_group": customer_group,
 			"territory": territory,
-			"mobile_no": mobile,
+			"mobile_no": normalized_mobile,
 		}
 	)
 	doc.insert(ignore_permissions=True)
@@ -5292,6 +5298,7 @@ def _create_sales_order(
 		_mark_coupon_used(coupon.get("name"))
 
 	so_doc.submit()
+	so_doc.db_set("customer_name", customer_name, update_modified=False)
 	if _has_column("Sales Order", "restaurant_status"):
 		so_doc.db_set("restaurant_status", "confirmed", update_modified=False)
 
@@ -6914,19 +6921,27 @@ def _resolve_order_type_and_delivery_mode(order_type=None, delivery_mode=None):
 	return "takeaway", "pickup"
 
 
-def _ensure_mobile(mobile):
+def _ensure_mobile(mobile, allow_empty=True):
 	mobile = re.sub(r"\D+", "", str(mobile or ""))
+	if not mobile:
+		if allow_empty:
+			return ""
+		frappe.throw(_("A valid mobile number is required."))
 	if mobile.startswith("98") and len(mobile) == 12:
 		mobile = "0" + mobile[2:]
 	if len(mobile) == 10 and mobile.startswith("9"):
 		mobile = "0" + mobile
+	if mobile == "09120000000" and allow_empty:
+		return ""
 	if len(mobile) < 10:
 		frappe.throw(_("A valid mobile number is required."))
 	return mobile
 
 
 def _find_customer_by_mobile(mobile):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 
 	if _has_column("Customer", "mobile_no"):
 		existing = frappe.db.get_value("Customer", {"mobile_no": normalized_mobile, "disabled": 0}, "name")
@@ -9408,7 +9423,9 @@ def _otp_cache_key(mobile):
 
 @frappe.whitelist(allow_guest=True)
 def send_otp(mobile, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	otp = "".join(random.choices(string.digits, k=6))
 	frappe.cache().set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)
 	result = {"success": True, "sent": 1, "mobile": normalized_mobile, "expires_in": 300}
@@ -9419,7 +9436,9 @@ def send_otp(mobile, customer_name=None):
 
 @frappe.whitelist(allow_guest=True)
 def verify_otp(mobile, otp=None, code=None, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	provided = (otp or code or "").strip()
 	cached = frappe.cache().get_value(_otp_cache_key(normalized_mobile))
 	if isinstance(cached, bytes):
@@ -10391,7 +10410,9 @@ def get_customer_profile(mobile=None, customer_name=None):
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_checkout_profile(mobile, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	customer_docname = _find_customer_by_mobile(normalized_mobile)
 
 	resolved_name = (customer_name or "").strip()
@@ -10443,7 +10464,9 @@ def save_customer_vehicle(customer_info, vehicle_info):
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_vehicles(mobile, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	customer_docname = _find_customer_by_mobile(normalized_mobile)
 	if not customer_docname:
 		return {
@@ -13957,7 +13980,7 @@ def create_pos_order(payload):
     if not isinstance(payload, dict):
         payload = {}
     customer_name = (payload.get("customer_name") or "POS Customer").strip()
-    mobile = (payload.get("mobile") or "09120000000").strip()
+    mobile = (payload.get("mobile") or "").strip()
     order_type = (payload.get("order_type") or "takeaway").strip()
     address = (payload.get("address") or "").strip()
     note = (payload.get("note") or "").strip()
@@ -14398,7 +14421,7 @@ def create_management_pos_order(payload):
 		payload = {}
 
 	customer_name = (payload.get("customer_name") or "POS Customer").strip()
-	mobile = (payload.get("mobile") or "09120000000").strip()
+	mobile = (payload.get("mobile") or "").strip()
 	order_type = (payload.get("order_type") or "takeaway").strip()
 	address = (payload.get("address") or "").strip()
 	note = (payload.get("note") or "").strip()

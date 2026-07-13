@@ -2451,7 +2451,7 @@ function addQuickCustomer() {
     return
   }
   form.customer_name = String(name || '').trim() || 'مشتری POS'
-  form.mobile = String(mobile || '').trim() || form.mobile
+  form.mobile = String(mobile || '').trim()
   form.customer_query = `${form.customer_name} - ${form.mobile}`
 }
 
@@ -3932,7 +3932,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
 
   const payload = {
     customer_name: form.customer_name || 'مشتری POS',
-    mobile: form.mobile || '09120000000',
+    mobile: form.mobile || '',
     order_type: form.order_mode,
     note: [
       buildOrderNote(),
