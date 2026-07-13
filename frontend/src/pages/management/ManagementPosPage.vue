@@ -2634,6 +2634,7 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     has_customization: Boolean(hasCustomization),
     customization: normalizedCustomization,
     customization_ingredients: options.customizationIngredients || [],
+    variant_of: options.variant_of || item.variant_of || '',
   })
   selectedCartLineId.value = lineId
 }
@@ -3099,13 +3100,31 @@ function openLineCustomizationEditor(line) {
   }
   
   let baseItem = resolveProductBySlug(line.slug, line)
-  // If this item has variant_of, we should probably fetch the parent to show the variant selector correctly
-  if (baseItem.variant_of || (baseItem.item && baseItem.item.variant_of)) {
-    const parentName = baseItem.variant_of || baseItem.item.variant_of
-    // Temporary pass parentName as a mock so API falls back correctly if needed,
-    // though the backend detail API _get_core_item_detail already resolves child slugs to parents automatically.
+  
+  // If we are editing a variant-only item, we want to open the parent template so the user can switch variants.
+  // Otherwise, the backend will treat the current variant's attributes as fixed and hide the selector.
+  let targetItem = baseItem
+  const parentName = line.variant_of || baseItem.variant_of || (baseItem.item && baseItem.item.variant_of)
+  if (parentName) {
+    const parentItem = products.value.find(p => p.name === parentName || getItemSlug(p) === parentName)
+    if (parentItem) {
+      targetItem = parentItem
+    } else {
+      targetItem = { name: parentName, item_code: parentName, slug: parentName }
+    }
   }
-  openCustomizationSheet(baseItem, { editingLine: line })
+  
+  // If we swapped to parent, we need to map the current variant back into a customization payload so it preselects.
+  const isVariant = !!parentName
+  let sheetLine = line
+  if (isVariant && (!line.customization || !line.customization.selected_modifiers || line.customization.selected_modifiers.length === 0)) {
+    const attrs = baseItem.variant_attributes || (baseItem.item && baseItem.item.variant_attributes) || []
+    if (attrs.length > 0) {
+      sheetLine = { ...line, customization: { selected_modifiers: attrs.map(a => ({ group: `variant::${a.attribute}`, option: a.value })) } }
+    }
+  }
+  
+  openCustomizationSheet(targetItem, { editingLine: sheetLine })
 }
 
 function confirmCustomizationAdd() {
@@ -3115,20 +3134,27 @@ function confirmCustomizationAdd() {
   const normalized = normalizeCartCustomization(customizationSheet.customization, customizationSheet.ingredients)
   
   // Detect if this is a variant-only selection
-  const hasOnlyVariants = customizationSheet.modifierGroups.length > 0 && 
-    customizationSheet.modifierGroups.every(g => g.group_name.startsWith('variant::'));
-  
-  // Also check if there are no REAL custom ingredients/modifiers
-  const hasRealCustomizations = customizationSheet.ingredients.length > 0 || 
-    customizationSheet.modifierGroups.some(g => !g.group_name.startsWith('variant::'));
+  const hasVariantSelectors = customizationSheet.modifierGroups.some(g => g.group_name.startsWith('variant::'));
 
-  if (hasOnlyVariants && !hasRealCustomizations && (customizationSheet.variantsMapping || []).length > 0) {
+  if (hasVariantSelectors && (customizationSheet.variantsMapping || []).length > 0) {
     // Find the matching variant from variantsMapping
     const selectedAttributes = normalized.selected_modifiers || [];
     let matchedVariant = null;
     for (const variant of customizationSheet.variantsMapping) {
       let isMatch = true;
+      const fixedAttributes = customizationSheet.item.variant_fixed_attributes || {};
       for (const attr of variant.attributes || []) {
+        // If it's a fixed attribute, it won't be in selectedAttributes
+        if (fixedAttributes[attr.attribute] === attr.value) {
+          continue;
+        }
+        
+        // Check if this attribute was presented to the user as a modifier group
+        const isVariable = customizationSheet.modifierGroups.some(g => g.group_name === `variant::${attr.attribute}`);
+        if (!isVariable) {
+          continue; // It's likely a show_in_website=0 attribute, ignore it.
+        }
+        
         const sel = selectedAttributes.find(m => m.group === `variant::${attr.attribute}`);
         if (!sel || sel.option !== attr.value) {
           isMatch = false;
@@ -3163,9 +3189,14 @@ function confirmCustomizationAdd() {
             editingLine.name = matchedVariant.name;
             editingLine.price = nextPrice;
             editingLine.qty = nextQty;
-            editingLine.has_customization = false;
-            editingLine.customization = null;
-            editingLine.customization_ingredients = [];
+            // WE MUST KEEP the customization so it can be edited again!
+            editingLine.has_customization = true;
+            editingLine.customization = normalized;
+            editingLine.customization_ingredients = customizationIngredients;
+            
+            // Store parent info so edit knows how to open
+            editingLine.variant_of = customizationSheet.item.name;
+            
             selectedCartLineId.value = editingLine.line_id;
           }
           closeCustomizationSheet();
@@ -3176,7 +3207,10 @@ function confirmCustomizationAdd() {
       addToCart({
         ...matchedVariant,
         title: matchedVariant.item_name || matchedVariant.name,
-      }, nextQty, null, false, nextPrice, {});
+        variant_of: customizationSheet.item.name
+      }, nextQty, normalized, true, nextPrice, {
+        customizationIngredients
+      });
       closeCustomizationSheet();
       return;
     }
@@ -4097,16 +4131,30 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       gift_card_code: financial.creditCardCode,
       tax_exempt: financial.taxExempt,
     },
-    items: cart.map((line) => ({
-      item_slug: line.slug,
-      qty: line.qty,
-      note: line.note || '',
-      customization: line.customization || {
+    items: cart.map((line) => {
+      let finalCustomization = line.customization || {
         ingredient_adjustments: [],
         selected_modifiers: [],
         selected_alternatives: [],
-      },
-    })),
+      };
+      // If this line is a variant, we MUST strip the variant:: modifiers from the payload
+      // because the backend resolves to the variant doc, which doesn't have the variant:: groups,
+      // and it will throw an 'Invalid modifier group' error.
+      if (line.variant_of && finalCustomization.selected_modifiers && finalCustomization.selected_modifiers.length > 0) {
+        const cleanedModifiers = finalCustomization.selected_modifiers.filter(m => !m.group.startsWith('variant::'));
+        finalCustomization = {
+          ...finalCustomization,
+          selected_modifiers: cleanedModifiers,
+        };
+      }
+      
+      return {
+        item_slug: line.slug,
+        qty: line.qty,
+        note: line.note || '',
+        customization: finalCustomization,
+      };
+    }),
     payment: paymentPayload,
   }
 

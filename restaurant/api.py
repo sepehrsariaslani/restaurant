@@ -5073,6 +5073,11 @@ def _create_sales_order(
 	for cart_line in cart_items:
 		menu_doc = _get_item_doc_by_payload(cart_line)
 		customization = _extract_customization(cart_line.get("customization") or cart_line.get("config"))
+		
+		variant_doc = _resolve_variant_item_for_customization(menu_doc, customization or {})
+		if variant_doc:
+			menu_doc = variant_doc
+			
 		branch = (
 			cart_line.get("branch")
 			or order_context.get("branch")
@@ -7647,7 +7652,15 @@ def _get_item_doc_by_payload(item_payload):
 	)
 	if not item_name:
 		branch = (item_payload.get("branch") or "").strip()
-		item_name = _resolve_menu_item_name_from_variant_slug(slug=slug, branch=branch)
+		parent_name, variant_name = _resolve_variant_slug_to_context(slug=slug, branch=branch)
+		# For cart payload, we WANT the variant itself, not the parent!
+		item_name = variant_name if variant_name else parent_name
+	
+	if not item_name:
+		# Final fallback: Try to look it up by actual Name directly.
+		if frappe.db.exists("Item", slug):
+			item_name = slug
+	
 	if not item_name:
 		frappe.throw(_("Menu item not found: {0}").format(slug), frappe.DoesNotExistError)
 	return frappe.get_doc("Item", item_name)
@@ -8077,19 +8090,31 @@ def _resolve_variant_item_for_customization(menu_doc, customization):
 
 
 def _resolve_menu_item_name_from_variant_slug(slug, branch=None):
-	slug = _normalize_slug(slug)
-	if not slug:
+	normalized = _normalize_slug(slug)
+	if not normalized and not slug:
 		return ""
 
 	variant_name = frappe.db.get_value(
 		"Item",
 		{
-			"restaurant_slug": slug,
+			"restaurant_slug": normalized or slug,
 			"disabled": 0,
 			"restaurant_enabled": 1,
 		},
 		"name",
 	)
+	
+	if not variant_name and slug:
+		variant_name = frappe.db.get_value(
+			"Item",
+			{
+				"name": slug,
+				"disabled": 0,
+				"restaurant_enabled": 1,
+			},
+			"name",
+		)
+		
 	if not variant_name:
 		return ""
 
@@ -8105,19 +8130,31 @@ def _resolve_menu_item_name_from_variant_slug(slug, branch=None):
 
 
 def _resolve_variant_slug_to_context(slug, branch=None):
-	slug = _normalize_slug(slug)
-	if not slug:
+	normalized = _normalize_slug(slug)
+	if not normalized and not slug:
 		return ("", "")
 
 	direct_name = frappe.db.get_value(
 		"Item",
 		{
-			"restaurant_slug": slug,
+			"restaurant_slug": normalized or slug,
 			"disabled": 0,
 			"restaurant_enabled": 1,
 		},
 		"name",
 	)
+	
+	if not direct_name and slug:
+		direct_name = frappe.db.get_value(
+			"Item",
+			{
+				"name": slug,
+				"disabled": 0,
+				"restaurant_enabled": 1,
+			},
+			"name",
+		)
+		
 	if not direct_name:
 		return ("", "")
 

@@ -785,6 +785,7 @@ function canEditCustomization(line) {
 	const customization = line?.customization || {};
 	return Boolean(
 		line?.has_customization ||
+		line?.variant_of ||
 		Number((line?.customization_ingredients || []).length || 0) > 0 ||
 		Number((customization.ingredient_adjustments || []).length || 0) > 0 ||
 		Number((customization.selected_modifiers || []).length || 0) > 0 ||
