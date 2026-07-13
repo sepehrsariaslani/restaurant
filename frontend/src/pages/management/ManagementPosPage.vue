@@ -268,7 +268,7 @@
 
             <section v-if="leftPanelTab === 'history'" class="history-panel">
               <div class="tab-panel-toolbar">
-                <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions" title="بروزرسانی">↻</button>
+                <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions(true)" title="بروزرسانی">↻</button>
               </div>
               <p class="muted" v-if="todayTransactionsبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
@@ -339,7 +339,7 @@
 
             <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
               <div class="tab-panel-toolbar">
-                <button type="button" class="icon-refresh-btn" @click="loadRecentOrders" title="بروزرسانی">↻</button>
+                <button type="button" class="icon-refresh-btn" @click="loadRecentOrders(true)" title="بروزرسانی">↻</button>
               </div>
               <div class="recent-orders-filter">
                 <input
@@ -1152,8 +1152,9 @@ async function deliverOrder(order) {
     order.status = 'delivered'
     order.payment_method = order.payment_method || ''
     successMessage.value = `سفارش ${order.name} تحویل شد.${dnInfo}${woInfo}`
-    await loadRecentOrders()
-    await loadOpenInvoices()
+    
+    // Optimistically update local state instead of full refetch
+    openInvoices.value = openInvoices.value.filter(o => o.name !== order.name)
   } catch (err) {
     error.value = err.message || 'تولید و تحویل ناموفق بود.'
   }
@@ -2324,8 +2325,14 @@ async function settleAndDeliverFromInvoice(invoice) {
     successMessage.value = `فاکتور ${invoice.order_code} تسویه و تحویل شد.${siInfo}${dnInfo}`
     invoice.status = 'delivered'
     invoice.payment_method = method
-    await loadOpenInvoices()
-    await loadRecentOrders()
+    
+    // Optimistically update local state instead of full refetch
+    openInvoices.value = openInvoices.value.filter(o => o.name !== invoice.name)
+    const recentIdx = recentOrders.value.findIndex(o => o.name === invoice.name)
+    if (recentIdx !== -1) {
+      recentOrders.value[recentIdx].status = 'delivered'
+      recentOrders.value[recentIdx].payment_method = method
+    }
   } catch (err) {
     error.value = err.message || 'تسویه و تحویل ناموفق بود.'
   }
@@ -2343,8 +2350,12 @@ async function deliverFromInvoice(invoice) {
     invoice.delivery_exists = true
     deliveredInvoices.add(invoice.name)
     successMessage.value = `فاکتور ${invoice.order_code} تحویل شد (بدون پرداخت).${dnInfo}`
-    await loadOpenInvoices()
-    await loadRecentOrders()
+    
+    // Optimistically update local state instead of full refetch
+    const recentIdx = recentOrders.value.findIndex(o => o.name === invoice.name)
+    if (recentIdx !== -1) {
+      recentOrders.value[recentIdx].delivery_exists = true
+    }
   } catch (err) {
     error.value = err.message || 'تحویل ناموفق بود.'
   }
@@ -2651,8 +2662,9 @@ function recordPopularItem(slug, qty) {
   }
 }
 
-async function loadTodayTransactions() {
+async function loadTodayTransactions(force = false) {
   if (todayTransactionsبارگذاری.value) return
+  if (!force && todayTransactions.value.length > 0) return
   todayTransactionsبارگذاری.value = true
   todayTransactionsError.value = ''
   try {
@@ -2668,8 +2680,9 @@ async function loadTodayTransactions() {
   }
 }
 
-async function loadRecentOrders() {
+async function loadRecentOrders(force = false) {
   if (recentOrdersبارگذاری.value) return
+  if (!force && recentOrders.value.length > 0) return
   recentOrdersبارگذاری.value = true
   recentOrdersError.value = ''
   try {
@@ -2833,17 +2846,40 @@ async function executePurgeOrder() {
   purgeModal.error = ''
   try {
     const result = await purgeManagementPOSOrder(purgeModal.orderName)
-    const summary = result.summary?.cleaned_records || {}
+    // Update local state instead of full refetch
+    const orderName = purgeModal.orderName
+    
+    // Update Open Invoices
+    if (openInvoices.value.some(o => o.name === orderName)) {
+      openInvoices.value = openInvoices.value.filter(o => o.name !== orderName)
+    }
+    
+    // Update Recent Orders
+    if (recentOrders.value.some(o => o.name === orderName)) {
+      recentOrders.value = recentOrders.value.filter(o => o.name !== orderName)
+    }
+    
+    // Update Today Transactions
+    if (todayTransactions.value.some(o => o.name === orderName)) {
+      todayTransactions.value = todayTransactions.value.filter(o => o.name !== orderName)
+    }
+
+    if (selectedOpenInvoiceKey.value && selectedOpenInvoiceKey.value.includes(orderName)) {
+      selectedOpenInvoiceKey.value = ''
+      invoiceDetailMap.value.delete(selectedOpenInvoiceKey.value)
+    }
+
+    if (result.status === 'partial_success' || errors.length > 0) {
+      purgeModal.error = 'بخشی از فرآیند ناموفق بود:\n' + errors.join('\n')
+      purgeModal.loading = false
+      return // Wait for user to dismiss
+    }
+
     const deletedTypes = Object.keys(summary).filter(k => summary[k].length > 0).join(', ')
     purgeModal.success = 'سفارش و اطلاعات مرتبط (' + (deletedTypes || 'فقط سفارش') + ') با موفقیت لغو و حذف شد.'
     
-    // Refresh all affected POS lists after success
-    await loadOpenInvoices()
-    await loadTodayTransactions()
-    await loadRecentOrders()
-    
-    // Close modals after a short delay
     setTimeout(() => {
+      purgeModal.loading = false // Reset before closing
       closePurgeModal()
       closeOrderDetailModal()
     }, 2000)
@@ -3819,8 +3855,13 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       } else {
         saveActiveTicketSnapshot()
       }
-      loadOpenInvoices()
-      loadRecentOrders()
+      // Optimistically update
+      openInvoices.value = openInvoices.value.filter(o => o.name !== code)
+      const recentIdx = recentOrders.value.findIndex(o => o.name === code)
+      if (recentIdx !== -1) {
+        recentOrders.value[recentIdx].status = 'paid'
+        recentOrders.value[recentIdx].payment_method = paymentMethod
+      }
       await refreshHardwareStatus()
     } catch (err) {
       error.value = err.message || 'تسویه فاکتور ناموفق بود.'
@@ -3962,9 +4003,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         : 'فاکتور جدید ساخته شد.'
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
-      editingOriginalOrder.name = ''
-      loadOpenInvoices()
-      loadRecentOrders()
+      
+      // Remove old order from local open invoices
+      openInvoices.value = openInvoices.value.filter(o => o.name !== oldName)
     }
 
     // Save order code to ticket snapshot for receipt numbering
@@ -3989,8 +4030,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       window.location.href = '/management/orders'
     }
 
+    // Refresh only open invoices to keep the badge up to date.
+    // Recent orders and today transactions will fetch when their tabs are opened.
     loadOpenInvoices()
-    loadRecentOrders()
     await refreshHardwareStatus()
   } catch (submitErr) {
     error.value = submitErr.message || 'ثبت سفارش POS ناموفق بود.'

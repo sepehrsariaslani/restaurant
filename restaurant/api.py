@@ -14746,6 +14746,13 @@ def purge_management_pos_order(order_name):
 	_cancel_and_delete("Sales Order", [so_name])
 
 	frappe.db.commit()
+	if summary["errors"]:
+		return {
+			"status": "partial_success",
+			"order_name": so_name,
+			"summary": summary
+		}
+
 	return {
 		"status": "success",
 		"order_name": so_name,
