@@ -11947,7 +11947,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	start_date, end_date = _management_date_window(date_from=date_from, date_to=date_to)
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_transaction_date = _has_column("Sales Order", "transaction_date")
-	filters = {}
+	filters = {"docstatus": ["<", 2]}
 	if has_transaction_date:
 		filters["transaction_date"] = ["between", [start_date, end_date]]
 	else:
@@ -12114,7 +12114,7 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_created_at = _has_column("Restaurant Table Order", "created_at")
-	filters = {}
+	filters = {"docstatus": ["<", 2]}
 	if has_created_at:
 		filters["created_at"] = ["between", [start_dt, end_dt]]
 	else:
@@ -14741,6 +14741,9 @@ def purge_management_pos_order(order_name):
 	_cancel_and_delete("Work Order", wos)
 	_cancel_and_delete("Restaurant Production Ticket", tickets)
 	_cancel_and_delete("Restaurant POS Payment Log", pos_logs)
+
+	if _has_column("Sales Order", "restaurant_status") and frappe.db.exists("Sales Order", so_name):
+		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
 	
 	# Finally Sales Order
 	_cancel_and_delete("Sales Order", [so_name])

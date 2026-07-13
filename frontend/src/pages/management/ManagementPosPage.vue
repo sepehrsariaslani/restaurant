@@ -1127,9 +1127,10 @@ const filteredProducts = computed(() => {
 })
 
 const filteredRecentOrders = computed(() => {
+  const activeOrders = recentOrders.value.filter(o => String(o.status || '').toLowerCase() !== 'cancelled')
   const q = recentOrdersSearch.value.trim().toLowerCase()
-  if (!q) return recentOrders.value
-  return recentOrders.value.filter((o) =>
+  if (!q) return activeOrders
+  return activeOrders.filter((o) =>
     String(o.order_code || o.name || '').toLowerCase().includes(q) ||
     String(o.customer_name || '').toLowerCase().includes(q)
   )
@@ -2907,7 +2908,7 @@ async function executePurgeOrder() {
     }
 
     const deletedTypes = Object.keys(summary).filter(k => summary[k].length > 0).join(', ')
-    purgeModal.success = 'سفارش و اطلاعات مرتبط (' + (deletedTypes || 'فقط سفارش') + ') با موفقیت لغو و حذف شد.'
+    purgeModal.success = 'سفارش با موفقیت لغو و از عملیات صندوق پاکسازی شد.\n' + (deletedTypes ? 'جزئیات: ' + deletedTypes : '')
     
     setTimeout(() => {
       purgeModal.loading = false // Reset before closing
