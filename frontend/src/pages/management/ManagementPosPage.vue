@@ -2893,7 +2893,11 @@ async function executePurgeOrder() {
 
     if (selectedOpenInvoiceKey.value && selectedOpenInvoiceKey.value.includes(orderName)) {
       selectedOpenInvoiceKey.value = ''
-      invoiceDetailMap.value.delete(selectedOpenInvoiceKey.value)
+      selectedOpenInvoiceDetail.value = null
+    }
+
+    if (expandedInvoiceKey.value && expandedInvoiceKey.value.includes(orderName)) {
+      expandedInvoiceKey.value = ''
     }
 
     if (result.status === 'partial_success' || errors.length > 0) {
