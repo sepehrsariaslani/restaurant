@@ -66,7 +66,7 @@
 					</div>
 					<div class="line-actions">
 						<button v-if="canEditCustomization(line)" type="button" class="act-btn bom" title="ویرایش سفارشی سازی" @click.stop="$emit('edit-line-customization', line)">BOM</button>
-						<button type="button" class="act-btn" title="یادداشت" @click.stop="$emit('edit-line-note', line)">✎</button>
+						<button type="button" class="act-btn" title="یادداشت" @click.stop="$emit('edit-line-note', line)">Note</button>
 						<div class="counter">
 							<button type="button" @click.stop="$emit('decrement-line', line)">−</button>
 							<span>{{ qtyText(line.qty) }}</span>
@@ -362,7 +362,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { Banknote, CreditCard, FileClock, Plus, ShoppingCart, X } from "lucide-vue-next";
+import { Banknote, CreditCard, FileClock, Plus, ShoppingCart, X, MessageSquare } from "lucide-vue-next";
 import SearchableDropdown from "@/components/SearchableDropdown.vue";
 import PersianNumberInput from "@/components/PersianNumberInput.vue";
 import AmountPercentToggle from "@/components/AmountPercentToggle.vue";

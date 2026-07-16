@@ -5007,6 +5007,7 @@ def _create_sales_order(
 	delivery_payload=None,
 	coupon=None,
 	order_context=None,
+	financial_modifiers=None,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5092,16 +5093,23 @@ def _create_sales_order(
 		cfg = _menu_doc_config(menu_doc)
 		line_requires_production = _item_requires_production(menu_doc)
 
+		description = cfg["long_desc"] or cfg["short_desc"] or menu_doc.description or ""
+		line_note = str(cart_line.get("note") or "").strip()
+		if line_note:
+			description = f"{description}\n\nیادداشت: {line_note}".strip()
+			
 		row_payload = {
 			"item_code": menu_doc.item_code,
 			"item_name": cfg["title"],
-			"description": cfg["long_desc"] or cfg["short_desc"] or menu_doc.description,
+			"description": description,
 			"qty": line_calc["qty"],
 			"uom": menu_doc.stock_uom or uom_fallback,
 			"stock_uom": menu_doc.stock_uom or uom_fallback,
 			"rate": line_calc["unit_price"],
 			"amount": line_calc["line_total"],
 		}
+		if line_note and _has_column("Sales Order Item", "restaurant_note"):
+			row_payload["restaurant_note"] = line_note
 		if _has_column("Sales Order Item", "restaurant_menu_slug"):
 			row_payload["restaurant_menu_slug"] = cfg["slug"]
 		if _has_column("Sales Order Item", "restaurant_customization_json"):
@@ -5283,6 +5291,8 @@ def _create_sales_order(
 			)
 
 	discount_amount = flt(coupon.get("discount_amount") or 0)
+	financial_modifiers = financial_modifiers or {}
+	
 	if discount_amount > 0:
 		discount_amount = min(discount_amount, subtotal)
 		doc_payload["apply_discount_on"] = "Grand Total"
@@ -5290,6 +5300,50 @@ def _create_sales_order(
 		coupon_note = _("Coupon {0}: {1}").format(coupon.get("code") or "", discount_amount)
 		doc_payload["customer_note"] = (doc_payload.get("customer_note") or "") + coupon_note
 		payload_snapshot.append({"coupon": coupon.get("code") or "", "discount_amount": discount_amount})
+	else:
+		# Apply POS financial modifiers (manual discount)
+		pos_discount_val = flt(financial_modifiers.get("discount_value") or 0)
+		pos_discount_type = financial_modifiers.get("discount_type") or "fixed"
+		if pos_discount_val > 0:
+			doc_payload["apply_discount_on"] = "Grand Total"
+			if pos_discount_type == "percent":
+				doc_payload["additional_discount_percentage"] = min(pos_discount_val, 100.0)
+			else:
+				doc_payload["discount_amount"] = min(pos_discount_val, subtotal)
+				
+	# Apply Service Charge & Taxes & Tip
+	doc_payload["taxes"] = []
+	tax_acc = frappe.db.get_value("Account", {"account_type": "Tax", "company": company}, "name")
+	if not tax_acc:
+		# Fallback to any generic account if we must add a row
+		tax_acc = frappe.db.get_value("Account", {"is_group": 0, "company": company}, "name")
+		
+	pos_tax = flt(financial_modifiers.get("tax_amount") or 0)
+	if pos_tax > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": "Tax",
+			"tax_amount": pos_tax,
+		})
+		
+	pos_service = flt(financial_modifiers.get("service_value") or 0)
+	if pos_service > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": "Service Charge",
+			"tax_amount": pos_service, # Assuming fixed service value based on UI calculation
+		})
+		
+	pos_tip = flt(financial_modifiers.get("tip_amount") or 0)
+	if pos_tip > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": "Tip",
+			"tax_amount": pos_tip,
+		})
 
 	so_doc = frappe.get_doc(doc_payload)
 	# Some custom ERPNext forks expect commission-related attributes even when
@@ -10577,6 +10631,7 @@ def place_order(
 	pickup_vehicle_snapshot=None,
 	coupon_code=None,
 	order_context=None,
+	financial_modifiers=None,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -10661,6 +10716,7 @@ def place_order(
 		delivery_payload=delivery_payload,
 		coupon=coupon,
 		order_context=order_context,
+		financial_modifiers=financial_modifiers,
 	)
 
 
@@ -14051,11 +14107,13 @@ def create_pos_order(payload):
     address = (payload.get("address") or "").strip()
     note = (payload.get("note") or "").strip()
     items = payload.get("items") or []
+    financial_modifiers = payload.get("financial_modifiers", {})
     result = place_order(
         customer_info={"name": customer_name, "mobile": mobile},
         order_type=order_type, items=items,
         address=address, note=note,
         include_service_items=1,
+        financial_modifiers=financial_modifiers,
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
@@ -14152,19 +14210,28 @@ def _resolve_pos_mode_of_payment(method):
 
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
-    # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+        
     payment = _parse_json(payment, {})
     method = _normalize_payment_method(payment.get("method") or "cash")
-    manual_ref = (reference_no or payment.get("reference_no") or "").strip()
+    splits = payment.get("splits") or []
+    
+    # If no splits provided but we have a method, create a single split
+    if not splits:
+        splits = [{
+            "method": method,
+            "mode_of_payment": _resolve_pos_mode_of_payment(method),
+            "amount": 0, # Will be set to grand_total below
+            "reference_no": (reference_no or payment.get("reference_no") or "").strip()
+        }]
+
     result = {"sales_order": so_name}
-    # 1. Sales Invoice from SO
-    mode_of_payment = method
+    
     try:
         make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
         si_doc = make_si(so_name)
@@ -14181,54 +14248,81 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
 
         grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
 
-        # گرفتن نحوه پرداخت واقعی از داده باسی (به جای هاردکد)
-        mode_of_payment = _resolve_pos_mode_of_payment(method)
+        # Fix amounts in splits if empty
+        total_split = sum(flt(s.get("amount") or 0) for s in splits)
+        if total_split <= 0:
+            splits[0]["amount"] = grand_total
 
-        # Set payment on SI before insert
-        if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
+        # Validate splits total
+        total_split = sum(flt(s.get("amount") or 0) for s in splits)
+        if abs(total_split - grand_total) > 0.5: # Allow small rounding
+            frappe.throw(f"Payment splits total ({total_split}) does not match invoice total ({grand_total})")
+
+        # Add payments to SI
+        if hasattr(si_doc, "payments"):
             si_doc.payments = []
-        si_doc.append("payments", {
-            "mode_of_payment": mode_of_payment,
-            "amount": grand_total if grand_total > 0 else 1,
-            "default": 1,
-        })
+        for s in splits:
+            mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
+            if s.get("method") != "credit": # Don't add credit to SI payments table usually
+                si_doc.append("payments", {
+                    "mode_of_payment": mop,
+                    "amount": flt(s.get("amount")),
+                })
 
         si_doc.flags.ignore_permissions = True
         si_doc.insert()
         si_doc.submit()
         result["sales_invoice"] = si_doc.name
 
-        # 2. Payment Entry if not credit
-        if method != "credit" and si_doc.docstatus == 1:
-            try:
-                si_outstanding = frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount")
-                if flt(si_outstanding) > 0:
-                    from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
-                    pe = get_payment_entry("Sales Invoice", si_doc.name)
-                    pe.reference_no = manual_ref or si_doc.name
-                    pe.reference_date = today()
-                    pe.mode_of_payment = mode_of_payment
-                    pe.paid_amount = flt(si_outstanding)
-                    pe.received_amount = flt(si_outstanding)
-                    pe.flags.ignore_permissions = True
-                    pe.insert()
-                    pe.submit()
-                    result["payment_entry"] = pe.name
-                frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
+        # Create Payment Entries
+        if si_doc.docstatus == 1:
+            from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+            payment_entries = []
+            
+            for s in splits:
+                if s.get("method") == "credit":
+                    continue
+                    
+                mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
+                amt = flt(s.get("amount"))
+                ref = str(s.get("reference_no") or si_doc.name)
+                
+                pe = get_payment_entry("Sales Invoice", si_doc.name)
+                pe.reference_no = ref
+                pe.reference_date = today()
+                pe.mode_of_payment = mop
+                pe.paid_amount = amt
+                pe.received_amount = amt
+                # Clear references except this SI and adjust amount
+                for r in pe.references:
+                    if r.reference_name == si_doc.name:
+                        r.allocated_amount = amt
+                pe.flags.ignore_permissions = True
+                pe.insert()
+                pe.submit()
+                payment_entries.append(pe.name)
+                
+            if payment_entries:
+                result["payment_entries"] = payment_entries
+                
+            si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
+            if si_outstanding <= 0.1:
                 frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
-                result["payment_entry"] = pe.name
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Settle SI Payment")
-    except Exception:
+                _set_restaurant_order_status(so_name, "paid", force=True)
+                _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
+            else:
+                _append_sales_order_note(so_name, f"[SETTLE] Partially paid. Outstanding: {si_outstanding}")
+
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Settle POS SI")
-        result["invoice_error"] = "SI creation failed"
-    _set_restaurant_order_status(so_name, "paid", force=True)
-    _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
-    # Save normalized method (cash/card/credit) not Persian name
+        frappe.throw(str(e))
+        
     if _has_column("Sales Order", "restaurant_payment_method"):
         so_doc = frappe.get_doc("Sales Order", so_name)
-        so_doc.restaurant_payment_method = method
+        # Store primary method
+        so_doc.restaurant_payment_method = splits[0].get("method") if splits else method
         so_doc.save(ignore_permissions=True)
+        
     frappe.db.commit()
     return result
 
@@ -14315,8 +14409,10 @@ def _background_deliver_pos_order(so_name):
 
         _set_restaurant_order_status(so_name, "delivered", force=True)
         frappe.db.commit()
-    except Exception:
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Background Deliver POS Order Error")
+        _append_sales_order_note(so_name, f"[ERROR] Delivery failed: {str(e)[:100]}")
+        frappe.db.commit()
 
 @frappe.whitelist()
 def deliver_pos_order(order_name):
@@ -14327,12 +14423,26 @@ def deliver_pos_order(order_name):
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
+    status = _core_order_status(frappe.get_doc("Sales Order", so_name))
+    if status == "delivered":
+        dn = frappe.db.get_value("Delivery Note Item", {"against_sales_order": so_name}, "parent")
+        return {
+            "sales_order": so_name,
+            "status": "success",
+            "delivery_note": dn or "",
+            "message": "Order is already delivered."
+        }
+
     result = {
         "sales_order": so_name,
         "status": "success",
         "delivery_note": "در حال صدور...",
     }
     
+    # Set foreground status to preparing before background execution
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    frappe.db.commit()
+
     try:
         from frappe.utils.background_jobs import enqueue
         enqueue(
@@ -14343,9 +14453,6 @@ def deliver_pos_order(order_name):
         )
     except Exception:
         _background_deliver_pos_order(so_name)
-
-    _set_restaurant_order_status(so_name, "delivered", force=True)
-    frappe.db.commit()
 
     return result
 
@@ -14358,12 +14465,26 @@ def produce_and_deliver_pos_order(order_name):
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
+    status = _core_order_status(frappe.get_doc("Sales Order", so_name))
+    if status == "delivered":
+        dn = frappe.db.get_value("Delivery Note Item", {"against_sales_order": so_name}, "parent")
+        return {
+            "sales_order": so_name,
+            "status": "success",
+            "delivery_note": dn or "",
+            "message": "Order is already delivered."
+        }
+
     result = {
         "sales_order": so_name,
         "status": "success",
         "delivery_note": "در حال صدور...",
     }
     
+    # Set foreground status to preparing before background execution
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    frappe.db.commit()
+
     try:
         from frappe.utils.background_jobs import enqueue
         enqueue(
@@ -14374,9 +14495,6 @@ def produce_and_deliver_pos_order(order_name):
         )
     except Exception:
         _background_deliver_pos_order(so_name)
-
-    _set_restaurant_order_status(so_name, "delivered", force=True)
-    frappe.db.commit()
 
     return result
 
@@ -14442,8 +14560,10 @@ def _background_production_and_delivery(so_name):
                 
         _set_restaurant_order_status(so_name, "delivered", force=True)
         frappe.db.commit()
-    except Exception:
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), "CreateAndSettle Background Production Error")
+        _append_sales_order_note(so_name, f"[ERROR] Production failed: {str(e)[:100]}")
+        frappe.db.commit()
 
 def create_and_settle_pos_order(payload):
     # تسویه و تحویل: SO + SI + Payment (Sync) -> Production + DN (Background)
@@ -14459,6 +14579,9 @@ def create_and_settle_pos_order(payload):
     settle_result = settle_pos_order(order_name=so_name, payment=payment)
 
     # 3. Production + Delivery Note (Background)
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    frappe.db.commit()
+
     try:
         from frappe.utils.background_jobs import enqueue
         enqueue(
@@ -14842,6 +14965,7 @@ def get_management_order_detail(order_name, source=None):
 						"customization_json": row.get("restaurant_customization_json")
 						if has_item_customization
 						else "",
+						"note": row.get("restaurant_note") or "",
 					}
 				)
 
@@ -14857,6 +14981,10 @@ def get_management_order_detail(order_name, source=None):
 					"status": _core_order_status(doc),
 					"subtotal": flt(doc.total or doc.net_total),
 					"grand_total": flt(doc.grand_total or doc.total or doc.net_total),
+					"discount_amount": flt(doc.get("discount_amount") or doc.get("additional_discount_amount") or 0),
+					"tax_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Tax" in t.description or "مالیات" in t.description]),
+					"service_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Service" in t.description or "سرویس" in t.description]),
+					"tip_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Tip" in t.description or "انعام" in t.description]),
 					"created_at": _json_safe_datetime(
 						_management_business_datetime(doc.get("transaction_date"), doc.creation)
 						or doc.creation

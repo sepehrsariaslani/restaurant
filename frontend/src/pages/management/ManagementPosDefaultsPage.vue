@@ -51,7 +51,7 @@
             <input
               class="input"
               v-model="localConfig.default_customers[mode.value].mobile"
-              placeholder="09120000000"
+              placeholder=""
               type="tel"
               readonly
             />
@@ -139,9 +139,9 @@ const orderModes = [
 const defaultConfig = {
   default_order_mode: 'dine_in',
   default_customers: {
-    dine_in: { name: 'POS Customer', mobile: '09120000000' },
-    takeaway: { name: 'POS Customer', mobile: '09120000000' },
-    delivery: { name: 'POS Customer', mobile: '09120000000' },
+    dine_in: { name: 'POS Customer', mobile: '' },
+    takeaway: { name: 'POS Customer', mobile: '' },
+    delivery: { name: 'POS Customer', mobile: '' },
   },
   takeaway_places: ['بیرون بر حضوری', 'تحویل کنار سالن'],
   default_takeaway_place: 'بیرون بر حضوری',
@@ -153,9 +153,9 @@ const defaultConfig = {
 const localConfig = reactive({
   default_order_mode: 'dine_in',
   default_customers: {
-    dine_in: { name: 'POS Customer', mobile: '09120000000' },
-    takeaway: { name: 'POS Customer', mobile: '09120000000' },
-    delivery: { name: 'POS Customer', mobile: '09120000000' },
+    dine_in: { name: 'POS Customer', mobile: '' },
+    takeaway: { name: 'POS Customer', mobile: '' },
+    delivery: { name: 'POS Customer', mobile: '' },
   },
   takeaway_places: ['بیرون بر حضوری', 'تحویل کنار سالن'],
   default_takeaway_place: 'بیرون بر حضوری',
@@ -168,9 +168,9 @@ function applyConfig(cfg) {
   if (!cfg) return
   localConfig.default_order_mode = cfg.default_order_mode || 'dine_in'
   localConfig.default_customers = {
-    dine_in: { name: 'POS Customer', mobile: '09120000000', ...(cfg.default_customers?.dine_in || {}) },
-    takeaway: { name: 'POS Customer', mobile: '09120000000', ...(cfg.default_customers?.takeaway || {}) },
-    delivery: { name: 'POS Customer', mobile: '09120000000', ...(cfg.default_customers?.delivery || {}) },
+    dine_in: { name: 'POS Customer', mobile: '', ...(cfg.default_customers?.dine_in || {}) },
+    takeaway: { name: 'POS Customer', mobile: '', ...(cfg.default_customers?.takeaway || {}) },
+    delivery: { name: 'POS Customer', mobile: '', ...(cfg.default_customers?.delivery || {}) },
   }
   localConfig.takeaway_places = Array.isArray(cfg.takeaway_places) ? [...cfg.takeaway_places] : ['بیرون بر حضوری', 'تحویل کنار سالن']
   localConfig.default_takeaway_place = cfg.default_takeaway_place || (localConfig.takeaway_places[0] || '')

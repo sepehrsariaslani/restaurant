@@ -119,7 +119,7 @@
       <div v-if="showKeyboardMap" class="kbd-map-backdrop" @click.self="showKeyboardMap = false">
         <section class="kbd-map-modal" dir="rtl">
           <header class="kbd-map-head">
-            <h3>⌨ میانبرهای کیبورد</h3>
+            <h3><Keyboard :size="18" /> میانبرهای کیبورد</h3>
             <button type="button" class="kbd-map-close" @click="showKeyboardMap = false">×</button>
           </header>
           <table class="kbd-map-table">
@@ -353,7 +353,7 @@
                   class="input dark-input recent-date-input"
                   type="date"
                   v-model="recentOrdersDateFrom"
-                  @change="loadRecentOrders"
+                  @change="loadRecentOrders(true)"
                 />
               </div>
               <p class="muted" v-if="recentOrdersبارگذاری">در حال دریافت...</p>
@@ -651,22 +651,15 @@
             
             <!-- تسویه Section (for unpaid orders) -->
             <div class="od-settle" v-if="orderDetailModal.canSettle">
-              <div class="od-settle-row">
-                <select class="od-select" v-model="orderDetailModal.settleMethod">
-                  <option value="">انتخاب روش پرداخت</option>
-                  <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
-                </select>
-                <input class="od-input" v-if="['card','pos','bank','terminal'].includes(orderDetailModal.settleMethod)" v-model="orderDetailModal.settleReference" placeholder="شماره پیگیری" />
-              </div>
               <p class="od-err" v-if="orderDetailModal.settleError">{{ orderDetailModal.settleError }}</p>
-              <button class="od-btn od-btn-primary" :disabled="orderDetailModal.settling || !orderDetailModal.settleMethod" @click="confirmSettleOrder">
+              <button class="od-btn od-btn-primary" :disabled="orderDetailModal.settling" @click="confirmSettleOrder">
                 {{ orderDetailModal.settling ? '...' : '✓ تسویه سفارش' }}
               </button>
             </div>
 
             <!-- Edit Section (collapsible) -->
             <div class="od-edit-toggle" @click="editExpanded = !editExpanded">
-              <span>✎ ویرایش اطلاعات</span>
+              <span><Save :size="14" /> ویرایش اطلاعات</span>
               <span class="od-chevron" :class="{ open: editExpanded }">▼</span>
             </div>
             <div class="od-edit" v-if="editExpanded">
@@ -806,7 +799,7 @@ function defaultFormState() {
   return {
     customer_query: '',
     customer_name: modeCustomer.name || 'مشتری POS',
-    mobile: modeCustomer.mobile || '09120000000',
+    mobile: modeCustomer.mobile || '',
     customer_type: 'normal',
     guest_count: 1,
     order_mode: defaultMode,
@@ -1165,13 +1158,15 @@ async function deliverOrder(order) {
     const result = await deliverPOSOrder(order.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
     const woInfo = result.submitted_work_orders?.length ? ` (${result.submitted_work_orders.length} دستور کار)` : ''
-    // Update local status so buttons hide immediately
-    order.status = 'delivered'
+    // Update local status to 'preparing' to match background job behavior
+    order.status = 'preparing'
     order.payment_method = order.payment_method || ''
-    successMessage.value = `سفارش ${order.name} تحویل شد.${dnInfo}${woInfo}`
+    successMessage.value = `سفارش ${order.name} برای تحویل ثبت شد.${dnInfo}${woInfo}`
     
-    // Optimistically update local state instead of full refetch
-    openInvoices.value = openInvoices.value.filter(o => o.name !== order.name)
+    // If order was fully paid, remove from open invoices. Else keep it there.
+    if (order.status === 'paid' || order.payment_method) {
+        openInvoices.value = openInvoices.value.filter(o => o.name !== order.name)
+    }
   } catch (err) {
     error.value = err.message || 'تولید و تحویل ناموفق بود.'
   }
@@ -2083,14 +2078,18 @@ function openInvoiceKey(row) {
 
 function isUnpaidOpenInvoice(row) {
   const status = String(row?.status || '').trim().toLowerCase()
-  const paymentStatus = String(row?.payment_status || '').trim().toLowerCase()
-  if (['delivered', 'cancelled'].includes(status)) {
+  
+  if (status === 'cancelled') {
     return false
   }
-  // اگه فقط تحویل شده (payment_method نداره) ولی DN خورده => باز هم فاکتور رو نمایش بده
-  if (status === 'paid' && row.payment_method) {
+  
+  // If it has a payment method assigned, it means the checkout flow (settle) has been completed.
+  // Even if it's "credit", it's financially processed by POS, so it shouldn't be here.
+  if (row.payment_method) {
     return false
   }
+  
+  // If it has no payment method, it hasn't been checked out yet, so it remains open.
   return true
 }
 
@@ -2295,6 +2294,21 @@ async function selectAndLoadInvoice(invoice) {
       const itemCode = String(item.item_code || item.name || item.title || '').trim()
       const matchedProduct = productByItemCode[itemCode.toLowerCase()]
       
+      let customization = null
+      let hasCustomization = false
+      if (item.customization_json) {
+        try {
+          customization = typeof item.customization_json === 'string' 
+            ? JSON.parse(item.customization_json) 
+            : item.customization_json
+          if (customization && Object.keys(customization).length > 0) {
+            hasCustomization = true
+          }
+        } catch (e) {
+          console.warn("Could not parse customization json for line", item)
+        }
+      }
+      
       if (matchedProduct) {
         // Use the real product with correct slug from loaded products
         const unitPrice = Number(item.unit_price || item.price || matchedProduct.base_price || matchedProduct.standard_rate || 0)
@@ -2307,7 +2321,9 @@ async function selectAndLoadInvoice(invoice) {
           standard_rate: unitPrice,
           price: unitPrice,
           image: matchedProduct.image || item.image || '',
-        }, qty, null, false, unitPrice)
+        }, qty, customization, hasCustomization, unitPrice, {
+          variant_of: matchedProduct.variant_of || ''
+        })
       } else {
         // Fallback: use item_code as-is and just set price
         const unitPrice = Number(item.unit_price || item.price || 0)
@@ -2320,10 +2336,18 @@ async function selectAndLoadInvoice(invoice) {
           standard_rate: unitPrice,
           price: unitPrice,
           image: item.image || '',
-        }, qty, null, false, unitPrice)
+        }, qty, customization, hasCustomization, unitPrice, {})
       }
     }
     
+    // Restore note
+    if (order.note) {
+      // Strip automatically generated audit notes
+      let cleanNote = order.note.split(' | روش پرداخت:')[0]
+      cleanNote = cleanNote.split(' | ادامه فاکتور')[0]
+      form.note = cleanNote.trim()
+    }
+
     // Apply financial modifiers from order if available
     const fm = order.financial_modifiers || order.totals || {}
     if (fm.discount_value > 0 || order.discount_amount > 0) {
@@ -2371,31 +2395,10 @@ async function settleSelectedInvoice(invoice) {
 
 async function settleAndDeliverFromInvoice(invoice) {
   if (!invoice?.name) return
-  const method = window.prompt('روش پرداخت را وارد کنید (cash / card / credit):', 'cash')
-  if (!method) return
-  error.value = ''
-  successMessage.value = ''
-  try {
-    // 1. تسویه (SI + Payment)
-    const settleResult = await settlePOSOrder(invoice.name, { method })
-    const siInfo = settleResult.sales_invoice ? ` | فاکتور: ${settleResult.sales_invoice}` : ''
-    // 2. تحویل (تولید + DN)
-    const deliverResult = await deliverPOSOrder(invoice.name)
-    const dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
-    successMessage.value = `فاکتور ${invoice.order_code} تسویه و تحویل شد.${siInfo}${dnInfo}`
-    invoice.status = 'delivered'
-    invoice.payment_method = method
-    
-    // Optimistically update local state instead of full refetch
-    openInvoices.value = openInvoices.value.filter(o => o.name !== invoice.name)
-    const recentIdx = recentOrders.value.findIndex(o => o.name === invoice.name)
-    if (recentIdx !== -1) {
-      recentOrders.value[recentIdx].status = 'delivered'
-      recentOrders.value[recentIdx].payment_method = method
-    }
-  } catch (err) {
-    error.value = err.message || 'تسویه و تحویل ناموفق بود.'
-  }
+  await selectAndLoadInvoice(invoice)
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup(null, 'settle')
 }
 
 async function deliverFromInvoice(invoice) {
@@ -2836,41 +2839,20 @@ async function saveOrderDetailEdit() {
 
 async function quickSettleOrder(order) {
   if (!order?.name) return
-  await openOrderDetailModal(order)
-  if (orderDetailModal.canSettle) {
-    orderDetailModal.settleMethod = orderDetailModal.editForm.payment_method || 'cash'
-  }
+  await selectAndLoadInvoice(order)
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup(null, 'settle')
 }
 
 async function confirmSettleOrder() {
-  if (!orderDetailModal.order?.name) {
-    orderDetailModal.settleError = 'سفارشی انتخاب نشده.'
-    return
-  }
-  if (!orderDetailModal.settleMethod) {
-    orderDetailModal.settleError = 'روش پرداخت را انتخاب کنید.'
-    return
-  }
-  orderDetailModal.settling = true
-  orderDetailModal.settleError = ''
-  try {
-    const result = await settlePOSOrder(orderDetailModal.order.name, {
-      method: orderDetailModal.settleMethod,
-      reference_no: orderDetailModal.settleReference || '',
-    })
-    const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
-    successMessage.value = `سفارش ${orderDetailModal.order.order_code} تسویه شد.${siInfo}`
-    closeOrderDetailModal()
-    if (leftPanelTab.value === 'history') {
-      loadTodayTransactions(true)
-    } else if (leftPanelTab.value === 'recent') {
-      loadRecentOrders(true)
-    }
-  } catch (err) {
-    orderDetailModal.settleError = err.message || 'ثبت پرداخت ناموفق بود.'
-  } finally {
-    orderDetailModal.settling = false
-  }
+  // Move this order to the main cart and use standard payment flow
+  if (!orderDetailModal.order?.name) return
+  await selectAndLoadInvoice(orderDetailModal.order)
+  closeOrderDetailModal()
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup()
 }
 
 function openReturnInvoiceModal() {
@@ -4038,35 +4020,44 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     return
   }
 
-  // Pay original invoice directly when editing (just SI + Payment, no production)
+  resolveCustomerFromQuery()
+
+
+  // Pay original invoice directly when editing
   if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
     submitting.value = true
     error.value = ''
     successMessage.value = ''
     try {
-      const paymentMethod = normalizePaymentMethodKind(payment.method)
-      const payResult = await settlePOSOrder(editingOriginalOrder.name, {
-        method: paymentMethod,
-        reference_no: payment.reference_no || '',
-      })
       const code = editingOriginalOrder.name
+      const payResult = await settlePOSOrder(code, paymentPayload)
+      let siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
+      
+      let dnInfo = ''
+      if (withProduction) {
+        const deliverResult = await deliverPOSOrder(code)
+        dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
+        successMessage.value = `فاکتور ${code} تسویه و برای تحویل ثبت شد.${siInfo}${dnInfo}`
+      } else {
+        successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
+      }
+      
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
-      editingOriginalOrder.name = ''
-      const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
-      successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
+      
       if (financial.createNextInvoice) {
         resetCurrentInvoiceState()
         saveActiveTicketSnapshot()
       } else {
         saveActiveTicketSnapshot()
       }
+      
       // Optimistically update
       openInvoices.value = openInvoices.value.filter(o => o.name !== code)
       const recentIdx = recentOrders.value.findIndex(o => o.name === code)
       if (recentIdx !== -1) {
-        recentOrders.value[recentIdx].status = 'paid'
-        recentOrders.value[recentIdx].payment_method = paymentMethod
+        recentOrders.value[recentIdx].status = withProduction ? 'preparing' : 'paid'
+        recentOrders.value[recentIdx].payment_method = paymentPayload.method
       }
       window.setTimeout(() => {
         refreshHardwareStatus()
@@ -4078,8 +4069,6 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     }
     return
   }
-
-  resolveCustomerFromQuery()
 
   const paymentSelection = resolvePaymentSubmission(paymentMeta)
   const paymentNoteLine = paymentSelection.auditLine
@@ -4205,7 +4194,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         // ثبت و تسویه یکجا (همه چی)
         const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
         const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-        successMessage.value = `سفارش ${orderCode} تسویه و تحویل شد.${siInfo}${dnInfo}`
+        successMessage.value = `سفارش ${orderCode} تسویه و برای تولید/تحویل ثبت شد.${siInfo}${dnInfo}`
       } else if (editingOriginalOrder.isEditing) {
         // تسویه از فاکتور باز
         successMessage.value = `فاکتور ${orderCode} تسویه شد.`
@@ -4334,7 +4323,7 @@ async function loadPOSBoot() {
 
       form.order_mode = defaultOrderMode
       form.customer_name = modeCustomer.name || 'مشتری POS'
-      form.mobile = modeCustomer.mobile || '09120000000'
+      form.mobile = modeCustomer.mobile || ''
       if (defaultOrderMode === 'delivery') {
         form.place = cfg.default_delivery_courier || cfg.default_delivery_place || ''
       } else if (defaultOrderMode === 'takeaway') {
