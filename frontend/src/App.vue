@@ -5,6 +5,7 @@
       <ManagementPosPage v-else-if="page === 'management-pos'" />
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementPosDefaultsPage v-else-if="page === 'management-pos-defaults'" />
+      <ManagementCouriersPage v-else-if="page === 'management-couriers'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
       <ManagementModifierGroupsPage v-else-if="page === 'management-modifier-groups'" />
@@ -156,6 +157,7 @@ import ManagementDashboardPage from './pages/management/ManagementDashboardPage.
 import ManagementPosPage from './pages/management/ManagementPosPage.vue'
 import ManagementPosProfilePage from './pages/management/ManagementPosProfilePage.vue'
 import ManagementPosDefaultsPage from './pages/management/ManagementPosDefaultsPage.vue'
+import ManagementCouriersPage from './pages/management/ManagementCouriersPage.vue'
 import ManagementOrdersPage from './pages/management/ManagementOrdersPage.vue'
 import ManagementProductsPage from './pages/management/ManagementProductsPage.vue'
 import ManagementModifierGroupsPage from './pages/management/ManagementModifierGroupsPage.vue'
@@ -190,6 +192,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/login')) return 'management-login'
     if (pathname === '/management' || pathname === '/management/') return 'management-dashboard'
     if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
+    if (pathname.startsWith('/management/couriers')) return 'management-couriers'
     if (pathname.startsWith('/management/pos-defaults') || pathname.startsWith('/management/pos_defaults')) return 'management-pos-defaults'
     if (pathname.startsWith('/management/pos-profile') || pathname.startsWith('/management/pos_profile')) return 'management-pos-profile'
     if (pathname.startsWith('/management/pos')) return 'management-pos'

@@ -1,31 +1,31 @@
 <template>
-  <ManagementPageScaffold title="مدیریت میزها" subtitle="مدیریت میزها، رزروها و سشن‌های فعال سالن">
+  <ManagementPageScaffold title="مدیریت میزها" subtitle="کنترل زنده سالن، رزروها و نشست‌های فعال">
     <ManagementSurfaceCard tone="accent">
       <div class="hero-toolbar">
         <div class="hero-stats">
           <article class="stat-card">
             <small>کل میزها</small>
-            <strong>{{ tables.length.toLocaleString('fa-IR') }}</strong>
+            <strong>{{ summary.totalTables.toLocaleString('fa-IR') }}</strong>
           </article>
           <article class="stat-card stat-card--success">
             <small>میز خالی</small>
-            <strong>{{ emptyTablesCount.toLocaleString('fa-IR') }}</strong>
+            <strong>{{ summary.emptyTables.toLocaleString('fa-IR') }}</strong>
           </article>
           <article class="stat-card stat-card--warning">
             <small>در انتظار</small>
-            <strong>{{ waitingTablesCount.toLocaleString('fa-IR') }}</strong>
+            <strong>{{ summary.waitingTables.toLocaleString('fa-IR') }}</strong>
           </article>
           <article class="stat-card stat-card--danger">
             <small>اشغال</small>
-            <strong>{{ occupiedTablesCount.toLocaleString('fa-IR') }}</strong>
+            <strong>{{ summary.occupiedTables.toLocaleString('fa-IR') }}</strong>
           </article>
           <article class="stat-card">
             <small>رزروها</small>
-            <strong>{{ reservations.length.toLocaleString('fa-IR') }}</strong>
+            <strong>{{ summary.reservations.toLocaleString('fa-IR') }}</strong>
           </article>
           <article class="stat-card">
-            <small>سشن‌ها</small>
-            <strong>{{ sessions.length.toLocaleString('fa-IR') }}</strong>
+            <small>سشن‌های فعال</small>
+            <strong>{{ summary.activeSessions.toLocaleString('fa-IR') }}</strong>
           </article>
         </div>
 
@@ -33,7 +33,7 @@
           <input
             v-model.trim="search"
             class="input hero-search"
-            placeholder="جستجو بر اساس شماره میز، لوکیشن، مشتری یا موبایل"
+            placeholder="جستجو بر اساس میز، لوکیشن، مشتری، موبایل یا وضعیت"
             @keyup.enter="loadTables"
           />
           <button class="primary-btn" type="button" :disabled="loading" @click="loadTables">
@@ -43,238 +43,248 @@
       </div>
     </ManagementSurfaceCard>
 
+    <ManagementSurfaceCard tone="soft" class="section-picker-shell">
+      <div class="section-picker">
+        <div class="simple-tabs" role="tablist" aria-label="بخش‌های مدیریت میزها">
+          <button
+            v-for="tab in tabOptions"
+            :key="tab.value"
+            class="simple-tab"
+            :class="{ active: activeTab === tab.value }"
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === tab.value"
+            @click="activeTab = tab.value"
+          >
+            <span>{{ tab.label }}</span>
+            <span class="tab-badge">{{ tab.badge.toLocaleString('fa-IR') }}</span>
+          </button>
+        </div>
+      </div>
+    </ManagementSurfaceCard>
+
     <p class="muted" v-if="loading">در حال بارگذاری اطلاعات میزها...</p>
     <p class="error" v-if="error">{{ error }}</p>
     <p class="success" v-if="successMessage">{{ successMessage }}</p>
 
-    <section class="grid-2" v-if="!loading">
-      <ManagementSurfaceCard title="میزها" subtitle="ویرایش سریع وضعیت، شماره و لوکیشن میز">
-        <ManagementDataTable :columns="tableColumns" :rows="filteredTables" row-key="name">
-          <template #cell-table_number="{ row }">
-            <input class="input inline-input" v-model.trim="row.table_number" />
-          </template>
-          <template #cell-status="{ row }">
-            <select class="select inline-input" v-model="row.status">
-              <option value="empty">خالی</option>
-              <option value="waiting">در انتظار</option>
-              <option value="occupied">اشغال</option>
-            </select>
-          </template>
-          <template #cell-location="{ row }">
-            <input class="input inline-input" v-model.trim="row.location" />
-          </template>
-          <template #cell-is_active="{ row }">
-            <label class="check-inline">
-              <input type="checkbox" v-model="row.is_active" :true-value="1" :false-value="0" />
-              <span>{{ Number(row.is_active || 0) === 1 ? 'فعال' : 'غیرفعال' }}</span>
-            </label>
-          </template>
-          <template #cell-active_session="{ value }">
-            <span>{{ value || '-' }}</span>
-          </template>
-          <template #cell-actions="{ row }">
-            <div class="row-actions">
-              <button class="secondary-btn" type="button" :disabled="savingMap[row.name]" @click="saveTable(row)">
-                {{ savingMap[row.name] ? 'در حال ذخیره...' : 'ذخیره' }}
-              </button>
-            </div>
-          </template>
-        </ManagementDataTable>
-      </ManagementSurfaceCard>
-
-      <ManagementSurfaceCard title="رزرو میزها" subtitle="به‌روزرسانی رزروهای ثبت‌شده">
-        <ManagementDataTable :columns="reservationColumns" :rows="filteredReservations" row-key="name">
-          <template #cell-customer_name="{ row }">
-            <input class="input inline-input" v-model.trim="row.customer_name" />
-          </template>
-          <template #cell-mobile="{ row }">
-            <input class="input inline-input" v-model.trim="row.mobile" />
-          </template>
-          <template #cell-branch="{ row }">
-            <input class="input inline-input" v-model.trim="row.branch" />
-          </template>
-          <template #cell-table="{ row }">
-            <select class="select inline-input" v-model="row.table">
-              <option value="">بدون میز</option>
-              <option v-for="table in tables" :key="`table-opt-${table.name}`" :value="table.name">
-                {{ table.table_number || table.name }}
-              </option>
-            </select>
-          </template>
-          <template #cell-reservation_date="{ row }">
-            <input class="input inline-input" type="date" v-model="row.reservation_date" />
-          </template>
-          <template #cell-reservation_time="{ row }">
-            <input class="input inline-input" type="time" v-model="row.reservation_time" />
-          </template>
-          <template #cell-guest_count="{ row }">
-            <input class="input inline-input" type="number" min="1" v-model.number="row.guest_count" />
-          </template>
-          <template #cell-status="{ row }">
-            <select class="select inline-input" v-model="row.status">
-              <option value="pending">pending</option>
-              <option value="confirmed">confirmed</option>
-              <option value="cancelled">cancelled</option>
-              <option value="completed">completed</option>
-            </select>
-          </template>
-          <template #cell-actions="{ row }">
-            <div class="row-actions">
-              <button class="secondary-btn" type="button" :disabled="savingMap[row.name]" @click="saveReservation(row)">
-                {{ savingMap[row.name] ? 'در حال ذخیره...' : 'ذخیره' }}
-              </button>
-            </div>
-          </template>
-        </ManagementDataTable>
-      </ManagementSurfaceCard>
-    </section>
-
-    <ManagementSurfaceCard v-if="!loading" title="سشن میزها" subtitle="کنترل وضعیت نشست‌های فعال/بسته و مبلغ تاییدشده">
-      <ManagementDataTable :columns="sessionColumns" :rows="filteredSessions" row-key="name">
-        <template #cell-table="{ value }">
-          <span>{{ tableLabelMap[value] || value || '-' }}</span>
-        </template>
-        <template #cell-status="{ row }">
-          <select class="select inline-input" v-model="row.status">
-            <option value="active">active</option>
-            <option value="closed">closed</option>
-          </select>
-        </template>
-        <template #cell-opened_at="{ value }">
-          <span>{{ formatDateTime(value) }}</span>
-        </template>
-        <template #cell-closed_at="{ value }">
-          <span>{{ formatDateTime(value) }}</span>
-        </template>
-        <template #cell-total_confirmed_amount="{ value }">
-          <span>{{ formatMoney(value, currency) }}</span>
-        </template>
-        <template #cell-note="{ row }">
-          <input class="input inline-input" v-model.trim="row.note" />
-        </template>
-        <template #cell-actions="{ row }">
-          <div class="row-actions">
-            <button class="secondary-btn" type="button" :disabled="savingMap[row.name]" @click="saveSession(row)">
-              {{ savingMap[row.name] ? 'در حال ذخیره...' : 'ذخیره' }}
-            </button>
+    <template v-if="!loading">
+      <section v-if="activeTab === 'floor'" class="floor-layout">
+        <div class="floor-main">
+          <div class="floor-toolbar">
+            <strong>نمای سالن</strong>
+            <small>{{ floorCards.length.toLocaleString('fa-IR') }} میز در این نما دیده می‌شود</small>
           </div>
-        </template>
-      </ManagementDataTable>
-    </ManagementSurfaceCard>
+
+          <div v-if="floorCards.length" class="floor-grid">
+            <ManagementTableCard
+              v-for="card in floorCards"
+              :key="card.name"
+              :card="card"
+              :currency="currency"
+              :selected="selectedTableName === card.name"
+              @select="selectTable"
+              @go-pos="goToPos"
+              @clear-session="clearTableSession"
+            />
+          </div>
+          <div v-else class="empty-surface">
+            <strong>میزی پیدا نشد</strong>
+            <p>با جستجوی فعلی چیزی برای نمایش باقی نمانده است.</p>
+          </div>
+        </div>
+
+        <ManagementTableDetailPanel
+          :detail="selectedTableDetail"
+          :table-draft="tableDraft"
+          :currency="currency"
+          :saving="Boolean(savingMap[selectedTableName])"
+          :has-changes="hasTableChanges"
+          @update-field="updateTableDraftField"
+          @save="saveTable()"
+          @clear-session="clearTableSession"
+          @go-pos="goToPos"
+          @open-reservations="openReservationsForTable"
+        />
+      </section>
+
+      <ManagementReservationsPanel
+        v-else-if="activeTab === 'reservations'"
+        :rows="filteredReservations"
+        :tables="tables"
+        :table-label-map="tableLabelMap"
+        :selected-name="selectedReservationName"
+        :reservation-draft="reservationDraft"
+        :saving="Boolean(savingMap[selectedReservationName])"
+        @select="selectReservation"
+        @update-field="updateReservationDraftField"
+        @save="saveReservation()"
+        @jump-table="jumpToTable"
+      />
+
+      <ManagementSessionsPanel
+        v-else
+        :rows="filteredSessions"
+        :table-label-map="tableLabelMap"
+        :selected-name="selectedSessionName"
+        :session-draft="sessionDraft"
+        :currency="currency"
+        :saving="Boolean(savingMap[selectedSessionName])"
+        @select="selectSession"
+        @update-field="updateSessionDraftField"
+        @save="saveSession()"
+        @jump-table="jumpToTable"
+      />
+    </template>
   </ManagementPageScaffold>
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
-import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
+import { computed, reactive, ref, watch } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementReservationsPanel from '@/components/management/tables/ManagementReservationsPanel.vue'
+import ManagementSessionsPanel from '@/components/management/tables/ManagementSessionsPanel.vue'
+import ManagementTableCard from '@/components/management/tables/ManagementTableCard.vue'
+import ManagementTableDetailPanel from '@/components/management/tables/ManagementTableDetailPanel.vue'
 import {
+  closeTableSession,
   getManagementTables,
   updateManagementTable,
   updateManagementTableReservation,
   updateManagementTableSession,
 } from '@/utils/api'
-import { formatMoney } from '@/utils/format'
+import {
+  buildFloorTableCards,
+  buildSelectedTableDetail,
+  buildTableLabelMap,
+  buildTablesSummary,
+  filterReservationsBySearch,
+  filterSessionsBySearch,
+  filterTablesBySearch,
+  sortReservations,
+} from '@/utils/managementTables'
 
 const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const search = ref('')
 const currency = ref('IRR')
+const activeTab = ref('floor')
 
 const tables = ref([])
 const reservations = ref([])
 const sessions = ref([])
 const savingMap = reactive({})
 
-const tableColumns = [
-  { key: 'table_number', label: 'شماره میز' },
-  { key: 'status', label: 'وضعیت' },
-  { key: 'location', label: 'لوکیشن/شعبه' },
-  { key: 'is_active', label: 'فعال' },
-  { key: 'active_session', label: 'سشن فعال' },
-  { key: 'actions', label: 'عملیات' },
-]
+const selectedTableName = ref('')
+const selectedReservationName = ref('')
+const selectedSessionName = ref('')
 
-const reservationColumns = [
-  { key: 'customer_name', label: 'مشتری' },
-  { key: 'mobile', label: 'موبایل' },
-  { key: 'branch', label: 'شعبه' },
-  { key: 'table', label: 'میز' },
-  { key: 'reservation_date', label: 'تاریخ' },
-  { key: 'reservation_time', label: 'ساعت' },
-  { key: 'guest_count', label: 'نفرات' },
-  { key: 'status', label: 'وضعیت' },
-  { key: 'actions', label: 'عملیات' },
-]
+const tableDraft = reactive(createTableDraft())
+const reservationDraft = reactive(createReservationDraft())
+const sessionDraft = reactive(createSessionDraft())
 
-const sessionColumns = [
-  { key: 'table', label: 'میز' },
-  { key: 'status', label: 'وضعیت' },
-  { key: 'opened_at', label: 'شروع' },
-  { key: 'closed_at', label: 'پایان' },
-  { key: 'total_confirmed_amount', label: 'مبلغ تاییدشده' },
-  { key: 'note', label: 'یادداشت' },
-  { key: 'actions', label: 'عملیات' },
-]
+const tableLabelMap = computed(() => buildTableLabelMap(tables.value))
+const summary = computed(() => buildTablesSummary({ tables: tables.value, reservations: reservations.value, sessions: sessions.value }))
+const filteredTableRows = computed(() => filterTablesBySearch(tables.value, sessions.value, reservations.value, search.value))
+const floorCards = computed(() => buildFloorTableCards({ tables: filteredTableRows.value, sessions: sessions.value, reservations: reservations.value }))
+const filteredReservations = computed(() => filterReservationsBySearch(reservations.value, tables.value, search.value))
+const filteredSessions = computed(() => filterSessionsBySearch(sessions.value, tables.value, reservations.value, search.value))
 
-const normalizedSearch = computed(() => String(search.value || '').trim().toLowerCase())
+const tabOptions = computed(() => [
+  { value: 'floor', label: 'نمای سالن', badge: summary.value.totalTables },
+  { value: 'reservations', label: 'رزروها', badge: filteredReservations.value.length },
+  { value: 'sessions', label: 'سشن‌ها', badge: filteredSessions.value.length },
+])
 
-const tableLabelMap = computed(() => {
-  return tables.value.reduce((acc, row) => {
-    acc[row.name] = row.table_number || row.name
-    return acc
-  }, {})
+const selectedTable = computed(() => tables.value.find((row) => row.name === selectedTableName.value) || null)
+const selectedTableCard = computed(() =>
+  buildFloorTableCards({
+    tables: selectedTable.value ? [selectedTable.value] : [],
+    sessions: sessions.value,
+    reservations: reservations.value,
+  })[0] || null,
+)
+const selectedTableDetail = computed(() =>
+  buildSelectedTableDetail({
+    table: selectedTable.value,
+    session: selectedTableCard.value?.session || null,
+    reservation: selectedTableCard.value?.reservation || null,
+  }),
+)
+
+const selectedReservation = computed(() => reservations.value.find((row) => row.name === selectedReservationName.value) || null)
+const selectedSession = computed(() => sessions.value.find((row) => row.name === selectedSessionName.value) || null)
+
+const hasTableChanges = computed(() => {
+  if (!selectedTable.value) return false
+  return ['table_number', 'status', 'location', 'notes', 'is_active', 'active_session'].some((key) => String(tableDraft[key] ?? '') !== String(selectedTable.value[key] ?? ''))
 })
 
-const filteredTables = computed(() => {
-  if (!normalizedSearch.value) return tables.value
-  return tables.value.filter((row) => {
-    const haystack = [row.table_number, row.location, row.status, row.notes]
-      .map((value) => String(value || '').toLowerCase())
-      .join(' ')
-    return haystack.includes(normalizedSearch.value)
-  })
-})
+watch(selectedTable, (row) => {
+  Object.assign(tableDraft, createTableDraft(), row || {})
+}, { immediate: true })
 
-const filteredReservations = computed(() => {
-  if (!normalizedSearch.value) return reservations.value
-  return reservations.value.filter((row) => {
-    const haystack = [row.customer_name, row.mobile, row.branch, row.table, row.status, row.note]
-      .map((value) => String(value || '').toLowerCase())
-      .join(' ')
-    return haystack.includes(normalizedSearch.value)
-  })
-})
+watch(selectedReservation, (row) => {
+  Object.assign(reservationDraft, createReservationDraft(), row || {})
+}, { immediate: true })
 
-const filteredSessions = computed(() => {
-  if (!normalizedSearch.value) return sessions.value
-  return sessions.value.filter((row) => {
-    const haystack = [row.table, row.status, row.note]
-      .map((value) => String(value || '').toLowerCase())
-      .join(' ')
-    return haystack.includes(normalizedSearch.value)
-  })
-})
+watch(selectedSession, (row) => {
+  Object.assign(sessionDraft, createSessionDraft(), row || {})
+}, { immediate: true })
 
-const emptyTablesCount = computed(() => tables.value.filter((row) => String(row.status || '').toLowerCase() === 'empty').length)
-const waitingTablesCount = computed(() => tables.value.filter((row) => String(row.status || '').toLowerCase() === 'waiting').length)
-const occupiedTablesCount = computed(() => tables.value.filter((row) => String(row.status || '').toLowerCase() === 'occupied').length)
+function createTableDraft() {
+  return {
+    name: '',
+    table_number: '',
+    status: 'empty',
+    is_active: 1,
+    location: '',
+    active_session: '',
+    notes: '',
+  }
+}
 
-function formatDateTime(value) {
-  const text = String(value || '').trim()
-  if (!text) return '-'
-  try {
-    return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(text))
-  } catch (_) {
-    return text
+function createReservationDraft() {
+  return {
+    name: '',
+    customer_name: '',
+    mobile: '',
+    branch: '',
+    table: '',
+    reservation_date: '',
+    reservation_time: '',
+    guest_count: 1,
+    status: 'pending',
+    note: '',
+  }
+}
+
+function createSessionDraft() {
+  return {
+    name: '',
+    table: '',
+    status: 'active',
+    opened_at: '',
+    closed_at: '',
+    total_confirmed_amount: 0,
+    note: '',
+    customer_name: '',
+    customer_mobile: '',
+    guest_count: 0,
+  }
+}
+
+function ensureSelections() {
+  if (tables.value.length && !tables.value.some((row) => row.name === selectedTableName.value)) {
+    selectedTableName.value = tables.value[0].name
+  }
+  const sortedReservations = sortReservations(reservations.value)
+  if (sortedReservations.length && !reservations.value.some((row) => row.name === selectedReservationName.value)) {
+    selectedReservationName.value = sortedReservations[0].name
+  }
+  if (sessions.value.length && !sessions.value.some((row) => row.name === selectedSessionName.value)) {
+    selectedSessionName.value = sessions.value[0].name
   }
 }
 
@@ -288,6 +298,7 @@ async function loadTables() {
     reservations.value = Array.isArray(payload?.reservations) ? payload.reservations : []
     sessions.value = Array.isArray(payload?.sessions) ? payload.sessions : []
     currency.value = String(payload?.currency || 'IRR').trim() || 'IRR'
+    ensureSelections()
   } catch (loadError) {
     error.value = loadError.message || 'بارگذاری میزها ناموفق بود.'
   } finally {
@@ -295,13 +306,14 @@ async function loadTables() {
   }
 }
 
-async function withSaveState(key, action) {
+async function withSaveState(key, action, successText = 'تغییرات با موفقیت ذخیره شد.') {
+  if (!key) return
   savingMap[key] = true
   error.value = ''
   successMessage.value = ''
   try {
     await action()
-    successMessage.value = 'تغییرات با موفقیت ذخیره شد.'
+    successMessage.value = successText
     await loadTables()
   } catch (saveError) {
     error.value = saveError.message || 'ذخیره اطلاعات ناموفق بود.'
@@ -310,7 +322,31 @@ async function withSaveState(key, action) {
   }
 }
 
-async function saveTable(row) {
+function updateTableDraftField({ key, value }) {
+  tableDraft[key] = value
+}
+
+function updateReservationDraftField({ key, value }) {
+  reservationDraft[key] = value
+}
+
+function updateSessionDraftField({ key, value }) {
+  sessionDraft[key] = value
+}
+
+function selectTable(table) {
+  selectedTableName.value = table?.name || ''
+}
+
+function selectReservation(name) {
+  selectedReservationName.value = name || ''
+}
+
+function selectSession(name) {
+  selectedSessionName.value = name || ''
+}
+
+async function saveTable(row = tableDraft) {
   await withSaveState(row.name, () =>
     updateManagementTable({
       name: row.name,
@@ -324,7 +360,7 @@ async function saveTable(row) {
   )
 }
 
-async function saveReservation(row) {
+async function saveReservation(row = reservationDraft) {
   await withSaveState(row.name, () =>
     updateManagementTableReservation({
       name: row.name,
@@ -341,7 +377,7 @@ async function saveReservation(row) {
   )
 }
 
-async function saveSession(row) {
+async function saveSession(row = sessionDraft) {
   await withSaveState(row.name, () =>
     updateManagementTableSession({
       name: row.name,
@@ -351,38 +387,79 @@ async function saveSession(row) {
   )
 }
 
+function resolveActiveSession(table) {
+  if (!table) return null
+  const explicitSession = sessions.value.find((row) => row.name === table.active_session)
+  if (explicitSession) return explicitSession
+  return sessions.value.find((row) => row.table === table.name && row.status === 'active') || null
+}
+
+async function clearTableSession(table) {
+  const targetTable = table?.name ? table : selectedTable.value
+  const session = resolveActiveSession(targetTable)
+  if (!session?.name) {
+    error.value = 'برای این میز سشن فعالی پیدا نشد.'
+    return
+  }
+  if (!window.confirm(`سشن فعال ${targetTable.table_number || targetTable.name} بسته شود؟`)) return
+  await withSaveState(session.name, () => closeTableSession(session.name), 'میز با موفقیت خالی شد.')
+}
+
+function goToPos(table) {
+  const target = String(table?.name || table?.table_number || '').trim()
+  const query = target ? `?table=${encodeURIComponent(target)}` : ''
+  window.location.assign(`/management/pos${query}`)
+}
+
+function openReservationsForTable(table) {
+  activeTab.value = 'reservations'
+  const linked = reservations.value.find((row) => row.table === table?.name)
+  selectedReservationName.value = linked?.name || ''
+  if (!linked && table?.table_number) {
+    search.value = table.table_number
+  }
+}
+
+function jumpToTable(tableName) {
+  activeTab.value = 'floor'
+  selectedTableName.value = tableName || ''
+}
+
 loadTables()
 </script>
 
 <style scoped>
-.grid-2 {
+.hero-toolbar,
+.hero-stats,
+.hero-actions,
+.floor-layout,
+.floor-main,
+.floor-grid,
+.section-picker,
+.simple-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
 }
 
 .hero-toolbar {
-  display: grid;
-  gap: 0.75rem;
+  gap: 0.8rem;
 }
 
 .hero-stats {
-  display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
 .stat-card {
   border-radius: 14px;
-  padding: 0.65rem;
-  background: rgb(var(--palette-eggshell-rgb) / 0.62);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+  padding: 0.72rem;
+  background: rgb(var(--palette-eggshell-rgb, 248 244 237) / 0.7);
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 15 23 42) / 0.14);
   display: grid;
-  gap: 0.18rem;
+  gap: 0.2rem;
 }
 
 .stat-card small {
-  color: var(--text-muted);
+  color: var(--text-muted, #6b7280);
   font-size: 0.73rem;
 }
 
@@ -391,11 +468,11 @@ loadTables()
 }
 
 .stat-card--success {
-  background: rgb(var(--palette-june-bud-rgb) / 0.16);
+  background: rgb(var(--palette-june-bud-rgb, 174 214 97) / 0.16);
 }
 
 .stat-card--warning {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.12);
+  background: rgb(var(--palette-deep-saffron-rgb, 244 180 0) / 0.12);
 }
 
 .stat-card--danger {
@@ -403,48 +480,134 @@ loadTables()
 }
 
 .hero-actions {
-  display: flex;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.6rem;
   align-items: center;
 }
 
 .hero-search {
-  flex: 1;
+  min-width: 0;
 }
 
-.inline-input {
-  min-width: 110px;
-}
-
-.row-actions {
-  display: inline-flex;
-  gap: 0.35rem;
-}
-
-.check-inline {
-  display: inline-flex;
-  gap: 0.35rem;
+.section-picker {
   align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.simple-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+
+.simple-tab {
+  min-height: 2.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #6b7280);
+  padding: 0.34rem 0.68rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  touch-action: manipulation;
+}
+
+.simple-tab:active {
+  transform: scale(0.98);
+}
+
+.simple-tab.active {
+  background: var(--surface-raised, #fff);
+  color: var(--brand-600, #8b5e3c);
+  border-color: rgb(139 94 60 / 0.2);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.06);
+}
+
+.tab-badge {
+  min-width: 1.32rem;
+  min-height: 1.32rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 0.34rem;
+  background: rgb(139 94 60 / 0.1);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.floor-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 420px);
+  gap: 0.95rem;
+  align-items: start;
+}
+
+.floor-main {
+  gap: 0.8rem;
+}
+
+.floor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.floor-toolbar small {
+  color: var(--text-muted, #6b7280);
+}
+
+.floor-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.85rem;
+}
+
+.empty-surface {
+  min-height: 220px;
+  border-radius: 10px;
+  background: var(--surface-raised, rgb(255 255 255 / 0.92));
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 15 23 42) / 0.1);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 0.05);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 0.4rem;
+  padding: 1rem;
+}
+
+.empty-surface p,
+.success,
+.error {
+  margin: 0;
+}
+
+.empty-surface p {
+  color: var(--text-muted, #6b7280);
 }
 
 .success {
-  margin: 0;
-  color: var(--accent-green);
+  color: var(--accent-green, #4b7d3b);
 }
 
 .error {
-  margin: 0;
-  color: var(--danger);
+  color: var(--danger, #b84f4f);
 }
 
 @media (max-width: 1180px) {
   .hero-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-}
 
-@media (max-width: 980px) {
-  .grid-2 {
+  .floor-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -455,8 +618,22 @@ loadTables()
   }
 
   .hero-actions {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .section-picker {
     align-items: stretch;
+  }
+
+  .simple-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+
+  .simple-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 }
 </style>

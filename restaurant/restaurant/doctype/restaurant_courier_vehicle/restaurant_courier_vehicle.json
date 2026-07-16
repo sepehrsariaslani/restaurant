@@ -1,0 +1,39 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RCF-{#####}",
+  "creation": "2026-07-16 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "courier",
+    "title",
+    "vehicle_type",
+    "plate_number",
+    "is_primary",
+    "is_active",
+    "notes"
+  ],
+  "fields": [
+    {"fieldname": "courier", "fieldtype": "Link", "in_list_view": 1, "label": "Courier", "options": "Restaurant Courier", "reqd": 1},
+    {"fieldname": "title", "fieldtype": "Data", "in_list_view": 1, "label": "Title"},
+    {"fieldname": "vehicle_type", "fieldtype": "Data", "in_list_view": 1, "label": "Vehicle Type", "reqd": 1},
+    {"fieldname": "plate_number", "fieldtype": "Data", "in_list_view": 1, "label": "Plate Number", "reqd": 1, "unique": 1},
+    {"default": "0", "fieldname": "is_primary", "fieldtype": "Check", "in_list_view": 1, "label": "Is Primary"},
+    {"default": "1", "fieldname": "is_active", "fieldtype": "Check", "in_list_view": 1, "label": "Is Active"},
+    {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes"}
+  ],
+  "links": [],
+  "modified": "2026-07-16 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Courier Vehicle",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+    {"read": 1, "role": "Desk User"}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

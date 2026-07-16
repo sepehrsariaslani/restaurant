@@ -10160,6 +10160,7 @@ def get_management_tables():
 			limit_page_length=500,
 		)
 		for row in session_rows:
+			customer_payload = _sanitize_table_session_customer(_extract_table_session_meta(row.get("note")))
 			sessions.append(
 				{
 					"name": row.get("name"),
@@ -10169,6 +10170,7 @@ def get_management_tables():
 					"closed_at": str(row.get("closed_at") or ""),
 					"total_confirmed_amount": flt(row.get("total_confirmed_amount") or 0),
 					"note": row.get("note") or "",
+					**customer_payload,
 				}
 			)
 
@@ -13774,6 +13776,7 @@ def get_management_dashboard(date_from=None, date_to=None, branch=None):
 		"recent_orders": orders[:10],
 		"hardware": _management_hardware_summary(date_from=date_from, date_to=date_to),
 		"operational": _management_operational_metrics(date_from=date_from, date_to=date_to),
+		"courier_fleet": _management_courier_summary(),
 	}
 
 
@@ -13884,59 +13887,76 @@ def report_management_pos_hardware_event(
 
 @frappe.whitelist()
 def get_management_pos_config():
-    """Get POS default configuration (order mode defaults, place presets)."""
-    _ensure_management_access()
-    raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if not raw:
-            raw = "{}"
-    try:
-        config = json.loads(raw) if isinstance(raw, str) else raw
-    except (json.JSONDecodeError, TypeError):
-        config = {}
-    
-    defaults = {
-        "default_order_mode": config.get("default_order_mode", "dine_in"),
-        "default_customers": config.get("default_customers", {
-            "dine_in": {"name": "POS Customer", "mobile": "09120000000"},
-            "takeaway": {"name": "POS Customer", "mobile": "09120000000"},
-            "delivery": {"name": "POS Customer", "mobile": "09120000000"},
-        }),
-        "takeaway_places": config.get("takeaway_places", ["بیرون بر حضوری", "تحویل کنار سالن"]),
-        "default_takeaway_place": config.get("default_takeaway_place", "بیرون بر حضوری"),
-        "delivery_places": config.get("delivery_places", ["پیک 1", "پیک 2", "پیک 3", "ارسال اکسپرس"]),
-        "default_delivery_place": config.get("default_delivery_place", "پیک 1"),
-    }
-    return defaults
+	"""Get POS default configuration (order mode defaults, place presets)."""
+	_ensure_management_access()
+	raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
+	if isinstance(raw, str):
+		raw = raw.strip()
+		if not raw:
+			raw = "{}"
+	try:
+		config = json.loads(raw) if isinstance(raw, str) else raw
+	except (json.JSONDecodeError, TypeError):
+		config = {}
+
+	delivery_couriers = _list_management_courier_options(active_only=True)
+	default_delivery_courier = (config.get("default_delivery_courier") or "").strip()
+	if not default_delivery_courier and delivery_couriers:
+		default_delivery_courier = delivery_couriers[0].get("label") or ""
+
+	defaults = {
+		"default_order_mode": config.get("default_order_mode", "dine_in"),
+		"default_customers": config.get(
+			"default_customers",
+			{
+				"dine_in": {"name": "POS Customer", "mobile": "09120000000"},
+				"takeaway": {"name": "POS Customer", "mobile": "09120000000"},
+				"delivery": {"name": "POS Customer", "mobile": "09120000000"},
+			},
+		),
+		"takeaway_places": config.get("takeaway_places", ["بیرون بر حضوری", "تحویل کنار سالن"]),
+		"default_takeaway_place": config.get("default_takeaway_place", "بیرون بر حضوری"),
+		"delivery_places": config.get("delivery_places", ["پیک 1", "پیک 2", "پیک 3", "ارسال اکسپرس"]),
+		"default_delivery_place": config.get("default_delivery_place", "پیک 1"),
+		"default_delivery_courier": default_delivery_courier,
+		"delivery_couriers": delivery_couriers,
+	}
+	return defaults
 
 
 @frappe.whitelist()
 def set_management_pos_config(payload=None):
-    """Save POS default configuration for the current user/operator."""
-    _ensure_management_access()
-    data = _parse_json(payload, {})
-    if not isinstance(data, dict):
-        frappe.throw(_("Invalid payload format."))
-    
-    raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if not raw:
-            raw = "{}"
-    try:
-        current = json.loads(raw) if isinstance(raw, str) else raw
-    except (json.JSONDecodeError, TypeError):
-        current = {}
-    
-    for key in ("default_order_mode", "default_customers", "takeaway_places",
-                "default_takeaway_place", "delivery_places", "default_delivery_place"):
-        if key in data:
-            current[key] = data[key]
-    
-    frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
-    frappe.db.commit()
-    return {"status": "success", "config": get_management_pos_config()}
+	"""Save POS default configuration for the current user/operator."""
+	_ensure_management_access()
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid payload format."))
+
+	raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
+	if isinstance(raw, str):
+		raw = raw.strip()
+		if not raw:
+			raw = "{}"
+	try:
+		current = json.loads(raw) if isinstance(raw, str) else raw
+	except (json.JSONDecodeError, TypeError):
+		current = {}
+
+	for key in (
+		"default_order_mode",
+		"default_customers",
+		"takeaway_places",
+		"default_takeaway_place",
+		"delivery_places",
+		"default_delivery_place",
+		"default_delivery_courier",
+	):
+		if key in data:
+			current[key] = data[key]
+
+	frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
+	frappe.db.commit()
+	return {"status": "success", "config": get_management_pos_config()}
 
 
 
@@ -18094,6 +18114,282 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 	}
 
 
+def _serialize_management_courier(row, vehicle_count_map=None):
+	vehicle_count_map = vehicle_count_map or {}
+	return {
+		"name": row.get("name") or "",
+		"courier_name": (row.get("courier_name") or "").strip(),
+		"courier_code": (row.get("courier_code") or "").strip(),
+		"mobile": (row.get("mobile") or "").strip(),
+		"vehicle_type": (row.get("vehicle_type") or "").strip(),
+		"plate_number": (row.get("plate_number") or "").strip(),
+		"zone": (row.get("zone") or "").strip(),
+		"assignment_priority": cint(row.get("assignment_priority") or 0),
+		"is_active": cint(row.get("is_active") or 0),
+		"notes": (row.get("notes") or "").strip(),
+		"vehicle_count": cint(vehicle_count_map.get(row.get("name")) or 0),
+		"modified": _json_safe_datetime(row.get("modified")),
+	}
+
+
+def _serialize_management_courier_vehicle(row, courier_map=None):
+	courier_map = courier_map or {}
+	courier_name = (row.get("courier") or "").strip()
+	courier_row = courier_map.get(courier_name) or {}
+	return {
+		"name": row.get("name") or "",
+		"title": (row.get("title") or "").strip(),
+		"courier": courier_name,
+		"courier_label": (courier_row.get("courier_name") or courier_name).strip(),
+		"vehicle_type": (row.get("vehicle_type") or "").strip(),
+		"plate_number": (row.get("plate_number") or "").strip(),
+		"is_primary": cint(row.get("is_primary") or 0),
+		"is_active": cint(row.get("is_active") or 0),
+		"notes": (row.get("notes") or "").strip(),
+		"modified": _json_safe_datetime(row.get("modified")),
+	}
+
+
+def _management_courier_vehicle_count_map():
+	if not frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		return {}
+	rows = frappe.get_all(
+		"Restaurant Courier Vehicle",
+		fields=["courier"],
+		filters={},
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	counts = {}
+	for row in rows:
+		courier_name = (row.get("courier") or "").strip()
+		if courier_name:
+			counts[courier_name] = cint(counts.get(courier_name) or 0) + 1
+	return counts
+
+
+def _management_courier_summary():
+	summary = {
+		"courier_count": 0,
+		"active_courier_count": 0,
+		"vehicle_count": 0,
+		"active_vehicle_count": 0,
+	}
+	if frappe.db.exists("DocType", "Restaurant Courier"):
+		summary["courier_count"] = cint(frappe.db.count("Restaurant Courier"))
+		summary["active_courier_count"] = cint(frappe.db.count("Restaurant Courier", {"is_active": 1}))
+	if frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		summary["vehicle_count"] = cint(frappe.db.count("Restaurant Courier Vehicle"))
+		summary["active_vehicle_count"] = cint(
+			frappe.db.count("Restaurant Courier Vehicle", {"is_active": 1})
+		)
+	return summary
+
+
+def _list_management_courier_options(active_only=True):
+	if not frappe.db.exists("DocType", "Restaurant Courier"):
+		return []
+	filters = {}
+	if active_only:
+		filters["is_active"] = 1
+	rows = frappe.get_all(
+		"Restaurant Courier",
+		fields=["name", "courier_name", "courier_code", "mobile", "zone", "assignment_priority"],
+		filters=filters,
+		order_by="assignment_priority asc, courier_name asc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	return [
+		{
+			"name": row.get("name") or "",
+			"label": (row.get("courier_name") or "").strip(),
+			"courier_code": (row.get("courier_code") or "").strip(),
+			"mobile": (row.get("mobile") or "").strip(),
+			"zone": (row.get("zone") or "").strip(),
+		}
+		for row in rows
+	]
+
+
+@frappe.whitelist()
+def list_management_couriers(search=None, active_only=None):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", "Restaurant Courier"):
+		return {"couriers": [], "summary": _management_courier_summary()}
+	search_text = (search or "").strip().lower()
+	filters = {}
+	if cint(active_only):
+		filters["is_active"] = 1
+	fields = [
+		"name",
+		"courier_name",
+		"courier_code",
+		"mobile",
+		"vehicle_type",
+		"plate_number",
+		"zone",
+		"assignment_priority",
+		"is_active",
+		"notes",
+		"modified",
+	]
+	or_filters = None
+	if search_text:
+		or_filters = {
+			"courier_name": ["like", f"%{search_text}%"],
+			"courier_code": ["like", f"%{search_text}%"],
+			"mobile": ["like", f"%{search_text}%"],
+			"plate_number": ["like", f"%{search_text}%"],
+			"zone": ["like", f"%{search_text}%"],
+		}
+	rows = frappe.get_all(
+		"Restaurant Courier",
+		fields=fields,
+		filters=filters,
+		or_filters=or_filters,
+		order_by="assignment_priority asc, courier_name asc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	vehicle_count_map = _management_courier_vehicle_count_map()
+	return {
+		"couriers": [_serialize_management_courier(row, vehicle_count_map) for row in rows],
+		"summary": _management_courier_summary(),
+	}
+
+
+@frappe.whitelist()
+def save_management_courier(payload=None):
+	_ensure_management_access()
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid payload format."))
+	docname = (data.get("name") or "").strip()
+	if docname and frappe.db.exists("Restaurant Courier", docname):
+		doc = frappe.get_doc("Restaurant Courier", docname)
+	else:
+		doc = frappe.new_doc("Restaurant Courier")
+	for fieldname in (
+		"courier_name",
+		"courier_code",
+		"mobile",
+		"vehicle_type",
+		"plate_number",
+		"zone",
+		"assignment_priority",
+		"is_active",
+		"notes",
+	):
+		if fieldname in data:
+			doc.set(fieldname, data.get(fieldname))
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success", "courier": _serialize_management_courier(doc.as_dict())}
+
+
+@frappe.whitelist()
+def delete_management_courier(name):
+	_ensure_management_access()
+	docname = (name or "").strip()
+	if not docname or not frappe.db.exists("Restaurant Courier", docname):
+		frappe.throw(_("Courier not found."))
+	linked_vehicle_count = 0
+	if frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		linked_vehicle_count = cint(
+			frappe.db.count("Restaurant Courier Vehicle", {"courier": docname})
+		)
+	if linked_vehicle_count:
+		frappe.throw(_("Delete courier vehicles first."))
+	frappe.delete_doc("Restaurant Courier", docname, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success"}
+
+
+@frappe.whitelist()
+def list_management_courier_vehicles(search=None, courier=None, active_only=None):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		return {"vehicles": [], "summary": _management_courier_summary()}
+	search_text = (search or "").strip().lower()
+	courier_name = (courier or "").strip()
+	filters = {}
+	if courier_name:
+		filters["courier"] = courier_name
+	if cint(active_only):
+		filters["is_active"] = 1
+	or_filters = None
+	if search_text:
+		or_filters = {
+			"title": ["like", f"%{search_text}%"],
+			"plate_number": ["like", f"%{search_text}%"],
+			"vehicle_type": ["like", f"%{search_text}%"],
+		}
+	rows = frappe.get_all(
+		"Restaurant Courier Vehicle",
+		fields=[
+			"name",
+			"title",
+			"courier",
+			"vehicle_type",
+			"plate_number",
+			"is_primary",
+			"is_active",
+			"notes",
+			"modified",
+		],
+		filters=filters,
+		or_filters=or_filters,
+		order_by="is_primary desc, modified desc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	courier_rows = frappe.get_all(
+		"Restaurant Courier",
+		fields=["name", "courier_name"],
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	courier_map = {(row.get("name") or "").strip(): row for row in courier_rows}
+	return {
+		"vehicles": [_serialize_management_courier_vehicle(row, courier_map) for row in rows],
+		"summary": _management_courier_summary(),
+	}
+
+
+@frappe.whitelist()
+def save_management_courier_vehicle(payload=None):
+	_ensure_management_access()
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid payload format."))
+	docname = (data.get("name") or "").strip()
+	if docname and frappe.db.exists("Restaurant Courier Vehicle", docname):
+		doc = frappe.get_doc("Restaurant Courier Vehicle", docname)
+	else:
+		doc = frappe.new_doc("Restaurant Courier Vehicle")
+	for fieldname in ("courier", "title", "vehicle_type", "plate_number", "is_primary", "is_active", "notes"):
+		if fieldname in data:
+			doc.set(fieldname, data.get(fieldname))
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"vehicle": _serialize_management_courier_vehicle(doc.as_dict()),
+	}
+
+
+@frappe.whitelist()
+def delete_management_courier_vehicle(name):
+	_ensure_management_access()
+	docname = (name or "").strip()
+	if not docname or not frappe.db.exists("Restaurant Courier Vehicle", docname):
+		frappe.throw(_("Courier vehicle not found."))
+	frappe.delete_doc("Restaurant Courier Vehicle", docname, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success"}
+
+
 def _management_customer_match(order, mobile="", customer_name=""):
 	normalized_mobile = (mobile or "").strip()
 	normalized_name = (customer_name or "").strip().lower()
@@ -18887,15 +19183,14 @@ def _get_session_request_docs(session_name):
 def _refresh_session_total_confirmed_amount(session_name):
 	rows = frappe.get_all(
 		"Restaurant Table Order",
-		fields=[{"sum": "grand_total", "as": "total"}],
+		fields=["grand_total"],
 		filters={
 			"session": session_name,
 			"status": ["in", list(TABLE_ORDER_BILLING_STATUSES)],
 		},
-		limit_page_length=1,
 		ignore_permissions=True,
 	)
-	total = flt((rows[0].get("total") if rows else 0) or 0)
+	total = sum(flt(row.get("grand_total") or 0) for row in (rows or []))
 	frappe.db.set_value(
 		"Restaurant Table Session",
 		session_name,

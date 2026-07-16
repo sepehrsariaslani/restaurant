@@ -1271,6 +1271,30 @@ export function setManagementPOSConfig(payload = {}) {
 	return callRestaurantAPI("set_management_pos_config", { payload });
 }
 
+export function listManagementCouriers({ search = "", active_only = 0 } = {}) {
+	return callRestaurantAPI("list_management_couriers", { search, active_only });
+}
+
+export function saveManagementCourier(payload = {}) {
+	return callRestaurantAPI("save_management_courier", { payload });
+}
+
+export function deleteManagementCourier(name = "") {
+	return callRestaurantAPI("delete_management_courier", { name });
+}
+
+export function listManagementCourierVehicles({ search = "", courier = "", active_only = 0 } = {}) {
+	return callRestaurantAPI("list_management_courier_vehicles", { search, courier, active_only });
+}
+
+export function saveManagementCourierVehicle(payload = {}) {
+	return callRestaurantAPI("save_management_courier_vehicle", { payload });
+}
+
+export function deleteManagementCourierVehicle(name = "") {
+	return callRestaurantAPI("delete_management_courier_vehicle", { name });
+}
+
 export function getManagementPOSHardwareStatus() {
 	return callRestaurantAPI("get_management_pos_hardware_status");
 }

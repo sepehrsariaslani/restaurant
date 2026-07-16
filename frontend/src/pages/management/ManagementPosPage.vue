@@ -1035,6 +1035,10 @@ const placeOptions = computed(() => {
     return ['میز 1', 'میز 2', 'میز 3', 'میز 4', 'میز VIP']
   }
   if (form.order_mode === 'delivery') {
+    const couriers = Array.isArray(cfg.delivery_couriers) ? cfg.delivery_couriers : []
+    if (couriers.length) {
+      return couriers.map((row) => row.label).filter(Boolean)
+    }
     const places = cfg.delivery_places
     return Array.isArray(places) && places.length ? places : ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
   }
@@ -1911,7 +1915,7 @@ function setOrderMode(mode) {
   if (mode === 'takeaway') {
     form.place = cfg.default_takeaway_place || (placeOptions.value[0] || '')
   } else if (mode === 'delivery') {
-    form.place = cfg.default_delivery_place || (placeOptions.value[0] || '')
+    form.place = cfg.default_delivery_courier || cfg.default_delivery_place || (placeOptions.value[0] || '')
   } else {
     form.place = placeOptions.value[0] || ''
   }
@@ -4331,6 +4335,11 @@ async function loadPOSBoot() {
       form.order_mode = defaultOrderMode
       form.customer_name = modeCustomer.name || 'مشتری POS'
       form.mobile = modeCustomer.mobile || '09120000000'
+      if (defaultOrderMode === 'delivery') {
+        form.place = cfg.default_delivery_courier || cfg.default_delivery_place || ''
+      } else if (defaultOrderMode === 'takeaway') {
+        form.place = cfg.default_takeaway_place || ''
+      }
     }
 
     const bootPayment = payload.payment || {}

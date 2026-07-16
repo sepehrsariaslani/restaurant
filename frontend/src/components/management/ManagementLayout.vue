@@ -563,6 +563,15 @@ const navLinks = computed(() => {
 			group: "sales",
 		},
 		{
+			key: "management-couriers",
+			label: "پیک‌ها",
+			shortLabel: "پیک",
+			caption: "ناوگان و تخصیص",
+			iconComponent: UsersIcon,
+			url: "/management/couriers",
+			group: "sales",
+		},
+		{
 			key: "management-orders",
 			label: "سفارش‌ها",
 			shortLabel: "سفارش",

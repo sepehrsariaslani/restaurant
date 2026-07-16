@@ -138,6 +138,35 @@
         </ManagementSurfaceCard>
       </section>
 
+      <ManagementSurfaceCard
+        v-if="widgetState.kpis"
+        title="پیک‌ها و ناوگان"
+        subtitle="ورود سریع به مدیریت پیک‌ها و خلاصه ظرفیت فعال"
+      >
+        <div class="mini-matrix">
+          <article>
+            <small>پیک فعال</small>
+            <strong>{{ Number(courierFleet.active_courier_count || 0).toLocaleString('fa-IR') }}</strong>
+            <a href="/management/couriers">مدیریت پیک‌ها</a>
+          </article>
+          <article>
+            <small>کل پیک‌ها</small>
+            <strong>{{ Number(courierFleet.courier_count || 0).toLocaleString('fa-IR') }}</strong>
+            <a href="/management/couriers">جزئیات</a>
+          </article>
+          <article>
+            <small>وسیله فعال</small>
+            <strong>{{ Number(courierFleet.active_vehicle_count || 0).toLocaleString('fa-IR') }}</strong>
+            <a href="/management/couriers">ناوگان</a>
+          </article>
+          <article>
+            <small>کل وسیله‌ها</small>
+            <strong>{{ Number(courierFleet.vehicle_count || 0).toLocaleString('fa-IR') }}</strong>
+            <a href="/management/couriers">نمایش همه</a>
+          </article>
+        </div>
+      </ManagementSurfaceCard>
+
       <section class="panel-grid" v-if="widgetState.sales_financial || widgetState.time_trend || widgetState.cost_control">
         <ManagementSurfaceCard title="فروش/هزینه" subtitle="فروش کل، هزینه، فروش بازگشتی و انتظار فروش" v-if="widgetState.sales_financial">
           <div class="legend-checks">
@@ -462,6 +491,7 @@ const menuEngineering = ref({
 const dashboardNutrition = ref({})
 const lostOrders = ref({ summary: { total: 0, lost_total: 0, cancelled_invoice: 0, voided: 0 }, labels: [], values: [] })
 const productCategoryMap = ref({})
+const courierFleet = ref({ courier_count: 0, active_courier_count: 0, vehicle_count: 0, active_vehicle_count: 0 })
 
 const specialColumns = [
   { key: 'customer_name', label: 'مشتری' },
@@ -945,6 +975,7 @@ async function loadDashboard() {
     const dashboardTopProducts = Array.isArray(dashboardCurrent?.top_products) ? dashboardCurrent.top_products : []
     menuEngineering.value = buildMenuEngineering((topProductsCurrent.rows || []).length ? topProductsCurrent.rows || [] : dashboardTopProducts)
     dashboardNutrition.value = dashboardCurrent?.nutrition || {}
+    courierFleet.value = dashboardCurrent?.courier_fleet || { courier_count: 0, active_courier_count: 0, vehicle_count: 0, active_vehicle_count: 0 }
 
     lostOrders.value = buildLostOrderDataset({
       orderStatusRows: orderStatusCurrent.rows || [],
