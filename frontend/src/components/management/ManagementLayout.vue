@@ -612,16 +612,16 @@ const moduleThemeVars = computed(() => {
 			"--module-500": "#f4e6d3",
 			"--module-600": "#fff3e2",
 			"--module-50": "rgb(244 230 211 / 0.13)",
-			"--module-title-light": "#0f172a",
+			"--module-title-light": "var(--mg-text-main)",
 			"--module-title-dark": "#fff7ed",
 		};
 	}
 
 	return {
-		"--module-500": "#8b5e34",
-		"--module-600": "#6f4726",
+		"--module-500": "var(--mg-primary)",
+		"--module-600": "var(--mg-primary)",
 		"--module-50": "rgb(139 94 52 / 0.075)",
-		"--module-title-light": "#0f172a",
+		"--module-title-light": "var(--mg-text-main)",
 		"--module-title-dark": "#fff7ed",
 	};
 });
@@ -1318,8 +1318,8 @@ onBeforeUnmount(() => {
 	}
 
 	.dfm-toggle-btn {
-		width: 3.8rem;
-		height: 3.8rem;
+		width: 3.2rem;
+		height: 3.2rem;
 		border-radius: 50%;
 		background: var(--mg-bg-surface);
 		color: var(--mg-primary);
@@ -1366,8 +1366,8 @@ onBeforeUnmount(() => {
 	}
 
 	.dfm-burger {
-		width: 22px;
-		height: 16px;
+		width: 18px;
+		height: 14px;
 		position: relative;
 	}
 	.dfm-line {

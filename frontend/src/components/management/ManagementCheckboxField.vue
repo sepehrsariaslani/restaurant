@@ -59,7 +59,7 @@ defineEmits(['update:modelValue'])
   align-items: center;
   gap: 0.7rem;
   padding: 0.7rem 0.8rem;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 14px;
   background: var(--bg-card, #fff);
   cursor: pointer;
@@ -115,8 +115,8 @@ defineEmits(['update:modelValue'])
 }
 
 .checkbox-field.checked .checkbox-box {
-  background: var(--module-500, #8b5e34);
-  border-color: var(--module-500, #8b5e34);
+  background: var(--module-500, var(--mg-primary));
+  border-color: var(--module-500, var(--mg-primary));
 }
 
 .checkbox-field.checked .checkbox-indicator {
@@ -132,13 +132,13 @@ defineEmits(['update:modelValue'])
 .checkbox-copy strong {
   font-size: 0.84rem;
   line-height: 1.5;
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
 }
 
 .checkbox-copy small {
   font-size: 0.74rem;
   line-height: 1.55;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .checkbox-field:focus-within {

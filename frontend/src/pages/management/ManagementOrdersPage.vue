@@ -867,18 +867,18 @@ if (isOrderDetailView.value) {
 
 /* Status variants */
 .status-new { background: var(--mg-danger-bg); color: var(--mg-danger); border-color: var(--mg-border-light); }
-.status-confirmed, .status-preparing { background: rgba(221, 167, 123, 0.15); color: #8C5E35; border-color: rgba(221, 167, 123, 0.3); }
+.status-confirmed, .status-preparing { background: rgba(221, 167, 123, 0.15); color: #8c5e35; border-color: rgba(221, 167, 123, 0.3); }
 .status-ready { background: var(--mg-danger-bg); color: var(--mg-primary); border-color: var(--mg-primary); }
 .status-delivered { background: var(--mg-bg-soft); color: var(--mg-text-muted); border-color: var(--mg-border-light); }
 .status-cancelled { background: var(--mg-danger-bg); color: var(--mg-danger); border-color: var(--mg-border-light); }
 
-:global(.dark) .status-confirmed, :global(.dark) .status-preparing { background: rgba(221, 167, 123, 0.1); color: #DDA77B; border-color: rgba(221, 167, 123, 0.2); }
+:global(.dark) .status-confirmed, :global(.dark) .status-preparing { background: rgba(221, 167, 123, 0.1); color: #dda77b; border-color: rgba(221, 167, 123, 0.2); }
 
 /* Payment variants */
 .pay-paid { background: rgba(110, 118, 74, 0.15); color: var(--mg-success); border-color: rgba(110, 118, 74, 0.3); }
 .pay-unpaid { background: var(--mg-danger-bg); color: var(--mg-danger); border-color: var(--mg-border-light); }
 
-:global(.dark) .pay-paid { background: rgba(110, 118, 74, 0.1); color: #88935C; }
+:global(.dark) .pay-paid { background: rgba(110, 118, 74, 0.1); color: #88935c; }
 
 .order-row-meta {
   display: flex;
@@ -1156,7 +1156,7 @@ if (isOrderDetailView.value) {
 .primary-btn:hover:not(:disabled) {
   background: var(--mg-primary-hover);
 }
-:global(.dark) .primary-btn { color: #1A130D; }
+:global(.dark) .primary-btn { color: var(--mg-text-main); }
 
 .secondary-btn {
   background: var(--mg-bg-surface);

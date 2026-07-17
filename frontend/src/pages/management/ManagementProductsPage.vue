@@ -1519,9 +1519,9 @@ loadProducts()
 .group-header-btn {
   width: 100%;
   min-height: 2.85rem;
-  border: 1px solid var(--border, #e2e8f0);
-  background: var(--bg-soft, #f1f5f9);
-  color: var(--text, #0f172a);
+  border: 1px solid var(--border, var(--mg-border-light));
+  background: var(--bg-soft, var(--mg-bg-page));
+  color: var(--text, var(--mg-text-main));
   border-radius: 12px;
   padding: 0.58rem 0.7rem;
   display: grid;
@@ -1562,7 +1562,7 @@ loadProducts()
 
 .state-pill.on {
   background: rgb(220 252 231 / 0.9);
-  color: #166534;
+  color: var(--mg-success);
 }
 
 .state-pill.off {
@@ -1671,8 +1671,8 @@ loadProducts()
   height: 64px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--border, #e2e8f0);
-  background: var(--bg-soft, #f1f5f9);
+  border: 1px solid var(--border, var(--mg-border-light));
+  background: var(--bg-soft, var(--mg-bg-page));
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -1685,7 +1685,7 @@ loadProducts()
 }
 
 .product-card__fallback {
-  color: var(--module-600, #6f4726);
+  color: var(--module-600, var(--mg-primary));
   font-size: 0.84rem;
   font-weight: 700;
 }
@@ -1697,7 +1697,7 @@ loadProducts()
 
 .product-card__title {
   margin: 0;
-  color: var(--text, #0f172a);
+  color: var(--text, var(--mg-text-main));
   font-size: 0.96rem;
   font-weight: 800;
   line-height: 1.45;
@@ -1706,7 +1706,7 @@ loadProducts()
 .product-card__sub {
   margin: 0.18rem 0 0;
   font-size: 0.82rem;
-  color: var(--muted, #64748b);
+  color: var(--muted, var(--mg-text-muted));
   line-height: 1.6;
 }
 
@@ -1716,9 +1716,9 @@ loadProducts()
   gap: 0.45rem;
   padding: 0.65rem;
   border-radius: 8px;
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
   font-size: 0.84rem;
-  color: var(--text, #0f172a);
+  color: var(--text, var(--mg-text-main));
 }
 
 .product-card__totals p {
@@ -1737,7 +1737,7 @@ loadProducts()
 
 .gallery-status.on {
   background: rgb(220 252 231 / 0.95);
-  color: #166534;
+  color: var(--mg-success);
 }
 
 .gallery-status.off {
@@ -1929,8 +1929,8 @@ loadProducts()
 }
 
 .tag-pill.more {
-  background: var(--bg-soft, #f1f5f9);
-  color: var(--text, #0f172a);
+  background: var(--bg-soft, var(--mg-bg-page));
+  color: var(--text, var(--mg-text-main));
   font-weight: 600;
 }
 

@@ -120,7 +120,7 @@ function confirmRemove(url) {
   min-height: 5rem;
   border: 1px dashed rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.28);
   border-radius: 12px;
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
   padding: 0.75rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -143,8 +143,8 @@ function confirmRemove(url) {
   height: 2.55rem;
   border-radius: 12px;
   background: var(--bg-card, #fff);
-  border: 1px solid var(--border, #e2e8f0);
-  color: var(--module-500, #8b5e34);
+  border: 1px solid var(--border, var(--mg-border-light));
+  color: var(--module-500, var(--mg-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -162,13 +162,13 @@ function confirmRemove(url) {
 }
 
 .upload-copy strong {
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 0.9rem;
 }
 
 .upload-copy small {
   font-size: 0.78rem;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
   line-height: 1.65;
 }
 
@@ -184,7 +184,7 @@ function confirmRemove(url) {
 }
 
 .image-card {
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
   background: var(--bg-card, #fff);
   padding: 0.5rem;
@@ -194,9 +194,9 @@ function confirmRemove(url) {
 }
 
 .thumb-btn {
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   padding: 0;
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
@@ -236,17 +236,17 @@ function confirmRemove(url) {
 
 .badge.cover {
   background: var(--module-50, rgb(139 94 52 / 0.075));
-  color: var(--module-title-light, #0f172a);
+  color: var(--module-title-light, var(--mg-text-main));
 }
 
 .badge.secondary {
   background: rgb(var(--palette-deep-saffron-rgb) / 0.15);
-  color: var(--module-600, #6f4726);
+  color: var(--module-600, var(--mg-primary));
 }
 
 .badge.muted {
-  background: var(--bg-soft, #f1f5f9);
-  color: var(--text-muted, #64748b);
+  background: var(--bg-soft, var(--mg-bg-page));
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .action-row {

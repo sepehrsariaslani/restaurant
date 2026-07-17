@@ -231,7 +231,7 @@ function formatTimeOnly(value) {
 
 .time-metric { color: var(--mg-primary); font-size: 0.75rem; }
 .res-metric { color: var(--mg-primary); font-weight: 600; }
-.inactive-metric { color: #b84f4f; }
+.inactive-metric { color: var(--mg-danger); }
 
 .card-footer {
   display: flex;
@@ -272,7 +272,7 @@ function formatTimeOnly(value) {
   color: white;
 }
 :global(.dark) .pos-btn {
-  color: #1A130D;
+  color: var(--mg-text-main);
 }
 
 .detail-btn, .clear-btn {

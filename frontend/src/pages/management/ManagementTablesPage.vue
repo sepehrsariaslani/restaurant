@@ -620,7 +620,7 @@ loadTables()
 }
 
 .kpi-dot.empty { background: var(--mg-secondary); }
-.kpi-dot.waiting { background: #DDA77B; } /* Sand/amber */
+.kpi-dot.waiting { background: #dda77b; } /* Sand/amber */
 .kpi-dot.occupied { background: var(--mg-primary); }
 
 .kpi-info {

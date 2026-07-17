@@ -408,7 +408,7 @@ watch(
 .pbw__title p {
   margin: 0.25rem 0 0;
   font-size: 0.82rem;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .pbw__actions {
@@ -421,7 +421,7 @@ watch(
 .pbw__company {
   font-size: 0.78rem;
   font-weight: 700;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
   background: #f1e7db;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
@@ -429,7 +429,7 @@ watch(
 
 .pbw__status {
   font-size: 0.8rem;
-  color: var(--accent-green, #2f8f5b);
+  color: var(--accent-green, var(--mg-success));
   font-weight: 700;
 }
 
@@ -444,13 +444,13 @@ watch(
 }
 
 .pbw__btn--primary {
-  background: var(--accent-green, #2f8f5b);
+  background: var(--accent-green, var(--mg-success));
   color: #fff;
 }
 
 .pbw__btn--ghost {
   background: transparent;
-  border: 1px solid var(--border, #ddd0c2);
+  border: 1px solid var(--border, var(--mg-border-light));
   color: inherit;
 }
 
@@ -464,7 +464,7 @@ watch(
   padding: 0.7rem 0.9rem;
   border-radius: 10px;
   background: #fbe9e9;
-  color: #b84f4f;
+  color: var(--mg-danger);
   font-size: 0.85rem;
 }
 
@@ -485,13 +485,13 @@ watch(
 
 .pbw__card {
   background: #fff;
-  border: 1px solid var(--border, #e6dccf);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 14px;
   padding: 0.9rem;
 }
 
 .pbw__card--muted {
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.85rem;
 }
 
@@ -516,15 +516,15 @@ watch(
   gap: 0.55rem;
   padding: 0.55rem 0.6rem;
   border-radius: 10px;
-  border: 1px solid var(--border, #e6dccf);
+  border: 1px solid var(--border, var(--mg-border-light));
   background: #fdfaf6;
   cursor: grab;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .pbw__block.active {
-  border-color: var(--accent-green, #2f8f5b);
-  background: #f2f8f4;
+  border-color: var(--accent-green, var(--mg-success));
+  background: var(--mg-bg-surface);
 }
 
 .pbw__block.disabled {
@@ -553,7 +553,7 @@ watch(
 
 .pbw__block-info small {
   font-size: 0.72rem;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .pbw__block-tools {
@@ -573,7 +573,7 @@ watch(
 }
 
 .pbw__block-tools button.danger {
-  color: #b84f4f;
+  color: var(--mg-danger);
 }
 
 .pbw__block-tools button:hover {
@@ -582,7 +582,7 @@ watch(
 
 .pbw__empty {
   font-size: 0.82rem;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
   text-align: center;
   padding: 0.8rem;
 }
@@ -594,7 +594,7 @@ watch(
 }
 
 .pbw__palette-item {
-  border: 1px dashed var(--border, #ddd0c2);
+  border: 1px dashed var(--border, var(--mg-border-light));
   background: transparent;
   cursor: pointer;
   padding: 0.6rem 0.5rem;
@@ -611,17 +611,17 @@ watch(
 
 .pbw__palette-item small {
   font-size: 0.68rem;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .pbw__palette-item:hover {
-  border-color: var(--accent-green, #2f8f5b);
-  background: #f2f8f4;
+  border-color: var(--accent-green, var(--mg-success));
+  background: var(--mg-bg-surface);
 }
 
 .pbw__preview {
   background: #fff;
-  border: 1px solid var(--border, #e6dccf);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 14px;
   overflow: hidden;
 }
@@ -631,7 +631,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 0.9rem;
-  border-bottom: 1px solid var(--border, #e6dccf);
+  border-bottom: 1px solid var(--border, var(--mg-border-light));
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -642,7 +642,7 @@ watch(
 }
 
 .pbw__device button {
-  border: 1px solid var(--border, #ddd0c2);
+  border: 1px solid var(--border, var(--mg-border-light));
   background: transparent;
   cursor: pointer;
   padding: 0.3rem 0.7rem;
@@ -652,7 +652,7 @@ watch(
 }
 
 .pbw__device button.active {
-  background: var(--accent-green, #2f8f5b);
+  background: var(--accent-green, var(--mg-success));
   color: #fff;
   border-color: transparent;
 }
@@ -688,7 +688,7 @@ watch(
 
 .pbw__stage--mobile .pbw__viewport {
   max-width: 390px;
-  border: 8px solid #1c1411;
+  border: 8px solid var(--mg-text-main);
   border-radius: 28px;
   overflow: hidden;
 }
@@ -701,7 +701,7 @@ watch(
 }
 
 .pbw__variant {
-  border: 1px solid var(--border, #e6dccf);
+  border: 1px solid var(--border, var(--mg-border-light));
   background: #fff;
   cursor: pointer;
   padding: 0.55rem 0.7rem;
@@ -713,8 +713,8 @@ watch(
 }
 
 .pbw__variant.selected {
-  border-color: var(--accent-green, #2f8f5b);
-  background: #f2f8f4;
+  border-color: var(--accent-green, var(--mg-success));
+  background: var(--mg-bg-surface);
 }
 
 .pbw__variant strong {
@@ -723,7 +723,7 @@ watch(
 
 .pbw__variant small {
   font-size: 0.72rem;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 @media (max-width: 1100px) {

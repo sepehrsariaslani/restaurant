@@ -98,16 +98,16 @@ const label = computed(() => {
 }
 
 /* Earthy Theme Colors
-   Cowhide Cocoa: #442D1C
+   Cowhide Cocoa: #442d1c
    Spiced Wine: #743014
-   Toasted Caramel: #84592B
-   Olive Harvest: #9D9167
-   Golden Batter: #E8D1A7
+   Toasted Caramel: #84592b
+   Olive Harvest: #9d9167
+   Golden Batter: #e8d1a7
 */
 
 .is-empty {
   background: rgba(232, 209, 167, 0.25);
-  color: #84592B;
+  color: #84592b;
   border-color: rgba(232, 209, 167, 0.6);
 }
 
@@ -135,13 +135,13 @@ const label = computed(() => {
 .is-completed,
 .is-closed {
   background: rgba(68, 45, 28, 0.06);
-  color: #442D1C;
+  color: #442d1c;
   border-color: rgba(68, 45, 28, 0.12);
 }
 
 :global(.dark) .is-empty {
   background: rgba(232, 209, 167, 0.1);
-  color: #E8D1A7;
+  color: #e8d1a7;
   border-color: rgba(232, 209, 167, 0.2);
 }
 

@@ -161,8 +161,8 @@ async function uploadImage(file) {
 .preview-panel,
 .drop-panel,
 .url-field {
-  border: 1px solid var(--border, #e2e8f0);
-  background: color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, #f8fafc));
+  border: 1px solid var(--border, var(--mg-border-light));
+  background: color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, var(--mg-bg-page)));
   border-radius: 20px;
 }
 
@@ -187,11 +187,11 @@ async function uploadImage(file) {
   justify-items: center;
   gap: 0.45rem;
   text-align: center;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .empty-preview strong {
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 0.98rem;
 }
 
@@ -229,8 +229,8 @@ async function uploadImage(file) {
   height: 3.25rem;
   border-radius: 18px;
   background: var(--bg-card, #fff);
-  border: 1px solid var(--border, #e2e8f0);
-  color: var(--module-500, #8b5e34);
+  border: 1px solid var(--border, var(--mg-border-light));
+  color: var(--module-500, var(--mg-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -242,13 +242,13 @@ async function uploadImage(file) {
 }
 
 .drop-copy strong {
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 0.95rem;
 }
 
 .drop-copy small,
 .url-field span {
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.78rem;
 }
 
@@ -273,7 +273,7 @@ async function uploadImage(file) {
 }
 
 .danger {
-  color: var(--danger, #dc2626);
+  color: var(--danger, var(--mg-danger));
 }
 
 .spin {

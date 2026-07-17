@@ -122,7 +122,7 @@ function onSearchInput(event) {
 <style scoped>
 .filter-panel {
   border-radius: 18px;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   background: var(--bg-card, #fff);
   box-shadow: var(--shadow-sm, 0 8px 22px rgb(15 23 42 / 0.045));
 }

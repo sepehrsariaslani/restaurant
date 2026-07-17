@@ -406,7 +406,7 @@ bootstrap()
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
   display: grid;
   place-items: center;
-  color: var(--ink-700, #7a6a60);
+  color: var(--ink-700, var(--mg-text-muted));
   font-weight: 900;
   font-size: 1.7rem;
   box-shadow: 0 18px 38px rgb(15 23 42 / 0.08);
@@ -473,7 +473,7 @@ bootstrap()
 
 .soft-pill {
   background: rgb(var(--palette-deep-sapphire-rgb) / 0.1);
-  color: var(--ink-700, #7a6a60);
+  color: var(--ink-700, var(--mg-text-muted));
 }
 
 .ltr {

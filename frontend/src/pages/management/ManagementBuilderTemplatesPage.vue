@@ -171,7 +171,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 2rem;
-  color: #6b7280;
+  color: var(--mg-text-muted);
 }
 .status-badge {
   display: inline-block;
@@ -186,7 +186,7 @@ onMounted(() => {
 }
 .status-badge.inactive {
   background: #f3f4f6;
-  color: #6b7280;
+  color: var(--mg-text-muted);
 }
 .row-actions {
   display: flex;
@@ -208,8 +208,8 @@ onMounted(() => {
   background: #f3f4f6;
 }
 .icon-btn.danger {
-  color: #dc2626;
-  border-color: #fca5a5;
+  color: var(--mg-danger);
+  border-color: var(--mg-danger);
 }
 .icon-btn.danger:hover {
   background: #fef2f2;

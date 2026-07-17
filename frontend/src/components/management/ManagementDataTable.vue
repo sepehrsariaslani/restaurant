@@ -86,7 +86,7 @@ function handleRowKeydown(row) {
 <style scoped>
 .table-shell {
   overflow-x: auto;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 16px;
   background: var(--bg-card, #fff);
 }
@@ -100,7 +100,7 @@ function handleRowKeydown(row) {
 .table td {
   text-align: right;
   padding: 0.5rem 0.45rem;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+  border-bottom: 1px solid var(--border, var(--mg-border-light));
   font-size: 0.81rem;
   white-space: nowrap;
 }
@@ -116,7 +116,7 @@ function handleRowKeydown(row) {
 .table th {
   font-size: 0.78rem;
   color: var(--muted, var(--text-muted));
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
 }
 
 .empty-row {

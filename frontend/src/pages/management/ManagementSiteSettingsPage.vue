@@ -609,22 +609,22 @@
             <template v-else-if="activeDesignComponent === 'categoryRail'">
               <div class="variant-row">
                 <button type="button" class="variant-card" :class="{ selected: webSettings.category_rail_variant === 'pill' }" @click="webSettings.category_rail_variant = 'pill'">
-                  <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
+                  <div class="variant-preview" style="background: var(--mg-bg-page); padding: 8px;">
                     <div style="display: flex; gap: 6px; margin-top: 8px;">
-                      <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
+                      <div style="background: #fff; border: 1px solid var(--mg-border-light); border-radius: 10px; width: 56px; height: 38px;"></div>
                       <div style="background: rgba(111,74,49,0.12); border: 1px solid rgba(111,74,49,0.4); border-radius: 10px; width: 56px; height: 38px;"></div>
-                      <div style="background: #fff; border: 1px solid #ddd; border-radius: 10px; width: 56px; height: 38px;"></div>
+                      <div style="background: #fff; border: 1px solid var(--mg-border-light); border-radius: 10px; width: 56px; height: 38px;"></div>
                     </div>
                   </div>
                   <div class="variant-meta"><strong>متنی</strong><small>دکمه‌های ساده و خوانا</small></div>
                   <span class="variant-check" v-if="webSettings.category_rail_variant === 'pill'">✓</span>
                 </button>
                 <button type="button" class="variant-card" :class="{ selected: webSettings.category_rail_variant === 'image' }" @click="webSettings.category_rail_variant = 'image'">
-                  <div class="variant-preview" style="background: #f5f0eb; padding: 8px;">
+                  <div class="variant-preview" style="background: var(--mg-bg-page); padding: 8px;">
                     <div style="display: flex; gap: 8px; margin-top: 6px; justify-content: center;">
                       <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent-green, #6f4a31);"></div>
-                      <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
-                      <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0d8cf;"></div>
+                      <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--mg-border-light);"></div>
+                      <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--mg-border-light);"></div>
                     </div>
                   </div>
                   <div class="variant-meta"><strong>تصویری</strong><small>دایره‌های تصویر با برچسب</small></div>
@@ -1366,14 +1366,14 @@
             رنگ پس‌زمینه Overlay
             <div class="color-field">
               <input class="color-picker" type="color" v-model="webSettings.loader_overlay_color" />
-              <input class="input" v-model.trim="webSettings.loader_overlay_color" placeholder="#F6F4ED" />
+              <input class="input" v-model.trim="webSettings.loader_overlay_color" placeholder="#f6f4ed" />
             </div>
           </label>
           <label>
             رنگ اصلی انیمیشن
             <div class="color-field">
               <input class="color-picker" type="color" v-model="webSettings.loader_accent_color" />
-              <input class="input" v-model.trim="webSettings.loader_accent_color" placeholder="#6A9A6B" />
+              <input class="input" v-model.trim="webSettings.loader_accent_color" placeholder="#6a9a6b" />
             </div>
           </label>
           <label class="span-2" v-if="webSettings.loader_mode === 'custom'">
@@ -1381,7 +1381,7 @@
             <textarea
               class="textarea code-textarea"
               v-model="webSettings.loader_custom_code"
-              placeholder="<style>.dot{width:18px;height:18px;border-radius:50%;background:#3B7A57;animation:pulse 1.2s infinite}@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.6)}}</style><div class='dot'></div>"
+              placeholder="<style>.dot{width:18px;height:18px;border-radius:50%;background:#3b7a57;animation:pulse 1.2s infinite}@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.6)}}</style><div class='dot'></div>"
             />
           </label>
         </div>
@@ -2155,15 +2155,15 @@ const cardVariantOptions = [
     value: 'classic',
     label: 'کارت کلاسیک',
     desc: 'کارت سفید با تصویر بالا، بج قیمت، دسته‌بندی، توضیح و دکمه مشاهده',
-    previewStyle: { background: '#f5f0eb' },
-    cardStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '14px', height: '80%' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
+    cardStyle: { background: '#fff', border: '1px solid var(--mg-border-light)', borderRadius: '14px', height: '80%' },
   },
   {
     value: 'dark',
     label: 'کارت تاریک',
     desc: 'کارت با تصویر پوشش‌دهنده، افکت تاریک و متن سفید روی آن',
-    previewStyle: { background: '#1c1411' },
-    cardStyle: { background: 'linear-gradient(135deg, #2d1a10, #1c1411)', borderRadius: '14px', height: '80%' },
+    previewStyle: { background: 'var(--mg-text-main)' },
+    cardStyle: { background: 'linear-gradient(135deg, #2d1a10, var(--mg-text-main))', borderRadius: '14px', height: '80%' },
   },
   {
     value: 'navy',
@@ -2228,21 +2228,21 @@ const headerVariantOptions = [
     value: 'classic',
     label: 'هدر کارتی',
     desc: 'هدر اصلی سایت با برند، ناوبری، سبد و ورود مدیریت؛ همان نوار بالای سایت',
-    previewStyle: { background: '#f5f0eb' },
-    barStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '12px', boxShadow: '0 8px 18px rgba(76,33,45,0.08)' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
+    barStyle: { background: '#fff', border: '1px solid var(--mg-border-light)', borderRadius: '12px', boxShadow: '0 8px 18px rgba(76,33,45,0.08)' },
   },
   {
     value: 'minimal',
     label: 'مینیمال تاریک',
     desc: 'هدر تاریک و مدرن با پس‌زمینه یکدست قهوه‌ای تیره',
-    previewStyle: { background: '#1c1411' },
-    barStyle: { background: '#1c1411', borderBottom: '1px solid rgba(255,255,255,0.08)' },
+    previewStyle: { background: 'var(--mg-text-main)' },
+    barStyle: { background: 'var(--mg-text-main)', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   },
   {
     value: 'glass',
     label: 'شیشه‌ای (Glass)',
     desc: 'هدر شفاف با افکت شیشه‌ای و بلور مدرن؛ روی هر پس‌زمینه‌ای زیبا به نظر می‌رسد',
-    previewStyle: { background: 'linear-gradient(135deg, #f0ece7, #e8e0d8)' },
+    previewStyle: { background: 'linear-gradient(135deg, var(--mg-bg-page), #e8e0d8)' },
     barStyle: { background: 'rgba(255,255,255,0.72)', borderBottom: '1px solid rgba(111,74,49,0.12)', backdropFilter: 'blur(18px)' },
   },
 ]
@@ -2252,15 +2252,15 @@ const menuSearchVariantOptions = [
     value: 'search-card',
     label: 'کارت سرچ کامل',
     desc: 'کامپوننت جداگانه برای جستجو در منو، با عنوان برند، input جستجو و دکمه سبد',
-    previewStyle: { background: '#f0ece7', padding: '8px' },
-    searchStyle: { background: '#fff', border: '1px solid #e0d8cf', borderRadius: '14px', padding: '12px' },
+    previewStyle: { background: 'var(--mg-bg-page)', padding: '8px' },
+    searchStyle: { background: '#fff', border: '1px solid var(--mg-border-light)', borderRadius: '14px', padding: '12px' },
   },
   {
     value: 'off',
     label: 'خاموش',
     desc: 'کارت سرچ نمایش داده نمی‌شود و فقط دسته‌بندی‌ها/محتوا باقی می‌ماند',
-    previewStyle: { background: '#f0ece7' },
-    searchStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
+    searchStyle: { background: 'repeating-linear-gradient(45deg, var(--mg-border-light) 0, var(--mg-border-light) 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%' },
   },
 ]
 
@@ -2269,14 +2269,14 @@ const heroVariantOptions = [
     value: 'off',
     label: 'بدون هیرو',
     desc: 'هیرو سکشن نمایش داده نمی‌شود',
-    previewStyle: { background: '#f0ece7' },
-    heroStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
+    heroStyle: { background: 'repeating-linear-gradient(45deg, var(--mg-border-light) 0, var(--mg-border-light) 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
   {
     value: 'slider',
     label: 'اسلایدر هیرو',
     desc: 'هیرو مخصوص اسلایدها؛ هر اسلاید تصویر، عنوان، لینک و CTA خودش را دارد',
-    previewStyle: { background: '#f0ece7' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
     heroStyle: { background: 'linear-gradient(135deg, #fff, #e7d8c8)', height: '100%' },
   },
   {
@@ -2284,14 +2284,14 @@ const heroVariantOptions = [
     label: 'تمام‌صفحه',
     desc: 'بنر بزرگ تمام صفحه با تصویر پس‌زمینه و هدر شفاف روی آن',
     previewStyle: { background: '#2a1a10' },
-    heroStyle: { background: 'linear-gradient(135deg, #1c1411, #3d2510)', height: '100%' },
+    heroStyle: { background: 'linear-gradient(135deg, var(--mg-text-main), var(--mg-text-main))', height: '100%' },
   },
   {
     value: 'banner',
     label: 'بنر کوتاه',
     desc: 'بنر افقی جمع‌وجور با ارتفاع کمتر، مناسب برای صفحات مینیمال',
-    previewStyle: { background: '#1c1411' },
-    heroStyle: { background: 'linear-gradient(135deg, #1c1411 60%, #3d2510)', height: '60%', marginTop: '20%' },
+    previewStyle: { background: 'var(--mg-text-main)' },
+    heroStyle: { background: 'linear-gradient(135deg, var(--mg-text-main) 60%, var(--mg-text-main))', height: '60%', marginTop: '20%' },
   },
   {
     value: 'cover',
@@ -2304,8 +2304,8 @@ const heroVariantOptions = [
     value: 'foodbar',
     label: 'فودبار محصولی',
     desc: 'هیرو محصول‌محور با تصویر بزرگ و تمرکز روی آیتم‌های پرفروش',
-    previewStyle: { background: '#1c1411' },
-    heroStyle: { background: 'linear-gradient(180deg, #1c1411 40%, #fff 40%)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    previewStyle: { background: 'var(--mg-text-main)' },
+    heroStyle: { background: 'linear-gradient(180deg, var(--mg-text-main) 40%, #fff 40%)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
 ]
 
@@ -2314,22 +2314,22 @@ const footerVariantOptions = [
     value: 'off',
     label: 'بدون فوتر',
     desc: 'فوتر نمایش داده نمی‌شود',
-    previewStyle: { background: '#f0ece7' },
-    footerStyle: { background: 'repeating-linear-gradient(45deg, #e0d8cf 0, #e0d8cf 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
+    footerStyle: { background: 'repeating-linear-gradient(45deg, var(--mg-border-light) 0, var(--mg-border-light) 1px, transparent 0, transparent 50%) 0 0 / 8px 8px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   },
   {
     value: 'full',
     label: 'فوتر کامل',
     desc: 'فوتر کامل با نام برند، اطلاعات تماس، لینک‌های اجتماعی و کپی‌رایت',
-    previewStyle: { background: '#1c1411' },
-    footerStyle: { background: '#1c1411', height: '100%' },
+    previewStyle: { background: 'var(--mg-text-main)' },
+    footerStyle: { background: 'var(--mg-text-main)', height: '100%' },
   },
   {
     value: 'minimal',
     label: 'فوتر مینیمال',
     desc: 'فوتر ساده و کوچک فقط با نام برند و کپی‌رایت',
-    previewStyle: { background: '#f5f0eb' },
-    footerStyle: { background: '#f5f0eb', borderTop: '1px solid #e0d8cf', height: '45%', marginTop: '55%' },
+    previewStyle: { background: 'var(--mg-bg-page)' },
+    footerStyle: { background: 'var(--mg-bg-page)', borderTop: '1px solid var(--mg-border-light)', height: '45%', marginTop: '55%' },
   },
 ]
 
@@ -3320,11 +3320,11 @@ loadSettings()
 
 .preview-topbar span {
   font-weight: 900;
-  color: var(--ink-900, #1c1411);
+  color: var(--ink-900, var(--mg-text-main));
 }
 
 .preview-topbar small {
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .preview-topbar > div:first-child {
@@ -3345,7 +3345,7 @@ loadSettings()
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
   font-family: inherit;
   font-size: 0.72rem;
   padding: 0.22rem 0.58rem;
@@ -3354,7 +3354,7 @@ loadSettings()
 
 .preview-device-toggle button.active {
   background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  color: var(--ink-900, #1c1411);
+  color: var(--ink-900, var(--mg-text-main));
   font-weight: 800;
 }
 
@@ -3421,7 +3421,7 @@ loadSettings()
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
   border-radius: 16px;
   background: #fff;
-  color: var(--ink-900, #1c1411);
+  color: var(--ink-900, var(--mg-text-main));
   font-family: inherit;
   cursor: pointer;
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
@@ -3443,7 +3443,7 @@ loadSettings()
 
 .page-chip small,
 .component-chip small {
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.68rem;
 }
 
@@ -3483,7 +3483,7 @@ loadSettings()
 
 .review-summary-card small,
 .review-page-item small {
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .review-page-list {
@@ -3509,12 +3509,12 @@ loadSettings()
 }
 
 .hero-editor-head strong {
-  color: var(--ink-900, #1c1411);
+  color: var(--ink-900, var(--mg-text-main));
   font-size: 0.92rem;
 }
 
 .hero-editor-head small {
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
   line-height: 1.7;
 }
 
@@ -3537,13 +3537,13 @@ loadSettings()
 .mini-section p,
 .about-preview-card p {
   margin: 0;
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
   line-height: 1.7;
 }
 
 .about-preview-card small,
 .faq-preview-card span {
-  color: var(--text-muted, #786b61);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .mini-products {
@@ -3571,7 +3571,7 @@ loadSettings()
   padding: 3rem;
   border-radius: 28px;
   background: linear-gradient(135deg, #fffaf2, #efe0cf);
-  color: #174d32;
+  color: var(--mg-success);
 }
 
 .slider-hero-copy {
@@ -3660,7 +3660,7 @@ loadSettings()
   direction: rtl;
   display: grid;
   gap: 1rem;
-  color: #174d32;
+  color: var(--mg-success);
 }
 
 .hcp-badge {
@@ -3709,7 +3709,7 @@ loadSettings()
 
 .hcp-actions .ghost {
   background: rgb(255 255 255 / 0.66);
-  color: #174d32;
+  color: var(--mg-success);
   border: 1px solid rgb(23 77 50 / 0.18);
 }
 
@@ -3721,7 +3721,7 @@ loadSettings()
 }
 
 .hcp-features span {
-  color: #174d32;
+  color: var(--mg-success);
   font-weight: 900;
 }
 
@@ -3734,7 +3734,7 @@ loadSettings()
   padding: 3rem;
   border-radius: 28px;
   background: linear-gradient(135deg, #fffaf2, #efe0cf);
-  color: #174d32;
+  color: var(--mg-success);
 }
 
 .slider-hero-copy {
@@ -3879,7 +3879,7 @@ loadSettings()
 }
 
 .variant-card.selected {
-  border-color: var(--palette-deep-sapphire, #6F4A31);
+  border-color: var(--palette-deep-sapphire, #6f4a31);
   box-shadow: 0 4px 18px rgb(var(--palette-deep-sapphire-rgb) / 0.18);
   background: rgb(var(--palette-june-bud-rgb) / 0.04);
 }
@@ -4009,12 +4009,12 @@ loadSettings()
 
 .variant-meta strong {
   font-size: 0.82rem;
-  color: var(--ink-900, #1c1411);
+  color: var(--ink-900, var(--mg-text-main));
 }
 
 .variant-meta small {
   font-size: 0.7rem;
-  color: var(--ink-700, #7a6a60);
+  color: var(--ink-700, var(--mg-text-muted));
   line-height: 1.45;
 }
 
@@ -4025,7 +4025,7 @@ loadSettings()
   width: 1.3rem;
   height: 1.3rem;
   border-radius: 50%;
-  background: var(--palette-deep-sapphire, #6F4A31);
+  background: var(--palette-deep-sapphire, #6f4a31);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 900;
@@ -4058,8 +4058,8 @@ loadSettings()
 }
 
 .secondary-btn.mini.danger {
-  border-color: var(--danger, #dc2626);
-  color: var(--danger, #dc2626);
+  border-color: var(--danger, var(--mg-danger));
+  color: var(--danger, var(--mg-danger));
 }
 
 .variant-action-row {
@@ -4142,7 +4142,7 @@ loadSettings()
 }
 
 .site-preview-empty strong {
-  color: var(--ink-900, #1c1411);
+  color: var(--ink-900, var(--mg-text-main));
 }
 
 .site-preview-empty--footer {

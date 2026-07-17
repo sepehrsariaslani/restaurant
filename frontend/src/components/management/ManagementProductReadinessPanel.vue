@@ -37,9 +37,9 @@ defineProps({
 <style scoped>
 .readiness-panel {
   margin: 0.82rem 0;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
-  background: linear-gradient(145deg, var(--bg-card, #fff), var(--bg-subtle, #f8fafc));
+  background: linear-gradient(145deg, var(--bg-card, #fff), var(--bg-subtle, var(--mg-bg-page)));
   padding: 0.7rem;
   display: grid;
   gap: 0.58rem;
@@ -58,7 +58,7 @@ defineProps({
 }
 
 .readiness-panel strong {
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 0.82rem;
 }
 
@@ -93,7 +93,7 @@ defineProps({
   display: flex;
   align-items: flex-start;
   gap: 0.42rem;
-  border: 1px dashed color-mix(in srgb, var(--border, #e2e8f0) 70%, var(--text-muted, #64748b));
+  border: 1px dashed color-mix(in srgb, var(--border, var(--mg-border-light)) 70%, var(--text-muted, var(--mg-text-muted)));
   border-radius: 10px;
   background: var(--bg-card, #fff);
   padding: 0.52rem;

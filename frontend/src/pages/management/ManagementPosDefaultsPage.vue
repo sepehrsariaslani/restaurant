@@ -288,7 +288,7 @@ onMounted(() => {
 }
 .mode-btn {
   padding: 10px 20px;
-  border: 2px solid #ddd;
+  border: 2px solid var(--mg-border-light);
   border-radius: 8px;
   background: #fff;
   cursor: pointer;
@@ -310,7 +310,7 @@ onMounted(() => {
   gap: 16px;
 }
 .customer-mode-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mg-border-light);
   border-radius: 8px;
   padding: 16px;
 }
@@ -351,7 +351,7 @@ onMounted(() => {
   font-size: 16px;
 }
 .ghost-btn.danger {
-  color: #ef4444;
+  color: var(--mg-danger);
 }
 .ghost-btn.danger:hover {
   background: #fef2f2;
@@ -366,12 +366,12 @@ onMounted(() => {
   font-size: 13px;
 }
 .secondary-btn:hover {
-  background: #f9fafb;
+  background: var(--mg-bg-page);
 }
 .default-place-select {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--mg-border-light);
 }
 .default-place-select label {
   display: flex;

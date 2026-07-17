@@ -579,7 +579,7 @@ function formatReservationDate(value) {
 .primary-btn:hover:not(:disabled) {
   background: var(--mg-primary-hover);
 }
-:global(.dark) .primary-btn { color: #1A130D; }
+:global(.dark) .primary-btn { color: var(--mg-text-main); }
 
 .secondary-btn {
   background: var(--mg-bg-surface);

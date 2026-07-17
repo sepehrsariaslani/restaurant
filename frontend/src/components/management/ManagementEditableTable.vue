@@ -232,7 +232,7 @@ function saveDraft() {
 
 <style scoped>
 .editable-table {
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 16px;
   background: var(--bg-card, #fff);
   padding: 0.56rem;

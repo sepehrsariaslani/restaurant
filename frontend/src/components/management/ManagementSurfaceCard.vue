@@ -35,7 +35,7 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 <style scoped>
 .surface-card {
   border-radius: 16px;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   background: var(--bg-card, #fff);
   box-shadow: var(--shadow-sm, 0 12px 30px rgb(15 23 42 / 0.05));
   overflow: visible;
@@ -52,7 +52,7 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 .surface-head h3 {
   margin: 0;
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 1rem;
   font-weight: 900;
   line-height: 1.45;
@@ -60,13 +60,13 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 .surface-head p {
   margin: 0.2rem 0 0;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.82rem;
   line-height: 1.65;
 }
 
 .tone-soft {
-  background: color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, #f1f5f9));
+  background: color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, var(--mg-bg-page)));
 }
 
 .tone-accent {

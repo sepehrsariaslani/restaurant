@@ -494,7 +494,7 @@ onMounted(() => {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--mg-text-muted));
   padding: 0.34rem 0.68rem;
   font-size: 0.78rem;
   font-weight: 850;
@@ -537,7 +537,7 @@ onMounted(() => {
 }
 
 .summary-card {
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-color, var(--mg-border-light));
   border-radius: 8px;
   padding: 14px;
   display: grid;
@@ -545,7 +545,7 @@ onMounted(() => {
 }
 
 .summary-card small {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .summary-card strong {
@@ -559,7 +559,7 @@ onMounted(() => {
 }
 
 .rule-card {
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-color, var(--mg-border-light));
   border-radius: 8px;
   padding: 14px;
   display: grid;
@@ -569,13 +569,13 @@ onMounted(() => {
 
 .rule-card p {
   margin: 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--mg-text-muted));
   line-height: 1.8;
 }
 
 .rules-note {
   margin-top: 14px;
-  border: 1px dashed var(--border-color, #e5e7eb);
+  border: 1px dashed var(--border-color, var(--mg-border-light));
   border-radius: 8px;
   padding: 12px 14px;
   display: flex;
@@ -604,7 +604,7 @@ onMounted(() => {
 .full-width {
   display: grid;
   gap: 6px;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 13px;
 }
 
