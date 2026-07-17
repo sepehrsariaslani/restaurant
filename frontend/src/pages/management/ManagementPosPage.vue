@@ -4753,7 +4753,7 @@ onBeforeUnmount(() => {
 }
 
 .pos-theme :deep(.hero-card p) {
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
 }
 
 
@@ -4781,7 +4781,7 @@ onBeforeUnmount(() => {
 
 .open-invoice-card small {
   font-size: 0.72rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.82);
+  color: var(--mg-text-muted);
 }
 
 .open-invoice-card.active {
@@ -4808,7 +4808,7 @@ onBeforeUnmount(() => {
   display: block;
   margin-top: 0.18rem;
   font-size: 0.72rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
 }
 
 .open-invoice-actions {
@@ -4890,12 +4890,12 @@ onBeforeUnmount(() => {
 
 .pos-status-shift {
   font-size: 0.78rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
+  color: var(--mg-text-muted);
 }
 
 .pos-status-method {
   font-size: 0.76rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.65);
+  color: var(--mg-text-muted);
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   background: var(--mg-bg-page);
@@ -4944,7 +4944,7 @@ onBeforeUnmount(() => {
 }
 
 .pos-info-label {
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.62);
+  color: var(--mg-text-muted);
   font-size: 0.73rem;
 }
 
@@ -4969,7 +4969,7 @@ onBeforeUnmount(() => {
 }
 
 .count-badge.empty {
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.18);
+  background: var(--mg-bg-surface);
   color: var(--mg-text-main);
 }
 
@@ -4997,7 +4997,7 @@ onBeforeUnmount(() => {
 
 .collapse-arrow {
   font-size: 0.7rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
+  color: var(--mg-text-muted);
   width: 18px;
   text-align: center;
 }
@@ -5034,7 +5034,7 @@ onBeforeUnmount(() => {
 
 .table-cell-time {
   font-size: 0.65rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.65);
+  color: var(--mg-text-muted);
 }
 
 .table-cell-orders {
@@ -5061,13 +5061,13 @@ onBeforeUnmount(() => {
 }
 
 .table-cell.status-waiting {
-  background: rgb(var(--mg-primary-rgb, 245 158 11) / 0.1);
-  border-color: rgb(var(--mg-primary-rgb, 245 158 11) / 0.4);
+  background: var(--mg-bg-surface);
+  border-color: var(--mg-text-muted);
 }
 
 .table-cell.active {
   border-color: var(--mg-primary);
-  box-shadow: 0 0 0 2px rgb(var(--mg-primary-rgb, 1 90 114) / 0.18);
+  box-shadow: 0 0 0 2px var(--mg-primary);
   transform: translateY(-2px);
 }
 
@@ -5086,7 +5086,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.35rem 0.55rem;
   font-size: 0.78rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.88);
+  color: var(--mg-text-muted);
 }
 
 .table-detail-info strong {
@@ -5166,7 +5166,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-inline-start: 1px solid var(--mg-border);
   background: transparent;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
   width: 26px;
   min-height: 28px;
   font-size: 0.95rem;
@@ -5275,7 +5275,7 @@ onBeforeUnmount(() => {
 
 .ops-trigger:hover {
   background: color-mix(in srgb, var(--mg-bg-surface) 100%, transparent);
-  border-color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.22);
+  border-color: var(--mg-border-light);
 }
 
 .left-col {
@@ -5320,11 +5320,11 @@ onBeforeUnmount(() => {
 .left-tab-btn.active {
   color: var(--mg-primary);
   border-bottom-color: var(--mg-primary);
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.05);
+  background: var(--mg-bg-surface);
 }
 
 .left-tab-btn:hover:not(.active) {
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.04);
+  background: var(--mg-bg-surface);
 }
 
 .tab-panel-toolbar {
@@ -5386,7 +5386,7 @@ onBeforeUnmount(() => {
 
 .history-time {
   font-size: 0.7rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
+  color: var(--mg-text-muted);
 }
 
 .history-card-body {
@@ -5412,14 +5412,14 @@ onBeforeUnmount(() => {
 .kbd-help-btn {
   border: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.12);
   background: color-mix(in srgb, var(--mg-bg-surface) 96%, transparent);
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.68);
+  color: var(--mg-text-muted);
   padding: 0.48rem 0.8rem;
   min-width: 112px;
 }
 
 .kbd-help-btn:hover {
   color: var(--mg-primary);
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.04);
+  background: var(--mg-bg-surface);
 }
 
 .kbd-help-btn span {
@@ -5459,14 +5459,14 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.8rem;
   padding: 0.85rem 0.95rem;
-  border-bottom: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.08);
+  border-bottom: 1px solid var(--mg-border-light);
 }
 
 .ops-overlay-kicker {
   margin: 0 0 0.12rem;
   font-size: 0.69rem;
   font-weight: 700;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.46);
+  color: var(--mg-text-muted);
 }
 
 .ops-overlay-head h3 {
@@ -5480,15 +5480,15 @@ onBeforeUnmount(() => {
   height: 34px;
   border: none;
   border-radius: 10px;
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.06);
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-muted);
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .ops-overlay-close:hover {
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.12);
+  background: var(--mg-bg-surface);
   color: var(--mg-text-main);
 }
 
@@ -5685,7 +5685,7 @@ onBeforeUnmount(() => {
 }
 
 kbd {
-  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.08);
+  background: var(--mg-bg-surface);
   border: 1px solid var(--mg-border);
   border-radius: 5px;
   padding: 0.1rem 0.45rem;
@@ -5696,7 +5696,7 @@ kbd {
 
 .kbd-map-note {
   font-size: 0.74rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.5);
+  color: var(--mg-text-muted);
   margin: 0;
   text-align: center;
 }
@@ -5730,8 +5730,8 @@ kbd {
 }
 
 .tbl-btn.split {
-  background: rgb(var(--mg-primary-rgb, 255 152 54) / 0.12);
-  border-color: rgb(var(--mg-primary-rgb, 255 152 54) / 0.35);
+  background: var(--mg-bg-surface);
+  border-color: var(--mg-border-light);
   color: var(--mg-primary, var(--mg-primary));
   width: 100%;
 }
@@ -5764,7 +5764,7 @@ kbd {
 
 .offline-banner {
   background: var(--mg-primary-soft);
-  border-color: rgb(var(--mg-primary-rgb, 255 152 54) / 0.3);
+  border-color: var(--mg-border-light);
 }
 
 .sync-banner {
@@ -5822,7 +5822,7 @@ kbd {
 .print-editor-head p {
   margin: 0.2rem 0 0;
   font-size: 0.76rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.76);
+  color: var(--mg-text-muted);
 }
 
 .print-editor-actions {
@@ -5841,7 +5841,7 @@ kbd {
   display: grid;
   gap: 0.2rem;
   font-size: 0.72rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.86);
+  color: var(--mg-text-muted);
 }
 
 .print-editor-grid {
@@ -5895,7 +5895,7 @@ kbd {
 
 .print-editor-row-main small {
   font-size: 0.73rem;
-  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
 }
 
 .print-editor-row-actions {
