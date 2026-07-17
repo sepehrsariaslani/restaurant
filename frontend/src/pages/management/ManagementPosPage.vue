@@ -4962,10 +4962,11 @@ onBeforeUnmount(() => {
   height: 20px;
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: var(--mg-primary);
-  color: var(--mg-bg-surface);
+  background: color-mix(in srgb, var(--mg-primary) 16%, white 84%);
+  color: var(--mg-primary);
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 22%, transparent);
 }
 
 .count-badge.empty {
@@ -4982,8 +4983,8 @@ onBeforeUnmount(() => {
 }
 
 .icon-refresh-btn {
-  border: 1px solid var(--mg-border);
-  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
+  background: color-mix(in srgb, var(--mg-bg-page) 60%, white 40%);
   color: var(--mg-text-main);
   border-radius: 8px;
   width: 28px;
@@ -5146,26 +5147,27 @@ onBeforeUnmount(() => {
 .ticket-tab-group {
 	display: inline-flex;
 	align-items: center;
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
-	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: color-mix(in srgb, white 72%, var(--mg-bg-page) 28%);
 	border-radius: 999px;
 	overflow: hidden;
+  box-shadow: 0 8px 18px rgb(52 38 31 / 0.05);
 }
 
 .ticket-tab {
 	border: 0;
 	background: transparent;
 	color: var(--mg-text-main);
-	padding: 0.48rem 0.8rem;
+	padding: 0.52rem 0.84rem;
 	font-size: 0.8rem;
-	font-weight: 600;
+	font-weight: 700;
 	cursor: pointer;
 	white-space: nowrap;
 }
 
 .ticket-tab-close {
   border: 0;
-  border-inline-start: 1px solid var(--mg-border);
+  border-inline-start: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
   background: transparent;
   color: var(--mg-text-muted);
 	width: 28px;
@@ -5193,13 +5195,17 @@ onBeforeUnmount(() => {
   background: var(--mg-primary);
   border-color: var(--mg-primary);
   color: var(--mg-bg-surface);
+  box-shadow: 0 14px 30px rgb(var(--mg-primary-rgb) / 0.18);
 }
 
 .pos-fullpage {
 	display: grid;
 	gap: 0.7rem;
 	padding: 0.9rem;
-	background: var(--mg-bg-page);
+	background:
+    radial-gradient(circle at top right, rgb(var(--mg-success-rgb) / 0.05), transparent 22%),
+    radial-gradient(circle at top left, rgb(var(--mg-primary-rgb) / 0.06), transparent 26%),
+    var(--mg-bg-page);
 	width: 100%;
 	height: 100vh;
 	box-sizing: border-box;
@@ -5263,11 +5269,12 @@ onBeforeUnmount(() => {
 }
 
 .ops-trigger {
-  border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
-  background: color-mix(in srgb, var(--mg-bg-page) 60%, var(--mg-bg-surface) 40%);
-  color: var(--mg-primary);
+  border: 1px solid var(--mg-primary);
+  background: var(--mg-primary);
+  color: var(--mg-bg-surface);
   padding: 0.55rem 0.9rem;
   min-width: 112px;
+  box-shadow: 0 14px 28px rgb(var(--mg-primary-rgb) / 0.18);
 }
 
 .ops-trigger span {
@@ -5276,8 +5283,8 @@ onBeforeUnmount(() => {
 }
 
 .ops-trigger:hover {
-  background: color-mix(in srgb, var(--mg-bg-page) 48%, white 52%);
-  border-color: color-mix(in srgb, var(--mg-primary) 28%, var(--mg-border-light) 72%);
+  filter: brightness(0.98);
+  transform: translateY(-1px);
 }
 
 .left-col {
@@ -5293,16 +5300,18 @@ onBeforeUnmount(() => {
 .left-col-tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-bottom: 0;
-  background: color-mix(in srgb, var(--mg-bg-page) 68%, var(--mg-bg-surface) 32%);
+  background: color-mix(in srgb, var(--mg-bg-page) 88%, white 12%);
   border-radius: 18px 18px 0 0;
   overflow: hidden;
   flex-shrink: 0;
+  padding: 0.28rem;
+  gap: 0.28rem;
 }
 
 .left-tab-btn {
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--mg-text-main);
   padding: 0.55rem 0.4rem;
@@ -5314,19 +5323,31 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
-  border-bottom: 3px solid transparent;
   transition: all 0.15s;
-  margin-bottom: -2px;
+  border-radius: 14px 14px 0 0;
 }
 
 .left-tab-btn.active {
-  color: var(--mg-primary);
-  border-bottom-color: var(--mg-primary);
-  background: var(--mg-bg-surface);
+  color: var(--mg-bg-surface);
+  border-color: var(--mg-primary);
+  background: var(--mg-primary);
+  box-shadow: 0 12px 24px rgb(var(--mg-primary-rgb) / 0.16);
+}
+
+.left-tab-btn.active .count-badge {
+  background: rgb(255 255 255 / 0.18);
+  border-color: rgb(255 255 255 / 0.22);
+  color: var(--mg-bg-surface);
+}
+
+.left-tab-btn.active .occupied-badge {
+  background: rgb(255 255 255 / 0.18);
+  color: var(--mg-bg-surface);
 }
 
 .left-tab-btn:hover:not(.active) {
-  background: var(--mg-bg-surface);
+  background: color-mix(in srgb, white 60%, var(--mg-bg-page) 40%);
+  border-color: color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 }
 
 .tab-panel-toolbar {
@@ -5338,27 +5359,29 @@ onBeforeUnmount(() => {
 .table-session-preview,
 .open-invoices-panel,
 .history-panel {
-  border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 0 0 18px 18px;
   padding: 0 0.55rem 0.55rem;
-  background: var(--mg-bg-surface);
+  background: color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%);
   display: grid;
   gap: 0.45rem;
   align-content: start;
   overflow-y: auto;
   min-height: 0;
+  box-shadow: 0 18px 34px rgb(52 38 31 / 0.06);
 }
 
 .recent-orders-panel {
-  border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 0 0 18px 18px;
   padding: 0 0.55rem 0.55rem;
-  background: var(--mg-bg-surface);
+  background: color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%);
   display: grid;
   gap: 0.45rem;
   align-content: start;
   overflow-y: auto;
   min-height: 0;
+  box-shadow: 0 18px 34px rgb(52 38 31 / 0.06);
 }
 
 .history-list {
@@ -5367,12 +5390,13 @@ onBeforeUnmount(() => {
 }
 
 .history-card {
-  border: 1px solid var(--mg-border);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 10px;
   padding: 0.45rem 0.55rem;
   display: grid;
   gap: 0.2rem;
   font-size: 0.78rem;
+  background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
 }
 
 .history-card-head {
@@ -5413,15 +5437,15 @@ onBeforeUnmount(() => {
 
 .kbd-help-btn {
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
-  background: color-mix(in srgb, var(--mg-bg-page) 60%, var(--mg-bg-surface) 40%);
-  color: var(--mg-text-muted);
+  background: color-mix(in srgb, white 72%, var(--mg-bg-page) 28%);
+  color: var(--mg-text-main);
   padding: 0.55rem 0.9rem;
   min-width: 112px;
 }
 
 .kbd-help-btn:hover {
   color: var(--mg-primary);
-  background: var(--mg-bg-surface);
+  background: white;
 }
 
 .kbd-help-btn span {
@@ -5434,8 +5458,8 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 260;
   direction: ltr;
-  background: rgb(25 20 14 / 0.34);
-  backdrop-filter: blur(5px);
+  background: rgb(35 26 20 / 0.48);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
@@ -5447,9 +5471,9 @@ onBeforeUnmount(() => {
   max-width: calc(100vw - 5rem);
   height: 100vh;
   border-radius: 0 26px 26px 0;
-  background: color-mix(in srgb, var(--mg-bg-surface) 94%, white 6%);
-  border: 1px solid color-mix(in srgb, var(--mg-border) 88%, transparent);
-  box-shadow: 0 28px 56px rgb(15 23 42 / 0.18);
+  background: linear-gradient(180deg, color-mix(in srgb, white 28%, var(--mg-bg-surface) 72%) 0%, var(--mg-bg-surface) 100%);
+  border-inline-end: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  box-shadow: 0 32px 70px rgb(22 16 12 / 0.34);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -5461,14 +5485,15 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.8rem;
   padding: 0.85rem 0.95rem;
-  border-bottom: 1px solid var(--mg-border-light);
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  background: color-mix(in srgb, var(--mg-bg-page) 78%, white 22%);
 }
 
 .ops-overlay-kicker {
   margin: 0 0 0.12rem;
   font-size: 0.69rem;
   font-weight: 700;
-  color: var(--mg-text-muted);
+  color: var(--mg-primary);
 }
 
 .ops-overlay-head h3 {
@@ -5482,7 +5507,7 @@ onBeforeUnmount(() => {
   height: 34px;
   border: none;
   border-radius: 10px;
-  background: var(--mg-bg-surface);
+  background: color-mix(in srgb, white 70%, var(--mg-bg-page) 30%);
   color: var(--mg-text-muted);
   font-size: 1rem;
   cursor: pointer;
@@ -5490,8 +5515,8 @@ onBeforeUnmount(() => {
 }
 
 .ops-overlay-close:hover {
-  background: var(--mg-bg-surface);
-  color: var(--mg-text-main);
+  background: white;
+  color: var(--mg-primary);
 }
 
 .ops-overlay-enter-active,
@@ -6049,8 +6074,8 @@ kbd {
 
 /* Ticket Tabs Bar */
 .ticket-tabs-bar {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 98%, white 2%) 0%, var(--mg-bg-surface) 100%);
-  border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, white 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%) 100%);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 24px;
   padding: 0.7rem 0.85rem;
   direction: rtl;
@@ -6060,7 +6085,7 @@ kbd {
   gap: 0.85rem;
   min-width: 0;
   flex-wrap: wrap;
-  box-shadow: 0 16px 34px rgb(52 38 31 / 0.06);
+  box-shadow: 0 20px 38px rgb(52 38 31 / 0.08);
 }
 
 /* Recent orders panel */
@@ -6096,8 +6121,8 @@ kbd {
 }
 
 .history-card-interactive:hover {
-  background: var(--mg-bg-surface);
-  box-shadow: 0 2px 12px 0 rgb(0 0 0 / 0.18);
+  background: white;
+  box-shadow: 0 16px 30px rgb(52 38 31 / 0.1);
 }
 
 .history-card-footer {
@@ -6617,14 +6642,16 @@ kbd {
 
 .table-modern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
 .table-modern-card {
-  background: var(--mg-bg-surface); border: 1.5px solid var(--mg-border);
-  border-radius: 10px; padding: 0.55rem; cursor: pointer;
+  background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  border-radius: 16px; padding: 0.6rem; cursor: pointer;
   transition: all 0.15s; display: flex; flex-direction: column; gap: 0.25rem;
+  box-shadow: 0 12px 24px rgb(52 38 31 / 0.05);
 }
-.table-modern-card:hover { transform: translateY(-1px); box-shadow: 0 12px 24px rgb(52 38 31 / 0.1); }
-.table-modern-card.active { border-color: var(--mg-primary); box-shadow: 0 0 0 2px rgb(var(--mg-primary-rgb) / 0.15); }
-.tm-empty { border-color: var(--mg-border-light); }
-.tm-occupied { border-color: var(--mg-primary); background: var(--mg-bg-soft); }
+.table-modern-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgb(52 38 31 / 0.1); }
+.table-modern-card.active { border-color: var(--mg-primary); box-shadow: 0 0 0 2px rgb(var(--mg-primary-rgb) / 0.18), 0 16px 32px rgb(var(--mg-primary-rgb) / 0.12); }
+.tm-empty { border-color: color-mix(in srgb, var(--mg-success) 26%, var(--mg-border-light) 74%); }
+.tm-occupied { border-color: color-mix(in srgb, var(--mg-primary) 34%, var(--mg-border-light) 66%); background: color-mix(in srgb, var(--mg-primary) 8%, white 92%); }
 .tm-occupied .tm-name { color: var(--mg-primary); }
 :global(.dark) .tm-occupied { background: color-mix(in srgb, var(--mg-bg-surface) 84%, var(--mg-primary) 16%); }
 .tm-top { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }

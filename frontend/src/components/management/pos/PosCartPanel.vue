@@ -816,14 +816,14 @@ defineExpose({
 	--pos-success: var(--mg-success);
 	--pos-success-rgb: var(--mg-success-rgb);
 	border-radius: 24px;
-	background: var(--mg-bg-surface);
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+	background: linear-gradient(180deg, color-mix(in srgb, white 52%, var(--mg-bg-surface) 48%) 0%, var(--mg-bg-surface) 100%);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	padding: 0;
 	color: var(--mg-text-main);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	box-shadow: 0 20px 38px rgb(52 38 31 / 0.08);
+	box-shadow: 0 22px 42px rgb(52 38 31 / 0.1);
 }
 
 /* ─── Segmented Control ─── */
@@ -836,8 +836,8 @@ defineExpose({
 
 .mode-seg button {
 	flex: 1;
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
-	background: color-mix(in srgb, var(--mg-bg-page) 70%, var(--mg-bg-surface) 30%);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: color-mix(in srgb, white 76%, var(--mg-bg-page) 24%);
 	color: var(--mg-text-muted);
 	padding: 0.62rem 0.35rem;
 	font-size: 0.78rem;
@@ -876,13 +876,13 @@ defineExpose({
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.65rem 0.8rem 0.55rem;
-	border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 }
 
 .place-label {
 	font-size: 0.74rem;
 	font-weight: 600;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 	flex-shrink: 0;
 }
 
@@ -916,8 +916,8 @@ defineExpose({
 }
 
 .undo-btn {
-	background: none;
-	border: 1px solid rgb(var(--pos-accent-rgb) / 0.3);
+	background: color-mix(in srgb, var(--mg-success) 9%, white 91%);
+	border: 1px solid rgb(var(--pos-accent-rgb) / 0.24);
 	color: var(--pos-accent);
 	border-radius: 6px;
 	font-size: 0.68rem;
@@ -973,19 +973,20 @@ defineExpose({
 	gap: 0.4rem;
 	padding: 0.7rem 0.75rem;
 	border-radius: 16px;
-	background: color-mix(in srgb, var(--mg-bg-page) 68%, var(--mg-bg-surface) 32%);
+	background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-page) 82%, white 18%) 100%);
 	cursor: pointer;
 	transition: all 0.15s ease;
-	border: 1px solid transparent;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 }
 
 .cart-row:hover {
-	background: color-mix(in srgb, var(--mg-bg-page) 78%, white 22%);
+	background: color-mix(in srgb, var(--mg-primary) 6%, white 94%);
 }
 
 .cart-row.active {
-	background: color-mix(in srgb, var(--mg-bg-page) 72%, white 28%);
+	background: color-mix(in srgb, var(--mg-primary) 8%, white 92%);
 	border-color: color-mix(in srgb, var(--pos-primary) 38%, var(--mg-border-light) 62%);
+  box-shadow: 0 10px 24px rgb(var(--mg-primary-rgb) / 0.08);
 }
 
 .line-main {
@@ -1009,21 +1010,21 @@ defineExpose({
 
 .line-price {
 	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-primary);
 	font-weight: 500;
 	flex-shrink: 0;
 }
 
 .line-custom {
 	font-size: 0.66rem;
-	color: rgb(var(--pos-primary-rgb) / 0.5);
+	color: var(--mg-text-muted);
 	font-style: italic;
 }
 
 .line-custom-list {
 	margin: 0;
 	padding-right: 0.6rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 	font-size: 0.66rem;
 	line-height: 1.5;
 	display: flex;
@@ -1051,8 +1052,8 @@ defineExpose({
 	width: 26px;
 	height: 26px;
 	border: none;
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: rgb(var(--pos-primary-rgb) / 0.6);
+	background: color-mix(in srgb, var(--mg-bg-page) 62%, white 38%);
+	color: var(--pos-primary);
 	border-radius: 7px;
 	cursor: pointer;
 	font-size: 0.78rem;
@@ -1075,11 +1076,11 @@ defineExpose({
 	font-size: 0.62rem;
 	font-weight: 700;
 	color: var(--pos-accent);
-	background: rgb(var(--pos-accent-rgb) / 0.08);
+	background: color-mix(in srgb, var(--mg-success) 12%, white 88%);
 }
 
 .act-btn.bom:hover {
-	background: rgb(var(--pos-accent-rgb) / 0.18);
+	background: color-mix(in srgb, var(--mg-success) 18%, white 82%);
 }
 
 .act-btn.remove {
@@ -1094,7 +1095,7 @@ defineExpose({
 .counter {
 	display: inline-flex;
 	align-items: center;
-	background: rgb(var(--pos-primary-rgb) / 0.04);
+	background: color-mix(in srgb, var(--mg-bg-page) 56%, white 44%);
 	border-radius: 8px;
 	overflow: hidden;
 }
@@ -1143,12 +1144,12 @@ defineExpose({
 .cart-empty p {
 	margin: 0;
 	font-size: 0.78rem;
-	color: rgb(var(--pos-primary-rgb) / 0.35);
+	color: var(--mg-text-muted);
 }
 
 /* ─── Financial Section ─── */
 .fin-section {
-	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	padding: 0.7rem 0.8rem;
 	display: flex;
 	flex-direction: column;
@@ -1159,14 +1160,14 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	background: color-mix(in srgb, var(--mg-bg-page) 68%, var(--mg-bg-surface) 32%);
+	background: color-mix(in srgb, white 76%, var(--mg-bg-page) 24%);
 	border-radius: 14px;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
 	overflow: hidden;
 }
 
 .fin-group .fin-row + .fin-row {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.05);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 }
 
 .fin-row {
@@ -1180,7 +1181,7 @@ defineExpose({
 
 .fin-label {
 	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 	font-weight: 600;
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -1210,8 +1211,8 @@ defineExpose({
 }
 
 .fin-input {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.1);
-	background: rgb(var(--pos-primary-rgb) / 0.03);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: white;
 	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.32rem 0.5rem;
@@ -1225,7 +1226,7 @@ defineExpose({
 }
 
 .fin-input:focus {
-	border-color: rgb(var(--pos-primary-rgb) / 0.3);
+	border-color: color-mix(in srgb, var(--pos-primary) 42%, var(--mg-border-light) 58%);
 	background: var(--mg-bg-surface);
 	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.06);
 }
@@ -1236,8 +1237,8 @@ defineExpose({
 }
 
 .fin-action-btn {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
-	background: rgb(var(--pos-primary-rgb) / 0.05);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: color-mix(in srgb, var(--mg-bg-page) 58%, white 42%);
 	color: var(--pos-primary);
 	font-size: 0.7rem;
 	font-weight: 600;
@@ -1261,8 +1262,8 @@ defineExpose({
 
 .fin-note-input {
 	width: 100%;
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
-	background: rgb(var(--pos-primary-rgb) / 0.02);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: white;
 	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.35rem 0.55rem;
@@ -1285,12 +1286,12 @@ defineExpose({
 
 /* ─── Summary ─── */
 .summary-box {
-	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	padding: 0.7rem 0.8rem 0.55rem;
 	display: flex;
 	flex-direction: column;
 	gap: 0.32rem;
-	background: color-mix(in srgb, var(--mg-bg-page) 52%, var(--mg-bg-surface) 48%);
+	background: color-mix(in srgb, var(--mg-bg-page) 62%, white 38%);
 }
 
 .sum-line {
@@ -1298,7 +1299,7 @@ defineExpose({
 	justify-content: space-between;
 	align-items: center;
 	font-size: 0.74rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 }
 
 .sum-line strong {
@@ -1311,7 +1312,7 @@ defineExpose({
 }
 
 .sum-line.payable {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 	margin-top: 0.25rem;
 	padding-top: 0.4rem;
 	font-size: 0.84rem;
@@ -1322,13 +1323,13 @@ defineExpose({
 .sum-line.payable strong {
 	font-size: 0.92rem;
 	font-weight: 800;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 /* ─── Checkout Actions ─── */
 .checkout-actions {
 	padding: 0.75rem 0.8rem 0.9rem;
-	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	display: flex;
 	flex-direction: column;
 	gap: 0.55rem;
@@ -1355,7 +1356,7 @@ defineExpose({
 }
 
 .save-btn {
-	background: var(--pos-primary);
+	background: var(--mg-primary);
 }
 
 .save-btn:hover:not(:disabled) {
@@ -1386,17 +1387,17 @@ defineExpose({
 }
 
 .pay-btn {
-	background: var(--pos-accent);
+	background: color-mix(in srgb, var(--mg-text-main) 88%, black 12%);
 }
 
 .pay-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 12px rgb(var(--pos-accent-rgb) / 0.3);
+	box-shadow: 0 4px 12px rgb(52 38 31 / 0.24);
 }
 
 .print-btn {
 	background: transparent;
 	color: var(--mg-text-muted);
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	font-weight: 600;
 }
 
@@ -1426,7 +1427,7 @@ defineExpose({
 	align-items: center;
 	gap: 0.3rem;
 	font-size: 0.68rem;
-	color: rgb(var(--pos-primary-rgb) / 0.45);
+	color: var(--mg-text-muted);
 	cursor: pointer;
 	transition: color 0.12s;
 }

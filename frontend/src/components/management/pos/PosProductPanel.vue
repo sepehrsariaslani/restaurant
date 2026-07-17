@@ -556,10 +556,10 @@ function supportsCustomization(item = {}) {
 	--pos-white: var(--mg-bg-surface);
 	--pos-text: var(--mg-text-main);
 	--pos-border: var(--mg-border-light);
-	--pos-soft: color-mix(in srgb, var(--mg-bg-page) 72%, var(--mg-bg-surface) 28%);
+	--pos-soft: color-mix(in srgb, var(--mg-bg-page) 58%, white 42%);
 	border-radius: 24px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
-	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 98%, white 2%) 0%, var(--mg-bg-surface) 100%);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 95%, transparent);
+	background: linear-gradient(180deg, color-mix(in srgb, white 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%) 100%);
 	padding: 0.9rem;
 	color: var(--pos-text);
 	height: 100%;
@@ -567,7 +567,7 @@ function supportsCustomization(item = {}) {
 	grid-template-rows: auto auto 1fr;
 	overflow: hidden;
 	gap: 0.65rem;
-	box-shadow: 0 18px 36px rgb(52 38 31 / 0.06);
+	box-shadow: 0 22px 44px rgb(52 38 31 / 0.08);
 }
 
 .customer-search-bar {
@@ -583,8 +583,8 @@ function supportsCustomization(item = {}) {
 	grid-template-columns: 26px 1fr auto;
 	align-items: center;
 	border-radius: 14px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
-	background: var(--pos-white);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	background: white;
 	padding: 0 0.65rem;
 	min-height: 46px;
 }
@@ -622,7 +622,7 @@ function supportsCustomization(item = {}) {
 	inset-inline: 0;
 	border-radius: 16px;
 	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
-	background: var(--pos-white);
+	background: white;
 	box-shadow: 0 22px 40px rgb(52 38 31 / 0.12);
 	max-height: 240px;
 	overflow-y: auto;
@@ -649,7 +649,7 @@ function supportsCustomization(item = {}) {
 
 .cust-option.active,
 .cust-option:hover {
-	background: color-mix(in srgb, var(--pos-soft) 82%, white 18%);
+	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
 }
 
 .cust-option-name {
@@ -682,8 +682,8 @@ function supportsCustomization(item = {}) {
 	width: 36px;
 	height: 36px;
 	border-radius: 12px;
-	border: 1px solid var(--pos-accent);
-	background: var(--pos-accent);
+	border: 1px solid var(--pos-primary);
+	background: var(--pos-primary);
 	color: var(--mg-bg-surface);
 	font-size: 1.2rem;
 	cursor: pointer;
@@ -712,8 +712,8 @@ function supportsCustomization(item = {}) {
 	grid-template-columns: 24px 1fr auto;
 	align-items: center;
 	border-radius: 14px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
-	background: var(--pos-white);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	background: white;
 	padding: 0 0.7rem;
 	flex: 1;
 	min-height: 48px;
@@ -749,11 +749,11 @@ function supportsCustomization(item = {}) {
 
 .view-toggle {
 	display: inline-flex;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 95%, transparent);
 	border-radius: 14px;
 	overflow: hidden;
 	flex-shrink: 0;
-	background: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
+	background: color-mix(in srgb, white 70%, var(--mg-bg-page) 30%);
 }
 
 .view-toggle button {
@@ -781,8 +781,8 @@ function supportsCustomization(item = {}) {
 }
 
 .scan-btn {
-	border: 1px solid var(--pos-primary);
-	background: var(--pos-primary);
+	border: 1px solid var(--pos-accent);
+	background: var(--pos-accent);
 	border-radius: 14px;
 	color: var(--mg-bg-surface);
 	padding: 0.7rem 1rem;
@@ -818,10 +818,10 @@ function supportsCustomization(item = {}) {
 }
 
 .cat-chip {
-	border: 1px solid color-mix(in srgb, var(--pos-border) 90%, transparent);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
 	border-radius: 999px;
 	padding: 0.58rem 1rem;
-	background: var(--pos-white);
+	background: color-mix(in srgb, white 84%, var(--mg-bg-page) 16%);
 	color: var(--pos-text);
 	cursor: pointer;
 	white-space: nowrap;
@@ -834,16 +834,16 @@ function supportsCustomization(item = {}) {
 }
 
 .cat-chip:hover {
-	background: color-mix(in srgb, var(--pos-soft) 74%, white 26%);
+	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
 	border-color: color-mix(in srgb, var(--pos-primary) 42%, var(--pos-border) 58%);
 }
 
 .cat-chip.active {
-	background: var(--pos-primary);
+	background: var(--pos-accent);
 	color: var(--mg-bg-surface);
-	border-color: var(--pos-primary);
+	border-color: var(--pos-accent);
 	font-weight: 700;
-	box-shadow: 0 10px 24px rgb(var(--pos-primary-rgb) / 0.22);
+	box-shadow: 0 10px 24px rgb(var(--pos-accent-rgb) / 0.22);
 }
 
 .hint {
@@ -877,7 +877,7 @@ function supportsCustomization(item = {}) {
 	justify-content: space-between;
 	gap: 0.65rem;
 	padding-bottom: 0.55rem;
-	border-bottom: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
 }
 
 .category-section-copy {
@@ -895,7 +895,7 @@ function supportsCustomization(item = {}) {
 .category-section-copy p {
 	margin: 0;
 	font-size: 0.76rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.64);
+	color: var(--mg-text-muted);
 }
 
 .subcategory-stack {
@@ -919,12 +919,12 @@ function supportsCustomization(item = {}) {
 	margin: 0;
 	font-size: 0.82rem;
 	font-weight: 700;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.84);
+	color: var(--mg-primary);
 }
 
 .subcategory-section-head span {
 	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.58);
+	color: var(--mg-text-muted);
 }
 
 .products-grid {
@@ -948,12 +948,12 @@ function supportsCustomization(item = {}) {
 }
 
 .product-card {
-	border: 1px solid color-mix(in srgb, var(--pos-border) 90%, transparent);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
 	border-radius: 16px;
-	background: var(--pos-white);
+	background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
 	display: flex;
 	flex-direction: column;
-	box-shadow: 0 10px 22px rgb(52 38 31 / 0.05);
+	box-shadow: 0 14px 30px rgb(52 38 31 / 0.07);
 	cursor: pointer;
 	transition:
 		transform 0.15s ease,
@@ -963,7 +963,7 @@ function supportsCustomization(item = {}) {
 
 .product-card:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 18px 32px rgb(52 38 31 / 0.1);
+	box-shadow: 0 20px 40px rgb(52 38 31 / 0.12);
 	border-color: color-mix(in srgb, var(--pos-primary) 44%, var(--pos-border) 56%);
 }
 
@@ -979,7 +979,7 @@ function supportsCustomization(item = {}) {
 
 .image-btn {
 	border: 0;
-	background: color-mix(in srgb, var(--pos-soft) 82%, white 18%);
+	background: color-mix(in srgb, var(--mg-bg-page) 60%, white 40%);
 	padding: 0;
 	cursor: pointer;
 	width: 100%;
@@ -1040,7 +1040,7 @@ function supportsCustomization(item = {}) {
 .product-body strong {
 	font-size: 0.8rem;
 	font-weight: 700;
-	color: var(--pos-accent);
+	color: var(--pos-primary);
 	flex-shrink: 0;
 	font-variant-numeric: tabular-nums;
 }
@@ -1070,8 +1070,8 @@ function supportsCustomization(item = {}) {
 	width: 30px;
 	height: 30px;
 	border-radius: 10px;
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	background: white;
 	color: var(--pos-primary);
 	cursor: pointer;
 	font-size: 0.95rem;
@@ -1092,8 +1092,8 @@ function supportsCustomization(item = {}) {
 }
 
 .bom-btn {
-	border: 1px solid var(--pos-accent);
-	background: var(--pos-accent);
+	border: 1px solid var(--pos-primary);
+	background: var(--pos-primary);
 	color: var(--mg-bg-surface);
 	border-radius: 10px;
 	padding: 0.38rem 0.72rem;
@@ -1119,9 +1119,9 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-card {
-	border: 1px solid color-mix(in srgb, var(--pos-border) 90%, transparent);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
 	border-radius: 16px;
-	background: var(--pos-white);
+	background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
 	display: grid;
 	gap: 0.4rem;
 	transition: all 0.12s;
@@ -1137,7 +1137,7 @@ function supportsCustomization(item = {}) {
 
 .compact-card.has-qty {
 	border-color: var(--pos-primary);
-	background: color-mix(in srgb, var(--pos-soft) 84%, var(--mg-bg-surface) 16%);
+	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
 }
 
 .compact-name {
@@ -1150,7 +1150,7 @@ function supportsCustomization(item = {}) {
 
 .compact-price {
 	font-size: 0.78rem;
-	color: var(--pos-accent);
+	color: var(--pos-primary);
 	display: block;
 	font-weight: 700;
 }
@@ -1159,7 +1159,7 @@ function supportsCustomization(item = {}) {
 	position: absolute;
 	top: 0.45rem;
 	left: 0.45rem;
-	background: var(--pos-primary);
+	background: var(--pos-accent);
 	color: var(--mg-bg-surface);
 	border-radius: 999px;
 	font-size: 0.68rem;
