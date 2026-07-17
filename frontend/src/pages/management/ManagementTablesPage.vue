@@ -491,13 +491,13 @@ loadTables()
 .page-title {
   font-size: 2rem;
   font-weight: 900;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
 }
 
 .page-subtitle {
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   font-size: 1rem;
   margin: 0;
 }
@@ -518,42 +518,42 @@ loadTables()
   right: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--cw-secondary);
+  color: var(--mg-secondary);
 }
 
 .search-input {
   width: 100%;
-  background: var(--cw-surface-alt);
-  border: 1px solid var(--cw-border-light);
-  border-radius: var(--cw-radius-md);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-md);
   padding: 0.85rem 1rem 0.85rem 2.5rem;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   font-size: 0.95rem;
   transition: all 0.2s;
 }
 
 .search-input:focus {
-  border-color: var(--cw-primary);
+  border-color: var(--mg-primary);
   outline: none;
-  box-shadow: 0 0 0 3px var(--cw-danger-bg); /* Reusing a subtle bg tint */
+  box-shadow: 0 0 0 3px var(--mg-danger-bg); /* Reusing a subtle bg tint */
 }
 
 .refresh-btn {
-  background: var(--cw-surface-alt);
-  border: 1px solid var(--cw-border-light);
-  border-radius: var(--cw-radius-md);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-md);
   width: 3.2rem;
   height: 3.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   cursor: pointer;
   transition: all 0.2s;
 }
 .refresh-btn:hover {
-  background: var(--cw-surface);
-  color: var(--cw-primary);
+  background: var(--mg-bg-surface);
+  color: var(--mg-primary);
 }
 
 /* KPI Strip */
@@ -565,27 +565,27 @@ loadTables()
 }
 
 .kpi-hero {
-  background: var(--cw-surface-alt);
-  border-radius: var(--cw-radius-md);
+  background: var(--mg-bg-surface);
+  border-radius: var(--mg-radius-md);
   padding: 1.5rem 2.5rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  border: 1px solid var(--cw-border-light);
-  box-shadow: var(--cw-shadow-sm);
+  border: 1px solid var(--mg-border-light);
+  box-shadow: var(--mg-shadow-sm);
   min-width: 220px;
 }
 
 .kpi-hero-val {
   font-size: 3rem;
   font-weight: 900;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   line-height: 1;
 }
 
 .kpi-hero-label {
   font-size: 0.95rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   margin-top: 0.5rem;
   font-weight: 700;
 }
@@ -598,15 +598,15 @@ loadTables()
 }
 
 .kpi-tile {
-  background: var(--cw-surface-alt);
-  border-radius: var(--cw-radius-md);
+  background: var(--mg-bg-surface);
+  border-radius: var(--mg-radius-md);
   padding: 1.25rem 1.5rem;
   display: flex;
   align-items: flex-start;
   gap: 1rem;
   flex: 1;
   min-width: 140px;
-  border: 1px solid var(--cw-border-light);
+  border: 1px solid var(--mg-border-light);
 }
 
 .kpi-dot {
@@ -617,9 +617,9 @@ loadTables()
   flex-shrink: 0;
 }
 
-.kpi-dot.empty { background: var(--cw-secondary); }
+.kpi-dot.empty { background: var(--mg-secondary); }
 .kpi-dot.waiting { background: #DDA77B; } /* Sand/amber */
-.kpi-dot.occupied { background: var(--cw-primary); }
+.kpi-dot.occupied { background: var(--mg-primary); }
 
 .kpi-info {
   display: flex;
@@ -629,20 +629,20 @@ loadTables()
 .kpi-val {
   font-size: 1.6rem;
   font-weight: 800;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   line-height: 1.1;
 }
 
 .kpi-label {
   font-size: 0.85rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   font-weight: 600;
   margin-top: 0.25rem;
 }
 
 .kpi-divider {
   width: 1px;
-  background: var(--cw-border-light);
+  background: var(--mg-border-light);
   margin: 0.5rem 0.5rem;
 }
 
@@ -654,11 +654,11 @@ loadTables()
 
 .workspace-tabs {
   display: inline-flex;
-  background: var(--cw-surface);
-  border-radius: var(--cw-radius-md);
+  background: var(--mg-bg-surface);
+  border-radius: var(--mg-radius-md);
   padding: 0.35rem;
   gap: 0.25rem;
-  border: 1px solid var(--cw-border-light);
+  border: 1px solid var(--mg-border-light);
   overflow-x: auto;
   max-width: 100%;
 }
@@ -670,28 +670,28 @@ loadTables()
   padding: 0.75rem 1.25rem;
   border: none;
   background: transparent;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   font-weight: 700;
   font-size: 0.95rem;
   cursor: pointer;
-  border-radius: var(--cw-radius-sm);
+  border-radius: var(--mg-radius-sm);
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .workspace-tab:hover {
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
 }
 
 .workspace-tab.active {
-  background: var(--cw-surface-alt);
-  color: var(--cw-primary);
-  box-shadow: var(--cw-shadow-sm);
+  background: var(--mg-bg-surface);
+  color: var(--mg-primary);
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .tab-badge {
-  background: var(--cw-border-light);
-  color: var(--cw-text-main);
+  background: var(--mg-border-light);
+  color: var(--mg-text-main);
   padding: 0.15rem 0.6rem;
   border-radius: 99px;
   font-size: 0.75rem;
@@ -699,8 +699,8 @@ loadTables()
 }
 
 .workspace-tab.active .tab-badge {
-  background: var(--cw-danger-bg);
-  color: var(--cw-primary);
+  background: var(--mg-danger-bg);
+  color: var(--mg-primary);
 }
 
 /* Floor Grid Area */
@@ -721,15 +721,15 @@ loadTables()
 
 .floor-filter-label {
   font-size: 0.85rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   font-weight: 600;
   margin-left: 0.5rem;
 }
 
 .floor-chip {
-  background: var(--cw-surface-alt);
-  border: 1px solid var(--cw-border-light);
-  color: var(--cw-text-main);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  color: var(--mg-text-main);
   padding: 0.4rem 1rem;
   border-radius: 99px;
   font-size: 0.8rem;
@@ -739,17 +739,17 @@ loadTables()
 }
 
 .floor-chip:hover {
-  border-color: var(--cw-border);
+  border-color: var(--mg-border);
 }
 
 .floor-chip.active {
-  background: var(--cw-text-main);
-  border-color: var(--cw-text-main);
-  color: var(--cw-surface-alt);
+  background: var(--mg-text-main);
+  border-color: var(--mg-text-main);
+  color: var(--mg-bg-surface);
 }
 :global(.dark) .floor-chip.active {
-  background: var(--cw-text-main);
-  color: var(--cw-surface-alt);
+  background: var(--mg-text-main);
+  color: var(--mg-bg-surface);
 }
 
 .floor-grid {
@@ -771,10 +771,10 @@ loadTables()
   align-items: center;
   justify-content: center;
   padding: 5rem 2rem;
-  background: var(--cw-surface-alt);
-  border: 1px dashed var(--cw-border);
-  border-radius: var(--cw-radius-md);
-  color: var(--cw-secondary);
+  background: var(--mg-bg-surface);
+  border: 1px dashed var(--mg-border);
+  border-radius: var(--mg-radius-md);
+  color: var(--mg-secondary);
   text-align: center;
 }
 .empty-icon-wrapper {
@@ -783,26 +783,26 @@ loadTables()
 }
 .empty-state strong {
   font-size: 1.2rem;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   margin-bottom: 0.5rem;
   font-weight: 800;
 }
 .empty-state p {
   font-size: 0.95rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
 }
 .secondary-btn {
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  color: var(--cw-text-main);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border);
+  color: var(--mg-text-main);
   padding: 0.6rem 1.2rem;
-  border-radius: var(--cw-radius-sm);
+  border-radius: var(--mg-radius-sm);
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
 .secondary-btn:hover {
-  background: var(--cw-surface-alt);
+  background: var(--mg-bg-surface);
 }
 
 .workspace-alerts {
@@ -816,23 +816,23 @@ loadTables()
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-radius: var(--cw-radius-sm);
+  border-radius: var(--mg-radius-sm);
   font-size: 0.95rem;
   font-weight: 700;
   margin: 0;
 }
 .error-alert {
-  background: var(--cw-danger-bg);
-  color: var(--cw-danger);
+  background: var(--mg-danger-bg);
+  color: var(--mg-danger);
   border: 1px solid rgba(155, 61, 53, 0.2);
 }
 .success-alert {
   background: rgba(110, 118, 74, 0.1);
-  color: var(--cw-success);
+  color: var(--mg-success);
   border: 1px solid rgba(110, 118, 74, 0.25);
 }
 .muted-loading {
-  color: var(--cw-secondary);
+  color: var(--mg-secondary);
   font-size: 1rem;
   font-weight: 700;
   margin-bottom: 2rem;

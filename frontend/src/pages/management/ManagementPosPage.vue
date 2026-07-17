@@ -2505,7 +2505,7 @@ function selectCustomerFromHistory(customer) {
   form.customer_query = customer.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
 }
 
-async function createCustomerFromQuery(payload) {
+async async async function createCustomerFromQuery(payload) {
   const rawQuery = String(payload?.raw_query || form.customer_query || '').trim()
   if (!rawQuery) {
     return
@@ -2561,7 +2561,7 @@ async function createCustomerFromQuery(payload) {
   error.value = ''
 }
 
-async function addQuickCustomer() {
+async async async function addQuickCustomer() {
   const name = await showPrompt('نام مشتری را وارد کنید:', form.customer_name || '')
   if (name === null) {
     return
@@ -2734,7 +2734,7 @@ function decrementProduct(item) {
   setCartQty(baseLine, Number(baseLine.qty || 0) - 1)
 }
 
-async function editLineNote(line) {
+async async async function editLineNote(line) {
   const next = await showPrompt('یادداشت آیتم:', line.note || '')
   if (next === null) {
     return
@@ -4090,8 +4090,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
   }
 
   resolveCustomerFromQuery()
-  const paymentSelection = resolvePaymentSubmission(paymentMeta)
-  const paymentNoteLine = paymentSelection.auditLine
+  paymentSelection = resolvePaymentSubmission(paymentMeta)
+  let paymentNoteLine = paymentSelection.auditLine
 
   const paymentPayload = payNow
     ? {
@@ -4543,7 +4543,7 @@ function handleGlobalProductSearchTyping(event) {
   return false
 }
 
-async function onWindowKeydown(event) {
+async async async function onWindowKeydown(event) {
   const key = event.key
 
   if (customizationSheet.open) {

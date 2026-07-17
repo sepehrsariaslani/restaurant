@@ -165,10 +165,10 @@ function formatReservationDate(value) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--cw-surface-alt);
-  border-radius: var(--cw-radius-md);
-  border: 1px solid var(--cw-border-light);
-  box-shadow: var(--cw-shadow);
+  background: var(--mg-bg-surface);
+  border-radius: var(--mg-radius-md);
+  border: 1px solid var(--mg-border-light);
+  box-shadow: var(--mg-shadow);
   overflow: hidden;
 }
 
@@ -180,7 +180,7 @@ function formatReservationDate(value) {
   justify-content: center;
   padding: 3rem 2rem;
   text-align: center;
-  color: var(--cw-secondary);
+  color: var(--mg-secondary);
 }
 
 .empty-illustration {
@@ -190,14 +190,14 @@ function formatReservationDate(value) {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: var(--cw-surface);
+  background: var(--mg-bg-surface);
   margin-bottom: 1.5rem;
-  color: var(--cw-secondary);
-  border: 1px solid var(--cw-border-light);
+  color: var(--mg-secondary);
+  border: 1px solid var(--mg-border-light);
 }
 
 .inspection-empty strong {
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   font-size: 1.25rem;
   margin-bottom: 0.75rem;
   font-weight: 800;
@@ -206,7 +206,7 @@ function formatReservationDate(value) {
 .inspection-empty p {
   font-size: 0.95rem;
   line-height: 1.6;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
 }
 
 .inspection-head {
@@ -214,8 +214,8 @@ function formatReservationDate(value) {
   align-items: flex-start;
   justify-content: space-between;
   padding: 1.75rem 2rem;
-  border-bottom: 1px solid var(--cw-border-light);
-  background: var(--cw-surface);
+  border-bottom: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
 }
 
 .head-info {
@@ -225,7 +225,7 @@ function formatReservationDate(value) {
 
 .head-kicker {
   font-size: 0.8rem;
-  color: var(--cw-secondary);
+  color: var(--mg-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 800;
@@ -235,14 +235,14 @@ function formatReservationDate(value) {
 .head-info h2 {
   margin: 0;
   font-size: 1.8rem;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   font-weight: 900;
   letter-spacing: -0.02em;
 }
 
 .head-location {
   font-size: 0.95rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   margin-top: 0.25rem;
   font-weight: 600;
 }
@@ -267,13 +267,13 @@ function formatReservationDate(value) {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--cw-border-light);
+  border-bottom: 1px solid var(--mg-border-light);
 }
 
 .section-title {
   margin: 0;
   font-size: 1.1rem;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   font-weight: 800;
 }
 
@@ -295,15 +295,15 @@ function formatReservationDate(value) {
 
 .form-group label {
   font-size: 0.85rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   font-weight: 700;
 }
 
 .input {
-  background: var(--cw-page-bg);
-  border: 1px solid var(--cw-border-light);
-  color: var(--cw-text-main);
-  border-radius: var(--cw-radius-sm);
+  background: var(--mg-bg-page);
+  border: 1px solid var(--mg-border-light);
+  color: var(--mg-text-main);
+  border-radius: var(--mg-radius-sm);
   padding: 0.75rem 1rem;
   font-family: inherit;
   font-size: 0.95rem;
@@ -311,14 +311,14 @@ function formatReservationDate(value) {
 }
 
 .input:focus {
-  border-color: var(--cw-primary);
-  box-shadow: 0 0 0 3px var(--cw-danger-bg); /* fallback tint */
+  border-color: var(--mg-primary);
+  box-shadow: 0 0 0 3px var(--mg-danger-bg); /* fallback tint */
   outline: none;
 }
 
 .input:disabled {
   opacity: 0.6;
-  background: var(--cw-surface);
+  background: var(--mg-bg-surface);
 }
 
 .checkbox-group {
@@ -331,7 +331,7 @@ function formatReservationDate(value) {
   gap: 0.75rem;
   cursor: pointer;
   font-size: 0.9rem;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   font-weight: 600;
 }
 
@@ -339,10 +339,10 @@ function formatReservationDate(value) {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  background: var(--cw-page-bg);
+  background: var(--mg-bg-page);
   padding: 1.25rem;
-  border-radius: var(--cw-radius-sm);
-  border: 1px solid var(--cw-border-light);
+  border-radius: var(--mg-radius-sm);
+  border: 1px solid var(--mg-border-light);
 }
 
 .data-row {
@@ -350,12 +350,12 @@ function formatReservationDate(value) {
   align-items: center;
   gap: 0.85rem;
   font-size: 0.95rem;
-  color: var(--cw-text-main);
+  color: var(--mg-text-main);
   font-weight: 600;
 }
 
 .data-icon {
-  color: var(--cw-secondary);
+  color: var(--mg-secondary);
   display: flex;
 }
 
@@ -363,21 +363,21 @@ function formatReservationDate(value) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--cw-surface);
+  background: var(--mg-bg-surface);
   padding: 1rem 1.25rem;
-  border-radius: var(--cw-radius-sm);
-  border: 1px dashed var(--cw-border);
+  border-radius: var(--mg-radius-sm);
+  border: 1px dashed var(--mg-border);
 }
 
 .highlight-label {
   font-size: 0.9rem;
-  color: var(--cw-text-muted);
+  color: var(--mg-text-muted);
   font-weight: 700;
 }
 
 .highlight-value {
   font-size: 1.4rem;
-  color: var(--cw-primary);
+  color: var(--mg-primary);
   font-weight: 900;
   letter-spacing: -0.02em;
 }
@@ -389,7 +389,7 @@ function formatReservationDate(value) {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--cw-primary);
+  color: var(--mg-primary);
   font-size: 0.9rem;
   font-weight: 800;
   background: transparent;
@@ -399,13 +399,13 @@ function formatReservationDate(value) {
 }
 
 .icon-text-btn:hover {
-  color: var(--cw-primary-hover);
+  color: var(--mg-primary-hover);
 }
 
 .inspection-footer {
   padding: 1.5rem 2rem;
-  border-top: 1px solid var(--cw-border-light);
-  background: var(--cw-surface);
+  border-top: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -423,7 +423,7 @@ function formatReservationDate(value) {
   align-items: center;
   gap: 0.5rem;
   height: 3.2rem;
-  border-radius: var(--cw-radius-sm);
+  border-radius: var(--mg-radius-sm);
   font-size: 0.95rem;
   font-weight: 800;
   cursor: pointer;
@@ -432,26 +432,26 @@ function formatReservationDate(value) {
 }
 
 .primary-btn {
-  background: var(--cw-primary);
+  background: var(--mg-primary);
   color: #fff;
 }
 .primary-btn:hover:not(:disabled) {
-  background: var(--cw-primary-hover);
+  background: var(--mg-primary-hover);
 }
 :global(.dark) .primary-btn { color: #1A130D; }
 
 .secondary-btn {
-  background: var(--cw-surface-alt);
-  border: 1px solid var(--cw-border);
-  color: var(--cw-text-main);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border);
+  color: var(--mg-text-main);
 }
 .secondary-btn:hover:not(:disabled) {
-  background: var(--cw-surface);
+  background: var(--mg-bg-surface);
 }
 
 .danger-btn {
-  background: var(--cw-danger-bg);
-  color: var(--cw-danger);
+  background: var(--mg-danger-bg);
+  color: var(--mg-danger);
 }
 .danger-btn:hover {
   opacity: 0.8;

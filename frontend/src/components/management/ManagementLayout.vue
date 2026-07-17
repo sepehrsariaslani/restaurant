@@ -1179,35 +1179,28 @@ onBeforeUnmount(() => {
 <style scoped>
 .management-layout,
 .management-auth-shell {
-	/* Core Earthy Theme Backgrounds */
-	--bg-page: #FDFBF7; /* Muted parchment/cream */
-	--bg-card: #ffffff;
-	--bg-soft: #F4EFE6; /* Dusty beige/sand */
-	--bg-subtle: #FDFBF7;
-	--border: #E8D1A7; /* Golden Batter */
-	--border-strong: #9D9167; /* Olive */
-	
-	/* Core Earthy Theme Typography */
-	--text: #442D1C; /* Cowhide Cocoa */
-	--muted: #84592B; /* Toasted Caramel */
-	--muted-2: #9D9167; /* Olive Harvest */
-	--danger: #A33D3D; /* Deep Semantic Red */
-	
-	--shadow: 0 18px 44px rgba(68, 45, 28, 0.07);
-	--shadow-sm: 0 8px 22px rgba(68, 45, 28, 0.045);
+	/* Legacy mappings to prevent breaking POS/Products/Dashboard */
+	--bg-page: var(--mg-bg-page);
+	--bg-card: var(--mg-bg-surface);
+	--bg-soft: var(--mg-bg-soft);
+	--bg-subtle: var(--mg-bg-page);
+	--border: var(--mg-border);
+	--border-strong: var(--mg-text-muted);
+	--text: var(--mg-text-main);
+	--muted: var(--mg-text-muted);
+	--muted-2: var(--mg-olive);
+	--danger: var(--mg-danger);
+	--shadow: var(--mg-shadow-md);
+	--shadow-sm: var(--mg-shadow-sm);
+	--palette-deep-sapphire: var(--mg-primary);
+	--palette-deep-sapphire-rgb: 201, 120, 82;
+	--palette-june-bud: var(--mg-olive);
+	--palette-june-bud-rgb: 138, 139, 99;
+	--palette-deep-saffron: var(--mg-border);
+	--palette-deep-saffron-rgb: 216, 200, 180;
+	--palette-eggshell: var(--mg-bg-surface);
+	--palette-eggshell-rgb: 251, 247, 241;
 
-	/* Palette Overrides mapped to Earthy Theme */
-	--palette-deep-sapphire: #743014; /* Spiced Wine / Terracotta */
-	--palette-deep-sapphire-rgb: 116 48 20;
-	--palette-june-bud: #9D9167; /* Olive Harvest */
-	--palette-june-bud-rgb: 157 145 103;
-	--palette-deep-saffron: #84592B; /* Toasted Caramel */
-	--palette-deep-saffron-rgb: 132 89 43;
-	--palette-gold: #E8D1A7; /* Golden Batter */
-	--palette-gold-rgb: 232 209 167;
-	--palette-eggshell: #ffffff;
-	--palette-eggshell-rgb: 255 255 255;
-	--theme-surface-alt: var(--bg-soft);
 	--theme-background: var(--bg-page);
 	--theme-border: var(--border);
 	--glass-bg: #ffffff;
@@ -1277,23 +1270,26 @@ onBeforeUnmount(() => {
 .management-auth-shell.dark,
 :global(.dark) .management-layout,
 :global(.dark) .management-auth-shell {
-	--bg-page: #020617;
-	--bg-card: #0f172a;
-	--bg-soft: #111827;
-	--bg-subtle: #1e293b;
-	--border: #1f2937;
-	--border-strong: #334155;
-	--text: #f8fafc;
-	--muted: #cbd5e1;
-	--muted-2: #94a3b8;
-	--shadow: 0 22px 54px rgb(0 0 0 / 0.38);
-	--shadow-sm: 0 10px 28px rgb(0 0 0 / 0.28);
-	--palette-deep-sapphire: #f4e6d3;
-	--palette-deep-sapphire-rgb: 244 230 211;
-	--palette-june-bud: #f4e6d3;
-	--palette-june-bud-rgb: 244 230 211;
-	--palette-deep-saffron: #ffd7a8;
-	--palette-deep-saffron-rgb: 255 215 168;
+	--bg-page: var(--mg-bg-page);
+	--bg-card: var(--mg-bg-surface);
+	--bg-soft: var(--mg-bg-soft);
+	--bg-subtle: var(--mg-bg-page);
+	--border: var(--mg-border);
+	--border-strong: var(--mg-text-muted);
+	--text: var(--mg-text-main);
+	--muted: var(--mg-text-muted);
+	--muted-2: var(--mg-olive);
+	--shadow: var(--mg-shadow-md);
+	--shadow-sm: var(--mg-shadow-sm);
+	--palette-deep-sapphire: var(--mg-primary);
+	--palette-deep-sapphire-rgb: 178, 106, 74;
+	--palette-june-bud: var(--mg-olive);
+	--palette-june-bud-rgb: 121, 120, 85;
+	--palette-deep-saffron: var(--mg-border);
+	--palette-deep-saffron-rgb: 77, 59, 49;
+	--palette-eggshell: var(--mg-bg-surface);
+	--palette-eggshell-rgb: 38, 29, 24;
+
 	--glass-bg: #0f172a;
 	--glass-border: #1f2937;
 	--glass-highlight: rgb(255 255 255 / 0.08);
