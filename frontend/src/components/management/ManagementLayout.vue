@@ -137,6 +137,12 @@
 			<!-- Sidebar -->
 			<aside class="desktop-sidebar">
 				<div class="sidebar-logo-block">
+					
+					<button type="button" class="utility-icon-btn rail-toggle-btn" @click="toggleRailMode" :title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'">
+						<PanelRightCloseIcon v-if="!isRailCollapsed" class="icon-sm" />
+						<PanelRightOpenIcon v-else class="icon-sm" />
+					</button>
+
 					<a class="rail-brand" href="/management">
 						<span class="rail-brand-mark"><img class="brand-image brand-image-lg" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
 						<span class="rail-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
@@ -871,9 +877,15 @@ onMounted(() => {
 		const storedRailMode = window.localStorage.getItem(RAIL_STORAGE_KEY);
 
 		desktopScale.value = normalizeScale(storedScale);
+
+	if (isKitchenPage.value) {
+		railMode.value = "icons";
+	} else {
 		railMode.value = ["expanded", "icons"].includes(storedRailMode)
 			? storedRailMode
 			: "expanded";
+	}
+
 
 		desktopMedia = window.matchMedia(DESKTOP_MEDIA_QUERY);
 		desktopListener = () => syncDesktopState();
@@ -1145,6 +1157,7 @@ onBeforeUnmount(() => {
 
 	.desktop-sidebar {
 		width: 16rem;
+		transition: width 0.2s;
 		background: var(--mg-bg-surface);
 		border-left: 1px solid var(--mg-border-light);
 		display: flex;
@@ -1285,19 +1298,18 @@ onBeforeUnmount(() => {
 
 	.desktop-main--fullbleed { padding: 0; }
 	
-	/* Kitchen Page Specific Sidebar Tweaks */
-	.management-layout--kitchen .desktop-sidebar {
-		width: 5.5rem;
-	}
-	.management-layout--kitchen .rail-brand-text,
-	.management-layout--kitchen .group-title-rail,
-	.management-layout--kitchen .item-label {
-		display: none;
-	}
-	.management-layout--kitchen .nav-item {
-		justify-content: center;
-		padding: 0.8rem;
-	}
+	
+	.rail-toggle-btn { margin-right: auto; }
+	.rail-collapsed .desktop-sidebar { width: 5.5rem; }
+	.rail-collapsed .rail-brand-text,
+	.rail-collapsed .group-title-rail,
+	.rail-collapsed .item-label { display: none; }
+	.rail-collapsed .nav-item { justify-content: center; padding: 0.8rem; }
+	
+	.sidebar-logo-block { justify-content: space-between; }
+
+	/* Kitchen Page Specific Sidebar Tweaks (Use rail-collapsed mostly, but we can keep these as fallback or let the user decide.
+       Actually, let's let KDS default to collapsed via JS, but user can open it) */
 	.management-layout--kitchen .desktop-header {
 		display: none;
 	}

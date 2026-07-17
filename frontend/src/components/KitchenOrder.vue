@@ -1,64 +1,63 @@
 <template>
   <article class="ko-card" :class="[`status-${type}`, { 'is-urgent': isUrgent }]">
-    <!-- Meta row -->
-    <header class="ko-meta">
-      <div class="ko-meta-left">
-        <span class="ko-channel">{{ order.channel || 'حضوری' }}</span>
-        <strong class="ko-code">{{ order.order_code || order.name }}</strong>
+    
+    <div class="ko-header" :class="`ko-header-${type}`">
+      <div class="ko-identity">
+        <span class="ko-code">{{ order.order_code || order.name }}</span>
+        <span class="ko-channel" v-if="order.channel">{{ order.channel }}</span>
       </div>
-      <div class="ko-time" :class="{ 'is-urgent': isUrgent }">
+      <div class="ko-time" :class="{ 'is-urgent-time': isUrgent }">
         <Clock :size="14" class="icon-sm" />
-        <span>{{ elapsed }}<small>د</small></span>
+        <span class="ko-time-val">{{ elapsed }}<small>د</small></span>
       </div>
-    </header>
+    </div>
 
-    <!-- Identity row -->
-    <div class="ko-identity" v-if="order.customer_name">
+    <div class="ko-meta" v-if="order.customer_name">
       <div class="ko-customer">
         <UserRound :size="14" class="icon-sm" />
         <span class="customer-name">{{ order.customer_name }}</span>
       </div>
       <div class="ko-item-count">
-        <Layers :size="14" class="icon-sm" />
         <span>{{ toFaDigits(totalQty) }} مورد</span>
       </div>
     </div>
-    <div class="ko-identity" v-else>
+    <div class="ko-meta ko-meta-empty" v-else>
       <div class="ko-item-count">
-        <Layers :size="14" class="icon-sm" />
         <span>{{ toFaDigits(totalQty) }} مورد</span>
       </div>
     </div>
 
-    <!-- Items Preview -->
     <div class="ko-body">
-      <div class="ko-items-list">
-        <div v-for="(it, i) in (order.items || []).slice(0, previewCount)" :key="i" class="ko-item">
+      <div class="ko-items">
+        <div v-if="(order.items || []).length === 0" class="ko-empty-items">
+          بدون آیتم مشخص
+        </div>
+        <div v-for="(it, i) in (order.items || []).slice(0, 6)" :key="i" class="ko-item">
           <div class="ko-item-main">
-            <span class="ko-qty">{{ toFaDigits(it.qty) }}</span>
-            <span class="ko-title">{{ it.title || it.item_name }}</span>
+            <span class="ko-qty" :class="`ko-qty-${type}`">{{ toFaDigits(it.qty) }}</span>
+            <span class="ko-title">{{ it.title || it.item_name || 'آیتم نامشخص' }}</span>
           </div>
           <div v-if="it.note" class="ko-note">
             <CornerDownLeft :size="12" class="note-icon" />
             <span>{{ it.note }}</span>
           </div>
         </div>
-        <div v-if="(order.items || []).length > previewCount" class="ko-more">
-          + {{ toFaDigits((order.items || []).length - previewCount) }} آیتم دیگر
+        <div v-if="(order.items || []).length > 6" class="ko-more">
+          + {{ toFaDigits((order.items || []).length - 6) }} آیتم دیگر
         </div>
       </div>
     </div>
 
     <footer class="ko-footer" v-if="type !== 'closed'">
-      <button v-if="type === 'new'" class="ko-btn btn-new" @click.stop="$emit('action')">
+      <button v-if="type === 'new'" class="ko-btn ko-btn-new" @click.stop="$emit('action')">
         <Play :size="16" />
         <span>شروع تولید</span>
       </button>
-      <button v-if="type === 'prep'" class="ko-btn btn-prep" @click.stop="$emit('action')">
+      <button v-if="type === 'prep'" class="ko-btn ko-btn-prep" @click.stop="$emit('action')">
         <Check :size="16" />
         <span>آماده شد</span>
       </button>
-      <button v-if="type === 'ready'" class="ko-btn btn-ready" @click.stop="$emit('action')">
+      <button v-if="type === 'ready'" class="ko-btn ko-btn-ready" @click.stop="$emit('action')">
         <CheckCheck :size="16" />
         <span>تحویل مشتری</span>
       </button>
@@ -97,6 +96,7 @@ const elapsed = computed(() => {
 const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' && props.type !== 'closed')
 </script>
 
+
 <style scoped>
 .ko-card {
   display: flex;
@@ -105,15 +105,9 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   border: 1px solid var(--mg-border-light);
   border-radius: var(--mg-radius-md);
   transition: all 0.2s;
-  position: relative;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(52, 38, 31, 0.03);
 }
-
-/* Status variants */
-.ko-card.status-new { border-top: 3px solid var(--mg-primary); }
-.ko-card.status-prep { border-top: 3px solid var(--mg-danger); }
-.ko-card.status-ready { border-top: 3px solid var(--mg-success); background: rgba(111, 123, 86, 0.03); }
-.ko-card.status-closed { border-top: 3px solid var(--mg-border); opacity: 0.75; }
 
 .ko-card:hover {
   border-color: var(--mg-border);
@@ -121,8 +115,8 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
 }
 
 .ko-card.is-urgent {
-  border-color: rgba(166, 84, 63, 0.5);
-  box-shadow: 0 0 0 1px rgba(166, 84, 63, 0.2);
+  border-color: rgba(166, 84, 63, 0.4);
+  box-shadow: 0 0 0 1px rgba(166, 84, 63, 0.1);
   animation: urgent-pulse 2s infinite;
 }
 
@@ -132,69 +126,78 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   100% { box-shadow: 0 0 0 0px rgba(166, 84, 63, 0); }
 }
 
-.ko-meta {
+.ko-card.status-ready {
+  background: var(--mg-success-bg);
+  border-color: rgba(111, 123, 86, 0.2);
+}
+
+.ko-card.status-closed {
+  opacity: 0.75;
+}
+
+/* Header */
+.ko-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--mg-border-light);
 }
+.ko-header-new { background: rgba(201, 120, 82, 0.06); border-bottom-color: rgba(201, 120, 82, 0.15); }
+.ko-header-prep { background: rgba(166, 84, 63, 0.06); border-bottom-color: rgba(166, 84, 63, 0.15); }
+.ko-header-ready { background: rgba(111, 123, 86, 0.1); border-bottom-color: rgba(111, 123, 86, 0.2); }
+.ko-header-closed { background: var(--mg-surface-alt); }
 
-.ko-meta-left {
+.ko-identity {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
+
+.ko-code {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--mg-text-main);
+  letter-spacing: -0.01em;
+}
+.ko-header-ready .ko-code { color: var(--mg-success); }
 
 .ko-channel {
   font-size: 0.65rem;
-  background: var(--mg-surface-alt);
+  background: var(--mg-bg-surface);
   border: 1px solid var(--mg-border-light);
   color: var(--mg-text-muted);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
-  font-weight: 700;
-}
-
-.ko-code {
-  font-size: 1.05rem;
-  font-weight: 900;
-  color: var(--mg-text-main);
-  letter-spacing: -0.01em;
+  font-weight: 800;
 }
 
 .ko-time {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-  font-weight: 800;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 900;
   color: var(--mg-secondary);
-  background: var(--mg-surface-alt);
-  padding: 0.2rem 0.5rem;
-  border-radius: 99px;
-  border: 1px solid var(--mg-border-light);
 }
-
-.ko-time.is-urgent {
-  color: var(--mg-danger);
-  background: var(--mg-danger-bg);
-  border-color: rgba(166, 84, 63, 0.2);
-}
+.ko-time.is-urgent-time { color: var(--mg-danger); }
 
 .ko-time small {
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: 700;
   margin-right: 0.1rem;
 }
 
-.ko-identity {
+/* Meta */
+.ko-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 1rem 0.75rem;
-  border-bottom: 1px solid var(--mg-border-light);
+  padding: 0.6rem 0.85rem 0;
 }
-
+.ko-meta-empty {
+  justify-content: flex-end;
+}
 .ko-customer {
   display: flex;
   align-items: center;
@@ -203,32 +206,31 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   color: var(--mg-text-main);
   font-weight: 700;
 }
-
 .customer-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 130px;
+  max-width: 180px;
 }
-
 .ko-item-count {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 800;
   color: var(--mg-secondary);
+  background: var(--mg-surface-alt);
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  border: 1px solid var(--mg-border-light);
 }
 
+/* Body */
 .ko-body {
-  flex: 1;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.85rem;
 }
 
-.ko-items-list {
+.ko-items {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .ko-item {
@@ -240,13 +242,13 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
 .ko-item-main {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .ko-qty {
   flex: 0 0 auto;
-  min-width: 1.4rem;
-  height: 1.4rem;
+  min-width: 1.6rem;
+  height: 1.6rem;
   background: var(--mg-surface-alt);
   border: 1px solid var(--mg-border-light);
   color: var(--mg-text-main);
@@ -254,20 +256,17 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 800;
+  font-size: 0.9rem;
+  font-weight: 900;
 }
-
-.status-new .ko-qty {
-  color: var(--mg-primary);
-  background: rgba(201, 120, 82, 0.08);
-  border-color: rgba(201, 120, 82, 0.2);
-}
+.ko-qty-new { color: var(--mg-primary); border-color: rgba(201, 120, 82, 0.3); background: rgba(201, 120, 82, 0.08); }
+.ko-qty-prep { color: var(--mg-danger); border-color: rgba(166, 84, 63, 0.3); background: rgba(166, 84, 63, 0.08); }
+.ko-qty-ready { color: var(--mg-success); border-color: rgba(111, 123, 86, 0.3); background: rgba(111, 123, 86, 0.08); }
 
 .ko-title {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--mg-text-main);
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.4;
   padding-top: 0.1rem;
 }
@@ -278,10 +277,9 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   gap: 0.3rem;
   font-size: 0.8rem;
   color: var(--mg-danger);
-  padding-right: 1.9rem;
-  font-weight: 600;
+  padding-right: 2.2rem;
+  font-weight: 700;
 }
-
 .note-icon {
   margin-top: 0.15rem;
   opacity: 0.8;
@@ -291,14 +289,23 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   text-align: center;
   font-size: 0.8rem;
   color: var(--mg-secondary);
-  font-weight: 700;
-  padding-top: 0.4rem;
+  font-weight: 800;
+  padding-top: 0.5rem;
   border-top: 1px dashed var(--mg-border-light);
   margin-top: 0.2rem;
 }
 
+.ko-empty-items {
+  font-size: 0.85rem;
+  color: var(--mg-text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+/* Footer */
 .ko-footer {
-  padding: 0.75rem 1rem 1rem;
+  padding: 0 0.85rem 0.85rem;
   margin-top: auto;
 }
 
@@ -317,24 +324,25 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
   transition: all 0.2s;
 }
 
-.btn-new {
-  background: var(--mg-surface-alt);
-  border: 1px solid var(--mg-primary);
+.ko-btn-new {
+  background: var(--mg-bg-surface);
+  border: 2px solid var(--mg-primary);
   color: var(--mg-primary);
 }
-.btn-new:hover { background: var(--mg-primary); color: #fff; }
+.ko-btn-new:hover { background: var(--mg-primary); color: #fff; }
 
-.btn-prep {
+.ko-btn-prep {
   background: var(--mg-danger);
   color: #fff;
 }
-.btn-prep:hover { background: var(--mg-primary-hover); }
+.ko-btn-prep:hover { background: var(--mg-primary-hover); }
 
-.btn-ready {
+.ko-btn-ready {
   background: var(--mg-success);
   color: #fff;
 }
-.btn-ready:hover { background: #5a6344; }
+.ko-btn-ready:hover { background: #5a6344; }
 
 .icon-sm { opacity: 0.8; }
 </style>
+
