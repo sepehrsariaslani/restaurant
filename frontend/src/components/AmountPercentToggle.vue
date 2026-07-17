@@ -65,8 +65,8 @@ defineEmits(['update:modelValue'])
   align-items: stretch;
   padding: 2px;
   border-radius: 9px;
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.06);
+  border: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.12);
   gap: 2px;
   height: 30px;
   flex-shrink: 0;
@@ -75,7 +75,7 @@ defineEmits(['update:modelValue'])
 .apt-seg {
   border: 0;
   background: transparent;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.45);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.45);
   font-family: inherit;
   line-height: 1;
   padding: 0 0.45rem;
@@ -90,13 +90,13 @@ defineEmits(['update:modelValue'])
 }
 
 .apt-seg:hover:not(.active) {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.7);
+  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.08);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.7);
 }
 
 .apt-seg.active {
   background: var(--pos-white, #fff);
-  color: var(--pos-primary, #015a72);
+  color: var(--mg-primary, #015a72);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 }
 
@@ -106,7 +106,7 @@ defineEmits(['update:modelValue'])
 }
 
 .apt-seg:focus-visible {
-  outline: 2px solid rgb(var(--pos-accent-rgb, 255 152 54) / 0.6);
+  outline: 2px solid rgb(var(--mg-primary-rgb, 255 152 54) / 0.6);
   outline-offset: 1px;
 }
 </style>

@@ -130,7 +130,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	position: fixed;
 	inset: 0;
 	z-index: 120;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.24);
+	background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.24);
 	display: grid;
 	place-items: center;
 	padding: 1rem;
@@ -163,7 +163,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 
 .sheet-head p {
 	margin-top: 0.2rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
 }
 
 .close-btn,
@@ -171,7 +171,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 .counter button {
 	border: 1px solid var(--pos-border);
 	background: var(--pos-white);
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	border-radius: 10px;
 	cursor: pointer;
 	font-family: inherit;
@@ -189,7 +189,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	justify-content: space-between;
 	padding: 0.6rem 0.8rem;
 	border-radius: 14px;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+	background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.04);
 	border: 1px solid var(--pos-border);
 }
 
@@ -221,13 +221,13 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 
 .hint {
 	margin: 0;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
 	font-size: 0.92rem;
 }
 
 .error {
 	margin: 0;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 	font-size: 0.92rem;
 }
 
@@ -246,8 +246,8 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 }
 
 .submit-btn {
-	background: var(--pos-accent);
-	border-color: var(--pos-accent);
+	background: var(--mg-primary);
+	border-color: var(--mg-primary);
 	color: var(--pos-white);
 	padding: 0.7rem 1.4rem;
 	font-size: 0.98rem;

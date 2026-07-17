@@ -72,7 +72,7 @@ header h3 {
 }
 
 header small {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.72rem;
 }
 
@@ -93,15 +93,15 @@ header small {
 }
 
 .category-item.active {
-  background: var(--pos-primary);
+  background: var(--mg-primary);
   color: var(--pos-white);
-  border-color: var(--pos-primary);
+  border-color: var(--mg-primary);
   font-weight: 600;
 }
 
 .hint {
   margin: 0;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.78rem;
 }
 

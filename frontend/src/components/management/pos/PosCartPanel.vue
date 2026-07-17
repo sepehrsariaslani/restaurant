@@ -807,14 +807,14 @@ defineExpose({
 <style scoped>
 /* ─── Panel Shell ─── */
 .cart-panel {
-	--pos-primary: var(--mg-primary);
-	--pos-primary-rgb: var(--mg-primary-rgb);
-	--pos-accent: var(--mg-success);
-	--pos-accent-rgb: var(--mg-success-rgb);
-	--pos-danger: var(--mg-danger);
-	--pos-danger-rgb: var(--mg-danger-rgb);
-	--pos-success: var(--mg-success);
-	--pos-success-rgb: var(--mg-success-rgb);
+	--mg-primary: var(--mg-primary);
+	--mg-primary-rgb: var(--mg-primary-rgb);
+	--mg-primary: var(--mg-success);
+	--mg-primary-rgb: var(--mg-success-rgb);
+	--mg-danger: var(--mg-danger);
+	--mg-danger-rgb: var(--mg-danger-rgb);
+	--mg-success: var(--mg-success);
+	--mg-success-rgb: var(--mg-success-rgb);
 	border-radius: 24px;
 	background: linear-gradient(180deg, color-mix(in srgb, white 52%, var(--mg-bg-surface) 48%) 0%, var(--mg-bg-surface) 100%);
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
@@ -858,11 +858,11 @@ defineExpose({
 }
 
 .mode-seg button.active {
-	background: var(--pos-primary);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 	font-weight: 700;
-	border-color: var(--pos-primary);
-	box-shadow: 0 12px 24px rgb(var(--pos-primary-rgb) / 0.22);
+	border-color: var(--mg-primary);
+	box-shadow: 0 12px 24px color-mix(in srgb, var(--mg-primary) 22%, transparent);
 }
 
 .mode-seg button:not(.active):hover {
@@ -917,8 +917,8 @@ defineExpose({
 
 .undo-btn {
 	background: color-mix(in srgb, var(--mg-success) 9%, white 91%);
-	border: 1px solid rgb(var(--pos-accent-rgb) / 0.24);
-	color: var(--pos-accent);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 24%, transparent);
+	color: var(--mg-primary);
 	border-radius: 6px;
 	font-size: 0.68rem;
 	font-family: inherit;
@@ -932,15 +932,15 @@ defineExpose({
 }
 
 .undo-btn:hover {
-	background: var(--pos-accent);
-	border-color: var(--pos-accent);
+	background: var(--mg-primary);
+	border-color: var(--mg-primary);
 	color: var(--mg-bg-surface);
 }
 
 .clear-btn {
 	background: none;
 	border: none;
-	color: rgb(var(--pos-primary-rgb) / 0.4);
+	color: color-mix(in srgb, var(--mg-primary) 40%, transparent);
 	font-size: 0.72rem;
 	font-family: inherit;
 	cursor: pointer;
@@ -950,8 +950,8 @@ defineExpose({
 }
 
 .clear-btn:hover {
-	color: var(--pos-danger);
-	background: rgb(var(--pos-danger-rgb) / 0.08);
+	color: var(--mg-danger);
+	background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
 }
 
 /* ─── Cart List ─── */
@@ -985,8 +985,8 @@ defineExpose({
 
 .cart-row.active {
 	background: color-mix(in srgb, var(--mg-primary) 8%, white 92%);
-	border-color: color-mix(in srgb, var(--pos-primary) 38%, var(--mg-border-light) 62%);
-  box-shadow: 0 10px 24px rgb(var(--mg-primary-rgb) / 0.08);
+	border-color: color-mix(in srgb, var(--mg-primary) 38%, var(--mg-border-light) 62%);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--mg-primary) 8%, transparent);
 }
 
 .line-main {
@@ -1038,7 +1038,7 @@ defineExpose({
 
 .line-note {
 	font-size: 0.66rem;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 }
 
 .line-actions {
@@ -1053,7 +1053,7 @@ defineExpose({
 	height: 26px;
 	border: none;
 	background: color-mix(in srgb, var(--mg-bg-page) 62%, white 38%);
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	border-radius: 7px;
 	cursor: pointer;
 	font-size: 0.78rem;
@@ -1066,8 +1066,8 @@ defineExpose({
 }
 
 .act-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.12);
-	color: var(--pos-primary);
+	background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	color: var(--mg-primary);
 }
 
 .act-btn.bom {
@@ -1075,7 +1075,7 @@ defineExpose({
 	padding: 0 0.35rem;
 	font-size: 0.62rem;
 	font-weight: 700;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 	background: color-mix(in srgb, var(--mg-success) 12%, white 88%);
 }
 
@@ -1084,12 +1084,12 @@ defineExpose({
 }
 
 .act-btn.remove {
-	color: rgb(var(--pos-danger-rgb) / 0.5);
+	color: color-mix(in srgb, var(--mg-danger) 50%, transparent);
 }
 
 .act-btn.remove:hover {
-	background: rgb(var(--pos-danger-rgb) / 0.1);
-	color: var(--pos-danger);
+	background: color-mix(in srgb, var(--mg-danger) 10%, transparent);
+	color: var(--mg-danger);
 }
 
 .counter {
@@ -1105,7 +1105,7 @@ defineExpose({
 	height: 26px;
 	border: none;
 	background: transparent;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	cursor: pointer;
 	font-size: 0.88rem;
 	font-weight: 600;
@@ -1114,7 +1114,7 @@ defineExpose({
 }
 
 .counter button:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.1);
+	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
 .counter span {
@@ -1197,7 +1197,7 @@ defineExpose({
 .fin-checkbox {
 	width: 14px;
 	height: 14px;
-	accent-color: var(--pos-primary);
+	accent-color: var(--mg-primary);
 	cursor: pointer;
 	flex-shrink: 0;
 }
@@ -1226,9 +1226,9 @@ defineExpose({
 }
 
 .fin-input:focus {
-	border-color: color-mix(in srgb, var(--pos-primary) 42%, var(--mg-border-light) 58%);
+	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border-light) 58%);
 	background: var(--mg-bg-surface);
-	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.06);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 6%, transparent);
 }
 
 .fin-input:disabled {
@@ -1239,7 +1239,7 @@ defineExpose({
 .fin-action-btn {
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	background: color-mix(in srgb, var(--mg-bg-page) 58%, white 42%);
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	font-size: 0.7rem;
 	font-weight: 600;
 	cursor: pointer;
@@ -1253,7 +1253,7 @@ defineExpose({
 }
 
 .fin-action-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.1);
+	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
 .fin-note-row {
@@ -1275,13 +1275,13 @@ defineExpose({
 }
 
 .fin-note-input::placeholder {
-	color: rgb(var(--pos-primary-rgb) / 0.3);
+	color: color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .fin-note-input:focus {
-	border-color: rgb(var(--pos-primary-rgb) / 0.25);
+	border-color: color-mix(in srgb, var(--mg-primary) 25%, transparent);
 	background: var(--mg-bg-surface);
-	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.05);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 5%, transparent);
 }
 
 /* ─── Summary ─── */
@@ -1308,7 +1308,7 @@ defineExpose({
 }
 
 .sum-line strong.discount {
-	color: var(--pos-success);
+	color: var(--mg-success);
 }
 
 .sum-line.payable {
@@ -1360,7 +1360,7 @@ defineExpose({
 }
 
 .save-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 12px rgb(var(--pos-primary-rgb) / 0.3);
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .settle-btn-custom {
@@ -1402,9 +1402,9 @@ defineExpose({
 }
 
 .print-btn:hover:not(:disabled) {
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: var(--pos-primary);
-	border-color: rgb(var(--pos-primary-rgb) / 0.2);
+	background: color-mix(in srgb, var(--mg-primary) 6%, transparent);
+	color: var(--mg-primary);
+	border-color: color-mix(in srgb, var(--mg-primary) 20%, transparent);
 }
 
 .save-btn:disabled,
@@ -1433,13 +1433,13 @@ defineExpose({
 }
 
 .checkout-opts label:hover {
-	color: rgb(var(--pos-primary-rgb) / 0.7);
+	color: color-mix(in srgb, var(--mg-primary) 70%, transparent);
 }
 
 .checkout-opts input[type="checkbox"] {
 	width: 13px;
 	height: 13px;
-	accent-color: var(--pos-primary);
+	accent-color: var(--mg-primary);
 	cursor: pointer;
 }
 
@@ -1468,7 +1468,7 @@ defineExpose({
 
 .pay-popup {
 	background: var(--mg-bg-surface);
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
 	border-radius: 20px;
 	width: min(520px, calc(100vw - 2rem));
 	max-height: min(760px, calc(100dvh - 2rem));
@@ -1491,14 +1491,14 @@ defineExpose({
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5rem;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-popup-head h3 {
 	margin: 0;
 	font-size: 0.95rem;
 	font-weight: 800;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-popup-close {
@@ -1506,8 +1506,8 @@ defineExpose({
 	height: 2rem;
 	border: none;
 	border-radius: 8px;
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: rgb(var(--pos-primary-rgb) / 0.5);
+	background: color-mix(in srgb, var(--mg-primary) 6%, transparent);
+	color: color-mix(in srgb, var(--mg-primary) 50%, transparent);
 	font-size: 1.1rem;
 	cursor: pointer;
 	display: inline-flex;
@@ -1517,7 +1517,7 @@ defineExpose({
 }
 
 .pay-popup-close:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.12);
+	background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
 	color: var(--mg-text-main);
 }
 
@@ -1525,17 +1525,17 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background: rgb(var(--pos-primary-rgb) / 0.04);
+	background: color-mix(in srgb, var(--mg-primary) 4%, transparent);
 	border-radius: 12px;
 	padding: 0.7rem 0.85rem;
 	font-size: 0.8rem;
-	color: rgb(var(--pos-primary-rgb) / 0.6);
+	color: color-mix(in srgb, var(--mg-primary) 60%, transparent);
 }
 
 .pay-total-banner strong {
 	font-size: 1.05rem;
 	font-weight: 800;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-splits {
@@ -1554,8 +1554,8 @@ defineExpose({
 	gap: 0.65rem;
 	padding: 0.8rem;
 	border-radius: 14px;
-	background: rgb(var(--pos-primary-rgb) / 0.03);
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+	background: color-mix(in srgb, var(--mg-primary) 3%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 8%, transparent);
 }
 
 .pay-split-head {
@@ -1571,7 +1571,7 @@ defineExpose({
 	gap: 0.45rem;
 	font-size: 0.82rem;
 	font-weight: 700;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-split-controls {
@@ -1586,8 +1586,8 @@ defineExpose({
 	padding: 0.6rem 0.7rem;
 	font-size: 0.78rem;
 	min-width: 0;
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
-	background: rgb(var(--pos-primary-rgb) / 0.03);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	background: color-mix(in srgb, var(--mg-primary) 3%, transparent);
 	color: var(--mg-text-main);
 	font-family: inherit;
 	height: 44px;
@@ -1606,8 +1606,8 @@ defineExpose({
 	height: 26px;
 	border: none;
 	border-radius: 7px;
-	background: rgb(var(--pos-danger-rgb) / 0.08);
-	color: var(--pos-danger);
+	background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
+	color: var(--mg-danger);
 	font-size: 0.95rem;
 	cursor: pointer;
 	display: inline-flex;
@@ -1621,14 +1621,14 @@ defineExpose({
 	margin: 0;
 	font-size: 0.74rem;
 	line-height: 1.6;
-	color: rgb(var(--pos-primary-rgb) / 0.62);
-	background: rgb(var(--pos-accent-rgb) / 0.08);
+	color: color-mix(in srgb, var(--mg-primary) 62%, transparent);
+	background: color-mix(in srgb, var(--mg-primary) 8%, transparent);
 	border-radius: 10px;
 	padding: 0.5rem 0.65rem;
 }
 
 .pay-split-remove:hover {
-	background: rgb(var(--pos-danger-rgb) / 0.15);
+	background: color-mix(in srgb, var(--mg-danger) 15%, transparent);
 }
 
 .pay-add-split-btn {
@@ -1636,10 +1636,10 @@ defineExpose({
 	align-items: center;
 	justify-content: center;
 	gap: 0.4rem;
-	border: 1px dashed rgb(var(--pos-primary-rgb) / 0.15);
+	border: 1px dashed color-mix(in srgb, var(--mg-primary) 15%, transparent);
 	border-radius: 10px;
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb) / 0.5);
+	color: color-mix(in srgb, var(--mg-primary) 50%, transparent);
 	font-size: 0.76rem;
 	font-family: inherit;
 	padding: 0.42rem;
@@ -1648,9 +1648,9 @@ defineExpose({
 }
 
 .pay-add-split-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.04);
-	color: var(--pos-primary);
-	border-color: rgb(var(--pos-primary-rgb) / 0.25);
+	background: color-mix(in srgb, var(--mg-primary) 4%, transparent);
+	color: var(--mg-primary);
+	border-color: color-mix(in srgb, var(--mg-primary) 25%, transparent);
 }
 
 .pay-remaining-row {
@@ -1659,25 +1659,25 @@ defineExpose({
 	justify-content: space-between;
 	padding: 0.55rem 0.75rem;
 	border-radius: 10px;
-	background: rgb(var(--pos-accent-rgb) / 0.08);
+	background: color-mix(in srgb, var(--mg-primary) 8%, transparent);
 	font-size: 0.8rem;
 	font-weight: 600;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 	transition: all 0.2s ease;
 }
 
 .pay-remaining-row.zero {
-	background: rgb(var(--pos-success-rgb) / 0.08);
-	color: var(--pos-success);
+	background: color-mix(in srgb, var(--mg-success) 8%, transparent);
+	color: var(--mg-success);
 }
 
 .pay-remaining-row.over {
-	background: rgb(var(--pos-danger-rgb) / 0.08);
-	color: var(--pos-danger);
+	background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
+	color: var(--mg-danger);
 }
 
 .pay-split-summary {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	border-top: 1px solid color-mix(in srgb, var(--mg-primary) 6%, transparent);
 	padding-top: 0.45rem;
 	display: flex;
 	flex-direction: column;
@@ -1689,7 +1689,7 @@ defineExpose({
 	justify-content: space-between;
 	align-items: center;
 	font-size: 0.76rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: color-mix(in srgb, var(--mg-primary) 55%, transparent);
 }
 
 .pay-split-summary-label {
@@ -1706,9 +1706,9 @@ defineExpose({
 }
 
 .pay-cancel-btn {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb) / 0.6);
+	color: color-mix(in srgb, var(--mg-primary) 60%, transparent);
 	border-radius: 10px;
 	padding: 0.6rem;
 	cursor: pointer;
@@ -1718,14 +1718,14 @@ defineExpose({
 }
 
 .pay-cancel-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.05);
+	background: color-mix(in srgb, var(--mg-primary) 5%, transparent);
 	color: var(--mg-text-main);
 }
 
 .pay-confirm-btn {
 	border: 0;
 	border-radius: 10px;
-	background: var(--pos-primary);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 	padding: 0.6rem;
 	cursor: pointer;
@@ -1736,7 +1736,7 @@ defineExpose({
 }
 
 .pay-confirm-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 14px rgb(var(--pos-primary-rgb) / 0.3);
+	box-shadow: 0 4px 14px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .pay-confirm-btn:disabled {
@@ -1745,13 +1745,13 @@ defineExpose({
 }
 
 .dark-input {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
-	background: rgb(var(--pos-primary-rgb) / 0.03);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	background: color-mix(in srgb, var(--mg-primary) 3%, transparent);
 	color: var(--mg-text-main);
 }
 
 .dark-input::placeholder {
-	color: rgb(var(--pos-primary-rgb) / 0.35);
+	color: color-mix(in srgb, var(--mg-primary) 35%, transparent);
 }
 
 @media (max-width: 640px) {

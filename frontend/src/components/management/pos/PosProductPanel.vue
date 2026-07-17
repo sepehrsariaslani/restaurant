@@ -549,10 +549,10 @@ function supportsCustomization(item = {}) {
 
 <style scoped>
 .products-panel {
-	--pos-primary: var(--mg-primary);
-	--pos-primary-rgb: var(--mg-primary-rgb);
-	--pos-accent: var(--mg-success);
-	--pos-accent-rgb: var(--mg-success-rgb);
+	--mg-primary: var(--mg-primary);
+	--mg-primary-rgb: var(--mg-primary-rgb);
+	--mg-primary: var(--mg-success);
+	--mg-primary-rgb: var(--mg-success-rgb);
 	--pos-white: var(--mg-bg-surface);
 	--pos-text: var(--mg-text-main);
 	--pos-border: var(--mg-border-light);
@@ -604,7 +604,7 @@ function supportsCustomization(item = {}) {
 .cust-clear {
 	border: 0;
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
 	cursor: pointer;
 	width: 22px;
 	height: 22px;
@@ -632,7 +632,7 @@ function supportsCustomization(item = {}) {
 .cust-option {
 	width: 100%;
 	border: 0;
-	border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.1);
+	border-bottom: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.1);
 	background: transparent;
 	color: var(--pos-text);
 	padding: 0.38rem 0.55rem;
@@ -660,13 +660,13 @@ function supportsCustomization(item = {}) {
 .cust-option-meta {
 	display: inline-flex;
 	gap: 0.4rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.68);
 	font-size: 0.69rem;
 }
 
 .cust-new-tag {
-	background: rgb(var(--pos-accent-rgb, 255 152 54) / 0.15);
-	color: var(--pos-accent);
+	background: rgb(var(--mg-primary-rgb, 255 152 54) / 0.15);
+	color: var(--mg-primary);
 	border-radius: 999px;
 	padding: 0.05rem 0.4rem;
 }
@@ -674,7 +674,7 @@ function supportsCustomization(item = {}) {
 .cust-empty {
 	padding: 0.5rem;
 	font-size: 0.75rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.68);
 	text-align: center;
 }
 
@@ -682,8 +682,8 @@ function supportsCustomization(item = {}) {
 	width: 36px;
 	height: 36px;
 	border-radius: 12px;
-	border: 1px solid var(--pos-primary);
-	background: var(--pos-primary);
+	border: 1px solid var(--mg-primary);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 	font-size: 1.2rem;
 	cursor: pointer;
@@ -729,7 +729,7 @@ function supportsCustomization(item = {}) {
 .clear-search-btn {
 	border: 0;
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.66);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.66);
 	cursor: pointer;
 	width: 24px;
 	height: 24px;
@@ -739,12 +739,12 @@ function supportsCustomization(item = {}) {
 }
 
 .clear-search-btn:hover {
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.1);
-	color: var(--pos-primary);
+	background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.1);
+	color: var(--mg-primary);
 }
 
 .icon {
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
 }
 
 .view-toggle {
@@ -770,7 +770,7 @@ function supportsCustomization(item = {}) {
 }
 
 .view-toggle button.active {
-	background: var(--pos-primary);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 }
 
@@ -781,8 +781,8 @@ function supportsCustomization(item = {}) {
 }
 
 .scan-btn {
-	border: 1px solid var(--pos-accent);
-	background: var(--pos-accent);
+	border: 1px solid var(--mg-primary);
+	background: var(--mg-primary);
 	border-radius: 14px;
 	color: var(--mg-bg-surface);
 	padding: 0.7rem 1rem;
@@ -795,7 +795,7 @@ function supportsCustomization(item = {}) {
 
 .scan-feedback {
 	margin: 0;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	font-size: 0.77rem;
 }
 
@@ -835,24 +835,24 @@ function supportsCustomization(item = {}) {
 
 .cat-chip:hover {
 	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
-	border-color: color-mix(in srgb, var(--pos-primary) 42%, var(--pos-border) 58%);
+	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--pos-border) 58%);
 }
 
 .cat-chip.active {
-	background: var(--pos-accent);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
-	border-color: var(--pos-accent);
+	border-color: var(--mg-primary);
 	font-weight: 700;
-	box-shadow: 0 10px 24px rgb(var(--pos-accent-rgb) / 0.22);
+	box-shadow: 0 10px 24px color-mix(in srgb, var(--mg-primary) 22%, transparent);
 }
 
 .hint {
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
 	margin: 0;
 }
 
 .error {
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 	margin: 0;
 }
 
@@ -964,7 +964,7 @@ function supportsCustomization(item = {}) {
 .product-card:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 20px 40px rgb(52 38 31 / 0.12);
-	border-color: color-mix(in srgb, var(--pos-primary) 44%, var(--pos-border) 56%);
+	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--pos-border) 56%);
 }
 
 .product-card:active {
@@ -1040,7 +1040,7 @@ function supportsCustomization(item = {}) {
 .product-body strong {
 	font-size: 0.8rem;
 	font-weight: 700;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	flex-shrink: 0;
 	font-variant-numeric: tabular-nums;
 }
@@ -1072,7 +1072,7 @@ function supportsCustomization(item = {}) {
 	border-radius: 10px;
 	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
 	background: white;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	cursor: pointer;
 	font-size: 0.95rem;
 	font-weight: 600;
@@ -1092,8 +1092,8 @@ function supportsCustomization(item = {}) {
 }
 
 .bom-btn {
-	border: 1px solid var(--pos-primary);
-	background: var(--pos-primary);
+	border: 1px solid var(--mg-primary);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 	border-radius: 10px;
 	padding: 0.38rem 0.72rem;
@@ -1115,7 +1115,7 @@ function supportsCustomization(item = {}) {
 }
 
 .dark-input::placeholder {
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
 }
 
 .compact-card {
@@ -1131,26 +1131,26 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-card:hover {
-	border-color: color-mix(in srgb, var(--pos-primary) 44%, var(--pos-border) 56%);
+	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--pos-border) 56%);
 	background: color-mix(in srgb, var(--pos-soft) 70%, white 30%);
 }
 
 .compact-card.has-qty {
-	border-color: var(--pos-primary);
+	border-color: var(--mg-primary);
 	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
 }
 
 .compact-name {
 	font-size: 0.88rem;
 	font-weight: 700;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	line-height: 1.45;
 	display: block;
 }
 
 .compact-price {
 	font-size: 0.78rem;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	display: block;
 	font-weight: 700;
 }
@@ -1159,7 +1159,7 @@ function supportsCustomization(item = {}) {
 	position: absolute;
 	top: 0.45rem;
 	left: 0.45rem;
-	background: var(--pos-accent);
+	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 	border-radius: 999px;
 	font-size: 0.68rem;
@@ -1193,7 +1193,7 @@ function supportsCustomization(item = {}) {
 	border-radius: 9px;
 	border: 1px solid var(--pos-border);
 	background: color-mix(in srgb, var(--pos-white) 92%, transparent);
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	cursor: pointer;
 	display: inline-flex;
 	align-items: center;
@@ -1203,18 +1203,18 @@ function supportsCustomization(item = {}) {
 
 .compact-action-btn:hover {
 	background: var(--pos-soft);
-	border-color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.25);
+	border-color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.25);
 }
 
 .compact-action-btn--primary {
-	background: var(--pos-primary);
+	background: var(--mg-primary);
 	color: var(--pos-white);
-	border-color: var(--pos-primary);
+	border-color: var(--mg-primary);
 }
 
 .compact-action-btn--primary:hover {
 	filter: brightness(0.96);
-	background: var(--pos-primary);
+	background: var(--mg-primary);
 }
 
 @media (max-width: 1200px) {

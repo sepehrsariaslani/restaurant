@@ -301,7 +301,7 @@ defineExpose({
 .guest-counter button {
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  color: var(--pos-primary);
+  color: var(--mg-primary);
   border-radius: 10px;
   cursor: pointer;
 }
@@ -317,7 +317,7 @@ defineExpose({
 }
 
 .meta {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.72rem;
 }
 
@@ -339,7 +339,7 @@ defineExpose({
   border-radius: 12px;
   border: 1px solid var(--pos-border);
   background: var(--pos-white);
-  box-shadow: 0 14px 24px rgb(var(--pos-primary-rgb, 1 90 114) / 0.16);
+  box-shadow: 0 14px 24px rgb(var(--mg-primary-rgb, 1 90 114) / 0.16);
   max-height: 250px;
   overflow-y: auto;
   z-index: 40;
@@ -348,7 +348,7 @@ defineExpose({
 .customer-option {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+  border-bottom: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.12);
   background: transparent;
   color: var(--pos-text);
   padding: 0.42rem 0.55rem;
@@ -376,13 +376,13 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.7rem;
 }
 
 .customer-empty {
   padding: 0.55rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.74rem;
   text-align: center;
 }
@@ -390,8 +390,8 @@ defineExpose({
 .add-btn {
   font-size: 1.3rem;
   line-height: 1;
-  background: var(--pos-accent);
-  border-color: var(--pos-accent);
+  background: var(--mg-primary);
+  border-color: var(--mg-primary);
   color: var(--pos-white);
 }
 
@@ -431,7 +431,7 @@ defineExpose({
 }
 
 .status-box small {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
 }
 
 .chips {
@@ -447,14 +447,14 @@ defineExpose({
 
 .chip.ok {
   background: var(--pos-soft);
-  color: var(--pos-primary);
+  color: var(--mg-primary);
   border: 1px solid var(--pos-border);
 }
 
 .chip.warn {
   background: var(--pos-accent-soft);
-  color: var(--pos-primary);
-  border: 1px solid rgb(var(--pos-accent-rgb, 255 152 54) / 0.35);
+  color: var(--mg-primary);
+  border: 1px solid rgb(var(--mg-primary-rgb, 255 152 54) / 0.35);
 }
 
 .dark-input {
@@ -464,13 +464,13 @@ defineExpose({
 }
 
 .dark-input::placeholder {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
 }
 
 .refresh-btn {
-  background: var(--pos-primary);
+  background: var(--mg-primary);
   color: var(--pos-white);
-  border-color: var(--pos-primary);
+  border-color: var(--mg-primary);
 }
 
 @media (max-width: 1180px) {

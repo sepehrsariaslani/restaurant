@@ -5182,7 +5182,7 @@ onBeforeUnmount(() => {
   background: var(--mg-primary);
   border-color: var(--mg-primary);
   color: var(--mg-bg-surface);
-  box-shadow: 0 14px 30px rgb(var(--mg-primary-rgb) / 0.18);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--mg-primary) 18%, transparent);
 }
 
 .pos-fullpage {
@@ -5190,8 +5190,8 @@ onBeforeUnmount(() => {
 	gap: 0.7rem;
 	padding: 0.9rem;
 	background:
-    radial-gradient(circle at top right, rgb(var(--mg-success-rgb) / 0.05), transparent 22%),
-    radial-gradient(circle at top left, rgb(var(--mg-primary-rgb) / 0.06), transparent 26%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--mg-success) 5%, transparent), transparent 22%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--mg-primary) 6%, transparent), transparent 26%),
     var(--mg-bg-page);
 	width: 100%;
 	height: 100vh;
@@ -5261,7 +5261,7 @@ onBeforeUnmount(() => {
   color: var(--mg-bg-surface);
   padding: 0.55rem 0.9rem;
   min-width: 112px;
-  box-shadow: 0 14px 28px rgb(var(--mg-primary-rgb) / 0.18);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--mg-primary) 18%, transparent);
 }
 
 .ops-trigger span {
@@ -5318,7 +5318,7 @@ onBeforeUnmount(() => {
   color: var(--mg-bg-surface);
   border-color: var(--mg-primary);
   background: var(--mg-primary);
-  box-shadow: 0 12px 24px rgb(var(--mg-primary-rgb) / 0.16);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--mg-primary) 16%, transparent);
 }
 
 .left-tab-btn.active .count-badge {
@@ -5544,13 +5544,13 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgb(var(--mg-primary-rgb) / 0.35);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--mg-primary) 35%, transparent);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .cart-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgb(var(--mg-primary-rgb) / 0.45);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mg-primary) 45%, transparent);
 }
 
 .cart-fab.has-items {
@@ -6414,7 +6414,7 @@ kbd {
 }
 .accordion-card.expanded {
   border-color: var(--mg-primary);
-  box-shadow: 0 10px 22px rgb(var(--mg-primary-rgb) / 0.16);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--mg-primary) 16%, transparent);
 }
 .accordion-header {
   display: flex;
@@ -6636,7 +6636,7 @@ kbd {
   box-shadow: 0 12px 24px rgb(52 38 31 / 0.05);
 }
 .table-modern-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgb(52 38 31 / 0.1); }
-.table-modern-card.active { border-color: var(--mg-primary); box-shadow: 0 0 0 2px rgb(var(--mg-primary-rgb) / 0.18), 0 16px 32px rgb(var(--mg-primary-rgb) / 0.12); }
+.table-modern-card.active { border-color: var(--mg-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 18%, transparent), 0 16px 32px color-mix(in srgb, var(--mg-primary) 12%, transparent); }
 .tm-empty { border-color: color-mix(in srgb, var(--mg-success) 26%, var(--mg-border-light) 74%); }
 .tm-occupied { border-color: color-mix(in srgb, var(--mg-primary) 34%, var(--mg-border-light) 66%); background: color-mix(in srgb, var(--mg-primary) 8%, white 92%); }
 .tm-occupied .tm-name { color: var(--mg-primary); }
