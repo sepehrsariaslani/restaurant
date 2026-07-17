@@ -1301,13 +1301,15 @@ onBeforeUnmount(() => {
 		padding: 1.5rem 2rem;
 		overflow-y: auto;
 	}
+
 	.desktop-main > :deep(*) {
 		max-width: 1400px;
 		margin-inline: auto;
 	}
 
-	
 	.desktop-main--fullbleed { padding: 0; }
+	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
+
 	
 	/* --- Desktop Floating Menu (Top Right) --- */
 	.dfm-wrapper {

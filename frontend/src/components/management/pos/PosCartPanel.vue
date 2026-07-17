@@ -1379,6 +1379,7 @@ defineExpose({
 }
 .settle-btn-custom:hover:not(:disabled) {
 	background: var(--mg-success);
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-success) 30%, transparent);
 }
 .settle-btn-custom:disabled {
 	background: var(--mg-success-bg);
@@ -1387,11 +1388,12 @@ defineExpose({
 }
 
 .pay-btn {
-	background: color-mix(in srgb, var(--mg-text-main) 88%, black 12%);
+	background: var(--mg-text-main);
+	color: var(--mg-bg-surface);
 }
 
 .pay-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 12px rgb(52 38 31 / 0.24);
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-text-main) 20%, transparent);
 }
 
 .print-btn {
