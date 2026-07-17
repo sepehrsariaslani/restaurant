@@ -6993,6 +6993,7 @@ def _ensure_mobile(mobile, allow_empty=True):
 		mobile = "0" + mobile[2:]
 	if len(mobile) == 10 and mobile.startswith("9"):
 		mobile = "0" + mobile
+	# Legacy cleanup: fake mobile used to be default in older versions
 	if mobile == "09120000000" and allow_empty:
 		return ""
 	if len(mobile) < 10:
