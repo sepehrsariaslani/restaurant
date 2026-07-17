@@ -2505,7 +2505,7 @@ function selectCustomerFromHistory(customer) {
   form.customer_query = customer.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
 }
 
-async async async function createCustomerFromQuery(payload) {
+async function createCustomerFromQuery(payload) {
   const rawQuery = String(payload?.raw_query || form.customer_query || '').trim()
   if (!rawQuery) {
     return
@@ -2561,7 +2561,7 @@ async async async function createCustomerFromQuery(payload) {
   error.value = ''
 }
 
-async async async function addQuickCustomer() {
+async function addQuickCustomer() {
   const name = await showPrompt('نام مشتری را وارد کنید:', form.customer_name || '')
   if (name === null) {
     return
@@ -2734,7 +2734,7 @@ function decrementProduct(item) {
   setCartQty(baseLine, Number(baseLine.qty || 0) - 1)
 }
 
-async async async function editLineNote(line) {
+async function editLineNote(line) {
   const next = await showPrompt('یادداشت آیتم:', line.note || '')
   if (next === null) {
     return
@@ -4543,7 +4543,7 @@ function handleGlobalProductSearchTyping(event) {
   return false
 }
 
-async async async function onWindowKeydown(event) {
+async function onWindowKeydown(event) {
   const key = event.key
 
   if (customizationSheet.open) {

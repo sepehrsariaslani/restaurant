@@ -167,7 +167,9 @@
           @jump-table="jumpToTable"
         />
       </section>
-    </template>
+        </template>
+  </ManagementPageScaffold>
+</template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
