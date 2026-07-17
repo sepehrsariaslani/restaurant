@@ -21,6 +21,7 @@
       <ManagementBuilderTemplatesPage v-else-if="page === 'management-builder-templates' && !isBuilderTemplateEdit" />
       <ManagementBuilderTemplatePage v-else-if="page === 'management-builder-templates' && isBuilderTemplateEdit" :template-id="builderTemplateId" />
       <ManagementCustomersPage v-else-if="page === 'management-customers'" />
+      <ManagementKitchenPage v-else-if="page === 'management-kitchen'" />
       <ManagementTablesPage v-else-if="page === 'management-tables'" />
       <ManagementReportsIndexPage v-else-if="page === 'management-reports'" />
       <ManagementReportPage v-else-if="page === 'management-report'" :boot="boot" />
@@ -172,6 +173,7 @@ import ManagementVariantBuilderPage from './pages/management/ManagementVariantBu
 import ManagementBuilderTemplatesPage from './pages/management/ManagementBuilderTemplatesPage.vue'
 import ManagementBuilderTemplatePage from './pages/management/ManagementBuilderTemplatePage.vue'
 import ManagementCustomersPage from './pages/management/ManagementCustomersPage.vue'
+import ManagementKitchenPage from './pages/management/ManagementKitchenPage.vue'
 import ManagementTablesPage from './pages/management/ManagementTablesPage.vue'
 import ManagementReportsIndexPage from './pages/management/ManagementReportsIndexPage.vue'
 import ManagementReportPage from './pages/management/ManagementReportPage.vue'
@@ -252,7 +254,7 @@ function resolveInitialPage() {
     }
     if (pathname.startsWith('/checkout')) return 'checkout'
     if (pathname.startsWith('/payment/fail') || pathname.startsWith('/payment-fail')) return 'payment-fail'
-    if (pathname.startsWith('/management/kitchen')) return 'kitchen'
+    if (pathname.startsWith('/management/kitchen')) return 'management-kitchen'
     if (pathname.startsWith('/payment/callback')) return 'payment-callback'
     if (pathname.startsWith('/payment/')) return 'payment'
     if (pathname.startsWith('/bom-preview/')) return 'bom-preview'
