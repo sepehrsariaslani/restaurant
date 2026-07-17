@@ -5194,7 +5194,7 @@ onBeforeUnmount(() => {
     radial-gradient(circle at top left, color-mix(in srgb, var(--mg-primary) 6%, transparent), transparent 26%),
     var(--mg-bg-page);
 	width: 100%;
-	height: 100vh;
+	height: calc(100vh - 4.5rem);
 	box-sizing: border-box;
 	overflow: hidden;
 }

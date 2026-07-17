@@ -445,7 +445,7 @@ onUnmounted(() => {
 .kds-workspace {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 4.5rem);
   padding: 1.5rem;
   overflow: hidden;
   background: var(--mg-bg-page);
