@@ -141,8 +141,48 @@
 			<div class="desktop-content" :class="{ 'desktop-content--pos': isPosPage }">
 								<header class="desktop-header">
 					<div class="desktop-header-start">
+<div class="dfm-wrapper inline-dfm">
+							<button 
+								type="button" 
+								class="dfm-toggle-btn" 
+								:class="{ 'is-open': !isRailCollapsed }" 
+								@click="toggleRailMode" 
+								:title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'"
+							>
+								<span class="dfm-burger">
+									<span class="dfm-line top"></span>
+									<span class="dfm-line mid"></span>
+									<span class="dfm-line bot"></span>
+								</span>
+							</button>
+
+							<Transition name="dfm-anim">
+								<aside v-if="!isRailCollapsed" class="dfm-dropdown">
+									<div class="dfm-brand-block">
+										<a class="dfm-brand" href="/management" @click="toggleRailMode">
+											<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
+											<span class="dfm-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
+										</a>
+									</div>
+									<nav class="accordion-nav dfm-nav">
+										<div v-for="group in menuGroups" :key="group.key" class="nav-group" :class="{ open: isGroupOpen(group.key) }">
+											<div class="group-title-rail">{{ group.title }}</div>
+											<div class="group-items">
+												<a v-for="item in group.items" :key="item.key" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" :title="item.label" @click="toggleRailMode">
+													<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
+													<span class="item-label"><strong>{{ item.label }}</strong></span>
+												</a>
+											</div>
+										</div>
+									</nav>
+								</aside>
+							</Transition>
+							<Transition name="fade">
+								<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
+							</Transition>
+						</div>
 						<div class="page-title-wrap">
-							<h1>{{ activeTitle }}</h1>
+							<h1>{ activeTitle }</h1>
 						</div>
 					</div>
 
@@ -186,46 +226,7 @@
 						</template>
 
 						<!-- Menu Toggle Button (FAB inline) -->
-						<div class="dfm-wrapper inline-dfm">
-							<button 
-								type="button" 
-								class="dfm-toggle-btn" 
-								:class="{ 'is-open': !isRailCollapsed }" 
-								@click="toggleRailMode" 
-								:title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'"
-							>
-								<span class="dfm-burger">
-									<span class="dfm-line top"></span>
-									<span class="dfm-line mid"></span>
-									<span class="dfm-line bot"></span>
-								</span>
-							</button>
-
-							<Transition name="dfm-anim">
-								<aside v-if="!isRailCollapsed" class="dfm-dropdown">
-									<div class="dfm-brand-block">
-										<a class="dfm-brand" href="/management" @click="toggleRailMode">
-											<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
-											<span class="dfm-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
-										</a>
-									</div>
-									<nav class="accordion-nav dfm-nav">
-										<div v-for="group in menuGroups" :key="group.key" class="nav-group" :class="{ open: isGroupOpen(group.key) }">
-											<div class="group-title-rail">{{ group.title }}</div>
-											<div class="group-items">
-												<a v-for="item in group.items" :key="item.key" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" :title="item.label" @click="toggleRailMode">
-													<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
-													<span class="item-label"><strong>{{ item.label }}</strong></span>
-												</a>
-											</div>
-										</div>
-									</nav>
-								</aside>
-							</Transition>
-							<Transition name="fade">
-								<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
-							</Transition>
-						</div>
+						
 					</div>
 				</header>
 				<main
@@ -1419,16 +1420,103 @@ onBeforeUnmount(() => {
 	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
 
 	
-		/* --- Desktop Floating Menu (Integrated in Header) --- */
+		
+	/* --- Desktop Floating Menu (Integrated in Header) --- */
 	.dfm-wrapper.inline-dfm {
 		position: relative;
 		z-index: 10000;
+		margin-left: 0.5rem;
 	}
+
+	.dfm-toggle-btn {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: var(--mg-bg-surface);
+		color: var(--mg-primary);
+		border: 1px solid var(--mg-border-light);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+		transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+		position: relative;
+		z-index: 10001;
+	}
+	
+	/* Space rings animation */
+	.dfm-toggle-btn::before, .dfm-toggle-btn::after {
+		content: '';
+		position: absolute;
+		inset: -2px;
+		border-radius: 50%;
+		border: 1px solid var(--mg-primary);
+		opacity: 0;
+		pointer-events: none;
+	}
+	.dfm-toggle-btn::before {
+		animation: dfm-ring-pulse 3s infinite ease-out;
+	}
+	.dfm-toggle-btn::after {
+		animation: dfm-ring-pulse 3s infinite ease-out 1.5s;
+	}
+
+	@keyframes dfm-ring-pulse {
+		0% { transform: scale(1); opacity: 0.6; border-width: 1px; }
+		100% { transform: scale(1.6); opacity: 0; border-width: 0px; }
+	}
+
+	.dfm-toggle-btn:hover {
+		transform: scale(1.05);
+		background: var(--mg-primary);
+		color: #fff;
+		border-color: var(--mg-primary);
+	}
+	.dfm-toggle-btn:hover .dfm-line {
+		background: #fff;
+	}
+
+	.dfm-burger {
+		width: 16px;
+		height: 12px;
+		position: relative;
+	}
+	.dfm-line {
+		display: block;
+		width: 100%;
+		height: 2px;
+		background: var(--mg-primary);
+		border-radius: 2px;
+		position: absolute;
+		right: 0;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	.dfm-line.top { top: 0; }
+	.dfm-line.mid { top: 50%; transform: translateY(-50%); }
+	.dfm-line.bot { bottom: 0; }
+
+	.dfm-toggle-btn.is-open {
+		background: var(--mg-primary);
+		color: #fff;
+		border-color: var(--mg-primary);
+		transform: rotate(90deg);
+	}
+	.dfm-toggle-btn.is-open::before, .dfm-toggle-btn.is-open::after {
+		animation-play-state: paused;
+		opacity: 0;
+		display: none;
+	}
+	.dfm-toggle-btn.is-open .dfm-line { background: #fff; }
+	.dfm-toggle-btn.is-open .dfm-line.top { top: 50%; transform: translateY(-50%) rotate(45deg); }
+	.dfm-toggle-btn.is-open .dfm-line.mid { opacity: 0; transform: translateY(-50%) scaleX(0); }
+	.dfm-toggle-btn.is-open .dfm-line.bot { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
 
 	.dfm-dropdown {
 		position: absolute;
 		top: calc(100% + 1.25rem);
-		left: 0;
+		right: 0;
+
 		width: 17rem;
 		background: color-mix(in srgb, var(--mg-bg-surface) 96%, transparent);
 		backdrop-filter: blur(16px);
