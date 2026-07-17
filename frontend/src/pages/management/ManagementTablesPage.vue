@@ -168,10 +168,6 @@
         />
       </section>
     </template>
-  </ManagementPageScaffold>
-</template>
-  </ManagementPageScaffold>
-</template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'

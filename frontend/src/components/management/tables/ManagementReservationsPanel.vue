@@ -150,10 +150,6 @@
             </button>
           </footer>
         </template>
-      </div>
-    </aside>
-  </section>
-</template>
 
 <script setup>
 import { computed, ref } from 'vue'
