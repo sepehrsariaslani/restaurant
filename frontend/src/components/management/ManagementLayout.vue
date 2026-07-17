@@ -32,6 +32,7 @@
 			dark: isDarkMode,
 			'rail-collapsed': isDesktop && isRailCollapsed,
 			'management-layout--pos': isPosPage,
+			'management-layout--kitchen': isKitchenPage,
 		}"
 		:style="moduleThemeVars"
 		dir="rtl"
@@ -156,7 +157,7 @@
 			</aside>
 			<!-- Main Content -->
 			<div class="desktop-content" :class="{ 'desktop-content--pos': isPosPage }">
-				<header v-if="!isPosPage" class="desktop-header">
+				<header v-if="!isPosPage && !isKitchenPage" class="desktop-header">
 					<div class="page-title-wrap">
 						<h1>{{ activeTitle }}</h1>
 					</div>
@@ -189,7 +190,7 @@
 				</header>
 				<main
 					class="desktop-main module-content"
-					:class="{ 'desktop-main--fullbleed': isPosPage }"
+					:class="{ 'desktop-main--fullbleed': isPosPage || isKitchenPage }"
 				>
 					<section v-if="authLoading" class="auth-gate-card">
 						<ManagementBearLoader :size="188" label="در حال همگام‌سازی نشست..." />
@@ -580,6 +581,7 @@ const scaleLabel = computed(() => `${Math.round(desktopScale.value * 100)}%`);
 const isRailCollapsed = computed(() => railMode.value === "icons");
 const isLoginPage = computed(() => props.page === "management-login");
 const isPosPage = computed(() => props.page === "management-pos");
+const isKitchenPage = computed(() => props.page === "kitchen");
 const authGuest = computed(() => Boolean(authProfile.value?.is_guest));
 
 const moduleThemeVars = computed(() => {
@@ -1280,10 +1282,32 @@ onBeforeUnmount(() => {
 		max-width: 1400px;
 		margin-inline: auto;
 	}
+
 	.desktop-main--fullbleed { padding: 0; }
+	
+	/* Kitchen Page Specific Sidebar Tweaks */
+	.management-layout--kitchen .desktop-sidebar {
+		width: 5.5rem;
+	}
+	.management-layout--kitchen .rail-brand-text,
+	.management-layout--kitchen .group-title-rail,
+	.management-layout--kitchen .item-label {
+		display: none;
+	}
+	.management-layout--kitchen .nav-item {
+		justify-content: center;
+		padding: 0.8rem;
+	}
+	.management-layout--kitchen .desktop-header {
+		display: none;
+	}
+	.management-layout--kitchen .desktop-main {
+		padding: 0;
+	}
 }
 
 /* Nav Styles */
+
 .accordion-nav {
 	flex: 1;
 	overflow-y: auto;

@@ -1,5 +1,5 @@
 <template>
-  <ManagementPageScaffold title="" subtitle="" :show-title="false">
+  <div class="kds-workspace">
     
     <!-- Unified Top Toolbar -->
     <div class="kds-toolbar">
@@ -147,6 +147,7 @@
             <span class="col-count">{{ toFaDigits(colNew.length) }}</span>
           </header>
           <div class="kds-col-body">
+            <div v-if="!colNew.length" class="lane-empty">سفارش جدیدی نیست</div>
             <KitchenOrder 
               v-for="o in colNew" :key="o.name" 
               :order="o" type="new" 
@@ -162,6 +163,7 @@
             <span class="col-count">{{ toFaDigits(colPrep.length) }}</span>
           </header>
           <div class="kds-col-body">
+            <div v-if="!colPrep.length" class="lane-empty">آیتمی در حال تولید نیست</div>
             <KitchenOrder 
               v-for="o in colPrep" :key="o.name" 
               :order="o" type="prep" 
@@ -177,6 +179,7 @@
             <span class="col-count">{{ toFaDigits(colReady.length) }}</span>
           </header>
           <div class="kds-col-body">
+            <div v-if="!colReady.length" class="lane-empty">سفارشی آماده‌ی تحویل نیست</div>
             <KitchenOrder 
               v-for="o in colReady" :key="o.name" 
               :order="o" type="ready" 
@@ -192,6 +195,7 @@
             <span class="col-count">{{ toFaDigits(colClosed.length) }}</span>
           </header>
           <div class="kds-col-body">
+            <div v-if="!colClosed.length" class="lane-empty">سفارشی در تاریخچه نیست</div>
             <KitchenOrder 
               v-for="o in colClosed" :key="o.name" 
               :order="o" type="closed" 
@@ -200,13 +204,12 @@
         </div>
       </div>
     </template>
-  </ManagementPageScaffold>
+  </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Search, RefreshCcw, AlertCircle, CheckCheck, Volume2, VolumeX, Calendar } from 'lucide-vue-next'
-import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import KitchenOrder from '@/components/KitchenOrder.vue'
 import { callRestaurantAPI } from '@/utils/api'
 
@@ -415,6 +418,23 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+
+.kds-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 1.5rem;
+  overflow: hidden;
+  background: var(--mg-bg-page);
+}
+@media (max-width: 1024px) {
+  .kds-workspace {
+    height: auto;
+    overflow: visible;
+    padding: 1rem 0.5rem;
+  }
+}
+
 /* 1. Header & Toolbar */
 .kds-toolbar {
   display: flex;
@@ -696,6 +716,9 @@ onUnmounted(() => {
 
 /* 5. Desktop Kanban Board */
 .kds-board {
+  flex: 1;
+  overflow: hidden;
+
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem;
@@ -709,7 +732,7 @@ onUnmounted(() => {
   background: var(--mg-surface-alt);
   border-radius: var(--mg-radius-md);
   border: 1px solid var(--mg-border-light);
-  height: calc(100vh - 210px);
+  max-height: 100%;
 }
 
 .kds-column.col-ready {
@@ -766,6 +789,23 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+
+.lane-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--mg-text-muted);
+  border: 1px dashed var(--mg-border-light);
+  border-radius: var(--mg-radius-sm);
+  background: var(--mg-bg-page);
+  text-align: center;
+  margin: 0.5rem;
+  opacity: 0.8;
 }
 
 /* Responsive adjustments */
