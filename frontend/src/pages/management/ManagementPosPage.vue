@@ -4153,28 +4153,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     return
   }
 
-  const paymentSelection = resolvePaymentSubmission(paymentMeta)
-  const paymentNoteLine = paymentSelection.auditLine
 
-  const paymentPayload = payNow
-    ? {
-        method: paymentSelection.primary?.method || normalizePaymentMethodKind(payment.method),
-        mode_of_payment: paymentSelection.primary?.mode_of_payment || '',
-        provider: paymentSelection.primary?.method === 'card' ? paymentBoot.provider : 'manual',
-        terminal_id: paymentBoot.terminal_id || '',
-        reference_no: payment.reference_no || '',
-        rrn: payment.rrn || '',
-        splits: paymentSelection.splits,
-      }
-    : {
-        method: 'credit',
-        mode_of_payment: 'اعتباری',
-        provider: 'manual',
-        terminal_id: paymentBoot.terminal_id || '',
-        reference_no: '',
-        rrn: '',
-        splits: [],
-      }
 
   const payload = {
     customer_name: form.customer_name || 'مشتری POS',
