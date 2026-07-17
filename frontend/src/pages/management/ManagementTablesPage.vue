@@ -167,7 +167,7 @@
           @jump-table="jumpToTable"
         />
       </section>
-        </template>
+    </template>
   </ManagementPageScaffold>
 </template>
 
