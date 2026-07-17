@@ -23352,13 +23352,13 @@ def get_kitchen_display_orders(limit=50, date=None):
     has_order_type = _has_column("Sales Order", "restaurant_order_type")
     has_prod_ticket = frappe.db.exists("DocType", "Restaurant Production Ticket")
     
-    filters = {"docstatus": 1}
-    if has_restaurant_status:
-        # Also fetch 'delivered' status so that the frontend can show it in 'closed' views if needed
-        filters["restaurant_status"] = ["in", ["new", "confirmed", "preparing", "ready", "delivered"]]
+    # Canonical filter: no pre-filtering on restaurant_status
+    filters = {"docstatus": 1, "status": ["!=", "Cancelled"]}
     
     if date:
         filters["transaction_date"] = date
+    else:
+        filters["transaction_date"] = frappe.utils.today()
     
     so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
     if has_order_type:
@@ -23455,18 +23455,32 @@ def update_kitchen_order_status(order_name, status):
     _append_sales_order_note(so_name, f"[KITCHEN] Status changed to: {status}")
     frappe.db.commit()
     
-    # Actually trigger the canonical production flow so ERPNext documents reflect the real status
+    # Stage-aware action flows
     try:
         if status == "preparing":
-            # Just kicking the auto flow will submit WOs if settings allow
+            # Start production: submit Work Orders
             _run_sales_order_auto_flow(so_name, trigger="manual", force=True)
         elif status == "ready":
-            # Run it again to potentially manufacture if settings allow
-            _run_sales_order_auto_flow(so_name, trigger="manual", force=True)
+            # Complete production: manufacture Work Orders
+            if frappe.db.exists("DocType", "Work Order"):
+                wos = frappe.get_all("Work Order", filters={"sales_order": so_name, "docstatus": 1})
+                for wo in wos:
+                    wo_doc = frappe.get_doc("Work Order", wo.name)
+                    pending = max(float(wo_doc.qty or 0) - float(wo_doc.produced_qty or 0), 0)
+                    if pending > 0:
+                        try:
+                            _create_work_order_stock_entry(wo.name, "Manufacture", pending, submit_doc=True)
+                        except Exception:
+                            pass
         elif status == "delivered":
-            # If the KDS says delivered, it might not auto-create Delivery Note unless settings allow.
-            # But we run auto flow anyway.
-            _run_sales_order_auto_flow(so_name, trigger="manual", force=True)
+            # Handoff: create Delivery Note
+            if frappe.db.exists("DocType", "Delivery Note"):
+                dn_exists = frappe.db.exists("Delivery Note Item", {"against_sales_order": so_name, "docstatus": 1})
+                if not dn_exists:
+                    try:
+                        _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+                    except Exception:
+                        pass
     except Exception:
         pass
         

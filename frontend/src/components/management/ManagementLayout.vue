@@ -587,7 +587,7 @@ const scaleLabel = computed(() => `${Math.round(desktopScale.value * 100)}%`);
 const isRailCollapsed = computed(() => railMode.value === "icons");
 const isLoginPage = computed(() => props.page === "management-login");
 const isPosPage = computed(() => props.page === "management-pos");
-const isKitchenPage = computed(() => props.page === "kitchen");
+const isKitchenPage = computed(() => props.page === "management-kitchen");
 const authGuest = computed(() => Boolean(authProfile.value?.is_guest));
 
 const moduleThemeVars = computed(() => {
