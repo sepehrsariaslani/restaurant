@@ -690,6 +690,23 @@
       </div>
     </div>
 
+    <!-- Shared Prompt Modal -->
+    <div v-if="promptModal.open" class="pos-modal-backdrop" @click.self="cancelPrompt">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <h3>{{ promptModal.title }}</h3>
+          <button type="button" class="pos-modal-close" @click="cancelPrompt">×</button>
+        </header>
+        <div class="return-modal-body">
+          <input class="input dark-input full-width" type="text" v-model="promptModal.value" @keyup.enter="confirmPrompt" autofocus />
+        </div>
+        <div class="pos-modal-actions">
+          <button type="button" class="tbl-btn" @click="cancelPrompt">انصراف</button>
+          <button type="button" class="tbl-btn primary" @click="confirmPrompt">تایید</button>
+        </div>
+      </section>
+    </div>
+
     <!-- Purge Order Confirmation Modal -->
     <div v-if="purgeModal.open" class="pos-modal-backdrop" @click.self="closePurgeModal">
       <section class="pos-modal" dir="rtl">
@@ -898,6 +915,38 @@ const orderDetailModal = reactive({
     customer_name: '',
   },
 })
+
+const promptModal = reactive({
+  open: false,
+  title: '',
+  value: '',
+  resolve: null,
+  reject: null,
+})
+
+function showPrompt(title, defaultValue = '') {
+  return new Promise((resolve, reject) => {
+    promptModal.title = title
+    promptModal.value = defaultValue
+    promptModal.resolve = resolve
+    promptModal.reject = reject
+    promptModal.open = true
+  })
+}
+
+function confirmPrompt() {
+  if (promptModal.resolve) {
+    promptModal.resolve(promptModal.value)
+  }
+  promptModal.open = false
+}
+
+function cancelPrompt() {
+  if (promptModal.resolve) {
+    promptModal.resolve(null)
+  }
+  promptModal.open = false
+}
 
 const purgeModal = reactive({
   open: false,
@@ -2083,14 +2132,20 @@ function isUnpaidOpenInvoice(row) {
     return false
   }
   
-  // If it has a payment method assigned, it means the checkout flow (settle) has been completed.
-  // Even if it's "credit", it's financially processed by POS, so it shouldn't be here.
-  if (row.payment_method) {
-    return false
+  // Outstanding is true if the row has outstanding_amount > 0.1
+  // Credit orders and partially paid orders will have outstanding > 0.
+  const outstanding = Number(row?.outstanding_amount)
+  if (Number.isFinite(outstanding) && outstanding > 0.1) {
+    return true
   }
   
-  // If it has no payment method, it hasn't been checked out yet, so it remains open.
-  return true
+  // Fallback if outstanding is 0 or undefined, but payment_method is missing, it's open
+  if (!row.payment_method && status !== 'paid') {
+    return true
+  }
+  
+  // Otherwise, it's fully settled and should be hidden from Open Invoices
+  return false
 }
 
 function buildOpenInvoices(rows = []) {
@@ -2436,7 +2491,7 @@ function selectCustomerFromHistory(customer) {
   form.customer_query = customer.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
 }
 
-function createCustomerFromQuery(payload) {
+async function createCustomerFromQuery(payload) {
   const rawQuery = String(payload?.raw_query || form.customer_query || '').trim()
   if (!rawQuery) {
     return
@@ -2453,14 +2508,14 @@ function createCustomerFromQuery(payload) {
   }
 
   if (payload?.is_new) {
-    const nameInput = window.prompt('نام مشتری جدید را وارد کنید:', resolvedName || '')
+    const nameInput = await showPrompt('نام مشتری جدید را وارد کنید:', resolvedName || '')
     if (nameInput === null) {
       return
     }
     const cleanedName = String(nameInput || '').trim()
     resolvedName = cleanedName || 'مشتری POS'
 
-    const mobileInput = window.prompt('شماره تماس مشتری جدید را وارد کنید (اختیاری):', normalizedMobile || '')
+    const mobileInput = await showPrompt('شماره تماس مشتری جدید را وارد کنید (اختیاری):', normalizedMobile || '')
     if (mobileInput === null) {
       return
     }
@@ -2492,12 +2547,12 @@ function createCustomerFromQuery(payload) {
   error.value = ''
 }
 
-function addQuickCustomer() {
-  const name = window.prompt('نام مشتری را وارد کنید:', form.customer_name || '')
+async function addQuickCustomer() {
+  const name = await showPrompt('نام مشتری را وارد کنید:', form.customer_name || '')
   if (name === null) {
     return
   }
-  const mobile = window.prompt('شماره موبایل را وارد کنید:', form.mobile || '')
+  const mobile = await showPrompt('شماره موبایل را وارد کنید:', form.mobile || '')
   if (mobile === null) {
     return
   }
@@ -2665,8 +2720,8 @@ function decrementProduct(item) {
   setCartQty(baseLine, Number(baseLine.qty || 0) - 1)
 }
 
-function editLineNote(line) {
-  const next = window.prompt('یادداشت آیتم:', line.note || '')
+async function editLineNote(line) {
+  const next = await showPrompt('یادداشت آیتم:', line.note || '')
   if (next === null) {
     return
   }
@@ -4464,7 +4519,7 @@ function handleGlobalProductSearchTyping(event) {
   return false
 }
 
-function onWindowKeydown(event) {
+async function onWindowKeydown(event) {
   const key = event.key
 
   if (customizationSheet.open) {
@@ -4480,7 +4535,7 @@ function onWindowKeydown(event) {
     }
     if (key === 'Insert') {
       event.preventDefault()
-      const nextQty = window.prompt('تعداد BOM را وارد کنید:', String(customizationSheet.qty))
+      const nextQty = await showPrompt('تعداد BOM را وارد کنید:', String(customizationSheet.qty))
       const parsed = Number(nextQty)
       if (Number.isFinite(parsed) && parsed > 0) {
         customizationSheet.qty = Math.round(parsed)
@@ -4582,7 +4637,7 @@ function onWindowKeydown(event) {
     if (!line) {
       return
     }
-    const nextQty = window.prompt('تعداد جدید را وارد کنید:', String(line.qty))
+    const nextQty = await showPrompt('تعداد جدید را وارد کنید:', String(line.qty))
     if (nextQty === null) {
       return
     }

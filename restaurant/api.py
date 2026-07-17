@@ -5290,35 +5290,29 @@ def _create_sales_order(
 				}
 			)
 
-	discount_amount = flt(coupon.get("discount_amount") or 0)
 	financial_modifiers = financial_modifiers or {}
+	totals_data = totals or {}
 	
-	if discount_amount > 0:
-		discount_amount = min(discount_amount, subtotal)
+	frontend_discount_amount = flt(totals_data.get("discountAmount") or 0)
+	applied_coupon_code = coupon.get("code") if coupon else financial_modifiers.get("coupon_code")
+	
+	if frontend_discount_amount > 0:
 		doc_payload["apply_discount_on"] = "Grand Total"
-		doc_payload["discount_amount"] = discount_amount
-		coupon_note = _("Coupon {0}: {1}").format(coupon.get("code") or "", discount_amount)
-		doc_payload["customer_note"] = (doc_payload.get("customer_note") or "") + coupon_note
-		payload_snapshot.append({"coupon": coupon.get("code") or "", "discount_amount": discount_amount})
-	else:
-		# Apply POS financial modifiers (manual discount)
-		pos_discount_val = flt(financial_modifiers.get("discount_value") or 0)
-		pos_discount_type = financial_modifiers.get("discount_type") or "fixed"
-		if pos_discount_val > 0:
-			doc_payload["apply_discount_on"] = "Grand Total"
-			if pos_discount_type == "percent":
-				doc_payload["additional_discount_percentage"] = min(pos_discount_val, 100.0)
-			else:
-				doc_payload["discount_amount"] = min(pos_discount_val, subtotal)
+		doc_payload["discount_amount"] = min(frontend_discount_amount, subtotal)
+		
+		if applied_coupon_code:
+			coupon_note = _("Coupon {0}: {1}").format(applied_coupon_code, frontend_discount_amount)
+			doc_payload["customer_note"] = (doc_payload.get("customer_note") or "") + coupon_note
+			payload_snapshot.append({"coupon": applied_coupon_code, "discount_amount": frontend_discount_amount})
 				
 	# Apply Service Charge & Taxes & Tip
 	doc_payload["taxes"] = []
 	tax_acc = frappe.db.get_value("Account", {"account_type": "Tax", "company": company}, "name")
 	if not tax_acc:
-		# Fallback to any generic account if we must add a row
 		tax_acc = frappe.db.get_value("Account", {"is_group": 0, "company": company}, "name")
 		
-	pos_tax = flt(financial_modifiers.get("tax_amount") or 0)
+	totals_data = totals or {}
+	pos_tax = flt(totals_data.get("taxAmount") or financial_modifiers.get("tax_amount") or 0)
 	if pos_tax > 0 and tax_acc:
 		doc_payload["taxes"].append({
 			"charge_type": "Actual",
@@ -5327,16 +5321,16 @@ def _create_sales_order(
 			"tax_amount": pos_tax,
 		})
 		
-	pos_service = flt(financial_modifiers.get("service_value") or 0)
+	pos_service = flt(totals_data.get("serviceAmount") or 0)
 	if pos_service > 0 and tax_acc:
 		doc_payload["taxes"].append({
 			"charge_type": "Actual",
 			"account_head": tax_acc,
 			"description": "Service Charge",
-			"tax_amount": pos_service, # Assuming fixed service value based on UI calculation
+			"tax_amount": pos_service,
 		})
 		
-	pos_tip = flt(financial_modifiers.get("tip_amount") or 0)
+	pos_tip = flt(totals_data.get("tipAmount") or financial_modifiers.get("tip_amount") or 0)
 	if pos_tip > 0 and tax_acc:
 		doc_payload["taxes"].append({
 			"charge_type": "Actual",
@@ -5362,7 +5356,7 @@ def _create_sales_order(
 	if _has_column("Sales Order", "restaurant_payload_json"):
 		so_doc.db_set("restaurant_payload_json", frappe.as_json(payload_snapshot))
 
-	if discount_amount > 0 and coupon.get("name"):
+	if frontend_discount_amount > 0 and coupon.get("name"):
 		_mark_coupon_used(coupon.get("name"))
 
 	so_doc.submit()
@@ -10702,6 +10696,8 @@ def place_order(
 			vehicle_snapshot=pickup_vehicle_snapshot,
 		)
 
+	financial_modifiers = financial_modifiers or {}
+	coupon_code = financial_modifiers.get("coupon_code") or ""
 	coupon = _validate_coupon_for_cart(coupon_code, cart_items, mobile=mobile) if coupon_code else {}
 
 	return _create_sales_order(
@@ -12203,6 +12199,20 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 			)
 
 	normalized_status = (status or "").strip().lower()
+	
+	# Fetch outstanding amounts in bulk to avoid N+1
+	outstanding_map = {}
+	if parent_names and frappe.db.exists("DocType", "Sales Invoice Item"):
+		si_items = frappe.get_all("Sales Invoice Item", filters={"sales_order": ["in", parent_names], "docstatus": 1}, fields=["parent", "sales_order"], ignore_permissions=True)
+		if si_items:
+			si_names = list({si.parent for si in si_items})
+			si_docs = frappe.get_all("Sales Invoice", filters={"name": ["in", si_names]}, fields=["name", "outstanding_amount"], ignore_permissions=True)
+			si_outstanding = {doc.name: flt(doc.outstanding_amount) for doc in si_docs}
+			for si_item in si_items:
+				if si_item.sales_order not in outstanding_map:
+					outstanding_map[si_item.sales_order] = 0.0
+				outstanding_map[si_item.sales_order] += si_outstanding.get(si_item.parent, 0.0)
+
 	payload = []
 	for row in rows:
 		order_status = _core_order_status(row)
@@ -12229,6 +12239,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"status": order_status,
 				"subtotal": flt(row.total or row.net_total),
 				"grand_total": flt(row.grand_total or row.total or row.net_total),
+				"outstanding_amount": flt(outstanding_map.get(row.name, flt(row.grand_total or row.total or row.net_total))),
 				"created_at": _json_safe_datetime(created_at),
 				"cashier": row.owner or "",
 				"note": row.restaurant_note if has_note else "",
@@ -14108,12 +14119,15 @@ def create_pos_order(payload):
     note = (payload.get("note") or "").strip()
     items = payload.get("items") or []
     financial_modifiers = payload.get("financial_modifiers", {})
+    totals_payload = payload.get("totals", {})
+    
     result = place_order(
         customer_info={"name": customer_name, "mobile": mobile},
         order_type=order_type, items=items,
         address=address, note=note,
         include_service_items=1,
         financial_modifiers=financial_modifiers,
+        totals=totals_payload,
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
@@ -14217,6 +14231,18 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
         
+    # Idempotency check: if order is already paid/invoiced, return success.
+    si = frappe.db.get_value("Sales Invoice Item", {"sales_order": so_name}, "parent")
+    if si:
+        si_doc = frappe.get_doc("Sales Invoice", si)
+        if si_doc.docstatus == 1:
+            return {
+                "sales_order": so_name,
+                "sales_invoice": si,
+                "status": "success",
+                "message": "Order is already invoiced."
+            }
+            
     payment = _parse_json(payment, {})
     method = _normalize_payment_method(payment.get("method") or "cash")
     splits = payment.get("splits") or []
