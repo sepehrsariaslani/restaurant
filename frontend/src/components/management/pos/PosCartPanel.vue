@@ -1458,7 +1458,7 @@ defineExpose({
 .pay-popup-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 300;
+	z-index: 9999;
 	background: rgb(0 0 0 / 0.45);
 	backdrop-filter: blur(4px);
 	display: grid;
