@@ -1,48 +1,47 @@
 <template>
   <ManagementPageScaffold title="" subtitle="" :show-title="false">
-    <!-- Header Toolbar -->
-    <div class="workspace-header">
-      <div class="header-intro">
-        <h1 class="page-title">نمایشگر آشپزخانه <span class="badge-kds">KDS</span></h1>
-        <p class="page-subtitle">مدیریت لحظه‌ای تولید و آماده‌سازی سفارشات</p>
-      </div>
-
-      <div class="header-actions">
-        <!-- Date Filter (Professional & Visible) -->
-        <div class="date-filter-control" :class="{ 'is-today': isToday }">
-          <Calendar :size="18" class="date-icon" />
+    
+    <!-- Unified Top Toolbar -->
+    <div class="kds-toolbar">
+      <div class="toolbar-start">
+        <h1 class="page-title">
+          آشپزخانه 
+          <span class="live-dot" :class="{ offline: !isOnline, live: isToday && isOnline }" :title="isToday && isOnline ? 'زنده' : 'آرشیو'"></span>
+        </h1>
+        
+        <div class="date-filter-compact" :class="{ 'is-today': isToday }">
+          <Calendar :size="16" class="icon-date" />
           <input
             type="date"
             v-model="dateFilter"
-            class="filter-input date-input"
+            class="date-input"
             @change="fetchOrders(true)"
             title="انتخاب تاریخ"
           />
-          <span v-if="isToday" class="today-badge">امروز</span>
+          <span v-if="isToday" class="today-tag">امروز</span>
         </div>
+      </div>
 
-        <div class="live-indicator" :class="{ offline: !isOnline, live: isToday && isOnline }">
-          <div class="pulse-dot"></div>
-          <span>{{ !isOnline ? 'آفلاین' : (isToday ? 'زنده' : 'آرشیو') }}</span>
-        </div>
-        
-        <div class="filter-box">
-          <Search :size="18" class="search-icon" />
+      <div class="toolbar-end">
+        <div class="search-compact">
+          <Search :size="16" class="icon-search" />
           <input
             v-model.trim="searchQuery"
-            class="filter-input search-input"
-            placeholder="جستجوی سفارش..."
+            class="search-input"
+            placeholder="جستجو..."
           />
         </div>
         
-        <button class="icon-btn" :class="{ active: soundEnabled }" @click="soundEnabled = !soundEnabled" :title="soundEnabled ? 'صدا روشن' : 'صدا خاموش'">
-          <Volume2 v-if="soundEnabled" :size="18" />
-          <VolumeX v-else :size="18" />
-        </button>
+        <div class="toolbar-actions">
+          <button class="action-btn" :class="{ active: soundEnabled }" @click="soundEnabled = !soundEnabled" title="صدا">
+            <Volume2 v-if="soundEnabled" :size="18" />
+            <VolumeX v-else :size="18" />
+          </button>
 
-        <button class="refresh-btn" type="button" :disabled="loading" @click="fetchOrders(true)" title="بروزرسانی">
-          <RefreshCcw :size="18" :class="{ 'is-spinning': loading }" />
-        </button>
+          <button class="action-btn" :disabled="loading" @click="fetchOrders(true)" title="بروزرسانی">
+            <RefreshCcw :size="18" :class="{ 'is-spinning': loading }" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -50,70 +49,61 @@
       <p class="error-alert"><AlertCircle :size="16" /> {{ errorMsg }}</p>
     </div>
 
-    <!-- KPI Strip (Desktop) -->
-    <div v-if="!isMobileView" class="kpi-strip desktop-only">
-      <button class="kpi-tile" :class="{ active: filterStatus === '' }" @click="filterStatus = ''">
-        <span class="kpi-dot all"></span>
-        <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(activeCount) }}</span>
-          <span class="kpi-label">فعال</span>
-        </div>
-      </button>
-      <button class="kpi-tile kpi-new" :class="{ active: filterStatus === 'new' }" @click="filterStatus = 'new'">
-        <span class="kpi-dot new"></span>
-        <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(colNew.length) }}</span>
-          <span class="kpi-label">جدید</span>
-        </div>
-      </button>
-      <button class="kpi-tile kpi-prep" :class="{ active: filterStatus === 'preparing' }" @click="filterStatus = 'preparing'">
-        <span class="kpi-dot preparing"></span>
-        <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(colPrep.length) }}</span>
-          <span class="kpi-label">در حال تولید</span>
-        </div>
-      </button>
-      <button class="kpi-tile kpi-ready" :class="{ active: filterStatus === 'ready' }" @click="filterStatus = 'ready'">
-        <span class="kpi-dot ready"></span>
-        <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(colReady.length) }}</span>
-          <span class="kpi-label">آماده تحویل</span>
-        </div>
-      </button>
-      <button class="kpi-tile kpi-closed" :class="{ active: filterStatus === 'closed' }" @click="filterStatus = 'closed'">
-        <span class="kpi-dot closed"></span>
-        <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(colClosed.length) }}</span>
-          <span class="kpi-label">تاریخچه / بسته</span>
-        </div>
+    <!-- Desktop KPI Strip -->
+    <div v-if="!isMobileView" class="kpi-strip">
+      <button class="kpi-btn" :class="{ active: filterStatus === '' }" @click="filterStatus = ''">
+        <span class="kpi-val">{{ toFaDigits(activeCount) }}</span>
+        <span class="kpi-lbl">فعال</span>
       </button>
       
-      <div class="kpi-divider"></div>
+      <div class="kpi-sep"></div>
       
-      <div class="kpi-tile readonly">
-        <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(avgTime) }} <small class="text-sm">دقیقه</small></span>
-          <span class="kpi-label">میانگین زمان</span>
-        </div>
+      <button class="kpi-btn accent-new" :class="{ active: filterStatus === 'new' }" @click="filterStatus = 'new'">
+        <span class="kpi-val">{{ toFaDigits(colNew.length) }}</span>
+        <span class="kpi-lbl">جدید</span>
+      </button>
+      
+      <button class="kpi-btn accent-prep" :class="{ active: filterStatus === 'preparing' }" @click="filterStatus = 'preparing'">
+        <span class="kpi-val">{{ toFaDigits(colPrep.length) }}</span>
+        <span class="kpi-lbl">تولید</span>
+      </button>
+      
+      <button class="kpi-btn accent-ready" :class="{ active: filterStatus === 'ready' }" @click="filterStatus = 'ready'">
+        <span class="kpi-val">{{ toFaDigits(colReady.length) }}</span>
+        <span class="kpi-lbl">آماده</span>
+      </button>
+      
+      <div class="kpi-sep"></div>
+      
+      <button class="kpi-btn" :class="{ active: filterStatus === 'closed' }" @click="filterStatus = 'closed'">
+        <span class="kpi-val">{{ toFaDigits(colClosed.length) }}</span>
+        <span class="kpi-lbl">بسته / تحویل</span>
+      </button>
+      
+      <div class="kpi-spacer"></div>
+      
+      <div class="kpi-read">
+        <span class="kpi-val">{{ toFaDigits(avgTime) }}<small>د</small></span>
+        <span class="kpi-lbl">میانگین</span>
       </div>
     </div>
 
     <!-- Mobile Tabs (Pure Tab-based List) -->
-    <div v-if="isMobileView" class="mobile-tabs mobile-only">
+    <div v-if="isMobileView" class="mobile-tabs">
       <button class="m-tab" :class="{ active: mobileTab === 'new' }" @click="mobileTab = 'new'">
-        <span class="m-tab-label">جدید</span>
+        <span class="m-tab-lbl">جدید</span>
         <span class="m-tab-count new" v-if="colNew.length">{{ toFaDigits(colNew.length) }}</span>
       </button>
       <button class="m-tab" :class="{ active: mobileTab === 'preparing' }" @click="mobileTab = 'preparing'">
-        <span class="m-tab-label">در تولید</span>
+        <span class="m-tab-lbl">تولید</span>
         <span class="m-tab-count prep" v-if="colPrep.length">{{ toFaDigits(colPrep.length) }}</span>
       </button>
       <button class="m-tab m-tab-ready" :class="{ active: mobileTab === 'ready' }" @click="mobileTab = 'ready'">
-        <span class="m-tab-label">آماده</span>
+        <span class="m-tab-lbl">آماده</span>
         <span class="m-tab-count ready" v-if="colReady.length">{{ toFaDigits(colReady.length) }}</span>
       </button>
       <button class="m-tab" :class="{ active: mobileTab === 'closed' }" @click="mobileTab = 'closed'">
-        <span class="m-tab-label">بسته</span>
+        <span class="m-tab-lbl">بسته</span>
       </button>
     </div>
 
@@ -122,7 +112,7 @@
     
     <template v-else-if="!orders.length && !searchQuery">
       <div class="empty-state">
-        <div class="empty-icon-wrapper"><CheckCheck :size="32" class="success-icon" /></div>
+        <div class="empty-icon-wrapper"><CheckCheck :size="40" class="success-icon" /></div>
         <strong>لیست خالی است</strong>
         <p>هیچ سفارشی در این تاریخ وجود ندارد.</p>
       </div>
@@ -130,7 +120,7 @@
     
     <template v-else-if="(isMobileView && !activeMobileList.length) || (!isMobileView && filterStatus && !activeDesktopFilteredList.length) || (!isMobileView && !filterStatus && activeCount === 0)">
       <div class="empty-state">
-        <div class="empty-icon-wrapper"><Search :size="32" /></div>
+        <div class="empty-icon-wrapper"><Search :size="40" /></div>
         <strong>سفارشی یافت نشد</strong>
         <p>با تب یا فیلترهای فعلی موردی وجود ندارد.</p>
         <button class="secondary-btn mt-2" @click="clearFilters">نمایش همه</button>
@@ -153,10 +143,7 @@
         <!-- New Column -->
         <div class="kds-column col-new" v-show="!filterStatus || filterStatus === 'new'">
           <header class="kds-col-header">
-            <div class="col-title">
-              <span class="col-dot new"></span>
-              <h3>جدید</h3>
-            </div>
+            <h3>جدید</h3>
             <span class="col-count">{{ toFaDigits(colNew.length) }}</span>
           </header>
           <div class="kds-col-body">
@@ -171,10 +158,7 @@
         <!-- Preparing Column -->
         <div class="kds-column col-preparing" v-show="!filterStatus || filterStatus === 'preparing'">
           <header class="kds-col-header">
-            <div class="col-title">
-              <span class="col-dot preparing"></span>
-              <h3>در حال تولید</h3>
-            </div>
+            <h3>در حال تولید</h3>
             <span class="col-count">{{ toFaDigits(colPrep.length) }}</span>
           </header>
           <div class="kds-col-body">
@@ -189,10 +173,7 @@
         <!-- Ready Column (Olive Semantic) -->
         <div class="kds-column col-ready" v-show="!filterStatus || filterStatus === 'ready'">
           <header class="kds-col-header">
-            <div class="col-title">
-              <span class="col-dot ready"></span>
-              <h3>آماده تحویل</h3>
-            </div>
+            <h3>آماده تحویل</h3>
             <span class="col-count">{{ toFaDigits(colReady.length) }}</span>
           </header>
           <div class="kds-col-body">
@@ -207,10 +188,7 @@
         <!-- Closed Column -->
         <div class="kds-column col-closed" v-show="filterStatus === 'closed'">
           <header class="kds-col-header">
-            <div class="col-title">
-              <span class="col-dot closed"></span>
-              <h3>بسته / تحویل‌شده</h3>
-            </div>
+            <h3>بسته / تاریخچه</h3>
             <span class="col-count">{{ toFaDigits(colClosed.length) }}</span>
           </header>
           <div class="kds-col-body">
@@ -268,14 +246,12 @@ let resizeHandler = null
 const isMobileView = computed(() => windowWidth.value <= 1024)
 const isToday = computed(() => dateFilter.value === getLocalTodayDate())
 
-// Filter match logic - completely uncoupled from payment "paid" status
+// Filter match logic - strictly isolated from payment flow
 function _match(o, s) {
   const st = String(o.status || '').toLowerCase()
   if (s === 'new') return ['new', 'confirmed'].includes(st)
   if (s === 'preparing') return ['preparing', 'in_progress'].includes(st)
-  // Ready means food is ready to handoff, not just paid.
   if (s === 'ready') return ['ready', 'completed'].includes(st)
-  // Closed / Delivered states. No longer pollutes the active view.
   if (s === 'closed') return ['delivered', 'cancelled', 'closed'].includes(st)
   return true
 }
@@ -300,7 +276,6 @@ const colClosed = computed(() => shown.value.filter(o => _match(o, 'closed')))
 
 const activeCount = computed(() => colNew.value.length + colPrep.value.length + colReady.value.length)
 
-// For mobile vertical list
 const activeMobileList = computed(() => {
   if (mobileTab.value === 'new') return colNew.value
   if (mobileTab.value === 'preparing') return colPrep.value
@@ -349,7 +324,7 @@ async function fetchOrders(manual = false) {
     const res = await callRestaurantAPI('get_kitchen_display_orders', { limit: 100, date: dateFilter.value })
     const newOrders = res.orders || []
     
-    // Play sound if there are new active orders, and we are viewing today
+    // Sound notification
     if (soundEnabled.value && orders.value.length > 0 && isToday.value) {
       const oldNewCount = orders.value.filter(o => _match(o, 'new')).length
       const currentNewCount = newOrders.filter(o => _match(o, 'new')).length
@@ -398,7 +373,7 @@ function handleAction(o, type) {
 
 function setupTimers() {
   if (pollTimer) clearInterval(pollTimer)
-  // Smart polling: only poll if we are viewing TODAY.
+  // Smart polling: only poll if viewing TODAY and tab is active
   pollTimer = setInterval(() => {
     if (document.visibilityState === 'visible' && isOnline.value && isToday.value) {
       fetchOrders()
@@ -440,167 +415,134 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.workspace-header {
+/* 1. Header & Toolbar */
+.kds-toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-md);
+  padding: 0.75rem 1rem;
+  gap: 1rem;
+  box-shadow: 0 4px 12px rgba(52, 38, 31, 0.02);
+}
+
+.toolbar-start, .toolbar-end {
+  display: flex;
+  align-items: center;
   gap: 1.5rem;
 }
 
-.badge-kds {
-  background: var(--mg-danger-bg);
-  color: var(--mg-danger);
-  font-size: 0.8rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 6px;
-  vertical-align: middle;
-  margin-right: 0.25rem;
-}
-
 .page-title {
-  font-size: 1.8rem;
+  font-size: 1.25rem;
   font-weight: 900;
   color: var(--mg-text-main);
-  margin: 0 0 0.5rem 0;
-  letter-spacing: -0.02em;
-}
-
-.page-subtitle {
-  color: var(--mg-text-muted);
-  font-size: 0.95rem;
   margin: 0;
-}
-
-.header-actions {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-/* Date Filter - Professional UI */
-.date-filter-control {
-  position: relative;
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mg-text-muted);
+}
+.live-dot.live {
+  background: var(--mg-success);
+  animation: pulse-live 2s infinite;
+}
+@keyframes pulse-live {
+  0% { box-shadow: 0 0 0 0px rgba(111, 123, 86, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(111, 123, 86, 0); }
+  100% { box-shadow: 0 0 0 0px rgba(111, 123, 86, 0); }
+}
+
+.date-filter-compact {
   display: flex;
   align-items: center;
   background: var(--mg-surface-alt);
   border: 1px solid var(--mg-border-light);
-  border-radius: var(--mg-radius-md);
-  padding: 0;
-  overflow: hidden;
-  transition: all 0.2s;
-  height: 2.8rem;
+  border-radius: var(--mg-radius-sm);
+  padding: 0 0.5rem;
+  height: 2.4rem;
+  transition: border-color 0.2s;
+  position: relative;
 }
-
-.date-filter-control.is-today {
+.date-filter-compact.is-today {
   border-color: rgba(111, 123, 86, 0.4);
-  background: rgba(111, 123, 86, 0.05);
+  background: rgba(111, 123, 86, 0.04);
 }
-
-.date-icon {
-  position: absolute;
-  right: 0.75rem;
+.icon-date {
   color: var(--mg-secondary);
-  pointer-events: none;
+  margin-left: 0.25rem;
 }
-.date-filter-control.is-today .date-icon { color: var(--mg-success); }
+.date-filter-compact.is-today .icon-date { color: var(--mg-success); }
 
 .date-input {
   background: transparent;
   border: none;
-  width: 150px;
-  height: 100%;
-  padding: 0 1rem 0 2.5rem;
   color: var(--mg-text-main);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
   outline: none;
   cursor: pointer;
 }
-
-.today-badge {
+.today-tag {
   position: absolute;
-  left: 0.5rem;
+  left: 0.25rem;
   background: var(--mg-success);
   color: #fff;
-  font-size: 0.7rem;
-  padding: 0.15rem 0.4rem;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.35rem;
   border-radius: 4px;
   font-weight: 700;
   pointer-events: none;
 }
 
-.live-indicator {
+.search-compact {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
   background: var(--mg-surface-alt);
-  color: var(--mg-text-muted);
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--mg-radius-md);
-  font-size: 0.85rem;
-  font-weight: 700;
   border: 1px solid var(--mg-border-light);
-  height: 2.8rem;
+  border-radius: var(--mg-radius-sm);
+  padding: 0 0.75rem;
+  height: 2.4rem;
+  width: 200px;
+  transition: border-color 0.2s;
 }
-.live-indicator.live {
-  background: var(--mg-success-bg);
-  color: var(--mg-success);
-  border-color: rgba(111, 123, 86, 0.3);
+.search-compact:focus-within {
+  border-color: var(--mg-primary);
 }
-
-.pulse-dot {
-  width: 8px;
-  height: 8px;
-  background: currentColor;
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-.live-indicator:not(.live) .pulse-dot { animation: none; opacity: 0.5; }
-
-@keyframes pulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 4px rgba(111, 123, 86, 0.2); }
-  100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(111, 123, 86, 0); }
-}
-
-.filter-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-icon {
-  position: absolute;
-  right: 1rem;
+.icon-search {
   color: var(--mg-secondary);
+  margin-left: 0.5rem;
 }
-
-.filter-input {
-  background: var(--mg-surface-alt);
-  border: 1px solid var(--mg-border-light);
-  border-radius: var(--mg-radius-md);
-  padding: 0.75rem 1rem 0.75rem 2.5rem;
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
   color: var(--mg-text-main);
   font-size: 0.9rem;
-  transition: all 0.2s;
-  height: 2.8rem;
-}
-
-.search-input { width: 220px; }
-.search-input:focus {
-  border-color: var(--mg-primary);
   outline: none;
+  min-width: 0;
 }
 
-.icon-btn, .refresh-btn {
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.action-btn {
   background: var(--mg-surface-alt);
   border: 1px solid var(--mg-border-light);
-  border-radius: var(--mg-radius-md);
-  width: 2.8rem;
-  height: 2.8rem;
+  border-radius: var(--mg-radius-sm);
+  width: 2.4rem;
+  height: 2.4rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -608,117 +550,73 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
 }
-.icon-btn:hover, .refresh-btn:hover {
-  background: var(--mg-bg-surface);
-  color: var(--mg-primary);
-}
-.icon-btn.active {
-  color: var(--mg-primary);
-}
+.action-btn:hover { background: var(--mg-bg-surface); color: var(--mg-primary); }
+.action-btn.active { color: var(--mg-primary); }
 
-.is-spinning {
-  animation: spin 1s linear infinite;
-}
+.is-spinning { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-/* KPI Strip */
+/* 2. Desktop KPI Strip */
 .kpi-strip {
   display: flex;
-  gap: 0.75rem;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
+  align-items: center;
+  background: var(--mg-surface-alt);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-sm);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1.5rem;
+  gap: 0.5rem;
 }
 
-.kpi-tile {
-  background: var(--mg-surface-alt);
-  border-radius: var(--mg-radius-md);
-  padding: 1rem 1.25rem;
+.kpi-btn {
   display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  flex: 1;
-  min-width: 130px;
-  border: 1px solid var(--mg-border-light);
-  text-align: right;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.kpi-tile:hover {
-  border-color: var(--mg-border);
-  transform: translateY(-2px);
-}
-
-.kpi-tile.active {
-  background: var(--mg-bg-surface);
-  border-color: var(--mg-primary);
-  box-shadow: var(--mg-shadow-sm);
-}
-.kpi-tile.kpi-ready.active {
-  border-color: var(--mg-success);
-  background: rgba(111, 123, 86, 0.05);
-}
-
-.kpi-tile.readonly {
-  cursor: default;
-}
-.kpi-tile.readonly:hover {
-  transform: none;
-  border-color: var(--mg-border-light);
-}
-
-.kpi-closed {
-  opacity: 0.8;
-}
-
-.kpi-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  margin-top: 0.5rem;
-  flex-shrink: 0;
-}
-
-.kpi-dot.all { background: var(--mg-text-main); }
-.kpi-dot.new { background: var(--mg-primary); } 
-.kpi-dot.preparing { background: var(--mg-danger); } 
-.kpi-dot.ready { background: var(--mg-success); }
-.kpi-dot.closed { background: var(--mg-secondary); }
-
-.kpi-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.kpi-val {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--mg-text-main);
-  line-height: 1.1;
-}
-
-.kpi-label {
-  font-size: 0.8rem;
   color: var(--mg-text-muted);
-  font-weight: 700;
-  margin-top: 0.25rem;
+}
+.kpi-btn:hover { background: var(--mg-bg-surface); }
+.kpi-btn.active {
+  background: var(--mg-bg-surface);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-.text-sm { font-size: 0.85rem; }
+.kpi-val { font-size: 1.1rem; font-weight: 800; color: var(--mg-text-main); }
+.kpi-lbl { font-size: 0.85rem; font-weight: 700; }
 
-.kpi-divider {
+.kpi-btn.accent-new.active .kpi-lbl { color: var(--mg-primary); }
+.kpi-btn.accent-prep.active .kpi-lbl { color: var(--mg-danger); }
+.kpi-btn.accent-ready.active .kpi-lbl { color: var(--mg-success); }
+
+.kpi-sep {
   width: 1px;
+  height: 1.5rem;
   background: var(--mg-border-light);
-  margin: 0.5rem 0.5rem;
+  margin: 0 0.25rem;
 }
+.kpi-spacer { flex: 1; }
 
-/* Mobile Tabs (Pure Native Tab feeling) */
+.kpi-read {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.5rem;
+}
+.kpi-read .kpi-val { color: var(--mg-secondary); font-size: 1rem; }
+.kpi-read .kpi-lbl { color: var(--mg-text-muted); }
+
+/* 3. Mobile Tabs */
 .mobile-tabs {
   background: var(--mg-surface-alt);
   border: 1px solid var(--mg-border-light);
-  border-radius: var(--mg-radius-md);
+  border-radius: var(--mg-radius-sm);
   padding: 0.4rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   display: flex;
 }
 
@@ -727,9 +625,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.8rem 0.2rem;
-  border-radius: var(--mg-radius-sm);
+  gap: 0.35rem;
+  padding: 0.6rem 0.2rem;
+  border-radius: 6px;
   border: none;
   background: transparent;
   color: var(--mg-text-muted);
@@ -738,114 +636,72 @@ onUnmounted(() => {
   transition: all 0.2s;
   cursor: pointer;
 }
-
 .m-tab.active {
   background: var(--mg-bg-surface);
   color: var(--mg-text-main);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
-
-.m-tab.m-tab-ready.active {
-  background: rgba(111, 123, 86, 0.05);
-  color: var(--mg-success);
-}
+.m-tab.m-tab-ready.active { background: rgba(111, 123, 86, 0.08); color: var(--mg-success); }
 
 .m-tab-count {
   background: var(--mg-border);
   color: var(--mg-text-main);
   font-size: 0.75rem;
-  padding: 0.15rem 0.4rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 99px;
-  min-width: 1.2rem;
+  min-width: 1.1rem;
   text-align: center;
 }
-
 .m-tab.active .m-tab-count.new { background: var(--mg-primary); color: #fff; }
 .m-tab.active .m-tab-count.prep { background: var(--mg-danger); color: #fff; }
 .m-tab.active .m-tab-count.ready { background: var(--mg-success); color: #fff; }
 
-/* Mobile Ticket List (Vertical Only) */
-.mobile-ticket-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding-bottom: 2rem;
-}
-
-/* Empty / Alerts */
+/* 4. Empty / Loading States */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 5rem 2rem;
   background: var(--mg-surface-alt);
   border: 1px dashed var(--mg-border);
   border-radius: var(--mg-radius-md);
   color: var(--mg-secondary);
   text-align: center;
 }
-.empty-icon-wrapper {
-  margin-bottom: 1.5rem;
-  opacity: 0.8;
-}
-.success-icon { color: var(--mg-success); }
-
-.empty-state strong {
-  font-size: 1.2rem;
-  color: var(--mg-text-main);
-  margin-bottom: 0.5rem;
-  font-weight: 800;
-}
-.empty-state p {
-  font-size: 0.95rem;
-  color: var(--mg-text-muted);
-}
+.empty-icon-wrapper { margin-bottom: 1rem; opacity: 0.6; }
+.success-icon { color: var(--mg-success); opacity: 0.8; }
+.empty-state strong { font-size: 1.1rem; color: var(--mg-text-main); margin-bottom: 0.4rem; font-weight: 800; }
+.empty-state p { font-size: 0.9rem; color: var(--mg-text-muted); margin: 0; }
 .secondary-btn {
-  background: var(--mg-bg-surface);
-  border: 1px solid var(--mg-border);
-  color: var(--mg-text-main);
-  padding: 0.6rem 1.2rem;
-  border-radius: var(--mg-radius-sm);
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 1rem;
+  background: var(--mg-bg-surface); border: 1px solid var(--mg-border); color: var(--mg-text-main);
+  padding: 0.5rem 1rem; border-radius: 6px; font-weight: 700; cursor: pointer; margin-top: 1.25rem;
 }
 
-.workspace-alerts {
-  margin-bottom: 1.5rem;
-}
+.workspace-alerts { margin-bottom: 1.25rem; }
 .error-alert {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  border-radius: var(--mg-radius-sm);
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin: 0;
-  background: var(--mg-danger-bg);
-  color: var(--mg-danger);
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-radius: var(--mg-radius-sm);
+  font-size: 0.9rem; font-weight: 700; margin: 0; background: var(--mg-danger-bg); color: var(--mg-danger);
   border: 1px solid rgba(166, 84, 63, 0.2);
 }
-.muted-loading {
-  color: var(--mg-secondary);
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 2rem;
+.muted-loading { color: var(--mg-secondary); font-size: 0.95rem; font-weight: 700; margin-bottom: 2rem; }
+
+/* Mobile Vertical List */
+.mobile-ticket-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-bottom: 2rem;
 }
 
-/* Desktop Board Layout */
+/* 5. Desktop Kanban Board */
 .kds-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.5rem;
+  gap: 1.25rem;
   align-items: start;
 }
-
-.kds-board.desktop-filtered {
-  grid-template-columns: 1fr;
-}
+.kds-board.desktop-filtered { grid-template-columns: 1fr; }
 
 .kds-column {
   display: flex;
@@ -853,65 +709,50 @@ onUnmounted(() => {
   background: var(--mg-surface-alt);
   border-radius: var(--mg-radius-md);
   border: 1px solid var(--mg-border-light);
-  height: calc(100vh - 200px);
+  height: calc(100vh - 210px);
 }
 
-/* Green/Olive Semantics for Ready Column */
 .kds-column.col-ready {
   background: rgba(111, 123, 86, 0.03);
-  border-color: rgba(111, 123, 86, 0.2);
+  border-color: rgba(111, 123, 86, 0.15);
 }
 
 .kds-col-header {
+  position: sticky;
+  top: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--mg-border-light);
   background: var(--mg-bg-surface);
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--mg-radius-md) var(--mg-radius-md) 0 0;
+  z-index: 10;
 }
-
 .kds-column.col-ready .kds-col-header {
-  background: rgba(111, 123, 86, 0.08);
+  background: rgba(111, 123, 86, 0.06);
   border-bottom-color: rgba(111, 123, 86, 0.15);
 }
 
-.kds-column.col-ready h3 {
-  color: var(--mg-success);
-}
-
-.col-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.col-title h3 {
+.kds-col-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--mg-text-main);
 }
-.col-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-.col-dot.new { background: var(--mg-primary); }
-.col-dot.preparing { background: var(--mg-danger); }
-.col-dot.ready { background: var(--mg-success); }
-.col-dot.closed { background: var(--mg-secondary); }
+.kds-column.col-new h3 { color: var(--mg-primary); }
+.kds-column.col-preparing h3 { color: var(--mg-danger); }
+.kds-column.col-ready h3 { color: var(--mg-success); }
 
 .col-count {
   background: var(--mg-bg-page);
-  padding: 0.2rem 0.6rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 99px;
   font-size: 0.8rem;
   font-weight: 800;
   color: var(--mg-text-muted);
   border: 1px solid var(--mg-border-light);
 }
-
 .kds-column.col-ready .col-count {
   background: var(--mg-success-bg);
   color: var(--mg-success);
@@ -921,27 +762,21 @@ onUnmounted(() => {
 .kds-col-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
 }
 
+/* Responsive adjustments */
 @media (max-width: 1024px) {
-  .desktop-only { display: none !important; }
-  
-  .workspace-header {
+  .kds-toolbar {
     flex-direction: column;
     align-items: stretch;
+    padding: 0.75rem;
   }
-  .header-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .date-filter-control {
-    width: 100%;
-  }
-  .date-input { width: 100%; }
-  .filter-box, .search-input { width: 100%; }
+  .toolbar-start { justify-content: space-between; }
+  .toolbar-end { width: 100%; }
+  .search-compact { flex: 1; width: auto; }
 }
 </style>
