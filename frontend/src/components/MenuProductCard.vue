@@ -292,7 +292,7 @@ const cardStyle = computed(() => {
 })
 
 const resolvedImage = computed(
-  () => props.item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60',
+  () => props.item.image || '/NooshYar%20Image.png',
 )
 
 const visibleTags = computed(() => {
