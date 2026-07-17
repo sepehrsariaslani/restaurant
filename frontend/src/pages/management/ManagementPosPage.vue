@@ -2409,6 +2409,13 @@ async function selectAndLoadInvoice(invoice) {
       financial.discountValue = Number(fm.discount_value || order.discount_amount || 0)
       financial.discountType = fm.discount_type === 'percent' ? 'percent' : 'fixed'
     }
+    
+    // Check if it's partially paid
+    const outstanding = Number(order.outstanding_amount)
+    if (Number.isFinite(outstanding) && outstanding >= 0 && outstanding < Number(order.grand_total)) {
+      financial.walletApplied = Number(order.grand_total) - outstanding
+      financial.useWallet = true
+    }
     if (fm.service_value > 0 || order.service_amount > 0) {
       financial.serviceValue = Number(fm.service_value || order.service_amount || 0)
       financial.serviceType = fm.service_type === 'percent' ? 'percent' : 'fixed'
@@ -4076,7 +4083,28 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
   }
 
   resolveCustomerFromQuery()
+  const paymentSelection = resolvePaymentSubmission(paymentMeta)
+  const paymentNoteLine = paymentSelection.auditLine
 
+  const paymentPayload = payNow
+    ? {
+        method: paymentSelection.primary?.method || normalizePaymentMethodKind(payment.method),
+        mode_of_payment: paymentSelection.primary?.mode_of_payment || '',
+        provider: paymentSelection.primary?.method === 'card' ? paymentBoot.provider : 'manual',
+        terminal_id: paymentBoot.terminal_id || '',
+        reference_no: payment.reference_no || '',
+        rrn: payment.rrn || '',
+        splits: paymentSelection.splits,
+      }
+    : {
+        method: 'credit',
+        mode_of_payment: 'اعتباری',
+        provider: 'manual',
+        terminal_id: paymentBoot.terminal_id || '',
+        reference_no: '',
+        rrn: '',
+        splits: [],
+      }
 
   // Pay original invoice directly when editing
   if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {

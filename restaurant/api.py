@@ -10697,8 +10697,9 @@ def place_order(
 		)
 
 	financial_modifiers = financial_modifiers or {}
-	coupon_code = financial_modifiers.get("coupon_code") or ""
-	coupon = _validate_coupon_for_cart(coupon_code, cart_items, mobile=mobile) if coupon_code else {}
+	# Direct parameter takes precedence, then financial_modifiers fallback
+	resolved_coupon_code = (coupon_code or "").strip() or financial_modifiers.get("coupon_code") or ""
+	coupon = _validate_coupon_for_cart(resolved_coupon_code, cart_items, mobile=mobile) if resolved_coupon_code else {}
 
 	return _create_sales_order(
 		customer_name=customer_name,
@@ -13976,9 +13977,9 @@ def get_management_pos_config():
 		"default_customers": config.get(
 			"default_customers",
 			{
-				"dine_in": {"name": "POS Customer", "mobile": "09120000000"},
-				"takeaway": {"name": "POS Customer", "mobile": "09120000000"},
-				"delivery": {"name": "POS Customer", "mobile": "09120000000"},
+				"dine_in": {"name": "POS Customer", "mobile": ""},
+				"takeaway": {"name": "POS Customer", "mobile": ""},
+				"delivery": {"name": "POS Customer", "mobile": ""},
 			},
 		),
 		"takeaway_places": config.get("takeaway_places", ["بیرون بر حضوری", "تحویل کنار سالن"]),
@@ -14231,17 +14232,19 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
         
-    # Idempotency check: if order is already paid/invoiced, return success.
+    # Check if order is already invoiced
     si = frappe.db.get_value("Sales Invoice Item", {"sales_order": so_name}, "parent")
+    si_doc = None
     if si:
         si_doc = frappe.get_doc("Sales Invoice", si)
         if si_doc.docstatus == 1:
-            return {
-                "sales_order": so_name,
-                "sales_invoice": si,
-                "status": "success",
-                "message": "Order is already invoiced."
-            }
+            if flt(si_doc.outstanding_amount) <= 0.1:
+                return {
+                    "sales_order": so_name,
+                    "sales_invoice": si,
+                    "status": "success",
+                    "message": "Order is already fully paid."
+                }
             
     payment = _parse_json(payment, {})
     method = _normalize_payment_method(payment.get("method") or "cash")
@@ -14259,49 +14262,69 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     result = {"sales_order": so_name}
     
     try:
-        make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
-        si_doc = make_si(so_name)
-        if hasattr(si_doc, "as_dict"):
-            si_doc.is_pos = 1
-            si_doc.update_stock = 0
-        elif isinstance(si_doc, dict):
-            si_doc["is_pos"] = 1
-            si_doc["update_stock"] = 0
-            si_doc = frappe.get_doc(si_doc)
-        else:
-            si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
-            si_doc.is_pos = 1
-
-        grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
-
-        # Fix amounts in splits if empty
-        total_split = sum(flt(s.get("amount") or 0) for s in splits)
-        if total_split <= 0:
-            splits[0]["amount"] = grand_total
-
-        # Validate splits total
-        total_split = sum(flt(s.get("amount") or 0) for s in splits)
-        if abs(total_split - grand_total) > 0.5: # Allow small rounding
-            frappe.throw(f"Payment splits total ({total_split}) does not match invoice total ({grand_total})")
-
-        # Add payments to SI
-        if hasattr(si_doc, "payments"):
-            si_doc.payments = []
-        for s in splits:
-            mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
-            if s.get("method") != "credit": # Don't add credit to SI payments table usually
-                si_doc.append("payments", {
-                    "mode_of_payment": mop,
-                    "amount": flt(s.get("amount")),
-                })
-
-        si_doc.flags.ignore_permissions = True
-        si_doc.insert()
-        si_doc.submit()
+        if not si_doc:
+            make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
+            si_doc = make_si(so_name)
+            if hasattr(si_doc, "as_dict"):
+                si_doc.is_pos = 1
+                si_doc.update_stock = 0
+            elif isinstance(si_doc, dict):
+                si_doc["is_pos"] = 1
+                si_doc["update_stock"] = 0
+                si_doc = frappe.get_doc(si_doc)
+            else:
+                si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
+                si_doc.is_pos = 1
+    
+            grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
+    
+            # Fix amounts in splits if empty
+            total_split = sum(flt(s.get("amount") or 0) for s in splits)
+            if total_split <= 0:
+                splits[0]["amount"] = grand_total
+    
+            # Validate splits total
+            total_split = sum(flt(s.get("amount") or 0) for s in splits)
+            if abs(total_split - grand_total) > 0.5: # Allow small rounding
+                frappe.throw(f"Payment splits total ({total_split}) does not match invoice total ({grand_total})")
+    
+            # Add payments to SI
+            if hasattr(si_doc, "payments"):
+                si_doc.payments = []
+            for s in splits:
+                mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
+                if s.get("method") != "credit": # Don't add credit to SI payments table usually
+                    si_doc.append("payments", {
+                        "mode_of_payment": mop,
+                        "amount": flt(s.get("amount")),
+                    })
+    
+            si_doc.flags.ignore_permissions = True
+            si_doc.insert()
+            si_doc.submit()
+            
         result["sales_invoice"] = si_doc.name
 
         # Create Payment Entries
         if si_doc.docstatus == 1:
+            # Re-fetch outstanding amount
+            si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
+            
+            # If we are processing a partial payment retry, validate the split total against current outstanding
+            total_split = sum(flt(s.get("amount") or 0) for s in splits)
+            
+            if total_split <= 0 and si_outstanding > 0:
+                # Fallback to outstanding
+                splits = [{
+                    "method": method,
+                    "mode_of_payment": _resolve_pos_mode_of_payment(method),
+                    "amount": si_outstanding,
+                    "reference_no": (reference_no or payment.get("reference_no") or "").strip()
+                }]
+                total_split = si_outstanding
+                
+            if total_split > si_outstanding + 0.5:
+                frappe.throw(f"Payment splits total ({total_split}) exceeds outstanding amount ({si_outstanding})")
             from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
             payment_entries = []
             
