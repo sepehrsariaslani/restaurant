@@ -23287,10 +23287,10 @@ def get_session_roles():
 
 
 @frappe.whitelist()
-def get_kitchen_display_orders(limit=50):
+def get_kitchen_display_orders(limit=50, date=None):
     """Get production-ready orders for kitchen display"""
     _ensure_management_access()
-    limit = cint(limit) or 50
+    limit = cint(limit) or 100
     orders = []
     
     if not frappe.db.exists("DocType", "Sales Order"):
@@ -23303,7 +23303,11 @@ def get_kitchen_display_orders(limit=50):
     
     filters = {"docstatus": 1}
     if has_restaurant_status:
-        filters["restaurant_status"] = ["in", ["new", "confirmed", "preparing", "ready"]]
+        # Also fetch 'delivered' status so that the frontend can show it in 'closed' views if needed
+        filters["restaurant_status"] = ["in", ["new", "confirmed", "preparing", "ready", "delivered"]]
+    
+    if date:
+        filters["transaction_date"] = date
     
     so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
     if has_order_type:

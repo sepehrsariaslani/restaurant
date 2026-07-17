@@ -13,12 +13,24 @@
           <span>{{ isOnline ? 'آنلاین' : 'آفلاین' }}</span>
         </div>
         
-        <div class="search-box">
+        <div class="filter-box">
+          <Calendar :size="18" class="search-icon" />
+          <input
+            type="date"
+            v-model="dateFilter"
+            class="filter-input date-input"
+            @change="fetchOrders(true)"
+            title="تاریخ"
+          />
+          <span v-if="isToday" class="today-badge">امروز</span>
+        </div>
+        
+        <div class="filter-box">
           <Search :size="18" class="search-icon" />
           <input
             v-model.trim="searchQuery"
-            class="search-input"
-            placeholder="جستجوی سفارش، میز یا مشتری..."
+            class="filter-input search-input"
+            placeholder="جستجوی سفارش، مشتری..."
           />
         </div>
         
@@ -37,12 +49,12 @@
       <p class="error-alert"><AlertCircle :size="16" /> {{ errorMsg }}</p>
     </div>
 
-    <!-- KPI Strip -->
-    <div class="kpi-strip">
+    <!-- KPI Strip (Hidden or compact on mobile) -->
+    <div class="kpi-strip desktop-only">
       <button class="kpi-tile" :class="{ active: filterStatus === '' }" @click="filterStatus = ''">
         <span class="kpi-dot all"></span>
         <div class="kpi-info">
-          <span class="kpi-val">{{ toFaDigits(orders.length) }}</span>
+          <span class="kpi-val">{{ toFaDigits(activeOrders.length) }}</span>
           <span class="kpi-label">کل سفارش‌ها</span>
         </div>
       </button>
@@ -78,13 +90,29 @@
       </div>
     </div>
 
-    <p class="muted-loading" v-if="loading && !orders.length">در حال همگام‌سازی تابلو...</p>
+    <!-- Mobile Tabs -->
+    <div class="mobile-tabs mobile-only">
+      <button class="m-tab" :class="{ active: mobileTab === 'new' }" @click="mobileTab = 'new'">
+        <span class="m-tab-label">جدید</span>
+        <span class="m-tab-count new">{{ toFaDigits(cntFilter('new')) }}</span>
+      </button>
+      <button class="m-tab" :class="{ active: mobileTab === 'preparing' }" @click="mobileTab = 'preparing'">
+        <span class="m-tab-label">در تولید</span>
+        <span class="m-tab-count prep">{{ toFaDigits(cntFilter('preparing')) }}</span>
+      </button>
+      <button class="m-tab" :class="{ active: mobileTab === 'ready' }" @click="mobileTab = 'ready'">
+        <span class="m-tab-label">آماده</span>
+        <span class="m-tab-count ready">{{ toFaDigits(cntFilter('ready')) }}</span>
+      </button>
+    </div>
+
+    <p class="muted-loading" v-if="loading && !orders.length">در حال دریافت سفارشات...</p>
     
-    <template v-else-if="!orders.length">
+    <template v-else-if="!activeOrders.length && !searchQuery">
       <div class="empty-state">
         <div class="empty-icon-wrapper"><CheckCheck :size="32" class="success-icon" /></div>
-        <strong>تابلو خالی است</strong>
-        <p>همه سفارش‌ها انجام شده‌اند. خسته نباشید!</p>
+        <strong>همه چیز مرتب است</strong>
+        <p>هیچ سفارش فعالی در این تاریخ وجود ندارد.</p>
       </div>
     </template>
     
@@ -93,13 +121,13 @@
         <div class="empty-icon-wrapper"><Search :size="32" /></div>
         <strong>سفارشی یافت نشد</strong>
         <p>با فیلترها و جستجوی فعلی موردی وجود ندارد.</p>
-        <button class="secondary-btn mt-2" @click="searchQuery = ''; filterStatus = ''">پاک کردن فیلترها</button>
+        <button class="secondary-btn mt-2" @click="clearFilters">پاک کردن فیلترها</button>
       </div>
       
       <!-- Board Layout -->
-      <div v-else class="kds-board">
+      <div v-else class="kds-board" :class="{ 'mobile-tab-view': isMobileView }">
         <!-- New Column -->
-        <div class="kds-column col-new" v-show="!filterStatus || filterStatus === 'new'">
+        <div class="kds-column col-new" v-show="shouldShowCol('new')">
           <header class="kds-col-header">
             <div class="col-title">
               <span class="col-dot new"></span>
@@ -117,7 +145,7 @@
         </div>
 
         <!-- Preparing Column -->
-        <div class="kds-column col-preparing" v-show="!filterStatus || filterStatus === 'preparing'">
+        <div class="kds-column col-preparing" v-show="shouldShowCol('preparing')">
           <header class="kds-col-header">
             <div class="col-title">
               <span class="col-dot preparing"></span>
@@ -135,7 +163,7 @@
         </div>
 
         <!-- Ready Column -->
-        <div class="kds-column col-ready" v-show="!filterStatus || filterStatus === 'ready'">
+        <div class="kds-column col-ready" v-show="shouldShowCol('ready')">
           <header class="kds-col-header">
             <div class="col-title">
               <span class="col-dot ready"></span>
@@ -158,7 +186,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Search, RefreshCcw, AlertCircle, CheckCheck, Volume2, VolumeX } from 'lucide-vue-next'
+import { Search, RefreshCcw, AlertCircle, CheckCheck, Volume2, VolumeX, Calendar } from 'lucide-vue-next'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import KitchenOrder from '@/components/KitchenOrder.vue'
 import { callRestaurantAPI } from '@/utils/api'
@@ -170,6 +198,13 @@ if (typeof Audio !== 'undefined') {
   notifyAudio.volume = 0.6
 }
 
+function getLocalTodayDate() {
+  const d = new Date()
+  const offset = d.getTimezoneOffset() * 60000
+  const localDate = new Date(d.getTime() - offset)
+  return localDate.toISOString().split('T')[0]
+}
+
 // State
 const orders = ref([])
 const loading = ref(false)
@@ -177,18 +212,40 @@ const errorMsg = ref('')
 const soundEnabled = ref(true)
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
 const searchQuery = ref('')
-const filterStatus = ref('')
+const filterStatus = ref('') // desktop filter
+const mobileTab = ref('new') // mobile tab filter
+const dateFilter = ref(getLocalTodayDate())
 const nowTick = ref(Date.now())
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 
 // Timers
 let pollTimer = null
 let clockTimer = null
 let visibilityHandler = null
+let resizeHandler = null
 
 // Computed
+const isMobileView = computed(() => windowWidth.value <= 1024)
+
+const isToday = computed(() => dateFilter.value === getLocalTodayDate())
+
+// We only show active orders on the board (ignore delivered/cancelled)
+const activeOrders = computed(() => {
+  return orders.value.filter(o => {
+    const st = String(o.status || '').toLowerCase()
+    return !['delivered', 'cancelled', 'closed'].includes(st)
+  })
+})
+
 const shown = computed(() => {
-  let l = orders.value
-  if (filterStatus.value) l = l.filter(o => _match(o, filterStatus.value))
+  let l = activeOrders.value
+  
+  if (isMobileView.value) {
+    l = l.filter(o => _match(o, mobileTab.value))
+  } else if (filterStatus.value) {
+    l = l.filter(o => _match(o, filterStatus.value))
+  }
+  
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.trim().toLowerCase()
     l = l.filter(o => 
@@ -205,13 +262,15 @@ const colPrep = computed(() => shown.value.filter(o => _match(o, 'preparing')))
 const colReady = computed(() => shown.value.filter(o => _match(o, 'ready')))
 
 const avgTime = computed(() => {
-  if (!orders.value.length) return 0
+  if (!activeOrders.value.length) return 0
   const now = nowTick.value
-  const totalMins = orders.value.reduce((s, o) => {
-    const ts = new Date(o.created_at || o.creation || now).getTime()
+  const totalMins = activeOrders.value.reduce((s, o) => {
+    const created = o.created_at || o.creation || ''
+    const safeDateStr = String(created).replace(' ', 'T')
+    const ts = created ? new Date(safeDateStr).getTime() : now
     return s + Math.floor((now - ts) / 60000)
   }, 0)
-  return Math.round(totalMins / orders.value.length)
+  return Math.round(totalMins / activeOrders.value.length)
 })
 
 // Methods
@@ -221,14 +280,27 @@ function toFaDigits(val) {
 
 function _match(o, s) {
   const st = String(o.status || '').toLowerCase()
+  // Cleaned up workflow status logic: 'paid' is a payment state, not a kitchen state.
   if (s === 'new') return ['new', 'confirmed'].includes(st)
   if (s === 'preparing') return ['preparing', 'in_progress'].includes(st)
-  if (s === 'ready') return ['ready', 'paid'].includes(st)
+  if (s === 'ready') return ['ready', 'completed'].includes(st)
   return true
 }
 
 function cntFilter(s) {
-  return orders.value.filter(o => _match(o, s)).length
+  return activeOrders.value.filter(o => _match(o, s)).length
+}
+
+function shouldShowCol(colType) {
+  if (isMobileView.value) return mobileTab.value === colType
+  if (!filterStatus.value) return true
+  return filterStatus.value === colType
+}
+
+function clearFilters() {
+  searchQuery.value = ''
+  filterStatus.value = ''
+  mobileTab.value = 'new'
 }
 
 async function fetchOrders(manual = false) {
@@ -236,13 +308,13 @@ async function fetchOrders(manual = false) {
   if (manual) loading.value = true
   
   try {
-    const res = await callRestaurantAPI('get_kitchen_display_orders', { limit: 100 })
+    const res = await callRestaurantAPI('get_kitchen_display_orders', { limit: 100, date: dateFilter.value })
     const newOrders = res.orders || []
     
     // Play sound if there are new orders that weren't there before
     if (soundEnabled.value && orders.value.length > 0) {
-      const oldNewCount = orders.value.filter(o => _match(o, 'new')).length
-      const currentNewCount = newOrders.filter(o => _match(o, 'new')).length
+      const oldNewCount = activeOrders.value.filter(o => _match(o, 'new')).length
+      const currentNewCount = newOrders.filter(o => !['delivered', 'cancelled', 'closed'].includes(String(o.status || '').toLowerCase()) && _match(o, 'new')).length
       if (currentNewCount > oldNewCount && notifyAudio) {
         notifyAudio.play().catch(() => {})
       }
@@ -285,16 +357,15 @@ function markReady(o) {
 }
 
 function closeOrder(o) {
-  // For KDS, closing an order means it leaves the board (delivered)
+  // Move to delivered, so it naturally filters out of `activeOrders`
   _updateOrderStatus(o, 'delivered')
-  // Instantly hide it from board
-  orders.value = orders.value.filter(item => item.name !== o.name)
 }
 
 function setupTimers() {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = setInterval(() => {
-    if (document.visibilityState === 'visible' && isOnline.value) {
+    // Only poll automatically if we are looking at "today" to avoid confusing the user on past dates
+    if (document.visibilityState === 'visible' && isOnline.value && isToday.value) {
       fetchOrders()
     }
   }, 10000) // Poll every 10s for kitchen responsiveness
@@ -314,17 +385,23 @@ onMounted(() => {
     window.addEventListener('offline', () => { isOnline.value = false })
     
     visibilityHandler = () => {
-      if (document.visibilityState === 'visible') fetchOrders()
+      if (document.visibilityState === 'visible' && isToday.value) fetchOrders()
     }
     document.addEventListener('visibilitychange', visibilityHandler)
+    
+    resizeHandler = () => {
+      windowWidth.value = window.innerWidth
+    }
+    window.addEventListener('resize', resizeHandler)
   }
 })
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (clockTimer) clearInterval(clockTimer)
-  if (typeof window !== 'undefined' && visibilityHandler) {
-    document.removeEventListener('visibilitychange', visibilityHandler)
+  if (typeof window !== 'undefined') {
+    if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler)
+    if (resizeHandler) window.removeEventListener('resize', resizeHandler)
   }
 })
 </script>
@@ -368,6 +445,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .live-indicator {
@@ -403,21 +481,19 @@ onUnmounted(() => {
   100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(111, 123, 86, 0); }
 }
 
-.search-box {
+.filter-box {
   position: relative;
-  width: 260px;
+  display: flex;
+  align-items: center;
 }
 
 .search-icon {
   position: absolute;
   right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
   color: var(--mg-secondary);
 }
 
-.search-input {
-  width: 100%;
+.filter-input {
   background: var(--mg-surface-alt);
   border: 1px solid var(--mg-border-light);
   border-radius: var(--mg-radius-md);
@@ -425,11 +501,27 @@ onUnmounted(() => {
   color: var(--mg-text-main);
   font-size: 0.9rem;
   transition: all 0.2s;
+  height: 2.8rem;
 }
 
-.search-input:focus {
+.search-input { width: 220px; }
+.date-input { width: 140px; padding-left: 1rem; }
+
+.filter-input:focus {
   border-color: var(--mg-primary);
   outline: none;
+}
+
+.today-badge {
+  position: absolute;
+  left: 0.5rem;
+  background: var(--mg-success-bg);
+  color: var(--mg-success);
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .icon-btn, .refresh-btn {
@@ -539,6 +631,53 @@ onUnmounted(() => {
   background: var(--mg-border-light);
   margin: 0.5rem 0.5rem;
 }
+
+/* Mobile Tabs */
+.mobile-tabs {
+  display: none;
+  background: var(--mg-surface-alt);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-md);
+  padding: 0.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.m-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 0.5rem;
+  border-radius: var(--mg-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--mg-text-muted);
+  font-weight: 700;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.m-tab.active {
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.m-tab-count {
+  background: var(--mg-border);
+  color: var(--mg-text-main);
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.m-tab.active .m-tab-count.new { background: var(--mg-primary); color: #fff; }
+.m-tab.active .m-tab-count.prep { background: var(--mg-danger); color: #fff; }
+.m-tab.active .m-tab-count.ready { background: var(--mg-success); color: #fff; }
 
 /* Empty / Alerts */
 .empty-state {
@@ -669,15 +808,32 @@ onUnmounted(() => {
   gap: 0.85rem;
 }
 
+/* Mobile Adjustments */
 @media (max-width: 1024px) {
-  .kds-board {
-    grid-template-columns: 1fr;
-    gap: 2rem;
+  .desktop-only { display: none !important; }
+  .mobile-only { display: flex; }
+  
+  .kds-board.mobile-tab-view {
+    display: block;
   }
+  
   .kds-column {
     height: auto;
-    max-height: 600px;
+    border: none;
+    background: transparent;
   }
+  
+  .kds-col-header {
+    display: none; /* In mobile tab view, the header is redundant */
+  }
+  
+  .kds-col-body {
+    padding: 0;
+  }
+}
+
+@media (min-width: 1025px) {
+  .mobile-only { display: none !important; }
 }
 
 @media (max-width: 768px) {
@@ -685,12 +841,8 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: stretch;
   }
-  .search-box { width: 100%; }
+  .search-box, .filter-box { width: 100%; }
+  .search-input, .date-input { width: 100%; }
   .header-actions { flex-wrap: wrap; }
-  .kpi-divider { display: none; }
-  .kpi-tiles, .kpi-strip {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 </style>

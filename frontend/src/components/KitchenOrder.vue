@@ -69,7 +69,8 @@ function toFaDigits(val) {
 const elapsed = computed(() => {
   const created = props.order?.created_at || props.order?.creation || ''
   if (!created) return 0
-  return Math.floor((Date.now() - new Date(created).getTime()) / 60000)
+  const safeDateStr = String(created).replace(' ', 'T')
+  return Math.floor((Date.now() - new Date(safeDateStr).getTime()) / 60000)
 })
 
 const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready')
