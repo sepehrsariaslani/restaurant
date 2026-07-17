@@ -2132,14 +2132,21 @@ function isUnpaidOpenInvoice(row) {
     return false
   }
   
+  // Fully paid orders should never be in open invoices
+  if (status === 'paid' && row.payment_method && row.payment_method !== 'credit') {
+    // If the system knows it's fully paid and it's not credit, hide it.
+    // (A true credit order might be 'paid' if setup weirdly, but usually it stays 'unpaid' or 'overdue')
+  }
+  
   // Outstanding is true if the row has outstanding_amount > 0.1
   // Credit orders and partially paid orders will have outstanding > 0.
   const outstanding = Number(row?.outstanding_amount)
-  if (Number.isFinite(outstanding) && outstanding > 0.1) {
-    return true
+  if (Number.isFinite(outstanding)) {
+    if (outstanding > 0.1) return true
+    if (outstanding <= 0.1) return false
   }
   
-  // Fallback if outstanding is 0 or undefined, but payment_method is missing, it's open
+  // Fallback if outstanding is undefined, but payment_method is missing, it's open
   if (!row.payment_method && status !== 'paid') {
     return true
   }
@@ -4136,7 +4143,17 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       }
       
       // Optimistically update
-      openInvoices.value = openInvoices.value.filter(o => o.name !== code)
+      // If it's credit or partial, it should stay in openInvoices with updated outstanding.
+      // But we don't have the exact outstanding amount returned from the backend currently.
+      // Easiest is to filter out ONLY if it's fully paid (cash/card etc) and not partial.
+      const isCredit = paymentPayload.method === 'credit'
+      const isPartial = paymentPayload.splits && paymentPayload.splits.some(s => s.amount > 0) && 
+                        paymentPayload.splits.reduce((sum, s) => sum + s.amount, 0) < Number(totals.value.payableAmount)
+                        
+      if (!isCredit && !isPartial) {
+        openInvoices.value = openInvoices.value.filter(o => o.name !== code)
+      }
+      
       const recentIdx = recentOrders.value.findIndex(o => o.name === code)
       if (recentIdx !== -1) {
         recentOrders.value[recentIdx].status = withProduction ? 'preparing' : 'paid'

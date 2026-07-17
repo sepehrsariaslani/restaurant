@@ -14328,6 +14328,19 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
             from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
             payment_entries = []
             
+            # Check existing Payment Entries to avoid duplicate on retry
+            existing_pes = frappe.get_all("Payment Entry Reference",
+                filters={"reference_name": si_doc.name, "docstatus": 1},
+                fields=["parent", "allocated_amount"], ignore_permissions=True)
+            
+            existing_pe_docs = []
+            if existing_pes:
+                existing_pe_names = list({r.parent for r in existing_pes})
+                existing_pe_docs = frappe.get_all("Payment Entry",
+                    filters={"name": ["in", existing_pe_names], "docstatus": 1},
+                    fields=["name", "mode_of_payment", "reference_no", "paid_amount"],
+                    ignore_permissions=True)
+                    
             for s in splits:
                 if s.get("method") == "credit":
                     continue
@@ -14335,6 +14348,19 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
                 mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
                 amt = flt(s.get("amount"))
                 ref = str(s.get("reference_no") or si_doc.name)
+                
+                # Verify if this exact payment (mode + ref + amount) was already submitted
+                is_duplicate = False
+                for ex_pe in existing_pe_docs:
+                    if (ex_pe.mode_of_payment == mop and 
+                        (not ref or ex_pe.reference_no == ref or ex_pe.reference_no == si_doc.name) and 
+                        abs(flt(ex_pe.paid_amount) - amt) < 0.1):
+                        is_duplicate = True
+                        payment_entries.append(ex_pe.name)
+                        break
+                        
+                if is_duplicate:
+                    continue
                 
                 pe = get_payment_entry("Sales Invoice", si_doc.name)
                 pe.reference_no = ref
