@@ -73,7 +73,7 @@ const elapsed = computed(() => {
   return Math.floor((Date.now() - new Date(safeDateStr).getTime()) / 60000)
 })
 
-const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready')
+const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' && props.type !== 'closed')
 </script>
 
 <style scoped>
@@ -106,6 +106,7 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready')
 .status-new::before { background: var(--mg-primary); }
 .status-prep::before { background: var(--mg-danger); }
 .status-ready::before { background: var(--mg-success); }
+.status-closed::before { background: var(--mg-secondary); }
 
 .is-urgent {
   background: var(--mg-danger-bg);
