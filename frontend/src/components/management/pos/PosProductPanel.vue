@@ -86,24 +86,27 @@
 						:class="{ active: productView === 'grid' }"
 						@click="$emit('update:productView', 'grid')"
 						title="شبکه‌ای با عکس"
+						aria-label="نمای شبکه‌ای"
 					>
-						⊞
+						<Grid2x2 :size="16" :stroke-width="2.2" />
 					</button>
 					<button
 						type="button"
 						:class="{ active: productView === 'compact' }"
 						@click="$emit('update:productView', 'compact')"
 						title="فشرده بدون عکس"
+						aria-label="نمای فشرده"
 					>
-						≡
+						<Rows3 :size="16" :stroke-width="2.2" />
 					</button>
 					<button
 						type="button"
 						:class="{ active: productView === 'list' }"
 						@click="$emit('update:productView', 'list')"
 						title="لیستی"
+						aria-label="نمای لیستی"
 					>
-						☰
+						<List :size="16" :stroke-width="2.2" />
 					</button>
 				</div>
 			</div>
@@ -269,7 +272,7 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import { Plus, Search, SlidersHorizontal, UserRound } from "lucide-vue-next";
+import { Grid2x2, List, Plus, Rows3, Search, SlidersHorizontal, UserRound } from "lucide-vue-next";
 import { formatMoney } from "@/utils/format";
 
 const props = defineProps({
@@ -546,22 +549,31 @@ function supportsCustomization(item = {}) {
 
 <style scoped>
 .products-panel {
-	border-radius: 18px;
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	padding: 0.65rem;
+	--pos-primary: var(--mg-primary);
+	--pos-primary-rgb: var(--mg-primary-rgb);
+	--pos-accent: var(--mg-success);
+	--pos-accent-rgb: var(--mg-success-rgb);
+	--pos-white: var(--mg-bg-surface);
+	--pos-text: var(--mg-text-main);
+	--pos-border: var(--mg-border-light);
+	--pos-soft: color-mix(in srgb, var(--mg-bg-page) 72%, var(--mg-bg-surface) 28%);
+	border-radius: 24px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
+	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 98%, white 2%) 0%, var(--mg-bg-surface) 100%);
+	padding: 0.9rem;
 	color: var(--pos-text);
 	height: 100%;
 	display: grid;
 	grid-template-rows: auto auto 1fr;
 	overflow: hidden;
-	gap: 0.4rem;
+	gap: 0.65rem;
+	box-shadow: 0 18px 36px rgb(52 38 31 / 0.06);
 }
 
 .customer-search-bar {
 	display: grid;
 	grid-template-columns: 1fr 36px;
-	gap: 0.4rem;
+	gap: 0.55rem;
 	align-items: center;
 }
 
@@ -570,15 +582,16 @@ function supportsCustomization(item = {}) {
 	display: grid;
 	grid-template-columns: 26px 1fr auto;
 	align-items: center;
-	border-radius: 12px;
-	border: 1px solid var(--pos-border);
+	border-radius: 14px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
 	background: var(--pos-white);
-	padding: 0 0.45rem;
+	padding: 0 0.65rem;
+	min-height: 46px;
 }
 
 .cust-icon {
 	font-size: 0.85rem;
-	opacity: 0.65;
+	color: var(--mg-text-muted);
 }
 
 .cust-input {
@@ -607,10 +620,10 @@ function supportsCustomization(item = {}) {
 	position: absolute;
 	top: calc(100% + 0.3rem);
 	inset-inline: 0;
-	border-radius: 12px;
-	border: 1px solid var(--pos-border);
+	border-radius: 16px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
 	background: var(--pos-white);
-	box-shadow: 0 14px 24px rgb(var(--pos-primary-rgb, 1 90 114) / 0.14);
+	box-shadow: 0 22px 40px rgb(52 38 31 / 0.12);
 	max-height: 240px;
 	overflow-y: auto;
 	z-index: 50;
@@ -636,7 +649,7 @@ function supportsCustomization(item = {}) {
 
 .cust-option.active,
 .cust-option:hover {
-	background: var(--pos-soft);
+	background: color-mix(in srgb, var(--pos-soft) 82%, white 18%);
 }
 
 .cust-option-name {
@@ -668,10 +681,10 @@ function supportsCustomization(item = {}) {
 .cust-add-btn {
 	width: 36px;
 	height: 36px;
-	border-radius: 10px;
+	border-radius: 12px;
 	border: 1px solid var(--pos-accent);
 	background: var(--pos-accent);
-	color: #fff;
+	color: var(--mg-bg-surface);
 	font-size: 1.2rem;
 	cursor: pointer;
 	display: flex;
@@ -682,27 +695,28 @@ function supportsCustomization(item = {}) {
 
 .panel-top {
 	display: grid;
-	gap: 0.45rem;
+	gap: 0.6rem;
 	flex-shrink: 0;
+	padding: 0.15rem 0 0.2rem;
 }
 
 .toolbar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.65rem;
+	gap: 0.8rem;
 }
 
 .search-box {
 	display: grid;
 	grid-template-columns: 24px 1fr auto;
 	align-items: center;
-	border-radius: 12px;
-	border: 1px solid var(--pos-border);
+	border-radius: 14px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
 	background: var(--pos-white);
-	padding: 0 0.55rem;
+	padding: 0 0.7rem;
 	flex: 1;
-	min-height: 44px;
+	min-height: 48px;
 }
 
 .search-box .input {
@@ -735,27 +749,29 @@ function supportsCustomization(item = {}) {
 
 .view-toggle {
 	display: inline-flex;
-	border: 1px solid var(--pos-border);
-	border-radius: 11px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
+	border-radius: 14px;
 	overflow: hidden;
 	flex-shrink: 0;
+	background: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
 }
 
 .view-toggle button {
 	border: 0;
-	background: var(--pos-white);
-	color: var(--pos-text);
-	padding: 0.55rem 0.75rem;
+	background: transparent;
+	color: var(--mg-text-muted);
+	padding: 0.7rem 0.82rem;
 	cursor: pointer;
-	font-size: 1.05rem;
-	line-height: 1;
 	min-width: 44px;
 	min-height: 44px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .view-toggle button.active {
 	background: var(--pos-primary);
-	color: var(--pos-white);
+	color: var(--mg-bg-surface);
 }
 
 .scan-row {
@@ -767,9 +783,9 @@ function supportsCustomization(item = {}) {
 .scan-btn {
 	border: 1px solid var(--pos-primary);
 	background: var(--pos-primary);
-	border-radius: 10px;
-	color: var(--pos-white);
-	padding: 0.55rem 1rem;
+	border-radius: 14px;
+	color: var(--mg-bg-surface);
+	padding: 0.7rem 1rem;
 	cursor: pointer;
 	font-family: inherit;
 	font-size: 0.88rem;
@@ -785,7 +801,7 @@ function supportsCustomization(item = {}) {
 
 .category-bar {
 	display: flex;
-	gap: 0.3rem;
+	gap: 0.45rem;
 	overflow-x: auto;
 	padding-bottom: 0.15rem;
 	scrollbar-width: thin;
@@ -802,9 +818,9 @@ function supportsCustomization(item = {}) {
 }
 
 .cat-chip {
-	border: 1px solid var(--pos-border);
+	border: 1px solid color-mix(in srgb, var(--pos-border) 90%, transparent);
 	border-radius: 999px;
-	padding: 0.5rem 0.95rem;
+	padding: 0.58rem 1rem;
 	background: var(--pos-white);
 	color: var(--pos-text);
 	cursor: pointer;
@@ -818,16 +834,16 @@ function supportsCustomization(item = {}) {
 }
 
 .cat-chip:hover {
-	background: var(--pos-soft);
-	border-color: var(--pos-primary);
+	background: color-mix(in srgb, var(--pos-soft) 74%, white 26%);
+	border-color: color-mix(in srgb, var(--pos-primary) 42%, var(--pos-border) 58%);
 }
 
 .cat-chip.active {
 	background: var(--pos-primary);
-	color: var(--pos-white);
+	color: var(--mg-bg-surface);
 	border-color: var(--pos-primary);
 	font-weight: 700;
-	box-shadow: 0 2px 8px rgb(var(--pos-primary-rgb, 1 90 114) / 0.25);
+	box-shadow: 0 10px 24px rgb(var(--pos-primary-rgb) / 0.22);
 }
 
 .hint {
@@ -842,7 +858,7 @@ function supportsCustomization(item = {}) {
 
 .products-sections {
 	display: grid;
-	gap: 0.9rem;
+	gap: 1rem;
 	overflow-y: auto;
 	overflow-x: hidden;
 	align-content: start;
@@ -860,8 +876,8 @@ function supportsCustomization(item = {}) {
 	align-items: flex-end;
 	justify-content: space-between;
 	gap: 0.65rem;
-	padding-bottom: 0.45rem;
-	border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
+	padding-bottom: 0.55rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
 }
 
 .category-section-copy {
@@ -918,7 +934,7 @@ function supportsCustomization(item = {}) {
 }
 
 .products-grid.mode-grid {
-	grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
 }
 
 .products-grid.mode-list {
@@ -927,17 +943,17 @@ function supportsCustomization(item = {}) {
 }
 
 .products-grid.mode-compact {
-	grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-	gap: 0.3rem;
+	grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+	gap: 0.45rem;
 }
 
 .product-card {
-	border: 1px solid var(--pos-border);
-	border-radius: 10px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 90%, transparent);
+	border-radius: 16px;
 	background: var(--pos-white);
 	display: flex;
 	flex-direction: column;
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.03);
+	box-shadow: 0 10px 22px rgb(52 38 31 / 0.05);
 	cursor: pointer;
 	transition:
 		transform 0.15s ease,
@@ -946,9 +962,9 @@ function supportsCustomization(item = {}) {
 }
 
 .product-card:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
-	border-color: var(--pos-primary);
+	transform: translateY(-2px);
+	box-shadow: 0 18px 32px rgb(52 38 31 / 0.1);
+	border-color: color-mix(in srgb, var(--pos-primary) 44%, var(--pos-border) 56%);
 }
 
 .product-card:active {
@@ -963,7 +979,7 @@ function supportsCustomization(item = {}) {
 
 .image-btn {
 	border: 0;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+	background: color-mix(in srgb, var(--pos-soft) 82%, white 18%);
 	padding: 0;
 	cursor: pointer;
 	width: 100%;
@@ -990,7 +1006,7 @@ function supportsCustomization(item = {}) {
 }
 
 .product-body {
-	padding: 0.35rem 0.5rem 0.2rem;
+	padding: 0.55rem 0.65rem 0.25rem;
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
@@ -1010,7 +1026,7 @@ function supportsCustomization(item = {}) {
 
 .product-body h4 {
 	margin: 0;
-	font-size: 0.76rem;
+	font-size: 0.82rem;
 	line-height: 1.3;
 	font-weight: 600;
 	color: var(--pos-text);
@@ -1022,7 +1038,7 @@ function supportsCustomization(item = {}) {
 }
 
 .product-body strong {
-	font-size: 0.74rem;
+	font-size: 0.8rem;
 	font-weight: 700;
 	color: var(--pos-accent);
 	flex-shrink: 0;
@@ -1034,7 +1050,7 @@ function supportsCustomization(item = {}) {
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.35rem;
-	padding: 0.25rem 0.45rem 0.35rem;
+	padding: 0.3rem 0.6rem 0.55rem;
 	margin-top: auto;
 }
 
@@ -1051,9 +1067,9 @@ function supportsCustomization(item = {}) {
 }
 
 .counter button {
-	width: 28px;
-	height: 28px;
-	border-radius: 8px;
+	width: 30px;
+	height: 30px;
+	border-radius: 10px;
 	border: 1px solid var(--pos-border);
 	background: var(--pos-white);
 	color: var(--pos-primary);
@@ -1078,9 +1094,9 @@ function supportsCustomization(item = {}) {
 .bom-btn {
 	border: 1px solid var(--pos-accent);
 	background: var(--pos-accent);
-	color: var(--pos-white);
-	border-radius: 8px;
-	padding: 0.3rem 0.6rem;
+	color: var(--mg-bg-surface);
+	border-radius: 10px;
+	padding: 0.38rem 0.72rem;
 	cursor: pointer;
 	font-size: 0.72rem;
 	font-weight: 600;
@@ -1103,29 +1119,29 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-card {
-	border: 1px solid var(--pos-border);
-	border-radius: 12px;
+	border: 1px solid color-mix(in srgb, var(--pos-border) 90%, transparent);
+	border-radius: 16px;
 	background: var(--pos-white);
 	display: grid;
 	gap: 0.4rem;
 	transition: all 0.12s;
 	position: relative;
-	padding: 0.55rem;
-	min-height: 112px;
+	padding: 0.7rem;
+	min-height: 128px;
 }
 
 .compact-card:hover {
-	border-color: var(--pos-primary);
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+	border-color: color-mix(in srgb, var(--pos-primary) 44%, var(--pos-border) 56%);
+	background: color-mix(in srgb, var(--pos-soft) 70%, white 30%);
 }
 
 .compact-card.has-qty {
 	border-color: var(--pos-primary);
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
+	background: color-mix(in srgb, var(--pos-soft) 84%, var(--mg-bg-surface) 16%);
 }
 
 .compact-name {
-	font-size: 0.83rem;
+	font-size: 0.88rem;
 	font-weight: 700;
 	color: var(--pos-primary);
 	line-height: 1.45;
@@ -1133,7 +1149,7 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-price {
-	font-size: 0.74rem;
+	font-size: 0.78rem;
 	color: var(--pos-accent);
 	display: block;
 	font-weight: 700;
@@ -1144,7 +1160,7 @@ function supportsCustomization(item = {}) {
 	top: 0.45rem;
 	left: 0.45rem;
 	background: var(--pos-primary);
-	color: #fff;
+	color: var(--mg-bg-surface);
 	border-radius: 999px;
 	font-size: 0.68rem;
 	padding: 0.14rem 0.42rem;
