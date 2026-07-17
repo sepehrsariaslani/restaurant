@@ -99,6 +99,47 @@
               <span class="data-value">
                 {{ formatReservationDate(detail.reservation.reservation_date) }}
                 <template v-if="detail.reservation.reservation_time"> ساعت {{ detail.reservation.reservation_time }}</template>
+              </span>
+            </div>
+            <div class="data-row">
+              <span class="data-icon"><UserRound :size="16" /></span>
+              <span class="data-value">{{ detail.reservation.customer_name || 'بدون نام' }}</span>
+            </div>
+            <div class="data-row" v-if="detail.reservation.mobile">
+              <span class="data-icon"><Smartphone :size="16" /></span>
+              <span class="data-value" dir="ltr">{{ detail.reservation.mobile }}</span>
+            </div>
+            <div class="data-row" v-if="detail.reservation.guest_count">
+              <span class="data-icon"><Users :size="16" /></span>
+              <span class="data-value">{{ Number(detail.reservation.guest_count || 0).toLocaleString('fa-IR') }} نفر</span>
+            </div>
+          </div>
+          <button class="ghost-btn icon-text-btn mt-3" type="button" @click="$emit('open-reservations', detail.table)">
+            <ArrowUpRight :size="14" />
+            <span>مدیریت این رزرو</span>
+          </button>
+        </section>
+      </div>
+
+      <footer class="inspection-footer">
+        <button class="primary-btn flex-1" type="button" :disabled="saving || !hasChanges" @click="$emit('save')">
+          <Save :size="16" />
+          <span>{{ saving ? 'در حال ذخیره...' : 'ذخیره میز' }}</span>
+        </button>
+        <div class="footer-actions-row">
+          <button class="secondary-btn flex-1" type="button" @click="$emit('go-pos', detail.table)">
+            <LayoutGrid :size="16" />
+            <span>ثبت سفارش (POS)</span>
+          </button>
+          <button v-if="detail.session" class="danger-btn flex-1" type="button" @click="$emit('clear-session', detail.table)" title="بستن و خالی کردن میز">
+            <LogOut :size="16" />
+            <span>تخلیه</span>
+          </button>
+        </div>
+      </footer>
+    </template>
+  </aside>
+</template>
 
 <script setup>
 import {

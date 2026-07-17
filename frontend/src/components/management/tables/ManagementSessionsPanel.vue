@@ -111,6 +111,10 @@
             </button>
           </footer>
         </template>
+      </div>
+    </aside>
+  </section>
+</template>
 
 <script setup>
 import { Clock3, Receipt, UserRound, History, Save, LayoutGrid } from 'lucide-vue-next'

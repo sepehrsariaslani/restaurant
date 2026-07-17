@@ -32,6 +32,41 @@
         </div>
       </template>
 
+      <!-- Reservation specific metrics -->
+      <template v-if="card.reservation?.reservation_time && !card.session?.name">
+        <div class="metric-row res-metric">
+          <CalendarClock :size="14" class="metric-icon" />
+          <span class="metric-text">رزرو: {{ card.reservation.reservation_time }}</span>
+        </div>
+      </template>
+      
+      <div class="metric-row inactive-metric" v-if="Number(card.is_active || 0) !== 1">
+        <CircleOff :size="14" class="metric-icon" />
+        <span class="metric-text">غیرفعال</span>
+      </div>
+    </div>
+
+    <footer class="card-footer">
+      <button class="action-btn pos-btn" type="button" @click.stop="$emit('go-pos', card)" title="ثبت سفارش در POS">
+        <LayoutGrid :size="14" />
+        <span>سفارش</span>
+      </button>
+      <button class="action-btn detail-btn" type="button" @click.stop="$emit('select', card)" title="مشاهده جزئیات">
+        <Settings2 :size="14" />
+      </button>
+      <button
+        v-if="card.session?.name"
+        class="action-btn clear-btn"
+        type="button"
+        @click.stop="$emit('clear-session', card)"
+        title="بستن نشست و تخلیه"
+      >
+        <LogOut :size="14" />
+      </button>
+    </footer>
+  </article>
+</template>
+
 <script setup>
 import { computed } from 'vue'
 import {
