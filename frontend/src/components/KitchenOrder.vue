@@ -34,7 +34,7 @@
       </div>
     </div>
 
-    <footer class="ko-footer">
+    <footer class="ko-footer" v-if="type !== 'closed'">
       <button v-if="type === 'new'" class="ko-action-btn btn-new" @click.stop="$emit('action')">
         <Play :size="14" />
         <span>شروع تولید</span>
@@ -43,6 +43,7 @@
         <Check :size="14" />
         <span>آماده شد</span>
       </button>
+      <!-- Ready state semantics using Olive/Green clearly -->
       <button v-if="type === 'ready'" class="ko-action-btn btn-ready" @click.stop="$emit('action')">
         <CheckCheck :size="14" />
         <span>تحویل مشتری</span>
@@ -106,7 +107,12 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
 .status-new::before { background: var(--mg-primary); }
 .status-prep::before { background: var(--mg-danger); }
 .status-ready::before { background: var(--mg-success); }
+.status-ready { 
+  background: rgba(111, 123, 86, 0.05); /* very light olive tint */
+  border-color: rgba(111, 123, 86, 0.2);
+}
 .status-closed::before { background: var(--mg-secondary); }
+.status-closed { opacity: 0.7; }
 
 .is-urgent {
   background: var(--mg-danger-bg);
