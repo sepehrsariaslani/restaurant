@@ -385,6 +385,9 @@ body {
   --mg-danger-bg: #F3E1DA;
   --mg-success: #6F7B56;
   --mg-success-bg: #E2E6D7;
+  --mg-primary-rgb: 201 120 82;
+  --mg-success-rgb: 111 123 86;
+  --mg-danger-rgb: 166 84 63;
   --mg-shadow-sm: 0 8px 24px rgba(52, 38, 31, 0.06);
   --mg-shadow-md: 0 18px 40px rgba(52, 38, 31, 0.09);
   --mg-radius-sm: 10px;
@@ -409,6 +412,9 @@ body.management-theme-dark {
   --mg-danger-bg: #3D231E;
   --mg-success: #7F8B54;
   --mg-success-bg: #2E3321;
+  --mg-primary-rgb: 192 112 80;
+  --mg-success-rgb: 127 139 84;
+  --mg-danger-rgb: 194 91 78;
   --mg-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.4);
   --mg-shadow-md: 0 18px 40px rgba(0, 0, 0, 0.6);
 }
