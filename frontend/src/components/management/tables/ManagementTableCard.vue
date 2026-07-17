@@ -1,134 +1,150 @@
 <template>
-  <article class="table-card" :class="{ 'is-selected': selected, 'is-inactive': Number(card.is_active || 0) !== 1 }">
+  <article class="floor-card" :class="[statusClass, { 'is-selected': selected, 'is-inactive': Number(card.is_active || 0) !== 1 }]">
     <button class="card-hitbox" type="button" @click="$emit('select', card)" :aria-label="`جزئیات ${card.table_number || card.name}`"></button>
 
-    <header class="table-card__head">
-      <div class="table-card__identity">
-        <strong>{{ card.table_number || card.name }}</strong>
-        <small>{{ card.location || 'بدون لوکیشن' }}</small>
+    <header class="card-header">
+      <div class="card-identity">
+        <h3>{{ card.table_number || card.name }}</h3>
+        <span class="card-location" v-if="card.location">{{ card.location }}</span>
       </div>
-      <ManagementTableStatusBadge :status="card.statusTone || card.status" />
+      <ManagementTableStatusBadge :status="card.statusTone || card.status" class="card-badge" />
     </header>
 
-    <div class="table-card__body">
-      <div class="table-card__metric" v-if="card.customerName">
-        <UserRound :size="14" />
-        <span>{{ card.customerName }}</span>
+    <div class="card-metrics">
+      <div class="metric-row" v-if="card.customerName">
+        <UserRound :size="14" class="metric-icon" />
+        <span class="metric-text font-medium">{{ card.customerName }}</span>
       </div>
-      <div class="table-card__metric" v-if="card.guestCount">
-        <Users :size="14" />
-        <span>{{ Number(card.guestCount || 0).toLocaleString('fa-IR') }} نفر</span>
+      <div class="metric-row" v-if="card.guestCount">
+        <Users :size="14" class="metric-icon" />
+        <span class="metric-text">{{ Number(card.guestCount || 0).toLocaleString('fa-IR') }} نفر</span>
       </div>
-      <div class="table-card__metric" v-if="card.sessionTotal">
-        <Receipt :size="14" />
-        <span>{{ formatMoney(card.sessionTotal, currency) }}</span>
-      </div>
-      <div class="table-card__metric" v-if="card.openedAt">
-        <Clock3 :size="14" />
-        <span>{{ formatDateTime(card.openedAt) }}</span>
-      </div>
-      <div class="table-card__metric" v-if="card.reservation?.reservation_time">
-        <CalendarClock :size="14" />
-        <span>رزرو {{ card.reservation.reservation_time }}</span>
-      </div>
-      <div class="table-card__metric" v-if="Number(card.is_active || 0) !== 1">
-        <CircleOff :size="14" />
-        <span>غیرفعال</span>
+      
+      <!-- Session specific metrics -->
+      <template v-if="card.session?.name">
+        <div class="metric-row highlight-metric">
+          <Receipt :size="14" class="metric-icon" />
+          <span class="metric-text font-bold" dir="ltr">{{ formatMoney(card.sessionTotal, currency) }}</span>
+        </div>
+        <div class="metric-row time-metric">
+          <Clock3 :size="14" class="metric-icon" />
+          <span class="metric-text">{{ formatTimeOnly(card.openedAt) }}</span>
+        </div>
+      </template>
+
+      <!-- Reservation specific metrics -->
+      <template v-if="card.reservation?.reservation_time && !card.session?.name">
+        <div class="metric-row res-metric">
+          <CalendarClock :size="14" class="metric-icon" />
+          <span class="metric-text">رزرو: {{ card.reservation.reservation_time }}</span>
+        </div>
+      </template>
+      
+      <div class="metric-row inactive-metric" v-if="Number(card.is_active || 0) !== 1">
+        <CircleOff :size="14" class="metric-icon" />
+        <span class="metric-text">غیرفعال</span>
       </div>
     </div>
 
-    <footer class="table-card__foot">
-      <button class="secondary-btn compact-btn" type="button" @click.stop="$emit('go-pos', card)">
-        <ArrowUpRight :size="14" />
-        <span>POS</span>
+    <footer class="card-footer">
+      <button class="action-btn pos-btn" type="button" @click.stop="$emit('go-pos', card)" title="باز کردن در POS">
+        <LayoutGrid :size="14" />
+        <span>سفارش</span>
       </button>
-      <button class="secondary-btn compact-btn" type="button" @click.stop="$emit('select', card)">
-        <PanelRightOpen :size="14" />
-        <span>جزئیات</span>
+      <button class="action-btn detail-btn" type="button" @click.stop="$emit('select', card)" title="جزئیات میز">
+        <Settings2 :size="14" />
       </button>
       <button
         v-if="card.session?.name"
-        class="ghost-btn compact-btn danger-btn"
+        class="action-btn clear-btn"
         type="button"
         @click.stop="$emit('clear-session', card)"
+        title="بستن سشن و خالی کردن"
       >
-        <Trash2 :size="14" />
-        <span>خالی کردن</span>
+        <LogOut :size="14" />
       </button>
     </footer>
   </article>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import {
-  ArrowUpRight,
   CalendarClock,
   CircleOff,
   Clock3,
-  PanelRightOpen,
+  LayoutGrid,
+  Settings2,
   Receipt,
-  Trash2,
+  LogOut,
   UserRound,
   Users,
 } from 'lucide-vue-next'
 import { formatMoney } from '@/utils/format'
 import ManagementTableStatusBadge from './ManagementTableStatusBadge.vue'
 
-defineProps({
-  card: {
-    type: Object,
-    required: true,
-  },
-  currency: {
-    type: String,
-    default: 'IRR',
-  },
-  selected: {
-    type: Boolean,
-    default: false,
-  },
+const props = defineProps({
+  card: { type: Object, required: true },
+  currency: { type: String, default: 'IRR' },
+  selected: { type: Boolean, default: false },
 })
 
 defineEmits(['select', 'go-pos', 'clear-session'])
 
-function formatDateTime(value) {
+const statusClass = computed(() => `status-${String(props.card.statusTone || props.card.status || 'empty').toLowerCase()}`)
+
+function formatTimeOnly(value) {
   const text = String(value || '').trim()
   if (!text) return '-'
   try {
     return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-      month: 'short',
-      day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(text))
   } catch (_) {
-    return text
+    return text.split(' ')[1] || text
   }
 }
 </script>
 
 <style scoped>
-.table-card {
+.floor-card {
   position: relative;
-  display: grid;
-  gap: 0.9rem;
-  min-height: 210px;
-  padding: 1rem;
-  border-radius: 10px;
-  background: var(--surface-raised, rgb(255 255 255 / 0.92));
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 15 23 42) / 0.1);
-  box-shadow: 0 10px 24px rgb(15 23 42 / 0.05);
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+  padding: 1.15rem;
+  border-radius: 14px;
+  background: var(--cw-surface);
+  border: 1px solid var(--cw-border);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
 
-.table-card.is-selected {
-  border-color: rgb(139 94 60 / 0.34);
-  box-shadow: 0 18px 36px rgb(111 74 49 / 0.12);
+.floor-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(68, 45, 28, 0.06);
 }
 
-.table-card.is-inactive {
-  opacity: 0.76;
+.floor-card.is-selected {
+  border-color: var(--cw-caramel);
+  box-shadow: 0 0 0 2px rgba(132, 89, 43, 0.2), 0 12px 32px rgba(68, 45, 28, 0.08);
 }
+
+.floor-card.is-inactive {
+  opacity: 0.6;
+  filter: grayscale(0.4);
+}
+
+/* Status variants for subtle background tinting */
+.status-empty { background: linear-gradient(to bottom right, var(--cw-surface), rgba(232, 209, 167, 0.05)); }
+.status-waiting { background: linear-gradient(to bottom right, var(--cw-surface), rgba(157, 145, 103, 0.05)); }
+.status-occupied, .status-active { background: linear-gradient(to bottom right, var(--cw-surface), rgba(132, 89, 43, 0.05)); border-color: rgba(132, 89, 43, 0.25); }
+
+:global(.dark) .status-empty { background: linear-gradient(to bottom right, var(--cw-surface), rgba(232, 209, 167, 0.02)); }
+:global(.dark) .status-waiting { background: linear-gradient(to bottom right, var(--cw-surface), rgba(157, 145, 103, 0.02)); }
+:global(.dark) .status-occupied, :global(.dark) .status-active { background: linear-gradient(to bottom right, var(--cw-surface), rgba(132, 89, 43, 0.05)); }
+
 
 .card-hitbox {
   position: absolute;
@@ -136,91 +152,152 @@ function formatDateTime(value) {
   border: 0;
   background: transparent;
   cursor: pointer;
-}
-
-.table-card__head,
-.table-card__foot,
-.table-card__body {
-  position: relative;
   z-index: 1;
 }
 
-.table-card__head {
+.card-header,
+.card-metrics,
+.card-footer {
+  position: relative;
+  z-index: 2;
+  pointer-events: none; /* Let clicks pass to hitbox unless on a button */
+}
+
+.card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.table-card__identity {
-  display: grid;
-  gap: 0.24rem;
-}
-
-.table-card__identity strong {
-  font-size: 1.05rem;
-  line-height: 1.2;
-}
-
-.table-card__identity small {
-  color: var(--text-muted, #6b7280);
-  font-size: 0.74rem;
-}
-
-.table-card__body {
-  display: grid;
   gap: 0.5rem;
-  align-content: start;
+  margin-bottom: 1rem;
 }
 
-.table-card__metric {
-  display: inline-flex;
+.card-identity {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-identity h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--cw-cocoa);
+  letter-spacing: -0.02em;
+}
+
+.card-location {
+  font-size: 0.75rem;
+  color: var(--cw-olive);
+  margin-top: 0.1rem;
+}
+
+.card-badge {
+  transform: scale(0.9);
+  transform-origin: top left;
+}
+
+.card-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.metric-row {
+  display: flex;
   align-items: center;
-  gap: 0.42rem;
-  color: var(--text-secondary, #374151);
-  font-size: 0.79rem;
-  min-width: 0;
+  gap: 0.4rem;
+  color: var(--cw-olive);
+  font-size: 0.8rem;
 }
 
-.table-card__metric span {
-  min-width: 0;
+.metric-icon {
+  opacity: 0.7;
+}
+
+.metric-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.table-card__foot {
+.font-medium { font-weight: 600; color: var(--cw-cocoa); }
+.font-bold { font-weight: 800; color: var(--cw-wine); font-size: 0.9rem; }
+
+.highlight-metric {
+  margin-top: 0.2rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed rgba(157, 145, 103, 0.2);
+}
+
+.time-metric { color: var(--cw-caramel); font-size: 0.75rem; }
+.res-metric { color: var(--cw-caramel); font-weight: 600; }
+.inactive-metric { color: #b84f4f; }
+
+.card-footer {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: auto;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+  pointer-events: auto; /* Buttons need pointer events */
 }
 
-.compact-btn {
-  min-height: 2.1rem;
-  display: inline-flex;
+.action-btn {
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
-  padding-inline: 0.72rem;
+  height: 2.25rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--cw-border);
+  background: var(--cw-surface);
+  color: var(--cw-cocoa);
 }
 
-.danger-btn {
-  color: var(--danger, #b84f4f);
-  border-color: rgb(184 79 79 / 0.22);
+.action-btn:hover {
+  background: rgba(132, 89, 43, 0.05);
+  border-color: var(--cw-caramel);
 }
 
-@media (max-width: 640px) {
-  .table-card {
-    min-height: 190px;
-  }
+.pos-btn {
+  flex: 1;
+  background: var(--cw-caramel);
+  color: white;
+  border-color: var(--cw-caramel);
+}
+.pos-btn:hover {
+  background: #744e26;
+  color: white;
+}
+:global(.dark) .pos-btn {
+  color: #1A130D;
+}
 
-  .table-card__foot {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.detail-btn, .clear-btn {
+  width: 2.25rem;
+  padding: 0;
+  color: var(--cw-olive);
+}
 
-  .table-card__foot > :last-child {
-    grid-column: 1 / -1;
+.detail-btn:hover { color: var(--cw-caramel); }
+
+.clear-btn {
+  color: var(--cw-wine);
+  border-color: rgba(116, 48, 20, 0.2);
+  background: rgba(116, 48, 20, 0.02);
+}
+
+.clear-btn:hover {
+  background: rgba(116, 48, 20, 0.08);
+  border-color: rgba(116, 48, 20, 0.3);
+}
+
+@media (max-width: 480px) {
+  .floor-card {
+    min-height: 160px;
+    padding: 1rem;
   }
 }
 </style>
