@@ -1357,15 +1357,18 @@ defineExpose({
 
 .save-btn {
 	background: var(--mg-primary);
+	color: #fff;
+	transition: all 0.2s;
 }
 
 .save-btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--mg-primary) 85%, black);
 	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .settle-btn-custom {
 	background: var(--mg-success);
-	color: var(--mg-bg-surface);
+	color: #fff;
 	border: none;
 	padding: 12px 16px;
 	border-radius: 10px;

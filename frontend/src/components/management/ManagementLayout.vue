@@ -1416,6 +1416,7 @@ onBeforeUnmount(() => {
 
 	.desktop-main--fullbleed { padding: 0; }
 	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
+	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
 
 	
 		/* --- Desktop Floating Menu (Integrated in Header) --- */
