@@ -1309,95 +1309,112 @@ onBeforeUnmount(() => {
 	
 	.desktop-main--fullbleed { padding: 0; }
 	
-	/* --- Desktop Floating Menu --- */
-	/* DFM Styles */
-.dfm-wrapper {
+	/* --- Desktop Floating Menu (Top Right) --- */
+	.dfm-wrapper {
 		position: fixed;
-		bottom: 1.5rem;
-		left: 1.5rem;
-		z-index: 9999;
+		top: 1.25rem;
+		right: 1.25rem;
+		z-index: 10000;
 	}
 
 	.dfm-toggle-btn {
-		width: 3.5rem;
-		height: 3.5rem;
+		width: 3.8rem;
+		height: 3.8rem;
 		border-radius: 50%;
-		background: var(--mg-primary);
-		color: #fff;
-		border: none;
+		background: var(--mg-bg-surface);
+		color: var(--mg-primary);
+		border: 2px solid var(--mg-primary);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
-		box-shadow: 0 10px 24px rgb(var(--mg-primary-rgb) / 0.35);
+		box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 		transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 		position: relative;
-		z-index: 10000;
+		z-index: 10001;
 	}
 	
-	.dfm-toggle-btn::before {
+	/* Space rings animation */
+	.dfm-toggle-btn::before, .dfm-toggle-btn::after {
 		content: '';
 		position: absolute;
-		inset: -4px;
+		inset: -2px;
 		border-radius: 50%;
-		border: 1px solid var(--mg-primary);
+		border: 2px solid var(--mg-primary);
 		opacity: 0;
-		animation: dfm-pulse 3s infinite;
+		pointer-events: none;
+	}
+	.dfm-toggle-btn::before {
+		animation: dfm-ring-pulse 3s infinite ease-out;
+	}
+	.dfm-toggle-btn::after {
+		animation: dfm-ring-pulse 3s infinite ease-out 1.5s;
 	}
 
-	@keyframes dfm-pulse {
-		0% { transform: scale(0.9); opacity: 0; }
-		50% { transform: scale(1.1); opacity: 0.3; }
-		100% { transform: scale(1.3); opacity: 0; }
+	@keyframes dfm-ring-pulse {
+		0% { transform: scale(1); opacity: 0.8; border-width: 2px; }
+		100% { transform: scale(1.6); opacity: 0; border-width: 0px; }
 	}
 
 	.dfm-toggle-btn:hover {
-		transform: scale(1.05) translateY(-2px);
-		box-shadow: 0 14px 28px rgb(var(--mg-primary-rgb) / 0.45);
+		transform: scale(1.05);
+		background: var(--mg-primary);
+		color: var(--mg-bg-surface);
+	}
+	.dfm-toggle-btn:hover .dfm-line {
+		background: var(--mg-bg-surface);
 	}
 
 	.dfm-burger {
 		width: 22px;
-		height: 18px;
+		height: 16px;
 		position: relative;
 	}
 	.dfm-line {
 		display: block;
 		width: 100%;
 		height: 2.5px;
-		background: #fff;
+		background: var(--mg-primary);
 		border-radius: 2px;
 		position: absolute;
-		left: 0;
-		transition: all 0.3s ease;
+		right: 0;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 	.dfm-line.top { top: 0; }
 	.dfm-line.mid { top: 50%; transform: translateY(-50%); }
 	.dfm-line.bot { bottom: 0; }
 
 	.dfm-toggle-btn.is-open {
-		background: var(--mg-bg-surface);
-		color: var(--mg-primary);
-		box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+		background: var(--mg-primary);
+		color: #fff;
+		border-color: var(--mg-primary);
+		transform: rotate(90deg);
 	}
-	.dfm-toggle-btn.is-open .dfm-line { background: var(--mg-primary); }
+	.dfm-toggle-btn.is-open::before, .dfm-toggle-btn.is-open::after {
+		animation-play-state: paused;
+		opacity: 0;
+		display: none;
+	}
+	.dfm-toggle-btn.is-open .dfm-line { background: #fff; }
 	.dfm-toggle-btn.is-open .dfm-line.top { top: 50%; transform: translateY(-50%) rotate(45deg); }
-	.dfm-toggle-btn.is-open .dfm-line.mid { opacity: 0; }
+	.dfm-toggle-btn.is-open .dfm-line.mid { opacity: 0; transform: translateY(-50%) scaleX(0); }
 	.dfm-toggle-btn.is-open .dfm-line.bot { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
 
 	.dfm-dropdown {
 		position: absolute;
-		bottom: 4.5rem;
-		left: 0;
-		width: 17rem;
-		background: var(--mg-bg-surface);
+		top: calc(100% + 1rem);
+		right: 0;
+		width: 18rem;
+		background: color-mix(in srgb, var(--mg-bg-surface) 96%, transparent);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
 		border: 1px solid var(--mg-border-light);
-		border-radius: 20px;
-		box-shadow: 0 24px 48px rgba(0,0,0,0.15);
+		border-radius: 24px;
+		box-shadow: 0 32px 64px rgba(0,0,0,0.15);
 		display: flex;
 		flex-direction: column;
 		max-height: calc(100vh - 6rem);
-		z-index: 9999;
+		z-index: 10000;
 		overflow: hidden;
 	}
 
@@ -1429,18 +1446,22 @@ onBeforeUnmount(() => {
 		position: fixed;
 		inset: 0;
 		background: rgba(0,0,0,0.2);
-		backdrop-filter: blur(2px);
+		backdrop-filter: blur(4px);
+		-webkit-backdrop-filter: blur(4px);
 		z-index: 9998;
 	}
 
 	.dfm-anim-enter-active, .dfm-anim-leave-active {
-		transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-		transform-origin: bottom left;
+		transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+		transform-origin: top right;
 	}
-
 	.dfm-anim-enter-from, .dfm-anim-leave-to {
 		opacity: 0;
-		transform: scale(0.9) translateY(20px);
+		transform: scale(0.85) translateY(-20px);
+	}
+
+	.desktop-header {
+		padding-right: 6.5rem !important; /* Make room for the top-right floating button */
 	}
 
 	/* Desktop layout content takes full width now */
