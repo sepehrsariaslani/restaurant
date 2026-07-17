@@ -206,6 +206,11 @@ function formatReservationDate(value) {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--cw-surface-alt);
+  border-radius: var(--cw-radius-md);
+  border: 1px solid var(--cw-border-light);
+  box-shadow: var(--cw-shadow);
+  overflow: hidden;
 }
 
 .inspection-empty {
@@ -214,38 +219,44 @@ function formatReservationDate(value) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 3rem 2rem;
   text-align: center;
-  color: var(--cw-olive);
+  color: var(--cw-secondary);
 }
 
 .empty-illustration {
-  width: 64px;
-  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: rgba(157, 145, 103, 0.1);
-  margin-bottom: 1rem;
+  background: var(--cw-surface);
+  margin-bottom: 1.5rem;
+  color: var(--cw-secondary);
+  border: 1px solid var(--cw-border-light);
 }
 
 .inspection-empty strong {
-  color: var(--cw-cocoa);
-  font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+  color: var(--cw-text-main);
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  font-weight: 800;
 }
 
 .inspection-empty p {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   line-height: 1.6;
+  color: var(--cw-text-muted);
 }
 
 .inspection-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--cw-border);
-  background: rgba(132, 89, 43, 0.02);
-  border-radius: 16px 16px 0 0;
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid var(--cw-border-light);
+  background: var(--cw-surface);
 }
 
 .head-info {
@@ -254,71 +265,69 @@ function formatReservationDate(value) {
 }
 
 .head-kicker {
-  font-size: 0.7rem;
-  color: var(--cw-olive);
+  font-size: 0.8rem;
+  color: var(--cw-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
+  font-weight: 800;
+  margin-bottom: 0.4rem;
 }
 
 .head-info h2 {
   margin: 0;
-  font-size: 1.5rem;
-  color: var(--cw-cocoa);
-  font-weight: 800;
+  font-size: 1.8rem;
+  color: var(--cw-text-main);
+  font-weight: 900;
   letter-spacing: -0.02em;
 }
 
 .head-location {
-  font-size: 0.8rem;
-  color: var(--cw-caramel);
-  margin-top: 0.15rem;
+  font-size: 0.95rem;
+  color: var(--cw-text-muted);
+  margin-top: 0.25rem;
+  font-weight: 600;
 }
 
 .inspection-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2.5rem;
 }
 
 .inspection-section {
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  border-radius: 12px;
-  padding: 1.25rem;
-  box-shadow: 0 2px 8px rgba(68, 45, 28, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .section-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(132, 89, 43, 0.1);
+  border-bottom: 1px solid var(--cw-border-light);
 }
 
 .section-title {
   margin: 0;
-  font-size: 0.9rem;
-  color: var(--cw-cocoa);
+  font-size: 1.1rem;
+  color: var(--cw-text-main);
   font-weight: 800;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .full-width {
@@ -326,24 +335,31 @@ function formatReservationDate(value) {
 }
 
 .form-group label {
-  font-size: 0.75rem;
-  color: var(--cw-olive);
-  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
+  font-weight: 700;
 }
 
 .input {
-  background: var(--cw-bg);
-  border: 1px solid var(--cw-border);
-  color: var(--cw-cocoa);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
+  background: var(--cw-page-bg);
+  border: 1px solid var(--cw-border-light);
+  color: var(--cw-text-main);
+  border-radius: var(--cw-radius-sm);
+  padding: 0.75rem 1rem;
   font-family: inherit;
+  font-size: 0.95rem;
   transition: all 0.2s ease;
 }
 
 .input:focus {
-  border-color: var(--cw-caramel);
-  box-shadow: 0 0 0 3px rgba(132, 89, 43, 0.1);
+  border-color: var(--cw-primary);
+  box-shadow: 0 0 0 3px var(--cw-danger-bg); /* fallback tint */
+  outline: none;
+}
+
+.input:disabled {
+  opacity: 0.6;
+  background: var(--cw-surface);
 }
 
 .checkbox-group {
@@ -353,27 +369,34 @@ function formatReservationDate(value) {
 .check-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--cw-text-main);
+  font-weight: 600;
 }
 
 .data-list {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.85rem;
+  background: var(--cw-page-bg);
+  padding: 1.25rem;
+  border-radius: var(--cw-radius-sm);
+  border: 1px solid var(--cw-border-light);
 }
 
 .data-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.85rem;
-  color: var(--cw-cocoa);
+  gap: 0.85rem;
+  font-size: 0.95rem;
+  color: var(--cw-text-main);
+  font-weight: 600;
 }
 
 .data-icon {
-  color: var(--cw-caramel);
-  opacity: 0.8;
+  color: var(--cw-secondary);
   display: flex;
 }
 
@@ -381,79 +404,109 @@ function formatReservationDate(value) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(132, 89, 43, 0.05);
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid rgba(132, 89, 43, 0.1);
+  background: var(--cw-surface);
+  padding: 1rem 1.25rem;
+  border-radius: var(--cw-radius-sm);
+  border: 1px dashed var(--cw-border);
 }
 
 .highlight-label {
-  font-size: 0.8rem;
-  color: var(--cw-olive);
-  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--cw-text-muted);
+  font-weight: 700;
 }
 
 .highlight-value {
-  font-size: 1.1rem;
-  color: var(--cw-wine);
-  font-weight: 800;
+  font-size: 1.4rem;
+  color: var(--cw-primary);
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
-.mt-2 { margin-top: 0.5rem; }
-.mt-3 { margin-top: 1rem; }
+.mt-2 { margin-top: 0.75rem; }
+.mt-3 { margin-top: 1.25rem; }
 
 .icon-text-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  color: var(--cw-caramel);
-  font-size: 0.8rem;
-  font-weight: 700;
+  gap: 0.5rem;
+  color: var(--cw-primary);
+  font-size: 0.9rem;
+  font-weight: 800;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   padding: 0;
 }
 
 .icon-text-btn:hover {
-  color: var(--cw-wine);
+  color: var(--cw-primary-hover);
 }
 
 .inspection-footer {
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--cw-border);
+  padding: 1.5rem 2rem;
+  border-top: 1px solid var(--cw-border-light);
   background: var(--cw-surface);
-  border-radius: 0 0 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .footer-actions-row {
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .flex-1 {
   flex: 1;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  height: 3.2rem;
+  border-radius: var(--cw-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.primary-btn {
+  background: var(--cw-primary);
+  color: #fff;
+}
+.primary-btn:hover:not(:disabled) {
+  background: var(--cw-primary-hover);
+}
+:global(.dark) .primary-btn { color: #1A130D; }
+
+.secondary-btn {
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border);
+  color: var(--cw-text-main);
+}
+.secondary-btn:hover:not(:disabled) {
+  background: var(--cw-surface);
 }
 
 .danger-btn {
-  background: rgba(116, 48, 20, 0.05);
-  color: var(--cw-wine);
-  border: 1px solid rgba(116, 48, 20, 0.2);
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
+  background: var(--cw-danger-bg);
+  color: var(--cw-danger);
+}
+.danger-btn:hover {
+  opacity: 0.8;
 }
 
-.danger-btn:hover {
-  background: rgba(116, 48, 20, 0.1);
-  border-color: rgba(116, 48, 20, 0.3);
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .form-grid, .footer-actions-row {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
 }
 </style>

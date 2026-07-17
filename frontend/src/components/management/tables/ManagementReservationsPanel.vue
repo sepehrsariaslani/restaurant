@@ -205,8 +205,8 @@ function formatReservationDate(value) {
 <style scoped>
 .workspace-split-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 2.5rem;
   align-items: start;
 }
 
@@ -214,77 +214,81 @@ function formatReservationDate(value) {
 .list-area {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .list-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0.25rem;
 }
 
 .list-title {
   margin: 0;
-  font-size: 1.1rem;
-  color: var(--cw-cocoa);
-  font-weight: 800;
+  font-size: 1.4rem;
+  color: var(--cw-text-main);
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
 .list-count {
-  font-size: 0.8rem;
-  color: var(--cw-olive);
-  font-weight: 600;
-  background: var(--cw-surface);
-  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
+  font-weight: 700;
+  background: var(--cw-surface-alt);
+  padding: 0.35rem 0.85rem;
   border-radius: 99px;
-  border: 1px solid var(--cw-border);
+  border: 1px solid var(--cw-border-light);
 }
 
 .list-filters {
   display: flex;
-  gap: 0.5rem;
-  padding: 0 0.25rem;
+  gap: 0.75rem;
 }
 
 .filter-select {
   flex: 1;
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  color: var(--cw-cocoa);
-  border-radius: 8px;
-  padding: 0.4rem 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border-light);
+  color: var(--cw-text-main);
+  border-radius: var(--cw-radius-sm);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  outline: none;
+}
+.filter-select:focus {
+  border-color: var(--cw-primary);
 }
 
 .master-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  max-height: calc(100vh - 220px);
+  gap: 1rem;
+  max-height: calc(100vh - 240px);
   overflow-y: auto;
-  padding-right: 0.25rem;
+  padding-right: 0.5rem;
 }
 
 .list-empty {
-  padding: 2rem 1rem;
+  padding: 3rem 1.5rem;
   text-align: center;
-  color: var(--cw-olive);
-  background: var(--cw-surface);
-  border-radius: 12px;
+  color: var(--cw-secondary);
+  background: var(--cw-surface-alt);
+  border-radius: var(--cw-radius-md);
   border: 1px dashed var(--cw-border);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .list-item {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  border-radius: 12px;
-  padding: 1rem;
+  gap: 0.75rem;
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border-light);
+  border-radius: var(--cw-radius-md);
+  padding: 1.25rem;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: right;
@@ -292,14 +296,15 @@ function formatReservationDate(value) {
 }
 
 .list-item:hover {
-  border-color: var(--cw-caramel);
-  transform: translateX(-2px);
+  border-color: var(--cw-border);
+  transform: translateX(-3px);
+  box-shadow: var(--cw-shadow-sm);
 }
 
 .list-item.active {
-  background: rgba(132, 89, 43, 0.05);
-  border-color: var(--cw-caramel);
-  box-shadow: 2px 0 0 0 var(--cw-caramel) inset;
+  background: var(--cw-surface);
+  border-color: var(--cw-primary);
+  box-shadow: 4px 0 0 0 var(--cw-primary) inset, var(--cw-shadow-sm);
 }
 
 .list-item-head {
@@ -310,53 +315,59 @@ function formatReservationDate(value) {
 }
 
 .item-title {
-  font-size: 1rem;
-  color: var(--cw-cocoa);
-  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--cw-text-main);
+  font-weight: 800;
 }
 
 .list-item-body {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1rem;
+  gap: 0.75rem 1.25rem;
 }
 
 .item-meta {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--cw-olive);
-}
-
-.meta-icon {
-  opacity: 0.7;
-}
-
-.table-meta {
-  color: #b84f4f; /* unlinked state */
-}
-.table-meta.has-table {
-  color: var(--cw-caramel);
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
   font-weight: 600;
 }
 
-/* Detail Area - Inspection Panel Styles */
+.meta-icon {
+  color: var(--cw-secondary);
+}
+
+.font-bold {
+  font-weight: 800;
+  color: var(--cw-primary);
+  font-size: 0.95rem;
+}
+
+.table-meta {
+  color: var(--cw-danger);
+}
+.table-meta.has-table {
+  color: var(--cw-text-main);
+}
+
+/* Detail Area uses same inspection panel styles as detail panel */
 .detail-area {
   position: sticky;
-  top: 1.5rem;
-  height: calc(100vh - 3rem);
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(68, 45, 28, 0.05);
-  overflow: hidden;
+  top: 2rem;
+  height: calc(100vh - 4rem);
 }
 
 .inspection-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--cw-surface-alt);
+  border-radius: var(--cw-radius-md);
+  border: 1px solid var(--cw-border-light);
+  box-shadow: var(--cw-shadow);
+  overflow: hidden;
 }
 
 .inspection-empty {
@@ -365,41 +376,44 @@ function formatReservationDate(value) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 3rem 2rem;
   text-align: center;
-  color: var(--cw-olive);
+  color: var(--cw-secondary);
 }
 
 .empty-illustration {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: rgba(157, 145, 103, 0.1);
-  margin-bottom: 1rem;
-  color: var(--cw-olive);
+  background: var(--cw-surface);
+  margin-bottom: 1.5rem;
+  color: var(--cw-secondary);
+  border: 1px solid var(--cw-border-light);
 }
 
 .inspection-empty strong {
-  color: var(--cw-cocoa);
-  font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+  color: var(--cw-text-main);
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  font-weight: 800;
 }
 
 .inspection-empty p {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   line-height: 1.6;
+  color: var(--cw-text-muted);
 }
 
 .inspection-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--cw-border);
-  background: rgba(132, 89, 43, 0.02);
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid var(--cw-border-light);
+  background: var(--cw-surface);
 }
 
 .head-info {
@@ -408,57 +422,98 @@ function formatReservationDate(value) {
 }
 
 .head-kicker {
-  font-size: 0.7rem;
-  color: var(--cw-olive);
+  font-size: 0.8rem;
+  color: var(--cw-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
+  font-weight: 800;
+  margin-bottom: 0.4rem;
 }
 
 .head-info h2 {
   margin: 0;
-  font-size: 1.5rem;
-  color: var(--cw-cocoa);
-  font-weight: 800;
+  font-size: 1.8rem;
+  color: var(--cw-text-main);
+  font-weight: 900;
   letter-spacing: -0.02em;
 }
 
 .inspection-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
+  gap: 2.5rem;
 }
 
-.inspection-section {
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  border-radius: 12px;
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.kpi-box {
+  background: var(--cw-page-bg);
+  border: 1px solid var(--cw-border-light);
+  border-radius: var(--cw-radius-sm);
   padding: 1.25rem;
-  box-shadow: 0 2px 8px rgba(68, 45, 28, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.kpi-box.highlight {
+  background: var(--cw-surface);
+  border-color: var(--cw-border);
+}
+
+.kpi-box.highlight .kpi-box-value {
+  color: var(--cw-primary);
+}
+
+.kpi-box-label {
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
+  font-weight: 700;
+}
+
+.kpi-box-value {
+  font-size: 1.3rem;
+  color: var(--cw-text-main);
+  font-weight: 900;
+}
+
+.opacity-50 { opacity: 0.5; }
+
+.inspection-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .section-title {
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(132, 89, 43, 0.1);
-  font-size: 0.9rem;
-  color: var(--cw-cocoa);
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--cw-text-main);
   font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--cw-border-light);
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .full-width {
@@ -466,39 +521,40 @@ function formatReservationDate(value) {
 }
 
 .form-group label {
-  font-size: 0.75rem;
-  color: var(--cw-olive);
-  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
+  font-weight: 700;
 }
 
 .input {
-  background: var(--cw-bg);
-  border: 1px solid var(--cw-border);
-  color: var(--cw-cocoa);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
+  background: var(--cw-page-bg);
+  border: 1px solid var(--cw-border-light);
+  color: var(--cw-text-main);
+  border-radius: var(--cw-radius-sm);
+  padding: 0.75rem 1rem;
   font-family: inherit;
+  font-size: 0.95rem;
   transition: all 0.2s ease;
 }
 
 .input:focus {
-  border-color: var(--cw-caramel);
-  box-shadow: 0 0 0 3px rgba(132, 89, 43, 0.1);
+  border-color: var(--cw-primary);
+  outline: none;
 }
 
 .input:disabled {
   opacity: 0.6;
-  background: rgba(157, 145, 103, 0.05);
+  background: var(--cw-surface);
 }
 
-.mt-4 { margin-top: 1.5rem; }
+.mt-4 { margin-top: 2rem; }
 
 .inspection-footer {
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--cw-border);
+  padding: 1.5rem 2rem;
+  border-top: 1px solid var(--cw-border-light);
   background: var(--cw-surface);
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .flex-1 {
@@ -506,16 +562,40 @@ function formatReservationDate(value) {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 0.4rem;
-  height: 2.5rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 700;
+  gap: 0.5rem;
+  height: 3.2rem;
+  border-radius: var(--cw-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.2s ease;
+  border: none;
 }
 
-@media (max-width: 980px) {
+.primary-btn {
+  background: var(--cw-primary);
+  color: #fff;
+}
+.primary-btn:hover:not(:disabled) {
+  background: var(--cw-primary-hover);
+}
+:global(.dark) .primary-btn { color: #1A130D; }
+
+.secondary-btn {
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border);
+  color: var(--cw-text-main);
+}
+.secondary-btn:hover:not(:disabled) {
+  background: var(--cw-surface);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1024px) {
   .workspace-split-layout {
     grid-template-columns: 1fr;
   }
@@ -524,7 +604,16 @@ function formatReservationDate(value) {
     height: auto;
   }
   .master-list {
-    max-height: 400px;
+    max-height: 500px;
+  }
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .inspection-footer {
+    flex-direction: column;
   }
 }
 </style>

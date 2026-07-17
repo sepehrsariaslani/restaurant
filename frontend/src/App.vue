@@ -314,6 +314,28 @@ const lastOrderUrl = computed(() => {
 </script>
 
 <style scoped>
+
+:root,
+body {
+  /* Core Earthy Theme Variables */
+  --cw-cocoa: #442D1C;
+  --cw-wine: #743014;
+  --cw-caramel: #84592B;
+  --cw-olive: #9D9167;
+  --cw-batter: #E8D1A7;
+  --cw-surface: #FDFBF7;
+  --cw-bg: #F4EFE6;
+  --cw-border: rgba(132, 89, 43, 0.15);
+}
+
+:root.dark,
+body.management-theme-dark {
+  --cw-surface: #2B1D14;
+  --cw-bg: #1A130D;
+  --cw-border: rgba(232, 209, 167, 0.1);
+  --cw-cocoa: #E8D1A7; 
+}
+
 .app-layout {
   min-height: 100vh;
   display: flex;

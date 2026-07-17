@@ -1179,25 +1179,32 @@ onBeforeUnmount(() => {
 <style scoped>
 .management-layout,
 .management-auth-shell {
-	--bg-page: #f8fafc;
+	/* Core Earthy Theme Backgrounds */
+	--bg-page: #FDFBF7; /* Muted parchment/cream */
 	--bg-card: #ffffff;
-	--bg-soft: #f1f5f9;
-	--bg-subtle: #f8fafc;
-	--border: #e2e8f0;
-	--border-strong: #cbd5e1;
-	--text: #0f172a;
-	--muted: #64748b;
-	--muted-2: #94a3b8;
-	--danger: #dc2626;
-	--shadow: 0 18px 44px rgb(15 23 42 / 0.07);
-	--shadow-sm: 0 8px 22px rgb(15 23 42 / 0.045);
+	--bg-soft: #F4EFE6; /* Dusty beige/sand */
+	--bg-subtle: #FDFBF7;
+	--border: #E8D1A7; /* Golden Batter */
+	--border-strong: #9D9167; /* Olive */
+	
+	/* Core Earthy Theme Typography */
+	--text: #442D1C; /* Cowhide Cocoa */
+	--muted: #84592B; /* Toasted Caramel */
+	--muted-2: #9D9167; /* Olive Harvest */
+	--danger: #A33D3D; /* Deep Semantic Red */
+	
+	--shadow: 0 18px 44px rgba(68, 45, 28, 0.07);
+	--shadow-sm: 0 8px 22px rgba(68, 45, 28, 0.045);
 
-	--palette-deep-sapphire: #8b5e34;
-	--palette-deep-sapphire-rgb: 139 94 52;
-	--palette-june-bud: #f4e6d3;
-	--palette-june-bud-rgb: 244 230 211;
-	--palette-deep-saffron: #b8793f;
-	--palette-deep-saffron-rgb: 184 121 63;
+	/* Palette Overrides mapped to Earthy Theme */
+	--palette-deep-sapphire: #743014; /* Spiced Wine / Terracotta */
+	--palette-deep-sapphire-rgb: 116 48 20;
+	--palette-june-bud: #9D9167; /* Olive Harvest */
+	--palette-june-bud-rgb: 157 145 103;
+	--palette-deep-saffron: #84592B; /* Toasted Caramel */
+	--palette-deep-saffron-rgb: 132 89 43;
+	--palette-gold: #E8D1A7; /* Golden Batter */
+	--palette-gold-rgb: 232 209 167;
 	--palette-eggshell: #ffffff;
 	--palette-eggshell-rgb: 255 255 255;
 	--theme-surface-alt: var(--bg-soft);

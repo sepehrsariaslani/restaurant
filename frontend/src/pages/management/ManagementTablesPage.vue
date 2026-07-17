@@ -1,67 +1,88 @@
 <template>
-  <ManagementPageScaffold title="مدیریت سالن و رزروها" subtitle="کنترل یکپارچه میزها، نشست‌های فعال و زمان‌بندی مهمانان">
-    
+  <ManagementPageScaffold title="" subtitle="" :show-title="false">
     <div class="workspace-header">
-      <div class="workspace-kpis">
-        <div class="kpi-item">
-          <span class="kpi-label">مجموع میزها</span>
-          <strong class="kpi-value">{{ summary.totalTables.toLocaleString('fa-IR') }}</strong>
-        </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi-item kpi-empty">
-          <span class="kpi-label">خالی</span>
-          <strong class="kpi-value">{{ summary.emptyTables.toLocaleString('fa-IR') }}</strong>
-        </div>
-        <div class="kpi-item kpi-waiting">
-          <span class="kpi-label">در انتظار</span>
-          <strong class="kpi-value">{{ summary.waitingTables.toLocaleString('fa-IR') }}</strong>
-        </div>
-        <div class="kpi-item kpi-occupied">
-          <span class="kpi-label">اشغال</span>
-          <strong class="kpi-value">{{ summary.occupiedTables.toLocaleString('fa-IR') }}</strong>
-        </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi-item">
-          <span class="kpi-label">سشن‌های فعال</span>
-          <strong class="kpi-value">{{ summary.activeSessions.toLocaleString('fa-IR') }}</strong>
-        </div>
-        <div class="kpi-item">
-          <span class="kpi-label">رزروها</span>
-          <strong class="kpi-value">{{ summary.reservations.toLocaleString('fa-IR') }}</strong>
-        </div>
+      <div class="header-intro">
+        <h1 class="page-title">مدیریت سالن و رزروها</h1>
+        <p class="page-subtitle">کنترل یکپارچه میزها، نشست‌های فعال و زمان‌بندی مهمانان</p>
       </div>
       
-      <div class="workspace-actions">
-        <div class="search-wrapper">
-          <Search :size="16" class="search-icon" />
+      <div class="header-actions">
+        <div class="search-box">
+          <Search :size="18" class="search-icon" />
           <input
             v-model.trim="search"
-            class="input workspace-search"
+            class="search-input"
             placeholder="جستجو (نام میز، موبایل، وضعیت...)"
             @keyup.enter="loadTables"
           />
         </div>
-        <button class="icon-btn refresh-btn" type="button" :disabled="loading" @click="loadTables" title="بروزرسانی اطلاعات">
-          <RefreshCcw :size="16" :class="{ 'is-spinning': loading }" />
+        <button class="refresh-btn" type="button" :disabled="loading" @click="loadTables" title="بروزرسانی اطلاعات">
+          <RefreshCcw :size="18" :class="{ 'is-spinning': loading }" />
         </button>
       </div>
     </div>
 
-    <div class="workspace-tabs" role="tablist">
-      <button
-        v-for="tab in tabOptions"
-        :key="tab.value"
-        class="workspace-tab"
-        :class="{ active: activeTab === tab.value }"
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === tab.value"
-        @click="activeTab = tab.value"
-      >
-        <component :is="tab.icon" :size="16" class="tab-icon" />
-        <span>{{ tab.label }}</span>
-        <span class="tab-badge" v-if="tab.badge">{{ tab.badge.toLocaleString('fa-IR') }}</span>
-      </button>
+    <!-- Composed KPI Strip -->
+    <div class="kpi-strip">
+      <div class="kpi-hero">
+        <div class="kpi-hero-val">{{ summary.totalTables.toLocaleString('fa-IR') }}</div>
+        <div class="kpi-hero-label">مجموع میزها</div>
+      </div>
+      <div class="kpi-tiles">
+        <div class="kpi-tile">
+          <span class="kpi-dot empty"></span>
+          <div class="kpi-info">
+            <span class="kpi-val">{{ summary.emptyTables.toLocaleString('fa-IR') }}</span>
+            <span class="kpi-label">خالی</span>
+          </div>
+        </div>
+        <div class="kpi-tile">
+          <span class="kpi-dot waiting"></span>
+          <div class="kpi-info">
+            <span class="kpi-val">{{ summary.waitingTables.toLocaleString('fa-IR') }}</span>
+            <span class="kpi-label">در انتظار</span>
+          </div>
+        </div>
+        <div class="kpi-tile">
+          <span class="kpi-dot occupied"></span>
+          <div class="kpi-info">
+            <span class="kpi-val">{{ summary.occupiedTables.toLocaleString('fa-IR') }}</span>
+            <span class="kpi-label">اشغال</span>
+          </div>
+        </div>
+        <div class="kpi-divider"></div>
+        <div class="kpi-tile">
+          <div class="kpi-info">
+            <span class="kpi-val">{{ summary.activeSessions.toLocaleString('fa-IR') }}</span>
+            <span class="kpi-label">سشن فعال</span>
+          </div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-info">
+            <span class="kpi-val">{{ summary.reservations.toLocaleString('fa-IR') }}</span>
+            <span class="kpi-label">رزروها</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="workspace-tabs-container">
+      <div class="workspace-tabs" role="tablist">
+        <button
+          v-for="tab in tabOptions"
+          :key="tab.value"
+          class="workspace-tab"
+          :class="{ active: activeTab === tab.value }"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === tab.value"
+          @click="activeTab = tab.value"
+        >
+          <component :is="tab.icon" :size="16" class="tab-icon" />
+          <span>{{ tab.label }}</span>
+          <span class="tab-badge" v-if="tab.badge">{{ tab.badge.toLocaleString('fa-IR') }}</span>
+        </button>
+      </div>
     </div>
 
     <p class="muted-loading" v-if="loading && !tables.length">در حال همگام‌سازی سالن...</p>
@@ -147,6 +168,8 @@
         />
       </section>
     </template>
+  </ManagementPageScaffold>
+</template>
   </ManagementPageScaffold>
 </template>
 
@@ -453,153 +476,195 @@ loadTables()
 </script>
 
 <style scoped>
-/* Core Earthy Theme Variables for this workspace */
-.workspace-header,
-.workspace-tabs,
-.workspace-floor,
-.workspace-reservations,
-.workspace-sessions {
-  --cw-cocoa: #442D1C;
-  --cw-wine: #743014;
-  --cw-caramel: #84592B;
-  --cw-olive: #9D9167;
-  --cw-batter: #E8D1A7;
-  --cw-surface: #FDFBF7;
-  --cw-bg: #F4EFE6;
-  --cw-border: rgba(132, 89, 43, 0.15);
+.workspace-intro {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
 }
 
-:global(.dark) .workspace-header,
-:global(.dark) .workspace-tabs,
-:global(.dark) .workspace-floor,
-:global(.dark) .workspace-reservations,
-:global(.dark) .workspace-sessions {
-  --cw-surface: #2B1D14;
-  --cw-bg: #1A130D;
-  --cw-border: rgba(232, 209, 167, 0.1);
-  --cw-cocoa: #E8D1A7; /* Invert text to light accent */
-}
-
-/* Header Area */
 .workspace-header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 12px rgba(68, 45, 28, 0.03);
-}
-
-.workspace-kpis {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
+  align-items: flex-end;
+  margin-bottom: 2rem;
   flex-wrap: wrap;
+  gap: 1.5rem;
 }
 
-.kpi-item {
+.page-title {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--cw-text-main);
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+  color: var(--cw-text-muted);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.header-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.kpi-label {
-  font-size: 0.7rem;
-  color: var(--cw-olive);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.kpi-value {
-  font-size: 1.15rem;
-  color: var(--cw-cocoa);
-  font-weight: 800;
-  line-height: 1;
-}
-
-.kpi-empty .kpi-value { color: var(--cw-caramel); }
-.kpi-waiting .kpi-value { color: var(--cw-olive); }
-.kpi-occupied .kpi-value { color: var(--cw-wine); }
-
-.kpi-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--cw-border);
-}
-
-.workspace-actions {
-  display: flex;
-  align-items: center;
   gap: 0.75rem;
-  flex-grow: 1;
-  max-width: 400px;
+  align-items: center;
 }
 
-.search-wrapper {
+.search-box {
   position: relative;
-  flex-grow: 1;
+  width: 320px;
 }
 
 .search-icon {
   position: absolute;
-  right: 0.75rem;
+  right: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--cw-olive);
+  color: var(--cw-secondary);
 }
 
-.workspace-search {
+.search-input {
   width: 100%;
-  padding-right: 2.25rem;
-  background: var(--cw-bg);
-  border: 1px solid var(--cw-border);
-  border-radius: 8px;
-  color: var(--cw-cocoa);
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border-light);
+  border-radius: var(--cw-radius-md);
+  padding: 0.85rem 1rem 0.85rem 2.5rem;
+  color: var(--cw-text-main);
+  font-size: 0.95rem;
+  transition: all 0.2s;
 }
 
-.workspace-search:focus {
-  border-color: var(--cw-caramel);
-  box-shadow: 0 0 0 3px rgba(132, 89, 43, 0.1);
+.search-input:focus {
+  border-color: var(--cw-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--cw-danger-bg); /* Reusing a subtle bg tint */
 }
 
-.icon-btn {
+.refresh-btn {
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border-light);
+  border-radius: var(--cw-radius-md);
+  width: 3.2rem;
+  height: 3.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--cw-border);
-  background: var(--cw-surface);
-  color: var(--cw-caramel);
+  color: var(--cw-text-main);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
+}
+.refresh-btn:hover {
+  background: var(--cw-surface);
+  color: var(--cw-primary);
 }
 
-.icon-btn:hover:not(:disabled) {
-  background: rgba(132, 89, 43, 0.08);
-  color: var(--cw-wine);
-}
-
-.is-spinning {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin { 100% { transform: rotate(360deg); } }
-
-/* Tabs */
-.workspace-tabs {
+/* KPI Strip */
+.kpi-strip {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid var(--cw-border);
-  padding-bottom: 1px;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.kpi-hero {
+  background: var(--cw-surface-alt);
+  border-radius: var(--cw-radius-md);
+  padding: 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--cw-border-light);
+  box-shadow: var(--cw-shadow-sm);
+  min-width: 220px;
+}
+
+.kpi-hero-val {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--cw-text-main);
+  line-height: 1;
+}
+
+.kpi-hero-label {
+  font-size: 0.95rem;
+  color: var(--cw-text-muted);
+  margin-top: 0.5rem;
+  font-weight: 700;
+}
+
+.kpi-tiles {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.kpi-tile {
+  background: var(--cw-surface-alt);
+  border-radius: var(--cw-radius-md);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex: 1;
+  min-width: 140px;
+  border: 1px solid var(--cw-border-light);
+}
+
+.kpi-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-top: 0.4rem;
+  flex-shrink: 0;
+}
+
+.kpi-dot.empty { background: var(--cw-secondary); }
+.kpi-dot.waiting { background: #DDA77B; } /* Sand/amber */
+.kpi-dot.occupied { background: var(--cw-primary); }
+
+.kpi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-val {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--cw-text-main);
+  line-height: 1.1;
+}
+
+.kpi-label {
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.kpi-divider {
+  width: 1px;
+  background: var(--cw-border-light);
+  margin: 0.5rem 0.5rem;
+}
+
+/* Tabs Container */
+.workspace-tabs-container {
+  display: flex;
+  margin-bottom: 2rem;
+}
+
+.workspace-tabs {
+  display: inline-flex;
+  background: var(--cw-surface);
+  border-radius: var(--cw-radius-md);
+  padding: 0.35rem;
+  gap: 0.25rem;
+  border: 1px solid var(--cw-border-light);
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .workspace-tab {
@@ -609,101 +674,98 @@ loadTables()
   padding: 0.75rem 1.25rem;
   border: none;
   background: transparent;
-  color: var(--cw-olive);
+  color: var(--cw-text-muted);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -3px;
+  border-radius: var(--cw-radius-sm);
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .workspace-tab:hover {
-  color: var(--cw-caramel);
-  background: rgba(132, 89, 43, 0.04);
-  border-radius: 8px 8px 0 0;
+  color: var(--cw-text-main);
 }
 
 .workspace-tab.active {
-  color: var(--cw-wine);
-  border-bottom-color: var(--cw-wine);
+  background: var(--cw-surface-alt);
+  color: var(--cw-primary);
+  box-shadow: var(--cw-shadow-sm);
 }
 
 .tab-badge {
-  background: rgba(157, 145, 103, 0.15);
-  color: inherit;
-  padding: 0.15rem 0.5rem;
+  background: var(--cw-border-light);
+  color: var(--cw-text-main);
+  padding: 0.15rem 0.6rem;
   border-radius: 99px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 800;
 }
+
 .workspace-tab.active .tab-badge {
-  background: rgba(116, 48, 20, 0.1);
+  background: var(--cw-danger-bg);
+  color: var(--cw-primary);
 }
 
-/* Floor Workspace */
+/* Floor Grid Area */
 .workspace-floor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 2.5rem;
   align-items: start;
 }
 
 .floor-filters {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
   flex-wrap: wrap;
 }
 
 .floor-filter-label {
-  font-size: 0.75rem;
-  color: var(--cw-olive);
+  font-size: 0.85rem;
+  color: var(--cw-text-muted);
   font-weight: 600;
+  margin-left: 0.5rem;
 }
 
 .floor-chip {
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  color: var(--cw-cocoa);
-  padding: 0.35rem 0.8rem;
+  background: var(--cw-surface-alt);
+  border: 1px solid var(--cw-border-light);
+  color: var(--cw-text-main);
+  padding: 0.4rem 1rem;
   border-radius: 99px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .floor-chip:hover {
-  border-color: var(--cw-caramel);
+  border-color: var(--cw-border);
 }
 
 .floor-chip.active {
-  background: var(--cw-caramel);
-  border-color: var(--cw-caramel);
-  color: white;
+  background: var(--cw-text-main);
+  border-color: var(--cw-text-main);
+  color: var(--cw-surface-alt);
 }
 :global(.dark) .floor-chip.active {
-  color: #1A130D;
+  background: var(--cw-text-main);
+  color: var(--cw-surface-alt);
 }
 
 .floor-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
 }
 
 .floor-detail-area {
   position: sticky;
-  top: 1.5rem;
-  height: calc(100vh - 3rem);
-  overflow-y: auto;
-  border-radius: 16px;
-  background: var(--cw-surface);
-  border: 1px solid var(--cw-border);
-  box-shadow: 0 10px 30px rgba(68, 45, 28, 0.05);
+  top: 2rem;
+  height: calc(100vh - 4rem);
 }
 
 /* Empty / Alerts */
@@ -712,67 +774,82 @@ loadTables()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
-  background: var(--cw-surface);
+  padding: 5rem 2rem;
+  background: var(--cw-surface-alt);
   border: 1px dashed var(--cw-border);
-  border-radius: 12px;
-  color: var(--cw-olive);
+  border-radius: var(--cw-radius-md);
+  color: var(--cw-secondary);
   text-align: center;
 }
 .empty-icon-wrapper {
-  margin-bottom: 1rem;
-  opacity: 0.5;
+  margin-bottom: 1.5rem;
+  opacity: 0.6;
 }
 .empty-state strong {
-  font-size: 1.1rem;
-  color: var(--cw-cocoa);
+  font-size: 1.2rem;
+  color: var(--cw-text-main);
   margin-bottom: 0.5rem;
+  font-weight: 800;
 }
 .empty-state p {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  color: var(--cw-text-muted);
+}
+.secondary-btn {
+  background: var(--cw-surface);
+  border: 1px solid var(--cw-border);
+  color: var(--cw-text-main);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--cw-radius-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.secondary-btn:hover {
+  background: var(--cw-surface-alt);
 }
 
 .workspace-alerts {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 .error-alert, .success-alert {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--cw-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 700;
   margin: 0;
 }
 .error-alert {
-  background: rgba(116, 48, 20, 0.1);
-  color: var(--cw-wine);
-  border: 1px solid rgba(116, 48, 20, 0.2);
+  background: var(--cw-danger-bg);
+  color: var(--cw-danger);
+  border: 1px solid rgba(155, 61, 53, 0.2);
 }
 .success-alert {
-  background: rgba(132, 89, 43, 0.1);
-  color: var(--cw-caramel);
-  border: 1px solid rgba(132, 89, 43, 0.2);
+  background: rgba(110, 118, 74, 0.1);
+  color: var(--cw-success);
+  border: 1px solid rgba(110, 118, 74, 0.25);
 }
 .muted-loading {
-  color: var(--cw-olive);
-  font-size: 0.85rem;
-  font-weight: 600;
+  color: var(--cw-secondary);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
 }
 .mt-2 { margin-top: 1rem; }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .workspace-floor {
     grid-template-columns: 1fr;
   }
   .floor-detail-area {
     position: static;
     height: auto;
-    overflow-y: visible;
   }
 }
 
@@ -781,14 +858,19 @@ loadTables()
     flex-direction: column;
     align-items: stretch;
   }
-  .workspace-actions {
-    max-width: none;
+  .search-box { width: 100%; }
+  .header-actions {
+    flex-wrap: wrap;
   }
+  .refresh-btn { flex: 1; }
   .kpi-divider { display: none; }
-  .workspace-kpis {
+  .kpi-tiles {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .kpi-hero {
+    min-width: 100%;
+    align-items: center;
   }
 }
 </style>
