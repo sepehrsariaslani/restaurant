@@ -14129,7 +14129,7 @@ def create_pos_order(payload):
         address=address, note=note,
         include_service_items=1,
         financial_modifiers=financial_modifiers,
-        totals=totals_payload,
+        
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
