@@ -2004,6 +2004,7 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 			"warehouse": warehouse,
 			"against_sales_order": so_name,
 			"so_detail": item.name,
+			"allow_zero_valuation_rate": 1,
 		})
 
 	if not dn.items:
