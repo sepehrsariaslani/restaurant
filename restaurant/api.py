@@ -14314,21 +14314,29 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
             # Re-fetch outstanding amount
             si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
             
-            # If we are processing a partial payment retry, validate the split total against current outstanding
-            total_split = sum(flt(s.get("amount") or 0) for s in splits)
-            
-            if total_split <= 0 and si_outstanding > 0:
-                # Fallback to outstanding
-                splits = [{
-                    "method": method,
-                    "mode_of_payment": _resolve_pos_mode_of_payment(method),
-                    "amount": si_outstanding,
-                    "reference_no": (reference_no or payment.get("reference_no") or "").strip()
-                }]
-                total_split = si_outstanding
+            # In POS, Sales Invoice automatically creates Payment Entries for payments added to `si_doc.payments` during submit.
+            # So if `si_doc.payments` had the full amount, `outstanding_amount` will be 0 right after submit().
+            # If outstanding is 0, we don't need to create more Payment Entries, nor do we want to throw an error.
+            if si_outstanding <= 0.5:
+                # Already paid via SI submit
+                splits = []
+                total_split = 0
+            else:
+                # If we are processing a partial payment retry, validate the split total against current outstanding
+                total_split = sum(flt(s.get("amount") or 0) for s in splits)
                 
-            if total_split > si_outstanding + 0.5:
-                frappe.throw(f"Payment splits total ({total_split}) exceeds outstanding amount ({si_outstanding})")
+                if total_split <= 0 and si_outstanding > 0:
+                    # Fallback to outstanding
+                    splits = [{
+                        "method": method,
+                        "mode_of_payment": _resolve_pos_mode_of_payment(method),
+                        "amount": si_outstanding,
+                        "reference_no": (reference_no or payment.get("reference_no") or "").strip()
+                    }]
+                    total_split = si_outstanding
+                    
+                if total_split > si_outstanding + 0.5:
+                    frappe.throw(f"Payment splits total ({total_split}) exceeds outstanding amount ({si_outstanding})")
             from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
             payment_entries = []
             
