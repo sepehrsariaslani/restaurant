@@ -829,44 +829,36 @@ defineExpose({
 /* ─── Segmented Control ─── */
 .mode-seg {
 	display: flex;
-	gap: 0.35rem;
-	padding: 0.75rem 0.8rem 0;
-	background: transparent;
+	margin: 0.75rem 0.8rem 0;
+	background: var(--mg-bg-surface);
+	border-radius: 14px;
+	padding: 0.35rem;
+	gap: 0.25rem;
+	border: 1px solid var(--mg-border-light);
 }
 
 .mode-seg button {
 	flex: 1;
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: color-mix(in srgb, var(--mg-bg-surface) 76%, var(--mg-bg-page) 24%);
+	border: none;
+	background: transparent;
 	color: var(--mg-text-muted);
-	padding: 0.62rem 0.35rem;
+	padding: 0.6rem 0.35rem;
 	font-size: 0.78rem;
-	font-weight: 600;
+	font-weight: 700;
 	font-family: inherit;
 	cursor: pointer;
 	transition: all 0.2s ease;
-	position: relative;
-	min-height: 44px;
-}
-
-.mode-seg button:first-child {
-	border-radius: 14px;
-}
-
-.mode-seg button:last-child {
-	border-radius: 14px;
+	border-radius: 10px;
+	min-height: 40px;
 }
 
 .mode-seg button.active {
-	background: var(--mg-primary);
-	color: var(--mg-bg-surface);
-	font-weight: 700;
-	border-color: var(--mg-primary);
-	box-shadow: 0 12px 24px color-mix(in srgb, var(--mg-primary) 22%, transparent);
+	background: var(--mg-bg-page);
+	color: var(--mg-primary);
+	box-shadow: var(--mg-shadow-sm, 0 8px 24px rgba(52, 38, 31, 0.06));
 }
 
 .mode-seg button:not(.active):hover {
-	background: color-mix(in srgb, var(--mg-bg-page) 78%, var(--mg-bg-surface) 22%);
 	color: var(--mg-text-main);
 }
 
@@ -1343,7 +1335,8 @@ defineExpose({
 
 .save-btn,
 .pay-btn,
-.print-btn {
+.print-btn,
+.settle-btn-custom {
 	border: 0;
 	border-radius: 14px;
 	color: var(--mg-bg-surface);
@@ -1357,8 +1350,7 @@ defineExpose({
 
 .save-btn {
 	background: var(--mg-primary);
-	color: #fff;
-	transition: all 0.2s;
+	color: var(--mg-bg-surface);
 }
 
 .save-btn:hover:not(:disabled) {
@@ -1368,26 +1360,12 @@ defineExpose({
 
 .settle-btn-custom {
 	background: var(--mg-success);
-	color: #fff;
-	border: none;
-	padding: 12px 16px;
-	border-radius: 10px;
-	font-size: 13px;
-	font-weight: 600;
-	cursor: pointer;
-	white-space: nowrap;
-	flex: 1;
-	min-width: 0;
-	transition: all 0.15s;
+	color: var(--mg-bg-surface);
 }
+
 .settle-btn-custom:hover:not(:disabled) {
-	background: var(--mg-success);
+	background: color-mix(in srgb, var(--mg-success) 85%, var(--mg-text-main));
 	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-success) 30%, transparent);
-}
-.settle-btn-custom:disabled {
-	background: var(--mg-success-bg);
-	cursor: not-allowed;
-	opacity: 0.6;
 }
 
 .pay-btn {
@@ -1414,6 +1392,7 @@ defineExpose({
 
 .save-btn:disabled,
 .pay-btn:disabled,
+.settle-btn-custom:disabled,
 .print-btn:disabled {
 	opacity: 0.35;
 	cursor: not-allowed;
