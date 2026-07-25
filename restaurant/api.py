@@ -5008,6 +5008,7 @@ def _create_sales_order(
 	coupon=None,
 	order_context=None,
 	financial_modifiers=None,
+	totals=None,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -10627,6 +10628,7 @@ def place_order(
 	coupon_code=None,
 	order_context=None,
 	financial_modifiers=None,
+	totals=None,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -10715,6 +10717,7 @@ def place_order(
 		coupon=coupon,
 		order_context=order_context,
 		financial_modifiers=financial_modifiers,
+		totals=totals,
 	)
 
 
@@ -14129,7 +14132,7 @@ def create_pos_order(payload):
         address=address, note=note,
         include_service_items=1,
         financial_modifiers=financial_modifiers,
-        
+        totals=totals_payload,
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
@@ -23524,3 +23527,11 @@ def update_kitchen_order_status(order_name, status):
     return {"status": "success"}
 
 # Triggering a direct push for E2E verification as requested
+
+@frappe.whitelist(allow_guest=True)
+def get_csrf_token():
+    return frappe.sessions.get_csrf_token()
+
+@frappe.whitelist(allow_guest=True)
+def get_management_csrf_token():
+    return frappe.sessions.get_csrf_token()
