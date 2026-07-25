@@ -141,9 +141,9 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	max-height: calc(100vh - 2rem);
 	overflow: auto;
 	border-radius: 18px;
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-text);
+	border: 1px solid var(--mg-border-light);
+	background: var(--mg-bg-surface);
+	color: var(--mg-text-main);
 	padding: 0.8rem;
 	display: grid;
 	gap: 0.65rem;
@@ -169,8 +169,8 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 .close-btn,
 .submit-btn,
 .counter button {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
+	border: 1px solid var(--mg-border-light);
+	background: var(--mg-bg-surface);
 	color: var(--mg-primary);
 	border-radius: 10px;
 	cursor: pointer;
@@ -190,13 +190,13 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	padding: 0.6rem 0.8rem;
 	border-radius: 14px;
 	background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.04);
-	border: 1px solid var(--pos-border);
+	border: 1px solid var(--mg-border-light);
 }
 
 .qty-row small {
 	font-size: 0.92rem;
 	font-weight: 600;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 .counter {
@@ -232,7 +232,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 }
 
 .sheet-foot {
-	border-top: 1px dashed var(--pos-border);
+	border-top: 1px dashed var(--mg-border-light);
 	padding-top: 0.6rem;
 	display: flex;
 	flex-wrap: wrap;
@@ -248,7 +248,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 .submit-btn {
 	background: var(--mg-primary);
 	border-color: var(--mg-primary);
-	color: var(--pos-white);
+	color: var(--mg-bg-surface);
 	padding: 0.7rem 1.4rem;
 	font-size: 0.98rem;
 	font-weight: 700;

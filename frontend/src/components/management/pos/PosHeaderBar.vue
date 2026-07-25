@@ -289,18 +289,18 @@ defineExpose({
   gap: 0.65rem;
   align-items: center;
   border-radius: 20px;
-  background: var(--pos-white);
-  border: 1px solid var(--pos-border);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
   padding: 0.7rem;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
 }
 
 .close-btn,
 .refresh-btn,
 .add-btn,
 .guest-counter button {
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
   color: var(--mg-primary);
   border-radius: 10px;
   cursor: pointer;
@@ -337,8 +337,8 @@ defineExpose({
   top: calc(100% + 0.3rem);
   inset-inline: 0;
   border-radius: 12px;
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
   box-shadow: 0 14px 24px rgb(var(--mg-primary-rgb, 1 90 114) / 0.16);
   max-height: 250px;
   overflow-y: auto;
@@ -350,7 +350,7 @@ defineExpose({
   border: 0;
   border-bottom: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.12);
   background: transparent;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
   padding: 0.42rem 0.55rem;
   display: grid;
   gap: 0.12rem;
@@ -364,7 +364,7 @@ defineExpose({
 
 .customer-option.active,
 .customer-option:hover {
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
 }
 
 .customer-option-main {
@@ -392,7 +392,7 @@ defineExpose({
   line-height: 1;
   background: var(--mg-primary);
   border-color: var(--mg-primary);
-  color: var(--pos-white);
+  color: var(--mg-bg-surface);
 }
 
 .field {
@@ -417,9 +417,9 @@ defineExpose({
 .guest-input {
   width: 100%;
   border-radius: 8px;
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
-  color: var(--pos-text);
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
   text-align: center;
   padding: 0.35rem 0.2rem;
 }
@@ -446,21 +446,21 @@ defineExpose({
 }
 
 .chip.ok {
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
   color: var(--mg-primary);
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border-light);
 }
 
 .chip.warn {
-  background: var(--pos-accent-soft);
+  background: var(--mg-primary-soft);
   color: var(--mg-primary);
   border: 1px solid rgb(var(--mg-primary-rgb, 255 152 54) / 0.35);
 }
 
 .dark-input {
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
-  color: var(--pos-text);
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
 }
 
 .dark-input::placeholder {
@@ -469,7 +469,7 @@ defineExpose({
 
 .refresh-btn {
   background: var(--mg-primary);
-  color: var(--pos-white);
+  color: var(--mg-bg-surface);
   border-color: var(--mg-primary);
 }
 

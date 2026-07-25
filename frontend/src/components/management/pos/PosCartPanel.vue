@@ -816,7 +816,7 @@ defineExpose({
 	--mg-success: var(--mg-success);
 	--mg-success-rgb: var(--mg-success-rgb);
 	border-radius: 24px;
-	background: linear-gradient(180deg, color-mix(in srgb, white 52%, var(--mg-bg-surface) 48%) 0%, var(--mg-bg-surface) 100%);
+	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 52%, var(--mg-bg-surface) 48%) 0%, var(--mg-bg-surface) 100%);
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	padding: 0;
 	color: var(--mg-text-main);
@@ -837,7 +837,7 @@ defineExpose({
 .mode-seg button {
 	flex: 1;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: color-mix(in srgb, white 76%, var(--mg-bg-page) 24%);
+	background: color-mix(in srgb, var(--mg-bg-surface) 76%, var(--mg-bg-page) 24%);
 	color: var(--mg-text-muted);
 	padding: 0.62rem 0.35rem;
 	font-size: 0.78rem;
@@ -866,7 +866,7 @@ defineExpose({
 }
 
 .mode-seg button:not(.active):hover {
-	background: color-mix(in srgb, var(--mg-bg-page) 78%, white 22%);
+	background: color-mix(in srgb, var(--mg-bg-page) 78%, var(--mg-bg-surface) 22%);
 	color: var(--mg-text-main);
 }
 
@@ -916,7 +916,7 @@ defineExpose({
 }
 
 .undo-btn {
-	background: color-mix(in srgb, var(--mg-success) 9%, white 91%);
+	background: color-mix(in srgb, var(--mg-success) 9%, var(--mg-bg-surface) 91%);
 	border: 1px solid color-mix(in srgb, var(--mg-primary) 24%, transparent);
 	color: var(--mg-primary);
 	border-radius: 6px;
@@ -973,18 +973,18 @@ defineExpose({
 	gap: 0.4rem;
 	padding: 0.7rem 0.75rem;
 	border-radius: 16px;
-	background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-page) 82%, white 18%) 100%);
+	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-page) 82%, var(--mg-bg-surface) 18%) 100%);
 	cursor: pointer;
 	transition: all 0.15s ease;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 }
 
 .cart-row:hover {
-	background: color-mix(in srgb, var(--mg-primary) 6%, white 94%);
+	background: color-mix(in srgb, var(--mg-primary) 6%, var(--mg-bg-surface) 94%);
 }
 
 .cart-row.active {
-	background: color-mix(in srgb, var(--mg-primary) 8%, white 92%);
+	background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface) 92%);
 	border-color: color-mix(in srgb, var(--mg-primary) 38%, var(--mg-border-light) 62%);
   box-shadow: 0 10px 24px color-mix(in srgb, var(--mg-primary) 8%, transparent);
 }
@@ -1052,7 +1052,7 @@ defineExpose({
 	width: 26px;
 	height: 26px;
 	border: none;
-	background: color-mix(in srgb, var(--mg-bg-page) 62%, white 38%);
+	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
 	color: var(--mg-primary);
 	border-radius: 7px;
 	cursor: pointer;
@@ -1076,11 +1076,11 @@ defineExpose({
 	font-size: 0.62rem;
 	font-weight: 700;
 	color: var(--mg-primary);
-	background: color-mix(in srgb, var(--mg-success) 12%, white 88%);
+	background: color-mix(in srgb, var(--mg-success) 12%, var(--mg-bg-surface) 88%);
 }
 
 .act-btn.bom:hover {
-	background: color-mix(in srgb, var(--mg-success) 18%, white 82%);
+	background: color-mix(in srgb, var(--mg-success) 18%, var(--mg-bg-surface) 82%);
 }
 
 .act-btn.remove {
@@ -1095,7 +1095,7 @@ defineExpose({
 .counter {
 	display: inline-flex;
 	align-items: center;
-	background: color-mix(in srgb, var(--mg-bg-page) 56%, white 44%);
+	background: color-mix(in srgb, var(--mg-bg-page) 56%, var(--mg-bg-surface) 44%);
 	border-radius: 8px;
 	overflow: hidden;
 }
@@ -1160,7 +1160,7 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	background: color-mix(in srgb, white 76%, var(--mg-bg-page) 24%);
+	background: color-mix(in srgb, var(--mg-bg-surface) 76%, var(--mg-bg-page) 24%);
 	border-radius: 14px;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
 	overflow: hidden;
@@ -1212,7 +1212,7 @@ defineExpose({
 
 .fin-input {
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: white;
+	background: var(--mg-bg-surface);
 	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.32rem 0.5rem;
@@ -1238,7 +1238,7 @@ defineExpose({
 
 .fin-action-btn {
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: color-mix(in srgb, var(--mg-bg-page) 58%, white 42%);
+	background: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
 	color: var(--mg-primary);
 	font-size: 0.7rem;
 	font-weight: 600;
@@ -1263,7 +1263,7 @@ defineExpose({
 .fin-note-input {
 	width: 100%;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: white;
+	background: var(--mg-bg-surface);
 	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.35rem 0.55rem;
@@ -1291,7 +1291,7 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 0.32rem;
-	background: color-mix(in srgb, var(--mg-bg-page) 62%, white 38%);
+	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
 }
 
 .sum-line {
@@ -1362,7 +1362,7 @@ defineExpose({
 }
 
 .save-btn:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--mg-primary) 85%, black);
+	background: color-mix(in srgb, var(--mg-primary) 85%, var(--mg-text-main));
 	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 

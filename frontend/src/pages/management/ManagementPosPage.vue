@@ -4949,7 +4949,7 @@ onBeforeUnmount(() => {
   height: 20px;
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--mg-primary) 16%, white 84%);
+  background: color-mix(in srgb, var(--mg-primary) 16%, var(--mg-bg-surface) 84%);
   color: var(--mg-primary);
   font-size: 0.7rem;
   font-weight: 700;
@@ -4971,7 +4971,7 @@ onBeforeUnmount(() => {
 
 .icon-refresh-btn {
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
-  background: color-mix(in srgb, var(--mg-bg-page) 60%, white 40%);
+  background: color-mix(in srgb, var(--mg-bg-page) 60%, var(--mg-bg-surface) 40%);
   color: var(--mg-text-main);
   border-radius: 8px;
   width: 28px;
@@ -5135,7 +5135,7 @@ onBeforeUnmount(() => {
 	display: inline-flex;
 	align-items: center;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: color-mix(in srgb, white 72%, var(--mg-bg-page) 28%);
+	background: color-mix(in srgb, var(--mg-bg-surface) 72%, var(--mg-bg-page) 28%);
 	border-radius: 999px;
 	overflow: hidden;
   box-shadow: 0 8px 18px rgb(52 38 31 / 0.05);
@@ -5288,7 +5288,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(4, 1fr);
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-bottom: 0;
-  background: color-mix(in srgb, var(--mg-bg-page) 88%, white 12%);
+  background: color-mix(in srgb, var(--mg-bg-page) 88%, var(--mg-bg-surface) 12%);
   border-radius: 18px 18px 0 0;
   overflow: hidden;
   flex-shrink: 0;
@@ -5332,7 +5332,7 @@ onBeforeUnmount(() => {
 }
 
 .left-tab-btn:hover:not(.active) {
-  background: color-mix(in srgb, white 60%, var(--mg-bg-page) 40%);
+  background: color-mix(in srgb, var(--mg-bg-surface) 60%, var(--mg-bg-page) 40%);
   border-color: color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 }
 
@@ -5348,7 +5348,7 @@ onBeforeUnmount(() => {
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 0 0 18px 18px;
   padding: 0 0.55rem 0.55rem;
-  background: color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%);
+  background: color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%);
   display: grid;
   gap: 0.45rem;
   align-content: start;
@@ -5361,7 +5361,7 @@ onBeforeUnmount(() => {
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 0 0 18px 18px;
   padding: 0 0.55rem 0.55rem;
-  background: color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%);
+  background: color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%);
   display: grid;
   gap: 0.45rem;
   align-content: start;
@@ -5382,7 +5382,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 0.2rem;
   font-size: 0.78rem;
-  background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
 }
 
 .history-card-head {
@@ -5423,7 +5423,7 @@ onBeforeUnmount(() => {
 
 .kbd-help-btn {
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
-  background: color-mix(in srgb, white 72%, var(--mg-bg-page) 28%);
+  background: color-mix(in srgb, var(--mg-bg-surface) 72%, var(--mg-bg-page) 28%);
   color: var(--mg-text-main);
   padding: 0.55rem 0.9rem;
   min-width: 112px;
@@ -5431,7 +5431,7 @@ onBeforeUnmount(() => {
 
 .kbd-help-btn:hover {
   color: var(--mg-primary);
-  background: white;
+  background: var(--mg-bg-surface);
 }
 
 .kbd-help-btn span {
@@ -5457,7 +5457,7 @@ onBeforeUnmount(() => {
   max-width: calc(100vw - 5rem);
   height: 100vh;
   border-radius: 0 26px 26px 0;
-  background: linear-gradient(180deg, color-mix(in srgb, white 28%, var(--mg-bg-surface) 72%) 0%, var(--mg-bg-surface) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 28%, var(--mg-bg-surface) 72%) 0%, var(--mg-bg-surface) 100%);
   border-inline-end: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   box-shadow: 0 32px 70px rgb(22 16 12 / 0.34);
   overflow: hidden;
@@ -5472,7 +5472,7 @@ onBeforeUnmount(() => {
   gap: 0.8rem;
   padding: 0.85rem 0.95rem;
   border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
-  background: color-mix(in srgb, var(--mg-bg-page) 78%, white 22%);
+  background: color-mix(in srgb, var(--mg-bg-page) 78%, var(--mg-bg-surface) 22%);
 }
 
 .ops-overlay-kicker {
@@ -5493,7 +5493,7 @@ onBeforeUnmount(() => {
   height: 34px;
   border: none;
   border-radius: 10px;
-  background: color-mix(in srgb, white 70%, var(--mg-bg-page) 30%);
+  background: color-mix(in srgb, var(--mg-bg-surface) 70%, var(--mg-bg-page) 30%);
   color: var(--mg-text-muted);
   font-size: 1rem;
   cursor: pointer;
@@ -5501,7 +5501,7 @@ onBeforeUnmount(() => {
 }
 
 .ops-overlay-close:hover {
-  background: white;
+  background: var(--mg-bg-surface);
   color: var(--mg-primary);
 }
 
@@ -6060,7 +6060,7 @@ kbd {
 
 /* Ticket Tabs Bar */
 .ticket-tabs-bar {
-  background: linear-gradient(180deg, color-mix(in srgb, white 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%) 100%);
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 24px;
   padding: 0.7rem 0.85rem;
@@ -6107,7 +6107,7 @@ kbd {
 }
 
 .history-card-interactive:hover {
-  background: white;
+  background: var(--mg-bg-surface);
   box-shadow: 0 16px 30px rgb(52 38 31 / 0.1);
 }
 
@@ -6360,7 +6360,7 @@ kbd {
 }
 .tbl-btn.success {
   background: var(--mg-success);
-  color: white;
+  color: var(--mg-bg-surface);
   border: 1px solid var(--mg-success);
 }
 .tbl-btn.success:hover:not(:disabled) {
@@ -6368,7 +6368,7 @@ kbd {
 }
 .deliver-acc-btn {
   background: var(--mg-primary);
-  color: white;
+  color: var(--mg-bg-surface);
   border: 1px solid var(--mg-primary);
   font-size: 12px;
   padding: 6px 12px;
@@ -6588,7 +6588,7 @@ kbd {
   font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: inherit;
   transition: all 0.15s;
 }
-.od-btn-primary { background: var(--mg-success); color: white; border-color: var(--mg-success); }
+.od-btn-primary { background: var(--mg-success); color: var(--mg-bg-surface); border-color: var(--mg-success); }
 .od-btn-primary:hover { background: var(--mg-success); }
 .od-btn-primary:disabled { background: var(--mg-success-bg); cursor: not-allowed; }
 .od-btn-danger { background: var(--mg-danger-bg); color: var(--mg-danger); border-color: var(--mg-danger-bg); }
@@ -6628,7 +6628,7 @@ kbd {
 
 .table-modern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
 .table-modern-card {
-  background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
   border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 16px; padding: 0.6rem; cursor: pointer;
   transition: all 0.15s; display: flex; flex-direction: column; gap: 0.25rem;
@@ -6637,7 +6637,7 @@ kbd {
 .table-modern-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgb(52 38 31 / 0.1); }
 .table-modern-card.active { border-color: var(--mg-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 18%, transparent), 0 16px 32px color-mix(in srgb, var(--mg-primary) 12%, transparent); }
 .tm-empty { border-color: color-mix(in srgb, var(--mg-success) 26%, var(--mg-border-light) 74%); }
-.tm-occupied { border-color: color-mix(in srgb, var(--mg-primary) 34%, var(--mg-border-light) 66%); background: color-mix(in srgb, var(--mg-primary) 8%, white 92%); }
+.tm-occupied { border-color: color-mix(in srgb, var(--mg-primary) 34%, var(--mg-border-light) 66%); background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface) 92%); }
 .tm-occupied .tm-name { color: var(--mg-primary); }
 :global(.dark) .tm-occupied { background: color-mix(in srgb, var(--mg-bg-surface) 84%, var(--mg-primary) 16%); }
 .tm-top { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
@@ -6667,7 +6667,7 @@ kbd {
 }
 .tdm-btn:hover { background: var(--mg-bg-page); }
 .tdm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.tdm-primary { background: var(--mg-primary); color: white; border-color: var(--mg-primary); }
+.tdm-primary { background: var(--mg-primary); color: var(--mg-bg-surface); border-color: var(--mg-primary); }
 .tdm-danger { color: var(--mg-danger); border-color: var(--mg-danger-bg); background: var(--mg-danger-bg); }
 .tdm-split { background: var(--mg-text-main); color: var(--mg-bg-surface); border-color: var(--mg-text-main); }
 

@@ -554,14 +554,14 @@ function supportsCustomization(item = {}) {
 	--mg-primary: var(--mg-success);
 	--mg-primary-rgb: var(--mg-success-rgb);
 	--pos-white: var(--mg-bg-surface);
-	--pos-text: var(--mg-text-main);
-	--pos-border: var(--mg-border-light);
-	--pos-soft: color-mix(in srgb, var(--mg-bg-page) 58%, white 42%);
+	--mg-text-main: var(--mg-text-main);
+	--mg-border-light: var(--mg-border-light);
+	--mg-bg-page: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
 	border-radius: 24px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 95%, transparent);
-	background: linear-gradient(180deg, color-mix(in srgb, white 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, white 4%) 100%);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%) 100%);
 	padding: 0.9rem;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 	height: 100%;
 	display: grid;
 	grid-template-rows: auto auto 1fr;
@@ -583,8 +583,8 @@ function supportsCustomization(item = {}) {
 	grid-template-columns: 26px 1fr auto;
 	align-items: center;
 	border-radius: 14px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
-	background: white;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+	background: var(--mg-bg-surface);
 	padding: 0 0.65rem;
 	min-height: 46px;
 }
@@ -621,8 +621,8 @@ function supportsCustomization(item = {}) {
 	top: calc(100% + 0.3rem);
 	inset-inline: 0;
 	border-radius: 16px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
-	background: white;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+	background: var(--mg-bg-surface);
 	box-shadow: 0 22px 40px rgb(52 38 31 / 0.12);
 	max-height: 240px;
 	overflow-y: auto;
@@ -634,7 +634,7 @@ function supportsCustomization(item = {}) {
 	border: 0;
 	border-bottom: 1px solid rgb(var(--mg-primary-rgb, 1 90 114) / 0.1);
 	background: transparent;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 	padding: 0.38rem 0.55rem;
 	display: grid;
 	gap: 0.1rem;
@@ -649,7 +649,7 @@ function supportsCustomization(item = {}) {
 
 .cust-option.active,
 .cust-option:hover {
-	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
+	background: color-mix(in srgb, var(--mg-primary) 7%, var(--mg-bg-surface) 93%);
 }
 
 .cust-option-name {
@@ -712,8 +712,8 @@ function supportsCustomization(item = {}) {
 	grid-template-columns: 24px 1fr auto;
 	align-items: center;
 	border-radius: 14px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
-	background: white;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+	background: var(--mg-bg-surface);
 	padding: 0 0.7rem;
 	flex: 1;
 	min-height: 48px;
@@ -749,11 +749,11 @@ function supportsCustomization(item = {}) {
 
 .view-toggle {
 	display: inline-flex;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 95%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	border-radius: 14px;
 	overflow: hidden;
 	flex-shrink: 0;
-	background: color-mix(in srgb, white 70%, var(--mg-bg-page) 30%);
+	background: color-mix(in srgb, var(--mg-bg-surface) 70%, var(--mg-bg-page) 30%);
 }
 
 .view-toggle button {
@@ -805,7 +805,7 @@ function supportsCustomization(item = {}) {
 	overflow-x: auto;
 	padding-bottom: 0.15rem;
 	scrollbar-width: thin;
-	scrollbar-color: var(--pos-border) transparent;
+	scrollbar-color: var(--mg-border-light) transparent;
 }
 
 .category-bar::-webkit-scrollbar {
@@ -813,16 +813,16 @@ function supportsCustomization(item = {}) {
 }
 
 .category-bar::-webkit-scrollbar-thumb {
-	background: var(--pos-border);
+	background: var(--mg-border-light);
 	border-radius: 99px;
 }
 
 .cat-chip {
-	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	border-radius: 999px;
 	padding: 0.58rem 1rem;
-	background: color-mix(in srgb, white 84%, var(--mg-bg-page) 16%);
-	color: var(--pos-text);
+	background: color-mix(in srgb, var(--mg-bg-surface) 84%, var(--mg-bg-page) 16%);
+	color: var(--mg-text-main);
 	cursor: pointer;
 	white-space: nowrap;
 	font-size: 0.85rem;
@@ -834,8 +834,8 @@ function supportsCustomization(item = {}) {
 }
 
 .cat-chip:hover {
-	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
-	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--pos-border) 58%);
+	background: color-mix(in srgb, var(--mg-primary) 7%, var(--mg-bg-surface) 93%);
+	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border-light) 58%);
 }
 
 .cat-chip.active {
@@ -877,7 +877,7 @@ function supportsCustomization(item = {}) {
 	justify-content: space-between;
 	gap: 0.65rem;
 	padding-bottom: 0.55rem;
-	border-bottom: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 }
 
 .category-section-copy {
@@ -889,7 +889,7 @@ function supportsCustomization(item = {}) {
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 800;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 .category-section-copy p {
@@ -948,9 +948,9 @@ function supportsCustomization(item = {}) {
 }
 
 .product-card {
-	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	border-radius: 16px;
-	background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
+	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
 	display: flex;
 	flex-direction: column;
 	box-shadow: 0 14px 30px rgb(52 38 31 / 0.07);
@@ -964,7 +964,7 @@ function supportsCustomization(item = {}) {
 .product-card:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 20px 40px rgb(52 38 31 / 0.12);
-	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--pos-border) 56%);
+	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--mg-border-light) 56%);
 }
 
 .product-card:active {
@@ -979,7 +979,7 @@ function supportsCustomization(item = {}) {
 
 .image-btn {
 	border: 0;
-	background: color-mix(in srgb, var(--mg-bg-page) 60%, white 40%);
+	background: color-mix(in srgb, var(--mg-bg-page) 60%, var(--mg-bg-surface) 40%);
 	padding: 0;
 	cursor: pointer;
 	width: 100%;
@@ -1029,7 +1029,7 @@ function supportsCustomization(item = {}) {
 	font-size: 0.82rem;
 	line-height: 1.3;
 	font-weight: 600;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 	word-break: break-word;
 }
 
@@ -1070,8 +1070,8 @@ function supportsCustomization(item = {}) {
 	width: 30px;
 	height: 30px;
 	border-radius: 10px;
-	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
-	background: white;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+	background: var(--mg-bg-surface);
 	color: var(--mg-primary);
 	cursor: pointer;
 	font-size: 0.95rem;
@@ -1080,7 +1080,7 @@ function supportsCustomization(item = {}) {
 }
 
 .counter button:hover {
-	background: var(--pos-soft);
+	background: var(--mg-bg-page);
 }
 
 .counter span {
@@ -1109,9 +1109,9 @@ function supportsCustomization(item = {}) {
 }
 
 .dark-input {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-text);
+	border: 1px solid var(--mg-border-light);
+	background: var(--mg-bg-surface);
+	color: var(--mg-text-main);
 }
 
 .dark-input::placeholder {
@@ -1119,9 +1119,9 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-card {
-	border: 1px solid color-mix(in srgb, var(--pos-border) 96%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	border-radius: 16px;
-	background: linear-gradient(180deg, white 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, white 8%) 100%);
+	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
 	display: grid;
 	gap: 0.4rem;
 	transition: all 0.12s;
@@ -1131,13 +1131,13 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-card:hover {
-	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--pos-border) 56%);
-	background: color-mix(in srgb, var(--pos-soft) 70%, white 30%);
+	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--mg-border-light) 56%);
+	background: color-mix(in srgb, var(--mg-bg-page) 70%, var(--mg-bg-surface) 30%);
 }
 
 .compact-card.has-qty {
 	border-color: var(--mg-primary);
-	background: color-mix(in srgb, var(--mg-primary) 7%, white 93%);
+	background: color-mix(in srgb, var(--mg-primary) 7%, var(--mg-bg-surface) 93%);
 }
 
 .compact-name {
@@ -1191,8 +1191,8 @@ function supportsCustomization(item = {}) {
 	width: 34px;
 	height: 34px;
 	border-radius: 9px;
-	border: 1px solid var(--pos-border);
-	background: color-mix(in srgb, var(--pos-white) 92%, transparent);
+	border: 1px solid var(--mg-border-light);
+	background: color-mix(in srgb, var(--mg-bg-surface) 92%, transparent);
 	color: var(--mg-primary);
 	cursor: pointer;
 	display: inline-flex;
@@ -1202,13 +1202,13 @@ function supportsCustomization(item = {}) {
 }
 
 .compact-action-btn:hover {
-	background: var(--pos-soft);
+	background: var(--mg-bg-page);
 	border-color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.25);
 }
 
 .compact-action-btn--primary {
 	background: var(--mg-primary);
-	color: var(--pos-white);
+	color: var(--mg-bg-surface);
 	border-color: var(--mg-primary);
 }
 
