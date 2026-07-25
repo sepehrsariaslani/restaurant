@@ -5215,7 +5215,6 @@ onBeforeUnmount(() => {
 	display: flex;
 	flex-direction: column;
 	gap: 0.7rem;
-	height: calc(100vh - 1.8rem);
 	min-height: 520px;
 	overflow: hidden;
 }
