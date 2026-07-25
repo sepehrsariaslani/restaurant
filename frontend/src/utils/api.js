@@ -71,7 +71,7 @@ export async function uploadFileToFrappe(file, options = {}) {
 
 async function refreshCsrfToken() {
 	try {
-		const res = await fetch("/api/method/frappe.utils.get_csrf_token", {
+		const res = await fetch("/api/method/restaurant.api.get_management_csrf_token", {
 			method: "GET",
 			credentials: "include",
 		});
@@ -102,16 +102,16 @@ function unpackServerMessages(payload) {
 }
 
 export async function callMethodByPath(methodPath, args = {}) {
-	const doFetch = (csrfToken) =>
-		fetch(`/api/method/${methodPath}`, {
+	const doFetch = (csrfToken) => {
+		const headers = { "Content-Type": "application/json" };
+		if (csrfToken) headers["X-Frappe-CSRF-Token"] = csrfToken;
+		return fetch(`/api/method/${methodPath}`, {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"X-Frappe-CSRF-Token": csrfToken,
-			},
+			headers,
 			credentials: "include",
 			body: JSON.stringify(args),
 		});
+	};
 
 	let response = await doFetch(getCSRFToken());
 

@@ -14644,6 +14644,7 @@ def _background_production_and_delivery(so_name):
         _append_sales_order_note(so_name, f"[ERROR] Production failed: {str(e)[:100]}")
         frappe.db.commit()
 
+@frappe.whitelist()
 def create_and_settle_pos_order(payload):
     # تسویه و تحویل: SO + SI + Payment (Sync) -> Production + DN (Background)
     _ensure_management_access()
