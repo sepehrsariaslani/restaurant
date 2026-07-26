@@ -1350,7 +1350,7 @@ defineExpose({
 
 .save-btn {
 	background: var(--mg-primary);
-	color: var(--mg-bg-surface);
+	color: #fff;
 }
 
 .save-btn:hover:not(:disabled) {
@@ -1360,7 +1360,7 @@ defineExpose({
 
 .settle-btn-custom {
 	background: var(--mg-success);
-	color: var(--mg-bg-surface);
+	color: #fff;
 }
 
 .settle-btn-custom:hover:not(:disabled) {

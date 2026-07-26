@@ -6014,8 +6014,8 @@ kbd {
   }
 
   .cart-fab {
-    left: 8.8rem;
-    bottom: 0.72rem;
+    left: 1rem;
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
 
   .open-invoices-head,
