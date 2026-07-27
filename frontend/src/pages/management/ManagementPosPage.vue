@@ -269,6 +269,12 @@
                         <span>{{ order.order_code || order.name }}</span>
                         <strong>{{ formatMoney(order.grand_total, currency) }}</strong>
                       </div>
+                      <div class="tdm-order-items-preview">
+                        <div v-for="item in order.items" :key="item.row_name" class="tdm-order-item-row">
+                          <span class="tdm-item-title">{{ toFaDigits(item.quantity || 1) }}x {{ item.menu_item_title }}</span>
+                          <span class="tdm-item-price muted">{{ formatMoney(item.line_total, currency) }}</span>
+                        </div>
+                      </div>
                       <div class="tdm-order-meta">
                         <span class="order-status-badge" :class="`status-${order.status}`">{{ formatStatus(order.status) }}</span>
                         <span v-if="order.payment_method" class="history-method-badge">{{ order.payment_method }}</span>
@@ -6734,4 +6740,29 @@ kbd {
   gap: 0.4rem;
   align-items: center;
 }
+
+.tdm-order-items-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  border-top: 1px dashed var(--mg-border-light);
+  padding-top: 0.4rem;
+  margin-top: 0.1rem;
+}
+
+.tdm-order-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tdm-item-title {
+  color: var(--mg-text-main);
+}
+
+.tdm-item-price {
+  font-size: 0.7rem;
+}
+
 </style>
