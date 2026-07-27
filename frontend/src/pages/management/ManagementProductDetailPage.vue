@@ -3152,9 +3152,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   padding: 0.5rem;
   border: 1px solid var(--mg-border);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  background: var(--mg-bg-surface);
   backdrop-filter: blur(16px);
-  box-shadow: 0 18px 42px rgb(15 23 42 / 0.1);
+  box-shadow: var(--mg-shadow-md);
 }
 
 .product-general-card {
@@ -3222,13 +3222,14 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   min-height: 150px;
   aspect-ratio: 1 / 1;
   border: 1px solid var(--mg-border);
-  border-radius: 18px;
+  border-radius: var(--mg-radius-md);
   background:
-    radial-gradient(circle at 18% 18%, var(--module-50, rgb(139 94 52 / 0.075)), transparent 34%),
-    var(--bg-soft, var(--mg-bg-page));
+    radial-gradient(circle at 18% 18%, var(--mg-bg-soft), transparent 34%),
+    var(--mg-bg-surface);
   display: grid;
   place-items: center;
   overflow: hidden;
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .general-product-image {
@@ -3457,6 +3458,11 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
+  padding: 0.75rem;
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .simple-tabs {
@@ -4666,21 +4672,24 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .info-box {
   padding: 0.75rem 1rem;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
-  border-radius: 0.5rem;
+  background: var(--mg-bg-soft);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-md);
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--mg-text-main);
   line-height: 1.5;
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .delete-btn {
-  border-color: rgb(220, 38, 38) !important;
-  color: rgb(220, 38, 38) !important;
+  border-color: rgb(var(--mg-danger-rgb, 166 84 63) / 0.3) !important;
+  color: var(--mg-danger) !important;
+  background: var(--mg-danger-bg) !important;
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: rgb(220, 38, 38, 0.1) !important;
-  border-color: rgb(220, 38, 38) !important;
+  background: rgb(var(--mg-danger-rgb, 166 84 63) / 0.14) !important;
+  border-color: rgb(var(--mg-danger-rgb, 166 84 63) / 0.45) !important;
 }
 
 .delete-btn:disabled {
