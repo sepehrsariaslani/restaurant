@@ -45,6 +45,31 @@
 				</div>
 			</header>
 
+			<!-- Confirmed Orders for this table -->
+			<div class="cart-list confirmed-orders-list" v-if="orderMode === 'dine_in' && confirmedTableOrders.length">
+				<div class="cart-section-title">سفارش‌های تایید شده</div>
+				<article
+					v-for="order in confirmedTableOrders"
+					:key="order.name"
+					class="cart-row confirmed-row"
+				>
+					<div class="line-main" style="width: 100%;">
+						<div class="confirmed-order-header">
+							<span>{{ order.order_code || order.name }}</span>
+							<span class="status-badge" :class="'status-' + order.status">{{ formatStatus(order.status) || 'تایید شده' }}</span>
+						</div>
+						<div v-for="item in order.items" :key="item.row_name" class="confirmed-item-row">
+							<div class="line-title-row">
+								<strong>{{ toFaDigits(item.quantity || 1) }}x {{ item.menu_item_title }}</strong>
+								<span class="line-price">{{ formatMoney(item.line_total, currency) }}</span>
+							</div>
+							<small class="line-note" v-if="item.note">{{ item.note }}</small>
+						</div>
+					</div>
+				</article>
+				<div class="cart-section-title mt-2" v-if="cartLines.length">سفارش جدید</div>
+			</div>
+
 			<div class="cart-list" v-if="cartLines.length">
 				<article
 					v-for="line in cartLines"
@@ -1757,4 +1782,45 @@ defineExpose({
 		grid-template-columns: 1fr;
 	}
 }
+
+.cart-section-title {
+	font-size: 0.75rem;
+	font-weight: 800;
+	color: var(--mg-text-muted);
+	padding: 0.2rem 0.5rem;
+	margin-bottom: 0.2rem;
+}
+.cart-section-title.mt-2 {
+	margin-top: 0.5rem;
+	border-top: 1px dashed var(--mg-border-light);
+	padding-top: 0.5rem;
+}
+.confirmed-orders-list {
+	padding-bottom: 0;
+	margin-bottom: 0.5rem;
+}
+.confirmed-row {
+	opacity: 0.8;
+	pointer-events: none;
+	background: color-mix(in srgb, var(--mg-bg-surface) 60%, var(--mg-bg-page) 40%);
+}
+.confirmed-order-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 0.7rem;
+	color: var(--mg-primary);
+	margin-bottom: 0.4rem;
+	padding-bottom: 0.2rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--mg-primary) 15%, transparent);
+}
+.confirmed-item-row {
+	margin-bottom: 0.3rem;
+}
+.status-badge {
+	padding: 0.1rem 0.3rem;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
+}
+
 </style>
