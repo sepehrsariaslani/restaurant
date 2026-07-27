@@ -2763,6 +2763,14 @@ export function updateManagementTable(payload = {}) {
 	return callRestaurantAPI("update_management_table", { payload });
 }
 
+export function createManagementTable(payload = {}) {
+	return callRestaurantAPI("create_management_table", { payload });
+}
+
+export function deleteManagementTable(name = "") {
+	return callRestaurantAPI("delete_management_table", { name });
+}
+
 export function updateManagementTableReservation(payload = {}) {
 	return callRestaurantAPI("update_management_table_reservation", { payload });
 }

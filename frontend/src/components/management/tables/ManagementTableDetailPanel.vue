@@ -136,6 +136,9 @@
             <span>تخلیه</span>
           </button>
         </div>
+        <button class="ghost-btn danger delete-table-btn" type="button" @click="$emit('delete', detail.table)">
+          حذف این میز
+        </button>
       </footer>
     </template>
   </aside>
@@ -164,7 +167,7 @@ const props = defineProps({
   hasChanges: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update-field', 'save', 'clear-session', 'go-pos', 'open-reservations'])
+const emit = defineEmits(['update-field', 'save', 'clear-session', 'go-pos', 'open-reservations', 'delete'])
 
 function emitField(key, value) {
   emit('update-field', { key, value })

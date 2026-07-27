@@ -10229,6 +10229,71 @@ def get_management_tables():
 
 
 @frappe.whitelist()
+def create_management_table(payload=None, **kwargs):
+	_ensure_management_site_settings_access()
+	data = _parse_json(payload, {}) if payload is not None else {}
+	if not isinstance(data, dict):
+		data = {}
+	data.update({k: v for k, v in kwargs.items() if v is not None})
+
+	table_number = (data.get("table_number") or data.get("name") or "").strip()
+	if not table_number:
+		frappe.throw(_("Table number or name is required."))
+	if not _restaurant_doctype_exists("Restaurant Table"):
+		frappe.throw(_("Restaurant Table doctype is not installed."))
+	if frappe.db.exists("Restaurant Table", table_number):
+		frappe.throw(_("A table with this name already exists."))
+	if frappe.db.exists("Restaurant Table", {"table_number": table_number}):
+		frappe.throw(_("A table with this number already exists."))
+
+	doc = frappe.new_doc("Restaurant Table")
+	# Keep the user-facing number as the document name when the doctype allows it;
+	# otherwise Frappe will generate a safe name automatically.
+	if doc.meta.autoname == "field:table_number":
+		doc.table_number = table_number
+	else:
+		doc.table_number = table_number
+	for fieldname in ("status", "location", "notes", "active_session"):
+		if fieldname in data and _has_column("Restaurant Table", fieldname):
+			doc.set(fieldname, data.get(fieldname) or "")
+	if _has_column("Restaurant Table", "is_active"):
+		doc.is_active = 1 if data.get("is_active", 1) else 0
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"success": True,
+		"table": {
+			"name": doc.name,
+			"table_number": doc.table_number or table_number,
+			"status": doc.status or "empty",
+			"is_active": cint(doc.is_active),
+			"location": doc.location or "",
+			"active_session": doc.active_session or "",
+			"notes": doc.notes or "",
+		},
+	}
+
+
+@frappe.whitelist()
+def delete_management_table(name=None, **kwargs):
+	_ensure_management_site_settings_access()
+	table_name = (name or kwargs.get("name") or "").strip()
+	if not table_name or not frappe.db.exists("Restaurant Table", table_name):
+		frappe.throw(_("Table not found."))
+	if _restaurant_doctype_exists("Restaurant Table Session") and frappe.db.exists(
+		"Restaurant Table Session", {"table": table_name, "status": "active"}
+	):
+		frappe.throw(_("Close the active table session before deleting this table."))
+	if _restaurant_doctype_exists("Restaurant Table Reservation") and frappe.db.exists(
+		"Restaurant Table Reservation", {"table": table_name, "status": ["in", ["pending", "confirmed"]]}
+	):
+		frappe.throw(_("Cancel or complete the table reservations before deleting this table."))
+	frappe.delete_doc("Restaurant Table", table_name, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True}
+
+
+@frappe.whitelist()
 def update_management_table(payload=None, **kwargs):
 	_ensure_management_site_settings_access()
 	data = _parse_json(payload, {}) if payload is not None else {}
