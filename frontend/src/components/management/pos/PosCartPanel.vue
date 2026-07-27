@@ -1152,7 +1152,7 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	background: color-mix(in srgb, var(--mg-bg-surface) 76%, var(--mg-bg-page) 24%);
+	background: color-mix(in srgb, var(--mg-bg-surface) 40%, var(--mg-bg-page) 60%);
 	border-radius: 14px;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
 	overflow: hidden;
@@ -1204,7 +1204,7 @@ defineExpose({
 
 .fin-input {
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: var(--mg-bg-surface);
+	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.32rem 0.5rem;
@@ -1230,7 +1230,7 @@ defineExpose({
 
 .fin-action-btn {
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
+	background: var(--mg-bg-page);
 	color: var(--mg-primary);
 	font-size: 0.7rem;
 	font-weight: 600;
@@ -1255,7 +1255,7 @@ defineExpose({
 .fin-note-input {
 	width: 100%;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: var(--mg-bg-surface);
+	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.35rem 0.55rem;

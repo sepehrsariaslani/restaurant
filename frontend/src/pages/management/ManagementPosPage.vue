@@ -259,7 +259,21 @@
                       <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." />
                       <button class="tdm-btn tdm-primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
                     </div>
-                    <button v-if="confirmedDineInOrders.length" class="tdm-btn tdm-split" @click="showSplitBill = true">تقسیم صورتحساب</button>
+                    <button v-if="confirmedDineInOrders.length" class="tdm-btn tdm-split" @click="showSplitBill = true">مشاهده و تسویه</button>
+                  </div>
+                  
+                  <div class="tdm-orders-list" v-if="confirmedDineInOrders.length">
+                    <strong class="tdm-section-title">سفارش‌های ثبت شده این میز</strong>
+                    <div v-for="order in confirmedDineInOrders" :key="order.name" class="tdm-order-card" @click="openOrderDetailModal(order)">
+                      <div class="tdm-order-header">
+                        <span>{{ order.order_code || order.name }}</span>
+                        <strong>{{ formatMoney(order.grand_total, currency) }}</strong>
+                      </div>
+                      <div class="tdm-order-meta">
+                        <span class="order-status-badge" :class="`status-${order.status}`">{{ formatStatus(order.status) }}</span>
+                        <span v-if="order.payment_method" class="history-method-badge">{{ order.payment_method }}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -6675,4 +6689,49 @@ kbd {
   .table-modern-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
 }
 
+
+.tdm-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--mg-border-light);
+  padding-top: 0.75rem;
+}
+
+.tdm-section-title {
+  font-size: 0.75rem;
+  color: var(--mg-text-muted);
+}
+
+.tdm-order-card {
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  border-radius: 8px;
+  padding: 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tdm-order-card:hover {
+  background: var(--mg-bg-page);
+  border-color: var(--mg-primary);
+}
+
+.tdm-order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--mg-text-main);
+}
+
+.tdm-order-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
 </style>
