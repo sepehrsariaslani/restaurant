@@ -60,7 +60,7 @@
 						</div>
 						<div v-for="item in order.items" :key="item.row_name" class="confirmed-item-row">
 							<div class="line-title-row">
-								<strong>{{ toFaDigits(item.quantity || 1) }}x {{ item.menu_item_title }}</strong>
+								<strong>{{ toPersianNumber(item.quantity || 1) }}x {{ item.menu_item_title }}</strong>
 								<span class="line-price">{{ formatMoney(item.line_total, currency) }}</span>
 							</div>
 							<small class="line-note" v-if="item.note">{{ item.note }}</small>
