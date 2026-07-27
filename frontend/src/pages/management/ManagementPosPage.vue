@@ -445,6 +445,7 @@
     </Transition>
 
     <!-- Cart Drawer -->
+    <Teleport to="body">
     <Transition name="cart-drawer">
       <div v-if="cartDrawerOpen && !isDesktopViewport" class="cart-drawer-backdrop" @click.self="cartDrawerOpen = false">
         <aside class="cart-drawer" dir="rtl">
@@ -497,6 +498,7 @@
         </aside>
       </div>
     </Transition>
+    </Teleport>
 
     <PosBomSheet
       :open="customizationSheet.open"
