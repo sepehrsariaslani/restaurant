@@ -10229,6 +10229,71 @@ def get_management_tables():
 
 
 @frappe.whitelist()
+def create_management_table(payload=None, **kwargs):
+	_ensure_management_site_settings_access()
+	data = _parse_json(payload, {}) if payload is not None else {}
+	if not isinstance(data, dict):
+		data = {}
+	data.update({k: v for k, v in kwargs.items() if v is not None})
+
+	table_number = (data.get("table_number") or data.get("name") or "").strip()
+	if not table_number:
+		frappe.throw(_("Table number or name is required."))
+	if not _restaurant_doctype_exists("Restaurant Table"):
+		frappe.throw(_("Restaurant Table doctype is not installed."))
+	if frappe.db.exists("Restaurant Table", table_number):
+		frappe.throw(_("A table with this name already exists."))
+	if frappe.db.exists("Restaurant Table", {"table_number": table_number}):
+		frappe.throw(_("A table with this number already exists."))
+
+	doc = frappe.new_doc("Restaurant Table")
+	# Keep the user-facing number as the document name when the doctype allows it;
+	# otherwise Frappe will generate a safe name automatically.
+	if doc.meta.autoname == "field:table_number":
+		doc.table_number = table_number
+	else:
+		doc.table_number = table_number
+	for fieldname in ("status", "location", "notes", "active_session"):
+		if fieldname in data and _has_column("Restaurant Table", fieldname):
+			doc.set(fieldname, data.get(fieldname) or "")
+	if _has_column("Restaurant Table", "is_active"):
+		doc.is_active = 1 if data.get("is_active", 1) else 0
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"success": True,
+		"table": {
+			"name": doc.name,
+			"table_number": doc.table_number or table_number,
+			"status": doc.status or "empty",
+			"is_active": cint(doc.is_active),
+			"location": doc.location or "",
+			"active_session": doc.active_session or "",
+			"notes": doc.notes or "",
+		},
+	}
+
+
+@frappe.whitelist()
+def delete_management_table(name=None, **kwargs):
+	_ensure_management_site_settings_access()
+	table_name = (name or kwargs.get("name") or "").strip()
+	if not table_name or not frappe.db.exists("Restaurant Table", table_name):
+		frappe.throw(_("Table not found."))
+	if _restaurant_doctype_exists("Restaurant Table Session") and frappe.db.exists(
+		"Restaurant Table Session", {"table": table_name, "status": "active"}
+	):
+		frappe.throw(_("Close the active table session before deleting this table."))
+	if _restaurant_doctype_exists("Restaurant Table Reservation") and frappe.db.exists(
+		"Restaurant Table Reservation", {"table": table_name, "status": ["in", ["pending", "confirmed"]]}
+	):
+		frappe.throw(_("Cancel or complete the table reservations before deleting this table."))
+	frappe.delete_doc("Restaurant Table", table_name, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True}
+
+
+@frappe.whitelist()
 def update_management_table(payload=None, **kwargs):
 	_ensure_management_site_settings_access()
 	data = _parse_json(payload, {}) if payload is not None else {}
@@ -23271,6 +23336,83 @@ def _is_restaurant_admin(user=None):
 	if user == "Administrator":
 		return True
 	return bool(_user_roles(user) & _RESTAURANT_ADMIN_ROLES)
+
+
+@frappe.whitelist()
+def list_management_users(search=None):
+	if not _is_restaurant_admin():
+		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	search_text = (search or "").strip().lower()
+	filters = {}
+	rows = frappe.get_all(
+		"User",
+		fields=["name", "full_name", "email", "enabled", "user_type", "mobile_no", "last_login"],
+		filters=filters,
+		order_by="enabled desc, full_name asc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	role_map = {}
+	for row in rows:
+		role_map[row.name] = [r.role for r in frappe.get_all("Has Role", filters={"parent": row.name}, fields=["role"], ignore_permissions=True)]
+	result = []
+	for row in rows:
+		if search_text and search_text not in " ".join(str(row.get(k) or "").lower() for k in ("name", "full_name", "email", "mobile_no")):
+			continue
+		result.append({**row, "roles": sorted(role_map.get(row.name, []))})
+	roles = frappe.get_all("Role", filters={"disabled": 0}, pluck="name", order_by="name asc", ignore_permissions=True)
+	return {"users": result, "roles": roles}
+
+
+@frappe.whitelist()
+def save_management_user(payload=None):
+	if not _is_restaurant_admin():
+		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid user payload."))
+	user_name = (data.get("name") or data.get("email") or "").strip()
+	if user_name and frappe.db.exists("User", user_name):
+		doc = frappe.get_doc("User", user_name)
+		if doc.name == frappe.session.user and not cint(data.get("enabled", 1)):
+			frappe.throw(_("You cannot disable your own account."))
+	else:
+		email = (data.get("email") or "").strip().lower()
+		if not email:
+			frappe.throw(_("Email is required."))
+		doc = frappe.new_doc("User")
+		doc.email = email
+		doc.user_type = "System User"
+	for fieldname in ("email", "full_name", "mobile_no", "user_type"):
+		if fieldname in data and data.get(fieldname) is not None:
+			doc.set(fieldname, str(data.get(fieldname)).strip())
+	doc.enabled = 1 if data.get("enabled", 1) else 0
+	password = str(data.get("new_password") or "")
+	if password:
+		doc.new_password = password
+	requested_roles = data.get("roles") if isinstance(data.get("roles"), list) else []
+	allowed_roles = set(frappe.get_all("Role", filters={"disabled": 0}, pluck="name", ignore_permissions=True))
+	requested_roles = [str(role).strip() for role in requested_roles if str(role).strip() in allowed_roles]
+	if not requested_roles:
+		requested_roles = ["Desk User"] if "Desk User" in allowed_roles else []
+	doc.set("roles", [])
+	for role in requested_roles:
+		doc.append("roles", {"role": role})
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "user": {"name": doc.name, "email": doc.email, "full_name": doc.full_name, "enabled": cint(doc.enabled), "roles": requested_roles}}
+
+
+@frappe.whitelist()
+def delete_management_user(name=None):
+	if not _is_restaurant_admin():
+		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	user_name = (name or "").strip()
+	if not user_name or user_name in {"Administrator", frappe.session.user} or not frappe.db.exists("User", user_name):
+		frappe.throw(_("This user cannot be deleted."))
+	frappe.delete_doc("User", user_name, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True}
 
 
 @frappe.whitelist()

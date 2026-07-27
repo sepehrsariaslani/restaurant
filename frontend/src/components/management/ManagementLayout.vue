@@ -92,9 +92,31 @@
 					</span>
 				</a>
 
-				<a href="/menu" class="icon-button" title="مشاهده سایت مشتری">
-					<HomeIcon class="icon-md" />
-				</a>
+				<div class="mobile-header-actions">
+					<button
+						type="button"
+						class="mobile-theme-toggle"
+						:class="{ 'is-dark': isDarkMode }"
+						@click="toggleTheme"
+						:aria-label="isDarkMode ? 'فعال‌سازی حالت روز' : 'فعال‌سازی حالت شب'"
+						:title="isDarkMode ? 'حالت روز' : 'حالت شب'"
+					>
+						<span class="theme-toggle-glow" aria-hidden="true"></span>
+						<span class="theme-toggle-track" aria-hidden="true">
+							<SunIcon class="theme-icon theme-icon-sun" />
+							<MoonIcon class="theme-icon theme-icon-moon" />
+							<span class="theme-toggle-thumb">
+								<SunIcon v-if="isDarkMode" class="theme-thumb-icon" />
+								<MoonIcon v-else class="theme-thumb-icon" />
+							</span>
+						</span>
+						<span class="sr-only">{{ isDarkMode ? 'حالت روز' : 'حالت شب' }}</span>
+					</button>
+
+					<a href="/menu" class="icon-button" title="مشاهده سایت مشتری">
+						<HomeIcon class="icon-md" />
+					</a>
+				</div>
 			</header>
 
 			<!-- Mobile Content -->
@@ -278,6 +300,7 @@ import {
 	Tags as TagsIcon,
 	Settings as SettingsIcon,
 	Users as UsersIcon,
+	UserCog as UserCogIcon,
 	BarChart3 as ReportsIcon,
 	FileText as FileTextIcon,
 	Printer as PrinterIcon,
@@ -502,6 +525,15 @@ const navLinks = computed(() => {
 			iconComponent: UsersIcon,
 			url: "/management/customers",
 			group: "crm",
+		},
+		{
+			key: "management-users",
+			label: "کاربران و دسترسی‌ها",
+			shortLabel: "کاربران",
+			caption: "نقش‌ها و سطح دسترسی",
+			iconComponent: UserCogIcon,
+			url: "/management/users",
+			group: "settings",
 		},
 		{
 			key: "management-tables",
@@ -1073,6 +1105,123 @@ onBeforeUnmount(() => {
 	position: sticky;
 	top: 0;
 	z-index: 50;
+}
+
+.mobile-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+}
+
+.mobile-theme-toggle {
+	position: relative;
+	width: 4.15rem;
+	height: 2.5rem;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--mg-text-muted);
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.theme-toggle-track {
+	position: absolute;
+	inset: 0.2rem 0;
+	display: block;
+	overflow: hidden;
+	border: 1px solid var(--mg-border-light);
+	border-radius: 999px;
+	background: linear-gradient(135deg, var(--mg-bg-soft), var(--mg-bg-page));
+	box-shadow: inset 0 1px 2px rgba(52, 38, 31, 0.08), 0 3px 10px rgba(52, 38, 31, 0.06);
+	transition: background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+
+.mobile-theme-toggle.is-dark .theme-toggle-track {
+	background: linear-gradient(135deg, #25221f, #3b302b);
+	border-color: rgba(244, 230, 211, 0.25);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35), 0 3px 14px rgba(0, 0, 0, 0.22);
+}
+
+.theme-toggle-thumb {
+	position: absolute;
+	top: 0.18rem;
+	left: 0.2rem;
+	width: 1.7rem;
+	height: 1.7rem;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: #fffaf3;
+	color: #c97852;
+	box-shadow: 0 2px 7px rgba(52, 38, 31, 0.2);
+	transition: transform 0.5s cubic-bezier(0.22, 1.25, 0.36, 1), background 0.45s ease, color 0.45s ease;
+}
+
+.mobile-theme-toggle.is-dark .theme-toggle-thumb {
+	transform: translateX(2.05rem) rotate(180deg);
+	background: #f4e6d3;
+	color: #57483e;
+}
+
+.theme-thumb-icon { width: 1rem; height: 1rem; }
+.theme-icon {
+	position: absolute;
+	top: 0.62rem;
+	width: 0.9rem;
+	height: 0.9rem;
+	opacity: 0.72;
+	transition: opacity 0.35s ease, transform 0.45s ease;
+}
+.theme-icon-sun { right: 0.42rem; color: #efb454; }
+.theme-icon-moon { left: 0.42rem; color: #d8c8b4; }
+.mobile-theme-toggle:not(.is-dark) .theme-icon-moon { opacity: 0.3; }
+.mobile-theme-toggle.is-dark .theme-icon-sun { opacity: 0.3; }
+
+.theme-toggle-glow {
+	position: absolute;
+	inset: 0.12rem;
+	border-radius: 999px;
+	background: var(--mg-primary);
+	opacity: 0;
+	transform: scale(0.55);
+	pointer-events: none;
+}
+.mobile-theme-toggle:active .theme-toggle-glow {
+	animation: theme-toggle-pulse 0.55s ease-out;
+}
+.mobile-theme-toggle:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--mg-primary) 45%, transparent);
+	outline-offset: 2px;
+	border-radius: 999px;
+}
+
+@keyframes theme-toggle-pulse {
+	0% { opacity: 0.35; transform: scale(0.55); }
+	100% { opacity: 0; transform: scale(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.theme-toggle-track,
+	.theme-toggle-thumb,
+	.theme-icon {
+		transition-duration: 0.01ms;
+	}
+	.mobile-theme-toggle:active .theme-toggle-glow {
+		animation: none;
+	}
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 .mobile-brand {

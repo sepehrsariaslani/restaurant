@@ -6,6 +6,7 @@
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementPosDefaultsPage v-else-if="page === 'management-pos-defaults'" />
       <ManagementCouriersPage v-else-if="page === 'management-couriers'" />
+      <ManagementUsersPage v-else-if="page === 'management-users'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
       <ManagementModifierGroupsPage v-else-if="page === 'management-modifier-groups'" />
@@ -159,6 +160,7 @@ import ManagementPosPage from './pages/management/ManagementPosPage.vue'
 import ManagementPosProfilePage from './pages/management/ManagementPosProfilePage.vue'
 import ManagementPosDefaultsPage from './pages/management/ManagementPosDefaultsPage.vue'
 import ManagementCouriersPage from './pages/management/ManagementCouriersPage.vue'
+import ManagementUsersPage from './pages/management/ManagementUsersPage.vue'
 import ManagementOrdersPage from './pages/management/ManagementOrdersPage.vue'
 import ManagementProductsPage from './pages/management/ManagementProductsPage.vue'
 import ManagementModifierGroupsPage from './pages/management/ManagementModifierGroupsPage.vue'
@@ -195,6 +197,7 @@ function resolveInitialPage() {
     if (pathname === '/management' || pathname === '/management/') return 'management-dashboard'
     if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
     if (pathname.startsWith('/management/couriers')) return 'management-couriers'
+    if (pathname.startsWith('/management/users') || pathname.startsWith('/management/user-access')) return 'management-users'
     if (pathname.startsWith('/management/pos-defaults') || pathname.startsWith('/management/pos_defaults')) return 'management-pos-defaults'
     if (pathname.startsWith('/management/pos-profile') || pathname.startsWith('/management/pos_profile')) return 'management-pos-profile'
     if (pathname.startsWith('/management/pos')) return 'management-pos'

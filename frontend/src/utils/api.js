@@ -2755,12 +2755,32 @@ export function listManagementCustomers({ search = "", date_from = "", date_to =
 	return callRestaurantAPI("list_management_customers", { search, date_from, date_to });
 }
 
+export function listManagementUsers({ search = "" } = {}) {
+	return callRestaurantAPI("list_management_users", { search });
+}
+
+export function saveManagementUser(payload = {}) {
+	return callRestaurantAPI("save_management_user", { payload });
+}
+
+export function deleteManagementUser(name = "") {
+	return callRestaurantAPI("delete_management_user", { name });
+}
+
 export function getManagementTables() {
 	return callRestaurantAPI("get_management_tables");
 }
 
 export function updateManagementTable(payload = {}) {
 	return callRestaurantAPI("update_management_table", { payload });
+}
+
+export function createManagementTable(payload = {}) {
+	return callRestaurantAPI("create_management_table", { payload });
+}
+
+export function deleteManagementTable(name = "") {
+	return callRestaurantAPI("delete_management_table", { name });
 }
 
 export function updateManagementTableReservation(payload = {}) {
