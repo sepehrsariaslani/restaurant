@@ -107,20 +107,6 @@
 				<slot v-else />
 			</main>
 
-			<!-- Mobile Bottom Navigation -->
-			<nav class="mobile-bottom-nav">
-				<a
-					v-for="link in mobilePrimaryLinks"
-					:key="`bottom-${link.key}`"
-					:href="link.url"
-					class="bottom-nav-item"
-					:class="{ active: isLinkActive(link.key) }"
-				>
-					<component :is="link.iconComponent" class="icon-md" />
-					<span>{{ link.shortLabel }}</span>
-				</a>
-			</nav>
-
 			<!-- Mobile Sidebar Overlay -->
 			<Transition name="fade">
 				<div v-if="mobileMenuOpen" class="mobile-overlay" @click="closeMobileMenu" />
@@ -213,9 +199,9 @@
 								<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
 							</Transition>
 						</div>
-						<div class="page-title-wrap">
-							<h1>{ activeTitle }</h1>
-						</div>
+					<div class="page-title-wrap">
+						<h1>{{ activeTitle }}</h1>
+					</div>
 					</div>
 
 					<div class="desktop-header-actions">
@@ -1074,7 +1060,6 @@ onBeforeUnmount(() => {
 	display: flex;
 	flex-direction: column;
 	min-height: 100vh;
-	padding-bottom: 5.5rem;
 }
 
 .mobile-header {

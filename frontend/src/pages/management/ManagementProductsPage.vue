@@ -1466,6 +1466,7 @@ loadProducts()
 </script>
 
 <style scoped>
+/* Theme-enhanced product page styles — matching Tables / POS theme */
 .toolbar {
   display: flex;
   gap: 0.6rem;
@@ -1474,12 +1475,21 @@ loadProducts()
   position: relative;
   z-index: 20;
   overflow: visible;
+  padding: 0.35rem;
+  border-radius: var(--mg-radius-md, 16px);
+  background: var(--mg-bg-surface, #FBF7F1);
+  border: 1px solid var(--mg-border-light, rgba(216, 200, 180, 0.4));
+  box-shadow: var(--mg-shadow-sm, 0 8px 24px rgba(52, 38, 31, 0.06));
 }
 
 .products-filter-card {
   position: relative;
   z-index: 35;
   overflow: visible !important;
+  border-radius: var(--mg-radius-md);
+  border-color: var(--mg-border-light);
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, var(--mg-bg-soft) 100%);
+  box-shadow: var(--mg-shadow-md);
 }
 
 .toolbar .input {
