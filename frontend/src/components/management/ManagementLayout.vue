@@ -300,6 +300,7 @@ import {
 	Tags as TagsIcon,
 	Settings as SettingsIcon,
 	Users as UsersIcon,
+	UserCog as UserCogIcon,
 	BarChart3 as ReportsIcon,
 	FileText as FileTextIcon,
 	Printer as PrinterIcon,
@@ -524,6 +525,15 @@ const navLinks = computed(() => {
 			iconComponent: UsersIcon,
 			url: "/management/customers",
 			group: "crm",
+		},
+		{
+			key: "management-users",
+			label: "کاربران و دسترسی‌ها",
+			shortLabel: "کاربران",
+			caption: "نقش‌ها و سطح دسترسی",
+			iconComponent: UserCogIcon,
+			url: "/management/users",
+			group: "settings",
 		},
 		{
 			key: "management-tables",
