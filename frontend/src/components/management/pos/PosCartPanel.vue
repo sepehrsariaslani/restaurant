@@ -102,7 +102,7 @@
 				</article>
 			</div>
 
-			<div class="cart-empty" v-else>
+			<div class="cart-empty" v-else-if="!(orderMode === 'dine_in' && confirmedTableOrders.length)">
 				<span class="cart-empty-icon"><ShoppingCart :size="22" :stroke-width="2.1" /></span>
 				<p>سبد خرید خالی است</p>
 			</div>
