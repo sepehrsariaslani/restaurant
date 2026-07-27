@@ -6765,4 +6765,13 @@ kbd {
   font-size: 0.7rem;
 }
 
+
+/* Fix overlapping of mobile header and dfm components on the side drawer */
+.cart-drawer-backdrop {
+  z-index: 10002 !important;
+}
+.cart-drawer {
+  z-index: 10003 !important;
+}
+
 </style>
