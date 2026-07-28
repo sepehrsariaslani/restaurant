@@ -322,6 +322,34 @@
       </section>
 
       <ManagementSurfaceCard
+        title="انبارداری هوشمند"
+        subtitle="هشدار نقطه سفارش، ارزش موجودی و سوخت ۳۰ روز اخیر"
+        v-if="widgetState.inventory_alerts && inventoryAlerts"
+      >
+        <section class="lost-kpis">
+          <article>
+            <small>اقلام زیر نقطه سفارش</small>
+            <strong :class="{ 'danger-text': inventoryAlerts.below_reorder > 0 }">{{ inventoryAlerts.below_reorder }}</strong>
+          </article>
+          <article>
+            <small>ارزش کل موجودی</small>
+            <strong>{{ formatMoney(inventoryAlerts.stock_value_total, currency) }}</strong>
+          </article>
+          <article>
+            <small>ضایعات/خسارت ۳۰ روز</small>
+            <strong>{{ formatMoney(inventoryAlerts.waste_damage_30d_value, currency) }}</strong>
+          </article>
+          <article>
+            <small>سفارش‌های خرید باز</small>
+            <strong>{{ inventoryAlerts.open_purchase_orders }}</strong>
+          </article>
+        </section>
+        <p class="hint-line">
+          <a href="/management/inventory">رفتن به انبارداری هوشمند ←</a>
+        </p>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard
         title="سفارش های از دست رفته"
         :subtitle="`کل سفارش ها: ${lostOrders.summary.total}`"
         v-if="widgetState.lost_orders"
@@ -357,7 +385,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementLineChart from '@/components/management/bi/ManagementLineChart.vue'
@@ -366,6 +394,9 @@ import ManagementPageScaffold from '@/components/management/ManagementPageScaffo
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getManagementDashboard,
+  getManagementDashboardLayout,
+  getManagementInventoryAlertsSummary,
+  setManagementDashboardLayout,
   getManagementPOSBoot,
   getManagementPOSShiftSettings,
   getManagementReportCashierPerformance,
@@ -420,6 +451,7 @@ const widgetState = reactive({
   channels: true,
   crm: true,
   menu: true,
+  inventory_alerts: true,
   lost_orders: true,
 })
 
@@ -433,6 +465,7 @@ const widgetOptions = [
   { key: 'channels', label: 'کانال های فروش' },
   { key: 'crm', label: 'تحلیل مشتریان' },
   { key: 'menu', label: 'مهندسی منو' },
+  { key: 'inventory_alerts', label: 'هشدارهای انبار' },
   { key: 'lost_orders', label: 'سفارش های از دست رفته' },
 ]
 
@@ -490,6 +523,15 @@ const menuEngineering = ref({
 })
 const dashboardNutrition = ref({})
 const lostOrders = ref({ summary: { total: 0, lost_total: 0, cancelled_invoice: 0, voided: 0 }, labels: [], values: [] })
+const inventoryAlerts = ref(null)
+
+async function loadInventoryAlerts() {
+  try {
+    inventoryAlerts.value = await getManagementInventoryAlertsSummary()
+  } catch (_) {
+    inventoryAlerts.value = null
+  }
+}
 const productCategoryMap = ref({})
 const courierFleet = ref({ courier_count: 0, active_courier_count: 0, vehicle_count: 0, active_vehicle_count: 0 })
 
@@ -990,8 +1032,52 @@ async function loadDashboard() {
   }
 }
 
+let layoutSaveTimer = null
+let layoutDirty = false
+let layoutAppliedFromServer = false
+
+async function loadDashboardLayoutPreferences() {
+  try {
+    const payload = await getManagementDashboardLayout()
+    const widgets = payload?.layout?.widgets || {}
+    for (const key of Object.keys(widgetState)) {
+      if (widgets[key] && typeof widgets[key].visible === 'boolean') {
+        widgetState[key] = widgets[key].visible
+      }
+    }
+    layoutAppliedFromServer = true
+  } catch (_) {
+    layoutAppliedFromServer = false
+  }
+}
+
+function queueDashboardLayoutSave() {
+  if (!layoutAppliedFromServer || layoutDirty) {
+    return
+  }
+  window.clearTimeout(layoutSaveTimer)
+  layoutSaveTimer = window.setTimeout(async () => {
+    try {
+      layoutDirty = true
+      const widgets = {}
+      Object.keys(widgetState).forEach((key, index) => {
+        widgets[key] = { visible: Boolean(widgetState[key]), order: index }
+      })
+      await setManagementDashboardLayout({ widgets })
+    } catch (_) {
+      // Layout persistence is best-effort; never block the dashboard.
+    } finally {
+      layoutDirty = false
+    }
+  }, 600)
+}
+
+watch(widgetState, () => {
+  queueDashboardLayoutSave()
+})
+
 async function initDashboardPage() {
-  await Promise.all([loadDashboard(), loadMenuHighlightSettings()])
+  await Promise.all([loadDashboard(), loadMenuHighlightSettings(), loadDashboardLayoutPreferences(), loadInventoryAlerts()])
 }
 
 initDashboardPage()
@@ -1259,6 +1345,9 @@ initDashboardPage()
   color: var(--text-muted);
 }
 
+.lost-kpis strong.danger-text {
+  color: var(--danger, #b84f4f);
+}
 .lost-kpis strong {
   display: block;
   margin-top: 0.2rem;

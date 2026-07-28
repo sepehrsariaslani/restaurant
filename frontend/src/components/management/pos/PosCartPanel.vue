@@ -224,6 +224,10 @@
 				<span>حق سرویس</span>
 				<strong>{{ formatMoney(totals.serviceAmount || 0, currency) }}</strong>
 			</div>
+			<div class="sum-line" v-if="isNonZero(totals.packagingAmount)">
+				<span>بسته‌بندی</span>
+				<strong>{{ formatMoney(totals.packagingAmount || 0, currency) }}</strong>
+			</div>
 			<div class="sum-line payable">
 				<span>مبلغ قابل پرداخت</span>
 				<strong>{{ formatMoney(totals.payableAmount || 0, currency) }}</strong>

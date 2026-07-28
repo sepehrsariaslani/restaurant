@@ -201,6 +201,14 @@
                   <span class="ts-item"><span class="ts-dot occ"></span>{{ occupiedTableCount }} اشغال</span>
                 </span>
               </div>
+
+              <div class="waiter-select-box" v-if="waiterOptions.length || waiterبارگذاری">
+                <label class="waiter-select-label">گارسون سفارش:</label>
+                <select class="input waiter-select" :value="form.waiter" @change="onWaiterChange">
+                  <option value="">— بدون گارسون —</option>
+                  <option v-for="w in waiterOptions" :key="w.name" :value="w.name">{{ w.label }}</option>
+                </select>
+              </div>
               
               <div class="table-modern-grid">
                 <div
@@ -778,6 +786,12 @@
       </section>
     </div>
 
+    <div v-if="kitchenReadyQueue.length" class="kitchen-ready-toasts">
+      <div v-for="o in kitchenReadyQueue" :key="o.name" class="kitchen-ready-toast">
+        <span>🍽️ سفارش <strong>{{ o.name }}</strong><template v-if="o.customer_name"> — {{ o.customer_name }}</template> آماده تحویل است</span>
+        <button type="button" class="toast-close" @click="dismissKitchenNotice(o.name)"><X :size="14" /></button>
+      </div>
+    </div>
 
   </section>
 </template>
@@ -816,7 +830,10 @@ import {
   moveTableSession,
   getManagementPOSBoot,
   getManagementPOSHardwareStatus,
+  getManagementPosKitchenNotifications,
+  getManagementProductByBarcode,
   reportManagementPOSHardwareEvent,
+  listManagementUsers,
   updateTableOrderItem,
   updateManagementOrder,
   createManagementReturnOrder,
@@ -844,6 +861,8 @@ function defaultFormState() {
     order_mode: defaultMode,
     place: '',
     note: '',
+    waiter: '',
+    waiter_name: '',
   }
 }
 
@@ -900,6 +919,8 @@ const ticketSessions = reactive([{ id: 'ticket-1', snapshot: null }])
 const activeTicketId = ref('ticket-1')
 let ticketCounter = 1
 const tableOptions = ref([])
+const waiterOptions = ref([])
+const waiterبارگذاری = ref(false)
 const posInfoExpanded = ref(false)
 const openInvoicesExpanded = ref(false)
 const tableExpanded = ref(false)
@@ -1049,6 +1070,20 @@ const paymentBoot = reactive({
   provider_label: 'حالت دستی',
   terminal_id: '',
   methods: [],
+})
+
+const packagingSettings = reactive({
+  enabled: false,
+  flat_fee: 0,
+  per_item: true,
+  apply_modes: [],
+  label: 'هزینه بسته‌بندی',
+})
+
+const printFontSettings = reactive({
+  font_family: 'Peyda',
+  font_size: 11,
+  receipt_font_scale: 'متوسط',
 })
 
 const payment = reactive(defaultPaymentState())
@@ -1428,6 +1463,26 @@ function paymentMethodDisplayLabel(value) {
   return String(value || '').trim() || '-'
 }
 
+const packagingAmount = computed(() => {
+  if (!packagingSettings.enabled) {
+    return 0
+  }
+  const mode = String(form.order_mode || '').trim()
+  if (!packagingSettings.apply_modes.includes(mode)) {
+    return 0
+  }
+  let fee = Number(packagingSettings.flat_fee || 0)
+  if (packagingSettings.per_item) {
+    for (const line of cart) {
+      const perItemPrice = Number(line?.packaging_price || 0)
+      if (perItemPrice > 0) {
+        fee += perItemPrice * Number(line?.qty || 0)
+      }
+    }
+  }
+  return Math.max(fee, 0)
+})
+
 const totals = computed(() =>
   calculatePosTotals({
     cartLines: cart.map((line) => ({
@@ -1441,6 +1496,7 @@ const totals = computed(() =>
     taxType: financial.taxExempt ? 'fixed' : financial.taxType,
     taxValue: financial.taxExempt ? 0 : financial.taxValue,
     tipAmount: financial.tipAmount,
+    packagingAmount: packagingAmount.value,
     useWallet: financial.useWallet,
     walletBalance: financial.walletBalance,
   }),
@@ -1752,6 +1808,33 @@ async function refreshSelectedDineInTableOrders() {
   } finally {
     tablePreviewبارگذاری.value = false
   }
+}
+
+async function loadWaitersOnce() {
+  if (waiterOptions.value.length || waiterبارگذاری.value) return
+  waiterبارگذاری.value = true
+  try {
+    const payload = await listManagementUsers({ search: '' })
+    const rows = Array.isArray(payload?.users) ? payload.users : []
+    waiterOptions.value = rows
+      .filter((row) => row && row.enabled !== 0)
+      .map((row) => ({
+        name: row.name,
+        label: row.full_name || row.name,
+        roles: Array.isArray(row.roles) ? row.roles : [],
+      }))
+  } catch (errObj) {
+    waiterOptions.value = []
+  } finally {
+    waiterبارگذاری.value = false
+  }
+}
+
+function onWaiterChange(event) {
+  const userName = String(event?.target?.value || '').trim()
+  const found = waiterOptions.value.find((row) => row.name === userName)
+  form.waiter = userName
+  form.waiter_name = found ? found.label : ''
 }
 
 async function selectDineInTable(table) {
@@ -2696,6 +2779,10 @@ function undoLastRemoval() {
 function addToCart(item, qty = 1, customizationPayload = null, hasCustomization = false, unitPrice = null, options = {}) {
   editingOriginalOrder.isEditing = false
   editingOriginalOrder.name = ''
+  if (Number(item?.out_of_stock || 0) === 1) {
+    error.value = `«${item?.title || item?.item_name || item?.name || ''}» ناموجود است و قابل فروش نیست.`
+    return
+  }
   const itemSlug = getItemSlug(item)
   if (!itemSlug) {
     return
@@ -2730,6 +2817,7 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     qty: Number(Number(qty || 1).toFixed(3)),
     price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? item.price ?? 0),
     item_code: item.name,
+    packaging_price: Number(item.packaging_price || 0),
     note: '',
     has_customization: Boolean(hasCustomization),
     customization: normalizedCustomization,
@@ -3421,35 +3509,61 @@ async function reportHardwareEvent(eventType, severity, message, payload = {}) {
   }
 }
 
+async function lookupProductBarcode(raw) {
+  try {
+    const payload = await getManagementProductByBarcode(raw)
+    if (payload?.status !== 'success' || !payload.item) {
+      error.value = 'محصولی با این بارکد پیدا نشد.'
+      return
+    }
+    const found = payload.item
+    const match = products.value.find((item) => {
+      const keys = [item.name, item.item_code, item.slug].map((value) => String(value || '').trim())
+      return keys.includes(String(found.name || '').trim()) || keys.includes(String(found.item_code || '').trim())
+    })
+    if (!match) {
+      error.value = `محصول «${found.item_name || found.name}» در لیست POS این شعبه موجود نیست.`
+      return
+    }
+    if (Number(match.out_of_stock || 0) === 1) {
+      error.value = `«${match.title || match.item_name || found.item_name}» فعلاً ناموجود است.`
+      return
+    }
+    addToCart(match, 1)
+    scannerFeedback.value = `بارکد اسکن شد: ${match.title || match.item_name || found.item_name}`
+    error.value = ''
+  } catch (lookupErr) {
+    error.value = lookupErr?.message || 'خطا در استعلام بارکد محصول.'
+  }
+}
+
 async function handleScaleBarcodeScan() {
   const raw = scannerInput.value.trim()
   scannerFeedback.value = ''
   if (!raw) {
     return
   }
-  if (!scaleConfig.enabled) {
-    error.value = 'پردازش بارکد وزنی در تنظیمات غیرفعال است.'
-    return
+
+  let scaleHandled = false
+  if (scaleConfig.enabled) {
+    try {
+      const parsed = parseScaleBarcode(raw)
+      const item = resolveScaleProduct(parsed.itemCode)
+      if (item) {
+        addToCart(item, parsed.qty)
+        scannerFeedback.value = `بارکد وزنی اعمال شد: ${item.title || item.item_name} × ${formatCompactNumber(parsed.qty)}`
+        error.value = ''
+        scaleHandled = true
+      }
+    } catch (scanErr) {
+      scaleHandled = false
+    }
   }
 
-  try {
-    const parsed = parseScaleBarcode(raw)
-    const item = resolveScaleProduct(parsed.itemCode)
-    if (!item) {
-      throw new Error(`کالایی با کد ترازو ${parsed.itemCode} پیدا نشد.`)
-    }
-    addToCart(item, parsed.qty)
-    scannerFeedback.value = `بارکد وزنی اعمال شد: ${item.title || item.item_name} × ${formatCompactNumber(parsed.qty)}`
-    error.value = ''
-  } catch (scanErr) {
-    error.value = scanErr.message || 'خطا در تحلیل بارکد وزنی.'
-    await reportHardwareEvent('scale', 'warn', scanErr.message || 'Invalid weighted barcode', {
-      reason: 'invalid_barcode',
-      barcode: raw,
-    })
-  } finally {
-    scannerInput.value = ''
+  if (!scaleHandled) {
+    await lookupProductBarcode(raw)
   }
+  scannerInput.value = ''
 }
 
 function buildOrderNote() {
@@ -3773,6 +3887,14 @@ function buildReceiptPrintableItemsFromLines(lines = []) {
     .join('')
 }
 
+function receiptFontSizePx() {
+  const base = Math.min(Math.max(Number(printFontSettings.font_size || 11), 8), 24)
+  const scale = String(printFontSettings.receipt_font_scale || 'متوسط')
+  if (scale === 'کوچک') return Math.max(base - 1, 8)
+  if (scale === 'بزرگ') return Math.min(base + 2, 26)
+  return base
+}
+
 function receiptStylesCss() {
   return `
     @font-face { font-family: Peyda; src: url('/fonts/Pevda-Reqular.ttf') format('truetype'); font-weight: 400; font-style: normal; }
@@ -3781,8 +3903,8 @@ function receiptStylesCss() {
     @font-face { font-family: Peyda; src: url('/fonts/Peyda-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; }
     @page { size: 80mm auto; margin: 4mm; }
     html, body { width: 100%; margin: 0; padding: 0; }
-    body { font-family: Peyda, sans-serif; color: var(--mg-text-main); background: var(--mg-bg-surface); }
-    .receipt { width: 72mm; margin: 0 auto; font-size: 11px; line-height: 1.35; }
+    body { font-family: ${printFontSettings.font_family || 'Peyda'}, Peyda, sans-serif; color: var(--mg-text-main); background: var(--mg-bg-surface); }
+    .receipt { width: 72mm; margin: 0 auto; font-size: ${receiptFontSizePx()}px; line-height: 1.35; }
     .center { text-align: center; }
     .brand-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
     .title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
@@ -3841,6 +3963,13 @@ function buildReceiptTotalsRowsHtml(totalValues = totals.value) {
     {
       label: 'حق سرویس',
       value: totalValues.serviceAmount || 0,
+      always: false,
+      negative: false,
+      className: '',
+    },
+    {
+      label: packagingSettings.label || 'بسته‌بندی',
+      value: totalValues.packagingAmount || 0,
       always: false,
       negative: false,
       className: '',
@@ -4210,6 +4339,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     customer_type: form.customer_type,
     guest_count: form.guest_count,
     place: form.place,
+    waiter: form.waiter || '',
+    waiter_name: form.waiter_name || '',
     totals: {
       ...totals.value,
       currency: currency.value,
@@ -4418,6 +4549,18 @@ async function loadPOSBoot() {
     categories.value = payload.categories || []
     currency.value = payload.currency || 'IRR'
     applyPOSProfileSummary(payload.pos_profile || {})
+
+    const bootPackaging = payload.packaging || {}
+    packagingSettings.enabled = Boolean(bootPackaging.enabled)
+    packagingSettings.flat_fee = Number(bootPackaging.flat_fee || 0)
+    packagingSettings.per_item = bootPackaging.per_item !== false
+    packagingSettings.apply_modes = Array.isArray(bootPackaging.apply_modes) ? bootPackaging.apply_modes : []
+    packagingSettings.label = bootPackaging.label || 'هزینه بسته‌بندی'
+
+    const bootPrintFont = payload.print_font || {}
+    printFontSettings.font_family = bootPrintFont.font_family || 'Peyda'
+    printFontSettings.font_size = Number(bootPrintFont.font_size || 11)
+    printFontSettings.receipt_font_scale = bootPrintFont.receipt_font_scale || 'متوسط'
 
     bootPosConfig = payload.pos_config || null
     if (bootPosConfig) {
@@ -4724,6 +4867,42 @@ watch(
   },
 )
 
+// ---------------------------------------------------------------------------
+// Kitchen → POS notifications: toast when an order becomes ready
+// ---------------------------------------------------------------------------
+const kitchenReadyQueue = ref([])
+const seenKitchenReady = new Set()
+let kitchenPollTimer = null
+let kitchenPollInFlight = false
+let kitchenPollPrimed = false
+
+async function pollKitchenReady() {
+  if (kitchenPollInFlight || typeof document === 'undefined' || document.hidden) return
+  kitchenPollInFlight = true
+  try {
+    const payload = await getManagementPosKitchenNotifications({})
+    const orders = Array.isArray(payload?.orders) ? payload.orders : []
+    if (!kitchenPollPrimed) {
+      kitchenPollPrimed = true
+      orders.forEach((o) => seenKitchenReady.add(o.name))
+      return
+    }
+    const fresh = orders.filter((o) => !seenKitchenReady.has(o.name))
+    fresh.forEach((o) => seenKitchenReady.add(o.name))
+    if (fresh.length) {
+      kitchenReadyQueue.value = [...kitchenReadyQueue.value, ...fresh].slice(-5)
+    }
+  } catch (err) {
+    // kitchen notifications are best-effort; stay silent on failure
+  } finally {
+    kitchenPollInFlight = false
+  }
+}
+
+function dismissKitchenNotice(name) {
+  kitchenReadyQueue.value = kitchenReadyQueue.value.filter((o) => o.name !== name)
+}
+
 onMounted(async () => {
   syncViewportMode()
   window.addEventListener('keydown', onWindowKeydown)
@@ -4732,10 +4911,13 @@ onMounted(async () => {
   window.addEventListener('offline', updateNetworkState)
   hydrateReceiptSettings()
   await loadPOSBoot()
+  loadWaitersOnce()
   saveActiveTicketSnapshot()
   await nextTick()
   window.scrollTo({ top: 0, behavior: 'auto' })
   headerBarRef.value?.focusCustomerSearch?.()
+  pollKitchenReady()
+  kitchenPollTimer = setInterval(pollKitchenReady, 45000)
 })
 
 onBeforeUnmount(() => {
@@ -4747,10 +4929,52 @@ onBeforeUnmount(() => {
   if (reminderTimer.value) {
     clearTimeout(reminderTimer.value)
   }
+  if (kitchenPollTimer) {
+    clearInterval(kitchenPollTimer)
+    kitchenPollTimer = null
+  }
 })
 </script>
 
 <style scoped>
+.kitchen-ready-toasts {
+  position: fixed;
+  bottom: 18px;
+  inset-inline-start: 18px;
+  z-index: 90;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(360px, 90vw);
+}
+.kitchen-ready-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: #2f6f5c;
+  color: #fff;
+  border-radius: 14px;
+  padding: 0.7rem 1rem;
+  font-size: 0.85rem;
+  box-shadow: 0 10px 30px rgba(20, 40, 33, 0.35);
+  animation: kitchen-toast-in 0.25s ease-out;
+}
+.kitchen-ready-toast .toast-close {
+  background: rgba(255, 255, 255, 0.18);
+  border: 0;
+  color: #fff;
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+@keyframes kitchen-toast-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
 .pos-theme :deep(.hero-card) {
   border: 1px solid var(--mg-border);
   background: var(--mg-bg-surface);
@@ -5377,6 +5601,31 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   min-height: 0;
   box-shadow: 0 18px 34px rgb(52 38 31 / 0.06);
+}
+
+.waiter-select-box {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.45rem 0.1rem;
+}
+
+.waiter-select-label {
+  font-size: 0.78rem;
+  color: var(--mg-text-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.waiter-select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.32rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
+  font-size: 0.8rem;
 }
 
 .recent-orders-panel {

@@ -176,6 +176,21 @@
                   </div>
                 </section>
                 
+                <section class="inspection-section mt-4" v-if="isDeliveryOrder(selectedOrder.order)">
+                  <h3 class="section-title">تحویل و پیک</h3>
+                  <div class="courier-assign-row">
+                    <select class="input" v-model="courierAssign.courier">
+                      <option value="">انتخاب پیک...</option>
+                      <option v-for="c in couriers" :key="c.name" :value="c.name">{{ c.courier_name }}</option>
+                    </select>
+                    <button class="secondary-btn" type="button" :disabled="courierAssign.busy" @click="assignCourier(selectedOrder.order.name)">
+                      {{ courierAssign.busy ? '...' : 'تخصیص پیک' }}
+                    </button>
+                  </div>
+                  <p class="courier-assign-msg ok-text" v-if="courierAssign.message">{{ courierAssign.message }}</p>
+                  <p class="courier-assign-msg text-danger" v-if="courierAssign.error">{{ courierAssign.error }}</p>
+                </section>
+
                 <section class="inspection-section mt-4" v-if="selectedOrder.order.source === 'web' && selectedOrder.order.payment_status !== 'Paid'">
                   <h3 class="section-title">ثبت پرداخت دستی</h3>
                   <div class="form-grid">
@@ -214,6 +229,16 @@
                   <span>تکمیل سفارش</span>
                 </button>
                 
+                <button
+                  class="secondary-btn flex-1"
+                  type="button"
+                  :disabled="proformaBusy"
+                  @click="openProforma(selectedOrder.order)"
+                >
+                  <FileText :size="16" />
+                  <span>{{ proformaBusy ? 'در حال آماده‌سازی...' : 'پیش‌فاکتور' }}</span>
+                </button>
+
                 <button class="ghost-btn flex-1" type="button" @click="closeOrderDetail">
                   <X :size="16" />
                   <span>بستن</span>
@@ -229,12 +254,13 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import { CheckCheck, CreditCard, FileText, X } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementMobileCardList from '@/components/management/ManagementMobileCardList.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
-import { completeManagementOrder, getManagementOrderDetail, listManagementOrders, markManagementOrderPaid } from '@/utils/api'
+import { completeManagementOrder, getManagementOrderDetail, listManagementOrders, markManagementOrderPaid, listManagementCouriers, assignManagementOrderCourier, createManagementOrderProforma } from '@/utils/api'
 import { formatMoney, formatStatus, parseQuery } from '@/utils/format'
 
 const query = parseQuery()
@@ -252,6 +278,59 @@ const manualPayment = reactive({
   reference_no: '',
   rrn: '',
 })
+
+const couriers = ref([])
+const courierAssign = reactive({ courier: '', busy: false, message: '', error: '' })
+
+function isDeliveryOrder(order) {
+  const channel = String(order?.channel || '').toLowerCase()
+  return channel.includes('delivery') || channel.includes('ارسال') || channel.includes('پیک')
+}
+
+async function loadCouriersOnce() {
+  if (couriers.value.length) return
+  try {
+    const payload = await listManagementCouriers({ active_only: 1 })
+    couriers.value = Array.isArray(payload?.couriers) ? payload.couriers : []
+  } catch (errObj) {
+    couriers.value = []
+  }
+}
+
+const proformaBusy = ref(false)
+
+async function openProforma(order) {
+  const orderName = order?.name || ''
+  if (!orderName || proformaBusy.value) return
+  proformaBusy.value = true
+  error.value = ''
+  try {
+    const payload = await createManagementOrderProforma(orderName)
+    const printUrl = String(payload?.print_url || '').trim()
+    if (printUrl) {
+      window.open(printUrl, '_blank', 'noopener')
+    }
+  } catch (errObj) {
+    error.value = errObj?.message || 'صدور پیش‌فاکتور ناموفق بود.'
+  } finally {
+    proformaBusy.value = false
+  }
+}
+
+async function assignCourier(orderName) {
+  courierAssign.busy = true
+  courierAssign.message = ''
+  courierAssign.error = ''
+  try {
+    await assignManagementOrderCourier({ order_name: orderName, courier: courierAssign.courier })
+    courierAssign.message = courierAssign.courier ? 'پیک به سفارش اختصاص یافت و وضعیت «تحویل به پیک» شد.' : 'پیک از سفارش برداشته شد.'
+    if (selectedOrder.value?.order) selectedOrder.value.order.courier = courierAssign.courier
+  } catch (errObj) {
+    courierAssign.error = errObj?.message || 'تخصیص پیک ناموفق بود.'
+  } finally {
+    courierAssign.busy = false
+  }
+}
 
 const filters = reactive({
   source: '',
@@ -422,6 +501,10 @@ async function loadOrderDetail(orderName, source = '') {
     currency.value = String(payload?.order?.currency || currency.value || 'IRR').trim() || 'IRR'
     manualPayment.reference_no = payload?.order?.payment_reference || ''
     manualPayment.rrn = payload?.order?.payment_rrn || ''
+    courierAssign.courier = payload?.order?.courier || ''
+    courierAssign.message = ''
+    courierAssign.error = ''
+    if (isDeliveryOrder(payload?.order)) loadCouriersOnce()
   } catch (errObj) {
     error.value = errObj.message || 'دریافت جزئیات سفارش ناموفق بود.'
   } finally {
@@ -1274,6 +1357,21 @@ button:disabled {
   .inspection-footer {
     flex-direction: column;
   }
+}
+.courier-assign-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.courier-assign-row .input {
+  flex: 1;
+}
+.courier-assign-msg {
+  font-size: 0.82rem;
+  margin: 0.4rem 0 0;
+}
+.ok-text {
+  color: var(--accent-green, #2f6f5c);
 }
 </style>
 

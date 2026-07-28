@@ -224,12 +224,14 @@
 							<template v-else>
 								<article
 									class="product-card"
+									:class="{ 'out-of-stock': Number(item.out_of_stock) === 1 }"
 									v-for="item in group.items"
 									:key="item.slug || item.name"
 								>
 									<button
 										type="button"
 										class="image-btn"
+										:disabled="Number(item.out_of_stock) === 1"
 										@click="$emit('increment-product', item)"
 									>
 										<img
@@ -244,6 +246,7 @@
 										<strong>{{
 											formatMoney(item.base_price || item.standard_rate || 0, currency)
 										}}</strong>
+										<small v-if="Number(item.out_of_stock) === 1" class="oos-badge">ناموجود</small>
 									</div>
 
 									<div class="product-actions">
@@ -252,7 +255,11 @@
 												-
 											</button>
 											<span>{{ displayQty(item.slug) }}</span>
-											<button type="button" @click="$emit('increment-product', item)">
+											<button
+												type="button"
+												:disabled="Number(item.out_of_stock) === 1"
+												@click="$emit('increment-product', item)"
+											>
 												+
 											</button>
 										</div>
@@ -959,6 +966,25 @@ function supportsCustomization(item = {}) {
 		transform 0.15s ease,
 		box-shadow 0.15s ease,
 		border-color 0.15s ease;
+}
+
+.product-card.out-of-stock {
+	opacity: 0.55;
+}
+
+.product-card.out-of-stock .product-image {
+	filter: grayscale(0.9);
+}
+
+.product-card .oos-badge {
+	display: inline-block;
+	margin-top: 2px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: rgba(184, 79, 79, 0.14);
+	color: #b84f4f;
+	font-size: 10px;
+	font-weight: 600;
 }
 
 .product-card:hover {

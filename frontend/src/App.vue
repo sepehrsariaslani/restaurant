@@ -26,6 +26,16 @@
       <ManagementTablesPage v-else-if="page === 'management-tables'" />
       <ManagementReportsIndexPage v-else-if="page === 'management-reports'" />
       <ManagementReportPage v-else-if="page === 'management-report'" :boot="boot" />
+      <ManagementRegisterPage v-else-if="page === 'management-register'" />
+      <ManagementInventoryPage v-else-if="page === 'management-inventory'" />
+      <ManagementClubPage v-else-if="page === 'management-club'" />
+      <ManagementSurveysPage v-else-if="page === 'management-surveys'" />
+      <ManagementCostControlPage v-else-if="page === 'management-cost-control'" />
+      <ManagementReservationsPage v-else-if="page === 'management-reservations'" />
+      <ManagementBranchesPage v-else-if="page === 'management-branches'" />
+      <ManagementCallCenterPage v-else-if="page === 'management-call-center'" />
+      <ManagementAccountingPage v-else-if="page === 'management-accounting'" />
+      <ManagementHelpPage v-else-if="page === 'management-help'" />
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
       <ManagementSiteSettingsPage v-else-if="page === 'management-settings'" entry-mode="theme-settings" />
       <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
@@ -179,6 +189,16 @@ import ManagementKitchenPage from './pages/management/ManagementKitchenPage.vue'
 import ManagementTablesPage from './pages/management/ManagementTablesPage.vue'
 import ManagementReportsIndexPage from './pages/management/ManagementReportsIndexPage.vue'
 import ManagementReportPage from './pages/management/ManagementReportPage.vue'
+import ManagementRegisterPage from './pages/management/ManagementRegisterPage.vue'
+import ManagementInventoryPage from './pages/management/ManagementInventoryPage.vue'
+import ManagementClubPage from './pages/management/ManagementClubPage.vue'
+import ManagementSurveysPage from './pages/management/ManagementSurveysPage.vue'
+import ManagementCostControlPage from './pages/management/ManagementCostControlPage.vue'
+import ManagementReservationsPage from './pages/management/ManagementReservationsPage.vue'
+import ManagementBranchesPage from './pages/management/ManagementBranchesPage.vue'
+import ManagementCallCenterPage from './pages/management/ManagementCallCenterPage.vue'
+import ManagementAccountingPage from './pages/management/ManagementAccountingPage.vue'
+import ManagementHelpPage from './pages/management/ManagementHelpPage.vue'
 import ManagementPrintFormatsPage from './pages/management/ManagementPrintFormatsPage.vue'
 import ManagementZarinpalSettingsPage from './pages/management/ManagementZarinpalSettingsPage.vue'
 import SiteLoaderOverlay from './components/SiteLoaderOverlay.vue'
@@ -216,6 +236,16 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/tables')) return 'management-tables'
     if (pathname.startsWith('/management/reports/')) return 'management-report'
     if (pathname.startsWith('/management/reports')) return 'management-reports'
+    if (pathname.startsWith('/management/register')) return 'management-register'
+  if (pathname.startsWith('/management/inventory')) return 'management-inventory'
+  if (pathname.startsWith('/management/club')) return 'management-club'
+  if (pathname.startsWith('/management/surveys')) return 'management-surveys'
+  if (pathname.startsWith('/management/cost-control')) return 'management-cost-control'
+  if (pathname.startsWith('/management/reservations')) return 'management-reservations'
+  if (pathname.startsWith('/management/branches')) return 'management-branches'
+  if (pathname.startsWith('/management/call-center') || pathname.startsWith('/management/call_center')) return 'management-call-center'
+  if (pathname.startsWith('/management/accounting')) return 'management-accounting'
+  if (pathname.startsWith('/management/help')) return 'management-help'
     if (pathname.startsWith('/management/print-formats') || pathname.startsWith('/management/print_formats')) return 'management-print-formats'
     if (pathname.startsWith('/management/home-builder') || pathname.startsWith('/management/home_builder')) return 'management-home-builder'
     if (pathname.startsWith('/management/site-settings') || pathname.startsWith('/management/site_settings')) return 'management-site-settings'

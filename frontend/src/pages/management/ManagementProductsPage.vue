@@ -20,9 +20,23 @@
         </div>
         <button class="primary-btn" type="button" @click="loadProducts">جستجو</button>
         <button class="secondary-btn" type="button" @click="openCreatePopup">کالای جدید</button>
+        <button class="secondary-btn" type="button" @click="exportProductsExcel" :disabled="excelBusy">
+          {{ excelBusy && excelMode === 'export' ? 'در حال خروجی...' : 'خروجی اکسل' }}
+        </button>
+        <button class="secondary-btn" type="button" @click="triggerExcelImport" :disabled="excelBusy">
+          {{ excelBusy && excelMode === 'import' ? 'در حال ورود...' : 'ورود از اکسل' }}
+        </button>
+        <button class="tertiary-btn" type="button" @click="openBulkPopup">عملیات گروهی</button>
         <button class="tertiary-btn" type="button" @click="toggleAdvancedMode">
           {{ showAdvanced ? 'کمتر' : 'فیلتر بیشتر' }}
         </button>
+        <input
+          ref="excelFileInput"
+          type="file"
+          accept=".xlsx,.csv"
+          class="hidden-file-input"
+          @change="handleExcelFile"
+        />
       </div>
       <div v-if="showAdvanced" class="toolbar advanced-toolbar">
         <ManagementFilterControl
@@ -488,6 +502,82 @@
         </div>
       </template>
     </ManagementPopup>
+
+    <ManagementPopup
+      v-model:open="bulkPopupOpen"
+      title="عملیات گروهی محصولات"
+      :subtitle="`${formatNumber(visibleProducts.length)} کالا در نمایش فعلی (با فیلترها) انتخاب شده‌اند`"
+      :close-on-backdrop="!bulkBusy"
+      :close-on-escape="!bulkBusy"
+    >
+      <div class="bulk-form">
+        <p class="hint">
+          عملیات انتخابی روی تمام کالاهای نمایش‌داده‌شده (با اعمال جستجو و فیلترهای فعلی) انجام می‌شود.
+          برای محدود کردن لیست، ابتدا از جستجو یا فیلتر گروه استفاده کنید.
+        </p>
+
+        <div class="bulk-actions-grid">
+          <button
+            v-for="option in bulkActionOptions"
+            :key="option.value"
+            type="button"
+            :class="['bulk-action-card', { active: bulkAction === option.value }]"
+            @click="bulkAction = option.value"
+          >
+            <strong>{{ option.title }}</strong>
+            <small>{{ option.desc }}</small>
+          </button>
+        </div>
+
+        <p class="error" v-if="bulkError">{{ bulkError }}</p>
+
+        <div v-if="bulkResult" class="bulk-result">
+          <p class="success-msg">
+            {{ formatNumber(bulkResult.updated || 0) }} کالا به‌روزرسانی شد
+            <template v-if="bulkResult.failed">({{ formatNumber(bulkResult.failed) }} خطا)</template>
+          </p>
+          <ul v-if="bulkResult.results && bulkResult.results.some(r => r.status === 'error')" class="bulk-error-list">
+            <li v-for="(row, idx) in bulkResult.results.filter(r => r.status === 'error').slice(0, 8)" :key="idx">
+              {{ row.item_name }}: {{ row.message }}
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="popup-actions">
+          <button class="secondary-btn" type="button" :disabled="bulkBusy" @click="bulkPopupOpen = false">بستن</button>
+          <button class="primary-btn" type="button" :disabled="bulkBusy || !visibleProducts.length" @click="runBulkAction">
+            {{ bulkBusy ? 'در حال اعمال...' : `اعمال روی ${formatNumber(visibleProducts.length)} کالا` }}
+          </button>
+        </div>
+      </template>
+    </ManagementPopup>
+
+    <ManagementPopup
+      v-model:open="excelSummaryOpen"
+      title="نتیجه ورود اطلاعات از اکسل"
+      subtitle="گزارش ایجاد و به‌روزرسانی محصولات"
+    >
+      <div class="excel-summary" v-if="excelSummary">
+        <div class="excel-summary-grid">
+          <div><small>کل سطرها</small><strong>{{ formatNumber(excelSummary.total_rows || 0) }}</strong></div>
+          <div><small>ایجاد شده</small><strong>{{ formatNumber(excelSummary.created || 0) }}</strong></div>
+          <div><small>به‌روزرسانی</small><strong>{{ formatNumber(excelSummary.updated || 0) }}</strong></div>
+          <div><small>خطا</small><strong>{{ formatNumber((excelSummary.errors || []).length) }}</strong></div>
+        </div>
+        <ul v-if="(excelSummary.errors || []).length" class="bulk-error-list">
+          <li v-for="(rowError, idx) in excelSummary.errors.slice(0, 10)" :key="idx">
+            سطر {{ rowError.row }} {{ rowError.item_code ? `(${rowError.item_code})` : '' }}: {{ rowError.message }}
+          </li>
+        </ul>
+      </div>
+      <template #footer>
+        <div class="popup-actions">
+          <button class="primary-btn" type="button" @click="excelSummaryOpen = false">بستن</button>
+        </div>
+      </template>
+    </ManagementPopup>
   </ManagementPageScaffold>
 </template>
 
@@ -508,12 +598,16 @@ import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
 import NumericInput from '@/components/NumericInput.vue'
 import {
+  bulkUpdateManagementProducts,
   createManagementProduct,
   deleteManagementProduct,
+  exportManagementProductsExcel,
   getManagementProductDetail,
   getMenuBoot,
+  importManagementProductsExcel,
   listManagementProducts,
   setManagementProductActive,
+  uploadFileToFrappe,
 } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 
@@ -555,6 +649,22 @@ const bootFieldOptions = ref({
   subcategories: [],
 })
 const createForm = ref(createDefaultForm())
+const bulkPopupOpen = ref(false)
+const bulkAction = ref('mark_out_of_stock')
+const bulkBusy = ref(false)
+const bulkError = ref('')
+const bulkResult = ref(null)
+const excelBusy = ref(false)
+const excelMode = ref('')
+const excelFileInput = ref(null)
+const excelSummary = ref(null)
+const excelSummaryOpen = ref(false)
+const bulkActionOptions = [
+  { value: 'mark_out_of_stock', title: 'ناموجود کردن', desc: 'اتمام موقت موجودی کالاها (بدون حذف)' },
+  { value: 'mark_in_stock', title: 'موجود کردن', desc: 'برگرداندن کالاها به حالت موجود' },
+  { value: 'deactivate', title: 'غیرفعال کردن', desc: 'پنهان شدن موقت یا دائم از منو و فروش' },
+  { value: 'activate', title: 'فعال کردن', desc: 'نمایش دوباره کالاها در منو و فروش' },
+]
 const MOBILE_BREAKPOINT = 760
 const isMobileView = ref(getInitialMobileView())
 const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'restaurant.management.productVisibilityOverrides'
@@ -788,6 +898,103 @@ async function loadProducts() {
     error.value = errObj.message || '❌ متأسفانه بارگذاری لیست محصولات ناموفق بود. لطفاً اتصال اینترنت خود را بررسی کنید.'
   } finally {
     loading.value = false
+  }
+}
+
+function openBulkPopup() {
+  bulkResult.value = null
+  bulkError.value = ''
+  bulkPopupOpen.value = true
+}
+
+async function runBulkAction() {
+  if (!visibleProducts.value.length || bulkBusy.value) {
+    return
+  }
+  bulkBusy.value = true
+  bulkError.value = ''
+  bulkResult.value = null
+  try {
+    const names = visibleProducts.value.map((row) => String(row?.name || '').trim()).filter(Boolean)
+    const payload = await bulkUpdateManagementProducts(names, bulkAction.value)
+    bulkResult.value = payload
+    await loadProducts()
+  } catch (errObj) {
+    bulkError.value = errObj?.message || '❌ عملیات گروهی ناموفق بود. لطفاً دوباره تلاش کنید.'
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function exportProductsExcel() {
+  if (excelBusy.value) {
+    return
+  }
+  excelBusy.value = true
+  excelMode.value = 'export'
+  error.value = ''
+  try {
+    const payload = await exportManagementProductsExcel({ include_disabled: 1 })
+    if (payload?.file_url) {
+      const link = document.createElement('a')
+      link.href = payload.file_url
+      link.download = payload.file_name || 'restaurant-products.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      successMessage.value = `خروجی اکسل ${formatNumber(payload.rows || 0)} کالا آماده شد.`
+      setTimeout(() => { successMessage.value = '' }, 4000)
+    }
+  } catch (errObj) {
+    error.value = errObj?.message || '❌ دریافت خروجی اکسل ناموفق بود.'
+  } finally {
+    excelBusy.value = false
+    excelMode.value = ''
+  }
+}
+
+function triggerExcelImport() {
+  if (excelBusy.value) {
+    return
+  }
+  const input = excelFileInput.value
+  if (input) {
+    input.value = ''
+    input.click()
+  }
+}
+
+async function handleExcelFile(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) {
+    return
+  }
+  excelBusy.value = true
+  excelMode.value = 'import'
+  error.value = ''
+  try {
+    const uploaded = await uploadFileToFrappe(file, { isPrivate: true })
+    const fileUrl = uploaded?.file_url || uploaded?.message?.file_url || ''
+    if (!fileUrl) {
+      throw new Error('آپلود فایل ناموفق بود.')
+    }
+    const payload = await importManagementProductsExcel({
+      file_url: fileUrl,
+      file_name: file.name,
+      update_existing: 1,
+      dry_run: 0,
+    })
+    excelSummary.value = payload
+    excelSummaryOpen.value = true
+    await loadProducts()
+  } catch (errObj) {
+    error.value = errObj?.message || '❌ ورود اطلاعات از اکسل ناموفق بود.'
+  } finally {
+    excelBusy.value = false
+    excelMode.value = ''
+    if (event?.target) {
+      event.target.value = ''
+    }
   }
 }
 
@@ -1970,6 +2177,84 @@ loadProducts()
 .filter-label {
   font-size: 0.8rem;
   font-weight: 600;
+  color: var(--text-muted);
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.bulk-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.bulk-form .hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.bulk-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.55rem;
+}
+
+.bulk-action-card {
+  border: 1px dashed var(--border-color, #d8d2c4);
+  border-radius: 12px;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+}
+
+.bulk-action-card.active {
+  border-style: solid;
+  border-color: var(--accent-green, #2f6f5c);
+  background: rgba(47, 111, 92, 0.08);
+}
+
+.bulk-action-card small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.bulk-result {
+  border-top: 1px dashed var(--border-color, #d8d2c4);
+  padding-top: 0.7rem;
+}
+
+.bulk-error-list {
+  margin: 0.4rem 0 0;
+  padding-inline-start: 1.1rem;
+  color: #b84f4f;
+  font-size: 0.78rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.excel-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.55rem;
+}
+
+.excel-summary-grid > div {
+  border: 1px dashed var(--border-color, #d8d2c4);
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.excel-summary-grid small {
   color: var(--text-muted);
 }
 </style>

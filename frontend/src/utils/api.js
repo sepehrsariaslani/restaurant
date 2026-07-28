@@ -3118,6 +3118,119 @@ export function getManagementReportModifierUsage({ date_from = "", date_to = "" 
 	return callRestaurantAPI("get_management_report_modifier_usage", { date_from, date_to });
 }
 
+export function getManagementReportCategorySales({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_category_sales", { date_from, date_to });
+}
+
+export function getManagementReportTableSales({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_table_sales", { date_from, date_to });
+}
+
+export function getManagementReportPaymentMethods({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_payment_methods", { date_from, date_to });
+}
+
+export function getManagementReportProductSales({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_product_sales", { date_from, date_to });
+}
+
+export function getManagementReportShiftSales({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_shift_sales", { date_from, date_to });
+}
+
+// --- POS feature pack: bulk ops, Excel, barcode, combos, packaging, shifts, register closing, fonts, layout ---
+
+export function bulkUpdateManagementProducts(itemNames, action) {
+	return callRestaurantAPI("bulk_update_management_products", {
+		item_names: itemNames,
+		action,
+	});
+}
+
+export function exportManagementProductsExcel({ category = "", include_disabled = 0 } = {}) {
+	return callRestaurantAPI("export_management_products_excel", { category, include_disabled });
+}
+
+export function importManagementProductsExcel({
+	file_url = "",
+	file_name = "",
+	content_base64 = "",
+	update_existing = 1,
+	dry_run = 0,
+} = {}) {
+	return callRestaurantAPI("import_management_products_excel", {
+		file_url,
+		file_name,
+		content_base64,
+		update_existing,
+		dry_run,
+	});
+}
+
+export function getManagementProductByBarcode(barcode) {
+	return callRestaurantAPI("get_management_product_by_barcode", { barcode });
+}
+
+export function listManagementCombos({ search = "" } = {}) {
+	return callRestaurantAPI("list_management_combos", { search });
+}
+
+export function saveManagementCombo(payload = {}) {
+	return callRestaurantAPI("save_management_combo", { payload });
+}
+
+export function deleteManagementCombo(comboItem) {
+	return callRestaurantAPI("delete_management_combo", { combo_item: comboItem });
+}
+
+export function getManagementPackagingSettings() {
+	return callRestaurantAPI("get_management_packaging_settings", {});
+}
+
+export function setManagementPackagingSettings(payload = {}) {
+	return callRestaurantAPI("set_management_packaging_settings", { payload });
+}
+
+export function getManagementWorkShifts() {
+	return callRestaurantAPI("get_management_work_shifts", {});
+}
+
+export function setManagementWorkShifts(shifts) {
+	return callRestaurantAPI("set_management_work_shifts", { payload: { shifts } });
+}
+
+export function getManagementRegisterClosingSummary({ pos_profile = "", date_from = "" } = {}) {
+	return callRestaurantAPI("get_management_register_closing_summary", { pos_profile, date_from });
+}
+
+export function closeManagementRegister(payload = {}) {
+	return callRestaurantAPI("close_management_register", { payload });
+}
+
+export function listManagementRegisterClosings({ limit = 20, cashier = "" } = {}) {
+	return callRestaurantAPI("list_management_register_closings", { limit, cashier });
+}
+
+export function getManagementRegisterClosingDetail(name) {
+	return callRestaurantAPI("get_management_register_closing_detail", { name });
+}
+
+export function getManagementPrintFontSettings() {
+	return callRestaurantAPI("get_management_print_font_settings", {});
+}
+
+export function setManagementPrintFontSettings(payload = {}) {
+	return callRestaurantAPI("set_management_print_font_settings", { payload });
+}
+
+export function getManagementDashboardLayout() {
+	return callRestaurantAPI("get_management_dashboard_layout", {});
+}
+
+export function setManagementDashboardLayout(payload = {}) {
+	return callRestaurantAPI("set_management_dashboard_layout", { payload });
+}
+
 export function listManagementPrintFormats({ search = "", doc_type = "", blank_only = 0 } = {}) {
 	return callRestaurantAPI("list_management_print_formats", { search, doc_type, blank_only });
 }
@@ -3180,4 +3293,581 @@ export async function saveZarinpalSettings(payload = {}) {
 
 export async function testZarinpalConnection(payload = {}) {
 	return callRestaurantAPI("test_zarinpal_connection", { payload });
+}
+
+// ---------------------------------------------------------------------------
+// Smart inventory (انبارداری هوشمند)
+// ---------------------------------------------------------------------------
+
+export function getManagementInventoryBoot() {
+	return callRestaurantAPI("get_management_inventory_boot", {});
+}
+
+export function listManagementRawMaterials({ search = "", include_inactive = 0, limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_raw_materials", { search, include_inactive, limit, offset });
+}
+
+export function getManagementRawMaterialDetail(item_code) {
+	return callRestaurantAPI("get_management_raw_material_detail", { item_code });
+}
+
+export function saveManagementRawMaterial(payload = {}) {
+	return callRestaurantAPI("save_management_raw_material", { payload });
+}
+
+export function listManagementWarehouses() {
+	return callRestaurantAPI("list_management_warehouses", {});
+}
+
+export function saveManagementWarehouse(payload = {}) {
+	return callRestaurantAPI("save_management_warehouse", { payload });
+}
+
+export function deleteManagementWarehouse(name) {
+	return callRestaurantAPI("delete_management_warehouse", { name });
+}
+
+export function getManagementStockOverview({ warehouse = "", search = "", only_materials = 0, limit = 400, offset = 0 } = {}) {
+	return callRestaurantAPI("get_management_stock_overview", { warehouse, search, only_materials, limit, offset });
+}
+
+export function createManagementStockMovement(payload = {}) {
+	return callRestaurantAPI("create_management_stock_movement", { payload });
+}
+
+export function listManagementStockMovements({ date_from = "", date_to = "", warehouse = "", item_code = "", kind = "", limit = 50, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_stock_movements", { date_from, date_to, warehouse, item_code, kind, limit, offset });
+}
+
+export function listManagementSuppliers({ search = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_suppliers", { search, limit, offset });
+}
+
+export function saveManagementSupplier(payload = {}) {
+	return callRestaurantAPI("save_management_supplier", { payload });
+}
+
+export function listManagementPurchaseOrders({ status = "", search = "", limit = 50, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_purchase_orders", { status, search, limit, offset });
+}
+
+export function getManagementPurchaseOrder(name) {
+	return callRestaurantAPI("get_management_purchase_order", { name });
+}
+
+export function saveManagementPurchaseOrder(payload = {}) {
+	return callRestaurantAPI("save_management_purchase_order", { payload });
+}
+
+export function updateManagementPurchaseOrderStatus(payload = {}) {
+	return callRestaurantAPI("update_management_purchase_order_status", { payload });
+}
+
+export function receiveManagementPurchaseOrder(payload = {}) {
+	return callRestaurantAPI("receive_management_purchase_order", { payload });
+}
+
+export function getManagementReorderAlerts({ warehouse = "", limit = 200 } = {}) {
+	return callRestaurantAPI("get_management_reorder_alerts", { warehouse, limit });
+}
+
+export function createManagementPurchaseFromAlerts(payload = {}) {
+	return callRestaurantAPI("create_management_purchase_from_alerts", { payload });
+}
+
+export function getManagementProductionPlan({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_production_plan", { date_from, date_to });
+}
+
+export function createManagementProductionEntry(payload = {}) {
+	return callRestaurantAPI("create_management_production_entry", { payload });
+}
+
+export function saveManagementOrderLoss(payload = {}) {
+	return callRestaurantAPI("save_management_order_loss", { payload });
+}
+
+export function listManagementOrderLosses({ date_from = "", date_to = "", loss_kind = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_order_losses", { date_from, date_to, loss_kind, limit, offset });
+}
+
+export function getManagementWasteLossReport({ date_from = "", date_to = "", warehouse = "" } = {}) {
+	return callRestaurantAPI("get_management_waste_loss_report", { date_from, date_to, warehouse });
+}
+
+export function getManagementReconciliationContext({ warehouse = "", search = "" } = {}) {
+	return callRestaurantAPI("get_management_reconciliation_context", { warehouse, search });
+}
+
+export function submitManagementStockReconciliation(payload = {}) {
+	return callRestaurantAPI("submit_management_stock_reconciliation", { payload });
+}
+
+export function listManagementStockReconciliations({ limit = 30 } = {}) {
+	return callRestaurantAPI("list_management_stock_reconciliations", { limit });
+}
+
+export function getManagementStockReconciliation(name) {
+	return callRestaurantAPI("get_management_stock_reconciliation", { name });
+}
+
+export function getManagementProductCostReport({ search = "", limit = 200 } = {}) {
+	return callRestaurantAPI("get_management_product_cost_report", { search, limit });
+}
+
+export function getManagementReportInventoryValuation({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_inventory_valuation", { date_from, date_to });
+}
+
+export function getManagementReportStockMovements({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_stock_movements", { date_from, date_to });
+}
+
+export function getManagementReportInventoryWaste({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_inventory_waste", { date_from, date_to });
+}
+
+export function exportManagementMaterialsExcel({ search = "" } = {}) {
+	return callRestaurantAPI("export_management_materials_excel", { search });
+}
+
+export function importManagementMaterialsExcel({ file_url = "", file_name = "", update_existing = 1, dry_run = 0 } = {}) {
+	return callRestaurantAPI("import_management_materials_excel", { file_url, file_name, update_existing, dry_run });
+}
+
+export function getManagementInventoryAlertsSummary() {
+	return callRestaurantAPI("get_management_inventory_alerts_summary", {});
+}
+
+export function getManagementInventoryPurchasePrint(name) {
+	return callRestaurantAPI("get_management_inventory_purchase_print", { name });
+}
+
+// ---------------------------------------------------------------------------
+// Customer club, loyalty wallet, SMS, surveys (api_club)
+// ---------------------------------------------------------------------------
+
+export function getManagementClubBoot() {
+	return callRestaurantAPI("get_management_club_boot", {});
+}
+
+export function updateManagementClubSettings(payload = {}) {
+	return callRestaurantAPI("update_management_club_settings", { payload });
+}
+
+export function listManagementClubCustomers({ search = "", tier = "", segment = "", kind = "", organization = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_club_customers", { search, tier, segment, kind, organization, limit, offset });
+}
+
+export function saveManagementClubCustomer(payload = {}) {
+	return callRestaurantAPI("save_management_club_customer", { payload });
+}
+
+export function assignManagementMembershipCodes() {
+	return callRestaurantAPI("assign_management_membership_codes", {});
+}
+
+export function exportManagementCustomersExcel({ search = "" } = {}) {
+	return callRestaurantAPI("export_management_customers_excel", { search });
+}
+
+export function importManagementCustomersExcel({ file_url = "", file_name = "", dry_run = 0 } = {}) {
+	return callRestaurantAPI("import_management_customers_excel", { file_url, file_name, dry_run });
+}
+
+export function computeManagementCustomerSegments() {
+	return callRestaurantAPI("compute_management_customer_segments", {});
+}
+
+export function getManagementSmsTemplates() {
+	return callRestaurantAPI("get_management_sms_templates", {});
+}
+
+export function setManagementSmsTemplates(payload = {}) {
+	return callRestaurantAPI("set_management_sms_templates", { payload });
+}
+
+export function sendManagementSms(payload = {}) {
+	return callRestaurantAPI("send_management_sms", { payload });
+}
+
+export function listManagementSmsMessages({ kind = "", status = "", date_from = "", date_to = "", search = "", limit = 50, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_sms_messages", { kind, status, date_from, date_to, search, limit, offset });
+}
+
+export function listManagementWallets({ search = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_wallets", { search, limit, offset });
+}
+
+export function getManagementWalletDetail(customer = "") {
+	return callRestaurantAPI("get_management_wallet_detail", { customer });
+}
+
+export function chargeManagementWallet(payload = {}) {
+	return callRestaurantAPI("charge_management_wallet", { payload });
+}
+
+export function transferManagementWallet(payload = {}) {
+	return callRestaurantAPI("transfer_management_wallet", { payload });
+}
+
+export function adjustManagementWallet(payload = {}) {
+	return callRestaurantAPI("adjust_management_wallet", { payload });
+}
+
+export function getManagementReferralSummary() {
+	return callRestaurantAPI("get_management_referral_summary", {});
+}
+
+export function listManagementCampaigns({ status = "" } = {}) {
+	return callRestaurantAPI("list_management_campaigns", { status });
+}
+
+export function saveManagementCampaign(payload = {}) {
+	return callRestaurantAPI("save_management_campaign", { payload });
+}
+
+export function updateManagementCampaignStatus(payload = {}) {
+	return callRestaurantAPI("update_management_campaign_status", { payload });
+}
+
+export function getManagementCampaignStats(name = "") {
+	return callRestaurantAPI("get_management_campaign_stats", { name });
+}
+
+export function listManagementSurveyQuestions({ include_inactive = 0 } = {}) {
+	return callRestaurantAPI("list_management_survey_questions", { include_inactive });
+}
+
+export function saveManagementSurveyQuestion(payload = {}) {
+	return callRestaurantAPI("save_management_survey_question", { payload });
+}
+
+export function deleteManagementSurveyQuestion(name = "") {
+	return callRestaurantAPI("delete_management_survey_question", { name });
+}
+
+export function listManagementSurveyResponses({ date_from = "", date_to = "", search = "", min_rating = 0, max_rating = 0 } = {}) {
+	return callRestaurantAPI("list_management_survey_responses", { date_from, date_to, search, min_rating, max_rating });
+}
+
+export function getManagementReportCustomerAnalytics({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_customer_analytics", { date_from, date_to });
+}
+
+export function getManagementReportCampaignPerformance({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_campaign_performance", { date_from, date_to });
+}
+
+export function getManagementReportWalletSummary({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_wallet_summary", { date_from, date_to });
+}
+
+export function getManagementReportCreditTransactions({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_credit_transactions", { date_from, date_to });
+}
+
+export function getManagementReportCareFeedback({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_care_feedback", { date_from, date_to });
+}
+
+export function getManagementReportSurveyAnalytics({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_survey_analytics", { date_from, date_to });
+}
+
+// ---------------------------------------------------------------------------
+// Courier ops, delivery zones, budgets & cost control (api_ops)
+// ---------------------------------------------------------------------------
+
+export function listManagementDeliveryZones({ include_inactive = 0 } = {}) {
+	return callRestaurantAPI("list_management_delivery_zones", { include_inactive });
+}
+
+export function saveManagementDeliveryZone(payload = {}) {
+	return callRestaurantAPI("save_management_delivery_zone", { payload });
+}
+
+export function deleteManagementDeliveryZone(name = "") {
+	return callRestaurantAPI("delete_management_delivery_zone", { name });
+}
+
+export function checkManagementDeliveryPoint({ lat = 0, lng = 0 } = {}) {
+	return callRestaurantAPI("check_management_delivery_point", { lat, lng });
+}
+
+export function assignManagementOrderCourier(payload = {}) {
+	return callRestaurantAPI("assign_management_order_courier", { payload });
+}
+
+export function getManagementDeliveryProviderSettings() {
+	return callRestaurantAPI("get_management_delivery_provider_settings", {});
+}
+
+export function setManagementDeliveryProviderSettings(payload = {}) {
+	return callRestaurantAPI("set_management_delivery_provider_settings", { payload });
+}
+
+export function dispatchManagementDeliveryProvider(payload = {}) {
+	return callRestaurantAPI("dispatch_management_delivery_provider", { payload });
+}
+
+export function getManagementPosKitchenNotifications({ since = "" } = {}) {
+	return callRestaurantAPI("get_management_pos_kitchen_notifications", { since });
+}
+
+export function listManagementBudgets({ fiscal_year = 0, period = "" } = {}) {
+	return callRestaurantAPI("list_management_budgets", { fiscal_year, period });
+}
+
+export function saveManagementBudget(payload = {}) {
+	return callRestaurantAPI("save_management_budget", { payload });
+}
+
+export function deleteManagementBudget(name = "") {
+	return callRestaurantAPI("delete_management_budget", { name });
+}
+
+export function getManagementCostControlBoot({ fiscal_year = "" } = {}) {
+	return callRestaurantAPI("get_management_cost_control_boot", { fiscal_year });
+}
+
+export function computeManagementRoi(payload = {}) {
+	return callRestaurantAPI("compute_management_roi", { payload });
+}
+
+export function getManagementReportCourierPerformance({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_courier_performance", { date_from, date_to });
+}
+
+export function getManagementReportKitchenPerformance({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_kitchen_performance", { date_from, date_to });
+}
+
+export function getManagementReportProfitLoss({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_profit_loss", { date_from, date_to });
+}
+
+export function getManagementReportBreakeven({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_breakeven", { date_from, date_to });
+}
+
+export function listManagementCoupons({ search = "", include_inactive = 0 } = {}) {
+	return callRestaurantAPI("list_management_coupons", { search, include_inactive });
+}
+
+export function saveManagementCoupon(payload = {}) {
+	return callRestaurantAPI("save_management_coupon", { payload });
+}
+
+// ---------------------------------------------------------------------------
+// Customer club extras: SMS class stats, customer voice, loyalty points
+// ---------------------------------------------------------------------------
+
+export function getManagementSmsKindStats({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_sms_kind_stats", { date_from, date_to });
+}
+
+export function listManagementCustomerVoices({ type = "", status = "", date_from = "", date_to = "", search = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_customer_voices", { type, status, date_from, date_to, search, limit, offset });
+}
+
+export function saveManagementCustomerVoice(payload = {}) {
+	return callRestaurantAPI("save_management_customer_voice", { payload });
+}
+
+export function updateManagementCustomerVoiceStatus(payload = {}) {
+	return callRestaurantAPI("update_management_customer_voice_status", { payload });
+}
+
+export function deleteManagementCustomerVoice(name = "") {
+	return callRestaurantAPI("delete_management_customer_voice", { name });
+}
+
+export function listManagementPointEntries({ customer = "", kind = "", date_from = "", date_to = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_point_entries", { customer, kind, date_from, date_to, limit, offset });
+}
+
+export function redeemManagementPoints(payload = {}) {
+	return callRestaurantAPI("redeem_management_points", { payload });
+}
+
+export function adjustManagementPoints(payload = {}) {
+	return callRestaurantAPI("adjust_management_points", { payload });
+}
+
+export function redeemMyPoints({ mobile = "", points = 0 } = {}) {
+	return callRestaurantAPI("redeem_my_points", { mobile, points });
+}
+
+// ---------------------------------------------------------------------------
+// Organizational (B2B) customers: contracts, members, credit, invoices
+// ---------------------------------------------------------------------------
+
+export function getManagementOrgBoot() {
+	return callRestaurantAPI("get_management_org_boot", {});
+}
+
+export function listManagementOrgContracts({ status = "", search = "" } = {}) {
+	return callRestaurantAPI("list_management_org_contracts", { status, search });
+}
+
+export function saveManagementOrgContract(payload = {}) {
+	return callRestaurantAPI("save_management_org_contract", { payload });
+}
+
+export function deleteManagementOrgContract(name = "") {
+	return callRestaurantAPI("delete_management_org_contract", { name });
+}
+
+export function listManagementOrgMembers({ organization = "", search = "" } = {}) {
+	return callRestaurantAPI("list_management_org_members", { organization, search });
+}
+
+export function saveManagementOrgMember(payload = {}) {
+	return callRestaurantAPI("save_management_org_member", { payload });
+}
+
+export function deleteManagementOrgMember(name = "") {
+	return callRestaurantAPI("delete_management_org_member", { name });
+}
+
+export function assignManagementCustomerOrganization(payload = {}) {
+	return callRestaurantAPI("assign_management_customer_organization", { payload });
+}
+
+export function getManagementOrgCredit(organization = "") {
+	return callRestaurantAPI("get_management_org_credit", { organization });
+}
+
+export function listManagementOrgOrders({ organization = "", date_from = "", date_to = "", member = "", invoiced = "", search = "", limit = 200, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_org_orders", { organization, date_from, date_to, member, invoiced, search, limit, offset });
+}
+
+export function exportManagementOrgOrdersExcel({ organization = "", date_from = "", date_to = "", member = "", invoiced = "", search = "" } = {}) {
+	return callRestaurantAPI("export_management_org_orders_excel", { organization, date_from, date_to, member, invoiced, search });
+}
+
+export function createManagementOrgInvoice(payload = {}) {
+	return callRestaurantAPI("create_management_org_invoice", { payload });
+}
+
+// ---------------------------------------------------------------------------
+// Ops extras: route optimization, proforma, waiter report
+// ---------------------------------------------------------------------------
+
+export function optimizeManagementCourierRoute(payload = {}) {
+	return callRestaurantAPI("optimize_management_courier_route", { payload });
+}
+
+export function createManagementOrderProforma(order_name = "") {
+	return callRestaurantAPI("create_management_order_proforma", { order_name });
+}
+
+export function getManagementReportWaiterPerformance({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_waiter_performance", { date_from, date_to });
+}
+
+// ---------------------------------------------------------------------------
+// Commerce pack: reservations, tax (moadian), branches, call center, vendors,
+// accounting
+// ---------------------------------------------------------------------------
+
+export function getManagementReservationBoot() {
+	return callRestaurantAPI("get_management_reservation_boot", {});
+}
+
+export function listManagementReservations({ date_from = "", date_to = "", status = "", table = "", search = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_reservations", { date_from, date_to, status, table, search, limit, offset });
+}
+
+export function saveManagementReservation(payload = {}) {
+	return callRestaurantAPI("save_management_reservation", { payload });
+}
+
+export function updateManagementReservationStatus(payload = {}) {
+	return callRestaurantAPI("update_management_reservation_status", { payload });
+}
+
+export function deleteManagementReservation(name = "") {
+	return callRestaurantAPI("delete_management_reservation", { name });
+}
+
+export function getManagementTaxBoot() {
+	return callRestaurantAPI("get_management_tax_boot", {});
+}
+
+export function setManagementTaxSettings(payload = {}) {
+	return callRestaurantAPI("set_management_tax_settings", { payload });
+}
+
+export function listManagementTaxSubmissions({ status = "", date_from = "", date_to = "", search = "", limit = 50, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_tax_submissions", { status, date_from, date_to, search, limit, offset });
+}
+
+export function submitManagementTaxInvoice(sales_invoice = "") {
+	return callRestaurantAPI("submit_management_tax_invoice", { sales_invoice });
+}
+
+export function getManagementBranchBoot() {
+	return callRestaurantAPI("get_management_branch_boot", {});
+}
+
+export function listManagementBranches({ active_only = 0 } = {}) {
+	return callRestaurantAPI("list_management_branches", { active_only });
+}
+
+export function saveManagementBranch(payload = {}) {
+	return callRestaurantAPI("save_management_branch", { payload });
+}
+
+export function updateManagementBranchStatus(payload = {}) {
+	return callRestaurantAPI("update_management_branch_status", { payload });
+}
+
+export function transferManagementCustomerBranch(payload = {}) {
+	return callRestaurantAPI("transfer_management_customer_branch", { payload });
+}
+
+export function suggestNearestBranch({ mobile = "", customer = "" } = {}) {
+	return callRestaurantAPI("suggest_nearest_branch", { mobile, customer });
+}
+
+export function getManagementCallCenterBoot() {
+	return callRestaurantAPI("get_management_call_center_boot", {});
+}
+
+export function listManagementCallLogs({ status = "", limit = 20, since = "" } = {}) {
+	return callRestaurantAPI("list_management_call_logs", { status, limit, since });
+}
+
+export function claimManagementCallLog(name = "") {
+	return callRestaurantAPI("claim_management_call_log", { name });
+}
+
+export function resolveManagementCallLog({ name = "", note = "" } = {}) {
+	return callRestaurantAPI("resolve_management_call_log", { name, note });
+}
+
+export function getCallCenterCustomer(mobile = "") {
+	return callRestaurantAPI("get_call_center_customer", { mobile });
+}
+
+export function sendCallCenterNote(payload = {}) {
+	return callRestaurantAPI("send_call_center_note", { payload });
+}
+
+export function listManagementVendors({ include_inactive = 0 } = {}) {
+	return callRestaurantAPI("list_management_vendors", { include_inactive });
+}
+
+export function saveManagementVendor(payload = {}) {
+	return callRestaurantAPI("save_management_vendor", { payload });
+}
+
+export function deleteManagementVendor(name = "") {
+	return callRestaurantAPI("delete_management_vendor", { name });
+}
+
+export function getManagementAccountingBoot() {
+	return callRestaurantAPI("get_management_accounting_boot", {});
 }

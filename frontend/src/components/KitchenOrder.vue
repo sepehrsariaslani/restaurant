@@ -34,6 +34,7 @@
         </div>
         <div v-for="(it, i) in (order.items || []).slice(0, 6)" :key="i" class="ko-item">
           <div class="ko-item-main">
+            <img v-if="it.image" :src="it.image" class="ko-thumb" alt="" loading="lazy" />
             <span class="ko-qty" :class="`ko-qty-${type}`">{{ toFaDigits(it.qty) }}</span>
             <span class="ko-title">{{ it.title || it.item_name || 'آیتم نامشخص' }}</span>
           </div>
@@ -45,6 +46,14 @@
         <div v-if="(order.items || []).length > 6" class="ko-more">
           + {{ toFaDigits((order.items || []).length - 6) }} آیتم دیگر
         </div>
+      </div>
+      <div v-if="prepTiming" class="ko-prep" :class="{ 'overtime': prepTiming.overtime }">
+        <Timer :size="12" class="icon-sm" />
+        <span>
+          آماده‌سازی: {{ toFaDigits(prepTiming.actual) }}د
+          <template v-if="prepTiming.expected"> / هدف {{ toFaDigits(prepTiming.expected) }}د</template>
+        </span>
+        <span v-if="prepTiming.overtime" class="ko-prep-overtime">+{{ toFaDigits(prepTiming.actual - prepTiming.expected) }}د تأخیر</span>
       </div>
     </div>
 
@@ -67,7 +76,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Clock, UserRound, CornerDownLeft, Play, Check, CheckCheck, Layers } from 'lucide-vue-next'
+import { Clock, UserRound, CornerDownLeft, Play, Check, CheckCheck, Layers, Timer } from 'lucide-vue-next'
 
 const props = defineProps({
   order: { type: Object, required: true },
@@ -94,6 +103,28 @@ const elapsed = computed(() => {
 })
 
 const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' && props.type !== 'closed')
+
+function parseServerDate(value) {
+  if (!value) return null
+  const ms = new Date(String(value).replace(' ', 'T')).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+const expectedPrepMins = computed(() =>
+  (props.order.items || []).reduce((m, it) => Math.max(m, Number(it.prep_time_mins) || 0), 0),
+)
+
+// Actual kitchen time: prep start → ready (or now). Target = max item prep mins.
+const prepTiming = computed(() => {
+  const expected = expectedPrepMins.value
+  const startedMs = parseServerDate(props.order?.kitchen_started_at)
+  const readyMs = parseServerDate(props.order?.kitchen_ready_at)
+  if (!startedMs && !readyMs && !expected) return null
+  const startMs = startedMs || parseServerDate(props.order?.created_at || props.order?.creation) || Date.now()
+  const endMs = readyMs || Date.now()
+  const actual = Math.max(0, Math.floor((endMs - startMs) / 60000))
+  return { expected, actual, overtime: expected > 0 && actual > expected }
+})
 </script>
 
 
@@ -283,6 +314,35 @@ const isUrgent = computed(() => elapsed.value >= 12 && props.type !== 'ready' &&
 .note-icon {
   margin-top: 0.15rem;
   opacity: 0.8;
+}
+.ko-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--mg-border-light);
+  margin-inline-start: 0.35rem;
+}
+.ko-item-main .ko-title {
+  flex: 1;
+}
+.ko-prep {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--mg-border-light);
+  font-size: 0.75rem;
+  color: var(--mg-text-muted, #6b7a72);
+}
+.ko-prep.overtime {
+  color: var(--mg-danger);
+  font-weight: 700;
+}
+.ko-prep-overtime {
+  margin-inline-start: auto;
 }
 
 .ko-more {

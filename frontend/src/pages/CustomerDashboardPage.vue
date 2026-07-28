@@ -56,6 +56,44 @@
         </div>
       </section>
 
+      <section v-if="club && club.points_enabled !== false" class="customer-section customer-glass-card club-summary">
+        <div class="club-summary__head">
+          <span class="customer-icon-badge club-badge"><Star :size="22" /></span>
+          <div>
+            <h2>باشگاه مشتریان</h2>
+            <p v-if="club.loyalty_tier" class="club-tier">سطح شما: {{ club.loyalty_tier }}</p>
+          </div>
+        </div>
+        <div class="club-summary__stats">
+          <article class="club-stat">
+            <small>اعتبار کیف پول</small>
+            <strong>{{ (club.wallet_balance || 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong>
+          </article>
+          <article class="club-stat">
+            <small>امتیاز وفاداری</small>
+            <strong>{{ (club.points_balance || 0).toLocaleString('fa-IR') }}</strong>
+          </article>
+        </div>
+        <p v-if="club.points_enabled && club.points_rial_value" class="club-hint">
+          هر {{ club.points_min_redeem ? club.points_min_redeem.toLocaleString('fa-IR') : '—' }}+ امتیاز قابل تبدیل به اعتبار است؛ هر امتیاز {{ club.points_rial_value.toLocaleString('fa-IR') }} {{ currencyLabel }}.
+          <template v-if="club.points_expiry_days">امتیازها تا {{ club.points_expiry_days.toLocaleString('fa-IR') }} روز معتبرند.</template>
+        </p>
+        <p v-if="clubMessage" class="club-msg ok">{{ clubMessage }}</p>
+        <p v-if="clubError" class="club-msg err">{{ clubError }}</p>
+        <div class="club-summary__actions" v-if="club.points_enabled">
+          <button
+            v-if="canRedeemPoints"
+            type="button"
+            class="customer-page__ghost-action club-redeem-btn"
+            :disabled="redeemBusy"
+            @click="redeemAllPoints"
+          >
+            <Wallet :size="16" />
+            {{ redeemBusy ? 'در حال تبدیل...' : 'تبدیل امتیاز به اعتبار' }}
+          </button>
+        </div>
+      </section>
+
       <section class="customer-section">
         <div class="customer-section__head">
           <div>
@@ -194,17 +232,55 @@ import {
   Search,
   ShoppingCart,
   Sparkles,
+  Star,
   Store,
   UserRound,
   UtensilsCrossed,
+  Wallet,
 } from 'lucide-vue-next'
 import { cartState } from '@/stores/cartStore'
-import { getCustomerProfile, getMenuItems } from '@/utils/api'
+import { getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 const customer = ref({ name: '', mobile: '' })
+const club = ref(null)
+const redeemBusy = ref(false)
+const clubMessage = ref('')
+const clubError = ref('')
+const currencyLabel = computed(() => (currency.value === 'TOMAN' || currency.value === 'IRT' ? 'تومان' : 'ریال'))
+const canRedeemPoints = computed(() => {
+  if (!club.value || !club.value.points_enabled) return false
+  const balance = Number(club.value.points_balance) || 0
+  const minRedeem = Number(club.value.points_min_redeem) || 0
+  return balance > 0 && balance >= minRedeem
+})
+
+async function redeemAllPoints() {
+  if (!customer.value.mobile || redeemBusy.value) return
+  redeemBusy.value = true
+  clubMessage.value = ''
+  clubError.value = ''
+  try {
+    const points = Number(club.value?.points_balance) || 0
+    const payload = await redeemMyPoints({ mobile: customer.value.mobile, points })
+    const credited = Number(payload?.amount_credited) || 0
+    clubMessage.value = `${(payload?.points_used || points).toLocaleString('fa-IR')} امتیاز به ${credited.toLocaleString('fa-IR')} ${currencyLabel.value} اعتبار تبدیل شد.`
+    if (club.value) {
+      club.value = {
+        ...club.value,
+        points_balance: Number(payload?.points_balance) || 0,
+        wallet_balance: Number(payload?.wallet_balance) || club.value.wallet_balance,
+      }
+    }
+  } catch (err) {
+    clubError.value = err?.message || 'تبدیل امتیاز انجام نشد.'
+  } finally {
+    redeemBusy.value = false
+  }
+}
+
 const orders = ref([])
 const specialOffers = ref([])
 const currency = ref('TOMAN')
@@ -276,6 +352,7 @@ onMounted(async () => {
     try {
       const profile = await getCustomerProfile({ mobile: auth.mobile })
       customer.value = profile?.customer || customer.value
+      club.value = profile?.club || null
       orders.value = profile?.orders || []
       if (profile?.currency) currency.value = profile.currency
       if (customer.value.name) localStorage.setItem('customer_name', customer.value.name)
@@ -366,6 +443,89 @@ onMounted(async () => {
   padding: 1rem;
   display: grid;
   gap: 0.9rem;
+}
+
+.club-summary {
+  padding: 1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.club-summary__head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.club-summary__head h2 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.club-tier {
+  margin: 0.24rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-primary, #b8722d);
+  font-weight: 700;
+}
+
+.club-badge {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  color: #7a4a12;
+}
+
+.club-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.club-stat {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 14px;
+  background: var(--surface-soft, rgba(255, 255, 255, 0.5));
+  border: 1px solid var(--border-soft, rgba(0, 0, 0, 0.06));
+}
+
+.club-stat small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.club-stat strong {
+  font-size: 1rem;
+}
+
+.club-hint {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.club-msg {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.club-msg.ok {
+  color: #2f7b47;
+}
+
+.club-msg.err {
+  color: #b3402e;
+}
+
+.club-summary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.club-redeem-btn {
+  font-weight: 700;
 }
 
 .account-summary__main,

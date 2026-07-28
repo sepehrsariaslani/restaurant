@@ -110,6 +110,12 @@
             <input class="customer-input" v-model="newAddr.detail" placeholder="مثلاً: واحد ۳" />
           </div>
 
+          <div class="customer-field">
+            <label>لینک فیلم راهنمای مسیر (اختیاری)</label>
+            <input class="customer-input" v-model="newAddr.video_url" dir="ltr" placeholder="https://... لینک ویدئو برای راهنمایی پیک" />
+            <small class="customer-hint">اگر مسیر خانه‌تان سخت است، لینک فیلم کوتاه راهنما را اینجا بگذارید تا پیک راحت‌تر پیدایتان کند.</small>
+          </div>
+
           <div class="customer-field location-field">
             <div class="location-field__head">
               <div>
@@ -197,6 +203,7 @@ function normalizeAddress(row) {
     type: row.type || row.address_type || 'سایر',
     address,
     detail: row.detail || row.address_line2 || '',
+    video_url: row.video_url || row.guidance_video || '',
     lat,
     lng,
   }
@@ -259,7 +266,7 @@ function openAddForm() {
   editingId.value = null
   locationError.value = ''
   mapStatus.value = ''
-  newAddr.value = { label: 'خانه', type: 'خانه', address: '', detail: '', lat: '', lng: '' }
+  newAddr.value = { label: 'خانه', type: 'خانه', address: '', detail: '', video_url: '', lat: '', lng: '' }
   showForm.value = true
 }
 function editAddress(addr) {
@@ -319,6 +326,7 @@ async function saveAddress() {
         address_line: newAddr.value.address,
         address_line1: newAddr.value.address,
         address_line2: newAddr.value.detail,
+        video_url: newAddr.value.video_url || '',
         lat: normalizeCoordinate(newAddr.value.lat),
         lng: normalizeCoordinate(newAddr.value.lng),
       },

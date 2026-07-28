@@ -79,6 +79,10 @@
             <input v-model.trim="courierForm.mobile" class="input" dir="ltr" />
           </label>
           <label>
+            کد دسترسی اپ پیک
+            <input v-model.trim="courierForm.access_code" class="input" dir="ltr" placeholder="برای ورود به /courier" />
+          </label>
+          <label>
             نوع وسیله اصلی
             <input v-model.trim="courierForm.vehicle_type" class="input" />
           </label>
@@ -162,9 +166,33 @@
           </span>
         </div>
       </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="بهینه‌سازی مسیر تحویل" subtitle="چیدمان سفارش‌های در حال ارسال هر پیک بر اساس نزدیک‌ترین مسیر؛ ترتیب در اپ پیک اعمال می‌شود">
+        <div class="dispatch-box">
+          <select v-model="routeForm.courier" class="input">
+            <option value="">— انتخاب پیک —</option>
+            <option v-for="courier in courierOptions" :key="courier.name" :value="courier.name">{{ courier.label || courier.name }}</option>
+          </select>
+          <button class="secondary-btn" type="button" :disabled="routeOptimizing || !routeForm.courier" @click="runRouteOptimization">
+            {{ routeOptimizing ? 'در حال محاسبه...' : 'بهینه‌سازی مسیر' }}
+          </button>
+          <span v-if="routeMessage" class="ok-text">{{ routeMessage }}</span>
+        </div>
+        <div v-if="routeOrders.length" class="route-list">
+          <div v-for="(row, idx) in routeOrders" :key="row.order || idx" class="route-item">
+            <span class="route-index">{{ toFa(idx + 1) }}</span>
+            <div>
+              <strong>{{ row.order }}</strong>
+              <small class="muted">{{ row.customer || '—' }}</small>
+            </div>
+            <small v-if="row.has_location === false" class="muted">بدون مختصات</small>
+          </div>
+        </div>
+        <p class="muted provider-hint">ترتیب محاسبه‌شده روی هر سفارش ذخیره می‌شود (route index) و اپ پیک سفارش‌ها را به همین ترتیب نمایش می‌دهد. سفارش‌های بدون مختصات در انتهای مسیر می‌مانند.</p>
+      </ManagementSurfaceCard>
     </section>
 
-    <section v-else class="panel-grid">
+    <section v-else-if="activeTab === 'fleet'" class="panel-grid">
       <ManagementSurfaceCard title="ناوگان داخلی" subtitle="هر وسیله به یک پیک متصل می‌شود و می‌تواند وسیله اصلی او باشد">
         <div class="toolbar-row">
           <input
@@ -238,6 +266,147 @@
         </ManagementDataTable>
       </ManagementSurfaceCard>
     </section>
+
+    <section v-else-if="activeTab === 'zones'" class="panel-grid">
+      <ManagementSurfaceCard title="محدوده‌های سفارش‌گیری" subtitle="زون‌های دایره‌ای روی مختصات جغرافیایی؛ سفارش ارسال فقط داخل محدوده فعال پذیرفته می‌شود">
+        <div class="editor-grid">
+          <label>
+            نام محدوده
+            <input v-model.trim="zoneForm.zone_name" class="input" placeholder="مثلاً محدوده مرکز شهر" />
+          </label>
+          <label>
+            عرض جغرافیایی مرکز (lat)
+            <input v-model.number="zoneForm.center_lat" class="input" dir="ltr" type="number" step="0.000001" placeholder="35.6892" />
+          </label>
+          <label>
+            طول جغرافیایی مرکز (lng)
+            <input v-model.number="zoneForm.center_lng" class="input" dir="ltr" type="number" step="0.000001" placeholder="51.3890" />
+          </label>
+          <label>
+            شعاع (کیلومتر)
+            <input v-model.number="zoneForm.radius_km" class="input" type="number" min="0.1" step="0.1" />
+          </label>
+          <label>
+            هزینه ارسال (ریال)
+            <input v-model.number="zoneForm.delivery_fee" class="input" type="number" min="0" />
+          </label>
+          <label>
+            حداقل سفارش (ریال)
+            <input v-model.number="zoneForm.min_order_amount" class="input" type="number" min="0" />
+          </label>
+          <label class="check-row">
+            <input v-model="zoneForm.is_active" type="checkbox" />
+            فعال
+          </label>
+        </div>
+
+        <label class="full-width">
+          یادداشت
+          <textarea v-model.trim="zoneForm.notes" class="input" rows="2"></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button class="primary-btn" type="button" :disabled="savingZone" @click="saveZone">
+            {{ savingZone ? 'در حال ذخیره...' : zoneForm.name ? 'ذخیره تغییرات محدوده' : 'ثبت محدوده' }}
+          </button>
+          <button
+            v-if="zoneForm.name"
+            class="ghost-btn danger"
+            type="button"
+            :disabled="savingZone"
+            @click="removeZone(zoneForm.name)"
+          >
+            حذف محدوده
+          </button>
+          <button class="secondary-btn" type="button" @click="resetZoneForm">محدوده جدید</button>
+          <label class="check-row zone-toggle">
+            <input v-model="providerForm.zone_control_enabled" type="checkbox" />
+            کنترل محدوده هنگام ثبت سفارش ارسال فعال باشد
+          </label>
+          <button class="tertiary-btn" type="button" :disabled="savingProvider" @click="saveProviderSettings">ذخیره</button>
+        </div>
+
+        <ManagementDataTable :columns="zoneColumns" :rows="zones" row-key="name">
+          <template #cell-zone_name="{ row }">
+            <button class="mini-link-btn" type="button" @click="editZone(row)">{{ row.zone_name }}</button>
+          </template>
+          <template #cell-center="{ row }"><span dir="ltr">{{ row.center_lat }}, {{ row.center_lng }}</span></template>
+          <template #cell-radius_km="{ value }">{{ toFa(value) }} km</template>
+          <template #cell-delivery_fee="{ value }">{{ toFa(value) }}</template>
+          <template #cell-min_order_amount="{ value }">{{ value ? toFa(value) : '-' }}</template>
+          <template #cell-is_active="{ value }">{{ value ? 'فعال' : 'غیرفعال' }}</template>
+        </ManagementDataTable>
+
+        <div class="zone-check">
+          <strong>تست محدوده:</strong>
+          <input v-model.number="zoneCheck.lat" class="input" dir="ltr" type="number" step="0.000001" placeholder="lat" />
+          <input v-model.number="zoneCheck.lng" class="input" dir="ltr" type="number" step="0.000001" placeholder="lng" />
+          <button class="secondary-btn" type="button" :disabled="zoneChecking" @click="runZoneCheck">
+            {{ zoneChecking ? '...' : 'بررسی' }}
+          </button>
+          <span v-if="zoneCheckResult" :class="zoneCheckResult.allowed ? 'ok-text' : 'warn-text'" class="zone-check-result">
+            <template v-if="zoneCheckResult.allowed">
+              داخل محدوده «{{ zoneCheckResult.matches[0].zone }}» — هزینه ارسال {{ toFa(zoneCheckResult.matches[0].delivery_fee) }}
+            </template>
+            <template v-else>خارج از همه محدوده‌های فعال</template>
+          </span>
+        </div>
+      </ManagementSurfaceCard>
+    </section>
+
+    <section v-else-if="activeTab === 'provider'" class="panel-grid">
+      <ManagementSurfaceCard title="اپ مخصوص پیک‌ها" subtitle="پییک با موبایل و کد دسترسی وارد می‌شود و سفارش‌های تخصیص‌یافته را مدیریت می‌کند">
+        <div class="rules-grid">
+          <article class="rule-card">
+            <strong>نشانی اپ پیک</strong>
+            <p><code class="link-code" dir="ltr">{{ courierAppUrl }}</code></p>
+          </article>
+          <article class="rule-card">
+            <strong>ورود پیک</strong>
+            <p>برای هر پیک در تب «لیست پیک‌ها» کد دسترسی تعریف کنید؛ پیک با موبایل + کد دسترسی لاگین می‌کند.</p>
+          </article>
+          <article class="rule-card">
+            <strong>جریان تحویل</strong>
+            <p>تحویل به پیک (courier_handoff) ← پیکاپ (در مسیر) ← تحویل‌شده. گزارش عملکرد در «مرکز گزارش‌ها ← عملکرد پیک‌ها».</p>
+          </article>
+        </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="پلتفرم‌های ثالث پیک" subtitle="اتصال به اسنپ‌باکس، الوپیک یا سایر سرویس‌دهندگان برای دیسپچ خودکار سفارش">
+        <div class="editor-grid">
+          <label>
+            پلتفرم
+            <select v-model="providerForm.provider" class="input">
+              <option value="">— غیرفعال —</option>
+              <option v-for="p in providerOptions" :key="p" :value="p">{{ p }}</option>
+            </select>
+          </label>
+          <label>
+            توکن / کلید API {{ providerForm.token_set ? '(ثبت‌شده — برای تغییر مقدار جدید وارد کنید)' : '' }}
+            <input v-model.trim="providerForm.token" class="input" dir="ltr" type="password" autocomplete="off" />
+          </label>
+          <label>
+            نشانی سرویس (در صورت سفارشی)
+            <input v-model.trim="providerForm.base_url" class="input" dir="ltr" placeholder="https://..." />
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="primary-btn" type="button" :disabled="savingProvider" @click="saveProviderSettings">
+            {{ savingProvider ? 'در حال ذخیره...' : 'ذخیره تنظیمات پلتفرم' }}
+          </button>
+        </div>
+
+        <div class="dispatch-box">
+          <strong>ارسال سفارش به پلتفرم:</strong>
+          <input v-model.trim="dispatchForm.order_name" class="input" dir="ltr" placeholder="کد سفارش، مثلاً SO-1024" />
+          <button class="secondary-btn" type="button" :disabled="dispatching" @click="runDispatch">
+            {{ dispatching ? 'در حال ارسال...' : 'دیسپچ' }}
+          </button>
+          <span v-if="dispatchResult" class="ok-text">{{ dispatchResult }}</span>
+        </div>
+        <p class="muted provider-hint">آساین پیک داخلی به سفارش: در کارت سفارش‌های ارسالی (POS/سفارش‌ها) یا API «assign_management_order_courier». وضعیت خودکار به «تحویل به پیک» می‌رود و در اپ پیک دیده می‌شود.</p>
+      </ManagementSurfaceCard>
+    </section>
   </ManagementPageScaffold>
 </template>
 
@@ -253,6 +422,14 @@ import {
   listManagementCourierVehicles,
   saveManagementCourier,
   saveManagementCourierVehicle,
+  listManagementDeliveryZones,
+  saveManagementDeliveryZone,
+  deleteManagementDeliveryZone,
+  checkManagementDeliveryPoint,
+  getManagementDeliveryProviderSettings,
+  setManagementDeliveryProviderSettings,
+  dispatchManagementDeliveryProvider,
+  optimizeManagementCourierRoute,
 } from '@/utils/api'
 
 const loading = ref(false)
@@ -274,11 +451,39 @@ const activeTab = ref('couriers')
 
 const courierForm = reactive(createCourierForm())
 const vehicleForm = reactive(createVehicleForm())
+const routeForm = reactive({ courier: '' })
+const routeOptimizing = ref(false)
+const routeMessage = ref('')
+const routeOrders = ref([])
+
+async function runRouteOptimization() {
+  if (!routeForm.courier) return
+  routeOptimizing.value = true
+  routeMessage.value = ''
+  routeOrders.value = []
+  error.value = ''
+  try {
+    const payload = await optimizeManagementCourierRoute({ courier: routeForm.courier })
+    routeOrders.value = Array.isArray(payload?.orders) ? payload.orders : []
+    const optimized = Number(payload?.optimized) || routeOrders.value.length
+    routeMessage.value = optimized
+      ? `${toFa(optimized)} سفارش به ترتیب مسیر چیده شد.`
+      : 'سفارش در حال ارسالی برای این پیک وجود ندارد.'
+  } catch (err) {
+    error.value = err?.message || 'بهینه‌سازی مسیر انجام نشد.'
+  } finally {
+    routeOptimizing.value = false
+  }
+}
 const tabOptions = [
   { value: 'couriers', label: 'لیست پیک‌ها' },
   { value: 'rules', label: 'قوانین پیک‌ها' },
   { value: 'fleet', label: 'ناوگان داخلی' },
+  { value: 'zones', label: 'محدوده‌های سفارش‌گیری' },
+  { value: 'provider', label: 'اپ پیک و پلتفرم‌ها' },
 ]
+
+const courierAppUrl = `${window.location.origin}/courier`
 
 const courierColumns = [
   { key: 'courier_name', label: 'پیک' },
@@ -309,6 +514,7 @@ function createCourierForm() {
     courier_name: '',
     courier_code: '',
     mobile: '',
+    access_code: '',
     vehicle_type: '',
     plate_number: '',
     zone: '',
@@ -463,8 +669,152 @@ function toFa(value) {
   return Number(value || 0).toLocaleString('fa-IR')
 }
 
+// ---------------------------------------------------------------------------
+// Delivery zones (geo radius) + third-party providers
+// ---------------------------------------------------------------------------
+const zones = ref([])
+const savingZone = ref(false)
+const zoneForm = reactive(createZoneForm())
+const zoneCheck = reactive({ lat: null, lng: null })
+const zoneChecking = ref(false)
+const zoneCheckResult = ref(null)
+const providerForm = reactive({ provider: '', token: '', base_url: '', token_set: false, zone_control_enabled: false })
+const providerOptions = ref([])
+const savingProvider = ref(false)
+const dispatchForm = reactive({ order_name: '' })
+const dispatching = ref(false)
+const dispatchResult = ref('')
+
+const zoneColumns = [
+  { key: 'zone_name', label: 'محدوده' },
+  { key: 'center', label: 'مرکز' },
+  { key: 'radius_km', label: 'شعاع' },
+  { key: 'delivery_fee', label: 'هزینه ارسال' },
+  { key: 'min_order_amount', label: 'حداقل سفارش' },
+  { key: 'is_active', label: 'وضعیت' },
+]
+
+function createZoneForm() {
+  return {
+    name: '',
+    zone_name: '',
+    center_lat: null,
+    center_lng: null,
+    radius_km: 3,
+    delivery_fee: 0,
+    min_order_amount: 0,
+    is_active: true,
+    notes: '',
+  }
+}
+
+function resetZoneForm() {
+  Object.assign(zoneForm, createZoneForm())
+}
+
+function editZone(row) {
+  Object.assign(zoneForm, {
+    ...createZoneForm(),
+    ...row,
+    is_active: Boolean(row.is_active),
+  })
+}
+
+async function loadZones() {
+  const payload = await listManagementDeliveryZones({ include_inactive: 1 })
+  zones.value = Array.isArray(payload?.zones) ? payload.zones : []
+}
+
+async function saveZone() {
+  savingZone.value = true
+  error.value = ''
+  successMessage.value = ''
+  try {
+    await saveManagementDeliveryZone({ ...zoneForm, is_active: zoneForm.is_active ? 1 : 0 })
+    successMessage.value = 'محدوده سفارش‌گیری ذخیره شد.'
+    resetZoneForm()
+    await loadZones()
+  } catch (errObj) {
+    error.value = errObj?.message || 'ذخیره محدوده ناموفق بود.'
+  } finally {
+    savingZone.value = false
+  }
+}
+
+async function removeZone(name) {
+  if (!window.confirm('این محدوده حذف شود؟')) return
+  error.value = ''
+  successMessage.value = ''
+  try {
+    await deleteManagementDeliveryZone(name)
+    successMessage.value = 'محدوده حذف شد.'
+    resetZoneForm()
+    await loadZones()
+  } catch (errObj) {
+    error.value = errObj?.message || 'حذف محدوده ناموفق بود.'
+  }
+}
+
+async function runZoneCheck() {
+  zoneChecking.value = true
+  zoneCheckResult.value = null
+  try {
+    zoneCheckResult.value = await checkManagementDeliveryPoint({ lat: zoneCheck.lat, lng: zoneCheck.lng })
+  } catch (errObj) {
+    zoneCheckResult.value = { allowed: false, matches: [] }
+    error.value = errObj?.message || 'بررسی محدوده ناموفق بود.'
+  } finally {
+    zoneChecking.value = false
+  }
+}
+
+async function loadProviderSettings() {
+  const payload = await getManagementDeliveryProviderSettings()
+  providerForm.provider = payload?.provider || ''
+  providerForm.token_set = !!payload?.token_set
+  providerForm.base_url = payload?.base_url || ''
+  providerForm.token = ''
+  providerForm.zone_control_enabled = !!payload?.zone_control_enabled
+  providerOptions.value = Array.isArray(payload?.providers) ? payload.providers : []
+}
+
+async function saveProviderSettings() {
+  savingProvider.value = true
+  error.value = ''
+  successMessage.value = ''
+  try {
+    const payload = { provider: providerForm.provider, base_url: providerForm.base_url, zone_control_enabled: providerForm.zone_control_enabled ? 1 : 0 }
+    if (providerForm.token) payload.token = providerForm.token
+    await setManagementDeliveryProviderSettings(payload)
+    providerForm.token = ''
+    providerForm.token_set = true
+    successMessage.value = 'تنظیمات پلتفرم دیسپچ ذخیره شد.'
+  } catch (errObj) {
+    error.value = errObj?.message || 'ذخیره تنظیمات پلتفرم ناموفق بود.'
+  } finally {
+    savingProvider.value = false
+  }
+}
+
+async function runDispatch() {
+  dispatching.value = true
+  dispatchResult.value = ''
+  error.value = ''
+  try {
+    const payload = await dispatchManagementDeliveryProvider({ order_name: dispatchForm.order_name })
+    dispatchResult.value = `ثبت شد — مرجع: ${payload?.reference || '-'}`
+    dispatchForm.order_name = ''
+  } catch (errObj) {
+    error.value = errObj?.message || 'دیسپچ سفارش ناموفق بود.'
+  } finally {
+    dispatching.value = false
+  }
+}
+
 onMounted(() => {
   loadAll()
+  loadZones()
+  loadProviderSettings()
 })
 </script>
 
@@ -657,5 +1007,88 @@ onMounted(() => {
     flex: 0 0 auto;
     white-space: nowrap;
   }
+}
+.zone-check,
+.dispatch-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-color, #e5dfd2);
+  font-size: 0.85rem;
+}
+.zone-check .input,
+.dispatch-box .input {
+  width: auto;
+  min-width: 130px;
+}
+.route-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+.route-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, #e5dfd2);
+  background: var(--surface-soft, #f7f3ea);
+  font-size: 0.85rem;
+}
+.route-item > div {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.route-item select.input,
+.route-item .input {
+  width: auto;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #ded5c4);
+  background: var(--surface-card, #fff);
+  font-size: 0.82rem;
+}
+.route-index {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--mg-primary, #c97852);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.zone-check-result,
+.provider-hint {
+  font-size: 0.85rem;
+}
+.zone-toggle {
+  font-size: 0.85rem;
+}
+.muted {
+  color: var(--text-muted, #6b7a72);
+}
+.link-code {
+  direction: ltr;
+  display: inline-block;
+  background: var(--surface-soft, #f0ede4);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+}
+.ok-text {
+  color: var(--accent-green, #2f6f5c);
+}
+.warn-text {
+  color: #b84f4f;
 }
 </style>
