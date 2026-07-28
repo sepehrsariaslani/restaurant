@@ -1,0 +1,152 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RCL-{YYYY}-{#####}",
+  "creation": "2026-07-27 21:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "cashier",
+    "pos_profile",
+    "period_start",
+    "period_end",
+    "opening_float",
+    "total_sales",
+    "total_orders",
+    "cash_sales",
+    "card_sales",
+    "credit_sales",
+    "other_sales",
+    "expected_cash",
+    "counted_cash",
+    "cash_difference",
+    "payments_breakdown_json",
+    "note"
+  ],
+  "fields": [
+    {
+      "fieldname": "cashier",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Cashier",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "pos_profile",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "POS Profile"
+    },
+    {
+      "fieldname": "period_start",
+      "fieldtype": "Datetime",
+      "label": "Period Start",
+      "reqd": 1
+    },
+    {
+      "fieldname": "period_end",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Period End",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "opening_float",
+      "fieldtype": "Currency",
+      "label": "Opening Float"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_sales",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Total Sales"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_orders",
+      "fieldtype": "Int",
+      "label": "Total Orders"
+    },
+    {
+      "default": "0",
+      "fieldname": "cash_sales",
+      "fieldtype": "Currency",
+      "label": "Cash Sales"
+    },
+    {
+      "default": "0",
+      "fieldname": "card_sales",
+      "fieldtype": "Currency",
+      "label": "Card Sales"
+    },
+    {
+      "default": "0",
+      "fieldname": "credit_sales",
+      "fieldtype": "Currency",
+      "label": "Credit Sales"
+    },
+    {
+      "default": "0",
+      "fieldname": "other_sales",
+      "fieldtype": "Currency",
+      "label": "Other Sales"
+    },
+    {
+      "default": "0",
+      "fieldname": "expected_cash",
+      "fieldtype": "Currency",
+      "label": "Expected Cash"
+    },
+    {
+      "default": "0",
+      "fieldname": "counted_cash",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Counted Cash"
+    },
+    {
+      "default": "0",
+      "fieldname": "cash_difference",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Cash Difference"
+    },
+    {
+      "fieldname": "payments_breakdown_json",
+      "fieldtype": "Long Text",
+      "label": "Payments Breakdown JSON"
+    },
+    {
+      "fieldname": "note",
+      "fieldtype": "Small Text",
+      "label": "Note"
+    }
+  ],
+  "links": [],
+  "modified": "2026-07-27 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Register Closing",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

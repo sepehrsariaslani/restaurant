@@ -1,44 +1,117 @@
 {
-  "actions": [],
-  "allow_rename": 1,
-  "autoname": "format:RCR-{#####}",
-  "creation": "2026-07-16 00:00:00.000000",
-  "doctype": "DocType",
-  "engine": "InnoDB",
-  "field_order": [
-    "courier_name",
-    "courier_code",
-    "mobile",
-    "vehicle_type",
-    "plate_number",
-    "zone",
-    "assignment_priority",
-    "is_active",
-    "notes"
-  ],
-  "fields": [
-    {"fieldname": "courier_name", "fieldtype": "Data", "in_list_view": 1, "label": "Courier Name", "reqd": 1},
-    {"fieldname": "courier_code", "fieldtype": "Data", "in_list_view": 1, "label": "Courier Code", "reqd": 1, "unique": 1},
-    {"fieldname": "mobile", "fieldtype": "Data", "in_list_view": 1, "label": "Mobile", "reqd": 1},
-    {"fieldname": "vehicle_type", "fieldtype": "Data", "in_list_view": 1, "label": "Vehicle Type", "reqd": 1},
-    {"fieldname": "plate_number", "fieldtype": "Data", "in_list_view": 1, "label": "Plate Number", "reqd": 1},
-    {"fieldname": "zone", "fieldtype": "Data", "in_list_view": 1, "label": "Zone"},
-    {"default": "10", "fieldname": "assignment_priority", "fieldtype": "Int", "in_list_view": 1, "label": "Assignment Priority"},
-    {"default": "1", "fieldname": "is_active", "fieldtype": "Check", "in_list_view": 1, "label": "Is Active"},
-    {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes"}
-  ],
-  "links": [],
-  "modified": "2026-07-16 00:00:00.000000",
-  "modified_by": "Administrator",
-  "module": "Restaurant",
-  "name": "Restaurant Courier",
-  "owner": "Administrator",
-  "permissions": [
-    {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
-    {"read": 1, "role": "Desk User"}
-  ],
-  "sort_field": "modified",
-  "sort_order": "DESC",
-  "states": []
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:RCR-{#####}",
+ "creation": "2026-07-16 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "courier_name",
+  "courier_code",
+  "mobile",
+  "access_code",
+  "vehicle_type",
+  "plate_number",
+  "zone",
+  "assignment_priority",
+  "is_active",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "courier_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Courier Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "courier_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Courier Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "access_code",
+   "fieldtype": "Data",
+   "label": "کد دسترسی اپ پیک",
+   "description": "کد ورود پیک به اپ مخصوص پیک‌ها (همراه با موبایل)",
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "vehicle_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Vehicle Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plate_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Plate Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "zone",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Zone"
+  },
+  {
+   "default": "10",
+   "fieldname": "assignment_priority",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Assignment Priority"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-16 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Courier",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Desk User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
 }
-

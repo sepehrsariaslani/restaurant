@@ -18,7 +18,11 @@
         "table_header_background_color",
         "border_color",
         "footer_section",
-        "footer_text"
+        "footer_text",
+        "fonts_section",
+        "print_font_family",
+        "print_font_size",
+        "print_receipt_font_scale"
     ],
     "fields": [
         {
@@ -95,6 +99,31 @@
             "fieldtype": "Small Text",
             "label": "متن پاورقی",
             "default": "این نسخه برای چاپ داخلی مجموعه است."
+        },
+        {
+            "fieldname": "fonts_section",
+            "fieldtype": "Section Break",
+            "label": "تنظیمات فونت چاپ"
+        },
+        {
+            "fieldname": "print_font_family",
+            "fieldtype": "Select",
+            "label": "فونت چاپ فاکتور و فیش",
+            "options": "Peyda\nVazirmatn\nIRANSans\nTahoma\nSahel\nShabnam\nSamim\nArial",
+            "default": "Peyda"
+        },
+        {
+            "fieldname": "print_font_size",
+            "fieldtype": "Int",
+            "label": "اندازه پایه فونت چاپ (پیکسل)",
+            "default": "11"
+        },
+        {
+            "fieldname": "print_receipt_font_scale",
+            "fieldtype": "Select",
+            "label": "مقیاس فونت فیش پرینتر حرارتی",
+            "options": "کوچک\nمتوسط\nبزرگ",
+            "default": "متوسط"
         }
     ],
     "index_web_pages_for_search": 1,

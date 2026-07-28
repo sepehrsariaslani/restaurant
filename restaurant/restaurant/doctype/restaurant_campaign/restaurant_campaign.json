@@ -1,0 +1,119 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:CMP-{YYYY}-{#####}",
+ "creation": "2026-07-28 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "coupon",
+  "channels",
+  "valid_from",
+  "valid_to",
+  "bonus_type",
+  "bonus_value",
+  "status",
+  "target_segment",
+  "sms_text",
+  "min_order_amount",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "coupon",
+   "fieldtype": "Link",
+   "label": "Coupon",
+   "options": "Restaurant Coupon"
+  },
+  {
+   "fieldname": "channels",
+   "fieldtype": "Data",
+   "label": "Channels"
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "Valid To"
+  },
+  {
+   "fieldname": "bonus_type",
+   "fieldtype": "Select",
+   "label": "Bonus Type",
+   "options": "تخفیف\nکش‌بک\nامتیاز",
+   "default": "کش‌بک"
+  },
+  {
+   "fieldname": "bonus_value",
+   "fieldtype": "Float",
+   "label": "Bonus Value",
+   "default": "0"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "پیش‌نویس\nفعال\nمتوقف\nپایان‌یافته",
+   "default": "پیش‌نویس",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "target_segment",
+   "fieldtype": "Select",
+   "label": "Target Segment",
+   "options": "\nVIP\nعمده‌فروش\nعادی\nجدید\nدر خطر ریزش\nخفته\nوفادار"
+  },
+  {
+   "fieldname": "sms_text",
+   "fieldtype": "Small Text",
+   "label": "SMS Text"
+  },
+  {
+   "fieldname": "min_order_amount",
+   "fieldtype": "Currency",
+   "label": "Min Order Amount",
+   "default": "0"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Campaign",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

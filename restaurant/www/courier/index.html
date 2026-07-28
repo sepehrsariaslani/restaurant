@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#25323c" />
+<title>اپ پیک رستوران</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: Tahoma, "Vazirmatn", sans-serif;
+    background: #25323c; color: #eef2f4; padding: 14px;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .topbar h1 { font-size: 1.1rem; margin: 0; }
+  .logout { background: none; border: 1px solid #4a5b66; color: #b8c6cd; border-radius: 10px; padding: 6px 12px; font-family: inherit; cursor: pointer; font-size: 0.8rem; }
+  .stats { display: flex; gap: 10px; margin-bottom: 16px; }
+  .stat { flex: 1; background: #30414d; border-radius: 14px; padding: 14px; text-align: center; }
+  .stat .n { font-size: 1.6rem; font-weight: 700; }
+  .stat .l { font-size: 0.75rem; color: #a9bac3; margin-top: 4px; }
+  .card {
+    background: #fff; color: #33424c; border-radius: 16px; padding: 16px; margin-bottom: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .card .code { font-weight: 700; font-size: 1rem; }
+  .badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 20px; }
+  .badge.handoff { background: #fdf0d5; color: #8a5a00; }
+  .badge.way { background: #dceeff; color: #1d5a8a; }
+  .badge.done { background: #dff0e8; color: #2f6f5c; }
+  .row { font-size: 0.85rem; margin: 6px 0; display: flex; gap: 6px; align-items: flex-start; }
+  .row .ico { flex-shrink: 0; }
+  .items { border-top: 1px dashed #dfe5e8; margin-top: 10px; padding-top: 8px; font-size: 0.82rem; color: #54656f; }
+  .total { font-weight: 700; margin-top: 8px; font-size: 0.95rem; }
+  .actions { display: flex; gap: 10px; margin-top: 12px; }
+  .actions button {
+    flex: 1; padding: 12px; border: 0; border-radius: 12px; font-family: inherit; font-size: 0.9rem; cursor: pointer; font-weight: 700;
+  }
+  .btn-pickup { background: #e3a72f; color: #4a3500; }
+  .btn-deliver { background: #2f6f5c; color: #fff; }
+  .btn-phone { background: #eef2f4; color: #33424c; flex: 0 0 52px; text-decoration: none; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+  .empty { text-align: center; color: #a9bac3; padding: 40px 0; }
+  .login-card { max-width: 420px; margin: 12vh auto 0; }
+  label { display: block; font-size: 0.85rem; margin: 12px 0 6px; color: #c4d2d9; }
+  input {
+    width: 100%; padding: 13px 14px; border: 1.5px solid #4a5b66; border-radius: 12px; font-size: 1rem;
+    font-family: inherit; background: #30414d; color: #eef2f4; outline: none;
+  }
+  button.primary { width: 100%; margin-top: 20px; padding: 14px; border: 0; border-radius: 14px; cursor: pointer; background: #e3a72f; color: #4a3500; font-size: 1rem; font-family: inherit; font-weight: 700; }
+  .msg { margin-top: 12px; font-size: 0.85rem; text-align: center; color: #ff9c8a; }
+  .hidden { display: none; }
+  .refresh-note { text-align: center; font-size: 0.72rem; color: #7d919c; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="view-login">
+    <div class="login-card">
+      <h1 style="text-align:center">🛵 اپ پیک</h1>
+      <p style="text-align:center;color:#a9bac3;font-size:0.85rem">با موبایل و کد دسترسی وارد شوید</p>
+      <label>شماره موبایل</label>
+      <input id="f-mobile" inputmode="tel" placeholder="09xxxxxxxxx" />
+      <label>کد دسترسی</label>
+      <input id="f-code" placeholder="کدی که مدیر به شما داده" />
+      <button class="primary" id="btn-login" onclick="login()">ورود</button>
+      <div class="msg" id="login-err"></div>
+    </div>
+  </div>
+
+  <div id="view-app" class="hidden">
+    <div class="topbar">
+      <h1>🛵 <span id="courier-name"></span></h1>
+      <button class="logout" onclick="logout()">خروج</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n" id="st-pending">0</div><div class="l">در انتظار تحویل</div></div>
+      <div class="stat"><div class="n" id="st-way">0</div><div class="l">در مسیر</div></div>
+      <div class="stat"><div class="n" id="st-done">0</div><div class="l">تحویل‌شده امروز</div></div>
+    </div>
+    <div id="orders"></div>
+    <div class="refresh-note">به‌روزرسانی خودکار هر ۳۰ ثانیه</div>
+  </div>
+</div>
+
+<script>
+const LS_KEY = "restaurant_courier_auth";
+let auth = null;
+let poller = null;
+
+function api(method, args) {
+  const body = new URLSearchParams();
+  Object.keys(args || {}).forEach((k) => body.append(k, args[k]));
+  return fetch("/api/method/restaurant.api." + method, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+    body: body.toString(),
+  }).then(async (r) => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      let msg = "خطا در ارتباط با سرور";
+      try {
+        const sm = JSON.parse(data._server_messages || "[]");
+        if (sm.length) msg = JSON.parse(sm[0]).message || msg;
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    return data.message;
+  });
+}
+
+function faNum(n) { return Number(n || 0).toLocaleString("fa-IR"); }
+
+async function login() {
+  const mobile = document.getElementById("f-mobile").value.trim();
+  const access_code = document.getElementById("f-code").value.trim();
+  const btn = document.getElementById("btn-login");
+  document.getElementById("login-err").textContent = "";
+  if (!mobile || !access_code) {
+    document.getElementById("login-err").textContent = "موبایل و کد دسترسی را وارد کنید.";
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const res = await api("courier_app_login", { mobile, access_code });
+    auth = { mobile, access_code, courier: res.courier, today_delivered: res.today_delivered || 0 };
+    localStorage.setItem(LS_KEY, JSON.stringify(auth));
+    enterApp();
+  } catch (e) {
+    document.getElementById("login-err").textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function logout() {
+  localStorage.removeItem(LS_KEY);
+  if (poller) clearInterval(poller);
+  location.reload();
+}
+
+function enterApp() {
+  document.getElementById("view-login").classList.add("hidden");
+  document.getElementById("view-app").classList.remove("hidden");
+  document.getElementById("courier-name").textContent = auth.courier.courier_name || "پیک";
+  refresh();
+  if (poller) clearInterval(poller);
+  poller = setInterval(refresh, 30000);
+}
+
+async function refresh() {
+  try {
+    const res = await api("courier_app_deliveries", { mobile: auth.mobile, access_code: auth.access_code });
+    renderOrders(res.orders || []);
+  } catch (e) {
+    if ((e.message || "").indexOf("نامعتبر") >= 0) logout();
+  }
+}
+
+const STATUS_META = {
+  courier_handoff: { label: "آماده تحویل به شما", cls: "handoff" },
+  on_the_way: { label: "در مسیر", cls: "way" },
+  delivered: { label: "تحویل شد", cls: "done" },
+};
+
+function renderOrders(orders) {
+  const pending = orders.filter((o) => o.status === "courier_handoff").length;
+  const way = orders.filter((o) => o.status === "on_the_way").length;
+  const doneToday = orders.filter((o) => o.status === "delivered").length + (auth.today_delivered || 0);
+  document.getElementById("st-pending").textContent = faNum(pending);
+  document.getElementById("st-way").textContent = faNum(way);
+  document.getElementById("st-done").textContent = faNum(doneToday);
+
+  const box = document.getElementById("orders");
+  const active = orders.filter((o) => o.status !== "delivered");
+  if (!active.length) {
+    box.innerHTML = '<div class="empty">سفارش فعالی ندارید ☕</div>';
+    return;
+  }
+  box.innerHTML = "";
+  active.forEach((o) => {
+    const meta = STATUS_META[o.status] || { label: o.status, cls: "handoff" };
+    const card = document.createElement("div");
+    card.className = "card";
+    let items = (o.items || []).map((i) => faNum(i.qty) + "× " + (i.title || "")).join("، ");
+    card.innerHTML =
+      '<div class="head"><span class="code">' + o.name + '</span><span class="badge ' + meta.cls + '">' + meta.label + "</span></div>" +
+      '<div class="row"><span class="ico">👤</span><span>' + (o.customer_name || "-") + "</span></div>" +
+      '<div class="row"><span class="ico">📍</span><span>' + (o.address || "-") + "</span></div>" +
+      '<div class="items">' + (items || "-") + "</div>" +
+      '<div class="total">مبلغ: ' + faNum(o.grand_total) + "</div>";
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    if (o.phone) {
+      const a = document.createElement("a");
+      a.className = "btn-phone";
+      a.href = "tel:" + o.phone;
+      a.textContent = "📞";
+      actions.appendChild(a);
+    }
+    if (o.status === "courier_handoff") {
+      actions.appendChild(actionButton("پیکاپ سفارش", "btn-pickup", o.name, "pickup"));
+    } else if (o.status === "on_the_way") {
+      actions.appendChild(actionButton("تحویل داده شد ✓", "btn-deliver", o.name, "deliver"));
+    }
+    card.appendChild(actions);
+    box.appendChild(card);
+  });
+}
+
+function actionButton(label, cls, order, action) {
+  const b = document.createElement("button");
+  b.className = cls;
+  b.textContent = label;
+  b.onclick = async () => {
+    b.disabled = true;
+    try {
+      await api("courier_app_action", { mobile: auth.mobile, access_code: auth.access_code, order_name: order, action });
+      refresh();
+    } catch (e) {
+      alert(e.message);
+      b.disabled = false;
+    }
+  };
+  return b;
+}
+
+(function autoLogin() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+    if (saved && saved.mobile && saved.access_code) {
+      auth = saved;
+      enterApp();
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

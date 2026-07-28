@@ -1,0 +1,122 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-28 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "customer_name",
+  "mobile",
+  "reservation_date",
+  "reservation_time",
+  "party_size",
+  "restaurant_table",
+  "status",
+  "source",
+  "note",
+  "reminder_sent"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "RSV-{YYYY}-{#####}",
+   "hidden": 1
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "نام مشتری",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "label": "موبایل",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reservation_date",
+   "fieldtype": "Date",
+   "label": "تاریخ رزرو",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reservation_time",
+   "fieldtype": "Data",
+   "label": "ساعت رزرو",
+   "default": "19:00",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "party_size",
+   "fieldtype": "Int",
+   "label": "تعداد نفرات",
+   "default": "2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "restaurant_table",
+   "fieldtype": "Link",
+   "options": "Restaurant Table",
+   "label": "جایگاه (میز/سالن)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "وضعیت",
+   "options": "در انتظار\nتاییدشده\nنشست\nلغوشده\nحاضر‌نشد",
+   "default": "در انتظار",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "منبع ثبت",
+   "options": "سایت\nتلفنی\nصندوق",
+   "default": "سایت"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "توضیحات"
+  },
+  {
+   "fieldname": "reminder_sent",
+   "fieldtype": "Check",
+   "label": "یادآوری ارسال شد",
+   "default": "0"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Reservation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "naming_series:RSV-{YYYY}-{#####}"
+}

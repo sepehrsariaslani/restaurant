@@ -147,6 +147,16 @@ website_route_rules = [
 	},
 	{"from_route": "/management/builder-template/new", "to_route": "management/builder_template"},
 	{"from_route": "/management/kitchen", "to_route": "management/kitchen"},
+	{"from_route": "/management/register", "to_route": "management/register"},
+	{"from_route": "/management/inventory", "to_route": "management/inventory"},
+	{"from_route": "/management/club", "to_route": "management/club"},
+	{"from_route": "/management/surveys", "to_route": "management/surveys"},
+	{"from_route": "/management/cost-control", "to_route": "management/cost_control"},
+	{"from_route": "/management/accounting", "to_route": "management/accounting"},
+	{"from_route": "/management/reservations", "to_route": "management/reservations"},
+	{"from_route": "/management/branches", "to_route": "management/branches"},
+	{"from_route": "/management/call-center", "to_route": "management/call_center"},
+	{"from_route": "/management/help", "to_route": "management/help"},
 ]
 
 # Jinja
@@ -286,6 +296,11 @@ scheduler_events = {
 		"restaurant.activity_tracking.jobs.aggregate_employee_activity_daily",
 		"restaurant.activity_tracking.jobs.purge_employee_activity_raw_data",
 		"restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.purge_orphaned_selections",
+		"restaurant.api_club.run_daily_customer_club_jobs",
+		"restaurant.api_tax.run_daily_tax_auto_submissions",
+	],
+	"hourly": [
+		"restaurant.api_reserve.run_reservation_reminders",
 	],
 	"cron": {
 		"* * * * *": [
@@ -390,4 +405,9 @@ fixtures = [
 
 patches = [
 	"restaurant.patches.v2_6.backfill_item_images_from_attachments",
+	"restaurant.patches.v2_7.ensure_pos_ops_custom_fields",
+	"restaurant.patches.v2_8.ensure_inventory_custom_fields",
+	"restaurant.patches.v2_9.ensure_club_ops_custom_fields",
+	"restaurant.patches.v2_10.ensure_commerce_custom_fields",
+	"restaurant.patches.v2_11.ensure_loyalty_org_waiter_fields",
 ]

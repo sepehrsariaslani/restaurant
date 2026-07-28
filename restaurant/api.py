@@ -1514,6 +1514,11 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 	frappe.db.set_value(
 		"Sales Order", order_name, "restaurant_status", normalized_next, update_modified=False
 	)
+	if normalized_next == "delivered":
+		try:
+			club_apply_fulfillment_effects(order_name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Restaurant delivered club effects failed")
 	return normalized_next
 
 
@@ -4283,6 +4288,8 @@ def _get_menu_items_public_fallback(
 	filters = {"disabled": 0}
 	if has_restaurant_enabled:
 		filters["restaurant_enabled"] = 1
+	if _has_column("Item", "restaurant_out_of_stock"):
+		filters["restaurant_out_of_stock"] = ["!=", 1]
 	if has_restaurant_branch and branch:
 		filters["restaurant_branch"] = ["in", [branch, ""]]
 	if has_variant_of:
@@ -4993,6 +5000,11 @@ def _normalize_order_context_payload(order_context=None, order_type="takeaway"):
 	ctx["customer_note"] = (ctx.get("customer_note") or "").strip()
 	ctx["kitchen_note"] = (ctx.get("kitchen_note") or "").strip()
 	ctx["courier_note"] = (ctx.get("courier_note") or "").strip()
+	ctx["waiter"] = (ctx.get("waiter") or "").strip()
+	ctx["waiter_name"] = (ctx.get("waiter_name") or "").strip()
+	ctx["org_member"] = (ctx.get("org_member") or "").strip()
+	ctx["org_access_code"] = (ctx.get("org_access_code") or "").strip()
+	ctx["organization"] = (ctx.get("organization") or "").strip()
 	return ctx
 
 
@@ -5072,15 +5084,26 @@ def _create_sales_order(
 	subtotal = 0.0
 	payload_snapshot = []
 	selected_branches = set()
+	packaging_qty_map = {}
 
 	for cart_line in cart_items:
 		menu_doc = _get_item_doc_by_payload(cart_line)
 		customization = _extract_customization(cart_line.get("customization") or cart_line.get("config"))
-		
+
 		variant_doc = _resolve_variant_item_for_customization(menu_doc, customization or {})
 		if variant_doc:
 			menu_doc = variant_doc
-			
+
+		if _has_column("Item", "restaurant_out_of_stock") and cint(
+			menu_doc.get("restaurant_out_of_stock") or 0
+		):
+			frappe.throw(
+				_("{0} is currently out of stock.").format(menu_doc.get("item_name") or menu_doc.get("name"))
+			)
+		packaging_qty_map[menu_doc.name] = packaging_qty_map.get(menu_doc.name, 0.0) + flt(
+			cart_line.get("qty")
+		)
+
 		branch = (
 			cart_line.get("branch")
 			or order_context.get("branch")
@@ -5340,6 +5363,60 @@ def _create_sales_order(
 			"description": "Tip",
 			"tax_amount": pos_tip,
 		})
+
+	pos_packaging = flt(
+		totals_data.get("packagingAmount") or financial_modifiers.get("packaging_amount") or 0
+	)
+	if pos_packaging <= 0 and _caller_has_management_access():
+		# Auto-compute the packaging fee only for staff/POS orders. Web (guest)
+		# checkouts must never get a fee they could not see before payment.
+		try:
+			pos_packaging = flt(fp_compute_order_packaging_fee(order_type, packaging_qty_map))
+		except Exception:
+			pos_packaging = 0.0
+	if pos_packaging > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": _("Packaging Fee"),
+			"tax_amount": pos_packaging,
+		})
+	if _has_column("Sales Order", "restaurant_packaging_fee"):
+		doc_payload["restaurant_packaging_fee"] = flt(pos_packaging)
+
+	# Organizational order validation (caps, allowed days/hours, addresses) +
+	# waiter attribution — throws and rolls the order back on rule hits.
+	estimated_total = (
+		subtotal + pos_tax + pos_service + pos_tip + pos_packaging
+		+ flt(order_context.get("delivery_fee") or 0) - flt(frontend_discount_amount or 0)
+	)
+	org_binding = org_validate_order(
+		order_context,
+		customer,
+		estimated_total,
+		delivery_address_name=delivery_address_name or (delivery_payload.get("id") or ""),
+	)
+	if org_binding:
+		if _has_column("Sales Order", "restaurant_organization"):
+			doc_payload["restaurant_organization"] = org_binding.get("organization") or ""
+		if _has_column("Sales Order", "restaurant_org_member"):
+			member_label = org_binding.get("org_member") or ""
+			if org_binding.get("org_member_code"):
+				member_label = (member_label + " (" + org_binding["org_member_code"] + ")").strip() if member_label else org_binding["org_member_code"]
+			doc_payload["restaurant_org_member"] = member_label
+		order_context["organization"] = org_binding.get("organization") or ""
+		if _has_column("Sales Order", "restaurant_order_context_json"):
+			doc_payload["restaurant_order_context_json"] = frappe.as_json(order_context)
+	if order_context.get("waiter") or order_context.get("waiter_name"):
+		waiter_user = (order_context.get("waiter") or "").strip()
+		waiter_name = (order_context.get("waiter_name") or "").strip()
+		if waiter_user and frappe.db.exists("User", waiter_user):
+			if _has_column("Sales Order", "restaurant_waiter"):
+				doc_payload["restaurant_waiter"] = waiter_user
+			if not waiter_name:
+				waiter_name = frappe.db.get_value("User", waiter_user, "full_name") or waiter_user
+		if waiter_name and _has_column("Sales Order", "restaurant_waiter_name"):
+			doc_payload["restaurant_waiter_name"] = waiter_name
 
 	so_doc = frappe.get_doc(doc_payload)
 	# Some custom ERPNext forks expect commission-related attributes even when
@@ -7072,6 +7149,12 @@ def _ensure_checkout_address_fields():
 			"fieldtype": "Float",
 			"insert_after": "restaurant_latitude",
 		},
+		{
+			"fieldname": "restaurant_guidance_video",
+			"label": "Guidance Video URL",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_longitude",
+		},
 	]
 
 	changed = False
@@ -7264,6 +7347,7 @@ def _serialize_address_payload(row):
 		"lat": lat,
 		"lng": lng,
 		"is_primary": cint(row.get("is_primary_address") or 0),
+		"video_url": (row.get("restaurant_guidance_video") or "").strip(),
 		"updated_at": _json_safe_datetime(row.get("modified")),
 	}
 
@@ -7306,6 +7390,7 @@ def _list_customer_delivery_addresses(customer_name):
 		"restaurant_floor",
 		"restaurant_latitude",
 		"restaurant_longitude",
+		"restaurant_guidance_video",
 		"latitude",
 		"longitude",
 	]
@@ -7350,6 +7435,8 @@ def _normalize_address_payload(address_info, customer_name, mobile):
 		required=True,
 	)
 	is_primary = cint(info.get("is_primary") or info.get("is_primary_address") or 0)
+	video_url = _first_non_empty(info.get("video_url"), info.get("guidance_video"), info.get("video")) or ""
+	video_url = str(video_url).strip()
 
 	if not address_line:
 		frappe.throw(_("Address line is required for delivery."))
@@ -7365,6 +7452,7 @@ def _normalize_address_payload(address_info, customer_name, mobile):
 		"lat": lat,
 		"lng": lng,
 		"is_primary": is_primary,
+		"video_url": video_url,
 	}
 
 
@@ -7408,6 +7496,8 @@ def _upsert_customer_delivery_address(customer_name, normalized_info):
 		doc.set("latitude", normalized_info["lat"])
 	if _has_column("Address", "longitude"):
 		doc.set("longitude", normalized_info["lng"])
+	if _has_column("Address", "restaurant_guidance_video"):
+		doc.set("restaurant_guidance_video", normalized_info.get("video_url") or "")
 
 	links = doc.get("links") or []
 	has_customer_link = any(
@@ -10569,6 +10659,11 @@ def get_customer_orders(mobile, limit=50, start=0):
 def get_customer_profile(mobile=None, customer_name=None):
 	profile = get_customer_checkout_profile(mobile=mobile, customer_name=customer_name)
 	profile["orders"] = get_customer_orders(mobile=mobile, limit=10).get("orders", []) if mobile else []
+	try:
+		customer_id = (profile.get("customer") or {}).get("customer_id") or ""
+		profile["club"] = get_customer_club_summary(customer_id)
+	except Exception:
+		profile["club"] = {"wallet_balance": 0.0, "points_balance": 0, "loyalty_tier": "", "points_enabled": False}
 	return profile
 
 
@@ -11469,6 +11564,17 @@ MANAGEMENT_WEB_REVENUE_STATUSES = {"new", "confirmed", "preparing", "ready", "de
 MANAGEMENT_TABLE_REVENUE_STATUSES = {"confirmed", "served", "paid"}
 
 
+def _caller_has_management_access():
+	"""Non-throwing variant of _ensure_management_access (for optional features)."""
+	if frappe.session.user == "Guest":
+		return False
+	try:
+		roles = set(frappe.get_roles(frappe.session.user))
+	except Exception:
+		return False
+	return bool(roles.intersection(MANAGEMENT_ALLOWED_ROLES))
+
+
 def _ensure_management_access():
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Please login to access management pages."), frappe.PermissionError)
@@ -12160,6 +12266,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	has_payment_method = _has_column("Sales Order", "restaurant_payment_method")
 	has_payment_status = _has_column("Sales Order", "restaurant_payment_status")
 	has_payment_provider = _has_column("Sales Order", "restaurant_payment_provider")
+	has_restaurant_table = _has_column("Sales Order", "restaurant_table")
 
 	fields = [
 		"name",
@@ -12187,6 +12294,8 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_payment_status")
 	if has_payment_provider:
 		fields.append("restaurant_payment_provider")
+	if has_restaurant_table:
+		fields.append("restaurant_table")
 	if _has_column("Sales Order", "restaurant_status"):
 		fields.append("restaurant_status")
 
@@ -12317,6 +12426,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"payment_method": row.restaurant_payment_method if has_payment_method else "",
 				"payment_status": row.restaurant_payment_status if has_payment_status else "",
 				"payment_provider": row.restaurant_payment_provider if has_payment_provider else "",
+				"table": (row.restaurant_table or "") if has_restaurant_table else "",
 				"items": items_by_parent.get(row.name, []),
 			}
 		)
@@ -12385,20 +12495,30 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 
 	menu_item_names = {row.menu_item for row in item_rows if row.menu_item}
 	menu_title_map = {}
+	menu_erp_item_map = {}
 	if menu_item_names and frappe.db.exists("DocType", "Restaurant Table Menu Item"):
+		menu_fields = ["name", "item_name"]
+		has_menu_erp_item = _has_column("Restaurant Table Menu Item", "erpnext_item")
+		if has_menu_erp_item:
+			menu_fields.append("erpnext_item")
 		menu_rows = frappe.get_all(
 			"Restaurant Table Menu Item",
-			fields=["name", "item_name"],
+			fields=menu_fields,
 			filters={"name": ["in", list(menu_item_names)]},
 			ignore_permissions=True,
 		)
 		menu_title_map = {row.name: row.item_name for row in menu_rows}
+		if has_menu_erp_item:
+			menu_erp_item_map = {
+				row.name: (row.get("erpnext_item") or "") for row in menu_rows if row.get("erpnext_item")
+			}
 
 	items_by_parent = defaultdict(list)
 	for item in item_rows:
 		items_by_parent[item.parent].append(
 			{
 				"title": menu_title_map.get(item.menu_item) or item.menu_item or "",
+				"item_code": menu_erp_item_map.get(item.menu_item, ""),
 				"qty": flt(item.quantity),
 				"line_total": flt(item.line_total),
 				"customization_json": "",
@@ -12418,6 +12538,8 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 				"customer_name": f"Table {table_label}",
 				"mobile": "",
 				"channel": "dine_in",
+				"table": row.table or "",
+				"table_label": table_label,
 				"status": row.status or "pending",
 				"subtotal": flt(row.subtotal),
 				"grand_total": flt(row.grand_total),
@@ -13556,6 +13678,82 @@ def _build_management_report_bi(report_key, title, summary, rows, orders, previo
 			}
 		]
 
+	elif report_key in MANAGEMENT_FEATURE_PACK_REPORTS:
+		# Feature-pack reports (category/table/payment-method/product/shift sales).
+		fp_bi = fp_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(fp_bi, dict):
+			kpis = fp_bi.get("kpis") or []
+			charts = fp_bi.get("charts") or []
+			tables = fp_bi.get("tables") or []
+			insights = fp_bi.get("insights") or []
+
+	elif report_key in MANAGEMENT_INVENTORY_REPORTS:
+		# Inventory reports (valuation/movements/waste & losses).
+		inv_bi = inv_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(inv_bi, dict):
+			kpis = inv_bi.get("kpis") or []
+			charts = inv_bi.get("charts") or []
+			tables = inv_bi.get("tables") or []
+			insights = inv_bi.get("insights") or []
+
+	elif report_key in CLUB_REPORT_KEYS:
+		# Customer-club reports (RFM, campaigns, wallet, surveys).
+		club_bi = club_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(club_bi, dict):
+			kpis = club_bi.get("kpis") or []
+			charts = club_bi.get("charts") or []
+			tables = club_bi.get("tables") or []
+			insights = club_bi.get("insights") or []
+
+	elif report_key in OPS_REPORT_KEYS:
+		# Ops/finance reports (couriers, kitchen, P&L, break-even).
+		ops_bi = ops_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(ops_bi, dict):
+			kpis = ops_bi.get("kpis") or []
+			charts = ops_bi.get("charts") or []
+			tables = ops_bi.get("tables") or []
+			insights = ops_bi.get("insights") or []
+
+	elif report_key in MENUENG_REPORT_KEYS:
+		menueng_bi = menueng_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(menueng_bi, dict):
+			kpis = menueng_bi.get("kpis") or []
+			charts = menueng_bi.get("charts") or []
+			tables = menueng_bi.get("tables") or []
+			insights = menueng_bi.get("insights") or []
+
+	elif report_key in TAX_REPORT_KEYS:
+		tax_bi = tax_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(tax_bi, dict):
+			kpis = tax_bi.get("kpis") or []
+			charts = tax_bi.get("charts") or []
+			tables = tax_bi.get("tables") or []
+			insights = tax_bi.get("insights") or []
+
+	elif report_key in BRANCH_REPORT_KEYS:
+		branch_bi = branch_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(branch_bi, dict):
+			kpis = branch_bi.get("kpis") or []
+			charts = branch_bi.get("charts") or []
+			tables = branch_bi.get("tables") or []
+			insights = branch_bi.get("insights") or []
+
+	elif report_key in KIOSK_REPORT_KEYS:
+		kiosk_bi = kiosk_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(kiosk_bi, dict):
+			kpis = kiosk_bi.get("kpis") or []
+			charts = kiosk_bi.get("charts") or []
+			tables = kiosk_bi.get("tables") or []
+			insights = kiosk_bi.get("insights") or []
+
+	elif report_key in ACC_REPORT_KEYS:
+		acc_bi = acc_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(acc_bi, dict):
+			kpis = acc_bi.get("kpis") or []
+			charts = acc_bi.get("charts") or []
+			tables = acc_bi.get("tables") or []
+			insights = acc_bi.get("insights") or []
+
 	if not tables and rows:
 		tables = [
 			{
@@ -14105,20 +14303,25 @@ def get_management_pos_boot(branch=None):
 	image_field = _core_item_image_field()
 	category_meta_map = _get_core_category_meta_map()
 	subcategory_meta_map = _get_core_subcategory_meta_map()
+	boot_item_fields = [
+		"name",
+		"item_name",
+		"restaurant_slug",
+		"restaurant_short_desc",
+		"restaurant_base_price",
+		"standard_rate",
+		f"{image_field} as image",
+		"restaurant_category",
+		"restaurant_subcategory",
+	]
+	if _has_column("Item", "restaurant_out_of_stock"):
+		boot_item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_packaging_price"):
+		boot_item_fields.append("restaurant_packaging_price")
 	rows = frappe.get_all(
 		"Item",
 		filters=_core_item_filters(branch),
-		fields=[
-			"name",
-			"item_name",
-			"restaurant_slug",
-			"restaurant_short_desc",
-			"restaurant_base_price",
-			"standard_rate",
-			f"{image_field} as image",
-			"restaurant_category",
-			"restaurant_subcategory",
-		],
+		fields=boot_item_fields,
 		ignore_permissions=True,
 		order_by="restaurant_sort_order asc, item_name asc",
 		limit=300,
@@ -14149,14 +14352,16 @@ def get_management_pos_boot(branch=None):
 		if not (r.get("image") or "").strip() and r["name"] in attachment_map:
 			r["image"] = attachment_map[r["name"]]
 
-	items = [
-		_serialize_core_item(
+	items = []
+	for row in rows:
+		serialized = _serialize_core_item(
 			row,
 			category_meta_map=category_meta_map,
 			subcategory_meta_map=subcategory_meta_map,
 		)
-		for row in rows
-	]
+		serialized["out_of_stock"] = cint(row.get("restaurant_out_of_stock") or 0)
+		serialized["packaging_price"] = flt(row.get("restaurant_packaging_price") or 0)
+		items.append(serialized)
 	categories = [
 		{
 			"name": key,
@@ -14166,6 +14371,7 @@ def get_management_pos_boot(branch=None):
 		for key, value in category_meta_map.items()
 	]
 	config = get_management_pos_config()
+	print_brand_settings = _management_get_print_brand_settings()
 	return {
 		"currency": _get_currency(),
 		"items": items,
@@ -14173,6 +14379,31 @@ def get_management_pos_boot(branch=None):
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),
 		"pos_config": config,
+		"packaging": {
+			"enabled": cint(_get_single_setting("Restaurant Web Settings", "restaurant_packaging_enabled", 0))
+			== 1,
+			"flat_fee": flt(_get_single_setting("Restaurant Web Settings", "restaurant_packaging_flat_fee", 0)),
+			"per_item": cint(
+				_get_single_setting("Restaurant Web Settings", "restaurant_packaging_per_item", 1)
+			)
+			== 1,
+			"apply_modes": [
+				mode
+				for mode, fieldname in (
+					("takeaway", "restaurant_packaging_takeaway"),
+					("delivery", "restaurant_packaging_delivery"),
+					("dine_in", "restaurant_packaging_dine_in"),
+				)
+				if cint(_get_single_setting("Restaurant Web Settings", fieldname, 0)) == 1
+			],
+			"label": _get_single_setting("Restaurant Web Settings", "restaurant_packaging_label", "")
+			or _("Packaging Fee"),
+		},
+		"print_font": {
+			"font_family": print_brand_settings.get("print_font_family") or "Peyda",
+			"font_size": min(max(cint(print_brand_settings.get("print_font_size") or 11), 8), 24),
+			"receipt_font_scale": print_brand_settings.get("print_receipt_font_scale") or "متوسط",
+		},
 	}
 
 
@@ -14191,12 +14422,26 @@ def create_pos_order(payload):
     items = payload.get("items") or []
     financial_modifiers = payload.get("financial_modifiers", {})
     totals_payload = payload.get("totals", {})
-    
+    # waiter / table / org context for dine-in attribution
+    order_context = _parse_json(payload.get("order_context"), {})
+    if not isinstance(order_context, dict):
+        order_context = {}
+    waiter = (payload.get("waiter") or "").strip()
+    waiter_name = (payload.get("waiter_name") or "").strip()
+    if waiter and not order_context.get("waiter"):
+        order_context["waiter"] = waiter
+    if waiter_name and not order_context.get("waiter_name"):
+        order_context["waiter_name"] = waiter_name
+    table = (payload.get("table") or "").strip()
+    if table and not order_context.get("table"):
+        order_context["table"] = table
+
     result = place_order(
         customer_info={"name": customer_name, "mobile": mobile},
         order_type=order_type, items=items,
         address=address, note=note,
         include_service_items=1,
+        order_context=order_context,
         financial_modifiers=financial_modifiers,
         totals=totals_payload,
     )
@@ -14258,6 +14503,51 @@ def create_and_pay_pos_order(payload):
         "status": "success",
         "sales_invoice": settle_result.get("sales_invoice", ""),
     }
+
+@frappe.whitelist()
+def create_management_order_proforma(order_name):
+    """ساخت پیش‌فاکتور (Quotation) از روی سفارش — برای گارسون/صندوق."""
+    _ensure_management_access()
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("سفارش یافت نشد: {0}").format(order_name or "-"))
+    if not frappe.db.exists("DocType", "Quotation"):
+        frappe.throw(_("ماژول پیش‌فاکتور (Quotation) در دسترس نیست."))
+
+    so = frappe.get_doc("Sales Order", so_name)
+    quotation = frappe.new_doc("Quotation")
+    quotation.quotation_to = "Customer"
+    quotation.party_name = so.customer
+    quotation.customer_name = so.get("customer_name") or so.customer
+    quotation.company = so.company
+    quotation.transaction_date = today()
+    quotation.currency = so.get("currency") or _get_currency(so.company)
+    if so.get("selling_price_list"):
+        quotation.selling_price_list = so.get("selling_price_list")
+    for item in so.get("items") or []:
+        line = {
+            "item_code": item.get("item_code"),
+            "item_name": item.get("item_name") or item.get("item_code"),
+            "description": item.get("description") or item.get("item_name") or item.get("item_code"),
+            "qty": flt(item.get("qty")),
+            "uom": item.get("uom") or item.get("stock_uom") or "Nos",
+            "rate": flt(item.get("rate")),
+        }
+        if item.get("income_account"):
+            line["income_account"] = item.get("income_account")
+        quotation.append("items", line)
+    quotation.remarks = _("پیش‌فاکتور سفارش {0}").format(so_name)
+    quotation.flags.ignore_permissions = True
+    quotation.insert(ignore_permissions=True)
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "quotation": quotation.name,
+        "order": so_name,
+        "grand_total": flt(quotation.grand_total),
+        "print_url": "/printview?doctype=Quotation&name={}&trigger_print=1".format(quotation.name),
+    }
+
 
 def _resolve_pos_mode_of_payment(method):
     """Get mode of payment from DB that has a default account"""
@@ -14475,7 +14765,13 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
         # Store primary method
         so_doc.restaurant_payment_method = splits[0].get("method") if splits else method
         so_doc.save(ignore_permissions=True)
-        
+
+    # Customer club effects: wallet debit + cashback credit (idempotent).
+    try:
+        club_apply_settle_effects(so_name, splits, result.get("payment_breakdown") or result.get("payments"))
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Settle POS Club Effects")
+
     frappe.db.commit()
     return result
 
@@ -15149,6 +15445,7 @@ def get_management_order_detail(order_name, source=None):
 					"payment_status": doc.get("restaurant_payment_status") or "",
 					"payment_provider": doc.get("restaurant_payment_provider") or "",
 					"payment_reference": doc.get("restaurant_payment_reference") or "",
+					"courier": doc.get("restaurant_courier") or "",
 					"payment_rrn": doc.get("restaurant_payment_rrn") or "",
 					"items": items,
 				}
@@ -17429,6 +17726,19 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"website_image": item_doc.get("website_image") or "",
 			"restaurant_slug": item_doc.get("restaurant_slug") or "",
 			"restaurant_enabled": cint(item_doc.get("restaurant_enabled") or 0),
+			"restaurant_out_of_stock": cint(item_doc.get("restaurant_out_of_stock") or 0)
+			if _has_column("Item", "restaurant_out_of_stock")
+			else 0,
+			"restaurant_packaging_price": flt(item_doc.get("restaurant_packaging_price") or 0)
+			if _has_column("Item", "restaurant_packaging_price")
+			else 0,
+			"barcodes": [
+				(barcode_row.get("barcode") or "").strip()
+				for barcode_row in (item_doc.get("barcodes") or [])
+				if (barcode_row.get("barcode") or "").strip()
+			]
+			if frappe.db.exists("DocType", "Item Barcode")
+			else [],
 			"restaurant_is_featured": cint(item_doc.get("restaurant_is_featured") or 0),
 			"restaurant_is_best_seller": cint(item_doc.get("restaurant_is_best_seller") or 0),
 			"restaurant_sort_order": cint(item_doc.get("restaurant_sort_order") or 0),
@@ -17552,8 +17862,9 @@ def update_management_product_settings(payload=None):
 		"restaurant_allow_direct_add",
 		"restaurant_show_nutrition_summary",
 		"restaurant_show_allergen_warnings",
+		"restaurant_out_of_stock",
 	}
-	float_fields = {"restaurant_auto_add_qty"}
+	float_fields = {"restaurant_auto_add_qty", "restaurant_packaging_price"}
 	nutrition_fields = set(NUTRITION_KEY_FIELD_MAP.values())
 
 	changed = False
@@ -18161,6 +18472,10 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		item_fields.append("restaurant_item_tags")
 	if _has_column("Item", "restaurant_coming_soon"):
 		item_fields.append("restaurant_coming_soon")
+	if _has_column("Item", "restaurant_out_of_stock"):
+		item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_packaging_price"):
+		item_fields.append("restaurant_packaging_price")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -18205,6 +18520,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 				"custom_snapp_code": row.get("custom_snapp_code") or "",
 				"is_active": cint(row.restaurant_enabled),
 				"is_disabled": cint(row.disabled),
+				"out_of_stock": cint(row.get("restaurant_out_of_stock") or 0),
+				"packaging_price": flt(row.get("restaurant_packaging_price") or 0),
 				"stock_qty": flt(stock_by_item.get(row.name) or 0),
 			}
 		)
@@ -18403,6 +18720,7 @@ def _serialize_management_courier(row, vehicle_count_map=None):
 		"courier_name": (row.get("courier_name") or "").strip(),
 		"courier_code": (row.get("courier_code") or "").strip(),
 		"mobile": (row.get("mobile") or "").strip(),
+		"access_code": (row.get("access_code") or "").strip(),
 		"vehicle_type": (row.get("vehicle_type") or "").strip(),
 		"plate_number": (row.get("plate_number") or "").strip(),
 		"zone": (row.get("zone") or "").strip(),
@@ -18516,6 +18834,8 @@ def list_management_couriers(search=None, active_only=None):
 		"notes",
 		"modified",
 	]
+	if _has_column("Restaurant Courier", "access_code"):
+		fields.insert(4, "access_code")
 	or_filters = None
 	if search_text:
 		or_filters = {
@@ -18556,6 +18876,7 @@ def save_management_courier(payload=None):
 		"courier_name",
 		"courier_code",
 		"mobile",
+		"access_code",
 		"vehicle_type",
 		"plate_number",
 		"zone",
@@ -18563,7 +18884,7 @@ def save_management_courier(payload=None):
 		"is_active",
 		"notes",
 	):
-		if fieldname in data:
+		if fieldname in data and (fieldname != "access_code" or hasattr(doc, "access_code")):
 			doc.set(fieldname, data.get(fieldname))
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
@@ -19183,6 +19504,30 @@ def get_management_bi_report(report_key, date_from=None, date_to=None, compare_m
 		"cashier-performance": get_management_report_cashier_performance,
 		"cancellations": get_management_report_cancellations,
 		"modifier-usage": get_management_report_modifier_usage,
+		"category-sales": get_management_report_category_sales,
+		"table-sales": get_management_report_table_sales,
+		"payment-methods": get_management_report_payment_methods,
+		"product-sales": get_management_report_product_sales,
+		"shift-sales": get_management_report_shift_sales,
+		"inventory-valuation": get_management_report_inventory_valuation,
+		"stock-movements": get_management_report_stock_movements,
+		"inventory-waste": get_management_report_inventory_waste,
+		"customer-analytics": get_management_report_customer_analytics,
+		"campaign-performance": get_management_report_campaign_performance,
+		"wallet-summary": get_management_report_wallet_summary,
+		"credit-transactions": get_management_report_credit_transactions,
+		"care-feedback": get_management_report_care_feedback,
+		"survey-analytics": get_management_report_survey_analytics,
+		"courier-performance": get_management_report_courier_performance,
+		"waiter-performance": get_management_report_waiter_performance,
+		"kitchen-performance": get_management_report_kitchen_performance,
+		"profit-loss": get_management_report_profit_loss,
+		"breakeven": get_management_report_breakeven,
+		"menu-engineering": get_management_report_menu_engineering,
+		"tax-reconciliation": get_management_report_tax_reconciliation,
+		"branch-performance": get_management_report_branch_performance,
+		"vendor-sales": get_management_report_vendor_sales,
+		"receipt-payment-balance": get_management_report_receipt_payment_balance,
 	}
 	fn = dispatch.get(normalized_key)
 	if not fn:
@@ -20530,6 +20875,7 @@ def _management_doc_type_label(doctype_name):
 		"Leave Application": "درخواست مرخصی",
 		"Payment Entry": "سند ثبت تنخواه",
 		"Restaurant POS Payment Log": "گزارش صندوق پوز",
+		"Restaurant Register Closing": "اختتامیه صندوق",
 		"Sales Invoice": "فاکتور فروش",
 		"Sales Order": "سفارش فروش",
 		"Purchase Order": "سفارش خرید",
@@ -20570,6 +20916,9 @@ def _management_get_print_brand_settings():
 		"table_header_background_color": "#F7F2E3",
 		"border_color": "#D8C8B3",
 		"footer_text": "این نسخه برای چاپ داخلی مجموعه است.",
+		"print_font_family": "Peyda",
+		"print_font_size": 11,
+		"print_receipt_font_scale": "متوسط",
 	}
 	if not frappe.db.exists("DocType", "Restaurant Print Brand Settings"):
 		return defaults
@@ -20743,6 +21092,8 @@ def _management_fallback_bom_html(print_format_name):
 	footer_text = html_escape(str(brand.get("footer_text") or "این نسخه برای چاپ داخلی مجموعه است."))
 	brand_logo = html_escape(str(brand.get("logo") or ""))
 	title = html_escape(_management_print_format_title(print_format_name))
+	print_font_family = html_escape(str(brand.get("print_font_family") or "Peyda"))
+	print_font_size = min(max(cint(brand.get("print_font_size") or 11), 8), 24)
 
 	material_rows = "".join(
 		f"<tr><td>{index}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>"
@@ -20760,7 +21111,7 @@ def _management_fallback_bom_html(print_format_name):
 
 	return f"""
     <style>
-      body {{ margin: 0; direction: rtl; color: #2f3c36; font-family: Peyda, Tahoma, sans-serif; }}
+      body {{ margin: 0; direction: rtl; color: #2f3c36; font-family: {print_font_family}, Peyda, Tahoma, sans-serif; font-size: {print_font_size}px; }}
       .sheet {{ border: 1px solid {border_color}; border-radius: 12px; overflow: hidden; }}
       .header {{ background: {header_bg}; color: {header_text}; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
       .logo {{ width: 52px; height: 52px; border-radius: 10px; object-fit: cover; background: #fff; border: 1px solid {border_color}; }}
@@ -20933,9 +21284,13 @@ def _management_fallback_print_html(print_format_name, doctype_name, error_messa
 			f"خطا در رندر کامل قالب: {html_escape(str(error_message))}</p>"
 		)
 
+	brand_settings = _management_get_print_brand_settings()
+	print_font_family = html_escape(str(brand_settings.get("print_font_family") or "Peyda"))
+	print_font_size = min(max(cint(brand_settings.get("print_font_size") or 11), 8), 24)
+
 	return f"""
     <style>
-      body {{ direction: rtl; font-family: Peyda, Tahoma, sans-serif; margin: 18px; color: #1f3b32; }}
+      body {{ direction: rtl; font-family: {print_font_family}, Peyda, Tahoma, sans-serif; font-size: {print_font_size}px; margin: 18px; color: #1f3b32; }}
       .sheet {{ border: 1px solid #d9d9d9; border-radius: 12px; padding: 16px; }}
       h1 {{ margin: 0 0 10px; font-size: 18px; }}
       .line {{ border-bottom: 1px dashed #bcc7c1; min-height: 18px; margin-bottom: 8px; }}
@@ -23526,6 +23881,10 @@ def _start_kitchen_production(so_name):
                     tickets = frappe.get_all("Restaurant Production Ticket", filters={"work_order": wo.name})
                     for t in tickets:
                         frappe.db.set_value("Restaurant Production Ticket", t.name, "status", "in_progress", update_modified=False)
+    try:
+        ops_kitchen_mark(so_name, "preparing")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Kitchen Mark Preparing")
 
 def _complete_kitchen_production(so_name):
     settings = _production_auto_settings()
@@ -23539,11 +23898,15 @@ def _complete_kitchen_production(so_name):
             
             # Mark ticket completed
             if frappe.db.exists("DocType", "Restaurant Production Ticket"):
-                tickets = frappe.get_all("Restaurant Production Ticket", filters={"work_order": wo.name})
-                for t in tickets:
-                    frappe.db.set_value("Restaurant Production Ticket", t.name, "status", "completed", update_modified=False)
+                    tickets = frappe.get_all("Restaurant Production Ticket", filters={"work_order": wo.name})
+                    for t in tickets:
+                        frappe.db.set_value("Restaurant Production Ticket", t.name, "status", "completed", update_modified=False)
+    try:
+        ops_kitchen_mark(so_name, "ready")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Kitchen Mark Ready")
 
-                    
+
 @frappe.whitelist()
 def get_kitchen_display_orders(limit=50, date=None):
     """Get production-ready orders for kitchen display"""
@@ -23570,6 +23933,9 @@ def get_kitchen_display_orders(limit=50, date=None):
     so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
     if has_order_type:
         so_fields.append("restaurant_order_type")
+    has_kitchen_timestamps = _has_column("Sales Order", "restaurant_kitchen_started_at") and _has_column("Sales Order", "restaurant_kitchen_ready_at")
+    if has_kitchen_timestamps:
+        so_fields.extend(["restaurant_kitchen_started_at", "restaurant_kitchen_ready_at"])
     
     rows = frappe.get_all("Sales Order",
         fields=so_fields,
@@ -23594,7 +23960,26 @@ def get_kitchen_display_orders(limit=50, date=None):
             order_by="idx asc",
             ignore_permissions=True
         )
+        item_codes = [i.item_code for i in so_items if i.item_code]
+        item_meta = {}
+        if item_codes:
+            has_item_image = _has_column("Item", "image")
+            has_prep_time = _has_column("Item", "restaurant_prep_time_mins")
+            has_vendor = _has_column("Item", "restaurant_vendor")
+            meta_fields = ["name"]
+            if has_item_image:
+                meta_fields.append("image")
+            if has_prep_time:
+                meta_fields.append("restaurant_prep_time_mins")
+            if has_vendor:
+                meta_fields.append("restaurant_vendor")
+            try:
+                for meta_row in frappe.get_all("Item", fields=meta_fields, filters={"name": ["in", item_codes]}, ignore_permissions=True):
+                    item_meta[meta_row["name"]] = meta_row
+            except Exception:
+                item_meta = {}
         for item in so_items:
+            meta = item_meta.get(item.item_code) or {}
             items.append({
                 "item_code": item.item_code,
                 "title": item.item_name,
@@ -23602,6 +23987,9 @@ def get_kitchen_display_orders(limit=50, date=None):
                 "qty": flt(item.qty),
                 "rate": flt(item.rate),
                 "note": item.restaurant_note if has_restaurant_note else "",
+                "image": meta.get("image") or "",
+                "prep_time_mins": cint(meta.get("restaurant_prep_time_mins") or 0),
+                "vendor": meta.get("restaurant_vendor") or "",
             })
         
         if has_prod_ticket:
@@ -23626,8 +24014,10 @@ def get_kitchen_display_orders(limit=50, date=None):
             "production_tickets": tickets,
             "creation": str(so.creation or ""),
             "created_at": str(so.transaction_date or so.creation or ""),
+            "kitchen_started_at": str(so.get("restaurant_kitchen_started_at") or "") if has_kitchen_timestamps else "",
+            "kitchen_ready_at": str(so.get("restaurant_kitchen_ready_at") or "") if has_kitchen_timestamps else "",
         })
-    
+
     return {"orders": orders}
 
 
@@ -23687,3 +24077,23 @@ def get_csrf_token():
 @frappe.whitelist(allow_guest=True)
 def get_management_csrf_token():
     return frappe.sessions.get_csrf_token()
+
+
+# ---------------------------------------------------------------------------
+# POS feature pack: bulk product ops, Excel import/export, barcode lookup,
+# combos, packaging fees, work shifts, register closing, extra sales reports,
+# printer fonts and dashboard layout. Endpoints are re-exported here so they
+# are reachable as /api/method/restaurant.api.<endpoint>.
+# ---------------------------------------------------------------------------
+from restaurant.api_feature_pack import *  # noqa: F401,F403,E402
+from restaurant.api_inventory import *  # noqa: F401,F403,E402
+from restaurant.api_club import *  # noqa: F401,F403,E402
+from restaurant.api_ops import *  # noqa: F401,F403,E402
+from restaurant.api_menueng import *  # noqa: F401,F403,E402
+from restaurant.api_reserve import *  # noqa: F401,F403,E402
+from restaurant.api_tax import *  # noqa: F401,F403,E402
+from restaurant.api_branch import *  # noqa: F401,F403,E402
+from restaurant.api_callcenter import *  # noqa: F401,F403,E402
+from restaurant.api_kiosk import *  # noqa: F401,F403,E402
+from restaurant.api_accounting import *  # noqa: F401,F403,E402
+from restaurant.api_org import *  # noqa: F401,F403,E402
