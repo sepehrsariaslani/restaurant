@@ -589,7 +589,7 @@ function uploadOptionImage(row) {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--module-500, #8b5e34);
+  background: var(--module-500, var(--mg-primary));
   color: #fff;
   font-weight: 600;
   font-size: 0.85rem;
@@ -621,8 +621,8 @@ function uploadOptionImage(row) {
   background: #f3f4f6;
 }
 .icon-btn.danger {
-  color: #dc2626;
-  border-color: #fca5a5;
+  color: var(--mg-danger);
+  border-color: var(--mg-danger);
 }
 .icon-btn.danger:hover:not(:disabled) {
   background: #fef2f2;
@@ -643,7 +643,7 @@ function uploadOptionImage(row) {
 }
 .options-section {
   margin-top: 1rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--mg-border-light);
   padding-top: 1rem;
 }
 .options-head {
@@ -655,7 +655,7 @@ function uploadOptionImage(row) {
 .empty-options {
   padding: 1rem;
   text-align: center;
-  background: #f9fafb;
+  background: var(--mg-bg-page);
   border-radius: 8px;
 }
 .option-thumb {
@@ -669,7 +669,7 @@ function uploadOptionImage(row) {
   font-size: 0.9rem;
 }
 .item-detail .uom {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.75rem;
 }
 .option-editor-grid {
@@ -679,12 +679,12 @@ function uploadOptionImage(row) {
   min-width: 320px;
 }
 .error-text {
-  color: #dc2626;
+  color: var(--mg-danger);
   font-size: 0.85rem;
   margin: 0.25rem 0;
 }
 .is-invalid {
-  border-color: #fca5a5;
+  border-color: var(--mg-danger);
 }
 .add-option-form {
   display: flex;

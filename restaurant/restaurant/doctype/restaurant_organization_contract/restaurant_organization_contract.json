@@ -1,0 +1,147 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:ORC-{YYYY}-{#####}",
+ "creation": "2026-07-28 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "organization",
+  "contract_no",
+  "start_date",
+  "end_date",
+  "status",
+  "daily_order_cap",
+  "monthly_order_cap",
+  "allowed_days",
+  "allowed_from_hour",
+  "allowed_to_hour",
+  "restrict_addresses",
+  "allowed_addresses",
+  "invoice_mode",
+  "portal_access_code",
+  "note"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "ORC-{YYYY}-{#####}"
+  },
+  {
+   "fieldname": "organization",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "مشتری سازمانی",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contract_no",
+   "fieldtype": "Data",
+   "label": "شماره قرارداد",
+   "unique": 1
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "تاریخ شروع"
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "تاریخ پایان"
+  },
+  {
+   "default": "فعال",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "وضعیت",
+   "options": "پیش‌نویس\nفعال\nتعلیق\nپایان‌یافته"
+  },
+  {
+   "fieldname": "daily_order_cap",
+   "fieldtype": "Currency",
+   "label": "سقف سفارش روزانه (ریال)"
+  },
+  {
+   "fieldname": "monthly_order_cap",
+   "fieldtype": "Currency",
+   "label": "سقف سفارش ماهانه (ریال)"
+  },
+  {
+   "description": "لیست JSON از روزهای هفته؛ خالی یعنی بدون محدودیت",
+   "fieldname": "allowed_days",
+   "fieldtype": "Small Text",
+   "label": "روزهای مجاز سفارش"
+  },
+  {
+   "fieldname": "allowed_from_hour",
+   "fieldtype": "Int",
+   "label": "از ساعت مجاز"
+  },
+  {
+   "fieldname": "allowed_to_hour",
+   "fieldtype": "Int",
+   "label": "تا ساعت مجاز"
+  },
+  {
+   "default": "0",
+   "fieldname": "restrict_addresses",
+   "fieldtype": "Check",
+   "label": "محدود به آدرس‌های مجاز"
+  },
+  {
+   "fieldname": "allowed_addresses",
+   "fieldtype": "Long Text",
+   "label": "آدرس‌های مجاز (JSON)"
+  },
+  {
+   "default": "ماهانه",
+   "fieldname": "invoice_mode",
+   "fieldtype": "Select",
+   "label": "زمان صدور فاکتور سازمانی",
+   "options": "پس از هر سفارش\nهفتگی\nماهانه"
+  },
+  {
+   "fieldname": "portal_access_code",
+   "fieldtype": "Data",
+   "label": "کد دسترسی پورتال حسابدار"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "یادداشت"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Organization Contract",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

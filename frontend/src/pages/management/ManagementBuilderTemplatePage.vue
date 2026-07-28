@@ -369,14 +369,14 @@ onMounted(async () => {
   gap: 1rem;
 }
 .required {
-  color: #dc2626;
+  color: var(--mg-danger);
 }
 .error-text {
-  color: #dc2626;
+  color: var(--mg-danger);
   font-size: 0.8rem;
 }
 .is-invalid {
-  border-color: #fca5a5 !important;
+  border-color: var(--mg-danger) !important;
 }
 .steps-toolbar {
   margin-bottom: 1rem;
@@ -384,7 +384,7 @@ onMounted(async () => {
 .empty-steps {
   text-align: center;
   padding: 2rem;
-  border: 2px dashed #e5e7eb;
+  border: 2px dashed var(--mg-border-light);
   border-radius: 8px;
 }
 .unsaved-chip {

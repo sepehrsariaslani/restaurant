@@ -1,0 +1,102 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:SMS-{YYYY}-{#####}",
+ "creation": "2026-07-28 22:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "mobile",
+  "kind",
+  "template_key",
+  "campaign",
+  "message",
+  "status",
+  "provider_note",
+  "sent_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "label": "Mobile",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "دستی\nانبوه\nتبریک تولد\nخوش‌آمدگویی\nیادآوری خرید\nکمپین",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "template_key",
+   "fieldtype": "Data",
+   "label": "Template Key"
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "Restaurant Campaign"
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Text",
+   "label": "Message",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "در صف\nارسال‌شده\nناموفق\nبدون درگاه",
+   "default": "در صف",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "provider_note",
+   "fieldtype": "Small Text",
+   "label": "Provider Note"
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent At",
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant SMS Message",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -3150,11 +3150,11 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   gap: 0.45rem;
   flex-wrap: wrap;
   padding: 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  background: var(--mg-bg-surface);
   backdrop-filter: blur(16px);
-  box-shadow: 0 18px 42px rgb(15 23 42 / 0.1);
+  box-shadow: var(--mg-shadow-md);
 }
 
 .product-general-card {
@@ -3205,7 +3205,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .price-preview-input {
   font-weight: 900;
-  color: var(--module-600, #6f4726) !important;
+  color: var(--module-600, var(--mg-primary)) !important;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3221,14 +3221,15 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   height: clamp(150px, 18vw, 210px);
   min-height: 150px;
   aspect-ratio: 1 / 1;
-  border: 1px solid var(--border);
-  border-radius: 18px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-md);
   background:
-    radial-gradient(circle at 18% 18%, var(--module-50, rgb(139 94 52 / 0.075)), transparent 34%),
-    var(--bg-soft, #f1f5f9);
+    radial-gradient(circle at 18% 18%, var(--mg-bg-soft), transparent 34%),
+    var(--mg-bg-surface);
   display: grid;
   place-items: center;
   overflow: hidden;
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .general-product-image {
@@ -3243,7 +3244,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   display: grid;
   justify-items: center;
   gap: 0.4rem;
-  color: var(--muted, #64748b);
+  color: var(--muted, var(--mg-text-muted));
   text-align: center;
 }
 
@@ -3254,8 +3255,8 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   display: grid;
   place-items: center;
   background: var(--bg-card, #fff);
-  border: 1px solid var(--border);
-  color: var(--module-600, #6f4726);
+  border: 1px solid var(--mg-border);
+  color: var(--module-600, var(--mg-primary));
   font-size: 1.35rem;
   font-weight: 900;
 }
@@ -3306,14 +3307,14 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   padding: 0.38rem 0.65rem;
   border-radius: 999px;
   background: var(--bg-soft);
-  border: 1px solid var(--border);
-  color: var(--text);
+  border: 1px solid var(--mg-border);
+  color: var(--mg-text-main);
   font-size: 0.75rem;
 }
 
 .mini-meta-chip strong {
   font-size: 0.72rem;
-  color: var(--muted);
+  color: var(--mg-text-muted);
 }
 
 .mini-readiness-row {
@@ -3350,7 +3351,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   min-height: 1.72rem;
   padding: 0.18rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   background: var(--bg-card);
   font-size: 0.68rem;
   font-weight: 800;
@@ -3432,7 +3433,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   gap: 0.5rem;
   align-items: end;
   padding: 0.65rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   background: var(--bg-soft);
 }
@@ -3457,6 +3458,11 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
+  padding: 0.75rem;
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .simple-tabs {
@@ -3502,7 +3508,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .simple-tab:hover {
   background: var(--bg-soft);
-  border-color: var(--border);
+  border-color: var(--mg-border);
   color: var(--text-primary);
 }
 
@@ -3610,7 +3616,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .nutrition-box {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 12px;
   background: var(--bg-soft);
   padding: 0.5rem;
@@ -3686,7 +3692,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .image-shell {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 8px;
   background: var(--bg-soft);
   min-height: 200px;
@@ -3744,7 +3750,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .variant-config-shell {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 8px;
   background: var(--bg-soft);
   padding: 0.75rem;
@@ -3764,7 +3770,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .variant-editor-table-wrap {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 8px;
   background: var(--bg-card);
   overflow-x: auto;
@@ -3781,7 +3787,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .variant-editor-table td,
 .variant-values-table th,
 .variant-values-table td {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--mg-border);
   padding: 0.58rem 0.6rem;
   text-align: right;
   font-size: 0.77rem;
@@ -3822,7 +3828,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .variant-values-shell {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 8px;
   background: var(--bg-card);
   padding: 0.55rem;
@@ -3888,7 +3894,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .variant-attribute-mobile-card,
 .variant-value-mobile-card,
 .variant-mobile-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 8px;
   background: var(--bg-card);
   padding: 0.55rem;
@@ -4172,9 +4178,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .menu-preview-inline {
   margin-top: 0.8rem;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
   padding: 0.7rem;
   display: grid;
   gap: 0.5rem;
@@ -4194,7 +4200,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .menu-preview-inline-meta strong {
   font-size: 0.84rem;
-  color: var(--text, #0f172a);
+  color: var(--text, var(--mg-text-main));
 }
 
 .menu-preview-inline-meta small {
@@ -4243,10 +4249,10 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .menu-preview-modal-details {
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
   padding: 0.6rem;
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
   display: grid;
   gap: 0.45rem;
 }
@@ -4269,9 +4275,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .menu-preview-customer-view {
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
-  background: var(--bg-soft, #f1f5f9);
+  background: var(--bg-soft, var(--mg-bg-page));
   padding: 0.6rem;
   display: grid;
   gap: 0.45rem;
@@ -4317,7 +4323,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .builder-fields {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--mg-border-light);
 }
 .builder-link {
   margin-top: 1.5rem;
@@ -4326,7 +4332,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   margin-top: 1rem;
   text-align: center;
   padding: 1rem;
-  background: #f9fafb;
+  background: var(--mg-bg-page);
   border-radius: 8px;
 }
 
@@ -4376,7 +4382,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .pill.active {
   background: rgb(220 252 231 / 0.9);
-  color: #166534;
+  color: var(--mg-success);
 }
 
 .pill.inactive {
@@ -4390,13 +4396,13 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .pill.docstatus {
-  background: #f1f5f9;
+  background: var(--mg-bg-page);
   color: #6f6258;
 }
 
 .pill.docstatus.submitted {
   background: #dcfce7;
-  color: #166534;
+  color: var(--mg-success);
 }
 
 .row-actions {
@@ -4666,21 +4672,24 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .info-box {
   padding: 0.75rem 1rem;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
-  border-radius: 0.5rem;
+  background: var(--mg-bg-soft);
+  border: 1px solid var(--mg-border-light);
+  border-radius: var(--mg-radius-md);
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--mg-text-main);
   line-height: 1.5;
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .delete-btn {
-  border-color: rgb(220, 38, 38) !important;
-  color: rgb(220, 38, 38) !important;
+  border-color: rgb(var(--mg-danger-rgb, 166 84 63) / 0.3) !important;
+  color: var(--mg-danger) !important;
+  background: var(--mg-danger-bg) !important;
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: rgb(220, 38, 38, 0.1) !important;
-  border-color: rgb(220, 38, 38) !important;
+  background: rgb(var(--mg-danger-rgb, 166 84 63) / 0.14) !important;
+  border-color: rgb(var(--mg-danger-rgb, 166 84 63) / 0.45) !important;
 }
 
 .delete-btn:disabled {

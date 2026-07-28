@@ -5,6 +5,8 @@
       <ManagementPosPage v-else-if="page === 'management-pos'" />
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementPosDefaultsPage v-else-if="page === 'management-pos-defaults'" />
+      <ManagementCouriersPage v-else-if="page === 'management-couriers'" />
+      <ManagementUsersPage v-else-if="page === 'management-users'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
       <ManagementModifierGroupsPage v-else-if="page === 'management-modifier-groups'" />
@@ -20,9 +22,20 @@
       <ManagementBuilderTemplatesPage v-else-if="page === 'management-builder-templates' && !isBuilderTemplateEdit" />
       <ManagementBuilderTemplatePage v-else-if="page === 'management-builder-templates' && isBuilderTemplateEdit" :template-id="builderTemplateId" />
       <ManagementCustomersPage v-else-if="page === 'management-customers'" />
+      <ManagementKitchenPage v-else-if="page === 'management-kitchen'" />
       <ManagementTablesPage v-else-if="page === 'management-tables'" />
       <ManagementReportsIndexPage v-else-if="page === 'management-reports'" />
       <ManagementReportPage v-else-if="page === 'management-report'" :boot="boot" />
+      <ManagementRegisterPage v-else-if="page === 'management-register'" />
+      <ManagementInventoryPage v-else-if="page === 'management-inventory'" />
+      <ManagementClubPage v-else-if="page === 'management-club'" />
+      <ManagementSurveysPage v-else-if="page === 'management-surveys'" />
+      <ManagementCostControlPage v-else-if="page === 'management-cost-control'" />
+      <ManagementReservationsPage v-else-if="page === 'management-reservations'" />
+      <ManagementBranchesPage v-else-if="page === 'management-branches'" />
+      <ManagementCallCenterPage v-else-if="page === 'management-call-center'" />
+      <ManagementAccountingPage v-else-if="page === 'management-accounting'" />
+      <ManagementHelpPage v-else-if="page === 'management-help'" />
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
       <ManagementSiteSettingsPage v-else-if="page === 'management-settings'" entry-mode="theme-settings" />
       <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
@@ -76,7 +89,7 @@
       <CustomerTableSelectPage v-else-if="page === 'customer-table-select'" />
       <CheckoutPage v-else-if="page === 'checkout'" />
       <PaymentFailPage v-else-if="page === 'payment-fail'" />
-      <KitchenDisplayPage v-else-if="page === 'kitchen'" />
+      <KitchenDisplayPage v-else-if="page === 'kitchen' || page === 'management-kitchen'" />
       <NotFoundPage v-else-if="page === 'not-found'" />
       <NotFoundPage v-else />
     </main>
@@ -156,6 +169,8 @@ import ManagementDashboardPage from './pages/management/ManagementDashboardPage.
 import ManagementPosPage from './pages/management/ManagementPosPage.vue'
 import ManagementPosProfilePage from './pages/management/ManagementPosProfilePage.vue'
 import ManagementPosDefaultsPage from './pages/management/ManagementPosDefaultsPage.vue'
+import ManagementCouriersPage from './pages/management/ManagementCouriersPage.vue'
+import ManagementUsersPage from './pages/management/ManagementUsersPage.vue'
 import ManagementOrdersPage from './pages/management/ManagementOrdersPage.vue'
 import ManagementProductsPage from './pages/management/ManagementProductsPage.vue'
 import ManagementModifierGroupsPage from './pages/management/ManagementModifierGroupsPage.vue'
@@ -170,9 +185,20 @@ import ManagementVariantBuilderPage from './pages/management/ManagementVariantBu
 import ManagementBuilderTemplatesPage from './pages/management/ManagementBuilderTemplatesPage.vue'
 import ManagementBuilderTemplatePage from './pages/management/ManagementBuilderTemplatePage.vue'
 import ManagementCustomersPage from './pages/management/ManagementCustomersPage.vue'
+import ManagementKitchenPage from './pages/management/ManagementKitchenPage.vue'
 import ManagementTablesPage from './pages/management/ManagementTablesPage.vue'
 import ManagementReportsIndexPage from './pages/management/ManagementReportsIndexPage.vue'
 import ManagementReportPage from './pages/management/ManagementReportPage.vue'
+import ManagementRegisterPage from './pages/management/ManagementRegisterPage.vue'
+import ManagementInventoryPage from './pages/management/ManagementInventoryPage.vue'
+import ManagementClubPage from './pages/management/ManagementClubPage.vue'
+import ManagementSurveysPage from './pages/management/ManagementSurveysPage.vue'
+import ManagementCostControlPage from './pages/management/ManagementCostControlPage.vue'
+import ManagementReservationsPage from './pages/management/ManagementReservationsPage.vue'
+import ManagementBranchesPage from './pages/management/ManagementBranchesPage.vue'
+import ManagementCallCenterPage from './pages/management/ManagementCallCenterPage.vue'
+import ManagementAccountingPage from './pages/management/ManagementAccountingPage.vue'
+import ManagementHelpPage from './pages/management/ManagementHelpPage.vue'
 import ManagementPrintFormatsPage from './pages/management/ManagementPrintFormatsPage.vue'
 import ManagementZarinpalSettingsPage from './pages/management/ManagementZarinpalSettingsPage.vue'
 import SiteLoaderOverlay from './components/SiteLoaderOverlay.vue'
@@ -190,6 +216,8 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/login')) return 'management-login'
     if (pathname === '/management' || pathname === '/management/') return 'management-dashboard'
     if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
+    if (pathname.startsWith('/management/couriers')) return 'management-couriers'
+    if (pathname.startsWith('/management/users') || pathname.startsWith('/management/user-access')) return 'management-users'
     if (pathname.startsWith('/management/pos-defaults') || pathname.startsWith('/management/pos_defaults')) return 'management-pos-defaults'
     if (pathname.startsWith('/management/pos-profile') || pathname.startsWith('/management/pos_profile')) return 'management-pos-profile'
     if (pathname.startsWith('/management/pos')) return 'management-pos'
@@ -208,6 +236,16 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/tables')) return 'management-tables'
     if (pathname.startsWith('/management/reports/')) return 'management-report'
     if (pathname.startsWith('/management/reports')) return 'management-reports'
+    if (pathname.startsWith('/management/register')) return 'management-register'
+  if (pathname.startsWith('/management/inventory')) return 'management-inventory'
+  if (pathname.startsWith('/management/club')) return 'management-club'
+  if (pathname.startsWith('/management/surveys')) return 'management-surveys'
+  if (pathname.startsWith('/management/cost-control')) return 'management-cost-control'
+  if (pathname.startsWith('/management/reservations')) return 'management-reservations'
+  if (pathname.startsWith('/management/branches')) return 'management-branches'
+  if (pathname.startsWith('/management/call-center') || pathname.startsWith('/management/call_center')) return 'management-call-center'
+  if (pathname.startsWith('/management/accounting')) return 'management-accounting'
+  if (pathname.startsWith('/management/help')) return 'management-help'
     if (pathname.startsWith('/management/print-formats') || pathname.startsWith('/management/print_formats')) return 'management-print-formats'
     if (pathname.startsWith('/management/home-builder') || pathname.startsWith('/management/home_builder')) return 'management-home-builder'
     if (pathname.startsWith('/management/site-settings') || pathname.startsWith('/management/site_settings')) return 'management-site-settings'
@@ -249,7 +287,7 @@ function resolveInitialPage() {
     }
     if (pathname.startsWith('/checkout')) return 'checkout'
     if (pathname.startsWith('/payment/fail') || pathname.startsWith('/payment-fail')) return 'payment-fail'
-    if (pathname.startsWith('/kitchen')) return 'kitchen'
+    if (pathname.startsWith('/management/kitchen')) return 'management-kitchen'
     if (pathname.startsWith('/payment/callback')) return 'payment-callback'
     if (pathname.startsWith('/payment/')) return 'payment'
     if (pathname.startsWith('/bom-preview/')) return 'bom-preview'
@@ -311,6 +349,11 @@ const lastOrderUrl = computed(() => {
 </script>
 
 <style scoped>
+
+
+
+
+
 .app-layout {
   min-height: 100vh;
   display: flex;
@@ -353,5 +396,59 @@ const lastOrderUrl = computed(() => {
   .app-layout.page-menu .app-main {
     padding-top: 0 !important;
   }
+}
+</style>
+
+<style>
+/* Global Management Theme Tokens (Canonical) */
+:root,
+body {
+  --mg-bg-page: #F6F0E6;
+  --mg-bg-surface: #FBF7F1;
+  --mg-bg-soft: #E8DDD0;
+  --mg-text-main: #34261F;
+  --mg-text-muted: #746454;
+  --mg-border: #D8C8B4;
+  --mg-border-light: rgba(216, 200, 180, 0.4);
+  --mg-primary: #C97852;
+  --mg-primary-hover: #B96845;
+  --mg-olive: #8A8B63;
+  --mg-olive-soft: #D9D8C7;
+  --mg-danger: #A6543F;
+  --mg-danger-bg: #F3E1DA;
+  --mg-success: #6F7B56;
+  --mg-success-bg: #E2E6D7;
+  --mg-primary-rgb: 201 120 82;
+  --mg-success-rgb: 111 123 86;
+  --mg-danger-rgb: 166 84 63;
+  --mg-shadow-sm: 0 8px 24px rgba(52, 38, 31, 0.06);
+  --mg-shadow-md: 0 18px 40px rgba(52, 38, 31, 0.09);
+  --mg-radius-sm: 10px;
+  --mg-radius-md: 16px;
+  --mg-radius-lg: 24px;
+}
+
+:root.dark,
+body.management-theme-dark {
+  --mg-bg-page: #1C1A18;
+  --mg-bg-surface: #25221F;
+  --mg-bg-soft: #2E2A27;
+  --mg-text-main: #EAE5DF;
+  --mg-text-muted: #A39B93;
+  --mg-border: #423C38;
+  --mg-border-light: rgba(66, 60, 56, 0.5);
+  --mg-primary: #C07050;
+  --mg-primary-hover: #D4805E;
+  --mg-olive: #838561;
+  --mg-olive-soft: #303225;
+  --mg-danger: #C25B4E;
+  --mg-danger-bg: #3D231E;
+  --mg-success: #7F8B54;
+  --mg-success-bg: #2E3321;
+  --mg-primary-rgb: 192 112 80;
+  --mg-success-rgb: 127 139 84;
+  --mg-danger-rgb: 194 91 78;
+  --mg-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --mg-shadow-md: 0 18px 40px rgba(0, 0, 0, 0.6);
 }
 </style>

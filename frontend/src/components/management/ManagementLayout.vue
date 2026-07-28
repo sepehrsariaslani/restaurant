@@ -32,6 +32,7 @@
 			dark: isDarkMode,
 			'rail-collapsed': isDesktop && isRailCollapsed,
 			'management-layout--pos': isPosPage,
+			'management-layout--kitchen': isKitchenPage,
 		}"
 		:style="moduleThemeVars"
 		dir="rtl"
@@ -40,14 +41,46 @@
 		<div class="mobile-layout">
 			<!-- Mobile Header -->
 			<header class="mobile-header">
-				<button
-					type="button"
-					class="icon-button"
-					aria-label="باز کردن منو"
-					@click="mobileMenuOpen = true"
-				>
-					<MenuIcon class="icon-md" />
-				</button>
+				<div class="dfm-wrapper inline-dfm">
+					<button 
+						type="button" 
+						class="dfm-toggle-btn" 
+						:class="{ 'is-open': !isRailCollapsed }" 
+						@click="toggleRailMode" 
+						:title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'"
+					>
+						<span class="dfm-burger">
+							<span class="dfm-line top"></span>
+							<span class="dfm-line mid"></span>
+							<span class="dfm-line bot"></span>
+						</span>
+					</button>
+
+					<Transition name="dfm-anim">
+						<aside v-if="!isRailCollapsed" class="dfm-dropdown">
+							<div class="dfm-brand-block">
+								<a class="dfm-brand" href="/management" @click="toggleRailMode">
+									<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
+									<span class="dfm-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
+								</a>
+							</div>
+							<nav class="accordion-nav dfm-nav">
+								<div v-for="group in menuGroups" :key="group.key" class="nav-group" :class="{ open: isGroupOpen(group.key) }">
+									<div class="group-title-rail">{{ group.title }}</div>
+									<div class="group-items">
+										<a v-for="item in group.items" :key="item.key" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" :title="item.label" @click="toggleRailMode">
+											<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
+											<span class="item-label"><strong>{{ item.label }}</strong></span>
+										</a>
+									</div>
+								</div>
+							</nav>
+						</aside>
+					</Transition>
+					<Transition name="fade">
+						<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
+					</Transition>
+				</div>
 
 				<a href="/management" class="mobile-brand">
 					<span class="brand-mark">
@@ -59,9 +92,31 @@
 					</span>
 				</a>
 
-				<a href="/menu" class="icon-button" title="مشاهده سایت مشتری">
-					<HomeIcon class="icon-md" />
-				</a>
+				<div class="mobile-header-actions">
+					<button
+						type="button"
+						class="mobile-theme-toggle"
+						:class="{ 'is-dark': isDarkMode }"
+						@click="toggleTheme"
+						:aria-label="isDarkMode ? 'فعال‌سازی حالت روز' : 'فعال‌سازی حالت شب'"
+						:title="isDarkMode ? 'حالت روز' : 'حالت شب'"
+					>
+						<span class="theme-toggle-glow" aria-hidden="true"></span>
+						<span class="theme-toggle-track" aria-hidden="true">
+							<SunIcon class="theme-icon theme-icon-sun" />
+							<MoonIcon class="theme-icon theme-icon-moon" />
+							<span class="theme-toggle-thumb">
+								<SunIcon v-if="isDarkMode" class="theme-thumb-icon" />
+								<MoonIcon v-else class="theme-thumb-icon" />
+							</span>
+						</span>
+						<span class="sr-only">{{ isDarkMode ? 'حالت روز' : 'حالت شب' }}</span>
+					</button>
+
+					<a href="/menu" class="icon-button" title="مشاهده سایت مشتری">
+						<HomeIcon class="icon-md" />
+					</a>
+				</div>
 			</header>
 
 			<!-- Mobile Content -->
@@ -74,20 +129,6 @@
 				<slot v-else />
 			</main>
 
-			<!-- Mobile Bottom Navigation -->
-			<nav class="mobile-bottom-nav">
-				<a
-					v-for="link in mobilePrimaryLinks"
-					:key="`bottom-${link.key}`"
-					:href="link.url"
-					class="bottom-nav-item"
-					:class="{ active: isLinkActive(link.key) }"
-				>
-					<component :is="link.iconComponent" class="icon-md" />
-					<span>{{ link.shortLabel }}</span>
-				</a>
-			</nav>
-
 			<!-- Mobile Sidebar Overlay -->
 			<Transition name="fade">
 				<div v-if="mobileMenuOpen" class="mobile-overlay" @click="closeMobileMenu" />
@@ -97,318 +138,140 @@
 				<aside v-if="mobileMenuOpen" class="mobile-sidebar">
 					<div class="mobile-sidebar-header">
 						<div class="sidebar-title">
-							<span class="brand-mark">
-								<img
-									class="brand-image"
-									src="/NooshYar%20Image.png"
-									alt="NooshYar"
-								/>
-							</span>
-							<div>
-								<strong>منوی مدیریت</strong>
-								<small>{{ brandName }}</small>
-							</div>
+							<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
+							<div><strong>نوش‌یار</strong><small>{{ brandName }}</small></div>
 						</div>
-
-						<button type="button" class="icon-button" @click="closeMobileMenu">
-							<XIcon class="icon-md" />
-						</button>
+						<button type="button" class="icon-button" @click="closeMobileMenu"><XIcon class="icon-md" /></button>
 					</div>
 
 					<nav class="accordion-nav">
-						<div
-							v-for="group in menuGroups"
-							:key="`mobile-group-${group.key}`"
-							class="nav-group"
-							:class="{ open: isGroupOpen(group.key) }"
-						>
-							<button
-								type="button"
-								class="group-button"
-								:class="{ active: isGroupOpen(group.key) }"
-								:aria-expanded="isGroupOpen(group.key)"
-								@click="toggleGroup(group.key)"
-							>
-								<span class="group-icon">
-									<component :is="group.icon" class="icon-sm" />
-								</span>
-								<span>{{ group.title }}</span>
-								<ChevronDownIcon
-									class="icon-sm chevron"
-									:class="{ rotated: isGroupOpen(group.key) }"
-								/>
-							</button>
-
-							<div v-if="isGroupOpen(group.key)" class="group-items">
-								<a
-									v-for="item in group.items"
-									:key="`mobile-item-${item.key}`"
-									:href="item.url"
-									class="nav-item"
-									:class="{ active: isLinkActive(item.key) }"
-									@click="closeMobileMenu"
-								>
-									<span class="item-icon">
-										<component :is="item.iconComponent" class="icon-sm" />
-									</span>
+						<div v-for="group in menuGroups" :key="`mobile-group-${group.key}`" class="nav-group open">
+							<div class="group-title-rail">{{ group.title }}</div>
+							<div class="group-items">
+								<a v-for="item in group.items" :key="`mobile-item-${item.key}`" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" @click="closeMobileMenu">
+									<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
 									<span>{{ item.label }}</span>
-									<ChevronLeftIcon
-										v-if="isLinkActive(item.key)"
-										class="icon-sm active-chevron"
-									/>
 								</a>
 							</div>
 						</div>
 					</nav>
 
-					<section class="sidebar-auth-card">
-						<template v-if="authLoading">
-							<p class="muted">در حال بررسی وضعیت کاربر...</p>
-						</template>
-
-						<template v-else-if="authGuest">
-							<p class="auth-title">وضعیت کاربر: مهمان</p>
-							<a class="primary-pill-link" :href="loginUrl" @click="closeMobileMenu">
-								ورود به حساب مدیریت
-							</a>
-						</template>
-
-						<template v-else>
-							<div class="user-row">
-								<span class="user-avatar">
-									<UserIcon class="icon-sm" />
-								</span>
-								<div>
-									<strong>{{
-										authProfile.full_name || authProfile.user
-									}}</strong>
-									<small>{{ authProfile.user }}</small>
-								</div>
-							</div>
-
-							<button
-								type="button"
-								class="secondary-btn full"
-								:disabled="authSubmitting"
-								@click="handleMobileLogout"
-							>
-								{{ authSubmitting ? "در حال خروج..." : "خروج" }}
+					<div class="mobile-utility-zone">
+						<a class="utility-link" href="/menu" @click="closeMobileMenu"><ExternalLinkIcon class="icon-sm" /> سایت مشتری</a>
+						<button type="button" class="utility-link" @click="toggleTheme">
+							<component :is="isDarkMode ? SunIcon : MoonIcon" class="icon-sm" /> 
+							{{ isDarkMode ? 'حالت روز' : 'حالت شب' }}
+						</button>
+						<template v-if="!authLoading && !authGuest">
+							<button type="button" class="utility-link text-danger" :disabled="authSubmitting" @click="handleMobileLogout">
+								<UserIcon class="icon-sm" /> {{ authSubmitting ? 'در حال خروج...' : 'خروج از حساب' }}
 							</button>
 						</template>
-
-						<p v-if="authError" class="auth-error">
-							{{ authError }}
-						</p>
-					</section>
+					</div>
 				</aside>
 			</Transition>
 		</div>
 
 		<!-- Desktop Layout -->
 		<div class="desktop-layout">
-			<!-- Sidebar -->
-			<aside class="desktop-sidebar">
-				<!-- Sidebar Top -->
-				<div class="sidebar-logo-block">
-					<button
-						type="button"
-						class="rail-mini-toggle"
-						:title="isRailCollapsed ? 'باز کردن منو' : 'کوچک کردن منو'"
-						@click="toggleRailMode"
-					>
-						<PanelRightCloseIcon v-if="!isRailCollapsed" class="icon-sm" />
-						<PanelRightOpenIcon v-else class="icon-sm" />
-					</button>
+			
 
-					<a class="rail-brand" href="/management">
-						<span class="rail-brand-mark">
-							<img
-								class="brand-image brand-image-lg"
-								src="/NooshYar%20Image.png"
-								alt="NooshYar"
-							/>
-						</span>
-
-						<span class="rail-brand-text">
-							<strong>نوش‌یار</strong>
-							<small>پنل مدیریت رستوران</small>
-						</span>
-					</a>
-				</div>
-
-				<!-- Accordion Nav -->
-				<nav class="accordion-nav desktop-nav">
-					<div
-						v-for="group in menuGroups"
-						:key="group.key"
-						class="nav-group"
-						:class="{ open: isGroupOpen(group.key) }"
-					>
-						<button
-							type="button"
-							class="group-button"
-							:class="{ active: isGroupOpen(group.key) }"
-							:aria-expanded="isGroupOpen(group.key)"
-							@click="toggleGroup(group.key)"
-						>
-							<span class="group-icon">
-								<component :is="group.icon" class="icon-sm" />
-							</span>
-
-							<span class="group-title">{{ group.title }}</span>
-
-							<ChevronDownIcon
-								class="icon-sm chevron"
-								:class="{ rotated: isGroupOpen(group.key) }"
-							/>
-						</button>
-
-						<div v-if="isGroupOpen(group.key)" class="group-items">
-							<a
-								v-for="item in group.items"
-								:key="item.key"
-								:href="item.url"
-								class="nav-item"
-								:class="{ active: isLinkActive(item.key) }"
-								:title="item.label"
-							>
-								<span class="item-icon">
-									<component :is="item.iconComponent" class="icon-sm" />
-								</span>
-
-								<span class="item-label">
-									<strong>{{ item.label }}</strong>
-									<small>{{ item.caption }}</small>
-								</span>
-
-								<ChevronLeftIcon
-									v-if="isLinkActive(item.key)"
-									class="icon-sm active-chevron"
-								/>
-							</a>
-						</div>
-					</div>
-				</nav>
-
-				<!-- Sidebar Footer -->
-				<div class="sidebar-footer">
-					<a class="customer-site-link" href="/menu" title="مشاهده سایت مشتری">
-						<ExternalLinkIcon class="icon-sm" />
-						<span>مشاهده سایت مشتری</span>
-					</a>
-
-					<section class="auth-panel">
-						<template v-if="authLoading">
-							<p class="muted">در حال بررسی وضعیت کاربر...</p>
-						</template>
-
-						<template v-else-if="authGuest">
-							<p class="auth-title">وضعیت کاربر: مهمان</p>
-							<p class="muted">برای مشاهده داشبورد، ابتدا وارد حساب شوید.</p>
-							<a class="primary-pill-link" :href="loginUrl"> ورود </a>
-						</template>
-
-						<template v-else>
-							<div class="user-row">
-								<span class="user-avatar">
-									<UserIcon class="icon-sm" />
-								</span>
-								<div>
-									<strong>{{
-										authProfile.full_name || authProfile.user
-									}}</strong>
-									<small>{{ authProfile.user }}</small>
-								</div>
-							</div>
-
-							<button
-								class="secondary-btn full"
-								type="button"
-								:disabled="authSubmitting"
-								@click="submitLogout"
-							>
-								{{ authSubmitting ? "در حال خروج..." : "خروج" }}
-							</button>
-						</template>
-
-						<p v-if="authError" class="auth-error">
-							{{ authError }}
-						</p>
-					</section>
-
-					<button type="button" class="theme-toggle" @click="toggleTheme">
-						<SunIcon v-if="isDarkMode" class="icon-sm" />
-						<MoonIcon v-else class="icon-sm" />
-						<span>{{ isDarkMode ? "حالت روز" : "حالت شب" }}</span>
-					</button>
-
-					<div class="desktop-zoom">
-						<button
-							type="button"
-							class="zoom-btn"
-							:disabled="!canIncrease"
-							@click="increaseScale"
-						>
-							A+
-						</button>
-						<span class="zoom-level">{{ scaleLabel }}</span>
-						<button
-							type="button"
-							class="zoom-btn"
-							:disabled="!canDecrease"
-							@click="decreaseScale"
-						>
-							A-
-						</button>
-						<button
-							type="button"
-							class="zoom-reset"
-							:disabled="isDefaultScale"
-							@click="resetScale"
-						>
-							پیش‌فرض
-						</button>
-					</div>
-				</div>
-			</aside>
 
 			<!-- Main Content -->
 			<div class="desktop-content" :class="{ 'desktop-content--pos': isPosPage }">
-				<header v-if="!isPosPage" class="desktop-header">
+								<header class="desktop-header">
+					<div class="desktop-header-start">
+<div class="dfm-wrapper inline-dfm">
+							<button 
+								type="button" 
+								class="dfm-toggle-btn" 
+								:class="{ 'is-open': !isRailCollapsed }" 
+								@click="toggleRailMode" 
+								:title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'"
+							>
+								<span class="dfm-burger">
+									<span class="dfm-line top"></span>
+									<span class="dfm-line mid"></span>
+									<span class="dfm-line bot"></span>
+								</span>
+							</button>
+
+							<Transition name="dfm-anim">
+								<aside v-if="!isRailCollapsed" class="dfm-dropdown">
+									<div class="dfm-brand-block">
+										<a class="dfm-brand" href="/management" @click="toggleRailMode">
+											<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
+											<span class="dfm-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
+										</a>
+									</div>
+									<nav class="accordion-nav dfm-nav">
+										<div v-for="group in menuGroups" :key="group.key" class="nav-group" :class="{ open: isGroupOpen(group.key) }">
+											<div class="group-title-rail">{{ group.title }}</div>
+											<div class="group-items">
+												<a v-for="item in group.items" :key="item.key" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" :title="item.label" @click="toggleRailMode">
+													<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
+													<span class="item-label"><strong>{{ item.label }}</strong></span>
+												</a>
+											</div>
+										</div>
+									</nav>
+								</aside>
+							</Transition>
+							<Transition name="fade">
+								<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
+							</Transition>
+						</div>
 					<div class="page-title-wrap">
-						<small>داشبورد عملیاتی</small>
 						<h1>{{ activeTitle }}</h1>
+					</div>
 					</div>
 
 					<div class="desktop-header-actions">
-						<a class="header-site-link" href="/menu"> سایت مشتری </a>
+						<button type="button" class="utility-icon-btn theme-toggle-btn" @click="toggleTheme" :title="isDarkMode ? 'حالت روز' : 'حالت شب'">
+							<SunIcon v-if="isDarkMode" class="icon-sm" />
+							<MoonIcon v-else class="icon-sm" />
+						</button>
 
 						<template v-if="!authLoading">
-							<a v-if="authGuest" class="header-auth-btn" :href="loginUrl"> ورود </a>
-
-							<template v-else>
-								<div class="header-user-chip" :title="authProfile.user">
-									<strong>{{
-										authProfile.full_name || authProfile.user
-									}}</strong>
-									<small>{{ authProfile.user }}</small>
-								</div>
-
-								<button
-									class="header-auth-btn muted"
-									type="button"
-									@click="submitLogout"
-								>
-									خروج
+							<a v-if="authGuest" class="header-auth-btn" :href="loginUrl">ورود</a>
+							<div v-else class="user-dropdown-wrapper">
+								<button type="button" class="user-dropdown-trigger" @click="toggleUserMenu">
+									<div class="header-user-avatar">
+										{{ (authProfile.full_name || authProfile.user).charAt(0) }}
+									</div>
+									<div class="header-user-info">
+										<strong>{{ authProfile.full_name || authProfile.user }}</strong>
+										<small>{{ authProfile.roles?.includes('System Manager') ? 'مدیر سیستم' : 'کاربر' }}</small>
+									</div>
+									<ChevronDownIcon class="icon-sm dropdown-chevron" />
 								</button>
-							</template>
+								
+								<Transition name="dropdown-anim">
+									<div v-if="userMenuOpen" class="user-dropdown-menu">
+										<a class="user-menu-item" href="/menu">
+											<ExternalLinkIcon class="icon-sm" />
+											<span>سایت مشتری</span>
+										</a>
+										<div class="user-menu-divider"></div>
+										<button class="user-menu-item text-danger" type="button" @click="submitLogout" :disabled="authSubmitting">
+											<LogOutIcon class="icon-sm" />
+											<span>{{ authSubmitting ? 'در حال خروج...' : 'خروج از حساب' }}</span>
+										</button>
+									</div>
+								</Transition>
+								
+								<!-- Invisible backdrop to close menu when clicking outside -->
+								<div v-if="userMenuOpen" class="user-dropdown-backdrop" @click="userMenuOpen = false"></div>
+							</div>
 						</template>
+
+						<!-- Menu Toggle Button (FAB inline) -->
+						
 					</div>
 				</header>
-
 				<main
 					class="desktop-main module-content"
-					:class="{ 'desktop-main--fullbleed': isPosPage }"
+					:class="{ 'desktop-main--fullbleed': isPosPage || isKitchenPage }"
 				>
 					<section v-if="authLoading" class="auth-gate-card">
 						<ManagementBearLoader :size="188" label="در حال همگام‌سازی نشست..." />
@@ -437,6 +300,7 @@ import {
 	Tags as TagsIcon,
 	Settings as SettingsIcon,
 	Users as UsersIcon,
+	UserCog as UserCogIcon,
 	BarChart3 as ReportsIcon,
 	FileText as FileTextIcon,
 	Printer as PrinterIcon,
@@ -448,12 +312,23 @@ import {
 	ChevronDown as ChevronDownIcon,
 	ChevronLeft as ChevronLeftIcon,
 	ExternalLink as ExternalLinkIcon,
+	LogOut as LogOutIcon,
 	Sun as SunIcon,
 	Moon as MoonIcon,
 	PanelRightClose as PanelRightCloseIcon,
 	PanelRightOpen as PanelRightOpenIcon,
 	SlidersHorizontal as SlidersIcon,
 	Store as StoreIcon,
+	Boxes as InventoryIcon,
+	UtensilsCrossed as KitchenIcon,
+	HeartHandshake as ClubIcon,
+	ClipboardCheck as SurveyIcon,
+	Wallet as WalletIcon,
+	Calculator as CalculatorIcon,
+	CalendarCheck as CalendarCheckIcon,
+	Headset as HeadsetIcon,
+	Building2 as BuildingIcon,
+	LifeBuoy as LifeBuoyIcon,
 } from "lucide-vue-next";
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
@@ -487,8 +362,9 @@ const props = defineProps({
 
 const isDesktop = ref(false);
 const desktopScale = ref(1);
-const railMode = ref("expanded");
+const railMode = ref("icons");
 const mobileMenuOpen = ref(false);
+const userMenuOpen = ref(false);
 const openGroupKey = ref("");
 const openGroups = ref({});
 
@@ -560,12 +436,121 @@ const navLinks = computed(() => {
 			group: "sales",
 		},
 		{
+			key: "management-register",
+			label: "صندوق و تسویه",
+			shortLabel: "صندوق",
+			caption: "بستن صندوق، شیفت و کمبو",
+			iconComponent: StoreIcon,
+			url: "/management/register",
+			group: "sales",
+		},
+		{
+			key: "management-inventory",
+			label: "انبارداری هوشمند",
+			shortLabel: "انبار",
+			caption: "موجودی، خرید، تولید و ضایعات",
+			iconComponent: InventoryIcon,
+			url: "/management/inventory",
+			group: "sales",
+		},
+		{
+			key: "management-club",
+			label: "باشگاه مشتریان",
+			shortLabel: "باشگاه",
+			caption: "وفاداری، پیامک، کیف پول و کمپین",
+			iconComponent: ClubIcon,
+			url: "/management/club",
+			group: "crm",
+		},
+		{
+			key: "management-surveys",
+			label: "نظرسنجی هوشمند",
+			shortLabel: "نظرسنجی",
+			caption: "نظر سفارش‌محور و هشدار نارضایتی",
+			iconComponent: SurveyIcon,
+			url: "/management/surveys",
+			group: "crm",
+		},
+		{
+			key: "management-cost-control",
+			label: "کاست کنترل",
+			shortLabel: "هزینه",
+			caption: "بودجه، سود و زیان و نقطه سربه‌سر",
+			iconComponent: WalletIcon,
+			url: "/management/cost-control",
+			group: "reports",
+		},
+		{
+			key: "management-accounting",
+			label: "حسابداری یکپارچه",
+			shortLabel: "حسابداری",
+			caption: "تراز دریافت و پرداخت، مالیات و اسناد",
+			iconComponent: CalculatorIcon,
+			url: "/management/accounting",
+			group: "reports",
+		},
+		{
+			key: "management-reservations",
+			label: "رزرواسیون",
+			shortLabel: "رزرو",
+			caption: "رزرو میز، میهمان و یادآوری",
+			iconComponent: CalendarCheckIcon,
+			url: "/management/reservations",
+			group: "sales",
+		},
+		{
+			key: "management-call-center",
+			label: "مرکز تماس",
+			shortLabel: "تماس",
+			caption: "تماس ورودی VOIP و پروفایل مشتری",
+			iconComponent: HeadsetIcon,
+			url: "/management/call-center",
+			group: "crm",
+		},
+		{
+			key: "management-branches",
+			label: "شعب",
+			shortLabel: "شعبه",
+			caption: "مدیریت شعب و انتقال مشتری",
+			iconComponent: BuildingIcon,
+			url: "/management/branches",
+			group: "settings",
+		},
+		{
+			key: "management-help",
+			label: "راهنما و آموزش",
+			shortLabel: "راهنما",
+			caption: "پشتیبانی، آموزش و اکانت منیجر",
+			iconComponent: LifeBuoyIcon,
+			url: "/management/help",
+			group: "settings",
+		},
+		{
+			key: "management-couriers",
+			label: "پیک‌ها",
+			shortLabel: "پیک",
+			caption: "ناوگان و تخصیص",
+			iconComponent: UsersIcon,
+			url: "/management/couriers",
+			group: "sales",
+		},
+		{
 			key: "management-orders",
 			label: "سفارش‌ها",
 			shortLabel: "سفارش",
 			caption: "وضعیت و تحویل",
 			iconComponent: OrdersIcon,
 			url: "/management/orders",
+			group: "sales",
+		},
+		{
+			key: "management-kitchen",
+			label: "آشپزخانه",
+			shortLabel: "آشپز",
+			caption: "نمایشگر تولید",
+			iconComponent: KitchenIcon,
+			url: "/management/kitchen",
+			target: "_blank",
 			group: "sales",
 		},
 		{
@@ -639,6 +624,15 @@ const navLinks = computed(() => {
 			iconComponent: UsersIcon,
 			url: "/management/customers",
 			group: "crm",
+		},
+		{
+			key: "management-users",
+			label: "کاربران و دسترسی‌ها",
+			shortLabel: "کاربران",
+			caption: "نقش‌ها و سطح دسترسی",
+			iconComponent: UserCogIcon,
+			url: "/management/users",
+			group: "settings",
 		},
 		{
 			key: "management-tables",
@@ -779,6 +773,7 @@ const scaleLabel = computed(() => `${Math.round(desktopScale.value * 100)}%`);
 const isRailCollapsed = computed(() => railMode.value === "icons");
 const isLoginPage = computed(() => props.page === "management-login");
 const isPosPage = computed(() => props.page === "management-pos");
+const isKitchenPage = computed(() => props.page === "management-kitchen");
 const authGuest = computed(() => Boolean(authProfile.value?.is_guest));
 
 const moduleThemeVars = computed(() => {
@@ -787,16 +782,16 @@ const moduleThemeVars = computed(() => {
 			"--module-500": "#f4e6d3",
 			"--module-600": "#fff3e2",
 			"--module-50": "rgb(244 230 211 / 0.13)",
-			"--module-title-light": "#0f172a",
+			"--module-title-light": "var(--mg-text-main)",
 			"--module-title-dark": "#fff7ed",
 		};
 	}
 
 	return {
-		"--module-500": "#8b5e34",
-		"--module-600": "#6f4726",
+		"--module-500": "var(--mg-primary)",
+		"--module-600": "var(--mg-primary)",
 		"--module-50": "rgb(139 94 52 / 0.075)",
-		"--module-title-light": "#0f172a",
+		"--module-title-light": "var(--mg-text-main)",
 		"--module-title-dark": "#fff7ed",
 	};
 });
@@ -862,7 +857,11 @@ function unlockBodyScroll() {
 	lockedScrollY = 0;
 }
 
-function toggleRailMode() {
+function toggleUserMenu() {
+		userMenuOpen.value = !userMenuOpen.value;
+	}
+
+	function toggleRailMode() {
 	railMode.value = isRailCollapsed.value ? "expanded" : "icons";
 }
 
@@ -1068,9 +1067,9 @@ onMounted(() => {
 		const storedRailMode = window.localStorage.getItem(RAIL_STORAGE_KEY);
 
 		desktopScale.value = normalizeScale(storedScale);
-		railMode.value = ["expanded", "icons"].includes(storedRailMode)
-			? storedRailMode
-			: "expanded";
+
+	railMode.value = "icons"; // Default to closed for all pages with floating menu
+
 
 		desktopMedia = window.matchMedia(DESKTOP_MEDIA_QUERY);
 		desktopListener = () => syncDesktopState();
@@ -1157,1332 +1156,765 @@ onBeforeUnmount(() => {
 <style scoped>
 .management-layout,
 .management-auth-shell {
-	--bg-page: #f8fafc;
-	--bg-card: #ffffff;
-	--bg-soft: #f1f5f9;
-	--bg-subtle: #f8fafc;
-	--border: #e2e8f0;
-	--border-strong: #cbd5e1;
-	--text: #0f172a;
-	--muted: #64748b;
-	--muted-2: #94a3b8;
-	--danger: #dc2626;
-	--shadow: 0 18px 44px rgb(15 23 42 / 0.07);
-	--shadow-sm: 0 8px 22px rgb(15 23 42 / 0.045);
-
-	--palette-deep-sapphire: #8b5e34;
-	--palette-deep-sapphire-rgb: 139 94 52;
-	--palette-june-bud: #f4e6d3;
-	--palette-june-bud-rgb: 244 230 211;
-	--palette-deep-saffron: #b8793f;
-	--palette-deep-saffron-rgb: 184 121 63;
-	--palette-eggshell: #ffffff;
-	--palette-eggshell-rgb: 255 255 255;
-	--theme-surface-alt: var(--bg-soft);
-	--theme-background: var(--bg-page);
-	--theme-border: var(--border);
-	--glass-bg: #ffffff;
-	--glass-border: var(--border);
-	--glass-highlight: rgb(255 255 255 / 0.95);
-	--accent-green: #8b5e34;
-	--accent-green80: rgb(139 94 52 / 0.86);
-	--accent-green60: rgb(139 94 52 / 0.62);
-	--accent-green40: rgb(139 94 52 / 0.12);
-	--accent-green20: rgb(139 94 52 / 0.075);
-	--accent-cream: #f4e6d3;
-	--accent-cream80: rgb(244 230 211 / 0.88);
-	--accent-cream50: rgb(244 230 211 / 0.52);
-	--accent-cream20: rgb(244 230 211 / 0.24);
-	--accent-gold: #b8793f;
-	--accent-gold80: rgb(184 121 63 / 0.82);
-	--accent-gold50: rgb(184 121 63 / 0.45);
-	--accent-gold20: rgb(184 121 63 / 0.1);
-	--accent: #8b5e34;
-	--text-primary: var(--text);
-	--text-secondary: #334155;
-	--text-muted: var(--muted);
-	--management-ink: var(--text);
-	--ink-900: #0f172a;
-	--ink-800: #1e293b;
-	--ink-700: #334155;
-	--ink-600: #64748b;
-	--ink-400: #94a3b8;
-	--ink-200: #e2e8f0;
-	--success: #16a34a;
-	--success-rgb: 22 163 74;
-	--warning: #d97706;
-	--warning-rgb: 217 119 6;
-	--shadow-deep: 0 24px 56px rgb(15 23 42 / 0.1);
-	--shadow-soft: 0 12px 28px rgb(15 23 42 / 0.07);
-	--radius-xl: 28px;
-	--radius-lg: 18px;
-	--radius-md: 14px;
-	--pos-primary-color: #6f4a31;
-	--pos-primary-rgb: 111 74 49;
-	--pos-accent-color: #c98d42;
-	--pos-accent-rgb: 201 141 66;
-	--pos-success-color: #0b7d4a;
-	--pos-success-rgb: 11 125 74;
-	--pos-danger-color: #ab3535;
-	--pos-danger-rgb: 171 53 53;
-	--pos-warning-color: #f59e0b;
-	--pos-warning-rgb: 245 158 11;
-	--pos-surface-color: #ffffff;
+	/* Legacy mappings to prevent breaking POS/Products/Dashboard */
+	--bg-page: var(--mg-bg-page);
+	--bg-card: var(--mg-bg-surface);
+	--bg-soft: var(--mg-bg-soft);
+	--bg-subtle: var(--mg-bg-page);
+	--border: var(--mg-border);
+	--border-strong: var(--mg-text-muted);
+	--text: var(--mg-text-main);
+	--muted: var(--mg-text-muted);
+	--muted-2: var(--mg-olive);
+	--danger: var(--mg-danger);
+	--shadow: var(--mg-shadow-md);
+	--shadow-sm: var(--mg-shadow-sm);
+	--palette-deep-sapphire: var(--mg-primary);
+	--palette-deep-sapphire-rgb: 201, 120, 82;
+	--palette-june-bud: var(--mg-olive);
+	--palette-june-bud-rgb: 138, 139, 99;
+	--palette-deep-saffron: var(--mg-border);
+	--palette-deep-saffron-rgb: 216, 200, 180;
+	--palette-eggshell: var(--mg-bg-surface);
+	--palette-eggshell-rgb: 251, 247, 241;
 
 	min-height: 100vh;
-	background: var(--bg-page);
-	color: var(--text);
+	background: var(--mg-bg-page);
+	color: var(--mg-text-main);
 }
 
-:global(body.management-theme-dark) {
-	background: #020617;
-	color: #f8fafc;
-}
-
-:global(body.management-theme-light) {
-	background: #f8fafc;
-	color: #0f172a;
-}
-
-.management-layout.dark,
-.management-auth-shell.dark,
-:global(.dark) .management-layout,
-:global(.dark) .management-auth-shell {
-	--bg-page: #020617;
-	--bg-card: #0f172a;
-	--bg-soft: #111827;
-	--bg-subtle: #1e293b;
-	--border: #1f2937;
-	--border-strong: #334155;
-	--text: #f8fafc;
-	--muted: #cbd5e1;
-	--muted-2: #94a3b8;
-	--shadow: 0 22px 54px rgb(0 0 0 / 0.38);
-	--shadow-sm: 0 10px 28px rgb(0 0 0 / 0.28);
-	--palette-deep-sapphire: #f4e6d3;
-	--palette-deep-sapphire-rgb: 244 230 211;
-	--palette-june-bud: #f4e6d3;
-	--palette-june-bud-rgb: 244 230 211;
-	--palette-deep-saffron: #ffd7a8;
-	--palette-deep-saffron-rgb: 255 215 168;
-	--glass-bg: #0f172a;
-	--glass-border: #1f2937;
-	--glass-highlight: rgb(255 255 255 / 0.08);
-	--theme-surface-alt: #111827;
-	--theme-background: #020617;
-	--theme-border: #1f2937;
-	--accent-green: #f4e6d3;
-	--accent-green80: rgb(244 230 211 / 0.9);
-	--accent-green60: rgb(244 230 211 / 0.7);
-	--accent-green40: rgb(244 230 211 / 0.2);
-	--accent-green20: rgb(244 230 211 / 0.11);
-	--accent-cream: #f4e6d3;
-	--accent-cream80: rgb(244 230 211 / 0.88);
-	--accent-cream50: rgb(244 230 211 / 0.48);
-	--accent-cream20: rgb(244 230 211 / 0.14);
-	--accent-gold: #ffd7a8;
-	--accent-gold80: rgb(255 215 168 / 0.82);
-	--accent-gold50: rgb(255 215 168 / 0.45);
-	--accent-gold20: rgb(255 215 168 / 0.12);
-	--accent: #f4e6d3;
-	--text-primary: var(--text);
-	--text-secondary: #e2e8f0;
-	--text-muted: var(--muted);
-	--management-ink: var(--text);
-	--ink-900: #f8fafc;
-	--ink-800: #e2e8f0;
-	--ink-700: #cbd5e1;
-	--ink-600: #94a3b8;
-	--ink-400: #64748b;
-	--ink-200: #334155;
-	--pos-primary-color: #f4e6d3;
-	--pos-primary-rgb: 244 230 211;
-	--pos-accent-color: #d4a169;
-	--pos-accent-rgb: 212 161 105;
-	--pos-success-color: #34d399;
-	--pos-success-rgb: 52 211 153;
-	--pos-danger-color: #f87171;
-	--pos-danger-rgb: 248 113 113;
-	--pos-warning-color: #fbbf24;
-	--pos-warning-rgb: 251 191 36;
-	--pos-surface-color: #0f172a;
-}
-
-/* Auth */
-.management-auth-shell {
-	display: grid;
-	place-items: center;
-	padding: 1rem;
-}
-
-.management-auth-card,
-.auth-gate-card {
-	width: min(440px, 100%);
-	border: 1px solid var(--border);
-	border-radius: 22px;
-	background: color-mix(in srgb, var(--bg-card) 94%, transparent);
-	box-shadow: var(--shadow);
-	padding: 1.1rem;
-	display: grid;
-	gap: 0.45rem;
-	justify-items: center;
-	text-align: center;
-}
-
-.auth-card-title,
-.auth-gate-title {
-	margin: 0;
-	font-size: 1rem;
-	font-weight: 900;
-	color: var(--text);
-}
-
-.auth-card-muted,
-.muted {
-	margin: 0;
-	color: var(--muted);
-	font-size: 0.78rem;
-}
-
-.auth-error {
-	margin: 0;
-	color: var(--danger);
-	font-size: 0.75rem;
-}
-
-.auth-error--login {
-	margin-top: 0.75rem;
-}
-
-/* Common */
-.icon-sm {
-	width: 1rem;
-	height: 1rem;
-}
-
-.icon-md {
-	width: 1.35rem;
-	height: 1.35rem;
-}
-
-.brand-image {
-	width: 1.35rem;
-	height: 1.35rem;
-	object-fit: cover;
-	border-radius: 0.55rem;
-}
-
-.brand-image-lg {
-	width: 1.55rem;
-	height: 1.55rem;
-}
-
-.brand-mark,
-.rail-brand-mark {
-	width: 2.45rem;
-	height: 2.45rem;
-	border-radius: 0.8rem;
-	background: var(--bg-soft);
-	border: 1px solid var(--border);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	box-shadow: none;
-	flex-shrink: 0;
-}
-
-.icon-button {
-	width: 2.75rem;
-	height: 2.75rem;
-	border: 1px solid var(--border);
-	border-radius: 0.75rem;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	background: var(--bg-card);
-	color: var(--muted);
-	cursor: pointer;
-	transition: 0.18s ease;
-}
-
-.icon-button:hover {
-	background: var(--bg-soft);
-	border-color: var(--border);
-	color: var(--text);
-}
-
-/* Mobile */
-.mobile-layout {
-	min-height: 100vh;
-	display: flex;
-	flex-direction: column;
-}
-
-.mobile-header {
-	min-height: 4.35rem;
-	padding: 0 0.9rem;
-	border-bottom: 1px solid var(--border);
-	background: color-mix(in srgb, var(--bg-card) 98%, transparent);
-	backdrop-filter: blur(10px);
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.75rem;
-	position: sticky;
-	top: 0;
-	z-index: 80;
-}
-
-.mobile-brand {
-	min-width: 0;
-	display: inline-flex;
-	align-items: center;
-	gap: 0.55rem;
-	color: var(--text);
-}
-
-.mobile-brand-text {
-	display: grid;
-	gap: 0.04rem;
-	min-width: 0;
-}
-
-.mobile-brand-text strong {
-	font-size: 0.88rem;
-}
-
-.mobile-brand-text small {
-	color: var(--muted);
-	font-size: 0.68rem;
-}
-
-.mobile-main {
-	flex: 1;
-	overflow: auto;
-	overflow-x: hidden;
-	padding: 0.85rem clamp(0.7rem, 3vw, 1rem) 5.75rem;
-	width: 100%;
-	max-width: 100vw;
-}
-
-.mobile-bottom-nav {
-	position: fixed;
-	right: 0;
-	left: 0;
-	bottom: 0;
-	z-index: 90;
-	height: calc(4.55rem + env(safe-area-inset-bottom));
-	padding-bottom: env(safe-area-inset-bottom);
-	background: color-mix(in srgb, var(--bg-card) 96%, transparent);
-	border-top: 1px solid var(--border);
-	display: flex;
-	justify-content: space-around;
-	align-items: center;
-	backdrop-filter: blur(10px);
-}
-
-.bottom-nav-item {
-	height: 100%;
-	min-width: 4.45rem;
-	min-height: 3.75rem;
-	border-radius: 8px;
-	padding: 0.38rem 0.42rem;
-	display: grid;
-	justify-items: center;
-	align-content: center;
-	gap: 0.25rem;
-	color: var(--muted);
-	font-size: 0.68rem;
-	touch-action: manipulation;
-}
-
-.bottom-nav-item.active {
-	color: var(--module-600);
-	background: var(--module-50);
-	font-weight: 900;
-}
-
-.management-layout.dark .bottom-nav-item.active,
-:global(.dark) .bottom-nav-item.active {
-	color: var(--module-title-dark);
-}
-
-.mobile-overlay {
-	position: fixed;
-	inset: 0;
-	height: 100dvh;
-	z-index: 110;
-	background: rgb(2 6 23 / 0.56);
-	backdrop-filter: blur(2px);
-}
-
-.mobile-sidebar {
-	position: fixed;
-	inset-block: 0;
-	top: 0;
-	right: 0;
-	bottom: 0;
-	z-index: 120;
-	width: min(94vw, 410px);
-	height: 100dvh;
-	max-height: 100dvh;
-	background: var(--bg-card);
-	border-left: 1px solid var(--border);
-	border-radius: 16px 0 0 16px;
-	display: flex;
-	flex-direction: column;
-	box-shadow: -24px 0 56px rgb(15 23 42 / 0.18);
-	overflow: hidden;
-}
-
-.mobile-sidebar-header {
-	position: sticky;
-	top: 0;
-	z-index: 2;
-	min-height: 4.6rem;
-	padding: 0.85rem 1rem;
-	border-bottom: 1px solid var(--border);
-	background: var(--bg-card);
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-
-.mobile-sidebar .accordion-nav {
-	flex: 1;
-	min-height: 0;
-	padding: 0.85rem;
-	overflow-y: auto;
-	overscroll-behavior: contain;
-}
-
-.mobile-sidebar .group-button {
-	min-height: 3.02rem;
-	padding-block: 0.48rem;
-}
-
-.mobile-sidebar .nav-item {
-	min-height: 2.82rem;
-}
-
-.sidebar-title {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.75rem;
-}
-
-.sidebar-title div {
-	display: grid;
-}
-
-.sidebar-title strong {
-	font-size: 0.98rem;
-}
-
-.sidebar-title small {
-	color: var(--muted);
-	font-size: 0.74rem;
-}
-
-/* Desktop */
 .desktop-layout {
 	display: none;
 }
 
-@media (min-width: 1024px) {
-	.mobile-layout {
-		display: none;
+.mobile-layout {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
+.mobile-header {
+	height: 3.75rem;
+	background: var(--mg-bg-surface);
+	border-bottom: 1px solid var(--mg-border-light);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 0.5rem;
+	position: sticky;
+	top: 0;
+	z-index: 50;
+}
+
+.mobile-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+}
+
+.mobile-theme-toggle {
+	position: relative;
+	width: 4.15rem;
+	height: 2.5rem;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--mg-text-muted);
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.theme-toggle-track {
+	position: absolute;
+	inset: 0.2rem 0;
+	display: block;
+	overflow: hidden;
+	border: 1px solid var(--mg-border-light);
+	border-radius: 999px;
+	background: linear-gradient(135deg, var(--mg-bg-soft), var(--mg-bg-page));
+	box-shadow: inset 0 1px 2px rgba(52, 38, 31, 0.08), 0 3px 10px rgba(52, 38, 31, 0.06);
+	transition: background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+
+.mobile-theme-toggle.is-dark .theme-toggle-track {
+	background: linear-gradient(135deg, #25221f, #3b302b);
+	border-color: rgba(244, 230, 211, 0.25);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35), 0 3px 14px rgba(0, 0, 0, 0.22);
+}
+
+.theme-toggle-thumb {
+	position: absolute;
+	top: 0.18rem;
+	left: 0.2rem;
+	width: 1.7rem;
+	height: 1.7rem;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: #fffaf3;
+	color: #c97852;
+	box-shadow: 0 2px 7px rgba(52, 38, 31, 0.2);
+	transition: transform 0.5s cubic-bezier(0.22, 1.25, 0.36, 1), background 0.45s ease, color 0.45s ease;
+}
+
+.mobile-theme-toggle.is-dark .theme-toggle-thumb {
+	transform: translateX(2.05rem) rotate(180deg);
+	background: #f4e6d3;
+	color: #57483e;
+}
+
+.theme-thumb-icon { width: 1rem; height: 1rem; }
+.theme-icon {
+	position: absolute;
+	top: 0.62rem;
+	width: 0.9rem;
+	height: 0.9rem;
+	opacity: 0.72;
+	transition: opacity 0.35s ease, transform 0.45s ease;
+}
+.theme-icon-sun { right: 0.42rem; color: #efb454; }
+.theme-icon-moon { left: 0.42rem; color: #d8c8b4; }
+.mobile-theme-toggle:not(.is-dark) .theme-icon-moon { opacity: 0.3; }
+.mobile-theme-toggle.is-dark .theme-icon-sun { opacity: 0.3; }
+
+.theme-toggle-glow {
+	position: absolute;
+	inset: 0.12rem;
+	border-radius: 999px;
+	background: var(--mg-primary);
+	opacity: 0;
+	transform: scale(0.55);
+	pointer-events: none;
+}
+.mobile-theme-toggle:active .theme-toggle-glow {
+	animation: theme-toggle-pulse 0.55s ease-out;
+}
+.mobile-theme-toggle:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--mg-primary) 45%, transparent);
+	outline-offset: 2px;
+	border-radius: 999px;
+}
+
+@keyframes theme-toggle-pulse {
+	0% { opacity: 0.35; transform: scale(0.55); }
+	100% { opacity: 0; transform: scale(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.theme-toggle-track,
+	.theme-toggle-thumb,
+	.theme-icon {
+		transition-duration: 0.01ms;
+	}
+	.mobile-theme-toggle:active .theme-toggle-glow {
+		animation: none;
+	}
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.mobile-brand {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	text-decoration: none;
+	color: var(--mg-text-main);
+}
+
+.brand-mark {
+	width: 2.2rem;
+	height: 2.2rem;
+	border-radius: 8px;
+	background: var(--mg-bg-page);
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+}
+.brand-image { width: 100%; height: 100%; object-fit: contain; }
+
+.mobile-brand-text {
+	display: grid;
+}
+.mobile-brand-text strong { font-size: 0.95rem; font-weight: 800; }
+.mobile-brand-text small { font-size: 0.7rem; color: var(--mg-text-muted); }
+
+.icon-button {
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: 8px;
+	border: none;
+	background: transparent;
+	color: var(--mg-text-muted);
+	display: grid;
+	place-items: center;
+}
+.icon-button:hover { background: var(--mg-bg-soft); color: var(--mg-text-main); }
+
+.mobile-bottom-nav {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 4.5rem;
+	background: var(--mg-bg-surface);
+	border-top: 1px solid var(--mg-border-light);
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	padding: 0 0.5rem max(env(safe-area-inset-bottom), 0.5rem);
+	z-index: 50;
+}
+
+.bottom-nav-item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.25rem;
+	color: var(--mg-text-muted);
+	text-decoration: none;
+	padding: 0.5rem;
+	border-radius: 8px;
+}
+.bottom-nav-item.active {
+	color: var(--mg-primary);
+	font-weight: 800;
+}
+.bottom-nav-item span { font-size: 0.7rem; }
+
+.mobile-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(47, 36, 29, 0.6);
+	backdrop-filter: blur(2px);
+	z-index: 100;
+}
+
+.mobile-sidebar {
+	position: fixed;
+	top: 0; right: 0; bottom: 0;
+	width: 85vw;
+	max-width: 320px;
+	background: var(--mg-bg-surface);
+	z-index: 110;
+	display: flex;
+	flex-direction: column;
+}
+
+.mobile-sidebar-header {
+	height: 4.5rem;
+	border-bottom: 1px solid var(--mg-border-light);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 1rem;
+}
+.sidebar-title { display: flex; align-items: center; gap: 0.75rem; }
+.sidebar-title strong { font-weight: 800; color: var(--mg-text-main); }
+.sidebar-title small { font-size: 0.75rem; color: var(--mg-text-muted); }
+
+.mobile-utility-zone {
+	margin-top: auto;
+	padding: 1rem;
+	border-top: 1px solid var(--mg-border-light);
+	display: grid;
+	gap: 0.5rem;
+	background: var(--mg-bg-page);
+}
+.utility-link {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem;
+	border-radius: 8px;
+	color: var(--mg-text-main);
+	text-decoration: none;
+	font-size: 0.9rem;
+	font-weight: 700;
+	background: transparent;
+	border: none;
+	width: 100%;
+}
+.utility-link:hover { background: var(--mg-bg-soft); }
+.text-danger { color: var(--mg-danger); }
+
+/* --- Desktop Floating Menu (Integrated in Header) --- */
+	.dfm-wrapper.inline-dfm {
+		position: relative;
+		z-index: 10000;
+		margin-left: 0.5rem;
 	}
 
-	.desktop-layout {
-		min-height: 100vh;
+	.dfm-toggle-btn {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: var(--mg-bg-surface);
+		color: var(--mg-primary);
+		border: 1px solid var(--mg-border-light);
 		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+		transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+		position: relative;
+		z-index: 10001;
+	}
+	
+	/* Space rings animation */
+	.dfm-toggle-btn::before, .dfm-toggle-btn::after {
+		content: '';
+		position: absolute;
+		inset: -2px;
+		border-radius: 50%;
+		border: 1px solid var(--mg-primary);
+		opacity: 0;
+		pointer-events: none;
+	}
+	.dfm-toggle-btn::before {
+		animation: dfm-ring-pulse 3s infinite ease-out;
+	}
+	.dfm-toggle-btn::after {
+		animation: dfm-ring-pulse 3s infinite ease-out 1.5s;
+	}
+
+	@keyframes dfm-ring-pulse {
+		0% { transform: scale(1); opacity: 0.6; border-width: 1px; }
+		100% { transform: scale(1.6); opacity: 0; border-width: 0px; }
+	}
+
+	.dfm-toggle-btn:hover {
+		transform: scale(1.05);
+		background: var(--mg-primary);
+		color: #fff;
+		border-color: var(--mg-primary);
+	}
+	.dfm-toggle-btn:hover .dfm-line {
+		background: #fff;
+	}
+
+	.dfm-burger {
+		width: 16px;
+		height: 12px;
+		position: relative;
+	}
+	.dfm-line {
+		display: block;
+		width: 100%;
+		height: 2px;
+		background: var(--mg-primary);
+		border-radius: 2px;
+		position: absolute;
+		right: 0;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	.dfm-line.top { top: 0; }
+	.dfm-line.mid { top: 50%; transform: translateY(-50%); }
+	.dfm-line.bot { bottom: 0; }
+
+	.dfm-toggle-btn.is-open {
+		background: var(--mg-primary);
+		color: #fff;
+		border-color: var(--mg-primary);
+		transform: rotate(90deg);
+	}
+	.dfm-toggle-btn.is-open::before, .dfm-toggle-btn.is-open::after {
+		animation-play-state: paused;
+		opacity: 0;
+		display: none;
+	}
+	.dfm-toggle-btn.is-open .dfm-line { background: #fff; }
+	.dfm-toggle-btn.is-open .dfm-line.top { top: 50%; transform: translateY(-50%) rotate(45deg); }
+	.dfm-toggle-btn.is-open .dfm-line.mid { opacity: 0; transform: translateY(-50%) scaleX(0); }
+	.dfm-toggle-btn.is-open .dfm-line.bot { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
+
+	.dfm-dropdown {
+		position: absolute;
+		top: calc(100% + 1.25rem);
+		right: 0;
+
+		width: 17rem;
+		background: color-mix(in srgb, var(--mg-bg-surface) 96%, transparent);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		border: 1px solid var(--mg-border-light);
+		border-radius: 20px;
+		box-shadow: 0 32px 64px rgba(0,0,0,0.15);
+		display: flex;
+		flex-direction: column;
+		max-height: calc(100vh - 6rem);
+		z-index: 10000;
+		overflow: hidden;
+	}
+
+
+	.dfm-brand-block {
+		padding: 1.25rem 1.25rem;
+		border-bottom: 1px solid var(--mg-border-light);
+		background: var(--mg-bg-page);
+	}
+
+	.dfm-brand {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		text-decoration: none;
+		color: var(--mg-text-main);
+	}
+	
+	.dfm-brand-text { display: grid; }
+	.dfm-brand-text strong { font-weight: 900; font-size: 1.1rem; letter-spacing: -0.01em; }
+	.dfm-brand-text small { font-size: 0.75rem; color: var(--mg-text-muted); margin-top: 0.1rem; }
+
+	.dfm-nav {
+		padding: 1rem;
+		overflow-y: auto;
+		gap: 1.25rem;
+	}
+
+	.dfm-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0,0,0,0.2);
+		backdrop-filter: blur(4px);
+		-webkit-backdrop-filter: blur(4px);
+		z-index: 9998;
+	}
+
+	.dfm-anim-enter-active, .dfm-anim-leave-active {
+		transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+		transform-origin: top right;
+	}
+	.dfm-anim-enter-from, .dfm-anim-leave-to {
+		opacity: 0;
+		transform: scale(0.85) translateY(-20px);
+	}
+
+
+
+	/* Desktop layout content takes full width now */
+	
+
+/* Desktop */
+@media (min-width: 1024px) {
+	.mobile-layout { display: none; }
+	.desktop-layout {
+		display: flex;
+		min-height: 100vh;
 	}
 
 	.desktop-sidebar {
-		width: 18.25rem;
-		height: 100vh;
-		position: sticky;
-		top: 0;
-		border-left: 1px solid var(--border);
-		background: color-mix(in srgb, var(--bg-card) 96%, var(--bg-page));
+		width: 16rem;
+		transition: width 0.2s;
+		background: var(--mg-bg-surface);
+		border-left: 1px solid var(--mg-border-light);
 		display: flex;
 		flex-direction: column;
-		box-shadow: -10px 0 32px rgb(15 23 42 / 0.04);
-		transition:
-			width 0.22s ease,
-			box-shadow 0.22s ease;
-	}
-
-	.management-layout.rail-collapsed .desktop-sidebar {
-		width: 5.8rem;
 	}
 
 	.sidebar-logo-block {
-		min-height: 5.35rem;
-		padding: 0.95rem 1rem;
-		border-bottom: 1px solid var(--border);
+		height: 4.5rem;
+		padding: 0 1.25rem;
 		display: flex;
 		align-items: center;
-		gap: 0.7rem;
-	}
-
-	.rail-mini-toggle {
-		width: 2.45rem;
-		height: 2.45rem;
-		flex-shrink: 0;
-		border: 1px solid var(--border);
-		border-radius: 0.75rem;
-		background: var(--bg-card);
-		color: var(--text);
-		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
+		border-bottom: 1px solid var(--mg-border-light);
 	}
 
 	.rail-brand {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		color: var(--text);
-		min-width: 0;
+		text-decoration: none;
+		color: var(--mg-text-main);
+		overflow: hidden;
 	}
-
-	.rail-brand-text {
-		display: grid;
-		gap: 0.1rem;
-		min-width: 0;
+	.rail-brand-mark {
+		width: 2.2rem; height: 2.2rem;
+		border-radius: 8px;
+		background: var(--mg-bg-page);
+		display: grid; place-items: center; flex-shrink: 0;
 	}
-
-	.rail-brand-text strong {
-		font-size: 1rem;
-	}
-
-	.rail-brand-text small {
-		color: var(--muted);
-		font-size: 0.72rem;
-	}
-
-	.management-layout.rail-collapsed .rail-brand {
-		justify-content: center;
-	}
-
-	.management-layout.rail-collapsed .sidebar-logo-block {
-		justify-content: center;
-		padding-inline: 0.55rem;
-	}
-
-	.management-layout.rail-collapsed .rail-mini-toggle {
-		width: 2.65rem;
-		height: 2.65rem;
-	}
-
-	.management-layout.rail-collapsed .rail-brand-text,
-	.management-layout.rail-collapsed .group-title,
-	.management-layout.rail-collapsed .chevron,
-	.management-layout.rail-collapsed .item-label,
-	.management-layout.rail-collapsed .active-chevron,
-	.management-layout.rail-collapsed .customer-site-link span,
-	.management-layout.rail-collapsed .auth-panel,
-	.management-layout.rail-collapsed .theme-toggle span,
-	.management-layout.rail-collapsed .desktop-zoom {
-		display: none;
-	}
-
+	.brand-image-lg { width: 1.6rem; }
+	
+	.rail-brand-text { display: grid; }
+	.rail-brand-text strong { font-weight: 800; font-size: 1rem; }
+	.rail-brand-text small { font-size: 0.75rem; color: var(--mg-text-muted); }
+	
 	.desktop-content {
 		flex: 1;
-		min-width: 0;
 		display: flex;
 		flex-direction: column;
-	}
-
-	.desktop-content--pos {
-		background: var(--bg-page);
+		min-width: 0;
 	}
 
 	.desktop-header {
-		height: 4.6rem;
-		border-bottom: 1px solid var(--border);
-		background: color-mix(in srgb, var(--bg-card) 96%, transparent);
-		padding: 0 1.65rem;
+		height: 4.5rem;
+		background: var(--mg-bg-page);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		backdrop-filter: blur(10px);
+		padding: 0 2rem;
 		position: sticky;
 		top: 0;
-		z-index: 70;
+		z-index: 40;
+		border-bottom: 1px solid var(--mg-border-light);
 	}
 
-	.page-title-wrap {
-		display: grid;
-		gap: 0.08rem;
-	}
-
-	.page-title-wrap small {
-		color: var(--muted);
-		font-size: 0.72rem;
+	.desktop-header-start {
+		display: flex;
+		align-items: center;
+		gap: 1.5rem;
 	}
 
 	.page-title-wrap h1 {
 		margin: 0;
-		color: var(--module-title-light);
-		font-size: 1.04rem;
+		font-size: 1.25rem;
 		font-weight: 900;
-	}
-
-	.management-layout.dark .page-title-wrap h1,
-	:global(.dark) .page-title-wrap h1 {
-		color: var(--module-title-dark);
+		color: var(--mg-text-main);
+		letter-spacing: -0.01em;
 	}
 
 	.desktop-header-actions {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: 0.55rem;
+		gap: 1.25rem;
+	}
+
+	.utility-icon-btn {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		border: 1px solid var(--mg-border-light);
+		background: var(--mg-bg-surface);
+		color: var(--mg-text-muted);
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+	.utility-icon-btn:hover { 
+		background: var(--mg-primary); 
+		color: #fff; 
+		border-color: var(--mg-primary);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(var(--mg-primary-rgb), 0.2);
+	}
+
+	.user-dropdown-wrapper {
+		position: relative;
+	}
+
+	.user-dropdown-trigger {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		background: var(--mg-bg-surface);
+		padding: 0.4rem 0.6rem 0.4rem 1rem;
+		border-radius: 99px;
+		border: 1px solid var(--mg-border-light);
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+	.user-dropdown-trigger:hover {
+		border-color: var(--mg-primary);
+		box-shadow: 0 4px 12px rgba(var(--mg-primary-rgb), 0.08);
+	}
+
+	.header-user-avatar {
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 50%;
+		background: var(--mg-primary);
+		color: #fff;
+		display: grid;
+		place-items: center;
+		font-weight: 800;
+		font-size: 1rem;
+	}
+
+	.header-user-info {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		text-align: right;
+	}
+	.header-user-info strong {
+		font-size: 0.85rem;
+		color: var(--mg-text-main);
+		line-height: 1.1;
+	}
+	.header-user-info small {
+		font-size: 0.65rem;
+		color: var(--mg-text-muted);
+		font-weight: 700;
+	}
+
+	.dropdown-chevron {
+		color: var(--mg-text-muted);
+		margin-right: 0.5rem;
+		opacity: 0.7;
+	}
+
+	.user-dropdown-menu {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		left: 0;
+		min-width: 180px;
+		background: var(--mg-bg-surface);
+		border: 1px solid var(--mg-border-light);
+		border-radius: 16px;
+		box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+		padding: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		z-index: 100;
+	}
+
+	.user-menu-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		border-radius: 10px;
+		text-decoration: none;
+		color: var(--mg-text-main);
+		font-size: 0.9rem;
+		font-weight: 700;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s;
+		text-align: right;
+		width: 100%;
+	}
+	.user-menu-item:hover {
+		background: var(--mg-bg-page);
+		color: var(--mg-primary);
+	}
+	.user-menu-item.text-danger:hover {
+		background: var(--mg-danger-bg);
+		color: var(--mg-danger);
+	}
+
+	.user-menu-divider {
+		height: 1px;
+		background: var(--mg-border-light);
+		margin: 0.25rem 0.5rem;
+	}
+
+	.user-dropdown-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 90;
+	}
+
+	.dropdown-anim-enter-active, .dropdown-anim-leave-active {
+		transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+		transform-origin: top left;
+	}
+	.dropdown-anim-enter-from, .dropdown-anim-leave-to {
+		opacity: 0;
+		transform: scale(0.95) translateY(-10px);
 	}
 
 	.desktop-main {
 		flex: 1;
-		overflow: auto;
+		padding: 1.5rem 2rem;
+		overflow-y: auto;
 	}
 
 	.desktop-main > :deep(*) {
-		max-width: 1320px;
+		max-width: 1400px;
 		margin-inline: auto;
 	}
 
-	.desktop-main--fullbleed {
-		padding: 0;
-	}
+	.desktop-main--fullbleed { padding: 0; }
+	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
+	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
 
-	.desktop-main--fullbleed > :deep(*) {
-		max-width: none;
-		margin-inline: 0;
-		width: 100%;
-	}
+	
+		
+	
+
+	.desktop-sidebar { display: none; }
 }
 
-.module-content :deep(.glass-card),
-.module-content :deep(.surface-card),
-.module-content :deep(.hero-card),
-.module-content :deep(.management-surface-card),
-.module-content :deep(.table-shell),
-.module-content :deep(.filter-panel),
-.module-content :deep(.builder-step-card),
-.module-content :deep(.report-card),
-.module-content :deep(.kpi-card),
-.module-content :deep(.line-card),
-.module-content :deep(.designer-panel),
-.module-content :deep(.designer-preview),
-.module-content :deep(.preview-category-card),
-.module-content :deep(.editable-table) {
-	border-color: var(--border) !important;
-	background: var(--bg-card) !important;
-	color: var(--text) !important;
-	box-shadow: var(--shadow-sm) !important;
-}
+/* Nav Styles */
 
-.module-content :deep(.hero-card),
-.module-content :deep(.surface-card.tone-soft),
-.module-content :deep(.surface-card.tone-accent),
-.module-content :deep(.glass-card.tone-accent),
-.module-content :deep(.menu-preview-frame) {
-	background: linear-gradient(
-		180deg,
-		var(--bg-card),
-		color-mix(in srgb, var(--bg-card) 92%, var(--bg-soft))
-	) !important;
-}
 
-.module-content :deep(.surface-head h3),
-.module-content :deep(.hero-card h2),
-.module-content :deep(.section-title),
-.module-content :deep(h1),
-.module-content :deep(h2),
-.module-content :deep(h3) {
-	color: var(--text) !important;
-}
-
-.module-content :deep(.muted),
-.module-content :deep(.surface-head p),
-.module-content :deep(.hero-card p),
-.module-content :deep(.hint),
-.module-content :deep(.field-help),
-.module-content :deep(.category-copy small),
-.module-content :deep(.product-copy small),
-.module-content :deep(.preview-category-copy p),
-.module-content :deep(small) {
-	color: var(--muted) !important;
-}
-
-.module-content :deep(.input),
-.module-content :deep(.select),
-.module-content :deep(.textarea),
-.module-content :deep(input:not([type="checkbox"]):not([type="radio"]):not([type="color"])),
-.module-content :deep(select),
-.module-content :deep(textarea) {
-	border-color: var(--border) !important;
-	background: var(--bg-card) !important;
-	color: var(--text) !important;
-}
-
-.module-content :deep(.input:focus),
-.module-content :deep(.select:focus),
-.module-content :deep(.textarea:focus),
-.module-content :deep(input:focus),
-.module-content :deep(select:focus),
-.module-content :deep(textarea:focus) {
-	border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.42) !important;
-	box-shadow: 0 0 0 3px rgb(var(--palette-deep-sapphire-rgb) / 0.1) !important;
-}
-
-.module-content :deep(.secondary-btn),
-.module-content :deep(.ghost-btn),
-.module-content :deep(.mini-link-btn),
-.module-content :deep(.icon-btn),
-.module-content :deep(.mini-icon),
-.module-content :deep(.drag-handle),
-.module-content :deep(.preview-tab),
-.module-content :deep(.switch-btn) {
-	border-color: var(--border) !important;
-	background: var(--bg-card) !important;
-	color: var(--text) !important;
-}
-
-.module-content :deep(.secondary-btn:hover),
-.module-content :deep(.ghost-btn:hover),
-.module-content :deep(.mini-link-btn:hover) {
-	border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.22) !important;
-	background: var(--module-50) !important;
-	color: var(--module-title-light) !important;
-}
-
-.module-content :deep(.primary-btn),
-.module-content :deep(.primary-pill-link) {
-	background: var(--module-500) !important;
-	border-color: var(--module-500) !important;
-	color: #fff !important;
-	box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.18) !important;
-}
-
-.management-layout.dark .module-content :deep(.primary-btn),
-.management-layout.dark .module-content :deep(.primary-pill-link),
-:global(.dark) .module-content :deep(.primary-btn),
-:global(.dark) .module-content :deep(.primary-pill-link) {
-	color: #111827 !important;
-}
-
-.module-content :deep(.badge),
-.module-content :deep(.state-pill),
-.module-content :deep(.pill),
-.module-content :deep(.tab-badge),
-.module-content :deep(.count-chip),
-.module-content :deep(.dirty-chip),
-.module-content :deep(.order-badge),
-.module-content :deep(.preview-tab.active) {
-	border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.16) !important;
-	background: var(--module-50) !important;
-	color: var(--module-title-light) !important;
-}
-
-.management-layout.dark .module-content :deep(.badge),
-.management-layout.dark .module-content :deep(.state-pill),
-.management-layout.dark .module-content :deep(.pill),
-.management-layout.dark .module-content :deep(.tab-badge),
-.management-layout.dark .module-content :deep(.count-chip),
-.management-layout.dark .module-content :deep(.dirty-chip),
-.management-layout.dark .module-content :deep(.order-badge),
-.management-layout.dark .module-content :deep(.preview-tab.active),
-:global(.dark) .module-content :deep(.badge),
-:global(.dark) .module-content :deep(.state-pill),
-:global(.dark) .module-content :deep(.pill),
-:global(.dark) .module-content :deep(.tab-badge),
-:global(.dark) .module-content :deep(.count-chip),
-:global(.dark) .module-content :deep(.dirty-chip),
-:global(.dark) .module-content :deep(.order-badge),
-:global(.dark) .module-content :deep(.preview-tab.active) {
-	color: var(--module-title-dark) !important;
-}
-
-.module-content :deep(table),
-.module-content :deep(thead th) {
-	color: var(--text) !important;
-}
-
-.module-content :deep(thead th),
-.module-content :deep(.table thead th) {
-	background: var(--bg-soft) !important;
-}
-
-.module-content :deep(td),
-.module-content :deep(th),
-.module-content :deep(.table-shell) {
-	border-color: var(--border) !important;
-}
-
-/* Accordion Nav */
 .accordion-nav {
-	padding: 0.9rem;
-	overflow-x: hidden;
+	flex: 1;
 	overflow-y: auto;
+	padding: 1.5rem 1rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.5rem;
-	min-height: 0;
-}
-
-.desktop-nav {
-	flex: 1;
-	padding-bottom: 1.1rem;
+	gap: 1.5rem;
 }
 
 .nav-group {
-	border: 1px solid var(--border);
-	border-radius: 14px;
-	overflow: hidden;
-	background: var(--bg-card);
-	flex: 0 0 auto;
-	min-height: 0;
-	transition:
-		border-color 0.18s ease,
-		box-shadow 0.18s ease,
-		background-color 0.18s ease;
-}
-
-.nav-group.open {
-	overflow: hidden;
-	border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-	box-shadow: 0 12px 28px rgb(15 23 42 / 0.055);
-}
-
-.group-button {
-	width: 100%;
-	border: 0;
-	background: transparent;
-	color: var(--text);
-	min-height: 2.82rem;
-	padding: 0.48rem 0.62rem;
 	display: flex;
-	align-items: center;
-	gap: 0.65rem;
-	cursor: pointer;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.group-title-rail {
+	font-size: 0.75rem;
+	color: var(--mg-olive);
 	font-weight: 800;
-	font-size: 0.82rem;
-	transition: 0.18s ease;
-	touch-action: manipulation;
-}
-
-.group-button:hover,
-.group-button.active {
-	background: var(--module-50);
-	color: var(--module-title-light);
-}
-
-.management-layout.dark .group-button:hover,
-.management-layout.dark .group-button.active,
-:global(.dark) .group-button:hover,
-:global(.dark) .group-button.active {
-	background: color-mix(in srgb, var(--module-500) 16%, transparent);
-	color: var(--module-title-dark);
-}
-
-.group-icon,
-.item-icon {
-	width: 2rem;
-	height: 2rem;
-	border-radius: 8px;
-	background: var(--bg-soft);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-}
-
-.group-button.active .group-icon {
-	background: var(--bg-card);
-	color: var(--module-600);
-	border: 1px solid var(--border);
-}
-
-.group-title {
-	flex: 1;
-	text-align: right;
-}
-
-.chevron {
-	transition: transform 0.18s ease;
-}
-
-.chevron.rotated {
-	transform: rotate(180deg);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding-right: 0.5rem;
+	margin-bottom: 0.25rem;
 }
 
 .group-items {
-	padding: 0.32rem 0.42rem 0.5rem;
-	display: grid;
-	gap: 0.3rem;
-	background: var(--bg-card);
-	width: 100%;
-	min-height: 0;
-	overflow: visible;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
 }
 
 .nav-item {
-	border-radius: 8px;
-	min-height: 2.72rem;
-	padding: 0.4rem 0.48rem;
 	display: flex;
 	align-items: center;
-	gap: 0.6rem;
-	color: var(--muted);
-	transition: 0.18s ease;
+	gap: 0.75rem;
+	padding: 0.65rem 0.75rem;
+	text-decoration: none;
+	color: var(--mg-text-muted);
+	border-radius: var(--mg-radius-sm);
+	transition: all 0.2s;
 }
 
-.nav-item:hover {
-	background: var(--bg-soft);
-	color: var(--text);
+.nav-item:hover { color: var(--mg-text-main); background: var(--mg-bg-page); }
+.nav-item.active { 
+	color: var(--mg-primary); 
+	font-weight: 800; 
+	background: var(--mg-bg-page); 
+	box-shadow: -3px 0 0 0 var(--mg-primary) inset;
 }
 
-.nav-item.active {
-	background: var(--module-50);
-	color: var(--module-title-light);
-	box-shadow: inset 3px 0 0 var(--module-600);
-}
-
-.management-layout.dark .nav-item.active,
-:global(.dark) .nav-item.active {
-	background: color-mix(in srgb, var(--module-500) 16%, transparent);
-	color: var(--module-title-dark);
-}
-
-.nav-item.active .item-icon {
-	background: var(--bg-card);
-	color: var(--module-600);
-	border: 1px solid var(--border);
-}
-
-.item-label {
-	display: grid;
-	gap: 0.06rem;
-	flex: 1;
-	min-width: 0;
-}
-
-.item-label strong {
-	font-size: 0.78rem;
-	color: currentColor;
-}
-
-.item-label small {
-	color: var(--muted-2);
-	font-size: 0.66rem;
-}
-
-.active-chevron {
-	color: var(--module-500);
-}
-
-/* Sidebar Footer */
-.sidebar-footer {
-	border-top: 1px solid var(--border);
-	padding: 0.9rem;
-	display: grid;
-	gap: 0.65rem;
-}
-
-.customer-site-link,
-.theme-toggle {
-	min-height: 2.75rem;
-	border: 1px solid var(--border);
-	border-radius: 12px;
-	background: var(--bg-card);
-	color: var(--text);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.45rem;
-	font-size: 0.78rem;
-	cursor: pointer;
-}
-
-.theme-toggle {
-	width: 100%;
-}
-
-.auth-panel,
-.sidebar-auth-card {
-	border: 1px solid var(--border);
-	border-radius: 14px;
-	background: var(--bg-soft);
-	padding: 0.75rem;
-	display: grid;
-	gap: 0.55rem;
-}
-
-.auth-title {
-	margin: 0;
-	font-size: 0.82rem;
-	font-weight: 800;
-}
-
-.user-row {
+.item-icon {
+	color: inherit;
 	display: flex;
-	align-items: center;
-	gap: 0.65rem;
-	min-width: 0;
 }
 
-.user-row div {
-	min-width: 0;
-	display: grid;
-	gap: 0.05rem;
-}
-
-.user-row strong {
-	font-size: 0.78rem;
-	color: var(--text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.user-row small {
-	font-size: 0.68rem;
-	color: var(--muted);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.user-avatar {
-	width: 2.25rem;
-	height: 2.25rem;
-	border-radius: 999px;
-	background: var(--bg-card);
-	color: var(--muted);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-}
-
-.primary-pill-link,
-.secondary-btn,
-.header-auth-btn,
-.header-site-link {
-	border: 1px solid var(--border);
-	border-radius: 999px;
-	min-height: 2.5rem;
-	padding: 0.62rem 0.95rem;
-	font-size: 0.78rem;
-	line-height: 1;
-	text-align: center;
-	cursor: pointer;
-}
-
-.primary-pill-link {
-	background: var(--module-500);
-	border-color: var(--module-500);
-	color: white;
-}
-
-.secondary-btn {
-	background: var(--bg-card);
-	color: var(--text);
-}
-
-.secondary-btn.full {
-	width: 100%;
-}
-
-.secondary-btn:disabled {
-	opacity: 0.55;
-	cursor: default;
-}
-
-.header-site-link,
-.header-auth-btn {
-	background: var(--bg-soft);
-	color: var(--text);
-}
-
-.header-auth-btn.muted {
-	background: color-mix(in srgb, var(--module-500) 13%, var(--bg-soft));
-}
-
-.header-user-chip {
-	border: 1px solid var(--border);
-	border-radius: 0.9rem;
-	background: color-mix(in srgb, var(--module-500) 10%, var(--bg-card));
-	padding: 0.32rem 0.65rem;
-	display: grid;
-	gap: 0.04rem;
-}
-
-.header-user-chip strong {
-	font-size: 0.72rem;
-	color: var(--text);
-}
-
-.header-user-chip small {
-	color: var(--muted);
-	font-size: 0.64rem;
-}
-
-/* Zoom */
-.desktop-zoom {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.25rem;
-	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: var(--bg-card);
-	padding: 0.25rem;
-}
-
-.zoom-btn,
-.zoom-reset {
-	border: 1px solid var(--border);
-	background: var(--bg-soft);
-	color: var(--text);
-	border-radius: 999px;
-	font-size: 0.7rem;
-	line-height: 1;
-	padding: 0.36rem 0.55rem;
-	cursor: pointer;
-}
-
-.zoom-btn:disabled,
-.zoom-reset:disabled {
-	opacity: 0.45;
-	cursor: default;
-}
-
-.zoom-level {
-	min-width: 2.6rem;
-	text-align: center;
-	color: var(--muted);
-	font-size: 0.72rem;
-}
-
-/* Mobile responsive fixes for management pages */
-@media (max-width: 1023px) {
-	.mobile-main {
-		overflow-x: hidden;
-		width: 100%;
-		max-width: 100vw;
-	}
-
-	.mobile-main :deep(.glass-card),
-	.mobile-main :deep(.hero-card),
-	.mobile-main :deep(.surface-card) {
-		border-radius: 18px;
-	}
-
-	.mobile-main :deep(.hero-card),
-	.mobile-main :deep(.surface-card),
-	.mobile-main :deep(.management-surface-card) {
-		padding: 0.75rem !important;
-		overflow-x: auto;
-	}
-
-	.mobile-main :deep(.form-grid) {
-		grid-template-columns: 1fr !important;
-	}
-
-	.mobile-main :deep(.form-grid .span-2),
-	.mobile-main :deep(.form-grid .col-span-2) {
-		grid-column: 1 !important;
-	}
-
-	.mobile-main :deep(.checks-grid) {
-		grid-template-columns: 1fr 1fr !important;
-	}
-
-	.mobile-main :deep(.page-header),
-	.mobile-main :deep(.module-page-header) {
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.mobile-main :deep(.page-header .page-actions),
-	.mobile-main :deep(.module-page-header .page-actions) {
-		flex-wrap: wrap;
-		gap: 0.4rem;
-	}
-
-	.mobile-main :deep(.primary-btn),
-	.mobile-main :deep(.secondary-btn),
-	.mobile-main :deep(.tertiary-btn),
-	.mobile-main :deep(.header-auth-btn),
-	.mobile-main :deep(.sheet-management-btn) {
-		min-height: 2.75rem;
-		padding: 0.42rem 0.68rem;
-		font-size: 0.8rem;
-	}
-
-	.mobile-main :deep(.input),
-	.mobile-main :deep(.textarea),
-	.mobile-main :deep(select),
-	.mobile-main :deep(.searchable-dropdown),
-	.mobile-main :deep(.searchable-select) {
-		min-height: 2.75rem;
-		font-size: 0.82rem;
-	}
-
-	.mobile-main :deep(.surface-card-inner),
-	.mobile-main :deep(.management-surface-card) {
-		overflow-x: auto;
-	}
-
-	.mobile-main :deep(table) {
-		min-width: 480px;
-	}
-
-	.mobile-main :deep(.table-shell) {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-		max-width: 100%;
-	}
-
-	.mobile-main :deep(.table-scroll),
-	.mobile-main :deep(.table-wrap) {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.mobile-main :deep(.variant-row) {
-		grid-template-columns: 1fr 1fr !important;
-	}
-
-	.mobile-main :deep(.stat-grid),
-	.mobile-main :deep(.stats-grid) {
-		grid-template-columns: 1fr 1fr !important;
-	}
-
-	.mobile-main :deep(.pos-grid),
-	.mobile-main :deep(.order-grid) {
-		grid-template-columns: 1fr !important;
-	}
-
-	/* Force all grids inside management pages to single column on mobile */
-	.mobile-main :deep([class*="grid"]) {
-		grid-template-columns: minmax(0, 1fr) !important;
-	}
-
-	/* But keep 2-col for specific small grids */
-	.mobile-main :deep(.kpi-grid),
-	.mobile-main :deep(.mini-matrix) {
-		grid-template-columns: 1fr 1fr !important;
-	}
-
-	/* KPI cards should wrap properly */
-	.mobile-main :deep(.kpi-card) {
-		min-width: 0;
-		overflow: hidden;
-	}
-
-	/* Charts should not overflow */
-	.mobile-main :deep(canvas),
-	.mobile-main :deep(svg) {
-		max-width: 100% !important;
-	}
-
-	/* Toggle rows and filter controls should wrap */
-	.mobile-main :deep(.toggle-row),
-	.mobile-main :deep(.legend-checks),
-	.mobile-main :deep(.global-controls),
-	.mobile-main :deep(.filters),
-	.mobile-main :deep(.toolbar) {
-		display: flex !important;
-		flex-wrap: wrap !important;
-		gap: 0.35rem !important;
-		grid-template-columns: unset !important;
-	}
-
-	/* Make labels inside controls wrap properly */
-	.mobile-main :deep(.global-controls label),
-	.mobile-main :deep(.filters label),
-	.mobile-main :deep(.toolbar label) {
-		min-width: 0;
-		flex: 1 1 auto;
-	}
-}
-
-/* Scoped deep tweaks for child pages */
-.module-content :deep(.glass-card),
-.module-content :deep(.card),
-.module-content :deep(.panel) {
-	border-color: var(--border);
-}
-
-.module-content :deep(.primary-btn),
-.module-content :deep(.module-primary-btn),
-.module-content :deep(button.bg-amber-500),
-.module-content :deep(button.bg-orange-500),
-.module-content :deep(button.bg-emerald-500),
-.module-content :deep(button.bg-cyan-500),
-.module-content :deep(button.bg-blue-500),
-.module-content :deep(button.bg-violet-500),
-.module-content :deep(button.bg-rose-500),
-.module-content :deep(button.bg-indigo-600),
-.module-content :deep(a.bg-indigo-600),
-.module-content :deep(a.bg-blue-600),
-.module-content :deep(button.bg-blue-600) {
-	background-color: var(--module-500) !important;
-	border-color: var(--module-500) !important;
-}
-
-.module-content :deep(.text-indigo-600),
-.module-content :deep(.text-blue-600),
-.module-content :deep(.text-emerald-600),
-.module-content :deep(.text-violet-600) {
-	color: var(--module-600) !important;
-}
+.item-label strong { font-size: 0.9rem; }
 
 /* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-	transition: opacity 0.2s ease;
-}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.slide-right-enter-active, .slide-right-leave-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
 
-.fade-enter-from,
-.fade-leave-to {
-	opacity: 0;
-}
-
-.slide-right-enter-active,
-.slide-right-leave-active {
-	transition: transform 0.28s ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	*,
-	*::before,
-	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		scroll-behavior: auto !important;
-		transition-duration: 0.01ms !important;
-	}
-}
-
-.slide-right-enter-from,
-.slide-right-leave-to {
-	transform: translateX(100%);
-}
-
-/* Links reset */
-a {
-	text-decoration: none;
-}
-
-/* Mobile auth card spacing */
-.mobile-sidebar .sidebar-auth-card {
-	margin: 0 1rem 1rem;
-	flex-shrink: 0;
-}
+.icon-sm { width: 18px; height: 18px; }
+.icon-md { width: 22px; height: 22px; }
 </style>

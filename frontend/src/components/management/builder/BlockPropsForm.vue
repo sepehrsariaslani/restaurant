@@ -169,14 +169,14 @@ function updateFeature(field, idx, key, val) {
 .bpf__help {
   font-weight: 400;
   font-size: 0.72rem;
-  color: var(--text-muted, #8a7867);
+  color: var(--text-muted, var(--mg-text-muted));
 }
 
 .bpf__input {
   width: 100%;
   padding: 0.55rem 0.7rem;
   border-radius: 10px;
-  border: 1px solid var(--border, #ddd0c2);
+  border: 1px solid var(--border, var(--mg-border-light));
   background: #fff;
   font: inherit;
   font-size: 0.85rem;
@@ -233,14 +233,14 @@ function updateFeature(field, idx, key, val) {
   height: 30px;
   border-radius: 8px;
   background: #f3e7e0;
-  color: #b84f4f;
+  color: var(--mg-danger);
   font-size: 1.1rem;
   line-height: 1;
 }
 
 .bpf__add {
   align-self: flex-start;
-  border: 1px dashed var(--border, #ddd0c2);
+  border: 1px dashed var(--border, var(--mg-border-light));
   background: transparent;
   cursor: pointer;
   padding: 0.45rem 0.9rem;

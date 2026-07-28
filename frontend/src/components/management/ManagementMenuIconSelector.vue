@@ -292,8 +292,8 @@ watch(open, (next) => {
 }
 
 .icon-option.selected {
-  background: var(--module-500, #8b5e34);
-  border-color: var(--module-500, #8b5e34);
+  background: var(--module-500, var(--mg-primary));
+  border-color: var(--module-500, var(--mg-primary));
   color: #fff;
   box-shadow: 0 12px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.2);
 }

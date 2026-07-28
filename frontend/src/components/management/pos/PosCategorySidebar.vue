@@ -52,10 +52,10 @@ defineEmits(['update:selectedCategory'])
 <style scoped>
 .category-sidebar {
   border-radius: 18px;
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
   padding: 0.75rem;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
   min-height: 620px;
 }
 
@@ -72,7 +72,7 @@ header h3 {
 }
 
 header small {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.72rem;
 }
 
@@ -83,25 +83,25 @@ header small {
 
 .category-item {
   width: 100%;
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border-light);
   border-radius: 12px;
   padding: 0.48rem 0.55rem;
   text-align: right;
-  background: var(--pos-white);
-  color: var(--pos-text);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
   cursor: pointer;
 }
 
 .category-item.active {
-  background: var(--pos-primary);
-  color: var(--pos-white);
-  border-color: var(--pos-primary);
+  background: var(--mg-primary);
+  color: var(--mg-bg-surface);
+  border-color: var(--mg-primary);
   font-weight: 600;
 }
 
 .hint {
   margin: 0;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
   font-size: 0.78rem;
 }
 

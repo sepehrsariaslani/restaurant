@@ -37,8 +37,8 @@
           :selected-category="selectedCategory"
           @update:selected-category="selectedCategory = $event"
           :products="filteredProducts"
-          :loading="loading"
-          :error="loading ? '' : productError"
+          :loading="بارگذاری"
+          :error="بارگذاری ? '' : productError"
           :search-term="search"
           :scanner-input="scannerInput"
           :scanner-feedback="scannerFeedback"
@@ -71,7 +71,7 @@
             :place="form.place"
             :place-options="placeOptions"
             :table-orders="selectedDineInOrders"
-            :table-preview-loading="tablePreviewLoading"
+            :table-preview-loading="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
             :can-print-table-orders="confirmedDineInOrders.length > 0"
             :note="form.note"
@@ -104,7 +104,7 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true, {}, true)"
+            @submit-and-settle="submitPOSOrder(true, $event, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
@@ -119,7 +119,7 @@
       <div v-if="showKeyboardMap" class="kbd-map-backdrop" @click.self="showKeyboardMap = false">
         <section class="kbd-map-modal" dir="rtl">
           <header class="kbd-map-head">
-            <h3>⌨ میانبرهای کیبورد</h3>
+            <h3><Keyboard :size="18" /> میانبرهای کیبورد</h3>
             <button type="button" class="kbd-map-close" @click="showKeyboardMap = false">×</button>
           </header>
           <table class="kbd-map-table">
@@ -196,58 +196,109 @@
             <section v-if="leftPanelTab === 'tables'" class="table-session-preview">
               <div class="tab-panel-toolbar">
                 <button type="button" class="icon-refresh-btn" @click="loadPOSBoot" title="بروزرسانی">↻</button>
+                <span class="tables-stats">
+                  <span class="ts-item"><span class="ts-dot free"></span>{{ freeTablesCount }} آزاد</span>
+                  <span class="ts-item"><span class="ts-dot occ"></span>{{ occupiedTableCount }} اشغال</span>
+                </span>
               </div>
-              <div class="table-grid">
-                <article
+
+              <div class="waiter-select-box" v-if="waiterOptions.length || waiterبارگذاری">
+                <label class="waiter-select-label">گارسون سفارش:</label>
+                <select class="input waiter-select" :value="form.waiter" @change="onWaiterChange">
+                  <option value="">— بدون گارسون —</option>
+                  <option v-for="w in waiterOptions" :key="w.name" :value="w.name">{{ w.label }}</option>
+                </select>
+              </div>
+              
+              <div class="table-modern-grid">
+                <div
                   v-for="table in tableOptions"
                   :key="table.name"
-                  class="table-cell"
-                  :class="[`status-${String(table.status || '').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
+                  class="table-modern-card"
+                  :class="[`tm-${String(table.status || 'empty').toLowerCase()}`, { active: selectedDineInTable?.name === table.name }]"
                   @click="selectDineInTable(table)"
                 >
-                  <span class="table-cell-name">{{ table.label }}</span>
-                  <span class="table-cell-time" v-if="table.occupied_minutes">{{ formatOccupiedMinutes(table.occupied_minutes) }}</span>
-                  <span class="table-cell-orders" v-if="table.pending_orders">{{ toFaDigits(table.pending_orders) }} سفارش</span>
-                  <span class="table-cell-empty" v-else-if="table.status === 'empty'">آزاد</span>
-                </article>
-              </div>
-              <p class="muted" v-if="tablePreviewLoading">در حال دریافت...</p>
-              <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
-              <template v-else-if="selectedDineInTable">
-                <div class="table-detail-bar">
-                  <div class="table-detail-info">
-                    <strong>{{ selectedDineInTable.label }}</strong>
-                    <span v-if="selectedTablePreview?.totals?.session_grand_total">
-                      {{ formatMoney(selectedTablePreview.totals.session_grand_total, currency) }}
+                  <div class="tm-top">
+                    <span class="tm-name">{{ table.label }}</span>
+                    <span class="tm-status-badge" :class="`tms-${String(table.status || 'empty').toLowerCase()}`">
+                      {{ table.status === 'empty' ? 'آزاد' : table.status === 'occupied' ? 'اشغال' : table.status }}
                     </span>
-                    <span v-if="selectedTableCustomer.name">مشتری: {{ selectedTableCustomer.name }}</span>
-                    <span v-if="selectedTableCustomer.guest_count">{{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
                   </div>
-                  <div class="table-detail-actions">
-                    <button type="button" class="tbl-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
-                    <button type="button" class="tbl-btn danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن</button>
-                    <template v-if="selectedTablePreview?.session?.name">
-                      <div class="tbl-action-row">
-                        <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." />
-                        <button type="button" class="tbl-btn primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
+                  <div class="tm-body" v-if="table.status !== 'empty'">
+                    <span class="tm-meta" v-if="table.occupied_minutes">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      {{ formatOccupiedMinutes(table.occupied_minutes) }}
+                    </span>
+                    <span class="tm-meta" v-if="table.pending_orders">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                      {{ toFaDigits(table.pending_orders) }} سفارش
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <p class="muted" v-if="tablePreviewبارگذاری">در حال دریافت...</p>
+              <p class="error" v-else-if="tablePreviewError">{{ tablePreviewError }}</p>
+              
+              <template v-else-if="selectedDineInTable">
+                <div class="table-detail-modern" v-if="selectedTablePreview?.session?.name">
+                  <div class="tdm-head">
+                    <div class="tdm-brand">
+                      <strong>{{ selectedDineInTable.label }}</strong>
+                      <span class="tdm-total">{{ formatMoney(selectedTablePreview.totals?.session_grand_total || 0, currency) }}</span>
+                    </div>
+                    <div class="tdm-meta">
+                      <span v-if="selectedTableCustomer.name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> {{ selectedTableCustomer.name }}</span>
+                      <span v-if="selectedTableCustomer.guest_count"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> {{ toFaDigits(selectedTableCustomer.guest_count) }} نفر</span>
+                    </div>
+                  </div>
+                  
+                  <div class="tdm-actions">
+                    <button class="tdm-btn" @click="assignCustomerToSelectedTable">ثبت مشتری</button>
+                    <button class="tdm-btn tdm-danger" :disabled="!selectedTablePreview?.session?.name" @click="clearSelectedTableSession">خالی کردن میز</button>
+                  </div>
+                  
+                  <div class="tdm-adv-actions">
+                    <div class="tdm-row">
+                      <SearchableDropdown v-model="moveTableTarget" :options="movableTableDropdownOptions" placeholder="انتقال به..." search-placeholder="جستجو..." include-empty-option empty-label="انتقال به..." />
+                      <button class="tdm-btn tdm-primary" :disabled="!moveTableTarget" @click="moveSelectedTableSession">انتقال</button>
+                    </div>
+                    <div class="tdm-row" v-if="mergeableTableDropdownOptions.length">
+                      <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." />
+                      <button class="tdm-btn tdm-primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
+                    </div>
+                    <button v-if="confirmedDineInOrders.length" class="tdm-btn tdm-split" @click="showSplitBill = true">مشاهده و تسویه</button>
+                  </div>
+                  
+                  <div class="tdm-orders-list" v-if="confirmedDineInOrders.length">
+                    <strong class="tdm-section-title">سفارش‌های ثبت شده این میز</strong>
+                    <div v-for="order in confirmedDineInOrders" :key="order.name" class="tdm-order-card" @click="openOrderDetailModal(order)">
+                      <div class="tdm-order-header">
+                        <span>{{ order.order_code || order.name }}</span>
+                        <strong>{{ formatMoney(order.grand_total, currency) }}</strong>
                       </div>
-                      <div class="tbl-action-row" v-if="mergeableTableDropdownOptions.length">
-                        <SearchableDropdown v-model="mergeTableTarget" :options="mergeableTableDropdownOptions" placeholder="ترکیب با..." search-placeholder="جستجو..." include-empty-option empty-label="ترکیب با..." />
-                        <button type="button" class="tbl-btn primary" :disabled="!mergeTableTarget" @click="mergeSelectedTableSession">ترکیب</button>
+                      <div class="tdm-order-items-preview">
+                        <div v-for="item in order.items" :key="item.row_name" class="tdm-order-item-row">
+                          <span class="tdm-item-title">{{ toFaDigits(item.quantity || 1) }}x {{ item.menu_item_title }}</span>
+                          <span class="tdm-item-price muted">{{ formatMoney(item.line_total, currency) }}</span>
+                        </div>
                       </div>
-                      <button v-if="confirmedDineInOrders.length" type="button" class="tbl-btn split" @click="showSplitBill = true">تقسیم صورتحساب</button>
-                    </template>
+                      <div class="tdm-order-meta">
+                        <span class="order-status-badge" :class="`status-${order.status}`">{{ formatStatus(order.status) }}</span>
+                        <span v-if="order.payment_method" class="history-method-badge">{{ order.payment_method }}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>
-              <p class="muted" v-else-if="!tablePreviewLoading && !tablePreviewError">یک میز را انتخاب کنید.</p>
+              <p class="muted" v-else-if="!tablePreviewبارگذاری && !tablePreviewError">یک میز را انتخاب کنید.</p>
             </section>
 
             <section v-if="leftPanelTab === 'history'" class="history-panel">
               <div class="tab-panel-toolbar">
-                <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions" title="بروزرسانی">↻</button>
+                <button type="button" class="icon-refresh-btn" @click="loadTodayTransactions(true)" title="بروزرسانی">↻</button>
               </div>
-              <p class="muted" v-if="todayTransactionsLoading">در حال دریافت...</p>
+              <p class="muted" v-if="todayTransactionsبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="todayTransactionsError">{{ todayTransactionsError }}</p>
               <p class="muted" v-else-if="!todayTransactions.length">هنوز تراکنشی امروز ثبت نشده.</p>
               <div v-else class="history-list">
@@ -257,7 +308,7 @@
                     <span class="history-time">{{ formatInvoiceDateTime(tx.created_at) }}</span>
                   </div>
                   <div class="history-card-body">
-                    <span>{{ tx.customer_name || 'POS Customer' }}</span>
+                    <span>{{ tx.customer_name || 'مشتری POS' }}</span>
                     <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
                   </div>
                   <span class="history-method-badge" v-if="tx.payment_method">
@@ -271,7 +322,7 @@
               <div class="tab-panel-toolbar">
                 <button type="button" class="icon-refresh-btn" @click="loadOpenInvoices" title="بروزرسانی">↻</button>
               </div>
-              <p class="muted" v-if="openInvoicesLoading">در حال دریافت...</p>
+              <p class="muted" v-if="openInvoicesبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
               <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
               <div v-else class="open-invoice-accordion">
@@ -282,8 +333,9 @@
                   :class="{ expanded: expandedInvoiceKey === invoice.invoice_key }"
                 >
                   <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
-                    <strong>{{ invoice.order_code }}</strong>
-                    <small class="accordion-customer">{{ invoice.customer_name || 'POS Customer' }}</small>
+                    <strong>{{ invoice.name }}</strong>
+                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت"><Printer :size="14" /></button>
+                    <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
                     <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
                     <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
                     <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
@@ -297,13 +349,16 @@
                       </div>
                     </div>
                     <div class="accordion-footer">
-                      <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)">انتخاب و بارگذاری</button>
-                      <button type="button" class="tbl-btn primary" :disabled="settlingOpenInvoice" @click.stop="settleSelectedInvoice(invoice)">
-                        {{ settlingOpenInvoice ? '...' : 'پرداخت' }}
-                      </button>
+                      <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)"><Download :size="13" /> انتخاب و بارگذاری</button>
+                      <button type="button" class="tbl-btn" @click.stop="settleSelectedInvoice(invoice)"><CreditCard :size="13" /> پرداخت</button>
+                      <template v-if="!invoice.delivery_exists">
+                        <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)"><CheckCheck :size="13" /> تسویه و تحویل</button>
+                        <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)"><Truck :size="13" /> تحویل</button>
+                      </template>
+                      <button type="button" class="tbl-btn danger" style="margin-right: auto;" @click.stop="openPurgeModalFromList(invoice)"><Trash2 :size="13" /> حذف کامل</button>
                     </div>
                   </div>
-                  <div class="accordion-loading" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
+                  <div class="accordion-بارگذاری" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
                     <small>در حال دریافت...</small>
                   </div>
                   <small class="error" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.loadError">{{ invoice.loadError }}</small>
@@ -313,7 +368,7 @@
 
             <section v-if="leftPanelTab === 'recent'" class="recent-orders-panel">
               <div class="tab-panel-toolbar">
-                <button type="button" class="icon-refresh-btn" @click="loadRecentOrders" title="بروزرسانی">↻</button>
+                <button type="button" class="icon-refresh-btn" @click="loadRecentOrders(true)" title="بروزرسانی">↻</button>
               </div>
               <div class="recent-orders-filter">
                 <input
@@ -326,10 +381,10 @@
                   class="input dark-input recent-date-input"
                   type="date"
                   v-model="recentOrdersDateFrom"
-                  @change="loadRecentOrders"
+                  @change="loadRecentOrders(true)"
                 />
               </div>
-              <p class="muted" v-if="recentOrdersLoading">در حال دریافت...</p>
+              <p class="muted" v-if="recentOrdersبارگذاری">در حال دریافت...</p>
               <p class="error" v-else-if="recentOrdersError">{{ recentOrdersError }}</p>
               <p class="muted" v-else-if="!filteredRecentOrders.length">سفارشی یافت نشد.</p>
               <div v-else class="history-list">
@@ -340,11 +395,17 @@
                   @click="openOrderDetailModal(order)"
                 >
                   <div class="history-card-head">
-                    <strong>{{ order.order_code || order.name }}</strong>
+                    <strong>{{ order.name }}</strong>
                     <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
+                    <button
+                      type="button"
+                      class="print-icon-btn"
+                      @click.stop="printOrderReceipt(order)"
+                      title="پرینت فاکتور"
+                    ><Printer :size="14" /></button>
                   </div>
                   <div class="history-card-body">
-                    <span>{{ order.customer_name || 'POS Customer' }}</span>
+                    <span>{{ order.customer_name || 'مشتری POS' }}</span>
                     <span class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</span>
                   </div>
                   <div class="history-card-footer">
@@ -370,7 +431,17 @@
                       @click.stop="deliverOrder(order)"
                       title="تولید و تحویل"
                     >
-                      🏭 تحویل
+                      <Truck :size="13" /> تحویل
+                    </button>
+                    <button
+                      v-if="order.status !== 'cancelled'"
+                      type="button"
+                      class="tbl-btn danger"
+                      style="margin-right: auto;"
+                      @click.stop="openPurgeModalFromList(order)"
+                      title="لغو و حذف کامل"
+                    >
+                      <Trash2 :size="13" /> حذف
                     </button>
                   </div>
                 </article>
@@ -382,6 +453,7 @@
     </Transition>
 
     <!-- Cart Drawer -->
+    <Teleport to="body">
     <Transition name="cart-drawer">
       <div v-if="cartDrawerOpen && !isDesktopViewport" class="cart-drawer-backdrop" @click.self="cartDrawerOpen = false">
         <aside class="cart-drawer" dir="rtl">
@@ -394,7 +466,7 @@
             :place="form.place"
             :place-options="placeOptions"
             :table-orders="selectedDineInOrders"
-            :table-preview-loading="tablePreviewLoading"
+            :table-preview-loading="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
             :can-print-table-orders="confirmedDineInOrders.length > 0"
             :note="form.note"
@@ -427,17 +499,18 @@
             @update-table-order-item="changeTableOrderItemQty($event.order, $event.item, $event.delta)"
             @print-confirmed-table="printConfirmedTableOrders"
             @submit-order="submitPOSOrder(false)"
-            @submit-and-settle="submitPOSOrder(true, {}, true)"
+            @submit-and-settle="submitPOSOrder(true, $event, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
             @print-ticket="openPrintEditor"
           />
         </aside>
       </div>
     </Transition>
+    </Teleport>
 
     <PosBomSheet
       :open="customizationSheet.open"
-      :loading="customizationSheet.loading"
+      :بارگذاری="customizationSheet.بارگذاری"
       :error="customizationSheet.error"
       :item="customizationSheet.item"
       :ingredients="customizationSheet.ingredients"
@@ -462,7 +535,7 @@
             <p>از همین صفحه می توانید آیتم ها را ویرایش کنید و بعد چاپ بگیرید.</p>
           </div>
           <div class="print-editor-actions">
-            <button type="button" class="secondary-btn" @click="closePrintEditor">بستن</button>
+            <button type="button" class="secondary-btn" @click="closePrintEditor"><X :size="14" /> بستن</button>
             <button type="button" class="primary-btn" :disabled="!cart.length" @click="printCurrentTicket">چاپ نهایی</button>
           </div>
         </header>
@@ -543,114 +616,148 @@
     />
 
     <!-- Order Detail / Edit Modal -->
-    <div v-if="orderDetailModal.open" class="pos-modal-backdrop" @click.self="closeOrderDetailModal">
-      <section class="pos-modal" dir="rtl">
-        <header class="pos-modal-head">
-          <div>
-            <h3>جزئیات سفارش</h3>
-            <small v-if="orderDetailModal.order">{{ orderDetailModal.order.order_code }}</small>
+    <div v-if="orderDetailModal.open" class="od-modal-overlay" @click.self="closeOrderDetailModal">
+      <div class="od-modal">
+        <div class="od-header">
+          <div class="od-header-info">
+            <span class="od-badge" :class="`od-badge-${orderDetailModal.order?.status || ''}`">
+              {{ formatStatus(orderDetailModal.order?.status || '') }}
+            </span>
+            <h3>{{ orderDetailModal.order?.order_code || 'جزئیات سفارش' }}</h3>
+            <span class="od-time" v-if="orderDetailModal.order?.created_at">
+              {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}
+            </span>
           </div>
-          <button type="button" class="pos-modal-close" @click="closeOrderDetailModal">×</button>
-        </header>
-        <p class="muted pos-modal-loading" v-if="orderDetailModal.loading">در حال دریافت...</p>
-        <p class="error pos-modal-loading" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
+          <button class="od-close" @click="closeOrderDetailModal">✕</button>
+        </div>
+
+        <p class="od-بارگذاری" v-if="orderDetailModal.بارگذاری">در حال دریافت...</p>
+        <p class="od-error" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
+
         <template v-else-if="orderDetailModal.order">
-          <div class="order-detail-meta">
-            <span>مشتری: {{ orderDetailModal.order.customer_name || 'POS Customer' }}</span>
-            <span>زمان: {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}</span>
-            <span class="history-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
-            <span class="history-method-badge" v-if="orderDetailModal.order.payment_method">
-              {{ paymentMethodDisplayLabel(orderDetailModal.order.payment_method) }}
-            </span>
-            <span class="order-status-badge" :class="`status-${orderDetailModal.order.status}`">
-              {{ formatStatus(orderDetailModal.order.status) }}
-            </span>
-          </div>
-          <ul class="order-detail-items">
-            <li v-for="(item, idx) in orderDetailModal.order.items || []" :key="idx">
-              <span>{{ item.title }}</span>
-              <span>× {{ formatCompactNumber(item.qty, 2) }}</span>
-              <span>{{ formatMoney(item.line_total || 0, currency) }}</span>
-            </li>
-          </ul>
-          <div class="order-detail-edit-form">
-            <h4>ویرایش اطلاعات</h4>
-            <label>
-              نام مشتری
-              <input class="input dark-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
-            </label>
-            <label>
-              روش پرداخت
-              <select class="input dark-input" v-model="orderDetailModal.editForm.payment_method">
-                <option value="">انتخاب نشده</option>
-                <option
-                  v-for="option in editablePaymentMethodOptions"
-                  :key="option.method"
-                  :value="option.method"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <label>
-              یادداشت
-              <textarea class="input dark-input" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت سفارش..."></textarea>
-            </label>
-          </div>
-          <p class="error pos-modal-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
           
-          <div class="order-settle-section" v-if="orderDetailModal.canSettle">
-            <h4>تسویه سفارش</h4>
-            <div class="settle-row">
-              <label class="settle-label">روش پرداخت:</label>
-              <select class="input dark-input settle-select" v-model="orderDetailModal.settleMethod">
-                <option value="">انتخاب کنید</option>
-                <option
-                  v-for="option in editablePaymentMethodOptions"
-                  :key="option.method"
-                  :value="option.method"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-            <div class="settle-row" v-if="['card','pos','bank','terminal'].includes(orderDetailModal.settleMethod)">
-              <label class="settle-label">شماره مرجع:</label>
-              <input class="input dark-input settle-input" v-model="orderDetailModal.settleReference" placeholder="شماره پیگیری" />
-            </div>
-            <div class="settle-row">
-              <label class="settle-label">مبلغ:</label>
-              <span class="settle-amount">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
-            </div>
-            <p class="error" v-if="orderDetailModal.settleError">{{ orderDetailModal.settleError }}</p>
-            <div class="settle-actions">
-              <button
-                type="button"
-                class="tbl-btn success settle-btn"
-                :disabled="orderDetailModal.settling || !orderDetailModal.settleMethod"
-                @click="confirmSettleOrder"
-              >
-                <span v-if="orderDetailModal.settling">...</span>
-                <span v-else>&check; ثبت و تسویه</span>
-              </button>
+          <!-- Customer & Payment Summary -->
+          <div class="od-summary">
+            <div class="od-summary-row">
+              <div class="od-summary-item">
+                <span class="od-label">مشتری</span>
+                <span class="od-value">{{ orderDetailModal.order.customer_name || 'مشتری POS' }}</span>
+              </div>
+              <div class="od-summary-item">
+                <span class="od-label">روش پرداخت</span>
+                <span class="od-value" v-if="orderDetailModal.order.payment_method">{{ paymentMethodDisplayLabel(orderDetailModal.order.payment_method) }}</span>
+                <span class="od-value muted" v-else>ثبت نشده</span>
+              </div>
+              <div class="od-summary-item">
+                <span class="od-label">مبلغ کل</span>
+                <span class="od-value od-price">{{ formatMoney(orderDetailModal.order.grand_total || 0, currency) }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="pos-modal-actions">
-            <button
-              type="button"
-              class="tbl-btn danger"
-              @click="openReturnInvoiceModal"
-              v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())"
-            >
-              فاکتور برگشتی
-            </button>
-            <button type="button" class="tbl-btn" @click="closeOrderDetailModal">انصراف</button>
-            <button type="button" class="tbl-btn primary" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
-              {{ orderDetailModal.saving ? '...' : 'ذخیره تغییرات' }}
-            </button>
+          <!-- Items -->
+          <div class="od-items">
+            <div class="od-items-head">
+              <span>آیتم‌ها</span>
+              <span class="od-items-count">{{ (orderDetailModal.order.items || []).length }} عنوان</span>
+            </div>
+            <div v-for="(item, idx) in orderDetailModal.order.items || []" :key="idx" class="od-item">
+              <div class="od-item-info">
+                <span class="od-item-name">{{ item.title }}</span>
+                <span class="od-item-qty">×{{ formatCompactNumber(item.qty, 2) }}</span>
+              </div>
+              <span class="od-item-price">{{ formatMoney(item.line_total || 0, currency) }}</span>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="od-note" v-if="orderDetailModal.order.note">
+            <span class="od-label">یادداشت</span>
+            <p>{{ orderDetailModal.order.note }}</p>
+          </div>
+
+          <!-- Actions -->
+          <div class="od-actions">
+            
+            <!-- تسویه Section (for unpaid orders) -->
+            <div class="od-settle" v-if="orderDetailModal.canSettle">
+              <p class="od-err" v-if="orderDetailModal.settleError">{{ orderDetailModal.settleError }}</p>
+              <button class="od-btn od-btn-primary" :disabled="orderDetailModal.settling" @click="confirmSettleOrder">
+                {{ orderDetailModal.settling ? '...' : '✓ تسویه سفارش' }}
+              </button>
+            </div>
+
+            <!-- Edit Section (collapsible) -->
+            <div class="od-edit-toggle" @click="editExpanded = !editExpanded">
+              <span><Save :size="14" /> ویرایش اطلاعات</span>
+              <span class="od-chevron" :class="{ open: editExpanded }">▼</span>
+            </div>
+            <div class="od-edit" v-if="editExpanded">
+              <input class="od-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
+              <select class="od-select" v-model="orderDetailModal.editForm.payment_method">
+                <option value="">انتخاب روش پرداخت</option>
+                <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
+              </select>
+              <textarea class="od-textarea" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت..."></textarea>
+              <p class="od-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
+              <button class="od-btn" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
+                <Save :size="14" v-if="!orderDetailModal.saving" /> {{ orderDetailModal.saving ? '...' : 'ذخیره' }}
+              </button>
+            </div>
+
+            <!-- Bottom Actions -->
+            <div class="od-bottom">
+              <button class="od-btn od-btn-danger" style="margin-left: auto;" @click="openPurgeModal">
+                <Trash2 :size="14" /> لغو و حذف کامل
+              </button>
+              <button class="od-btn od-btn-danger" @click="openReturnInvoiceModal" v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())">
+                فاکتور برگشتی
+              </button>
+              <button class="od-btn" @click="closeOrderDetailModal"><X :size="14" /> بستن</button>
+            </div>
           </div>
         </template>
+      </div>
+    </div>
+
+    <!-- Shared Prompt Modal -->
+    <div v-if="promptModal.open" class="pos-modal-backdrop" @click.self="cancelPrompt">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <h3>{{ promptModal.title }}</h3>
+          <button type="button" class="pos-modal-close" @click="cancelPrompt">×</button>
+        </header>
+        <div class="return-modal-body">
+          <input class="input dark-input full-width" type="text" v-model="promptModal.value" @keyup.enter="confirmPrompt" autofocus />
+        </div>
+        <div class="pos-modal-actions">
+          <button type="button" class="tbl-btn" @click="cancelPrompt">انصراف</button>
+          <button type="button" class="tbl-btn primary" @click="confirmPrompt">تایید</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Purge Order Confirmation Modal -->
+    <div v-if="purgeModal.open" class="pos-modal-backdrop" @click.self="closePurgeModal">
+      <section class="pos-modal" dir="rtl">
+        <header class="pos-modal-head">
+          <h3>لغو و حذف کامل سفارش</h3>
+          <button type="button" class="pos-modal-close" @click="closePurgeModal">×</button>
+        </header>
+        <div class="return-modal-body">
+          <p>شما در حال لغو و حذف کامل سفارش <strong>{{ purgeModal.orderCode }}</strong> هستید.</p>
+          <p class="muted" style="color: var(--mg-danger); font-weight: bold; margin-top: 10px;">
+            توجه: این عملیات تمامی رکوردهای مرتبط شامل اسناد فروش، حواله‌های تحویل، اسناد تولید، ورود و خروج انبار و گزارش‌های پرداخت این سفارش را در صورت امکان حذف و یا باطل خواهد کرد. این عملیات قابل بازگشت نیست.
+          </p>
+          <p class="error" v-if="purgeModal.error">{{ purgeModal.error }}</p>
+          <p class="success" v-if="purgeModal.success" style="color: var(--mg-success); font-size: 0.85rem; margin-top: 10px;">{{ purgeModal.success }}</p>
+        </div>
+        <div class="pos-modal-actions">
+          <button type="button" class="tbl-btn" @click="closePurgeModal" :disabled="purgeModal.loading">انصراف</button>
+          <button type="button" class="tbl-btn danger" :disabled="purgeModal.loading || !!purgeModal.success" @click="executePurgeOrder">
+            <Trash2 :size="14" v-if="!purgeModal.loading" /> {{ purgeModal.loading ? 'در حال حذف...' : 'تایید و حذف کامل' }}
+          </button>
+        </div>
       </section>
     </div>
 
@@ -671,21 +778,27 @@
           <p class="error" v-if="returnInvoiceModal.error">{{ returnInvoiceModal.error }}</p>
         </div>
         <div class="pos-modal-actions">
-          <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal">انصراف</button>
-          <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.loading" @click="confirmCreateReturnInvoice">
-            {{ returnInvoiceModal.loading ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
+          <button type="button" class="tbl-btn" @click="closeReturnInvoiceModal"><X :size="14" /> انصراف</button>
+          <button type="button" class="tbl-btn danger" :disabled="returnInvoiceModal.بارگذاری" @click="confirmCreateReturnInvoice">
+            <RefreshCw :size="14" v-if="!returnInvoiceModal.بارگذاری" /> {{ returnInvoiceModal.بارگذاری ? 'در حال ساخت...' : 'تایید و ساخت فاکتور برگشتی' }}
           </button>
         </div>
       </section>
     </div>
 
+    <div v-if="kitchenReadyQueue.length" class="kitchen-ready-toasts">
+      <div v-for="o in kitchenReadyQueue" :key="o.name" class="kitchen-ready-toast">
+        <span>🍽️ سفارش <strong>{{ o.name }}</strong><template v-if="o.customer_name"> — {{ o.customer_name }}</template> آماده تحویل است</span>
+        <button type="button" class="toast-close" @click="dismissKitchenNotice(o.name)"><X :size="14" /></button>
+      </div>
+    </div>
 
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Keyboard, ShoppingCart } from 'lucide-vue-next'
+import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
@@ -701,11 +814,15 @@ import {
   getTableOverview,
   getItemDetail,
   listManagementOrders,
+  listManagementCustomers,
   markManagementOrderPaid,
   createPOSOrder,
   producePOSOrder,
   settlePOSOrder,
   deliverPOSOrder,
+  deliverInvoiceOnly,
+  voidManagementPOSOrder,
+  purgeManagementPOSOrder,
   produceAndDeliverPOSOrder,
   createAndPayPOSOrder,
   createAndSettlePOSOrder,
@@ -713,7 +830,10 @@ import {
   moveTableSession,
   getManagementPOSBoot,
   getManagementPOSHardwareStatus,
+  getManagementPosKitchenNotifications,
+  getManagementProductByBarcode,
   reportManagementPOSHardwareEvent,
+  listManagementUsers,
   updateTableOrderItem,
   updateManagementOrder,
   createManagementReturnOrder,
@@ -734,13 +854,15 @@ function defaultFormState() {
   const modeCustomer = defaultCustomers[defaultMode] || {}
   return {
     customer_query: '',
-    customer_name: modeCustomer.name || 'POS Customer',
-    mobile: modeCustomer.mobile || '09120000000',
+    customer_name: modeCustomer.name || 'مشتری POS',
+    mobile: modeCustomer.mobile || '',
     customer_type: 'normal',
     guest_count: 1,
     order_mode: defaultMode,
     place: '',
     note: '',
+    waiter: '',
+    waiter_name: '',
   }
 }
 
@@ -771,9 +893,9 @@ function defaultFinancialState() {
   }
 }
 
-const loading = ref(false)
+const بارگذاری = ref(false)
 const submitting = ref(false)
-const hardwareLoading = ref(false)
+const hardwareبارگذاری = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const scannerFeedback = ref('')
@@ -797,6 +919,8 @@ const ticketSessions = reactive([{ id: 'ticket-1', snapshot: null }])
 const activeTicketId = ref('ticket-1')
 let ticketCounter = 1
 const tableOptions = ref([])
+const waiterOptions = ref([])
+const waiterبارگذاری = ref(false)
 const posInfoExpanded = ref(false)
 const openInvoicesExpanded = ref(false)
 const tableExpanded = ref(false)
@@ -807,25 +931,26 @@ const operationsOverlayOpen = ref(false)
 const cartDrawerOpen = ref(false)
 const isDesktopViewport = ref(typeof window === 'undefined' ? true : window.innerWidth >= 1180)
 const todayTransactions = ref([])
-const todayTransactionsLoading = ref(false)
+const todayTransactionsبارگذاری = ref(false)
 const todayTransactionsError = ref('')
 const recentOrders = ref([])
-const recentOrdersLoading = ref(false)
+const recentOrdersبارگذاری = ref(false)
 const recentOrdersError = ref('')
 const recentOrdersSearch = ref('')
 const recentOrdersDateFrom = ref(new Date().toISOString().split('T')[0])
 
+const editExpanded = ref(false)
 const orderDetailModal = reactive({
   open: false,
-  loading: false,
+  بارگذاری: false,
   saving: false,
-  loadError: '',
-  saveError: '',
+  loadخطا: '',
+  saveخطا: '',
   order: null,
-  canSettle: false,
-  settleMethod: '',
-  settleReference: '',
-  settleError: '',
+  canتسویه: false,
+  تسویهMethod: '',
+  تسویهReference: '',
+  تسویهخطا: '',
   settling: false,
   editForm: {
     payment_method: '',
@@ -834,10 +959,51 @@ const orderDetailModal = reactive({
   },
 })
 
-const returnInvoiceModal = reactive({
+const promptModal = reactive({
+  open: false,
+  title: '',
+  value: '',
+  resolve: null,
+  reject: null,
+})
+
+function showPrompt(title, defaultValue = '') {
+  return new Promise((resolve, reject) => {
+    promptModal.title = title
+    promptModal.value = defaultValue
+    promptModal.resolve = resolve
+    promptModal.reject = reject
+    promptModal.open = true
+  })
+}
+
+function confirmPrompt() {
+  if (promptModal.resolve) {
+    promptModal.resolve(promptModal.value)
+  }
+  promptModal.open = false
+}
+
+function cancelPrompt() {
+  if (promptModal.resolve) {
+    promptModal.resolve(null)
+  }
+  promptModal.open = false
+}
+
+const purgeModal = reactive({
   open: false,
   loading: false,
   error: '',
+  success: '',
+  orderCode: '',
+  orderName: '',
+})
+
+const returnInvoiceModal = reactive({
+  open: false,
+  بارگذاری: false,
+  خطا: '',
   reason: '',
 })
 
@@ -856,17 +1022,18 @@ const posProfileSummary = reactive({
   shift_status: '',
 })
 const selectedTablePreview = ref(null)
-const tablePreviewLoading = ref(false)
+const tablePreviewبارگذاری = ref(false)
 const tablePreviewError = ref('')
 const moveTableTarget = ref('')
 const mergeTableTarget = ref('')
 const showSplitBill = ref(false)
 const openInvoices = ref([])
-const openInvoicesLoading = ref(false)
+const openInvoicesبارگذاری = ref(false)
 const openInvoiceError = ref('')
 const selectedOpenInvoiceKey = ref('')
 const selectedOpenInvoiceDetail = ref(null)
 const settlingOpenInvoice = ref(false)
+const deliveredInvoices = reactive(new Set())
 const expandedInvoiceKey = ref('')
 const editingOriginalOrder = reactive({
   name: '',
@@ -905,6 +1072,20 @@ const paymentBoot = reactive({
   methods: [],
 })
 
+const packagingSettings = reactive({
+  enabled: false,
+  flat_fee: 0,
+  per_item: true,
+  apply_modes: [],
+  label: 'هزینه بسته‌بندی',
+})
+
+const printFontSettings = reactive({
+  font_family: 'Peyda',
+  font_size: 11,
+  receipt_font_scale: 'متوسط',
+})
+
 const payment = reactive(defaultPaymentState())
 
 const form = reactive(defaultFormState())
@@ -913,8 +1094,8 @@ const financial = reactive(defaultFinancialState())
 
 const customizationSheet = reactive({
   open: false,
-  loading: false,
-  error: '',
+  بارگذاری: false,
+  خطا: '',
   item: null,
   ingredients: [],
   modifierGroups: [],
@@ -928,7 +1109,7 @@ const customizationSheet = reactive({
 })
 
 const fallbackImage =
-  'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=900&auto=format&fit=crop&q=60'
+  ''
 
 const leftPanelTabLabel = computed(() => {
   switch (leftPanelTab.value) {
@@ -953,6 +1134,10 @@ const placeOptions = computed(() => {
     return ['میز 1', 'میز 2', 'میز 3', 'میز 4', 'میز VIP']
   }
   if (form.order_mode === 'delivery') {
+    const couriers = Array.isArray(cfg.delivery_couriers) ? cfg.delivery_couriers : []
+    if (couriers.length) {
+      return couriers.map((row) => row.label).filter(Boolean)
+    }
     const places = cfg.delivery_places
     return Array.isArray(places) && places.length ? places : ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
   }
@@ -1046,9 +1231,10 @@ const filteredProducts = computed(() => {
 })
 
 const filteredRecentOrders = computed(() => {
+  const activeOrders = recentOrders.value.filter(o => String(o.status || '').toLowerCase() !== 'cancelled')
   const q = recentOrdersSearch.value.trim().toLowerCase()
-  if (!q) return recentOrders.value
-  return recentOrders.value.filter((o) =>
+  if (!q) return activeOrders
+  return activeOrders.filter((o) =>
     String(o.order_code || o.name || '').toLowerCase().includes(q) ||
     String(o.customer_name || '').toLowerCase().includes(q)
   )
@@ -1070,7 +1256,7 @@ async function deliverOrder(order) {
     error.value = 'سفارشی انتخاب نشده.'
     return
   }
-  const confirmed = window.confirm(`سفارش ${order.order_code || order.name} تولید و تحویل داده شود؟`)
+  const confirmed = window.confirm(`سفارش ${order.name} تولید و تحویل داده شود؟`)
   if (!confirmed) return
   error.value = ''
   successMessage.value = ''
@@ -1078,14 +1264,78 @@ async function deliverOrder(order) {
     const result = await deliverPOSOrder(order.name)
     const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
     const woInfo = result.submitted_work_orders?.length ? ` (${result.submitted_work_orders.length} دستور کار)` : ''
-    // Update local status so buttons hide immediately
-    order.status = 'delivered'
+    // Update local status to 'preparing' to match background job behavior
+    order.status = 'preparing'
     order.payment_method = order.payment_method || ''
-    successMessage.value = `سفارش ${order.order_code || order.name} تحویل شد.${dnInfo}${woInfo}`
-    await loadRecentOrders()
-    await loadOpenInvoices()
+    successMessage.value = `سفارش ${order.name} برای تحویل ثبت شد.${dnInfo}${woInfo}`
+    
+    // If order was fully paid, remove from open invoices. Else keep it there.
+    if (order.status === 'paid' || order.payment_method) {
+        openInvoices.value = openInvoices.value.filter(o => o.name !== order.name)
+    }
   } catch (err) {
     error.value = err.message || 'تولید و تحویل ناموفق بود.'
+  }
+}
+
+async function printOrderReceipt(order) {
+  if (!order?.name) return
+  try {
+    const detail = await getManagementOrderDetail(order.name)
+    const orderData = detail?.order || detail
+    const items = orderData?.items || []
+    const customer = order.customer_name || 'مشتری POS'
+    const orderCode = order.name
+    const total = order.grand_total || 0
+    
+    // Build receipt using the same format as POS
+    const printableItems = buildReceiptPrintableItemsFromLines(items.map(item => ({
+      title: item.title || item.item_name || '',
+      qty: item.qty || 1,
+      price: item.unit_price || item.price || 0,
+      note: item.note || '',
+      customization_ingredients: [],
+      customization: {}
+    })))
+    
+    const totalsRows = buildReceiptTotalsRowsHtml({
+      itemsTotal: Number(total || 0),
+      discountAmount: 0,
+      walletApplied: 0,
+      taxAmount: 0,
+      tipAmount: 0,
+      serviceAmount: 0,
+      payableAmount: Number(total || 0),
+    })
+    
+    const paymentLabel = order.payment_method 
+      ? (paymentMethodDisplayLabel(order.payment_method) || order.payment_method)
+      : '-'
+    
+    const html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>' +
+      '<style>' + receiptStylesCss() + '</style></head><body>' +
+      buildReceiptMarkup({
+        printableItems,
+        totalsRows,
+        paymentLabel,
+        customerName: customer,
+        mobile: order.mobile || '',
+        orderMode: order.channel || 'takeaway',
+        place: order.place || '-',
+        note: order.note || '',
+        invoiceNo: orderCode,
+        heading: 'فیش فروش POS',
+      }) +
+      '</body></html>'
+
+    const w = window.open('', '_blank', 'width=380,height=700')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print() }, 300)
+  } catch(err) {
+    error.value = 'خطا در پرینت: ' + (err.message || '')
   }
 }
 
@@ -1110,6 +1360,7 @@ const productQtyMap = computed(() => {
   }, {})
 })
 
+const freeTablesCount = computed(() => tableOptions.value.filter(t => String(t.status || '').toLowerCase() === 'empty').length)
 const occupiedTableCount = computed(() =>
   tableOptions.value.filter((t) => t.status === 'occupied' || t.status === 'waiting').length,
 )
@@ -1212,6 +1463,26 @@ function paymentMethodDisplayLabel(value) {
   return String(value || '').trim() || '-'
 }
 
+const packagingAmount = computed(() => {
+  if (!packagingSettings.enabled) {
+    return 0
+  }
+  const mode = String(form.order_mode || '').trim()
+  if (!packagingSettings.apply_modes.includes(mode)) {
+    return 0
+  }
+  let fee = Number(packagingSettings.flat_fee || 0)
+  if (packagingSettings.per_item) {
+    for (const line of cart) {
+      const perItemPrice = Number(line?.packaging_price || 0)
+      if (perItemPrice > 0) {
+        fee += perItemPrice * Number(line?.qty || 0)
+      }
+    }
+  }
+  return Math.max(fee, 0)
+})
+
 const totals = computed(() =>
   calculatePosTotals({
     cartLines: cart.map((line) => ({
@@ -1225,6 +1496,7 @@ const totals = computed(() =>
     taxType: financial.taxExempt ? 'fixed' : financial.taxType,
     taxValue: financial.taxExempt ? 0 : financial.taxValue,
     tipAmount: financial.tipAmount,
+    packagingAmount: packagingAmount.value,
     useWallet: financial.useWallet,
     walletBalance: financial.walletBalance,
   }),
@@ -1246,7 +1518,7 @@ const sheetPreview = computed(() => {
 })
 
 const productError = computed(() => {
-  if (!filteredProducts.value.length && !loading.value) {
+  if (!filteredProducts.value.length && !بارگذاری.value) {
     return 'محصولی با این فیلتر پیدا نشد.'
   }
   return ''
@@ -1344,10 +1616,10 @@ function saveActiveTicketSnapshot() {
 function ticketLabel(ticket, index) {
   if (ticket.id === activeTicketId.value) {
     const activeName = String(form.customer_name || '').trim()
-    return activeName && activeName !== 'POS Customer' ? activeName : `فاکتور ${toPersianNumber(index + 1)}`
+    return activeName && activeName !== 'مشتری POS' ? activeName : `فاکتور ${toPersianNumber(index + 1)}`
   }
   const ticketName = String(ticket.snapshot?.form?.customer_name || '').trim()
-  return ticketName && ticketName !== 'POS Customer' ? ticketName : `فاکتور ${toPersianNumber(index + 1)}`
+  return ticketName && ticketName !== 'مشتری POS' ? ticketName : `فاکتور ${toPersianNumber(index + 1)}`
 }
 
 function switchToTicket(ticketId) {
@@ -1413,7 +1685,7 @@ function closeTicketTab(ticketId) {
 function resetCurrentInvoiceState() {
   editingOriginalOrder.isEditing = false
   editingOriginalOrder.name = ''
-  editingOriginalOrder.order_code = ''
+  editingOriginalOrder.name = ''
   applyTicketSnapshot(createEmptyTicketSnapshot())
 }
 
@@ -1511,7 +1783,7 @@ async function refreshSelectedDineInTableOrders() {
   if (form.order_mode !== 'dine_in') {
     selectedTablePreview.value = null
     tablePreviewError.value = ''
-    tablePreviewLoading.value = false
+    tablePreviewبارگذاری.value = false
     return
   }
 
@@ -1519,14 +1791,14 @@ async function refreshSelectedDineInTableOrders() {
   if (!selectedTable?.name) {
     selectedTablePreview.value = null
     tablePreviewError.value = ''
-    tablePreviewLoading.value = false
+    tablePreviewبارگذاری.value = false
     moveTableTarget.value = ''
     mergeTableTarget.value = ''
     showSplitBill.value = false
     return
   }
 
-  tablePreviewLoading.value = true
+  tablePreviewبارگذاری.value = true
   tablePreviewError.value = ''
   try {
     selectedTablePreview.value = await getTableDetail(selectedTable.name)
@@ -1534,8 +1806,35 @@ async function refreshSelectedDineInTableOrders() {
     selectedTablePreview.value = null
     tablePreviewError.value = tableErr.message || 'دریافت سفارش‌های میز ناموفق بود.'
   } finally {
-    tablePreviewLoading.value = false
+    tablePreviewبارگذاری.value = false
   }
+}
+
+async function loadWaitersOnce() {
+  if (waiterOptions.value.length || waiterبارگذاری.value) return
+  waiterبارگذاری.value = true
+  try {
+    const payload = await listManagementUsers({ search: '' })
+    const rows = Array.isArray(payload?.users) ? payload.users : []
+    waiterOptions.value = rows
+      .filter((row) => row && row.enabled !== 0)
+      .map((row) => ({
+        name: row.name,
+        label: row.full_name || row.name,
+        roles: Array.isArray(row.roles) ? row.roles : [],
+      }))
+  } catch (errObj) {
+    waiterOptions.value = []
+  } finally {
+    waiterبارگذاری.value = false
+  }
+}
+
+function onWaiterChange(event) {
+  const userName = String(event?.target?.value || '').trim()
+  const found = waiterOptions.value.find((row) => row.name === userName)
+  form.waiter = userName
+  form.waiter_name = found ? found.label : ''
 }
 
 async function selectDineInTable(table) {
@@ -1765,7 +2064,7 @@ function setOrderMode(mode) {
   if (mode === 'takeaway') {
     form.place = cfg.default_takeaway_place || (placeOptions.value[0] || '')
   } else if (mode === 'delivery') {
-    form.place = cfg.default_delivery_place || (placeOptions.value[0] || '')
+    form.place = cfg.default_delivery_courier || cfg.default_delivery_place || (placeOptions.value[0] || '')
   } else {
     form.place = placeOptions.value[0] || ''
   }
@@ -1809,12 +2108,20 @@ function syncViewportMode() {
   }
 }
 
+let customerSearchTimeout = null
 function setCustomerQuery(value) {
   form.customer_query = value
   const digits = String(value || '').replace(/\D/g, '')
   if (digits.length >= 10) {
     form.mobile = digits.startsWith('0') ? digits : `0${digits.slice(-10)}`
   }
+  
+  if (customerSearchTimeout) clearTimeout(customerSearchTimeout)
+  customerSearchTimeout = setTimeout(() => {
+    if (value && value.length > 1) {
+      loadCustomers(value)
+    }
+  }, 400)
 }
 
 function normalizeCustomerMobile(value) {
@@ -1829,6 +2136,42 @@ function toComparableDate(value) {
   const date = new Date(value || '')
   const time = Number(date.getTime())
   return Number.isFinite(time) ? time : 0
+}
+
+async function loadCustomers(search = '') {
+  try {
+    const payload = await listManagementCustomers({ search })
+    const customers = payload?.customers || []
+    const mapped = customers.map(c => {
+      const mobile = c.mobile || ''
+      const name = c.customer_name || 'مشتری'
+      return {
+        key: mobile || name.toLowerCase(),
+        label: name,
+        mobile: mobile,
+        orders_count: c.orders_count || 0,
+        total_sales: c.total_spent || 0,
+        last_order_at: c.last_order_at,
+      }
+    })
+    
+    if (search) {
+      // Merge results preserving existing
+      const existing = [...customerOptions.value]
+      const existingKeys = new Set(existing.map(r => r.key))
+      for (const row of mapped) {
+        if (!existingKeys.has(row.key)) {
+          existing.unshift(row)
+          existingKeys.add(row.key)
+        }
+      }
+      customerOptions.value = existing
+    } else {
+      customerOptions.value = mapped
+    }
+  } catch (err) {
+    console.error('Failed to load customers:', err)
+  }
 }
 
 function buildCustomerOptions(orders = []) {
@@ -1889,11 +2232,32 @@ function openInvoiceKey(row) {
 
 function isUnpaidOpenInvoice(row) {
   const status = String(row?.status || '').trim().toLowerCase()
-  const paymentStatus = String(row?.payment_status || '').trim().toLowerCase()
-  if (['delivered', 'cancelled'].includes(status)) {
+  
+  if (status === 'cancelled') {
     return false
   }
-  return paymentStatus !== 'paid'
+  
+  // Fully paid orders should never be in open invoices
+  if (status === 'paid' && row.payment_method && row.payment_method !== 'credit') {
+    // If the system knows it's fully paid and it's not credit, hide it.
+    // (A true credit order might be 'paid' if setup weirdly, but usually it stays 'unpaid' or 'overdue')
+  }
+  
+  // Outstanding is true if the row has outstanding_amount > 0.1
+  // Credit orders and partially paid orders will have outstanding > 0.
+  const outstanding = Number(row?.outstanding_amount)
+  if (Number.isFinite(outstanding)) {
+    if (outstanding > 0.1) return true
+    if (outstanding <= 0.1) return false
+  }
+  
+  // Fallback if outstanding is undefined, but payment_method is missing, it's open
+  if (!row.payment_method && status !== 'paid') {
+    return true
+  }
+  
+  // Otherwise, it's fully settled and should be hidden from Open Invoices
+  return false
 }
 
 function buildOpenInvoices(rows = []) {
@@ -1903,6 +2267,8 @@ function buildOpenInvoices(rows = []) {
     .map((row) => ({
       ...row,
       invoice_key: openInvoiceKey(row),
+      // بررسی اینکه آیا این فاکتور از قبل تحویل داده شده (با چک کردن existing DN توی response)
+      delivery_exists: deliveredInvoices.has(row.name) || row.dn_exists || false,
     }))
 }
 
@@ -1987,12 +2353,11 @@ function applySelectedOpenInvoiceProfile() {
 }
 
 async function loadOpenInvoices(preserveSelection = true) {
-  openInvoicesLoading.value = true
+  openInvoicesبارگذاری.value = true
   openInvoiceError.value = ''
   try {
     const orderPayload = await listManagementOrders({ source: 'web' })
     const allOrders = orderPayload?.orders || []
-    customerOptions.value = buildCustomerOptions(allOrders)
     setOpenInvoices(allOrders, preserveSelection)
     if (selectedOpenInvoiceKey.value) {
       await loadSelectedOpenInvoiceDetail(false)
@@ -2005,7 +2370,7 @@ async function loadOpenInvoices(preserveSelection = true) {
     selectedOpenInvoiceKey.value = ''
     selectedOpenInvoiceDetail.value = null
   } finally {
-    openInvoicesLoading.value = false
+    openInvoicesبارگذاری.value = false
   }
 }
 
@@ -2026,7 +2391,7 @@ async function settleSelectedOpenInvoice() {
       },
     })
     successMessage.value = `پرداخت فاکتور ${selectedOpenInvoice.value.order_code} ثبت شد.`
-    await loadOpenInvoices(true)
+    loadOpenInvoices(true)
   } catch (payErr) {
     error.value = payErr.message || 'ثبت پرداخت فاکتور باز ناموفق بود.'
   } finally {
@@ -2040,8 +2405,8 @@ async function toggleInvoiceAccordion(invoice) {
     return
   }
   expandedInvoiceKey.value = invoice.invoice_key
-  if (!invoice.detail && !invoice.loading) {
-    invoice.loading = true
+  if (!invoice.detail && !invoice.بارگذاری) {
+    invoice.بارگذاری = true
     invoice.loadError = ''
     try {
       const detail = await getManagementOrderDetail(invoice.name, invoice.source || 'web')
@@ -2049,7 +2414,7 @@ async function toggleInvoiceAccordion(invoice) {
     } catch (err) {
       invoice.loadError = err.message || 'خطا در دریافت جزئیات'
     } finally {
-      invoice.loading = false
+      invoice.بارگذاری = false
     }
   }
 }
@@ -2067,7 +2432,7 @@ async function selectAndLoadInvoice(invoice) {
     // Apply customer/order info to form
     // Store original order info for editing continuation
     editingOriginalOrder.name = order.name || invoice.name || ''
-    editingOriginalOrder.order_code = order.order_code || invoice.order_code || ''
+    editingOriginalOrder.order_code = order.name
     editingOriginalOrder.isEditing = true
     
     applyOpenInvoiceProfile(order)
@@ -2096,6 +2461,21 @@ async function selectAndLoadInvoice(invoice) {
       const itemCode = String(item.item_code || item.name || item.title || '').trim()
       const matchedProduct = productByItemCode[itemCode.toLowerCase()]
       
+      let customization = null
+      let hasCustomization = false
+      if (item.customization_json) {
+        try {
+          customization = typeof item.customization_json === 'string' 
+            ? JSON.parse(item.customization_json) 
+            : item.customization_json
+          if (customization && Object.keys(customization).length > 0) {
+            hasCustomization = true
+          }
+        } catch (e) {
+          console.warn("Could not parse customization json for line", item)
+        }
+      }
+      
       if (matchedProduct) {
         // Use the real product with correct slug from loaded products
         const unitPrice = Number(item.unit_price || item.price || matchedProduct.base_price || matchedProduct.standard_rate || 0)
@@ -2108,7 +2488,9 @@ async function selectAndLoadInvoice(invoice) {
           standard_rate: unitPrice,
           price: unitPrice,
           image: matchedProduct.image || item.image || '',
-        }, qty, null, false, unitPrice)
+        }, qty, customization, hasCustomization, unitPrice, {
+          variant_of: matchedProduct.variant_of || ''
+        })
       } else {
         // Fallback: use item_code as-is and just set price
         const unitPrice = Number(item.unit_price || item.price || 0)
@@ -2121,15 +2503,30 @@ async function selectAndLoadInvoice(invoice) {
           standard_rate: unitPrice,
           price: unitPrice,
           image: item.image || '',
-        }, qty, null, false, unitPrice)
+        }, qty, customization, hasCustomization, unitPrice, {})
       }
     }
     
+    // Restore note
+    if (order.note) {
+      // Strip automatically generated audit notes
+      let cleanNote = order.note.split(' | روش پرداخت:')[0]
+      cleanNote = cleanNote.split(' | ادامه فاکتور')[0]
+      form.note = cleanNote.trim()
+    }
+
     // Apply financial modifiers from order if available
     const fm = order.financial_modifiers || order.totals || {}
     if (fm.discount_value > 0 || order.discount_amount > 0) {
       financial.discountValue = Number(fm.discount_value || order.discount_amount || 0)
       financial.discountType = fm.discount_type === 'percent' ? 'percent' : 'fixed'
+    }
+    
+    // Check if it's partially paid
+    const outstanding = Number(order.outstanding_amount)
+    if (Number.isFinite(outstanding) && outstanding >= 0 && outstanding < Number(order.grand_total)) {
+      financial.walletApplied = Number(order.grand_total) - outstanding
+      financial.useWallet = true
     }
     if (fm.service_value > 0 || order.service_amount > 0) {
       financial.serviceValue = Number(fm.service_value || order.service_amount || 0)
@@ -2170,6 +2567,37 @@ async function settleSelectedInvoice(invoice) {
   cartPanelRef.value?.openPaymentPopup()
 }
 
+async function settleAndDeliverFromInvoice(invoice) {
+  if (!invoice?.name) return
+  await selectAndLoadInvoice(invoice)
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup(null, 'settle')
+}
+
+async function deliverFromInvoice(invoice) {
+  if (!invoice?.name) return
+  const confirmed = window.confirm(`فاکتور ${invoice.name} تحویل داده شود؟ (پرداخت نشده باقی می‌ماند)`)
+  if (!confirmed) return
+  error.value = ''
+  successMessage.value = ''
+  try {
+    const result = await deliverInvoiceOnly(invoice.name)
+    const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
+    invoice.delivery_exists = true
+    deliveredInvoices.add(invoice.name)
+    successMessage.value = `فاکتور ${invoice.order_code} تحویل شد (بدون پرداخت).${dnInfo}`
+    
+    // Optimistically update local state instead of full refetch
+    const recentIdx = recentOrders.value.findIndex(o => o.name === invoice.name)
+    if (recentIdx !== -1) {
+      recentOrders.value[recentIdx].delivery_exists = true
+    }
+  } catch (err) {
+    error.value = err.message || 'تحویل ناموفق بود.'
+  }
+}
+
 function selectCustomerFromHistory(customer) {
   if (!customer) {
     return
@@ -2182,7 +2610,7 @@ function selectCustomerFromHistory(customer) {
   form.customer_query = customer.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
 }
 
-function createCustomerFromQuery(payload) {
+async function createCustomerFromQuery(payload) {
   const rawQuery = String(payload?.raw_query || form.customer_query || '').trim()
   if (!rawQuery) {
     return
@@ -2195,18 +2623,18 @@ function createCustomerFromQuery(payload) {
     resolvedName = ''
   }
   if (!resolvedName) {
-    resolvedName = normalizedMobile ? `مشتری ${normalizedMobile.slice(-4)}` : 'POS Customer'
+    resolvedName = normalizedMobile ? `مشتری ${normalizedMobile.slice(-4)}` : 'مشتری POS'
   }
 
   if (payload?.is_new) {
-    const nameInput = window.prompt('نام مشتری جدید را وارد کنید:', resolvedName || '')
+    const nameInput = await showPrompt('نام مشتری جدید را وارد کنید:', resolvedName || '')
     if (nameInput === null) {
       return
     }
     const cleanedName = String(nameInput || '').trim()
-    resolvedName = cleanedName || 'POS Customer'
+    resolvedName = cleanedName || 'مشتری POS'
 
-    const mobileInput = window.prompt('شماره تماس مشتری جدید را وارد کنید (اختیاری):', normalizedMobile || '')
+    const mobileInput = await showPrompt('شماره تماس مشتری جدید را وارد کنید (اختیاری):', normalizedMobile || '')
     if (mobileInput === null) {
       return
     }
@@ -2238,17 +2666,17 @@ function createCustomerFromQuery(payload) {
   error.value = ''
 }
 
-function addQuickCustomer() {
-  const name = window.prompt('نام مشتری را وارد کنید:', form.customer_name || '')
+async function addQuickCustomer() {
+  const name = await showPrompt('نام مشتری را وارد کنید:', form.customer_name || '')
   if (name === null) {
     return
   }
-  const mobile = window.prompt('شماره موبایل را وارد کنید:', form.mobile || '')
+  const mobile = await showPrompt('شماره موبایل را وارد کنید:', form.mobile || '')
   if (mobile === null) {
     return
   }
-  form.customer_name = String(name || '').trim() || 'POS Customer'
-  form.mobile = String(mobile || '').trim() || form.mobile
+  form.customer_name = String(name || '').trim() || 'مشتری POS'
+  form.mobile = String(mobile || '').trim()
   form.customer_query = `${form.customer_name} - ${form.mobile}`
 }
 
@@ -2349,6 +2777,12 @@ function undoLastRemoval() {
 }
 
 function addToCart(item, qty = 1, customizationPayload = null, hasCustomization = false, unitPrice = null, options = {}) {
+  editingOriginalOrder.isEditing = false
+  editingOriginalOrder.name = ''
+  if (Number(item?.out_of_stock || 0) === 1) {
+    error.value = `«${item?.title || item?.item_name || item?.name || ''}» ناموجود است و قابل فروش نیست.`
+    return
+  }
   const itemSlug = getItemSlug(item)
   if (!itemSlug) {
     return
@@ -2383,10 +2817,12 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     qty: Number(Number(qty || 1).toFixed(3)),
     price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? item.price ?? 0),
     item_code: item.name,
+    packaging_price: Number(item.packaging_price || 0),
     note: '',
     has_customization: Boolean(hasCustomization),
     customization: normalizedCustomization,
     customization_ingredients: options.customizationIngredients || [],
+    variant_of: options.variant_of || item.variant_of || '',
   })
   selectedCartLineId.value = lineId
 }
@@ -2410,12 +2846,14 @@ function decrementProduct(item) {
   setCartQty(baseLine, Number(baseLine.qty || 0) - 1)
 }
 
-function editLineNote(line) {
-  const next = window.prompt('یادداشت آیتم:', line.note || '')
+async function editLineNote(line) {
+  const next = await showPrompt('یادداشت آیتم:', line.note || '')
   if (next === null) {
     return
   }
   line.note = String(next || '').trim()
+  editingOriginalOrder.isEditing = false
+  editingOriginalOrder.name = ''
 }
 
 function clearCart() {
@@ -2428,7 +2866,7 @@ function clearCart() {
   }
   editingOriginalOrder.isEditing = false
   editingOriginalOrder.name = ''
-  editingOriginalOrder.order_code = ''
+  editingOriginalOrder.name = ''
   cart.splice(0, cart.length)
   selectedCartLineId.value = ''
   lastRemovedLine.value = null
@@ -2471,9 +2909,10 @@ function recordPopularItem(slug, qty) {
   }
 }
 
-async function loadTodayTransactions() {
-  if (todayTransactionsLoading.value) return
-  todayTransactionsLoading.value = true
+async function loadTodayTransactions(force = false) {
+  if (todayTransactionsبارگذاری.value) return
+  if (!force && todayTransactions.value.length > 0) return
+  todayTransactionsبارگذاری.value = true
   todayTransactionsError.value = ''
   try {
     const today = new Date().toISOString().split('T')[0]
@@ -2484,13 +2923,14 @@ async function loadTodayTransactions() {
   } catch (err) {
     todayTransactionsError.value = err.message || 'خطا در بارگذاری تراکنش‌های امروز'
   } finally {
-    todayTransactionsLoading.value = false
+    todayTransactionsبارگذاری.value = false
   }
 }
 
-async function loadRecentOrders() {
-  if (recentOrdersLoading.value) return
-  recentOrdersLoading.value = true
+async function loadRecentOrders(force = false) {
+  if (recentOrdersبارگذاری.value) return
+  if (!force && recentOrders.value.length > 0) return
+  recentOrdersبارگذاری.value = true
   recentOrdersError.value = ''
   try {
     const dateFrom = recentOrdersDateFrom.value || new Date().toISOString().split('T')[0]
@@ -2499,14 +2939,14 @@ async function loadRecentOrders() {
   } catch (err) {
     recentOrdersError.value = err.message || 'خطا در بارگذاری سفارش‌های اخیر'
   } finally {
-    recentOrdersLoading.value = false
+    recentOrdersبارگذاری.value = false
   }
 }
 
 async function openOrderDetailModal(tx) {
   if (!tx) return
   orderDetailModal.open = true
-  orderDetailModal.loading = true
+  orderDetailModal.بارگذاری = true
   orderDetailModal.loadError = ''
   orderDetailModal.saveError = ''
   orderDetailModal.order = null
@@ -2534,13 +2974,13 @@ async function openOrderDetailModal(tx) {
   } catch (err) {
     orderDetailModal.loadError = err.message || 'خطا در بارگذاری جزئیات سفارش'
   } finally {
-    orderDetailModal.loading = false
+    orderDetailModal.بارگذاری = false
   }
 }
 
 function closeOrderDetailModal() {
   orderDetailModal.open = false
-  orderDetailModal.loading = false
+  orderDetailModal.بارگذاری = false
   orderDetailModal.saving = false
   orderDetailModal.loadError = ''
   orderDetailModal.saveError = ''
@@ -2569,9 +3009,9 @@ async function saveOrderDetailEdit() {
     orderDetailModal.order.customer_name = orderDetailModal.editForm.customer_name
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
-      await loadTodayTransactions()
+      loadTodayTransactions(true)
     } else if (leftPanelTab.value === 'recent') {
-      await loadRecentOrders()
+      loadRecentOrders(true)
     }
   } catch (err) {
     orderDetailModal.saveError = err.message || 'ویرایش سفارش ناموفق بود.'
@@ -2582,65 +3022,130 @@ async function saveOrderDetailEdit() {
 
 async function quickSettleOrder(order) {
   if (!order?.name) return
-  await openOrderDetailModal(order)
-  if (orderDetailModal.canSettle) {
-    orderDetailModal.settleMethod = orderDetailModal.editForm.payment_method || 'cash'
-  }
+  await selectAndLoadInvoice(order)
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup(null, 'settle')
 }
 
 async function confirmSettleOrder() {
-  if (!orderDetailModal.order?.name) {
-    orderDetailModal.settleError = 'سفارشی انتخاب نشده.'
-    return
-  }
-  if (!orderDetailModal.settleMethod) {
-    orderDetailModal.settleError = 'روش پرداخت را انتخاب کنید.'
-    return
-  }
-  orderDetailModal.settling = true
-  orderDetailModal.settleError = ''
-  try {
-    await markManagementOrderPaid({
-      order_name: orderDetailModal.order.name,
-      reference_no: orderDetailModal.settleReference || '',
-      rrn: '',
-      provider_payload: {
-        source: 'management-pos-settle',
-        method: orderDetailModal.settleMethod,
-      },
-    })
-    successMessage.value = `سفارش ${orderDetailModal.order.order_code} با موفقیت تسویه شد.`
-    closeOrderDetailModal()
-    if (leftPanelTab.value === 'history') {
-      await loadTodayTransactions()
-    } else if (leftPanelTab.value === 'recent') {
-      await loadRecentOrders()
-    }
-  } catch (err) {
-    orderDetailModal.settleError = err.message || 'ثبت پرداخت ناموفق بود.'
-  } finally {
-    orderDetailModal.settling = false
-  }
+  // Move this order to the main cart and use standard payment flow
+  if (!orderDetailModal.order?.name) return
+  await selectAndLoadInvoice(orderDetailModal.order)
+  closeOrderDetailModal()
+  closeOperationsOverlay()
+  await nextTick()
+  cartPanelRef.value?.openPaymentPopup()
 }
 
 function openReturnInvoiceModal() {
   if (!orderDetailModal.order?.name) return
   returnInvoiceModal.open = true
-  returnInvoiceModal.loading = false
+  returnInvoiceModal.بارگذاری = false
   returnInvoiceModal.error = ''
   returnInvoiceModal.reason = ''
 }
 
+function openPurgeModalFromList(order) {
+  if (!order?.name) return
+  purgeModal.open = true
+  purgeModal.loading = false
+  purgeModal.error = ''
+  purgeModal.success = ''
+  purgeModal.orderCode = order.order_code || order.name
+  purgeModal.orderName = order.name
+}
+
+function openPurgeModal() {
+  if (!orderDetailModal.order?.name) return
+  purgeModal.open = true
+  purgeModal.loading = false
+  purgeModal.error = ''
+  purgeModal.success = ''
+  purgeModal.orderCode = orderDetailModal.order.order_code || orderDetailModal.order.name
+  purgeModal.orderName = orderDetailModal.order.name
+}
+
+function closePurgeModal() {
+  if (purgeModal.loading) return
+  purgeModal.open = false
+  purgeModal.loading = false
+  purgeModal.error = ''
+  purgeModal.success = ''
+  purgeModal.orderCode = ''
+  purgeModal.orderName = ''
+}
+
+async function executePurgeOrder() {
+  if (!purgeModal.orderName) return
+  purgeModal.loading = true
+  purgeModal.error = ''
+  purgeModal.success = ''
+  try {
+    const result = await purgeManagementPOSOrder(purgeModal.orderName)
+    
+    // Safety check objects
+    const summary = result.summary?.cleaned_records || {}
+    const errors = result.summary?.errors || []
+
+    // Update local state instead of full refetch
+    const orderName = purgeModal.orderName
+    
+    // Update Open Invoices
+    if (openInvoices.value.some(o => o.name === orderName)) {
+      openInvoices.value = openInvoices.value.filter(o => o.name !== orderName)
+    }
+    
+    // Update Recent Orders
+    if (recentOrders.value.some(o => o.name === orderName)) {
+      recentOrders.value = recentOrders.value.filter(o => o.name !== orderName)
+    }
+    
+    // Update Today Transactions
+    if (todayTransactions.value.some(o => o.name === orderName)) {
+      todayTransactions.value = todayTransactions.value.filter(o => o.name !== orderName)
+    }
+
+    if (selectedOpenInvoiceKey.value && selectedOpenInvoiceKey.value.includes(orderName)) {
+      selectedOpenInvoiceKey.value = ''
+      selectedOpenInvoiceDetail.value = null
+    }
+
+    if (expandedInvoiceKey.value && expandedInvoiceKey.value.includes(orderName)) {
+      expandedInvoiceKey.value = ''
+    }
+
+    if (result.status === 'partial_success' || errors.length > 0) {
+      purgeModal.error = 'بخشی از فرآیند ناموفق بود:\n' + errors.join('\n')
+      purgeModal.loading = false
+      return // Wait for user to dismiss
+    }
+
+    const deletedTypes = Object.keys(summary).filter(k => summary[k].length > 0).join(', ')
+    purgeModal.success = 'سفارش با موفقیت لغو و از عملیات صندوق پاکسازی شد.\n' + (deletedTypes ? 'جزئیات: ' + deletedTypes : '')
+    
+    setTimeout(() => {
+      purgeModal.loading = false // Reset before closing
+      closePurgeModal()
+      closeOrderDetailModal()
+    }, 2000)
+    
+  } catch (err) {
+    purgeModal.error = err.message || 'حذف کامل سفارش ناموفق بود.'
+    purgeModal.loading = false
+  }
+}
+
 function closeReturnInvoiceModal() {
   returnInvoiceModal.open = false
-  returnInvoiceModal.loading = false
+  returnInvoiceModal.بارگذاری = false
   returnInvoiceModal.error = ''
   returnInvoiceModal.reason = ''
 }
 
 async function confirmCreateReturnInvoice() {
   if (!orderDetailModal.order?.name) return
-  returnInvoiceModal.loading = true
+  returnInvoiceModal.بارگذاری = true
   returnInvoiceModal.error = ''
   try {
     const result = await createManagementReturnOrder({
@@ -2651,20 +3156,20 @@ async function confirmCreateReturnInvoice() {
     closeReturnInvoiceModal()
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
-      await loadTodayTransactions()
+      loadTodayTransactions(true)
     } else if (leftPanelTab.value === 'recent') {
-      await loadRecentOrders()
+      loadRecentOrders(true)
     }
   } catch (err) {
     returnInvoiceModal.error = err.message || 'ساخت فاکتور برگشتی ناموفق بود.'
   } finally {
-    returnInvoiceModal.loading = false
+    returnInvoiceModal.بارگذاری = false
   }
 }
 
 function closeCustomizationSheet() {
   customizationSheet.open = false
-  customizationSheet.loading = false
+  customizationSheet.بارگذاری = false
   customizationSheet.error = ''
   customizationSheet.item = null
   customizationSheet.ingredients = []
@@ -2706,8 +3211,12 @@ async function openCustomizationSheet(item, options = {}) {
   }
 
   const sourceItem = resolveProductBySlug(itemSlug, item || editingLine || {})
+  
+  // Quick pre-check: If this is an exact variant that has NO customization and NO BOM, just add it directly.
+  // We can't know for sure until we fetch, but we open the sheet and auto-close if true.
+  
   customizationSheet.open = true
-  customizationSheet.loading = true
+  customizationSheet.بارگذاری = true
   customizationSheet.error = ''
   customizationSheet.item = sourceItem
   customizationSheet.qty = 1
@@ -2719,6 +3228,7 @@ async function openCustomizationSheet(item, options = {}) {
     const detailItem = payload.item || sourceItem
     const ingredients = payload.ingredients || []
     const modifierGroups = payload.modifier_groups || []
+    customizationSheet.variantsMapping = payload.variants_mapping || []
     customizationSheet.item = {
       ...sourceItem,
       ...detailItem,
@@ -2735,10 +3245,21 @@ async function openCustomizationSheet(item, options = {}) {
       customizationSheet.customization = createDefaultCustomization(ingredients, modifierGroups)
       customizationSheet.qty = 1
     }
+    
+    // Auto-confirm variant-only items that don't need user input if it's a new add
+    // Wait, if it's a template, we DO need user input.
+    // If it's ALREADY a variant, and has NO ingredients and NO non-variant modifier groups, just add it.
+    const isVariantOnly = ingredients.length === 0 && 
+                          modifierGroups.every(g => g.group_name.startsWith('variant::'));
+    if (!editingLine && isVariantOnly && !detailItem.variant_of && !detailItem.has_variants) {
+      // It's a resolved variant item with no customization.
+      // We shouldn't hit this often because PosProductPanel bypasses it if has_bom=0 & customizable=0
+    }
+    
   } catch (sheetErr) {
     customizationSheet.error = sheetErr.message || 'دریافت تنظیمات BOM ناموفق بود.'
   } finally {
-    customizationSheet.loading = false
+    customizationSheet.بارگذاری = false
   }
 }
 
@@ -2746,8 +3267,33 @@ function openLineCustomizationEditor(line) {
   if (!line) {
     return
   }
-  const baseItem = resolveProductBySlug(line.slug, line)
-  openCustomizationSheet(baseItem, { editingLine: line })
+  
+  let baseItem = resolveProductBySlug(line.slug, line)
+  
+  // If we are editing a variant-only item, we want to open the parent template so the user can switch variants.
+  // Otherwise, the backend will treat the current variant's attributes as fixed and hide the selector.
+  let targetItem = baseItem
+  const parentName = line.variant_of || baseItem.variant_of || (baseItem.item && baseItem.item.variant_of)
+  if (parentName) {
+    const parentItem = products.value.find(p => p.name === parentName || getItemSlug(p) === parentName)
+    if (parentItem) {
+      targetItem = parentItem
+    } else {
+      targetItem = { name: parentName, item_code: parentName, slug: parentName }
+    }
+  }
+  
+  // If we swapped to parent, we need to map the current variant back into a customization payload so it preselects.
+  const isVariant = !!parentName
+  let sheetLine = line
+  if (isVariant && (!line.customization || !line.customization.selected_modifiers || line.customization.selected_modifiers.length === 0)) {
+    const attrs = baseItem.variant_attributes || (baseItem.item && baseItem.item.variant_attributes) || []
+    if (attrs.length > 0) {
+      sheetLine = { ...line, customization: { selected_modifiers: attrs.map(a => ({ group: `variant::${a.attribute}`, option: a.value })) } }
+    }
+  }
+  
+  openCustomizationSheet(targetItem, { editingLine: sheetLine })
 }
 
 function confirmCustomizationAdd() {
@@ -2755,6 +3301,90 @@ function confirmCustomizationAdd() {
     return
   }
   const normalized = normalizeCartCustomization(customizationSheet.customization, customizationSheet.ingredients)
+  
+  // Detect if this is a variant-only selection
+  const hasVariantSelectors = customizationSheet.modifierGroups.some(g => g.group_name.startsWith('variant::'));
+
+  if (hasVariantSelectors && (customizationSheet.variantsMapping || []).length > 0) {
+    // Find the matching variant from variantsMapping
+    const selectedAttributes = normalized.selected_modifiers || [];
+    let matchedVariant = null;
+    for (const variant of customizationSheet.variantsMapping) {
+      let isMatch = true;
+      const fixedAttributes = customizationSheet.item.variant_fixed_attributes || {};
+      for (const attr of variant.attributes || []) {
+        // If it's a fixed attribute, it won't be in selectedAttributes
+        if (fixedAttributes[attr.attribute] === attr.value) {
+          continue;
+        }
+        
+        // Check if this attribute was presented to the user as a modifier group
+        const isVariable = customizationSheet.modifierGroups.some(g => g.group_name === `variant::${attr.attribute}`);
+        if (!isVariable) {
+          continue; // It's likely a show_in_website=0 attribute, ignore it.
+        }
+        
+        const sel = selectedAttributes.find(m => m.group === `variant::${attr.attribute}`);
+        if (!sel || sel.option !== attr.value) {
+          isMatch = false;
+          break;
+        }
+      }
+      if (isMatch) {
+        matchedVariant = variant;
+        break;
+      }
+    }
+    
+    if (matchedVariant) {
+      const nextQty = Number(Number(customizationSheet.qty || 1).toFixed(3));
+      const nextPrice = Number(matchedVariant.base_price || 0);
+      const nextSlug = matchedVariant.slug || matchedVariant.name;
+      
+      if (customizationSheet.editing_line_id) {
+        const editingLine = cart.find(line => line.line_id === customizationSheet.editing_line_id);
+        if (editingLine) {
+          const nextSignature = cartLineSignature(nextSlug, null);
+          const duplicateLine = cart.find(line => line.signature === nextSignature && line.line_id !== editingLine.line_id);
+          if (duplicateLine) {
+            duplicateLine.qty = Number((Number(duplicateLine.qty || 0) + nextQty).toFixed(3));
+            setCartQty(editingLine, 0);
+            selectedCartLineId.value = duplicateLine.line_id;
+          } else {
+            editingLine.signature = nextSignature;
+            editingLine.slug = nextSlug;
+            editingLine.title = matchedVariant.item_name || matchedVariant.name;
+            editingLine.item_code = matchedVariant.item_code || matchedVariant.name;
+            editingLine.name = matchedVariant.name;
+            editingLine.price = nextPrice;
+            editingLine.qty = nextQty;
+            // WE MUST KEEP the customization so it can be edited again!
+            editingLine.has_customization = true;
+            editingLine.customization = normalized;
+            editingLine.customization_ingredients = customizationIngredients;
+            
+            // Store parent info so edit knows how to open
+            editingLine.variant_of = customizationSheet.item.name;
+            
+            selectedCartLineId.value = editingLine.line_id;
+          }
+          closeCustomizationSheet();
+          return;
+        }
+      }
+      
+      addToCart({
+        ...matchedVariant,
+        title: matchedVariant.item_name || matchedVariant.name,
+        variant_of: customizationSheet.item.name
+      }, nextQty, normalized, true, nextPrice, {
+        customizationIngredients
+      });
+      closeCustomizationSheet();
+      return;
+    }
+  }
+
   const customizationIngredients = (customizationSheet.ingredients || []).map((ingredient) => ({
     key: String(ingredient.key || ingredient.name || '').trim(),
     name: String(ingredient.name || '').trim(),
@@ -2879,35 +3509,61 @@ async function reportHardwareEvent(eventType, severity, message, payload = {}) {
   }
 }
 
+async function lookupProductBarcode(raw) {
+  try {
+    const payload = await getManagementProductByBarcode(raw)
+    if (payload?.status !== 'success' || !payload.item) {
+      error.value = 'محصولی با این بارکد پیدا نشد.'
+      return
+    }
+    const found = payload.item
+    const match = products.value.find((item) => {
+      const keys = [item.name, item.item_code, item.slug].map((value) => String(value || '').trim())
+      return keys.includes(String(found.name || '').trim()) || keys.includes(String(found.item_code || '').trim())
+    })
+    if (!match) {
+      error.value = `محصول «${found.item_name || found.name}» در لیست POS این شعبه موجود نیست.`
+      return
+    }
+    if (Number(match.out_of_stock || 0) === 1) {
+      error.value = `«${match.title || match.item_name || found.item_name}» فعلاً ناموجود است.`
+      return
+    }
+    addToCart(match, 1)
+    scannerFeedback.value = `بارکد اسکن شد: ${match.title || match.item_name || found.item_name}`
+    error.value = ''
+  } catch (lookupErr) {
+    error.value = lookupErr?.message || 'خطا در استعلام بارکد محصول.'
+  }
+}
+
 async function handleScaleBarcodeScan() {
   const raw = scannerInput.value.trim()
   scannerFeedback.value = ''
   if (!raw) {
     return
   }
-  if (!scaleConfig.enabled) {
-    error.value = 'پردازش بارکد وزنی در تنظیمات غیرفعال است.'
-    return
+
+  let scaleHandled = false
+  if (scaleConfig.enabled) {
+    try {
+      const parsed = parseScaleBarcode(raw)
+      const item = resolveScaleProduct(parsed.itemCode)
+      if (item) {
+        addToCart(item, parsed.qty)
+        scannerFeedback.value = `بارکد وزنی اعمال شد: ${item.title || item.item_name} × ${formatCompactNumber(parsed.qty)}`
+        error.value = ''
+        scaleHandled = true
+      }
+    } catch (scanErr) {
+      scaleHandled = false
+    }
   }
 
-  try {
-    const parsed = parseScaleBarcode(raw)
-    const item = resolveScaleProduct(parsed.itemCode)
-    if (!item) {
-      throw new Error(`کالایی با کد ترازو ${parsed.itemCode} پیدا نشد.`)
-    }
-    addToCart(item, parsed.qty)
-    scannerFeedback.value = `بارکد وزنی اعمال شد: ${item.title || item.item_name} × ${formatCompactNumber(parsed.qty)}`
-    error.value = ''
-  } catch (scanErr) {
-    error.value = scanErr.message || 'خطا در تحلیل بارکد وزنی.'
-    await reportHardwareEvent('scale', 'warn', scanErr.message || 'Invalid weighted barcode', {
-      reason: 'invalid_barcode',
-      barcode: raw,
-    })
-  } finally {
-    scannerInput.value = ''
+  if (!scaleHandled) {
+    await lookupProductBarcode(raw)
   }
+  scannerInput.value = ''
 }
 
 function buildOrderNote() {
@@ -3179,10 +3835,16 @@ const receiptInvoiceNumber = computed(() => {
   if (manualValue) {
     return manualValue
   }
-  const now = new Date()
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  // Try to use the last created order code from ordersAPI or form
+  const ticket = getTicketSessionById(activeTicketId.value)
+  const snapshotCode = ticket?.snapshot?.lastOrderCode || ''
+  if (snapshotCode) return snapshotCode
+  // Fallback: use form data if available
+  const formCode = editingOriginalOrder.name || ''
+  if (formCode) return formCode
+  // Last resort: temporary code
   const ticketPart = String(activeTicketId.value || 'ticket-1').replace(/^ticket-/, '')
-  return `POS-${datePart}-${ticketPart}`
+  return ticketPart
 })
 
 function buildReceiptPrintableItems() {
@@ -3225,6 +3887,14 @@ function buildReceiptPrintableItemsFromLines(lines = []) {
     .join('')
 }
 
+function receiptFontSizePx() {
+  const base = Math.min(Math.max(Number(printFontSettings.font_size || 11), 8), 24)
+  const scale = String(printFontSettings.receipt_font_scale || 'متوسط')
+  if (scale === 'کوچک') return Math.max(base - 1, 8)
+  if (scale === 'بزرگ') return Math.min(base + 2, 26)
+  return base
+}
+
 function receiptStylesCss() {
   return `
     @font-face { font-family: Peyda; src: url('/fonts/Pevda-Reqular.ttf') format('truetype'); font-weight: 400; font-style: normal; }
@@ -3233,30 +3903,30 @@ function receiptStylesCss() {
     @font-face { font-family: Peyda; src: url('/fonts/Peyda-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; }
     @page { size: 80mm auto; margin: 4mm; }
     html, body { width: 100%; margin: 0; padding: 0; }
-    body { font-family: Peyda, sans-serif; color: #102c24; background: #fff; }
-    .receipt { width: 72mm; margin: 0 auto; font-size: 11px; line-height: 1.35; }
+    body { font-family: ${printFontSettings.font_family || 'Peyda'}, Peyda, sans-serif; color: var(--mg-text-main); background: var(--mg-bg-surface); }
+    .receipt { width: 72mm; margin: 0 auto; font-size: ${receiptFontSizePx()}px; line-height: 1.35; }
     .center { text-align: center; }
     .brand-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
     .title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
-    .muted { color: #355e52; font-size: 10px; }
-    .sep { border-top: 1px dashed #97b6ac; margin: 6px 0; }
+    .muted { color: var(--mg-success); font-size: 10px; }
+    .sep { border-top: 1px dashed var(--mg-success-bg); margin: 6px 0; }
     .meta-row { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
-    .meta-block { margin-top: 4px; border: 1px dashed #d3e2dc; border-radius: 7px; padding: 4px 5px; }
-    .meta-block strong { display: block; font-size: 10px; color: #355e52; margin-bottom: 2px; }
+    .meta-block { margin-top: 4px; border: 1px dashed var(--mg-success-bg); border-radius: 7px; padding: 4px 5px; }
+    .meta-block strong { display: block; font-size: 10px; color: var(--mg-success); margin-bottom: 2px; }
     .meta-block p { margin: 0; white-space: pre-wrap; font-size: 10px; }
-    .item-row { padding: 4px 0; border-bottom: 1px dashed #d3e2dc; }
+    .item-row { padding: 4px 0; border-bottom: 1px dashed var(--mg-success-bg); }
     .item-head { display: grid; grid-template-columns: auto 1fr auto; gap: 4px; align-items: start; }
     .item-index { font-weight: 600; }
     .item-title { font-weight: 600; }
     .item-total { font-weight: 700; }
-    .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: #355e52; }
-    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: #20483d; }
+    .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: var(--mg-success); }
+    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: var(--mg-success); }
     .item-custom li { margin: 1px 0; }
-    .item-note { margin-top: 3px; font-size: 10px; color: #20483d; }
+    .item-note { margin-top: 3px; font-size: 10px; color: var(--mg-success); }
     .totals { margin-top: 6px; display: grid; gap: 3px; }
     .total-row { display: flex; justify-content: space-between; gap: 6px; }
-    .payable { border-top: 1px dashed #97b6ac; margin-top: 2px; padding-top: 4px; font-size: 12px; font-weight: 700; }
-    .note { margin-top: 6px; font-size: 10px; color: #20483d; white-space: pre-wrap; }
+    .payable { border-top: 1px dashed var(--mg-success-bg); margin-top: 2px; padding-top: 4px; font-size: 12px; font-weight: 700; }
+    .note { margin-top: 6px; font-size: 10px; color: var(--mg-success); white-space: pre-wrap; }
   `
 }
 
@@ -3293,6 +3963,13 @@ function buildReceiptTotalsRowsHtml(totalValues = totals.value) {
     {
       label: 'حق سرویس',
       value: totalValues.serviceAmount || 0,
+      always: false,
+      negative: false,
+      className: '',
+    },
+    {
+      label: packagingSettings.label || 'بسته‌بندی',
+      value: totalValues.packagingAmount || 0,
       always: false,
       negative: false,
       className: '',
@@ -3348,7 +4025,7 @@ function buildReceiptMarkup({
 
       <div class="meta-row"><span>تاریخ</span><span>${escapeHtml(printDate)}</span></div>
       <div class="meta-row"><span>شماره فاکتور</span><span>${escapeHtml(invoiceNo)}</span></div>
-      <div class="meta-row"><span>مشتری</span><span>${escapeHtml(customerName || 'POS Customer')}</span></div>
+      <div class="meta-row"><span>مشتری</span><span>${escapeHtml(customerName || 'مشتری POS')}</span></div>
       <div class="meta-row"><span>موبایل مشتری</span><span>${escapeHtml(mobileLabel)}</span></div>
       <div class="meta-row"><span>نوع سفارش</span><span>${escapeHtml(orderMode)}</span></div>
       <div class="meta-row"><span>جایگاه</span><span>${escapeHtml(placeLabel)}</span></div>
@@ -3374,7 +4051,7 @@ function buildCurrentTicketReceiptMarkup() {
     printableItems: buildReceiptPrintableItems(),
     totalsRows: buildReceiptTotalsRowsHtml(),
     paymentLabel: paymentMethodDisplayLabel(payment.method),
-    customerName: form.customer_name || 'POS Customer',
+    customerName: form.customer_name || 'مشتری POS',
     mobile: form.mobile || '',
     orderMode: form.order_mode,
     place: form.place,
@@ -3388,7 +4065,7 @@ function buildConfirmedTableReceiptContext() {
   const flatLines = []
   const noteParts = []
   for (const order of confirmedDineInOrders.value) {
-    const orderCode = String(order.order_code || order.name || '').trim()
+    const orderCode = String(order.name || '').trim()
     if (order.note) {
       noteParts.push(`${orderCode || 'سفارش'}: ${String(order.note).trim()}`)
     }
@@ -3457,6 +4134,16 @@ function openPrintEditor() {
 
 function closePrintEditor() {
   printEditorOpen.value = false
+}
+
+function autoPrintReceipt() {
+  // چاپ خودکار رسید بعد از تسویه
+  if (!cart.length) {
+    // Try building from last receipt info
+    printCurrentTicket()
+    return
+  }
+  printCurrentTicket()
 }
 
 function printCurrentTicket() {
@@ -3557,44 +4244,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     return
   }
 
-  // Pay original invoice directly when editing (just SI + Payment, no production)
-  if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
-    submitting.value = true
-    error.value = ''
-    successMessage.value = ''
-    try {
-      const paymentMethod = normalizePaymentMethodKind(payment.method)
-      const payResult = await settlePOSOrder(editingOriginalOrder.name, {
-        method: paymentMethod,
-        reference_no: payment.reference_no || '',
-      })
-      const code = editingOriginalOrder.order_code
-      editingOriginalOrder.isEditing = false
-      editingOriginalOrder.name = ''
-      editingOriginalOrder.order_code = ''
-      const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
-      successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
-      if (financial.createNextInvoice) {
-        resetCurrentInvoiceState()
-        saveActiveTicketSnapshot()
-      } else {
-        saveActiveTicketSnapshot()
-      }
-      loadOpenInvoices()
-      loadRecentOrders()
-      await refreshHardwareStatus()
-    } catch (err) {
-      error.value = err.message || 'تسویه فاکتور ناموفق بود.'
-    } finally {
-      submitting.value = false
-    }
-    return
-  }
-
   resolveCustomerFromQuery()
-
-  const paymentSelection = resolvePaymentSubmission(paymentMeta)
-  const paymentNoteLine = paymentSelection.auditLine
+  let paymentSelection = resolvePaymentSubmission(paymentMeta)
+  let paymentNoteLine = paymentSelection.auditLine
 
   const paymentPayload = payNow
     ? {
@@ -3616,18 +4268,79 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         splits: [],
       }
 
+  // Pay original invoice directly when editing
+  if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+    submitting.value = true
+    error.value = ''
+    successMessage.value = ''
+    try {
+      const code = editingOriginalOrder.name
+      const payResult = await settlePOSOrder(code, paymentPayload)
+      let siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
+      
+      let dnInfo = ''
+      if (withProduction) {
+        const deliverResult = await deliverPOSOrder(code)
+        dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
+        successMessage.value = `فاکتور ${code} تسویه و برای تحویل ثبت شد.${siInfo}${dnInfo}`
+      } else {
+        successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
+      }
+      
+      editingOriginalOrder.isEditing = false
+      editingOriginalOrder.name = ''
+      
+      if (financial.createNextInvoice) {
+        resetCurrentInvoiceState()
+        saveActiveTicketSnapshot()
+      } else {
+        saveActiveTicketSnapshot()
+      }
+      
+      // Optimistically update
+      // If it's credit or partial, it should stay in openInvoices with updated outstanding.
+      // But we don't have the exact outstanding amount returned from the backend currently.
+      // Easiest is to filter out ONLY if it's fully paid (cash/card etc) and not partial.
+      const isCredit = paymentPayload.method === 'credit'
+      const isPartial = paymentPayload.splits && paymentPayload.splits.some(s => s.amount > 0) && 
+                        paymentPayload.splits.reduce((sum, s) => sum + s.amount, 0) < Number(totals.value.payableAmount)
+                        
+      if (!isCredit && !isPartial) {
+        openInvoices.value = openInvoices.value.filter(o => o.name !== code)
+      }
+      
+      const recentIdx = recentOrders.value.findIndex(o => o.name === code)
+      if (recentIdx !== -1) {
+        recentOrders.value[recentIdx].status = withProduction ? 'preparing' : 'paid'
+        recentOrders.value[recentIdx].payment_method = paymentPayload.method
+      }
+      window.setTimeout(() => {
+        refreshHardwareStatus()
+      }, 0)
+    } catch (err) {
+      error.value = err.message || 'تسویه فاکتور ناموفق بود.'
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+
+
+
   const payload = {
-    customer_name: form.customer_name || 'POS Customer',
-    mobile: form.mobile || '09120000000',
+    customer_name: form.customer_name || 'مشتری POS',
+    mobile: form.mobile || '',
     order_type: form.order_mode,
     note: [
       buildOrderNote(),
-      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.order_code}` : '',
+      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.name}` : '',
       paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : '',
     ].filter(Boolean).join(' | '),
     customer_type: form.customer_type,
     guest_count: form.guest_count,
     place: form.place,
+    waiter: form.waiter || '',
+    waiter_name: form.waiter_name || '',
     totals: {
       ...totals.value,
       currency: currency.value,
@@ -3647,16 +4360,30 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       gift_card_code: financial.creditCardCode,
       tax_exempt: financial.taxExempt,
     },
-    items: cart.map((line) => ({
-      item_slug: line.slug,
-      qty: line.qty,
-      note: line.note || '',
-      customization: line.customization || {
+    items: cart.map((line) => {
+      let finalCustomization = line.customization || {
         ingredient_adjustments: [],
         selected_modifiers: [],
         selected_alternatives: [],
-      },
-    })),
+      };
+      // If this line is a variant, we MUST strip the variant:: modifiers from the payload
+      // because the backend resolves to the variant doc, which doesn't have the variant:: groups,
+      // and it will throw an 'Invalid modifier group' error.
+      if (line.variant_of && finalCustomization.selected_modifiers && finalCustomization.selected_modifiers.length > 0) {
+        const cleanedModifiers = finalCustomization.selected_modifiers.filter(m => !m.group.startsWith('variant::'));
+        finalCustomization = {
+          ...finalCustomization,
+          selected_modifiers: cleanedModifiers,
+        };
+      }
+      
+      return {
+        item_slug: line.slug,
+        qty: line.qty,
+        note: line.note || '',
+        customization: finalCustomization,
+      };
+    }),
     payment: paymentPayload,
   }
 
@@ -3675,7 +4402,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         })
         editingOriginalOrder.isEditing = false
         editingOriginalOrder.name = ''
-        editingOriginalOrder.order_code = ''
+        editingOriginalOrder.name = ''
       } else if (withProduction) {
         // "ثبت و تسویه فاکتور": SO + تولید + SI + Payment + DN
         result = await createAndSettlePOSOrder(payload)
@@ -3684,16 +4411,26 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         result = await createAndPayPOSOrder(payload)
       }
     } else {
+      if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+        // ویرایش فاکتور موجود: کنسل کردن فاکتور قبلی + ساخت فاکتور جدید
+        try {
+          await voidManagementPOSOrder(editingOriginalOrder.name, 'ادامه فاکتور در POS')
+        } catch (voidErr) {
+          // اگه کنسل نشد، ادامه بده
+          console.warn('Could not void previous order:', voidErr)
+        }
+        payload.note = (payload.note || '') + ` | ادامه فاکتور ${editingOriginalOrder.name}`
+      }
       // فقط ثبت سفارش (بدون تولید، بدون پرداخت)
       result = await createPOSOrder(payload)
     }
-    let orderCode = result.order_code || ''
+    let orderCode = result.order_id || ''
     if (payNow) {
       if (withProduction) {
         // ثبت و تسویه یکجا (همه چی)
         const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
         const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-        successMessage.value = `سفارش ${orderCode} تسویه و تحویل شد.${siInfo}${dnInfo}`
+        successMessage.value = `سفارش ${orderCode} تسویه و برای تولید/تحویل ثبت شد.${siInfo}${dnInfo}`
       } else if (editingOriginalOrder.isEditing) {
         // تسویه از فاکتور باز
         successMessage.value = `فاکتور ${orderCode} تسویه شد.`
@@ -3707,12 +4444,29 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     }
 
     if (editingOriginalOrder.isEditing) {
-      successMessage.value = editingOriginalOrder.order_code
-        ? `آیتم‌ها به فاکتور ${editingOriginalOrder.order_code} اضافه شد.`
-        : 'آیتم‌ها به فاکتور اضافه شد.'
+      const oldName = editingOriginalOrder.name
+      successMessage.value = oldName
+        ? `فاکتور جدید با یادداشت ادامه فاکتور ${oldName} ساخته شد.`
+        : 'فاکتور جدید ساخته شد.'
       editingOriginalOrder.isEditing = false
       editingOriginalOrder.name = ''
-      editingOriginalOrder.order_code = ''
+      
+      // Remove old order from local open invoices
+      openInvoices.value = openInvoices.value.filter(o => o.name !== oldName)
+    }
+
+    // Save order code to ticket snapshot for receipt numbering
+    if (orderCode) {
+      const ticket = getTicketSessionById(activeTicketId.value)
+      if (ticket) {
+        if (!ticket.snapshot) ticket.snapshot = {}
+        ticket.snapshot.lastOrderCode = orderCode
+      }
+    }
+
+    // Auto-print receipt after successful settlement
+    if (payNow && result?.sales_invoice) {
+      autoPrintReceipt()
     }
 
     if (financial.createNextInvoice) {
@@ -3723,9 +4477,12 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       window.location.href = '/management/orders'
     }
 
+    // Refresh only open invoices to keep the badge up to date.
+    // Recent orders and today transactions will fetch when their tabs are opened.
     loadOpenInvoices()
-    loadRecentOrders()
-    await refreshHardwareStatus()
+    window.setTimeout(() => {
+      refreshHardwareStatus()
+    }, 0)
   } catch (submitErr) {
     error.value = submitErr.message || 'ثبت سفارش POS ناموفق بود.'
   } finally {
@@ -3768,7 +4525,7 @@ function updateNetworkState() {
 }
 
 async function refreshHardwareStatus() {
-  hardwareLoading.value = true
+  hardwareبارگذاری.value = true
   try {
     const payload = await getManagementPOSHardwareStatus()
     hardwareStatus.connected = Boolean(payload.connected)
@@ -3778,12 +4535,12 @@ async function refreshHardwareStatus() {
     hardwareStatus.connected = false
     hardwareStatus.message = statusErr.message || 'بررسی وضعیت سخت افزار ناموفق بود.'
   } finally {
-    hardwareLoading.value = false
+    hardwareبارگذاری.value = false
   }
 }
 
 async function loadPOSBoot() {
-  loading.value = true
+  بارگذاری.value = true
   error.value = ''
   popularSlugsMap.value = buildPopularSlugsMapFromLocalStorage()
   try {
@@ -3793,6 +4550,18 @@ async function loadPOSBoot() {
     currency.value = payload.currency || 'IRR'
     applyPOSProfileSummary(payload.pos_profile || {})
 
+    const bootPackaging = payload.packaging || {}
+    packagingSettings.enabled = Boolean(bootPackaging.enabled)
+    packagingSettings.flat_fee = Number(bootPackaging.flat_fee || 0)
+    packagingSettings.per_item = bootPackaging.per_item !== false
+    packagingSettings.apply_modes = Array.isArray(bootPackaging.apply_modes) ? bootPackaging.apply_modes : []
+    packagingSettings.label = bootPackaging.label || 'هزینه بسته‌بندی'
+
+    const bootPrintFont = payload.print_font || {}
+    printFontSettings.font_family = bootPrintFont.font_family || 'Peyda'
+    printFontSettings.font_size = Number(bootPrintFont.font_size || 11)
+    printFontSettings.receipt_font_scale = bootPrintFont.receipt_font_scale || 'متوسط'
+
     bootPosConfig = payload.pos_config || null
     if (bootPosConfig) {
       const cfg = bootPosConfig
@@ -3801,8 +4570,13 @@ async function loadPOSBoot() {
       const modeCustomer = defaultCustomers[defaultOrderMode] || {}
 
       form.order_mode = defaultOrderMode
-      form.customer_name = modeCustomer.name || 'POS Customer'
-      form.mobile = modeCustomer.mobile || '09120000000'
+      form.customer_name = modeCustomer.name || 'مشتری POS'
+      form.mobile = modeCustomer.mobile || ''
+      if (defaultOrderMode === 'delivery') {
+        form.place = cfg.default_delivery_courier || cfg.default_delivery_place || ''
+      } else if (defaultOrderMode === 'takeaway') {
+        form.place = cfg.default_takeaway_place || ''
+      }
     }
 
     const bootPayment = payload.payment || {}
@@ -3840,8 +4614,8 @@ async function loadPOSBoot() {
     try {
       const orderPayload = await listManagementOrders({ source: 'web' })
       const allOrders = orderPayload?.orders || []
-      customerOptions.value = buildCustomerOptions(allOrders)
       setOpenInvoices(allOrders, true)
+      loadCustomers()
       if (selectedOpenInvoiceKey.value) {
         await loadSelectedOpenInvoiceDetail(false)
       } else {
@@ -3874,7 +4648,7 @@ async function loadPOSBoot() {
   } catch (bootErr) {
     error.value = bootErr.message || 'بارگذاری POS ناموفق بود.'
   } finally {
-    loading.value = false
+    بارگذاری.value = false
   }
 }
 
@@ -3938,7 +4712,7 @@ function handleGlobalProductSearchTyping(event) {
   return false
 }
 
-function onWindowKeydown(event) {
+async function onWindowKeydown(event) {
   const key = event.key
 
   if (customizationSheet.open) {
@@ -3954,7 +4728,7 @@ function onWindowKeydown(event) {
     }
     if (key === 'Insert') {
       event.preventDefault()
-      const nextQty = window.prompt('تعداد BOM را وارد کنید:', String(customizationSheet.qty))
+      const nextQty = await showPrompt('تعداد BOM را وارد کنید:', String(customizationSheet.qty))
       const parsed = Number(nextQty)
       if (Number.isFinite(parsed) && parsed > 0) {
         customizationSheet.qty = Math.round(parsed)
@@ -4056,7 +4830,7 @@ function onWindowKeydown(event) {
     if (!line) {
       return
     }
-    const nextQty = window.prompt('تعداد جدید را وارد کنید:', String(line.qty))
+    const nextQty = await showPrompt('تعداد جدید را وارد کنید:', String(line.qty))
     if (nextQty === null) {
       return
     }
@@ -4093,6 +4867,42 @@ watch(
   },
 )
 
+// ---------------------------------------------------------------------------
+// Kitchen → POS notifications: toast when an order becomes ready
+// ---------------------------------------------------------------------------
+const kitchenReadyQueue = ref([])
+const seenKitchenReady = new Set()
+let kitchenPollTimer = null
+let kitchenPollInFlight = false
+let kitchenPollPrimed = false
+
+async function pollKitchenReady() {
+  if (kitchenPollInFlight || typeof document === 'undefined' || document.hidden) return
+  kitchenPollInFlight = true
+  try {
+    const payload = await getManagementPosKitchenNotifications({})
+    const orders = Array.isArray(payload?.orders) ? payload.orders : []
+    if (!kitchenPollPrimed) {
+      kitchenPollPrimed = true
+      orders.forEach((o) => seenKitchenReady.add(o.name))
+      return
+    }
+    const fresh = orders.filter((o) => !seenKitchenReady.has(o.name))
+    fresh.forEach((o) => seenKitchenReady.add(o.name))
+    if (fresh.length) {
+      kitchenReadyQueue.value = [...kitchenReadyQueue.value, ...fresh].slice(-5)
+    }
+  } catch (err) {
+    // kitchen notifications are best-effort; stay silent on failure
+  } finally {
+    kitchenPollInFlight = false
+  }
+}
+
+function dismissKitchenNotice(name) {
+  kitchenReadyQueue.value = kitchenReadyQueue.value.filter((o) => o.name !== name)
+}
+
 onMounted(async () => {
   syncViewportMode()
   window.addEventListener('keydown', onWindowKeydown)
@@ -4101,10 +4911,13 @@ onMounted(async () => {
   window.addEventListener('offline', updateNetworkState)
   hydrateReceiptSettings()
   await loadPOSBoot()
+  loadWaitersOnce()
   saveActiveTicketSnapshot()
   await nextTick()
   window.scrollTo({ top: 0, behavior: 'auto' })
   headerBarRef.value?.focusCustomerSearch?.()
+  pollKitchenReady()
+  kitchenPollTimer = setInterval(pollKitchenReady, 45000)
 })
 
 onBeforeUnmount(() => {
@@ -4116,35 +4929,64 @@ onBeforeUnmount(() => {
   if (reminderTimer.value) {
     clearTimeout(reminderTimer.value)
   }
+  if (kitchenPollTimer) {
+    clearInterval(kitchenPollTimer)
+    kitchenPollTimer = null
+  }
 })
 </script>
 
 <style scoped>
-.pos-theme {
-  --pos-primary: var(--pos-primary-color, #015a72);
-  --pos-accent: var(--pos-accent-color, #ff9836);
-  --pos-success: var(--pos-success-color, #0b7d4a);
-  --pos-danger: var(--pos-danger-color, #ab3535);
-  --pos-warning: var(--pos-warning-color, #f59e0b);
-  --pos-white: var(--pos-surface-color, var(--bg-card, #ffffff));
-  --pos-text: var(--text, var(--pos-primary-color, #015a72));
-  --pos-border: color-mix(in srgb, var(--border, #d6dde8) 88%, transparent);
-  --pos-soft: color-mix(in srgb, var(--bg-soft, #f6f8fb) 92%, transparent);
-  --pos-accent-soft: rgb(var(--pos-accent-rgb, 255 152 54) / 0.12);
+.kitchen-ready-toasts {
+  position: fixed;
+  bottom: 18px;
+  inset-inline-start: 18px;
+  z-index: 90;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(360px, 90vw);
 }
-
+.kitchen-ready-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: #2f6f5c;
+  color: #fff;
+  border-radius: 14px;
+  padding: 0.7rem 1rem;
+  font-size: 0.85rem;
+  box-shadow: 0 10px 30px rgba(20, 40, 33, 0.35);
+  animation: kitchen-toast-in 0.25s ease-out;
+}
+.kitchen-ready-toast .toast-close {
+  background: rgba(255, 255, 255, 0.18);
+  border: 0;
+  color: #fff;
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+@keyframes kitchen-toast-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
 .pos-theme :deep(.hero-card) {
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
+  border: 1px solid var(--mg-border);
+  background: var(--mg-bg-surface);
   box-shadow: none;
 }
 
 .pos-theme :deep(.hero-card h2) {
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .pos-theme :deep(.hero-card p) {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
 }
 
 
@@ -4157,9 +4999,9 @@ onBeforeUnmount(() => {
 
 .open-invoice-card {
   min-width: 170px;
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 12px;
-  background: var(--pos-white);
+  background: var(--mg-bg-surface);
   padding: 0.42rem 0.5rem;
   display: grid;
   gap: 0.18rem;
@@ -4172,16 +5014,16 @@ onBeforeUnmount(() => {
 
 .open-invoice-card small {
   font-size: 0.72rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.82);
+  color: var(--mg-text-muted);
 }
 
 .open-invoice-card.active {
-  border-color: var(--pos-primary);
-  box-shadow: inset 0 0 0 1px var(--pos-primary);
+  border-color: var(--mg-primary);
+  box-shadow: inset 0 0 0 1px var(--mg-primary);
 }
 
 .open-invoice-detail {
-  border: 1px dashed var(--pos-border);
+  border: 1px dashed var(--mg-border);
   border-radius: 12px;
   padding: 0.5rem;
   display: grid;
@@ -4199,7 +5041,7 @@ onBeforeUnmount(() => {
   display: block;
   margin-top: 0.18rem;
   font-size: 0.72rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
 }
 
 .open-invoice-actions {
@@ -4217,7 +5059,7 @@ onBeforeUnmount(() => {
 }
 
 .open-invoice-detail li {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 10px;
   padding: 0.35rem 0.45rem;
   display: grid;
@@ -4231,9 +5073,9 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 12px;
-  background: var(--pos-white);
+  background: var(--mg-bg-surface);
   padding: 0.5rem 0.75rem;
 }
 
@@ -4243,7 +5085,7 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
   flex-wrap: wrap;
   font-size: 0.82rem;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
 }
 
 .pos-status-right {
@@ -4262,40 +5104,40 @@ onBeforeUnmount(() => {
 }
 
 .shift-dot.shift-open {
-  background: var(--pos-success);
-  box-shadow: 0 0 0 3px rgb(var(--pos-success-rgb, 11 125 74) / 0.22);
+  background: var(--mg-success);
+  box-shadow: 0 0 0 3px rgb(var(--mg-success-rgb, 11 125 74) / 0.22);
 }
 
 .shift-dot.shift-closed {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.35);
+  background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.35);
 }
 
 .pos-status-name {
   font-size: 0.84rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .pos-status-sep {
-  color: var(--pos-border);
+  color: var(--mg-border);
 }
 
 .pos-status-shift {
   font-size: 0.78rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+  color: var(--mg-text-muted);
 }
 
 .pos-status-method {
   font-size: 0.76rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.65);
+  color: var(--mg-text-muted);
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
 }
 
 .pos-info-toggle {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   background: transparent;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
   border-radius: 8px;
   padding: 0.22rem 0.5rem;
   font-size: 0.73rem;
@@ -4310,9 +5152,9 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  border: 1px solid var(--pos-border);
-  background: var(--pos-soft);
-  color: var(--pos-text);
+  border: 1px solid var(--mg-border);
+  background: var(--mg-bg-page);
+  color: var(--mg-text-main);
   font-size: 0.85rem;
   text-decoration: none;
 }
@@ -4321,9 +5163,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.2rem;
-  border: 1px dashed var(--pos-border);
+  border: 1px dashed var(--mg-border);
   border-radius: 12px;
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
   padding: 0.55rem 0.8rem;
 }
 
@@ -4335,12 +5177,12 @@ onBeforeUnmount(() => {
 }
 
 .pos-info-label {
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.62);
+  color: var(--mg-text-muted);
   font-size: 0.73rem;
 }
 
 .pos-info-item strong {
-  color: var(--pos-primary);
+  color: var(--mg-primary);
   font-size: 0.8rem;
 }
 
@@ -4353,29 +5195,30 @@ onBeforeUnmount(() => {
   height: 20px;
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: var(--pos-primary);
-  color: #fff;
+  background: color-mix(in srgb, var(--mg-primary) 16%, var(--mg-bg-surface) 84%);
+  color: var(--mg-primary);
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 22%, transparent);
 }
 
 .count-badge.empty {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.18);
-  color: var(--pos-text);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
 }
 
 .occupied-badge {
   font-size: 0.73rem;
-  color: var(--pos-danger);
-  background: rgb(var(--pos-danger-rgb, 171 53 53) / 0.1);
+  color: var(--mg-danger);
+  background: rgb(var(--mg-danger-rgb, 171 53 53) / 0.1);
   border-radius: 999px;
   padding: 0.12rem 0.45rem;
 }
 
 .icon-refresh-btn {
-  border: 1px solid var(--pos-border);
-  background: transparent;
-  color: var(--pos-text);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
+  background: color-mix(in srgb, var(--mg-bg-page) 60%, var(--mg-bg-surface) 40%);
+  color: var(--mg-text-main);
   border-radius: 8px;
   width: 28px;
   height: 28px;
@@ -4388,7 +5231,7 @@ onBeforeUnmount(() => {
 
 .collapse-arrow {
   font-size: 0.7rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  color: var(--mg-text-muted);
   width: 18px;
   text-align: center;
 }
@@ -4402,9 +5245,9 @@ onBeforeUnmount(() => {
 .table-cell {
   width: 90px;
   height: 80px;
-  border: 2px solid var(--pos-border);
+  border: 2px solid var(--mg-border);
   border-radius: 14px;
-  background: var(--pos-white);
+  background: var(--mg-bg-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4419,56 +5262,56 @@ onBeforeUnmount(() => {
 .table-cell-name {
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
   line-height: 1.1;
 }
 
 .table-cell-time {
   font-size: 0.65rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.65);
+  color: var(--mg-text-muted);
 }
 
 .table-cell-orders {
   font-size: 0.65rem;
-  background: var(--pos-accent-soft);
-  color: var(--pos-accent, #ff9836);
+  background: var(--mg-primary-soft);
+  color: var(--mg-primary, var(--mg-primary));
   border-radius: 999px;
   padding: 0.08rem 0.32rem;
 }
 
 .table-cell-empty {
   font-size: 0.65rem;
-  color: var(--pos-success);
+  color: var(--mg-success);
 }
 
 .table-cell.status-empty {
-  background: rgb(var(--pos-success-rgb, 11 125 74) / 0.07);
-  border-color: rgb(var(--pos-success-rgb, 11 125 74) / 0.3);
+  background: rgb(var(--mg-success-rgb, 11 125 74) / 0.07);
+  border-color: rgb(var(--mg-success-rgb, 11 125 74) / 0.3);
 }
 
 .table-cell.status-occupied {
-  background: rgb(var(--pos-danger-rgb, 171 53 53) / 0.08);
-  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.28);
+  background: rgb(var(--mg-danger-rgb, 171 53 53) / 0.08);
+  border-color: rgb(var(--mg-danger-rgb, 171 53 53) / 0.28);
 }
 
 .table-cell.status-waiting {
-  background: rgb(var(--pos-warning-rgb, 245 158 11) / 0.1);
-  border-color: rgb(var(--pos-warning-rgb, 245 158 11) / 0.4);
+  background: var(--mg-bg-surface);
+  border-color: var(--mg-text-muted);
 }
 
 .table-cell.active {
-  border-color: var(--pos-primary);
-  box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb, 1 90 114) / 0.18);
+  border-color: var(--mg-primary);
+  box-shadow: 0 0 0 2px var(--mg-primary);
   transform: translateY(-2px);
 }
 
 .table-detail-bar {
   display: grid;
   gap: 0.4rem;
-  border: 1px dashed var(--pos-border);
+  border: 1px dashed var(--mg-border);
   border-radius: 12px;
   padding: 0.5rem 0.55rem;
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
 }
 
 .table-detail-info {
@@ -4477,11 +5320,11 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.35rem 0.55rem;
   font-size: 0.78rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.88);
+  color: var(--mg-text-muted);
 }
 
 .table-detail-info strong {
-  color: var(--pos-primary);
+  color: var(--mg-primary);
   font-size: 0.84rem;
   width: 100%;
 }
@@ -4492,8 +5335,8 @@ onBeforeUnmount(() => {
 }
 
 .table-detail-actions .danger {
-  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.3);
-  color: var(--pos-danger);
+  border-color: rgb(var(--mg-danger-rgb, 171 53 53) / 0.3);
+  color: var(--mg-danger);
 }
 
 .table-move-panel {
@@ -4502,7 +5345,7 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
   align-items: end;
   padding: 0.48rem;
-  border: 1px dashed var(--pos-border);
+  border: 1px dashed var(--mg-border);
   border-radius: 12px;
 }
 
@@ -4517,13 +5360,13 @@ onBeforeUnmount(() => {
 }
 
 .ticket-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  overflow-x: auto;
-  padding-bottom: 0.2rem;
-  min-width: 0;
-  flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	overflow-x: auto;
+	padding-bottom: 0.1rem;
+	min-width: 0;
+	flex: 1 1 auto;
 }
 
 .ticket-rail-actions {
@@ -4535,44 +5378,46 @@ onBeforeUnmount(() => {
 }
 
 .ticket-tab-group {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--pos-border);
-  background: var(--pos-white);
-  border-radius: 999px;
-  overflow: hidden;
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: color-mix(in srgb, var(--mg-bg-surface) 72%, var(--mg-bg-page) 28%);
+	border-radius: 999px;
+	overflow: hidden;
+  box-shadow: 0 8px 18px rgb(52 38 31 / 0.05);
 }
 
 .ticket-tab {
-  border: 0;
-  background: transparent;
-  color: var(--pos-text);
-  padding: 0.36rem 0.65rem;
-  font-size: 0.76rem;
-  cursor: pointer;
-  white-space: nowrap;
+	border: 0;
+	background: transparent;
+	color: var(--mg-text-main);
+	padding: 0.52rem 0.84rem;
+	font-size: 0.8rem;
+	font-weight: 700;
+	cursor: pointer;
+	white-space: nowrap;
 }
 
 .ticket-tab-close {
   border: 0;
-  border-inline-start: 1px solid var(--pos-border);
+  border-inline-start: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
   background: transparent;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.78);
-  width: 26px;
-  min-height: 28px;
+  color: var(--mg-text-muted);
+	width: 28px;
+	min-height: 32px;
   font-size: 0.95rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .ticket-tab-group.active {
-  background: var(--pos-primary);
-  border-color: var(--pos-primary);
+  background: var(--mg-primary);
+  border-color: var(--mg-primary);
 }
 
 .ticket-tab-group.active .ticket-tab,
 .ticket-tab-group.active .ticket-tab-close {
-  color: var(--pos-white);
+  color: var(--mg-bg-surface);
 }
 
 .ticket-tab-group.active .ticket-tab-close {
@@ -4580,49 +5425,53 @@ onBeforeUnmount(() => {
 }
 
 .ticket-tab.new {
-  background: var(--pos-accent);
-  border-color: var(--pos-accent);
-  color: var(--pos-white);
+  background: var(--mg-primary);
+  border-color: var(--mg-primary);
+  color: var(--mg-bg-surface);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--mg-primary) 18%, transparent);
 }
 
 .pos-fullpage {
-  display: grid;
-  gap: 0;
-  padding: 0.6rem;
-  width: 100%;
-  height: 100vh;
-  box-sizing: border-box;
-  overflow: hidden;
+	display: grid;
+	gap: 0.7rem;
+	padding: 0.9rem;
+	background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--mg-success) 5%, transparent), transparent 22%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--mg-primary) 6%, transparent), transparent 26%),
+    var(--mg-bg-page);
+	width: 100%;
+	height: calc(100vh - 4.5rem);
+	box-sizing: border-box;
+	overflow: hidden;
 }
 
 .pos-inline-error {
   margin: 0 0 0.35rem;
-  color: var(--pos-accent);
+  color: var(--mg-primary);
   font-size: 0.8rem;
 }
 
 .pos-inline-success {
   margin: 0 0 0.35rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
   font-size: 0.8rem;
 }
 
 .pos-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  height: calc(100vh - 0.6rem);
-  min-height: 520px;
-  overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	min-height: 520px;
+	overflow: hidden;
 }
 
 .pos-main-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.65rem;
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.9rem;
+	min-height: 0;
+	flex: 1;
+	overflow: hidden;
 }
 
 .cart-desktop-col {
@@ -4633,6 +5482,7 @@ onBeforeUnmount(() => {
 
 .cart-desktop-col :deep(.cart-panel) {
   height: 100%;
+  width: 100%;
 }
 
 .ops-trigger,
@@ -4651,11 +5501,12 @@ onBeforeUnmount(() => {
 }
 
 .ops-trigger {
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.16);
-  background: color-mix(in srgb, var(--pos-white) 96%, transparent);
-  color: var(--pos-primary);
-  padding: 0.48rem 0.8rem;
+  border: 1px solid var(--mg-primary);
+  background: var(--mg-primary);
+  color: var(--mg-bg-surface);
+  padding: 0.55rem 0.9rem;
   min-width: 112px;
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--mg-primary) 18%, transparent);
 }
 
 .ops-trigger span {
@@ -4664,8 +5515,8 @@ onBeforeUnmount(() => {
 }
 
 .ops-trigger:hover {
-  background: color-mix(in srgb, var(--pos-white) 100%, transparent);
-  border-color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.22);
+  filter: brightness(0.98);
+  transform: translateY(-1px);
 }
 
 .left-col {
@@ -4681,18 +5532,20 @@ onBeforeUnmount(() => {
 .left-col-tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border: 1px solid var(--pos-border);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-bottom: 0;
-  background: var(--pos-white);
-  border-radius: 14px 14px 0 0;
+  background: color-mix(in srgb, var(--mg-bg-page) 88%, var(--mg-bg-surface) 12%);
+  border-radius: 18px 18px 0 0;
   overflow: hidden;
   flex-shrink: 0;
+  padding: 0.28rem;
+  gap: 0.28rem;
 }
 
 .left-tab-btn {
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
   padding: 0.55rem 0.4rem;
   cursor: pointer;
   font-family: inherit;
@@ -4702,19 +5555,31 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
-  border-bottom: 3px solid transparent;
   transition: all 0.15s;
-  margin-bottom: -2px;
+  border-radius: 14px 14px 0 0;
 }
 
 .left-tab-btn.active {
-  color: var(--pos-primary);
-  border-bottom-color: var(--pos-primary);
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.05);
+  color: var(--mg-bg-surface);
+  border-color: var(--mg-primary);
+  background: var(--mg-primary);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--mg-primary) 16%, transparent);
+}
+
+.left-tab-btn.active .count-badge {
+  background: rgb(255 255 255 / 0.18);
+  border-color: rgb(255 255 255 / 0.22);
+  color: var(--mg-bg-surface);
+}
+
+.left-tab-btn.active .occupied-badge {
+  background: rgb(255 255 255 / 0.18);
+  color: var(--mg-bg-surface);
 }
 
 .left-tab-btn:hover:not(.active) {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+  background: color-mix(in srgb, var(--mg-bg-surface) 60%, var(--mg-bg-page) 40%);
+  border-color: color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 }
 
 .tab-panel-toolbar {
@@ -4726,27 +5591,54 @@ onBeforeUnmount(() => {
 .table-session-preview,
 .open-invoices-panel,
 .history-panel {
-  border: 1px solid var(--pos-border);
-  border-radius: 0 0 14px 14px;
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  border-radius: 0 0 18px 18px;
   padding: 0 0.55rem 0.55rem;
-  background: var(--pos-white);
+  background: color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%);
   display: grid;
   gap: 0.45rem;
   align-content: start;
   overflow-y: auto;
   min-height: 0;
+  box-shadow: 0 18px 34px rgb(52 38 31 / 0.06);
+}
+
+.waiter-select-box {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.45rem 0.1rem;
+}
+
+.waiter-select-label {
+  font-size: 0.78rem;
+  color: var(--mg-text-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.waiter-select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.32rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
+  font-size: 0.8rem;
 }
 
 .recent-orders-panel {
-  border: 1px solid var(--pos-border);
-  border-radius: 0 0 14px 14px;
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  border-radius: 0 0 18px 18px;
   padding: 0 0.55rem 0.55rem;
-  background: var(--pos-white);
+  background: color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%);
   display: grid;
   gap: 0.45rem;
   align-content: start;
   overflow-y: auto;
   min-height: 0;
+  box-shadow: 0 18px 34px rgb(52 38 31 / 0.06);
 }
 
 .history-list {
@@ -4755,12 +5647,13 @@ onBeforeUnmount(() => {
 }
 
 .history-card {
-  border: 1px solid var(--pos-border);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
   border-radius: 10px;
   padding: 0.45rem 0.55rem;
   display: grid;
   gap: 0.2rem;
   font-size: 0.78rem;
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
 }
 
 .history-card-head {
@@ -4771,12 +5664,12 @@ onBeforeUnmount(() => {
 
 .history-card-head strong {
   font-size: 0.8rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .history-time {
   font-size: 0.7rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  color: var(--mg-text-muted);
 }
 
 .history-card-body {
@@ -4787,12 +5680,12 @@ onBeforeUnmount(() => {
 
 .history-amount {
   font-weight: 600;
-  color: var(--pos-success, #0b7d4a);
+  color: var(--mg-success, var(--mg-success));
 }
 
 .history-method-badge {
   font-size: 0.7rem;
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
   border-radius: 6px;
   padding: 0.1rem 0.4rem;
   display: inline-block;
@@ -4800,16 +5693,16 @@ onBeforeUnmount(() => {
 }
 
 .kbd-help-btn {
-  border: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
-  background: color-mix(in srgb, var(--pos-white) 96%, transparent);
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.68);
-  padding: 0.48rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+  background: color-mix(in srgb, var(--mg-bg-surface) 72%, var(--mg-bg-page) 28%);
+  color: var(--mg-text-main);
+  padding: 0.55rem 0.9rem;
   min-width: 112px;
 }
 
 .kbd-help-btn:hover {
-  color: var(--pos-primary);
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
+  color: var(--mg-primary);
+  background: var(--mg-bg-surface);
 }
 
 .kbd-help-btn span {
@@ -4822,8 +5715,8 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 260;
   direction: ltr;
-  background: rgb(25 20 14 / 0.34);
-  backdrop-filter: blur(5px);
+  background: rgb(35 26 20 / 0.48);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
@@ -4834,10 +5727,10 @@ onBeforeUnmount(() => {
   width: min(780px, 64vw);
   max-width: calc(100vw - 5rem);
   height: 100vh;
-  border-radius: 0 22px 22px 0;
-  background: color-mix(in srgb, var(--pos-white) 96%, transparent);
-  border: 1px solid color-mix(in srgb, var(--pos-border) 88%, transparent);
-  box-shadow: 0 28px 56px rgb(15 23 42 / 0.18);
+  border-radius: 0 26px 26px 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 28%, var(--mg-bg-surface) 72%) 0%, var(--mg-bg-surface) 100%);
+  border-inline-end: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  box-shadow: 0 32px 70px rgb(22 16 12 / 0.34);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -4849,20 +5742,21 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.8rem;
   padding: 0.85rem 0.95rem;
-  border-bottom: 1px solid rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  background: color-mix(in srgb, var(--mg-bg-page) 78%, var(--mg-bg-surface) 22%);
 }
 
 .ops-overlay-kicker {
   margin: 0 0 0.12rem;
   font-size: 0.69rem;
   font-weight: 700;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.46);
+  color: var(--mg-primary);
 }
 
 .ops-overlay-head h3 {
   margin: 0;
   font-size: 0.98rem;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
 }
 
 .ops-overlay-close {
@@ -4870,16 +5764,16 @@ onBeforeUnmount(() => {
   height: 34px;
   border: none;
   border-radius: 10px;
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.06);
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.55);
+  background: color-mix(in srgb, var(--mg-bg-surface) 70%, var(--mg-bg-page) 30%);
+  color: var(--mg-text-muted);
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .ops-overlay-close:hover {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.12);
-  color: var(--pos-text);
+  background: var(--mg-bg-surface);
+  color: var(--mg-primary);
 }
 
 .ops-overlay-enter-active,
@@ -4909,8 +5803,8 @@ onBeforeUnmount(() => {
   bottom: 1.2rem;
   left: 10.4rem;
   z-index: 200;
-  background: var(--pos-accent);
-  color: #fff;
+  background: var(--mg-primary);
+  color: var(--mg-bg-surface);
   border: none;
   border-radius: 50%;
   width: 2.8rem;
@@ -4920,13 +5814,13 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgb(var(--pos-accent-rgb) / 0.35);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--mg-primary) 35%, transparent);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .cart-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgb(var(--pos-accent-rgb) / 0.45);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mg-primary) 45%, transparent);
 }
 
 .cart-fab.has-items {
@@ -4940,8 +5834,8 @@ onBeforeUnmount(() => {
   min-width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--pos-danger);
-  color: #fff;
+  background: var(--mg-danger);
+  color: var(--mg-bg-surface);
   font-size: 0.62rem;
   font-weight: 800;
   display: flex;
@@ -4973,7 +5867,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   width: min(420px, 90vw);
   z-index: 251;
-  background: var(--pos-white, #fff);
+  background: var(--mg-bg-surface, var(--mg-bg-surface));
   box-shadow: 4px 0 24px rgb(0 0 0 / 0.15);
   display: flex;
   flex-direction: column;
@@ -5021,7 +5915,7 @@ onBeforeUnmount(() => {
 }
 
 .kbd-map-modal {
-  background: var(--pos-white);
+  background: var(--mg-bg-surface);
   border-radius: 18px;
   padding: 1.4rem;
   min-width: 340px;
@@ -5040,7 +5934,7 @@ onBeforeUnmount(() => {
 .kbd-map-head h3 {
   margin: 0;
   font-size: 1rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .kbd-map-close {
@@ -5048,7 +5942,7 @@ onBeforeUnmount(() => {
   border: none;
   font-size: 1.4rem;
   cursor: pointer;
-  color: var(--pos-text);
+  color: var(--mg-text-main);
   line-height: 1;
   padding: 0 0.3rem;
 }
@@ -5061,8 +5955,8 @@ onBeforeUnmount(() => {
 
 .kbd-map-table td {
   padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid var(--pos-border);
-  color: var(--pos-text);
+  border-bottom: 1px solid var(--mg-border);
+  color: var(--mg-text-main);
 }
 
 .kbd-map-table td:first-child {
@@ -5075,18 +5969,18 @@ onBeforeUnmount(() => {
 }
 
 kbd {
-  background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.08);
-  border: 1px solid var(--pos-border);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border);
   border-radius: 5px;
   padding: 0.1rem 0.45rem;
   font-family: monospace;
   font-size: 0.82rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .kbd-map-note {
   font-size: 0.74rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.5);
+  color: var(--mg-text-muted);
   margin: 0;
   text-align: center;
 }
@@ -5097,10 +5991,10 @@ kbd {
 }
 
 .tbl-btn {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 9px;
-  background: var(--pos-white);
-  color: var(--pos-primary);
+  background: var(--mg-bg-surface);
+  color: var(--mg-primary);
   padding: 0.3rem 0.55rem;
   font-size: 0.76rem;
   cursor: pointer;
@@ -5109,20 +6003,20 @@ kbd {
 }
 
 .tbl-btn.primary {
-  background: var(--pos-primary);
-  color: var(--pos-white);
-  border-color: var(--pos-primary);
+  background: var(--mg-primary);
+  color: var(--mg-bg-surface);
+  border-color: var(--mg-primary);
 }
 
 .tbl-btn.danger {
-  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.3);
-  color: var(--pos-danger);
+  border-color: rgb(var(--mg-danger-rgb, 171 53 53) / 0.3);
+  color: var(--mg-danger);
 }
 
 .tbl-btn.split {
-  background: rgb(var(--pos-accent-rgb, 255 152 54) / 0.12);
-  border-color: rgb(var(--pos-accent-rgb, 255 152 54) / 0.35);
-  color: var(--pos-accent, #c47c00);
+  background: var(--mg-bg-surface);
+  border-color: var(--mg-border-light);
+  color: var(--mg-primary, var(--mg-primary));
   width: 100%;
 }
 
@@ -5147,30 +6041,30 @@ kbd {
   border-radius: 12px;
   padding: 0.5rem 0.62rem;
   font-size: 0.8rem;
-  background: var(--pos-white);
-  border: 1px solid var(--pos-border);
-  color: var(--pos-text);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border);
+  color: var(--mg-text-main);
 }
 
 .offline-banner {
-  background: var(--pos-accent-soft);
-  border-color: rgb(var(--pos-accent-rgb, 255 152 54) / 0.3);
+  background: var(--mg-primary-soft);
+  border-color: var(--mg-border-light);
 }
 
 .sync-banner {
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
 }
 
 .error {
-  background: rgb(var(--pos-danger-rgb, 171 53 53) / 0.12);
-  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.35);
-  color: var(--pos-danger);
+  background: rgb(var(--mg-danger-rgb, 171 53 53) / 0.12);
+  border-color: rgb(var(--mg-danger-rgb, 171 53 53) / 0.35);
+  color: var(--mg-danger);
 }
 
 .success {
-  background: rgb(var(--pos-success-rgb, 11 125 74) / 0.1);
-  border-color: rgb(var(--pos-success-rgb, 11 125 74) / 0.34);
-  color: var(--pos-success);
+  background: rgb(var(--mg-success-rgb, 11 125 74) / 0.1);
+  border-color: rgb(var(--mg-success-rgb, 11 125 74) / 0.34);
+  color: var(--mg-success);
 }
 
 .print-editor-backdrop {
@@ -5186,9 +6080,9 @@ kbd {
 .print-editor-sheet {
   width: min(1100px, 100%);
   max-height: calc(100vh - 2rem);
-  background: #fff;
+  background: var(--mg-bg-surface);
   border-radius: 18px;
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -5200,19 +6094,19 @@ kbd {
   align-items: center;
   gap: 0.8rem;
   padding: 0.8rem 0.9rem;
-  border-bottom: 1px solid var(--pos-border);
+  border-bottom: 1px solid var(--mg-border);
 }
 
 .print-editor-head h3 {
   margin: 0;
   font-size: 0.95rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .print-editor-head p {
   margin: 0.2rem 0 0;
   font-size: 0.76rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.76);
+  color: var(--mg-text-muted);
 }
 
 .print-editor-actions {
@@ -5231,7 +6125,7 @@ kbd {
   display: grid;
   gap: 0.2rem;
   font-size: 0.72rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.86);
+  color: var(--mg-text-muted);
 }
 
 .print-editor-grid {
@@ -5243,9 +6137,9 @@ kbd {
 }
 
 .print-editor-cart {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
-  background: var(--pos-soft);
+  background: var(--mg-bg-page);
   padding: 0.6rem;
   display: grid;
   gap: 0.5rem;
@@ -5255,7 +6149,7 @@ kbd {
 .print-editor-cart h4 {
   margin: 0;
   font-size: 0.82rem;
-  color: var(--pos-primary);
+  color: var(--mg-primary);
 }
 
 .print-editor-list {
@@ -5266,10 +6160,10 @@ kbd {
 }
 
 .print-editor-row {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 12px;
   padding: 0.5rem;
-  background: #fff;
+  background: var(--mg-bg-surface);
   display: grid;
   gap: 0.4rem;
 }
@@ -5285,7 +6179,7 @@ kbd {
 
 .print-editor-row-main small {
   font-size: 0.73rem;
-  color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.78);
+  color: var(--mg-text-muted);
 }
 
 .print-editor-row-actions {
@@ -5295,10 +6189,10 @@ kbd {
 }
 
 .print-editor-row-actions button {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 8px;
-  background: #fff;
-  color: var(--pos-primary);
+  background: var(--mg-bg-surface);
+  color: var(--mg-primary);
   min-width: 28px;
   height: 28px;
   padding: 0 0.45rem;
@@ -5317,16 +6211,16 @@ kbd {
 }
 
 .print-editor-row-actions .danger-btn {
-  color: var(--pos-danger);
-  border-color: rgb(var(--pos-danger-rgb, 171 53 53) / 0.25);
+  color: var(--mg-danger);
+  border-color: rgb(var(--mg-danger-rgb, 171 53 53) / 0.25);
 }
 
 .print-editor-preview {
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   padding: 0.7rem;
   overflow: auto;
-  background: #f7faf9;
+  background: var(--mg-bg-page);
 }
 
 .receipt-preview-host {
@@ -5357,7 +6251,7 @@ kbd {
 
 @media (max-width: 720px) {
   .pos-fullpage {
-    padding: 0.3rem;
+    padding: 0.45rem;
     height: auto;
     overflow: visible;
     min-height: 100vh;
@@ -5391,8 +6285,8 @@ kbd {
   }
 
   .cart-fab {
-    left: 8.8rem;
-    bottom: 0.72rem;
+    left: 1rem;
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
 
   .open-invoices-head,
@@ -5437,16 +6331,18 @@ kbd {
 
 /* Ticket Tabs Bar */
 .ticket-tabs-bar {
-  background: var(--pos-white);
-  border-bottom: 2px solid var(--pos-border);
-  padding: 0.45rem 1rem 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%) 100%);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  border-radius: 24px;
+  padding: 0.7rem 0.85rem;
   direction: rtl;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.7rem;
+  gap: 0.85rem;
   min-width: 0;
   flex-wrap: wrap;
+  box-shadow: 0 20px 38px rgb(52 38 31 / 0.08);
 }
 
 /* Recent orders panel */
@@ -5470,9 +6366,9 @@ kbd {
   font-size: 0.78rem;
   padding: 0.3rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid var(--pos-border);
-  background: var(--pos-surface, #1e2433);
-  color: var(--pos-text, #e0e6f0);
+  border: 1px solid var(--mg-border);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
 }
 
 /* Interactive history card */
@@ -5482,8 +6378,8 @@ kbd {
 }
 
 .history-card-interactive:hover {
-  background: var(--pos-surface, #1e2433);
-  box-shadow: 0 2px 12px 0 rgb(0 0 0 / 0.18);
+  background: var(--mg-bg-surface);
+  box-shadow: 0 16px 30px rgb(52 38 31 / 0.1);
 }
 
 .history-card-footer {
@@ -5500,27 +6396,27 @@ kbd {
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 600;
-  background: var(--pos-border);
-  color: var(--pos-text);
+  background: var(--mg-border);
+  color: var(--mg-text-main);
 }
 
 .order-status-badge.status-paid,
 .order-status-badge.status-completed,
 .order-status-badge.status-delivered {
-  background: #22c55e22;
-  color: #22c55e;
+  background: var(--mg-success-bg);
+  color: var(--mg-success);
 }
 
 .order-status-badge.status-pending,
 .order-status-badge.status-new {
-  background: #f59e0b22;
-  color: #f59e0b;
+  background: var(--mg-bg-soft);
+  color: var(--mg-primary);
 }
 
 .order-status-badge.status-cancelled,
 .order-status-badge.status-canceled {
-  background: #ef444422;
-  color: #ef4444;
+  background: var(--mg-danger-bg);
+  color: var(--mg-danger);
 }
 
 /* Modals */
@@ -5536,7 +6432,7 @@ kbd {
 }
 
 .pos-modal {
-  background: var(--pos-white, #fff);
+  background: var(--mg-bg-surface, var(--mg-bg-surface));
   border-radius: 18px;
   width: 100%;
   max-width: 520px;
@@ -5553,7 +6449,7 @@ kbd {
   align-items: flex-start;
   justify-content: space-between;
   padding: 1rem 1.2rem 0.75rem;
-  border-bottom: 1px solid var(--pos-border);
+  border-bottom: 1px solid var(--mg-border);
   gap: 0.5rem;
 }
 
@@ -5564,7 +6460,7 @@ kbd {
 }
 
 .pos-modal-head small {
-  color: var(--pos-muted, #7b8ca6);
+  color: var(--mg-text-muted, var(--mg-text-muted));
   font-size: 0.8rem;
 }
 
@@ -5574,16 +6470,16 @@ kbd {
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--pos-muted, #7b8ca6);
+  color: var(--mg-text-muted, var(--mg-text-muted));
   padding: 0 0.25rem;
   margin-top: -0.2rem;
 }
 
 .pos-modal-close:hover {
-  color: var(--pos-text, #1a2233);
+  color: var(--mg-text-main, var(--mg-text-main));
 }
 
-.pos-modal-loading {
+.pos-modal-بارگذاری {
   padding: 1.5rem 1.2rem;
   text-align: center;
 }
@@ -5628,7 +6524,7 @@ kbd {
   justify-content: space-between;
   font-size: 0.83rem;
   padding: 0.3rem 0.6rem;
-  background: var(--pos-surface, #f4f6fa);
+  background: var(--mg-bg-surface));
   border-radius: 8px;
   gap: 0.5rem;
 }
@@ -5643,7 +6539,7 @@ kbd {
 .order-detail-edit-form h4 {
   margin: 0 0 0.25rem;
   font-size: 0.9rem;
-  color: var(--pos-muted, #7b8ca6);
+  color: var(--mg-text-muted, var(--mg-text-muted));
 }
 
 .order-detail-edit-form label {
@@ -5657,7 +6553,7 @@ kbd {
   font-size: 0.85rem;
   padding: 0.4rem 0.65rem;
   border-radius: 8px;
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
 }
 
 .return-modal-body {
@@ -5678,75 +6574,90 @@ kbd {
   font-size: 0.85rem;
   padding: 0.4rem 0.65rem;
   border-radius: 8px;
-  border: 1px solid var(--pos-border);
+  border: 1px solid var(--mg-border);
 }
 
 .tbl-btn.danger {
-  background: #ef4444;
-  color: #fff;
-  border-color: #ef4444;
+  background: var(--mg-danger);
+  color: var(--mg-bg-surface);
+  border-color: var(--mg-danger);
 }
 
 .tbl-btn.danger:hover {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: var(--mg-danger);
+  border-color: var(--mg-danger);
 }
 
-.order-settle-section {
+.order-تسویه-section {
   margin-top: 16px;
   padding: 16px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--mg-success-bg);
+  border: 1px solid var(--mg-success-bg);
   border-radius: 8px;
 }
-.order-settle-section h4 {
+.order-تسویه-section h4 {
   margin: 0 0 12px;
   font-size: 15px;
-  color: #166534;
+  color: var(--mg-success);
 }
-.settle-row {
+.تسویه-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
 }
-.settle-label {
+.تسویه-label {
   font-size: 13px;
-  color: #374151;
+  color: var(--mg-text-main);
   min-width: 100px;
 }
-.settle-select, .settle-input {
+.تسویه-select, .تسویه-input {
   flex: 1;
   max-width: 250px;
 }
-.settle-amount {
+.تسویه-amount {
   font-size: 16px;
   font-weight: 700;
-  color: #166534;
+  color: var(--mg-success);
 }
-.settle-actions {
+.تسویه-actions {
   margin-top: 12px;
   display: flex;
   gap: 8px;
 }
 .settle-btn:disabled {
-  background: #86efac;
+  background: var(--mg-success-bg);
   cursor: not-allowed;
 }
 .tbl-btn.success {
-  background: #16a34a;
-  color: white;
-  border: 1px solid #15803d;
+  background: var(--mg-success);
+  color: var(--mg-bg-surface);
+  border: 1px solid var(--mg-success);
 }
 .tbl-btn.success:hover:not(:disabled) {
-  background: #15803d;
+  background: var(--mg-success);
+}
+.deliver-acc-btn {
+  background: var(--mg-primary);
+  color: var(--mg-bg-surface);
+  border: 1px solid var(--mg-primary);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.deliver-acc-btn:hover:not(:disabled) {
+  background: var(--mg-primary);
 }
 .settle-order-btn {
   margin-right: auto;
   padding: 4px 10px;
-  background: #dcfce7;
-  color: #166534;
-  border: 1px solid #86efac;
+  background: var(--mg-success-bg);
+  color: var(--mg-success);
+  border: 1px solid var(--mg-success-bg);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
@@ -5754,7 +6665,7 @@ kbd {
   white-space: nowrap;
 }
 .settle-order-btn:hover {
-  background: #bbf7d0;
+  background: var(--mg-success-bg);
 }
 
 
@@ -5765,19 +6676,20 @@ kbd {
   padding: 8px;
 }
 .accordion-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mg-border-light);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--mg-bg-surface);
   transition: box-shadow 0.15s;
 }
 .accordion-card.expanded {
-  border-color: #4f46e5;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+  border-color: var(--mg-primary);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--mg-primary) 16%, transparent);
 }
 .accordion-header {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   gap: 6px;
   padding: 10px 12px;
   cursor: pointer;
@@ -5786,30 +6698,30 @@ kbd {
 }
 .accordion-header strong {
   font-size: 13px;
-  color: #111827;
+  color: var(--mg-text-main);
 }
 .accordion-customer {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--mg-text-muted);
 }
 .accordion-amount {
   font-size: 12px;
   font-weight: 700;
-  color: #374151;
+  color: var(--mg-text-main);
   direction: ltr;
   text-align: left;
 }
 .accordion-time {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--mg-text-muted);
 }
 .accordion-chevron {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--mg-text-muted);
   text-align: center;
 }
 .accordion-body {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--mg-border-light);
   padding: 8px 12px;
 }
 .accordion-items {
@@ -5826,16 +6738,16 @@ kbd {
 }
 .accordion-item-title {
   flex: 1;
-  color: #374151;
+  color: var(--mg-text-main);
 }
 .accordion-item-qty {
-  color: #6b7280;
+  color: var(--mg-text-muted);
   min-width: 30px;
   text-align: center;
 }
 .accordion-item-total {
   font-weight: 600;
-  color: #111827;
+  color: var(--mg-text-main);
   direction: ltr;
 }
 .accordion-footer {
@@ -5843,21 +6755,21 @@ kbd {
   gap: 6px;
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--mg-bg-page);
 }
-.accordion-loading {
+.accordion-بارگذاری {
   padding: 8px 12px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--mg-text-muted);
 }
 
 
 .deliver-order-btn {
   margin-right: auto;
   padding: 4px 10px;
-  background: #dbeafe;
-  color: #1e40af;
-  border: 1px solid #93c5fd;
+  background: var(--mg-bg-soft);
+  color: var(--mg-primary);
+  border: 1px solid var(--mg-bg-soft);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
@@ -5865,7 +6777,252 @@ kbd {
   white-space: nowrap;
 }
 .deliver-order-btn:hover {
-  background: #bfdbfe;
+  background: var(--mg-bg-soft);
+}
+
+
+/* ─── Redesigned Order Detail Modal ─── */
+.od-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgb(25 20 14 / 0.42); display: flex;
+  align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.od-modal {
+  background: var(--mg-bg-surface, var(--mg-bg-surface)); color: var(--mg-text-main, var(--mg-text-main));
+  border-radius: 16px; width: 100%; max-width: 480px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 22px 48px rgb(52 38 31 / 0.16);
+  direction: rtl;
+}
+.od-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 1rem 1.25rem 0.5rem; gap: 1rem;
+}
+.od-header-info { display: flex; flex-direction: column; gap: 0.25rem; }
+.od-header-info h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+.od-badge {
+  display: inline-flex; align-items: center;
+  font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.5rem;
+  border-radius: 20px; width: fit-content;
+}
+.od-badge-pending { background: var(--mg-bg-soft); color: var(--mg-primary); }
+.od-badge-confirmed { background: var(--mg-bg-soft); color: var(--mg-primary); }
+.od-badge-preparing { background: var(--mg-bg-soft); color: var(--mg-primary); }
+.od-badge-ready { background: var(--mg-success-bg); color: var(--mg-success); }
+.od-badge-paid { background: var(--mg-success-bg); color: var(--mg-success); }
+.od-badge-delivered { background: var(--mg-success-bg); color: var(--mg-success); }
+.od-badge-cancelled { background: var(--mg-danger-bg); color: var(--mg-danger); }
+.od-time { font-size: 0.72rem; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--mg-text-muted, var(--mg-text-muted)); padding: 0.25rem; line-height: 1; }
+.od-بارگذاری, .od-error { padding: 1.25rem; text-align: center; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-error { color: var(--mg-danger); }
+
+.od-summary { margin: 0.5rem 1.25rem; }
+.od-summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+.od-summary-item { display: flex; flex-direction: column; gap: 0.15rem; }
+.od-label { font-size: 0.65rem; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-value { font-size: 0.82rem; font-weight: 600; color: var(--mg-text-main, var(--mg-text-main)); }
+.od-value.muted { color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-price { direction: ltr; text-align: left; }
+
+.od-items { margin: 0.75rem 1.25rem; }
+.od-items-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.35rem 0; border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 82%, transparent);
+}
+.od-item:last-child { border-bottom: none; }
+.od-item-info { display: flex; align-items: center; gap: 0.4rem; }
+.od-item-name { font-size: 0.82rem; }
+.od-item-qty { font-size: 0.68rem; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-item-price { font-size: 0.78rem; font-weight: 600; direction: ltr; }
+
+.od-note { margin: 0 1.25rem 0.75rem; padding: 0.5rem; background: color-mix(in srgb, var(--mg-bg-page) 72%, var(--mg-bg-surface) 28%); border-radius: 8px; }
+.od-note p { margin: 0.2rem 0 0; font-size: 0.78rem; }
+
+.od-actions { padding: 0.75rem 1.25rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.od-settle { background: var(--mg-success-bg); border: 1px solid var(--mg-success-bg); border-radius: 10px; padding: 0.75rem; }
+.od-settle-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.od-select, .od-input, .od-textarea {
+  background: var(--mg-bg-surface, var(--mg-bg-surface)); border: 1px solid var(--mg-text-muted);
+  border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.78rem;
+  font-family: inherit; color: var(--mg-text-main, var(--mg-text-main)); outline: none;
+  flex: 1; min-width: 100px;
+}
+.od-input::placeholder, .od-textarea::placeholder { color: var(--mg-text-muted); }
+.od-textarea { resize: vertical; }
+.od-err { font-size: 0.72rem; color: var(--mg-danger); margin: 0.3rem 0; }
+.od-btn {
+  background: var(--mg-bg-page, var(--mg-bg-page)); border: 1px solid var(--mg-text-muted);
+  color: var(--mg-text-main, var(--mg-text-main)); border-radius: 8px; padding: 0.5rem 1rem;
+  font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.od-btn-primary { background: var(--mg-success); color: var(--mg-bg-surface); border-color: var(--mg-success); }
+.od-btn-primary:hover { background: var(--mg-success); }
+.od-btn-primary:disabled { background: var(--mg-success-bg); cursor: not-allowed; }
+.od-btn-danger { background: var(--mg-danger-bg); color: var(--mg-danger); border-color: var(--mg-danger-bg); }
+.od-btn-danger:hover { background: var(--mg-danger-bg); }
+.od-edit-toggle {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.4rem 0.5rem; cursor: pointer; border-radius: 6px;
+  font-size: 0.78rem; color: var(--mg-text-muted, var(--mg-text-muted));
+}
+.od-edit-toggle:hover { background: color-mix(in srgb, var(--mg-bg-page) 72%, var(--mg-bg-surface) 28%); }
+.od-chevron { transition: transform 0.2s; font-size: 0.6rem; }
+.od-chevron.open { transform: rotate(180deg); }
+.od-edit { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem; background: color-mix(in srgb, var(--mg-bg-page) 64%, var(--mg-bg-surface) 36%); border-radius: 8px; }
+.od-bottom { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.25rem; }
+
+@media (max-width: 500px) {
+  .od-summary-row { grid-template-columns: 1fr 1fr; }
+  .od-modal { max-width: 100%; margin: 0.5rem; border-radius: 12px; }
+}
+
+
+.print-icon-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.85rem; padding: 2px 6px; border-radius: 4px;
+  opacity: 0.5; transition: all 0.15s; line-height: 1;
+  margin-right: auto;
+}
+.print-icon-btn:hover { opacity: 1; background: color-mix(in srgb, var(--mg-bg-page) 72%, var(--mg-bg-surface) 28%); }
+
+
+/* ─── Modern Table Cards ─── */
+.tables-stats { display: flex; gap: 0.5rem; margin-right: auto; font-size: 0.75rem; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.ts-item { display: flex; align-items: center; gap: 0.3rem; }
+.ts-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ts-dot.free { background: var(--mg-success); }
+.ts-dot.occ { background: var(--mg-primary); }
+
+.table-modern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
+.table-modern-card {
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+  border-radius: 16px; padding: 0.6rem; cursor: pointer;
+  transition: all 0.15s; display: flex; flex-direction: column; gap: 0.25rem;
+  box-shadow: 0 12px 24px rgb(52 38 31 / 0.05);
+}
+.table-modern-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgb(52 38 31 / 0.1); }
+.table-modern-card.active { border-color: var(--mg-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 18%, transparent), 0 16px 32px color-mix(in srgb, var(--mg-primary) 12%, transparent); }
+.tm-empty { border-color: color-mix(in srgb, var(--mg-success) 26%, var(--mg-border-light) 74%); }
+.tm-occupied { border-color: color-mix(in srgb, var(--mg-primary) 34%, var(--mg-border-light) 66%); background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface) 92%); }
+.tm-occupied .tm-name { color: var(--mg-primary); }
+:global(.dark) .tm-occupied { background: color-mix(in srgb, var(--mg-bg-surface) 84%, var(--mg-primary) 16%); }
+.tm-top { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+.tm-name { font-size: 0.85rem; font-weight: 700; color: var(--mg-text-main); }
+.tm-status-badge { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+.tms-empty { background: var(--mg-success-bg); color: var(--mg-success); }
+.tms-occupied { background: var(--mg-bg-soft); color: var(--mg-primary); }
+.tm-body { display: flex; flex-direction: column; gap: 0.15rem; }
+.tm-meta { display: flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; color: var(--mg-text-muted, var(--mg-text-muted)); direction: ltr; }
+
+.table-detail-modern { padding: 0.65rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.tdm-head { display: flex; flex-direction: column; gap: 0.35rem; }
+.tdm-brand { display: flex; align-items: center; justify-content: space-between; }
+.tdm-brand strong { font-size: 1rem; color: var(--mg-text-main); }
+.tdm-total { font-size: 1.1rem; font-weight: 800; color: var(--mg-primary); direction: ltr; }
+.tdm-meta { display: flex; gap: 0.75rem; font-size: 0.75rem; color: var(--mg-text-muted, var(--mg-text-muted)); }
+.tdm-meta span { display: flex; align-items: center; gap: 0.25rem; }
+.tdm-actions { display: flex; gap: 0.4rem; }
+.tdm-adv-actions { display: flex; flex-direction: column; gap: 0.4rem; }
+.tdm-row { display: flex; gap: 0.4rem; }
+.tdm-row :deep(.search-dropdown) { flex: 1; min-width: 0; }
+.tdm-btn {
+  flex: 1; padding: 0.4rem 0.65rem; border: 1px solid var(--mg-border);
+  border-radius: 6px; background: var(--mg-bg-surface); color: var(--mg-text-main);
+  font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: all 0.15s; white-space: nowrap;
+}
+.tdm-btn:hover { background: var(--mg-bg-page); }
+.tdm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tdm-primary { background: var(--mg-primary); color: var(--mg-bg-surface); border-color: var(--mg-primary); }
+.tdm-danger { color: var(--mg-danger); border-color: var(--mg-danger-bg); background: var(--mg-danger-bg); }
+.tdm-split { background: var(--mg-text-main); color: var(--mg-bg-surface); border-color: var(--mg-text-main); }
+
+@media (max-width: 768px) {
+  .table-modern-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+}
+
+
+.tdm-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--mg-border-light);
+  padding-top: 0.75rem;
+}
+
+.tdm-section-title {
+  font-size: 0.75rem;
+  color: var(--mg-text-muted);
+}
+
+.tdm-order-card {
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border-light);
+  border-radius: 8px;
+  padding: 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tdm-order-card:hover {
+  background: var(--mg-bg-page);
+  border-color: var(--mg-primary);
+}
+
+.tdm-order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--mg-text-main);
+}
+
+.tdm-order-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.tdm-order-items-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  border-top: 1px dashed var(--mg-border-light);
+  padding-top: 0.4rem;
+  margin-top: 0.1rem;
+}
+
+.tdm-order-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tdm-item-title {
+  color: var(--mg-text-main);
+}
+
+.tdm-item-price {
+  font-size: 0.7rem;
+}
+
+
+/* Fix overlapping of mobile header and dfm components on the side drawer */
+.cart-drawer-backdrop {
+  z-index: 10002 !important;
+}
+.cart-drawer {
+  z-index: 10003 !important;
 }
 
 </style>

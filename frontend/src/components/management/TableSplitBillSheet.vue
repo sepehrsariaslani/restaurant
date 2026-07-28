@@ -147,7 +147,7 @@ function toFaDigits(val) {
   return String(val ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])
 }
 
-const PERSON_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#db2777', '#0891b2']
+const PERSON_COLORS = ['var(--mg-primary)', 'var(--mg-success)', 'var(--mg-danger)', '#d97706', '#7c3aed', '#db2777', '#0891b2']
 
 let personCounter = 0
 
@@ -306,7 +306,7 @@ watch(
   gap: 1rem;
   padding: 1rem 1.2rem 0.9rem;
   border-bottom: 1px solid #e5eaef;
-  background: #f8fafc;
+  background: var(--mg-bg-page);
 }
 
 .split-head-info h3 {
@@ -335,7 +335,7 @@ watch(
 }
 
 .split-action-btn {
-  background: #015a72;
+  background: var(--mg-primary);
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -369,8 +369,8 @@ watch(
 
 .split-close-btn:hover {
   background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  border-color: var(--mg-danger);
+  color: var(--mg-danger);
 }
 
 .split-body {
@@ -412,8 +412,8 @@ watch(
 
 .split-add-person-btn {
   background: transparent;
-  border: 1px dashed #015a72;
-  color: #015a72;
+  border: 1px dashed var(--mg-primary);
+  color: var(--mg-primary);
   border-radius: 8px;
   padding: 0.25rem 0.6rem;
   font-size: 0.75rem;
@@ -431,7 +431,7 @@ watch(
 }
 
 .split-item-row {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--mg-border-light);
   border-radius: 12px;
   padding: 0.55rem 0.7rem;
   background: #fff;
@@ -474,10 +474,10 @@ watch(
 }
 
 .split-person-tag {
-  border: 1.5px solid var(--tag-color, #015a72);
+  border: 1.5px solid var(--tag-color, var(--mg-primary));
   border-radius: 8px;
   background: transparent;
-  color: var(--tag-color, #015a72);
+  color: var(--tag-color, var(--mg-primary));
   padding: 0.2rem 0.55rem;
   font-size: 0.74rem;
   cursor: pointer;
@@ -486,7 +486,7 @@ watch(
 }
 
 .split-person-tag.active {
-  background: var(--tag-color, #015a72);
+  background: var(--tag-color, var(--mg-primary));
   color: #fff;
 }
 
@@ -498,7 +498,7 @@ watch(
 }
 
 .split-person-card {
-  border: 1.5px solid rgb(from var(--card-color, #015a72) r g b / 0.25);
+  border: 1.5px solid rgb(from var(--card-color, var(--mg-primary)) r g b / 0.25);
   border-radius: 14px;
   background: #fff;
   overflow: hidden;
@@ -510,8 +510,8 @@ watch(
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.7rem;
-  background: rgb(from var(--card-color, #015a72) r g b / 0.06);
-  border-bottom: 1px solid rgb(from var(--card-color, #015a72) r g b / 0.12);
+  background: rgb(from var(--card-color, var(--mg-primary)) r g b / 0.06);
+  border-bottom: 1px solid rgb(from var(--card-color, var(--mg-primary)) r g b / 0.12);
 }
 
 .split-person-label-wrap {
@@ -559,7 +559,7 @@ watch(
 }
 
 .split-remove-person:hover {
-  color: #dc2626;
+  color: var(--mg-danger);
 }
 
 .split-person-items {
@@ -590,15 +590,15 @@ watch(
 
 .split-person-footer {
   padding: 0.4rem 0.7rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--mg-bg-page);
   display: flex;
   justify-content: flex-end;
 }
 
 .split-print-btn {
   background: transparent;
-  border: 1px solid #015a72;
-  color: #015a72;
+  border: 1px solid var(--mg-primary);
+  color: var(--mg-primary);
   border-radius: 8px;
   padding: 0.28rem 0.7rem;
   font-size: 0.76rem;
@@ -607,7 +607,7 @@ watch(
 }
 
 .split-print-btn:hover {
-  background: #015a72;
+  background: var(--mg-primary);
   color: #fff;
 }
 

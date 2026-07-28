@@ -2,7 +2,7 @@
   <div class="login-page" dir="rtl">
     <div class="login-hero">
       <div class="hero-overlay"></div>
-      <img class="hero-bg" src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80" alt="" />
+      <img class="hero-bg" src='/NooshYar%20Image.png' alt="" />
       <div class="hero-logo">
         <div class="logo-circle">🍽️</div>
         <h1 class="brand-name">{{ brandName }}</h1>

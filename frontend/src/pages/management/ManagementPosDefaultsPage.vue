@@ -35,19 +35,25 @@
           <h3>{{ mode.label }}</h3>
           <label>
             نام مشتری
-            <input
+            <select
               class="input"
-              v-model="localConfig.default_customers[mode.value].name"
-              :placeholder="`مشتری ${mode.label}`"
-            />
+              :value="selectedCustomerKey(mode.value)"
+              @change="applyCustomerSelection(mode.value, $event.target.value)"
+            >
+              <option value="">انتخاب از دیتابیس مشتری‌ها</option>
+              <option v-for="customer in customerOptions" :key="customer.key" :value="customer.key">
+                {{ customer.label }}
+              </option>
+            </select>
           </label>
           <label>
             شماره موبایل
             <input
               class="input"
               v-model="localConfig.default_customers[mode.value].mobile"
-              placeholder="09120000000"
+              placeholder=""
               type="tel"
+              readonly
             />
           </label>
         </div>
@@ -85,34 +91,22 @@
       </div>
     </ManagementSurfaceCard>
 
-    <!-- Delivery Places -->
-    <ManagementSurfaceCard title="جایگاه‌های بیرون بر (پیک)" subtitle="لیست جایگاه‌هایی که در حالت پیک نمایش داده می‌شود">
+    <!-- Delivery Courier -->
+    <ManagementSurfaceCard title="پیک پیش‌فرض" subtitle="پیک فعال را از ناوگان داخلی انتخاب کنید">
       <div class="places-editor">
-        <p class="muted" v-if="!localConfig.delivery_places.length">هیچ جایگاهی تعریف نشده است.</p>
-        <div v-for="(place, idx) in localConfig.delivery_places" :key="'delivery-' + idx" class="place-row">
-          <input
-            class="input"
-            v-model="localConfig.delivery_places[idx]"
-            :placeholder="`جایگاه ${idx + 1}`"
-          />
-          <button
-            type="button"
-            class="ghost-btn danger"
-            @click="removeDeliveryPlace(idx)"
-            title="حذف"
-          >×</button>
-        </div>
-        <button type="button" class="secondary-btn" @click="addDeliveryPlace">+ افزودن جایگاه</button>
-
-        <div class="default-place-select" v-if="localConfig.delivery_places.length">
-          <label>
-            جایگاه پیش‌فرض:
-            <select class="input" v-model="localConfig.default_delivery_place">
-              <option v-for="place in localConfig.delivery_places" :key="place" :value="place">{{ place }}</option>
-            </select>
-          </label>
-          <p class="muted hint">اگر فقط یک جایگاه داشته باشید، انتخابگر نمایش داده نمی‌شود.</p>
-        </div>
+        <label>
+          پیک پیش‌فرض
+          <select class="input" v-model="localConfig.default_delivery_courier">
+            <option value="">انتخاب پیک</option>
+            <option v-for="courier in courierOptions" :key="courier.name" :value="courier.label">
+              {{ courier.label }}{{ courier.mobile ? ` - ${courier.mobile}` : '' }}
+            </option>
+          </select>
+        </label>
+        <p class="muted hint" v-if="localConfig.default_delivery_courier">
+          در POS، این پیک به‌صورت پیش‌فرض برای سفارش‌های بیرون‌بر (پیک) پیشنهاد می‌شود.
+        </p>
+        <a class="secondary-btn manage-link" href="/management/couriers">مدیریت پیک‌ها و ناوگان</a>
       </div>
     </ManagementSurfaceCard>
   </ManagementPageScaffold>
@@ -122,12 +116,19 @@
 import { reactive, ref, onMounted } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
-import { getManagementPOSConfig, setManagementPOSConfig } from '@/utils/api'
+import {
+  getManagementPOSConfig,
+  listManagementCouriers,
+  listManagementCustomers,
+  setManagementPOSConfig,
+} from '@/utils/api'
 
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const successMessage = ref('')
+const customerOptions = ref([])
+const courierOptions = ref([])
 
 const orderModes = [
   { value: 'dine_in', label: 'سالن' },
@@ -138,41 +139,44 @@ const orderModes = [
 const defaultConfig = {
   default_order_mode: 'dine_in',
   default_customers: {
-    dine_in: { name: 'POS Customer', mobile: '09120000000' },
-    takeaway: { name: 'POS Customer', mobile: '09120000000' },
-    delivery: { name: 'POS Customer', mobile: '09120000000' },
+    dine_in: { name: 'POS Customer', mobile: '' },
+    takeaway: { name: 'POS Customer', mobile: '' },
+    delivery: { name: 'POS Customer', mobile: '' },
   },
   takeaway_places: ['بیرون بر حضوری', 'تحویل کنار سالن'],
   default_takeaway_place: 'بیرون بر حضوری',
   delivery_places: ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس'],
   default_delivery_place: 'پیک 1',
+  default_delivery_courier: '',
 }
 
 const localConfig = reactive({
   default_order_mode: 'dine_in',
   default_customers: {
-    dine_in: { name: 'POS Customer', mobile: '09120000000' },
-    takeaway: { name: 'POS Customer', mobile: '09120000000' },
-    delivery: { name: 'POS Customer', mobile: '09120000000' },
+    dine_in: { name: 'POS Customer', mobile: '' },
+    takeaway: { name: 'POS Customer', mobile: '' },
+    delivery: { name: 'POS Customer', mobile: '' },
   },
   takeaway_places: ['بیرون بر حضوری', 'تحویل کنار سالن'],
   default_takeaway_place: 'بیرون بر حضوری',
   delivery_places: ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس'],
   default_delivery_place: 'پیک 1',
+  default_delivery_courier: '',
 })
 
 function applyConfig(cfg) {
   if (!cfg) return
   localConfig.default_order_mode = cfg.default_order_mode || 'dine_in'
   localConfig.default_customers = {
-    dine_in: { name: 'POS Customer', mobile: '09120000000', ...(cfg.default_customers?.dine_in || {}) },
-    takeaway: { name: 'POS Customer', mobile: '09120000000', ...(cfg.default_customers?.takeaway || {}) },
-    delivery: { name: 'POS Customer', mobile: '09120000000', ...(cfg.default_customers?.delivery || {}) },
+    dine_in: { name: 'POS Customer', mobile: '', ...(cfg.default_customers?.dine_in || {}) },
+    takeaway: { name: 'POS Customer', mobile: '', ...(cfg.default_customers?.takeaway || {}) },
+    delivery: { name: 'POS Customer', mobile: '', ...(cfg.default_customers?.delivery || {}) },
   }
   localConfig.takeaway_places = Array.isArray(cfg.takeaway_places) ? [...cfg.takeaway_places] : ['بیرون بر حضوری', 'تحویل کنار سالن']
   localConfig.default_takeaway_place = cfg.default_takeaway_place || (localConfig.takeaway_places[0] || '')
   localConfig.delivery_places = Array.isArray(cfg.delivery_places) ? [...cfg.delivery_places] : ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
   localConfig.default_delivery_place = cfg.default_delivery_place || (localConfig.delivery_places[0] || '')
+  localConfig.default_delivery_courier = cfg.default_delivery_courier || ''
 }
 
 async function loadConfig() {
@@ -189,6 +193,24 @@ async function loadConfig() {
   }
 }
 
+async function loadDirectoryData() {
+  const [customersPayload, couriersPayload] = await Promise.all([
+    listManagementCustomers({}),
+    listManagementCouriers({ active_only: 1 }),
+  ])
+  customerOptions.value = (customersPayload?.customers || []).map((row) => ({
+    key: `${row.customer_name || ''}::${row.mobile || ''}`,
+    name: row.customer_name || '',
+    mobile: row.mobile || '',
+    label: `${row.customer_name || 'بدون نام'}${row.mobile ? ` - ${row.mobile}` : ''}`,
+  }))
+  courierOptions.value = (couriersPayload?.couriers || []).map((row) => ({
+    name: row.name,
+    label: row.courier_name || '',
+    mobile: row.mobile || '',
+  }))
+}
+
 async function saveConfig() {
   error.value = ''
   successMessage.value = ''
@@ -201,6 +223,7 @@ async function saveConfig() {
       default_takeaway_place: localConfig.default_takeaway_place,
       delivery_places: localConfig.delivery_places.filter(Boolean),
       default_delivery_place: localConfig.default_delivery_place,
+      default_delivery_courier: localConfig.default_delivery_courier,
     }
     await setManagementPOSConfig(payload)
     successMessage.value = 'تنظیمات با موفقیت ذخیره شد.'
@@ -233,8 +256,27 @@ function removeDeliveryPlace(idx) {
   }
 }
 
+function selectedCustomerKey(mode) {
+  const row = localConfig.default_customers?.[mode] || {}
+  return `${row.name || ''}::${row.mobile || ''}`
+}
+
+function applyCustomerSelection(mode, key) {
+  const match = customerOptions.value.find((row) => row.key === key)
+  if (!match) {
+    localConfig.default_customers[mode] = { name: '', mobile: '' }
+    return
+  }
+  localConfig.default_customers[mode] = {
+    name: match.name || '',
+    mobile: match.mobile || '',
+  }
+}
+
 onMounted(() => {
-  loadConfig()
+  Promise.all([loadConfig(), loadDirectoryData()]).catch((err) => {
+    error.value = String(err?.message || err || 'خطا در بارگذاری داده‌ها')
+  })
 })
 </script>
 
@@ -246,7 +288,7 @@ onMounted(() => {
 }
 .mode-btn {
   padding: 10px 20px;
-  border: 2px solid #ddd;
+  border: 2px solid var(--mg-border-light);
   border-radius: 8px;
   background: #fff;
   cursor: pointer;
@@ -268,7 +310,7 @@ onMounted(() => {
   gap: 16px;
 }
 .customer-mode-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mg-border-light);
   border-radius: 8px;
   padding: 16px;
 }
@@ -309,7 +351,7 @@ onMounted(() => {
   font-size: 16px;
 }
 .ghost-btn.danger {
-  color: #ef4444;
+  color: var(--mg-danger);
 }
 .ghost-btn.danger:hover {
   background: #fef2f2;
@@ -324,12 +366,12 @@ onMounted(() => {
   font-size: 13px;
 }
 .secondary-btn:hover {
-  background: #f9fafb;
+  background: var(--mg-bg-page);
 }
 .default-place-select {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--mg-border-light);
 }
 .default-place-select label {
   display: flex;
@@ -344,5 +386,9 @@ onMounted(() => {
 .hint {
   font-size: 12px;
   margin-top: 6px;
+}
+.manage-link {
+  display: inline-flex;
+  text-decoration: none;
 }
 </style>

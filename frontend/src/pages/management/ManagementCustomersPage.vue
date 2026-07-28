@@ -714,12 +714,12 @@ onMounted(() => {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 900;
-  color: var(--text);
+  color: var(--mg-text-main);
 }
 
 .hero-title-block p {
   margin: 0;
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.78rem;
 }
 
@@ -732,7 +732,7 @@ onMounted(() => {
 .hero-badge {
   min-width: 5.8rem;
   padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 0.95rem;
   background: color-mix(in srgb, var(--bg-card) 92%, transparent);
   display: grid;
@@ -746,7 +746,7 @@ onMounted(() => {
 }
 
 .hero-badge small {
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.64rem;
 }
 
@@ -761,7 +761,7 @@ onMounted(() => {
   display: grid;
   gap: 0.28rem;
   font-size: 0.74rem;
-  color: var(--muted);
+  color: var(--mg-text-muted);
 }
 
 .field span {
@@ -800,7 +800,7 @@ onMounted(() => {
 .detail-tabs {
   display: inline-flex;
   gap: 0.35rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   padding: 0.25rem;
   background: color-mix(in srgb, var(--bg-card) 90%, transparent);
@@ -812,7 +812,7 @@ onMounted(() => {
   background: transparent;
   border-radius: 10px;
   padding: 0.45rem 0.75rem;
-  color: var(--muted);
+  color: var(--mg-text-muted);
   cursor: pointer;
   font-size: 0.76rem;
   font-weight: 800;
@@ -834,7 +834,7 @@ onMounted(() => {
 }
 
 .summary-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bg-card) 92%, transparent);
   padding: 0.75rem;
@@ -844,7 +844,7 @@ onMounted(() => {
 }
 
 .summary-card small {
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.72rem;
 }
 
@@ -858,7 +858,7 @@ onMounted(() => {
 }
 
 .customer-list-item {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bg-card) 94%, transparent);
   padding: 0.75rem;
@@ -870,7 +870,7 @@ onMounted(() => {
 
 .customer-list-item:hover {
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--module-500) 32%, var(--border));
+  border-color: color-mix(in srgb, var(--module-500) 32%, var(--mg-border));
   box-shadow: var(--shadow);
 }
 
@@ -888,7 +888,7 @@ onMounted(() => {
 
 .customer-list-meta small,
 .grid-meta small {
-  color: var(--muted);
+  color: var(--mg-text-muted);
 }
 
 .customer-chip {
@@ -908,7 +908,7 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.76rem;
 }
 
@@ -919,7 +919,7 @@ onMounted(() => {
 }
 
 .customer-grid-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 16px;
   background: color-mix(in srgb, var(--bg-card) 92%, transparent);
   padding: 0.8rem;
@@ -973,12 +973,12 @@ onMounted(() => {
 
 .grid-metrics p {
   margin: 0;
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.76rem;
 }
 
 .grid-metrics strong {
-  color: var(--text);
+  color: var(--mg-text-main);
 }
 
 .customer-detail-header {
@@ -997,7 +997,7 @@ onMounted(() => {
 }
 
 .detail-ident-text small {
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.72rem;
 }
 
@@ -1010,7 +1010,7 @@ onMounted(() => {
 .detail-chip {
   min-width: 6.3rem;
   padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bg-soft) 70%, transparent);
   display: grid;
@@ -1023,7 +1023,7 @@ onMounted(() => {
 }
 
 .detail-chip small {
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.64rem;
 }
 
@@ -1035,7 +1035,7 @@ onMounted(() => {
 }
 
 .customer-kpis article {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mg-border);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bg-card) 92%, transparent);
   padding: 0.75rem;
@@ -1045,7 +1045,7 @@ onMounted(() => {
 }
 
 .customer-kpis article small {
-  color: var(--muted);
+  color: var(--mg-text-muted);
   font-size: 0.72rem;
 }
 
@@ -1064,7 +1064,7 @@ onMounted(() => {
   padding: 0 1rem 0 0;
   display: grid;
   gap: 0.35rem;
-  color: var(--text);
+  color: var(--mg-text-main);
 }
 
 .empty-state {

@@ -691,7 +691,7 @@ onMounted(async () => {
 }
 
 .summary-strip small {
-  color: var(--muted, #7c6a5d);
+  color: var(--muted, var(--mg-text-muted));
 }
 
 .summary-strip strong {
@@ -736,7 +736,7 @@ onMounted(async () => {
 .group-row__meta small,
 .option-name-cell small,
 .price-cell small {
-  color: var(--muted, #7c6a5d);
+  color: var(--muted, var(--mg-text-muted));
 }
 
 .group-row__chips {
@@ -755,7 +755,7 @@ onMounted(async () => {
 }
 
 .chip.ok {
-  color: #166534;
+  color: var(--mg-success);
   background: rgba(220, 252, 231, 0.8);
 }
 
@@ -765,7 +765,7 @@ onMounted(async () => {
 }
 
 .chip.muted {
-  color: #6b7280;
+  color: var(--mg-text-muted);
   background: rgba(243, 244, 246, 0.92);
 }
 
@@ -782,12 +782,12 @@ onMounted(async () => {
 
 .field span {
   font-size: 0.78rem;
-  color: var(--muted, #7c6a5d);
+  color: var(--muted, var(--mg-text-muted));
 }
 
 .field-note {
   font-size: 0.72rem;
-  color: var(--muted, #7c6a5d);
+  color: var(--muted, var(--mg-text-muted));
   line-height: 1.7;
 }
 
@@ -835,7 +835,7 @@ onMounted(async () => {
 }
 
 .price-editor__meta small {
-  color: var(--muted, #7c6a5d);
+  color: var(--muted, var(--mg-text-muted));
 }
 
 .price-editor__stats {
@@ -854,7 +854,7 @@ onMounted(async () => {
 }
 
 .price-editor__stats small {
-  color: var(--muted, #7c6a5d);
+  color: var(--muted, var(--mg-text-muted));
 }
 
 .editor-actions-top {

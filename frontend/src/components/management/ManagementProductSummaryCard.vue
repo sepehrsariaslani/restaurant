@@ -74,12 +74,12 @@ defineProps({
 }
 
 .product-summary-head strong {
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 1rem;
 }
 
 .product-summary-head small {
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
   line-height: 1.55;
 }
 
@@ -93,7 +93,7 @@ defineProps({
 
 .summary-chip {
   min-height: 4.6rem;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
   background: color-mix(in srgb, var(--bg-card, #fff) 88%, transparent);
   padding: 0.62rem;
@@ -104,13 +104,13 @@ defineProps({
 }
 
 .summary-chip span {
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.72rem;
   font-weight: 800;
 }
 
 .summary-chip strong {
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   font-size: 0.86rem;
   line-height: 1.45;
   overflow-wrap: anywhere;

@@ -1514,6 +1514,11 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 	frappe.db.set_value(
 		"Sales Order", order_name, "restaurant_status", normalized_next, update_modified=False
 	)
+	if normalized_next == "delivered":
+		try:
+			club_apply_fulfillment_effects(order_name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Restaurant delivered club effects failed")
 	return normalized_next
 
 
@@ -2004,6 +2009,7 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 			"warehouse": warehouse,
 			"against_sales_order": so_name,
 			"so_detail": item.name,
+			"allow_zero_valuation_rate": 1,
 		})
 
 	if not dn.items:
@@ -2103,7 +2109,7 @@ def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None
 			ticket_doc.db_set("status", "in_progress", update_modified=False)
 
 		pending_transfer = max(flt(wo_doc.qty) - flt(wo_doc.material_transferred_for_manufacturing), 0)
-		if settings.get("material_transfer") and pending_transfer > 1e-8:
+		if settings.get("material_transfer") and pending_transfer > 1e-8 and not cint(wo_doc.skip_transfer):
 			try:
 				se_name = _create_work_order_stock_entry(
 					wo_doc.name,
@@ -4282,6 +4288,8 @@ def _get_menu_items_public_fallback(
 	filters = {"disabled": 0}
 	if has_restaurant_enabled:
 		filters["restaurant_enabled"] = 1
+	if _has_column("Item", "restaurant_out_of_stock"):
+		filters["restaurant_out_of_stock"] = ["!=", 1]
 	if has_restaurant_branch and branch:
 		filters["restaurant_branch"] = ["in", [branch, ""]]
 	if has_variant_of:
@@ -4387,7 +4395,7 @@ def _get_menu_items_public_fallback(
 				"slug": slug,
 				"title": item_name,
 				"short_desc": short_desc,
-				"base_price": flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0),
+				"base_price": _get_default_item_price_rate(row) if _get_default_item_price_rate(row) is not None else flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0),
 				"image": (row.get("item_image") or row.get("image") or "").strip(),
 				"category": category_name,
 				"category_title": category_title,
@@ -4706,19 +4714,32 @@ def _get_core_item_detail(item_slug, branch=None):
 		"tags": _split_tags(getattr(doc, "restaurant_item_tags", None)),
 	}
 
+	
+	variants_mapping = []
+	if cint(template_doc.get("has_variants")):
+		try:
+			variants_mapping = _management_template_variants_payload(template_doc)
+		except Exception:
+			pass
+			
 	return {
 		"item": item_payload,
 		"ingredients": ingredients,
 		"modifier_groups": modifier_groups,
 		"allergens": _split_tags(doc.restaurant_allergen_tags),
 		"currency": _get_currency(),
+		"variants_mapping": variants_mapping,
 	}
 
 
 def _menu_doc_config(menu_doc):
+	item_price = _get_default_item_price_rate(menu_doc)
+	base_price = (
+		item_price if item_price is not None else (flt(menu_doc.restaurant_base_price) or flt(menu_doc.standard_rate))
+	)
 	return {
 		"title": menu_doc.item_name,
-		"base_price": flt(menu_doc.restaurant_base_price or menu_doc.standard_rate),
+		"base_price": base_price,
 		"slug": menu_doc.restaurant_slug,
 		"short_desc": menu_doc.restaurant_short_desc,
 		"long_desc": menu_doc.restaurant_long_desc or menu_doc.description,
@@ -4732,15 +4753,6 @@ def _core_order_status(sales_order_doc):
 		return explicit
 	return CORE_ORDER_STATUS_MAP.get((sales_order_doc.status or "").strip().lower(), "new")
 
-
-def _generate_order_code():
-	while True:
-		code = "R" + "".join(random.choices(string.digits, k=7))
-		in_sales = False
-		if _has_column("Sales Order", "restaurant_order_code"):
-			in_sales = frappe.db.exists("Sales Order", {"restaurant_order_code": code})
-		if not in_sales:
-			return code
 
 
 def _default_company():
@@ -4931,13 +4943,19 @@ def _get_auto_order_service_items(branches=None):
 
 
 def _ensure_customer(customer_name, mobile):
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	existing = _find_customer_by_mobile(mobile)
 	if existing:
-		if _has_column("Customer", "mobile_no"):
+		if normalized_mobile and _has_column("Customer", "mobile_no"):
 			current_mobile = frappe.db.get_value("Customer", existing, "mobile_no")
 			if not current_mobile:
-				frappe.db.set_value("Customer", existing, "mobile_no", mobile, update_modified=False)
+				frappe.db.set_value("Customer", existing, "mobile_no", normalized_mobile, update_modified=False)
 		return existing
+
+	if not normalized_mobile:
+		existing_by_name = frappe.db.get_value("Customer", {"customer_name": customer_name, "disabled": 0}, "name")
+		if existing_by_name:
+			return existing_by_name
 
 	customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or frappe.db.get_value(
 		"Customer Group", {}, "name"
@@ -4958,7 +4976,7 @@ def _ensure_customer(customer_name, mobile):
 			"customer_type": "Individual",
 			"customer_group": customer_group,
 			"territory": territory,
-			"mobile_no": mobile,
+			"mobile_no": normalized_mobile,
 		}
 	)
 	doc.insert(ignore_permissions=True)
@@ -4982,6 +5000,11 @@ def _normalize_order_context_payload(order_context=None, order_type="takeaway"):
 	ctx["customer_note"] = (ctx.get("customer_note") or "").strip()
 	ctx["kitchen_note"] = (ctx.get("kitchen_note") or "").strip()
 	ctx["courier_note"] = (ctx.get("courier_note") or "").strip()
+	ctx["waiter"] = (ctx.get("waiter") or "").strip()
+	ctx["waiter_name"] = (ctx.get("waiter_name") or "").strip()
+	ctx["org_member"] = (ctx.get("org_member") or "").strip()
+	ctx["org_access_code"] = (ctx.get("org_access_code") or "").strip()
+	ctx["organization"] = (ctx.get("organization") or "").strip()
 	return ctx
 
 
@@ -4997,6 +5020,8 @@ def _create_sales_order(
 	delivery_payload=None,
 	coupon=None,
 	order_context=None,
+	financial_modifiers=None,
+	totals=None,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5009,8 +5034,6 @@ def _create_sales_order(
 	if not selling_price_list:
 		frappe.throw(_("Please configure at least one selling price list."))
 	uom_fallback = _default_uom()
-	order_code = _generate_order_code()
-
 	delivery_payload = delivery_payload if isinstance(delivery_payload, dict) else {}
 	coupon = coupon if isinstance(coupon, dict) else {}
 	_ensure_checkout_sales_order_fields()
@@ -5026,8 +5049,7 @@ def _create_sales_order(
 		"ignore_pricing_rule": 1,
 		"items": [],
 	}
-	if _has_column("Sales Order", "restaurant_order_code"):
-		doc_payload["restaurant_order_code"] = order_code
+
 	if _has_column("Sales Order", "restaurant_customer_mobile"):
 		doc_payload["restaurant_customer_mobile"] = mobile
 	if _has_column("Sales Order", "restaurant_order_type"):
@@ -5062,10 +5084,26 @@ def _create_sales_order(
 	subtotal = 0.0
 	payload_snapshot = []
 	selected_branches = set()
+	packaging_qty_map = {}
 
 	for cart_line in cart_items:
 		menu_doc = _get_item_doc_by_payload(cart_line)
 		customization = _extract_customization(cart_line.get("customization") or cart_line.get("config"))
+
+		variant_doc = _resolve_variant_item_for_customization(menu_doc, customization or {})
+		if variant_doc:
+			menu_doc = variant_doc
+
+		if _has_column("Item", "restaurant_out_of_stock") and cint(
+			menu_doc.get("restaurant_out_of_stock") or 0
+		):
+			frappe.throw(
+				_("{0} is currently out of stock.").format(menu_doc.get("item_name") or menu_doc.get("name"))
+			)
+		packaging_qty_map[menu_doc.name] = packaging_qty_map.get(menu_doc.name, 0.0) + flt(
+			cart_line.get("qty")
+		)
+
 		branch = (
 			cart_line.get("branch")
 			or order_context.get("branch")
@@ -5080,16 +5118,23 @@ def _create_sales_order(
 		cfg = _menu_doc_config(menu_doc)
 		line_requires_production = _item_requires_production(menu_doc)
 
+		description = cfg["long_desc"] or cfg["short_desc"] or menu_doc.description or ""
+		line_note = str(cart_line.get("note") or "").strip()
+		if line_note:
+			description = f"{description}\n\nیادداشت: {line_note}".strip()
+			
 		row_payload = {
 			"item_code": menu_doc.item_code,
 			"item_name": cfg["title"],
-			"description": cfg["long_desc"] or cfg["short_desc"] or menu_doc.description,
+			"description": description,
 			"qty": line_calc["qty"],
 			"uom": menu_doc.stock_uom or uom_fallback,
 			"stock_uom": menu_doc.stock_uom or uom_fallback,
 			"rate": line_calc["unit_price"],
 			"amount": line_calc["line_total"],
 		}
+		if line_note and _has_column("Sales Order Item", "restaurant_note"):
+			row_payload["restaurant_note"] = line_note
 		if _has_column("Sales Order Item", "restaurant_menu_slug"):
 			row_payload["restaurant_menu_slug"] = cfg["slug"]
 		if _has_column("Sales Order Item", "restaurant_customization_json"):
@@ -5162,7 +5207,8 @@ def _create_sales_order(
 				continue
 
 			service_code = service_item.get("item_code") or service_item.get("name")
-			unit_price = flt(service_item.get("restaurant_base_price") or service_item.get("standard_rate"))
+			_service_item_price = _get_default_item_price_rate(service_item)
+			unit_price = _service_item_price if _service_item_price is not None else flt(service_item.get("restaurant_base_price") or service_item.get("standard_rate") or 0)
 			line_total = qty * unit_price
 			line_requires_production = _item_requires_production(service_item)
 
@@ -5269,14 +5315,108 @@ def _create_sales_order(
 				}
 			)
 
-	discount_amount = flt(coupon.get("discount_amount") or 0)
-	if discount_amount > 0:
-		discount_amount = min(discount_amount, subtotal)
+	financial_modifiers = financial_modifiers or {}
+	totals_data = totals or {}
+	
+	frontend_discount_amount = flt(totals_data.get("discountAmount") or 0)
+	applied_coupon_code = coupon.get("code") if coupon else financial_modifiers.get("coupon_code")
+	
+	if frontend_discount_amount > 0:
 		doc_payload["apply_discount_on"] = "Grand Total"
-		doc_payload["discount_amount"] = discount_amount
-		coupon_note = _("Coupon {0}: {1}").format(coupon.get("code") or "", discount_amount)
-		doc_payload["customer_note"] = (doc_payload.get("customer_note") or "") + coupon_note
-		payload_snapshot.append({"coupon": coupon.get("code") or "", "discount_amount": discount_amount})
+		doc_payload["discount_amount"] = min(frontend_discount_amount, subtotal)
+		
+		if applied_coupon_code:
+			coupon_note = _("Coupon {0}: {1}").format(applied_coupon_code, frontend_discount_amount)
+			doc_payload["customer_note"] = (doc_payload.get("customer_note") or "") + coupon_note
+			payload_snapshot.append({"coupon": applied_coupon_code, "discount_amount": frontend_discount_amount})
+				
+	# Apply Service Charge & Taxes & Tip
+	doc_payload["taxes"] = []
+	tax_acc = frappe.db.get_value("Account", {"account_type": "Tax", "company": company}, "name")
+	if not tax_acc:
+		tax_acc = frappe.db.get_value("Account", {"is_group": 0, "company": company}, "name")
+		
+	totals_data = totals or {}
+	pos_tax = flt(totals_data.get("taxAmount") or financial_modifiers.get("tax_amount") or 0)
+	if pos_tax > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": "Tax",
+			"tax_amount": pos_tax,
+		})
+		
+	pos_service = flt(totals_data.get("serviceAmount") or 0)
+	if pos_service > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": "Service Charge",
+			"tax_amount": pos_service,
+		})
+		
+	pos_tip = flt(totals_data.get("tipAmount") or financial_modifiers.get("tip_amount") or 0)
+	if pos_tip > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": "Tip",
+			"tax_amount": pos_tip,
+		})
+
+	pos_packaging = flt(
+		totals_data.get("packagingAmount") or financial_modifiers.get("packaging_amount") or 0
+	)
+	if pos_packaging <= 0 and _caller_has_management_access():
+		# Auto-compute the packaging fee only for staff/POS orders. Web (guest)
+		# checkouts must never get a fee they could not see before payment.
+		try:
+			pos_packaging = flt(fp_compute_order_packaging_fee(order_type, packaging_qty_map))
+		except Exception:
+			pos_packaging = 0.0
+	if pos_packaging > 0 and tax_acc:
+		doc_payload["taxes"].append({
+			"charge_type": "Actual",
+			"account_head": tax_acc,
+			"description": _("Packaging Fee"),
+			"tax_amount": pos_packaging,
+		})
+	if _has_column("Sales Order", "restaurant_packaging_fee"):
+		doc_payload["restaurant_packaging_fee"] = flt(pos_packaging)
+
+	# Organizational order validation (caps, allowed days/hours, addresses) +
+	# waiter attribution — throws and rolls the order back on rule hits.
+	estimated_total = (
+		subtotal + pos_tax + pos_service + pos_tip + pos_packaging
+		+ flt(order_context.get("delivery_fee") or 0) - flt(frontend_discount_amount or 0)
+	)
+	org_binding = org_validate_order(
+		order_context,
+		customer,
+		estimated_total,
+		delivery_address_name=delivery_address_name or (delivery_payload.get("id") or ""),
+	)
+	if org_binding:
+		if _has_column("Sales Order", "restaurant_organization"):
+			doc_payload["restaurant_organization"] = org_binding.get("organization") or ""
+		if _has_column("Sales Order", "restaurant_org_member"):
+			member_label = org_binding.get("org_member") or ""
+			if org_binding.get("org_member_code"):
+				member_label = (member_label + " (" + org_binding["org_member_code"] + ")").strip() if member_label else org_binding["org_member_code"]
+			doc_payload["restaurant_org_member"] = member_label
+		order_context["organization"] = org_binding.get("organization") or ""
+		if _has_column("Sales Order", "restaurant_order_context_json"):
+			doc_payload["restaurant_order_context_json"] = frappe.as_json(order_context)
+	if order_context.get("waiter") or order_context.get("waiter_name"):
+		waiter_user = (order_context.get("waiter") or "").strip()
+		waiter_name = (order_context.get("waiter_name") or "").strip()
+		if waiter_user and frappe.db.exists("User", waiter_user):
+			if _has_column("Sales Order", "restaurant_waiter"):
+				doc_payload["restaurant_waiter"] = waiter_user
+			if not waiter_name:
+				waiter_name = frappe.db.get_value("User", waiter_user, "full_name") or waiter_user
+		if waiter_name and _has_column("Sales Order", "restaurant_waiter_name"):
+			doc_payload["restaurant_waiter_name"] = waiter_name
 
 	so_doc = frappe.get_doc(doc_payload)
 	# Some custom ERPNext forks expect commission-related attributes even when
@@ -5295,31 +5435,22 @@ def _create_sales_order(
 	if _has_column("Sales Order", "restaurant_payload_json"):
 		so_doc.db_set("restaurant_payload_json", frappe.as_json(payload_snapshot))
 
-	if discount_amount > 0 and coupon.get("name"):
+	if frontend_discount_amount > 0 and coupon.get("name"):
 		_mark_coupon_used(coupon.get("name"))
 
 	so_doc.submit()
+	so_doc.db_set("customer_name", customer_name, update_modified=False)
 	if _has_column("Sales Order", "restaurant_status"):
 		so_doc.db_set("restaurant_status", "confirmed", update_modified=False)
 
-	production_payload = _create_production_for_sales_order(so_doc)
-	automation_payload = _run_sales_order_auto_flow(
-		so_doc.name,
-		trigger="order_submit",
-		payment_status="",
-	)
 	frappe.db.commit()
 
 	return {
 		"status": "success",
 		"order_id": so_doc.name,
-		"order_code": so_doc.get("restaurant_order_code") or order_code,
+		"order_code": so_doc.name,
 		"grand_total": flt(so_doc.grand_total or subtotal) + flt(order_context.get("delivery_fee") or 0),
 		"pricing_breakdown": payload_snapshot,
-		"production_tickets": production_payload["production_tickets"],
-		"work_orders": production_payload["work_orders"],
-		"production_skipped_items": production_payload.get("skipped_items") or [],
-		"automation": automation_payload or {},
 	}
 
 
@@ -5677,10 +5808,7 @@ def _create_work_order_for_ticket(
 		updates["restaurant_sales_order"] = sales_order_doc.name
 	if _has_column("Work Order", "restaurant_sales_order_item"):
 		updates["restaurant_sales_order_item"] = so_item_row.name
-	if _has_column("Work Order", "restaurant_order_code"):
-		updates["restaurant_order_code"] = (
-			sales_order_doc.get("restaurant_order_code") or sales_order_doc.name
-		)
+	# Use sales_order name as identifier
 	if _has_column("Work Order", "restaurant_production_ticket"):
 		updates["restaurant_production_ticket"] = ticket_doc.name
 	if _has_column("Work Order", "restaurant_customization_json"):
@@ -5857,7 +5985,7 @@ def _create_production_for_sales_order(so_doc):
 				"doctype": "Restaurant Production Ticket",
 				"sales_order": so_doc.name,
 				"sales_order_item": row.name,
-				"order_code": so_doc.get("restaurant_order_code") or so_doc.name,
+				"order_code": so_doc.name,
 				"company": so_doc.company,
 				"branch": settings.branch,
 				"menu_item": menu_doc.name,
@@ -5983,7 +6111,7 @@ def _get_sales_order_payload(so_name):
 
 	order_payload = {
 		"name": doc.name,
-		"order_code": doc.get("restaurant_order_code") or doc.name,
+		"order_code": doc.name,
 		"customer_name": doc.customer_name,
 		"mobile": doc.get("restaurant_customer_mobile") or "",
 		"order_type": resolved_order_type,
@@ -6934,19 +7062,28 @@ def _resolve_order_type_and_delivery_mode(order_type=None, delivery_mode=None):
 	return "takeaway", "pickup"
 
 
-def _ensure_mobile(mobile):
+def _ensure_mobile(mobile, allow_empty=True):
 	mobile = re.sub(r"\D+", "", str(mobile or ""))
+	if not mobile:
+		if allow_empty:
+			return ""
+		frappe.throw(_("A valid mobile number is required."))
 	if mobile.startswith("98") and len(mobile) == 12:
 		mobile = "0" + mobile[2:]
 	if len(mobile) == 10 and mobile.startswith("9"):
 		mobile = "0" + mobile
+	# Legacy cleanup: fake mobile used to be default in older versions
+	if mobile == "09120000000" and allow_empty:
+		return ""
 	if len(mobile) < 10:
 		frappe.throw(_("A valid mobile number is required."))
 	return mobile
 
 
 def _find_customer_by_mobile(mobile):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 
 	if _has_column("Customer", "mobile_no"):
 		existing = frappe.db.get_value("Customer", {"mobile_no": normalized_mobile, "disabled": 0}, "name")
@@ -7011,6 +7148,12 @@ def _ensure_checkout_address_fields():
 			"label": "Longitude",
 			"fieldtype": "Float",
 			"insert_after": "restaurant_latitude",
+		},
+		{
+			"fieldname": "restaurant_guidance_video",
+			"label": "Guidance Video URL",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_longitude",
 		},
 	]
 
@@ -7204,6 +7347,7 @@ def _serialize_address_payload(row):
 		"lat": lat,
 		"lng": lng,
 		"is_primary": cint(row.get("is_primary_address") or 0),
+		"video_url": (row.get("restaurant_guidance_video") or "").strip(),
 		"updated_at": _json_safe_datetime(row.get("modified")),
 	}
 
@@ -7246,6 +7390,7 @@ def _list_customer_delivery_addresses(customer_name):
 		"restaurant_floor",
 		"restaurant_latitude",
 		"restaurant_longitude",
+		"restaurant_guidance_video",
 		"latitude",
 		"longitude",
 	]
@@ -7290,6 +7435,8 @@ def _normalize_address_payload(address_info, customer_name, mobile):
 		required=True,
 	)
 	is_primary = cint(info.get("is_primary") or info.get("is_primary_address") or 0)
+	video_url = _first_non_empty(info.get("video_url"), info.get("guidance_video"), info.get("video")) or ""
+	video_url = str(video_url).strip()
 
 	if not address_line:
 		frappe.throw(_("Address line is required for delivery."))
@@ -7305,6 +7452,7 @@ def _normalize_address_payload(address_info, customer_name, mobile):
 		"lat": lat,
 		"lng": lng,
 		"is_primary": is_primary,
+		"video_url": video_url,
 	}
 
 
@@ -7348,6 +7496,8 @@ def _upsert_customer_delivery_address(customer_name, normalized_info):
 		doc.set("latitude", normalized_info["lat"])
 	if _has_column("Address", "longitude"):
 		doc.set("longitude", normalized_info["lng"])
+	if _has_column("Address", "restaurant_guidance_video"):
+		doc.set("restaurant_guidance_video", normalized_info.get("video_url") or "")
 
 	links = doc.get("links") or []
 	has_customer_link = any(
@@ -7643,7 +7793,15 @@ def _get_item_doc_by_payload(item_payload):
 	)
 	if not item_name:
 		branch = (item_payload.get("branch") or "").strip()
-		item_name = _resolve_menu_item_name_from_variant_slug(slug=slug, branch=branch)
+		parent_name, variant_name = _resolve_variant_slug_to_context(slug=slug, branch=branch)
+		# For cart payload, we WANT the variant itself, not the parent!
+		item_name = variant_name if variant_name else parent_name
+	
+	if not item_name:
+		# Final fallback: Try to look it up by actual Name directly.
+		if frappe.db.exists("Item", slug):
+			item_name = slug
+	
 	if not item_name:
 		frappe.throw(_("Menu item not found: {0}").format(slug), frappe.DoesNotExistError)
 	return frappe.get_doc("Item", item_name)
@@ -8073,19 +8231,31 @@ def _resolve_variant_item_for_customization(menu_doc, customization):
 
 
 def _resolve_menu_item_name_from_variant_slug(slug, branch=None):
-	slug = _normalize_slug(slug)
-	if not slug:
+	normalized = _normalize_slug(slug)
+	if not normalized and not slug:
 		return ""
 
 	variant_name = frappe.db.get_value(
 		"Item",
 		{
-			"restaurant_slug": slug,
+			"restaurant_slug": normalized or slug,
 			"disabled": 0,
 			"restaurant_enabled": 1,
 		},
 		"name",
 	)
+	
+	if not variant_name and slug:
+		variant_name = frappe.db.get_value(
+			"Item",
+			{
+				"name": slug,
+				"disabled": 0,
+				"restaurant_enabled": 1,
+			},
+			"name",
+		)
+		
 	if not variant_name:
 		return ""
 
@@ -8101,19 +8271,31 @@ def _resolve_menu_item_name_from_variant_slug(slug, branch=None):
 
 
 def _resolve_variant_slug_to_context(slug, branch=None):
-	slug = _normalize_slug(slug)
-	if not slug:
+	normalized = _normalize_slug(slug)
+	if not normalized and not slug:
 		return ("", "")
 
 	direct_name = frappe.db.get_value(
 		"Item",
 		{
-			"restaurant_slug": slug,
+			"restaurant_slug": normalized or slug,
 			"disabled": 0,
 			"restaurant_enabled": 1,
 		},
 		"name",
 	)
+	
+	if not direct_name and slug:
+		direct_name = frappe.db.get_value(
+			"Item",
+			{
+				"name": slug,
+				"disabled": 0,
+				"restaurant_enabled": 1,
+			},
+			"name",
+		)
+		
 	if not direct_name:
 		return ("", "")
 
@@ -9428,7 +9610,9 @@ def _otp_cache_key(mobile):
 
 @frappe.whitelist(allow_guest=True)
 def send_otp(mobile, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	otp = "".join(random.choices(string.digits, k=6))
 	frappe.cache().set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)
 	result = {"success": True, "sent": 1, "mobile": normalized_mobile, "expires_in": 300}
@@ -9439,7 +9623,9 @@ def send_otp(mobile, customer_name=None):
 
 @frappe.whitelist(allow_guest=True)
 def verify_otp(mobile, otp=None, code=None, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	provided = (otp or code or "").strip()
 	cached = frappe.cache().get_value(_otp_cache_key(normalized_mobile))
 	if isinstance(cached, bytes):
@@ -10115,6 +10301,7 @@ def get_management_tables():
 			limit_page_length=500,
 		)
 		for row in session_rows:
+			customer_payload = _sanitize_table_session_customer(_extract_table_session_meta(row.get("note")))
 			sessions.append(
 				{
 					"name": row.get("name"),
@@ -10124,10 +10311,76 @@ def get_management_tables():
 					"closed_at": str(row.get("closed_at") or ""),
 					"total_confirmed_amount": flt(row.get("total_confirmed_amount") or 0),
 					"note": row.get("note") or "",
+					**customer_payload,
 				}
 			)
 
 	return {"tables": tables, "reservations": reservations, "sessions": sessions}
+
+
+@frappe.whitelist()
+def create_management_table(payload=None, **kwargs):
+	_ensure_management_site_settings_access()
+	data = _parse_json(payload, {}) if payload is not None else {}
+	if not isinstance(data, dict):
+		data = {}
+	data.update({k: v for k, v in kwargs.items() if v is not None})
+
+	table_number = (data.get("table_number") or data.get("name") or "").strip()
+	if not table_number:
+		frappe.throw(_("Table number or name is required."))
+	if not _restaurant_doctype_exists("Restaurant Table"):
+		frappe.throw(_("Restaurant Table doctype is not installed."))
+	if frappe.db.exists("Restaurant Table", table_number):
+		frappe.throw(_("A table with this name already exists."))
+	if frappe.db.exists("Restaurant Table", {"table_number": table_number}):
+		frappe.throw(_("A table with this number already exists."))
+
+	doc = frappe.new_doc("Restaurant Table")
+	# Keep the user-facing number as the document name when the doctype allows it;
+	# otherwise Frappe will generate a safe name automatically.
+	if doc.meta.autoname == "field:table_number":
+		doc.table_number = table_number
+	else:
+		doc.table_number = table_number
+	for fieldname in ("status", "location", "notes", "active_session"):
+		if fieldname in data and _has_column("Restaurant Table", fieldname):
+			doc.set(fieldname, data.get(fieldname) or "")
+	if _has_column("Restaurant Table", "is_active"):
+		doc.is_active = 1 if data.get("is_active", 1) else 0
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"success": True,
+		"table": {
+			"name": doc.name,
+			"table_number": doc.table_number or table_number,
+			"status": doc.status or "empty",
+			"is_active": cint(doc.is_active),
+			"location": doc.location or "",
+			"active_session": doc.active_session or "",
+			"notes": doc.notes or "",
+		},
+	}
+
+
+@frappe.whitelist()
+def delete_management_table(name=None, **kwargs):
+	_ensure_management_site_settings_access()
+	table_name = (name or kwargs.get("name") or "").strip()
+	if not table_name or not frappe.db.exists("Restaurant Table", table_name):
+		frappe.throw(_("Table not found."))
+	if _restaurant_doctype_exists("Restaurant Table Session") and frappe.db.exists(
+		"Restaurant Table Session", {"table": table_name, "status": "active"}
+	):
+		frappe.throw(_("Close the active table session before deleting this table."))
+	if _restaurant_doctype_exists("Restaurant Table Reservation") and frappe.db.exists(
+		"Restaurant Table Reservation", {"table": table_name, "status": ["in", ["pending", "confirmed"]]}
+	):
+		frappe.throw(_("Cancel or complete the table reservations before deleting this table."))
+	frappe.delete_doc("Restaurant Table", table_name, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True}
 
 
 @frappe.whitelist()
@@ -10406,12 +10659,19 @@ def get_customer_orders(mobile, limit=50, start=0):
 def get_customer_profile(mobile=None, customer_name=None):
 	profile = get_customer_checkout_profile(mobile=mobile, customer_name=customer_name)
 	profile["orders"] = get_customer_orders(mobile=mobile, limit=10).get("orders", []) if mobile else []
+	try:
+		customer_id = (profile.get("customer") or {}).get("customer_id") or ""
+		profile["club"] = get_customer_club_summary(customer_id)
+	except Exception:
+		profile["club"] = {"wallet_balance": 0.0, "points_balance": 0, "loyalty_tier": "", "points_enabled": False}
 	return profile
 
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_checkout_profile(mobile, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	customer_docname = _find_customer_by_mobile(normalized_mobile)
 
 	resolved_name = (customer_name or "").strip()
@@ -10463,7 +10723,9 @@ def save_customer_vehicle(customer_info, vehicle_info):
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_vehicles(mobile, customer_name=None):
-	normalized_mobile = _ensure_mobile(mobile)
+	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	if not normalized_mobile:
+		return ""
 	customer_docname = _find_customer_by_mobile(normalized_mobile)
 	if not customer_docname:
 		return {
@@ -10526,6 +10788,8 @@ def place_order(
 	pickup_vehicle_snapshot=None,
 	coupon_code=None,
 	order_context=None,
+	financial_modifiers=None,
+	totals=None,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -10596,7 +10860,10 @@ def place_order(
 			vehicle_snapshot=pickup_vehicle_snapshot,
 		)
 
-	coupon = _validate_coupon_for_cart(coupon_code, cart_items, mobile=mobile) if coupon_code else {}
+	financial_modifiers = financial_modifiers or {}
+	# Direct parameter takes precedence, then financial_modifiers fallback
+	resolved_coupon_code = (coupon_code or "").strip() or financial_modifiers.get("coupon_code") or ""
+	coupon = _validate_coupon_for_cart(resolved_coupon_code, cart_items, mobile=mobile) if resolved_coupon_code else {}
 
 	return _create_sales_order(
 		customer_name=customer_name,
@@ -10610,6 +10877,8 @@ def place_order(
 		delivery_payload=delivery_payload,
 		coupon=coupon,
 		order_context=order_context,
+		financial_modifiers=financial_modifiers,
+		totals=totals,
 	)
 
 
@@ -10635,7 +10904,7 @@ def get_order(order_code, mobile):
 	so_name = frappe.db.get_value(
 		"Sales Order",
 		{
-			"restaurant_order_code": order_code,
+
 			"restaurant_customer_mobile": mobile,
 		},
 		"name",
@@ -10655,7 +10924,7 @@ def get_order_production_status(order_code, mobile):
 	so_name = frappe.db.get_value(
 		"Sales Order",
 		{
-			"restaurant_order_code": order_code,
+
 			"restaurant_customer_mobile": mobile,
 		},
 		"name",
@@ -10728,8 +10997,7 @@ def _resolve_sales_order_name(order_name):
 		return ""
 	if frappe.db.exists("Sales Order", so_name):
 		return so_name
-	if _has_column("Sales Order", "restaurant_order_code"):
-		mapped = frappe.db.get_value("Sales Order", {"restaurant_order_code": so_name}, "name")
+
 		if mapped:
 			return mapped
 	return ""
@@ -10837,16 +11105,7 @@ def sync_work_order_required_items_from_ticket(doc, method=None):
 		and not (doc.get("restaurant_sales_order_item") or "").strip()
 	):
 		updates["restaurant_sales_order_item"] = (doc.get("sales_order_item") or "").strip()
-	if (
-		_has_column("Work Order", "restaurant_order_code")
-		and not (doc.get("restaurant_order_code") or "").strip()
-	):
-		order_code = (
-			frappe.db.get_value("Sales Order", doc.get("sales_order"), "restaurant_order_code")
-			if doc.get("sales_order")
-			else ""
-		) or ""
-		updates["restaurant_order_code"] = order_code or (doc.get("sales_order") or "")
+
 	if updates:
 		frappe.db.set_value("Work Order", doc.name, updates, update_modified=False)
 
@@ -11303,6 +11562,17 @@ MANAGEMENT_SITE_SETTINGS_ALLOWED_ROLES = {
 }
 MANAGEMENT_WEB_REVENUE_STATUSES = {"new", "confirmed", "preparing", "ready", "delivered"}
 MANAGEMENT_TABLE_REVENUE_STATUSES = {"confirmed", "served", "paid"}
+
+
+def _caller_has_management_access():
+	"""Non-throwing variant of _ensure_management_access (for optional features)."""
+	if frappe.session.user == "Guest":
+		return False
+	try:
+		roles = set(frappe.get_roles(frappe.session.user))
+	except Exception:
+		return False
+	return bool(roles.intersection(MANAGEMENT_ALLOWED_ROLES))
 
 
 def _ensure_management_access():
@@ -11982,7 +12252,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	start_date, end_date = _management_date_window(date_from=date_from, date_to=date_to)
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_transaction_date = _has_column("Sales Order", "transaction_date")
-	filters = {}
+	filters = {"docstatus": ["<", 2]}
 	if has_transaction_date:
 		filters["transaction_date"] = ["between", [start_date, end_date]]
 	else:
@@ -11990,13 +12260,13 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	if cashier:
 		filters["owner"] = cashier
 
-	has_order_code = _has_column("Sales Order", "restaurant_order_code")
 	has_mobile = _has_column("Sales Order", "restaurant_customer_mobile")
 	has_order_type = _has_column("Sales Order", "restaurant_order_type")
 	has_note = _has_column("Sales Order", "restaurant_note")
 	has_payment_method = _has_column("Sales Order", "restaurant_payment_method")
 	has_payment_status = _has_column("Sales Order", "restaurant_payment_status")
 	has_payment_provider = _has_column("Sales Order", "restaurant_payment_provider")
+	has_restaurant_table = _has_column("Sales Order", "restaurant_table")
 
 	fields = [
 		"name",
@@ -12012,8 +12282,6 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	]
 	if has_transaction_date:
 		fields.append("transaction_date")
-	if has_order_code:
-		fields.append("restaurant_order_code")
 	if has_mobile:
 		fields.append("restaurant_customer_mobile")
 	if has_order_type:
@@ -12026,6 +12294,8 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_payment_status")
 	if has_payment_provider:
 		fields.append("restaurant_payment_provider")
+	if has_restaurant_table:
+		fields.append("restaurant_table")
 	if _has_column("Sales Order", "restaurant_status"):
 		fields.append("restaurant_status")
 
@@ -12093,6 +12363,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 					"item_code": item.item_code or "",
 					"title": item.item_name or "",
 					"qty": flt(item.qty),
+					"unit_price": flt(item.rate),
 					"line_total": line_total,
 					"customization_json": item.restaurant_customization_json
 					if has_item_customization
@@ -12108,6 +12379,20 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 			)
 
 	normalized_status = (status or "").strip().lower()
+	
+	# Fetch outstanding amounts in bulk to avoid N+1
+	outstanding_map = {}
+	if parent_names and frappe.db.exists("DocType", "Sales Invoice Item"):
+		si_items = frappe.get_all("Sales Invoice Item", filters={"sales_order": ["in", parent_names], "docstatus": 1}, fields=["parent", "sales_order"], ignore_permissions=True)
+		if si_items:
+			si_names = list({si.parent for si in si_items})
+			si_docs = frappe.get_all("Sales Invoice", filters={"name": ["in", si_names]}, fields=["name", "outstanding_amount"], ignore_permissions=True)
+			si_outstanding = {doc.name: flt(doc.outstanding_amount) for doc in si_docs}
+			for si_item in si_items:
+				if si_item.sales_order not in outstanding_map:
+					outstanding_map[si_item.sales_order] = 0.0
+				outstanding_map[si_item.sales_order] += si_outstanding.get(si_item.parent, 0.0)
+
 	payload = []
 	for row in rows:
 		order_status = _core_order_status(row)
@@ -12126,7 +12411,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"source": "web",
 				"doctype": "Sales Order",
 				"name": row.name,
-				"order_code": (row.restaurant_order_code if has_order_code else "") or row.name,
+				"order_code": row.name,
 				"customer_name": row.customer_name or "POS Customer",
 				"mobile": (row.restaurant_customer_mobile if has_mobile else "")
 				or mobile_by_customer.get(row.customer, ""),
@@ -12134,12 +12419,14 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"status": order_status,
 				"subtotal": flt(row.total or row.net_total),
 				"grand_total": flt(row.grand_total or row.total or row.net_total),
+				"outstanding_amount": flt(outstanding_map.get(row.name, flt(row.grand_total or row.total or row.net_total))),
 				"created_at": _json_safe_datetime(created_at),
 				"cashier": row.owner or "",
 				"note": row.restaurant_note if has_note else "",
 				"payment_method": row.restaurant_payment_method if has_payment_method else "",
 				"payment_status": row.restaurant_payment_status if has_payment_status else "",
 				"payment_provider": row.restaurant_payment_provider if has_payment_provider else "",
+				"table": (row.restaurant_table or "") if has_restaurant_table else "",
 				"items": items_by_parent.get(row.name, []),
 			}
 		)
@@ -12152,7 +12439,7 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_created_at = _has_column("Restaurant Table Order", "created_at")
-	filters = {}
+	filters = {"docstatus": ["<", 2]}
 	if has_created_at:
 		filters["created_at"] = ["between", [start_dt, end_dt]]
 	else:
@@ -12208,20 +12495,30 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 
 	menu_item_names = {row.menu_item for row in item_rows if row.menu_item}
 	menu_title_map = {}
+	menu_erp_item_map = {}
 	if menu_item_names and frappe.db.exists("DocType", "Restaurant Table Menu Item"):
+		menu_fields = ["name", "item_name"]
+		has_menu_erp_item = _has_column("Restaurant Table Menu Item", "erpnext_item")
+		if has_menu_erp_item:
+			menu_fields.append("erpnext_item")
 		menu_rows = frappe.get_all(
 			"Restaurant Table Menu Item",
-			fields=["name", "item_name"],
+			fields=menu_fields,
 			filters={"name": ["in", list(menu_item_names)]},
 			ignore_permissions=True,
 		)
 		menu_title_map = {row.name: row.item_name for row in menu_rows}
+		if has_menu_erp_item:
+			menu_erp_item_map = {
+				row.name: (row.get("erpnext_item") or "") for row in menu_rows if row.get("erpnext_item")
+			}
 
 	items_by_parent = defaultdict(list)
 	for item in item_rows:
 		items_by_parent[item.parent].append(
 			{
 				"title": menu_title_map.get(item.menu_item) or item.menu_item or "",
+				"item_code": menu_erp_item_map.get(item.menu_item, ""),
 				"qty": flt(item.quantity),
 				"line_total": flt(item.line_total),
 				"customization_json": "",
@@ -12241,6 +12538,8 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 				"customer_name": f"Table {table_label}",
 				"mobile": "",
 				"channel": "dine_in",
+				"table": row.table or "",
+				"table_label": table_label,
 				"status": row.status or "pending",
 				"subtotal": flt(row.subtotal),
 				"grand_total": flt(row.grand_total),
@@ -13379,6 +13678,82 @@ def _build_management_report_bi(report_key, title, summary, rows, orders, previo
 			}
 		]
 
+	elif report_key in MANAGEMENT_FEATURE_PACK_REPORTS:
+		# Feature-pack reports (category/table/payment-method/product/shift sales).
+		fp_bi = fp_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(fp_bi, dict):
+			kpis = fp_bi.get("kpis") or []
+			charts = fp_bi.get("charts") or []
+			tables = fp_bi.get("tables") or []
+			insights = fp_bi.get("insights") or []
+
+	elif report_key in MANAGEMENT_INVENTORY_REPORTS:
+		# Inventory reports (valuation/movements/waste & losses).
+		inv_bi = inv_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(inv_bi, dict):
+			kpis = inv_bi.get("kpis") or []
+			charts = inv_bi.get("charts") or []
+			tables = inv_bi.get("tables") or []
+			insights = inv_bi.get("insights") or []
+
+	elif report_key in CLUB_REPORT_KEYS:
+		# Customer-club reports (RFM, campaigns, wallet, surveys).
+		club_bi = club_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(club_bi, dict):
+			kpis = club_bi.get("kpis") or []
+			charts = club_bi.get("charts") or []
+			tables = club_bi.get("tables") or []
+			insights = club_bi.get("insights") or []
+
+	elif report_key in OPS_REPORT_KEYS:
+		# Ops/finance reports (couriers, kitchen, P&L, break-even).
+		ops_bi = ops_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(ops_bi, dict):
+			kpis = ops_bi.get("kpis") or []
+			charts = ops_bi.get("charts") or []
+			tables = ops_bi.get("tables") or []
+			insights = ops_bi.get("insights") or []
+
+	elif report_key in MENUENG_REPORT_KEYS:
+		menueng_bi = menueng_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(menueng_bi, dict):
+			kpis = menueng_bi.get("kpis") or []
+			charts = menueng_bi.get("charts") or []
+			tables = menueng_bi.get("tables") or []
+			insights = menueng_bi.get("insights") or []
+
+	elif report_key in TAX_REPORT_KEYS:
+		tax_bi = tax_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(tax_bi, dict):
+			kpis = tax_bi.get("kpis") or []
+			charts = tax_bi.get("charts") or []
+			tables = tax_bi.get("tables") or []
+			insights = tax_bi.get("insights") or []
+
+	elif report_key in BRANCH_REPORT_KEYS:
+		branch_bi = branch_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(branch_bi, dict):
+			kpis = branch_bi.get("kpis") or []
+			charts = branch_bi.get("charts") or []
+			tables = branch_bi.get("tables") or []
+			insights = branch_bi.get("insights") or []
+
+	elif report_key in KIOSK_REPORT_KEYS:
+		kiosk_bi = kiosk_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(kiosk_bi, dict):
+			kpis = kiosk_bi.get("kpis") or []
+			charts = kiosk_bi.get("charts") or []
+			tables = kiosk_bi.get("tables") or []
+			insights = kiosk_bi.get("insights") or []
+
+	elif report_key in ACC_REPORT_KEYS:
+		acc_bi = acc_build_report_bi(report_key, title, summary, rows, orders, previous_orders, meta)
+		if isinstance(acc_bi, dict):
+			kpis = acc_bi.get("kpis") or []
+			charts = acc_bi.get("charts") or []
+			tables = acc_bi.get("tables") or []
+			insights = acc_bi.get("insights") or []
+
 	if not tables and rows:
 		tables = [
 			{
@@ -13579,7 +13954,6 @@ def _management_operational_metrics(date_from=None, date_to=None):
 	]
 	rating_field = next((field for field in rating_candidates if _has_column("Sales Order", field)), "")
 	delivery_field = next((field for field in delivery_candidates if _has_column("Sales Order", field)), "")
-	has_order_code = _has_column("Sales Order", "restaurant_order_code")
 	if not rating_field and not delivery_field:
 		return metrics
 
@@ -13587,8 +13961,6 @@ def _management_operational_metrics(date_from=None, date_to=None):
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_transaction_date = _has_column("Sales Order", "transaction_date")
 	fields = ["name"]
-	if has_order_code:
-		fields.append("restaurant_order_code")
 	if has_transaction_date:
 		fields.append("transaction_date")
 	if rating_field:
@@ -13628,7 +14000,7 @@ def _management_operational_metrics(date_from=None, date_to=None):
 				if delivery_value > max_delivery_value:
 					max_delivery_value = delivery_value
 					max_delivery_order = (
-						row.get("restaurant_order_code") if has_order_code else ""
+						row.name
 					) or row.get("name")
 
 	if ratings:
@@ -13740,6 +14112,7 @@ def get_management_dashboard(date_from=None, date_to=None, branch=None):
 		"recent_orders": orders[:10],
 		"hardware": _management_hardware_summary(date_from=date_from, date_to=date_to),
 		"operational": _management_operational_metrics(date_from=date_from, date_to=date_to),
+		"courier_fleet": _management_courier_summary(),
 	}
 
 
@@ -13850,59 +14223,76 @@ def report_management_pos_hardware_event(
 
 @frappe.whitelist()
 def get_management_pos_config():
-    """Get POS default configuration (order mode defaults, place presets)."""
-    _ensure_management_access()
-    raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if not raw:
-            raw = "{}"
-    try:
-        config = json.loads(raw) if isinstance(raw, str) else raw
-    except (json.JSONDecodeError, TypeError):
-        config = {}
-    
-    defaults = {
-        "default_order_mode": config.get("default_order_mode", "dine_in"),
-        "default_customers": config.get("default_customers", {
-            "dine_in": {"name": "POS Customer", "mobile": "09120000000"},
-            "takeaway": {"name": "POS Customer", "mobile": "09120000000"},
-            "delivery": {"name": "POS Customer", "mobile": "09120000000"},
-        }),
-        "takeaway_places": config.get("takeaway_places", ["بیرون بر حضوری", "تحویل کنار سالن"]),
-        "default_takeaway_place": config.get("default_takeaway_place", "بیرون بر حضوری"),
-        "delivery_places": config.get("delivery_places", ["پیک 1", "پیک 2", "پیک 3", "ارسال اکسپرس"]),
-        "default_delivery_place": config.get("default_delivery_place", "پیک 1"),
-    }
-    return defaults
+	"""Get POS default configuration (order mode defaults, place presets)."""
+	_ensure_management_access()
+	raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
+	if isinstance(raw, str):
+		raw = raw.strip()
+		if not raw:
+			raw = "{}"
+	try:
+		config = json.loads(raw) if isinstance(raw, str) else raw
+	except (json.JSONDecodeError, TypeError):
+		config = {}
+
+	delivery_couriers = _list_management_courier_options(active_only=True)
+	default_delivery_courier = (config.get("default_delivery_courier") or "").strip()
+	if not default_delivery_courier and delivery_couriers:
+		default_delivery_courier = delivery_couriers[0].get("label") or ""
+
+	defaults = {
+		"default_order_mode": config.get("default_order_mode", "dine_in"),
+		"default_customers": config.get(
+			"default_customers",
+			{
+				"dine_in": {"name": "POS Customer", "mobile": ""},
+				"takeaway": {"name": "POS Customer", "mobile": ""},
+				"delivery": {"name": "POS Customer", "mobile": ""},
+			},
+		),
+		"takeaway_places": config.get("takeaway_places", ["بیرون بر حضوری", "تحویل کنار سالن"]),
+		"default_takeaway_place": config.get("default_takeaway_place", "بیرون بر حضوری"),
+		"delivery_places": config.get("delivery_places", ["پیک 1", "پیک 2", "پیک 3", "ارسال اکسپرس"]),
+		"default_delivery_place": config.get("default_delivery_place", "پیک 1"),
+		"default_delivery_courier": default_delivery_courier,
+		"delivery_couriers": delivery_couriers,
+	}
+	return defaults
 
 
 @frappe.whitelist()
 def set_management_pos_config(payload=None):
-    """Save POS default configuration for the current user/operator."""
-    _ensure_management_access()
-    data = _parse_json(payload, {})
-    if not isinstance(data, dict):
-        frappe.throw(_("Invalid payload format."))
-    
-    raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if not raw:
-            raw = "{}"
-    try:
-        current = json.loads(raw) if isinstance(raw, str) else raw
-    except (json.JSONDecodeError, TypeError):
-        current = {}
-    
-    for key in ("default_order_mode", "default_customers", "takeaway_places",
-                "default_takeaway_place", "delivery_places", "default_delivery_place"):
-        if key in data:
-            current[key] = data[key]
-    
-    frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
-    frappe.db.commit()
-    return {"status": "success", "config": get_management_pos_config()}
+	"""Save POS default configuration for the current user/operator."""
+	_ensure_management_access()
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid payload format."))
+
+	raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
+	if isinstance(raw, str):
+		raw = raw.strip()
+		if not raw:
+			raw = "{}"
+	try:
+		current = json.loads(raw) if isinstance(raw, str) else raw
+	except (json.JSONDecodeError, TypeError):
+		current = {}
+
+	for key in (
+		"default_order_mode",
+		"default_customers",
+		"takeaway_places",
+		"default_takeaway_place",
+		"delivery_places",
+		"default_delivery_place",
+		"default_delivery_courier",
+	):
+		if key in data:
+			current[key] = data[key]
+
+	frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
+	frappe.db.commit()
+	return {"status": "success", "config": get_management_pos_config()}
 
 
 
@@ -13913,20 +14303,25 @@ def get_management_pos_boot(branch=None):
 	image_field = _core_item_image_field()
 	category_meta_map = _get_core_category_meta_map()
 	subcategory_meta_map = _get_core_subcategory_meta_map()
+	boot_item_fields = [
+		"name",
+		"item_name",
+		"restaurant_slug",
+		"restaurant_short_desc",
+		"restaurant_base_price",
+		"standard_rate",
+		f"{image_field} as image",
+		"restaurant_category",
+		"restaurant_subcategory",
+	]
+	if _has_column("Item", "restaurant_out_of_stock"):
+		boot_item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_packaging_price"):
+		boot_item_fields.append("restaurant_packaging_price")
 	rows = frappe.get_all(
 		"Item",
 		filters=_core_item_filters(branch),
-		fields=[
-			"name",
-			"item_name",
-			"restaurant_slug",
-			"restaurant_short_desc",
-			"restaurant_base_price",
-			"standard_rate",
-			f"{image_field} as image",
-			"restaurant_category",
-			"restaurant_subcategory",
-		],
+		fields=boot_item_fields,
 		ignore_permissions=True,
 		order_by="restaurant_sort_order asc, item_name asc",
 		limit=300,
@@ -13957,14 +14352,16 @@ def get_management_pos_boot(branch=None):
 		if not (r.get("image") or "").strip() and r["name"] in attachment_map:
 			r["image"] = attachment_map[r["name"]]
 
-	items = [
-		_serialize_core_item(
+	items = []
+	for row in rows:
+		serialized = _serialize_core_item(
 			row,
 			category_meta_map=category_meta_map,
 			subcategory_meta_map=subcategory_meta_map,
 		)
-		for row in rows
-	]
+		serialized["out_of_stock"] = cint(row.get("restaurant_out_of_stock") or 0)
+		serialized["packaging_price"] = flt(row.get("restaurant_packaging_price") or 0)
+		items.append(serialized)
 	categories = [
 		{
 			"name": key,
@@ -13974,6 +14371,7 @@ def get_management_pos_boot(branch=None):
 		for key, value in category_meta_map.items()
 	]
 	config = get_management_pos_config()
+	print_brand_settings = _management_get_print_brand_settings()
 	return {
 		"currency": _get_currency(),
 		"items": items,
@@ -13981,6 +14379,31 @@ def get_management_pos_boot(branch=None):
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),
 		"pos_config": config,
+		"packaging": {
+			"enabled": cint(_get_single_setting("Restaurant Web Settings", "restaurant_packaging_enabled", 0))
+			== 1,
+			"flat_fee": flt(_get_single_setting("Restaurant Web Settings", "restaurant_packaging_flat_fee", 0)),
+			"per_item": cint(
+				_get_single_setting("Restaurant Web Settings", "restaurant_packaging_per_item", 1)
+			)
+			== 1,
+			"apply_modes": [
+				mode
+				for mode, fieldname in (
+					("takeaway", "restaurant_packaging_takeaway"),
+					("delivery", "restaurant_packaging_delivery"),
+					("dine_in", "restaurant_packaging_dine_in"),
+				)
+				if cint(_get_single_setting("Restaurant Web Settings", fieldname, 0)) == 1
+			],
+			"label": _get_single_setting("Restaurant Web Settings", "restaurant_packaging_label", "")
+			or _("Packaging Fee"),
+		},
+		"print_font": {
+			"font_family": print_brand_settings.get("print_font_family") or "Peyda",
+			"font_size": min(max(cint(print_brand_settings.get("print_font_size") or 11), 8), 24),
+			"receipt_font_scale": print_brand_settings.get("print_receipt_font_scale") or "متوسط",
+		},
 	}
 
 
@@ -13992,16 +14415,35 @@ def create_pos_order(payload):
     if not isinstance(payload, dict):
         payload = {}
     customer_name = (payload.get("customer_name") or "POS Customer").strip()
-    mobile = (payload.get("mobile") or "09120000000").strip()
+    mobile = (payload.get("mobile") or "").strip()
     order_type = (payload.get("order_type") or "takeaway").strip()
     address = (payload.get("address") or "").strip()
     note = (payload.get("note") or "").strip()
     items = payload.get("items") or []
+    financial_modifiers = payload.get("financial_modifiers", {})
+    totals_payload = payload.get("totals", {})
+    # waiter / table / org context for dine-in attribution
+    order_context = _parse_json(payload.get("order_context"), {})
+    if not isinstance(order_context, dict):
+        order_context = {}
+    waiter = (payload.get("waiter") or "").strip()
+    waiter_name = (payload.get("waiter_name") or "").strip()
+    if waiter and not order_context.get("waiter"):
+        order_context["waiter"] = waiter
+    if waiter_name and not order_context.get("waiter_name"):
+        order_context["waiter_name"] = waiter_name
+    table = (payload.get("table") or "").strip()
+    if table and not order_context.get("table"):
+        order_context["table"] = table
+
     result = place_order(
         customer_info={"name": customer_name, "mobile": mobile},
         order_type=order_type, items=items,
         address=address, note=note,
         include_service_items=1,
+        order_context=order_context,
+        financial_modifiers=financial_modifiers,
+        totals=totals_payload,
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
@@ -14037,9 +14479,6 @@ def produce_pos_order(order_name):
     }
 
 @frappe.whitelist()
-@frappe.whitelist()
-
-@frappe.whitelist()
 def create_and_pay_pos_order(payload):
     """ثبت + تسویه: SO ساخته میشه بعد SI + Payment یکجا (بدون تولید)"""
     _ensure_management_access()
@@ -14064,6 +14503,51 @@ def create_and_pay_pos_order(payload):
         "status": "success",
         "sales_invoice": settle_result.get("sales_invoice", ""),
     }
+
+@frappe.whitelist()
+def create_management_order_proforma(order_name):
+    """ساخت پیش‌فاکتور (Quotation) از روی سفارش — برای گارسون/صندوق."""
+    _ensure_management_access()
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("سفارش یافت نشد: {0}").format(order_name or "-"))
+    if not frappe.db.exists("DocType", "Quotation"):
+        frappe.throw(_("ماژول پیش‌فاکتور (Quotation) در دسترس نیست."))
+
+    so = frappe.get_doc("Sales Order", so_name)
+    quotation = frappe.new_doc("Quotation")
+    quotation.quotation_to = "Customer"
+    quotation.party_name = so.customer
+    quotation.customer_name = so.get("customer_name") or so.customer
+    quotation.company = so.company
+    quotation.transaction_date = today()
+    quotation.currency = so.get("currency") or _get_currency(so.company)
+    if so.get("selling_price_list"):
+        quotation.selling_price_list = so.get("selling_price_list")
+    for item in so.get("items") or []:
+        line = {
+            "item_code": item.get("item_code"),
+            "item_name": item.get("item_name") or item.get("item_code"),
+            "description": item.get("description") or item.get("item_name") or item.get("item_code"),
+            "qty": flt(item.get("qty")),
+            "uom": item.get("uom") or item.get("stock_uom") or "Nos",
+            "rate": flt(item.get("rate")),
+        }
+        if item.get("income_account"):
+            line["income_account"] = item.get("income_account")
+        quotation.append("items", line)
+    quotation.remarks = _("پیش‌فاکتور سفارش {0}").format(so_name)
+    quotation.flags.ignore_permissions = True
+    quotation.insert(ignore_permissions=True)
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "quotation": quotation.name,
+        "order": so_name,
+        "grand_total": flt(quotation.grand_total),
+        "print_url": "/printview?doctype=Quotation&name={}&trigger_print=1".format(quotation.name),
+    }
+
 
 def _resolve_pos_mode_of_payment(method):
     """Get mode of payment from DB that has a default account"""
@@ -14101,179 +14585,328 @@ def _resolve_pos_mode_of_payment(method):
 
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
-    # تسویه: فقط SI (POS) + Payment (بدون تولید، بدون تحویل)
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+        
+    # Check if order is already invoiced
+    si = frappe.db.get_value("Sales Invoice Item", {"sales_order": so_name}, "parent")
+    si_doc = None
+    if si:
+        si_doc = frappe.get_doc("Sales Invoice", si)
+        if si_doc.docstatus == 1:
+            if flt(si_doc.outstanding_amount) <= 0.1:
+                return {
+                    "sales_order": so_name,
+                    "sales_invoice": si,
+                    "status": "success",
+                    "message": "Order is already fully paid."
+                }
+            
     payment = _parse_json(payment, {})
     method = _normalize_payment_method(payment.get("method") or "cash")
-    manual_ref = (reference_no or payment.get("reference_no") or "").strip()
+    splits = payment.get("splits") or []
+    
+    # If no splits provided but we have a method, create a single split
+    if not splits:
+        splits = [{
+            "method": method,
+            "mode_of_payment": _resolve_pos_mode_of_payment(method),
+            "amount": 0, # Will be set to grand_total below
+            "reference_no": (reference_no or payment.get("reference_no") or "").strip()
+        }]
+
     result = {"sales_order": so_name}
-    # 1. Sales Invoice from SO
-    mode_of_payment = method
+    
     try:
-        make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
-        si_doc = make_si(so_name)
-        if hasattr(si_doc, "as_dict"):
-            si_doc.is_pos = 1
-            si_doc.update_stock = 0
-        elif isinstance(si_doc, dict):
-            si_doc["is_pos"] = 1
-            si_doc["update_stock"] = 0
-            si_doc = frappe.get_doc(si_doc)
-        else:
-            si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
-            si_doc.is_pos = 1
-
-        grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
-
-        # گرفتن نحوه پرداخت واقعی از داده باسی (به جای هاردکد)
-        mode_of_payment = _resolve_pos_mode_of_payment(method)
-
-        # Set payment on SI before insert
-        if hasattr(si_doc, "payments") and len(si_doc.payments) > 0:
-            si_doc.payments = []
-        si_doc.append("payments", {
-            "mode_of_payment": mode_of_payment,
-            "amount": grand_total if grand_total > 0 else 1,
-            "default": 1,
-        })
-
-        si_doc.flags.ignore_permissions = True
-        si_doc.insert()
-        si_doc.submit()
+        if not si_doc:
+            make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
+            si_doc = make_si(so_name)
+            if hasattr(si_doc, "as_dict"):
+                si_doc.is_pos = 1
+                si_doc.update_stock = 0
+            elif isinstance(si_doc, dict):
+                si_doc["is_pos"] = 1
+                si_doc["update_stock"] = 0
+                si_doc = frappe.get_doc(si_doc)
+            else:
+                si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
+                si_doc.is_pos = 1
+    
+            grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
+    
+            # Fix amounts in splits if empty
+            total_split = sum(flt(s.get("amount") or 0) for s in splits)
+            if total_split <= 0:
+                splits[0]["amount"] = grand_total
+    
+            # Validate splits total
+            total_split = sum(flt(s.get("amount") or 0) for s in splits)
+            if abs(total_split - grand_total) > 0.5: # Allow small rounding
+                frappe.throw(f"Payment splits total ({total_split}) does not match invoice total ({grand_total})")
+    
+            # Add payments to SI
+            if hasattr(si_doc, "payments"):
+                si_doc.payments = []
+            for s in splits:
+                mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
+                if s.get("method") != "credit": # Don't add credit to SI payments table usually
+                    si_doc.append("payments", {
+                        "mode_of_payment": mop,
+                        "amount": flt(s.get("amount")),
+                    })
+    
+            si_doc.flags.ignore_permissions = True
+            si_doc.insert()
+            si_doc.submit()
+            
         result["sales_invoice"] = si_doc.name
 
-        # 2. Payment Entry if not credit
-        if method != "credit" and si_doc.docstatus == 1:
-            try:
-                from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+        # Create Payment Entries
+        if si_doc.docstatus == 1:
+            # Re-fetch outstanding amount
+            si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
+            
+            # In POS, Sales Invoice automatically creates Payment Entries for payments added to `si_doc.payments` during submit.
+            # So if `si_doc.payments` had the full amount, `outstanding_amount` will be 0 right after submit().
+            # If outstanding is 0, we don't need to create more Payment Entries, nor do we want to throw an error.
+            if si_outstanding <= 0.5:
+                # Already paid via SI submit
+                splits = []
+                total_split = 0
+            else:
+                # If we are processing a partial payment retry, validate the split total against current outstanding
+                total_split = sum(flt(s.get("amount") or 0) for s in splits)
+                
+                if total_split <= 0 and si_outstanding > 0:
+                    # Fallback to outstanding
+                    splits = [{
+                        "method": method,
+                        "mode_of_payment": _resolve_pos_mode_of_payment(method),
+                        "amount": si_outstanding,
+                        "reference_no": (reference_no or payment.get("reference_no") or "").strip()
+                    }]
+                    total_split = si_outstanding
+                    
+                if total_split > si_outstanding + 0.5:
+                    frappe.throw(f"Payment splits total ({total_split}) exceeds outstanding amount ({si_outstanding})")
+            from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+            payment_entries = []
+            
+            # Check existing Payment Entries to avoid duplicate on retry
+            existing_pes = frappe.get_all("Payment Entry Reference",
+                filters={"reference_name": si_doc.name, "docstatus": 1},
+                fields=["parent", "allocated_amount"], ignore_permissions=True)
+            
+            existing_pe_docs = []
+            if existing_pes:
+                existing_pe_names = list({r.parent for r in existing_pes})
+                existing_pe_docs = frappe.get_all("Payment Entry",
+                    filters={"name": ["in", existing_pe_names], "docstatus": 1},
+                    fields=["name", "mode_of_payment", "reference_no", "paid_amount"],
+                    ignore_permissions=True)
+                    
+            for s in splits:
+                if s.get("method") == "credit":
+                    continue
+                    
+                mop = s.get("mode_of_payment") or _resolve_pos_mode_of_payment(s.get("method") or "cash")
+                amt = flt(s.get("amount"))
+                ref = str(s.get("reference_no") or si_doc.name)
+                
+                # Verify if this exact payment (mode + ref + amount) was already submitted
+                is_duplicate = False
+                for ex_pe in existing_pe_docs:
+                    if (ex_pe.mode_of_payment == mop and 
+                        (not ref or ex_pe.reference_no == ref or ex_pe.reference_no == si_doc.name) and 
+                        abs(flt(ex_pe.paid_amount) - amt) < 0.1):
+                        is_duplicate = True
+                        payment_entries.append(ex_pe.name)
+                        break
+                        
+                if is_duplicate:
+                    continue
+                
                 pe = get_payment_entry("Sales Invoice", si_doc.name)
-                pe.reference_no = manual_ref or si_doc.name
+                pe.reference_no = ref
                 pe.reference_date = today()
-                pe.mode_of_payment = mode_of_payment
-                pe.paid_amount = grand_total
-                pe.received_amount = grand_total
+                pe.mode_of_payment = mop
+                pe.paid_amount = amt
+                pe.received_amount = amt
+                # Clear references except this SI and adjust amount
+                for r in pe.references:
+                    if r.reference_name == si_doc.name:
+                        r.allocated_amount = amt
                 pe.flags.ignore_permissions = True
                 pe.insert()
                 pe.submit()
-                frappe.db.set_value("Sales Invoice", si_doc.name, "outstanding_amount", 0, update_modified=False)
+                payment_entries.append(pe.name)
+                
+            if payment_entries:
+                result["payment_entries"] = payment_entries
+                
+            si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
+            if si_outstanding <= 0.1:
                 frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
-                result["payment_entry"] = pe.name
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Settle SI Payment")
-    except Exception:
+                _set_restaurant_order_status(so_name, "paid", force=True)
+                _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
+            else:
+                _append_sales_order_note(so_name, f"[SETTLE] Partially paid. Outstanding: {si_outstanding}")
+
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Settle POS SI")
-        result["invoice_error"] = "SI creation failed"
-    _set_restaurant_order_status(so_name, "paid", force=True)
-    _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
-    # Save normalized method (cash/card/credit) not Persian name
+        frappe.throw(str(e))
+        
     if _has_column("Sales Order", "restaurant_payment_method"):
         so_doc = frappe.get_doc("Sales Order", so_name)
-        so_doc.restaurant_payment_method = method
+        # Store primary method
+        so_doc.restaurant_payment_method = splits[0].get("method") if splits else method
         so_doc.save(ignore_permissions=True)
+
+    # Customer club effects: wallet debit + cashback credit (idempotent).
+    try:
+        club_apply_settle_effects(so_name, splits, result.get("payment_breakdown") or result.get("payments"))
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Settle POS Club Effects")
+
     frappe.db.commit()
     return result
 
+
 @frappe.whitelist()
-def deliver_pos_order(order_name):
-    # تولید و تحویل: WO → SE → Finish WO → DN
+def deliver_invoice_only(order_name):
+    """فقط رسید تحویل بزن بدون تغییر وضعیت (فاکتور باز میمونه)"""
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
-
-    so_doc = frappe.get_doc("Sales Order", so_name)
+    
     result = {"sales_order": so_name}
-
-    # ایجاد Production Ticket
-    ticket_names = []
-    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
-        ticket_names = frappe.get_all(
-            "Restaurant Production Ticket",
-            filters={"sales_order": so_name},
-            pluck="name", ignore_permissions=True, order_by="creation asc"
-        )
-    if not ticket_names:
-        cp = _create_production_for_sales_order(so_doc)
-        ticket_names = cp.get("production_tickets") or []
-        result["tickets_created"] = ticket_names
-
-    # اجرای تولید کامل
-    for ticket_name in ticket_names:
-        if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
-            continue
-        ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
-        wo_name = ticket.get("work_order") or ""
-        if not wo_name or not frappe.db.exists("Work Order", wo_name):
-            continue
-
-        wo = frappe.get_doc("Work Order", wo_name)
-        if wo.docstatus == 0:
-            wo.flags.ignore_permissions = True
-            wo.submit()
-            wo = frappe.get_doc("Work Order", wo.name)
-            result.setdefault("submitted_work_orders", []).append(wo.name)
-
-        if wo.docstatus != 1:
-            continue
-
-        # Material Transfer - فقط اگه هنوز انتقال پیدا نکرده
-        pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
-        if pending_transfer > 1e-8:
-            se = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
-            if se:
-                result.setdefault("stock_entries_material", []).append(se)
-        else:
-            result.setdefault("stock_entries_material", []).append("already_transferred")
-
-        # Manufacture - تولید محصول نهایی (اگه هنوز تولید نشده)
-        wo = frappe.get_doc("Work Order", wo.name)
-        pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
-        if pending_manufacture > 1e-8:
-            se = _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
-            if se:
-                result.setdefault("stock_entries_manufacture", []).append(se)
-        else:
-            result.setdefault("stock_entries_manufacture", []).append("already_manufactured")
-
-        # Update WO
-        wo = frappe.get_doc("Work Order", wo.name)
-        if hasattr(wo, "update_work_order_qty"):
-            try: wo.update_work_order_qty()
-            except: pass
-        if hasattr(wo, "update_status"):
-            try: wo.update_status()
-            except: pass
-        if flt(wo.produced_qty) >= flt(wo.qty) - 1e-8:
-            if ticket.get("status") != "completed":
-                ticket.db_set("status", "completed", update_modified=False)
-
-    # رسید تحویل
     try:
         dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
         if dn_name:
             result["delivery_note"] = dn_name
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "Deliver POS DN")
+        frappe.log_error(frappe.get_traceback(), "DeliverInvoiceOnly DN")
         frappe.throw(_("Delivery Note creation failed."))
-
-    _set_restaurant_order_status(so_name, "delivered", force=True)
-    _append_sales_order_note(so_name, "[DELIVER] Production and delivery completed.")
+    
+    _append_sales_order_note(so_name, "[DELIVER_ONLY] Delivery Note created. Invoice remains open.")
     frappe.db.commit()
+    return result
+
+def _background_deliver_pos_order(so_name):
+    frappe.db.commit()
+    try:
+        so_doc = frappe.get_doc("Sales Order", so_name)
+        ticket_names = []
+        if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+            ticket_names = frappe.get_all(
+                "Restaurant Production Ticket",
+                filters={"sales_order": so_name},
+                pluck="name", ignore_permissions=True, order_by="creation asc"
+            )
+        if not ticket_names:
+            cp = _create_production_for_sales_order(so_doc)
+            ticket_names = cp.get("production_tickets") or []
+
+        for ticket_name in ticket_names:
+            if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
+                continue
+            ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
+            wo_name = ticket.get("work_order") or ""
+            if not wo_name or not frappe.db.exists("Work Order", wo_name):
+                continue
+
+            wo = frappe.get_doc("Work Order", wo_name)
+            if wo.docstatus == 0:
+                wo.flags.ignore_permissions = True
+                wo.submit()
+                wo = frappe.get_doc("Work Order", wo.name)
+
+            if wo.docstatus != 1:
+                continue
+
+            pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
+            if pending_transfer > 1e-8 and not cint(wo.skip_transfer):
+                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
+
+            wo = frappe.get_doc("Work Order", wo.name)
+            pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
+            if pending_manufacture > 1e-8:
+                _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
+
+            wo = frappe.get_doc("Work Order", wo.name)
+            if hasattr(wo, "update_work_order_qty"):
+                try: wo.update_work_order_qty()
+                except: pass
+            if hasattr(wo, "update_status"):
+                try: wo.update_status()
+                except: pass
+            if flt(wo.produced_qty) >= flt(wo.qty) - 1e-8:
+                if ticket.get("status") != "completed":
+                    ticket.db_set("status", "completed", update_modified=False)
+
+        try:
+            _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        except Exception:
+            pass
+
+        _set_restaurant_order_status(so_name, "delivered", force=True)
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Background Deliver POS Order Error")
+        _append_sales_order_note(so_name, f"[ERROR] Delivery failed: {str(e)[:100]}")
+        frappe.db.commit()
+
+@frappe.whitelist()
+def deliver_pos_order(order_name):
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+
+    status = _core_order_status(frappe.get_doc("Sales Order", so_name))
+    if status == "delivered":
+        dn = frappe.db.get_value("Delivery Note Item", {"against_sales_order": so_name}, "parent")
+        return {
+            "sales_order": so_name,
+            "status": "success",
+            "delivery_note": dn or "",
+            "message": "Order is already delivered."
+        }
+
+    result = {
+        "sales_order": so_name,
+        "status": "success",
+        "delivery_note": "در حال صدور...",
+    }
+    
+    # Set foreground status to preparing before background execution
+    _set_restaurant_order_status(so_name, "preparing", force=True)
+    frappe.db.commit()
+
+    try:
+        from frappe.utils.background_jobs import enqueue
+        enqueue(
+            "restaurant.api._background_deliver_pos_order",
+            queue="short",
+            so_name=so_name,
+            now=frappe.flags.in_test
+        )
+    except Exception:
+        _background_deliver_pos_order(so_name)
+
     return result
 
 @frappe.whitelist()
 def produce_and_deliver_pos_order(order_name):
-    # تولید هوشمند + تحویل (بدون وابستگی به تنظیمات - همه مراحل رو اجباری اجرا میکنه)
-    # 1) چک میکنه اگه محصول تو انبار هست -> نیازی به تولید نیست
-    # 2) اگه تو انبار نیست و BOM داره -> تولید کامل (WO + SE Material Transfer + SE Manufacture)
-    # 3) رسید تحویل (DN)
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
@@ -14281,176 +14914,53 @@ def produce_and_deliver_pos_order(order_name):
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
-    so_doc = frappe.get_doc("Sales Order", so_name)
-    result = {"sales_order": so_name}
+    status = _core_order_status(frappe.get_doc("Sales Order", so_name))
+    if status == "delivered":
+        dn = frappe.db.get_value("Delivery Note Item", {"against_sales_order": so_name}, "parent")
+        return {
+            "sales_order": so_name,
+            "status": "success",
+            "delivery_note": dn or "",
+            "message": "Order is already delivered."
+        }
 
-    # برا هر آیتم چک کن که تو انبار هست یا نیاز به تولید داره
-    needs_any_production = False
-    skip_items = []
-    stock_items = []
-    for item in so_doc.items:
-        item_code = item.item_code
-        item_doc = frappe.get_doc("Item", item_code)
-
-        # اگر BOM نداره -> تولید نمیخواد
-        if not _item_requires_production(item_doc):
-            skip_items.append({"item": item_code, "reason": "no_production_required"})
-            continue
-
-        has_bom = frappe.db.exists("BOM", {"item": item_code, "is_active": 1, "docstatus": 1})
-        if not has_bom:
-            skip_items.append({"item": item_code, "reason": "no_active_bom"})
-            continue
-
-        # موجودی انبار رو چک کن
-        warehouse = None
-        default_wh = frappe.db.get_value("Item Default", {"parent": item_code, "company": so_doc.company}, "default_warehouse")
-        if default_wh:
-            warehouse = default_wh
-        else:
-            warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
-
-        actual_qty = 0
-        if warehouse and frappe.db.exists("DocType", "Bin"):
-            bin_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")
-            if bin_data:
-                actual_qty = flt(bin_data)
-
-        required_qty = flt(item.qty)
-
-        if actual_qty >= required_qty:
-            # تو انبار هست -> نیازی به تولید نداره
-            stock_items.append({"item": item_code, "available": actual_qty, "required": required_qty})
-            continue
-
-        needs_any_production = True
-
-    result["in_stock_skip"] = stock_items
-    result["production_skip"] = skip_items
-    result["needs_production"] = needs_any_production
-
-    if not needs_any_production:
-        # اگه هیچی نیاز به تولید نداره، فقط برو رسید تحویل
-        try:
-            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
-            if dn_name:
-                result["delivery_note"] = dn_name
-        except Exception:
-            pass
-        _set_restaurant_order_status(so_name, "delivered", force=True)
-        _append_sales_order_note(so_name, "[PRODUCE_DELIVER] All items in stock. Delivered directly.")
-        frappe.db.commit()
-        return result
-
-    # 1. ایجاد Production Ticket (اگه وجود نداره)
-    ticket_names = []
-    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
-        ticket_names = frappe.get_all(
-            "Restaurant Production Ticket",
-            filters={"sales_order": so_name},
-            pluck="name", ignore_permissions=True, order_by="creation asc"
-        )
-
-    if not ticket_names:
-        creation_payload = _create_production_for_sales_order(so_doc)
-        ticket_names = creation_payload.get("production_tickets") or []
-        result["tickets_created"] = ticket_names
-
-    # 2. اجرای کامل تولید برای هر تیکت
-    se_list = []
-    for ticket_name in ticket_names:
-        if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
-            continue
-        ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
-        wo_name = ticket.get("work_order") or ""
-
-        if not wo_name or not frappe.db.exists("Work Order", wo_name):
-            continue
-
-        wo = frappe.get_doc("Work Order", wo_name)
-
-        # Submit Work Order (اگه هنوز submit نشده)
-        if wo.docstatus == 0:
-            wo.flags.ignore_permissions = True
-            wo.submit()
-            wo = frappe.get_doc("Work Order", wo.name)
-            result.setdefault("submitted_work_orders", []).append(wo.name)
-
-        if wo.docstatus != 1:
-            continue
-
-        # Material Transfer for Manufacture - فقط اگه انتقال کامل نشده
-        pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
-        if pending_transfer > 1e-8:
-            se_name = _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
-            if se_name:
-                se_list.append(se_name)
-                result.setdefault("stock_entries_material", []).append(se_name)
-
-        # Manufacture - فقط اگه تولید کامل نشده
-        wo = frappe.get_doc("Work Order", wo.name)
-        pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
-        if pending_manufacture > 1e-8:
-            se_name = _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
-            if se_name:
-                se_list.append(se_name)
-                result.setdefault("stock_entries_manufacture", []).append(se_name)
-
-        # به‌روزرسانی Work Order
-        wo = frappe.get_doc("Work Order", wo.name)
-        if hasattr(wo, "update_work_order_qty"):
-            try:
-                wo.update_work_order_qty()
-            except Exception:
-                pass
-        if hasattr(wo, "update_status"):
-            try:
-                wo.update_status()
-            except Exception:
-                pass
-
-        # Mark ticket as completed
-        if flt(wo.produced_qty) >= flt(wo.qty) - 1e-8:
-            if ticket.get("status") or "" != "completed":
-                ticket.db_set("status", "completed", update_modified=False)
-
-    result["stock_entries"] = se_list
-
-    # 3. رسید تحویل
-    try:
-        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
-        if dn_name:
-            result["delivery_note"] = dn_name
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "ProduceAndDeliver DN")
-        frappe.throw(_("Delivery Note creation failed."))
-
-    _set_restaurant_order_status(so_name, "delivered", force=True)
-    _append_sales_order_note(so_name, "[PRODUCE_DELIVER] Full production and delivery completed.")
+    result = {
+        "sales_order": so_name,
+        "status": "success",
+        "delivery_note": "در حال صدور...",
+    }
+    
+    # Set foreground status to preparing before background execution
+    _set_restaurant_order_status(so_name, "preparing", force=True)
     frappe.db.commit()
+
+    try:
+        from frappe.utils.background_jobs import enqueue
+        enqueue(
+            "restaurant.api._background_deliver_pos_order",
+            queue="short",
+            so_name=so_name,
+            now=frappe.flags.in_test
+        )
+    except Exception:
+        _background_deliver_pos_order(so_name)
+
     return result
 
 @frappe.whitelist()
-def create_and_settle_pos_order(payload):
-    # تسویه و تحویل: SO + Production + SI + DN + Payment - همه چیز
-    _ensure_management_access()
-    payload = _parse_json(payload, {})
 
-    # 1. ثبت سفارش
-    order_result = create_pos_order(payload)
-    so_name = order_result.get("order_id", "")
-
-    # 2. رسید تحویل - سعی کن اول بساز (اگر ساخت که عالیه)
-    dn_name = None
-    try:
-        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error")
-
-    # 3. تولید (اگه نیاز باشه)
-    prod_result = {}
+def _background_production_and_delivery(so_name):
+    frappe.db.commit()
     try:
         so_doc = frappe.get_doc("Sales Order", so_name)
+        # 1. Delivery Note
+        dn_name = None
+        try:
+            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error Background")
+
+        # 2. Production
         ticket_names = []
         if frappe.db.exists("DocType", "Restaurant Production Ticket"):
             ticket_names = frappe.get_all(
@@ -14460,6 +14970,7 @@ def create_and_settle_pos_order(payload):
         if not ticket_names:
             cp = _create_production_for_sales_order(so_doc)
             ticket_names = cp.get("production_tickets") or []
+            
         for ticket_name in ticket_names:
             if not frappe.db.exists("Restaurant Production Ticket", ticket_name):
                 continue
@@ -14475,7 +14986,7 @@ def create_and_settle_pos_order(payload):
             if wo.docstatus != 1:
                 continue
             pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
-            if pending_transfer > 1e-8:
+            if pending_transfer > 1e-8 and not cint(wo.skip_transfer):
                 _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
             wo = frappe.get_doc("Work Order", wo.name)
             pending_mfg = max(flt(wo.qty) - flt(wo.produced_qty), 0)
@@ -14488,32 +14999,57 @@ def create_and_settle_pos_order(payload):
             if hasattr(wo, "update_status"):
                 try: wo.update_status()
                 except: pass
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "CreateAndSettle Production")
+                
+        # 3. Retry Delivery Note if it failed earlier
+        if not dn_name:
+            try:
+                _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+            except Exception:
+                pass
+                
+        _set_restaurant_order_status(so_name, "delivered", force=True)
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "CreateAndSettle Background Production Error")
+        _append_sales_order_note(so_name, f"[ERROR] Production failed: {str(e)[:100]}")
+        frappe.db.commit()
 
-    # 4. تسویه (SI + Payment)
+@frappe.whitelist()
+def create_and_settle_pos_order(payload):
+    # تسویه و تحویل: SO + SI + Payment (Sync) -> Production + DN (Background)
+    _ensure_management_access()
+    payload = _parse_json(payload, {})
+
+    # 1. ثبت سفارش (Sync)
+    order_result = create_pos_order(payload)
+    so_name = order_result.get("order_id", "")
+
+    # 2. تسویه (SI + Payment) (Sync)
     payment = payload.get("payment", {})
     settle_result = settle_pos_order(order_name=so_name, payment=payment)
 
-    # 5. اگر رسید تحویل ساخته نشد (مرحله ۲)، دوباره تلاش کن
-    if not dn_name:
-        try:
-            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
-            if dn_name:
-                frappe.log_error(f"DN created at retry: {dn_name}", "CreateAndSettle DN Retry")
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Retry Error")
-
-    # Set delivered after all steps complete
-    _set_restaurant_order_status(so_name, "delivered", force=True)
+    # 3. Production + Delivery Note (Background)
+    _set_restaurant_order_status(so_name, "preparing", force=True)
     frappe.db.commit()
+
+    try:
+        from frappe.utils.background_jobs import enqueue
+        enqueue(
+            "restaurant.api._background_production_and_delivery",
+            queue="short",
+            so_name=so_name,
+            now=frappe.flags.in_test
+        )
+    except Exception:
+        # Fallback to sync if enqueue fails
+        _background_production_and_delivery(so_name)
 
     return {
         "status": "success",
         "order_id": so_name,
         "order_code": order_result.get("order_code", ""),
         "sales_invoice": settle_result.get("sales_invoice", ""),
-        "delivery_note": dn_name or "",
+        "delivery_note": "در حال صدور...",
     }
 
 @frappe.whitelist()
@@ -14524,7 +15060,7 @@ def create_management_pos_order(payload):
 		payload = {}
 
 	customer_name = (payload.get("customer_name") or "POS Customer").strip()
-	mobile = (payload.get("mobile") or "09120000000").strip()
+	mobile = (payload.get("mobile") or "").strip()
 	order_type = (payload.get("order_type") or "takeaway").strip()
 	address = (payload.get("address") or "").strip()
 	note = (payload.get("note") or "").strip()
@@ -14590,7 +15126,7 @@ def confirm_management_pos_payment(
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 		"payment": payment_result,
 		"automation": automation_payload or {},
 	}
@@ -14642,7 +15178,7 @@ def mark_management_order_paid(order_name, reference_no=None, rrn=None, provider
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 		"payment": payment_result,
 		"restaurant_status": _core_order_status(frappe.get_doc("Sales Order", so_name)),
 	}
@@ -14673,9 +15209,113 @@ def complete_management_order(order_name, reference_no=None, rrn=None, provider_
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 		"payment": payment_result,
 		"restaurant_status": _core_order_status(frappe.get_doc("Sales Order", so_name)),
+	}
+
+
+@frappe.whitelist()
+
+@frappe.whitelist()
+def purge_management_pos_order(order_name):
+	_ensure_management_access()
+	if not order_name:
+		frappe.throw(_("Order name is required."))
+
+	so_name = _resolve_sales_order_name(order_name)
+	if not so_name or not frappe.db.exists("Sales Order", so_name):
+		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+
+	summary = {
+		"cleaned_records": {},
+		"errors": []
+	}
+
+	def _cancel_and_delete(doctype, names):
+		if not names:
+			return
+		if doctype not in summary["cleaned_records"]:
+			summary["cleaned_records"][doctype] = []
+		
+		for name in set(names):
+			if not frappe.db.exists(doctype, name):
+				continue
+			try:
+				doc = frappe.get_doc(doctype, name)
+				if doc.docstatus == 1:
+					doc.flags.ignore_permissions = True
+					doc.cancel()
+				
+				# Only delete if it's draft, or if it's a custom log (like POS Log / Ticket)
+				# For core ERPNext documents, safe to delete draft, but CANCEL only if submitted.
+				if doc.docstatus == 0 or doctype in ["Restaurant Production Ticket", "Restaurant POS Payment Log"]:
+					frappe.delete_doc(doctype, name, force=True, ignore_permissions=True)
+					summary["cleaned_records"][doctype].append(f"{name} (Deleted)")
+				else:
+					summary["cleaned_records"][doctype].append(f"{name} (Cancelled)")
+			except Exception as e:
+				summary["errors"].append(f"Failed to clean {doctype} {name}: {str(e)}")
+
+	# 1. Gather dependent docs
+	tickets = frappe.get_all("Restaurant Production Ticket", filters={"sales_order": so_name}, pluck="name", ignore_permissions=True) if frappe.db.exists("DocType", "Restaurant Production Ticket") else []
+	
+	wos = frappe.get_all("Work Order", filters={"sales_order": so_name}, pluck="name", ignore_permissions=True) if frappe.db.exists("DocType", "Work Order") else []
+	
+	ses = []
+	if wos and frappe.db.exists("DocType", "Stock Entry"):
+		ses = frappe.get_all("Stock Entry", filters={"work_order": ["in", wos]}, pluck="name", ignore_permissions=True)
+		
+	dns = []
+	if frappe.db.exists("DocType", "Delivery Note Item"):
+		dn_items = frappe.get_all("Delivery Note Item", filters={"against_sales_order": so_name}, pluck="parent", ignore_permissions=True)
+		dns = list(set(dn_items))
+		
+	sis = []
+	if frappe.db.exists("DocType", "Sales Invoice Item"):
+		si_items = frappe.get_all("Sales Invoice Item", filters={"sales_order": so_name}, pluck="parent", ignore_permissions=True)
+		sis = list(set(si_items))
+		
+	pes = []
+	if frappe.db.exists("DocType", "Payment Entry Reference"):
+		refs = [{"reference_doctype": "Sales Order", "reference_name": so_name}]
+		for si in sis:
+			refs.append({"reference_doctype": "Sales Invoice", "reference_name": si})
+			
+		for ref in refs:
+			pe_refs = frappe.get_all("Payment Entry Reference", filters=ref, pluck="parent", ignore_permissions=True)
+			pes.extend(pe_refs)
+		pes = list(set(pes))
+		
+	pos_logs = frappe.get_all("Restaurant POS Payment Log", filters={"sales_order": so_name}, pluck="name", ignore_permissions=True) if frappe.db.exists("DocType", "Restaurant POS Payment Log") else []
+
+	# Cancel & Delete in dependency order
+	_cancel_and_delete("Payment Entry", pes)
+	_cancel_and_delete("Sales Invoice", sis)
+	_cancel_and_delete("Delivery Note", dns)
+	_cancel_and_delete("Stock Entry", ses)
+	_cancel_and_delete("Work Order", wos)
+	_cancel_and_delete("Restaurant Production Ticket", tickets)
+	_cancel_and_delete("Restaurant POS Payment Log", pos_logs)
+
+	if _has_column("Sales Order", "restaurant_status") and frappe.db.exists("Sales Order", so_name):
+		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
+	
+	# Finally Sales Order
+	_cancel_and_delete("Sales Order", [so_name])
+
+	frappe.db.commit()
+	if summary["errors"]:
+		return {
+			"status": "partial_success",
+			"order_name": so_name,
+			"summary": summary
+		}
+
+	return {
+		"status": "success",
+		"order_name": so_name,
+		"summary": summary
 	}
 
 
@@ -14686,8 +15326,7 @@ def void_management_pos_order(order_name, reason=None):
 		frappe.throw(_("Order name is required."))
 
 	so_name = order_name
-	if not frappe.db.exists("Sales Order", so_name) and _has_column("Sales Order", "restaurant_order_code"):
-		so_name = frappe.db.get_value("Sales Order", {"restaurant_order_code": order_name}, "name")
+
 	if not so_name or not frappe.db.exists("Sales Order", so_name):
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
@@ -14712,7 +15351,7 @@ def void_management_pos_order(order_name, reason=None):
 	return {
 		"status": "success",
 		"order_name": doc.name,
-		"order_code": doc.get("restaurant_order_code") or doc.name,
+		"order_code": doc.name,
 		"state": "cancelled",
 	}
 
@@ -14754,8 +15393,7 @@ def get_management_order_detail(order_name, source=None):
 		so_name = None
 		if frappe.db.exists("Sales Order", order_name):
 			so_name = order_name
-		elif _has_column("Sales Order", "restaurant_order_code"):
-			so_name = frappe.db.get_value("Sales Order", {"restaurant_order_code": order_name}, "name")
+
 
 		if so_name:
 			doc = frappe.get_doc("Sales Order", so_name)
@@ -14767,14 +15405,17 @@ def get_management_order_detail(order_name, source=None):
 					amount = row.get("base_amount")
 				items.append(
 					{
+						"item_code": row.item_code or "",
 						"title": row.item_name,
 						"qty": flt(row.qty),
+						"unit_price": flt(row.rate),
 						"line_total": flt(
 							amount if amount not in (None, "") else flt(row.rate) * flt(row.qty)
 						),
 						"customization_json": row.get("restaurant_customization_json")
 						if has_item_customization
 						else "",
+						"note": row.get("restaurant_note") or "",
 					}
 				)
 
@@ -14783,13 +15424,17 @@ def get_management_order_detail(order_name, source=None):
 					"source": "web",
 					"doctype": "Sales Order",
 					"name": doc.name,
-					"order_code": doc.get("restaurant_order_code") or doc.name,
+					"order_code": doc.name,
 					"customer_name": doc.customer_name,
 					"mobile": doc.get("restaurant_customer_mobile") or "",
 					"channel": doc.get("restaurant_order_type") or "takeaway",
 					"status": _core_order_status(doc),
 					"subtotal": flt(doc.total or doc.net_total),
 					"grand_total": flt(doc.grand_total or doc.total or doc.net_total),
+					"discount_amount": flt(doc.get("discount_amount") or doc.get("additional_discount_amount") or 0),
+					"tax_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Tax" in t.description or "مالیات" in t.description]),
+					"service_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Service" in t.description or "سرویس" in t.description]),
+					"tip_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Tip" in t.description or "انعام" in t.description]),
 					"created_at": _json_safe_datetime(
 						_management_business_datetime(doc.get("transaction_date"), doc.creation)
 						or doc.creation
@@ -14800,6 +15445,7 @@ def get_management_order_detail(order_name, source=None):
 					"payment_status": doc.get("restaurant_payment_status") or "",
 					"payment_provider": doc.get("restaurant_payment_provider") or "",
 					"payment_reference": doc.get("restaurant_payment_reference") or "",
+					"courier": doc.get("restaurant_courier") or "",
 					"payment_rrn": doc.get("restaurant_payment_rrn") or "",
 					"items": items,
 				}
@@ -14918,98 +15564,105 @@ def update_management_order(order_name, payment_method=None, note=None, customer
 	return {
 		"status": "success",
 		"order_name": so_name,
-		"order_code": frappe.db.get_value("Sales Order", so_name, "restaurant_order_code") or so_name,
+		"order_code": so_name,
 	}
 
 
 @frappe.whitelist()
 def create_management_return_order(order_name, reason=None):
-	_ensure_management_access()
-	if not order_name:
-		frappe.throw(_("Order name is required."))
+    """ساخت فاکتور برگشتی کامل: SI برگشتی + DN برگشتی + کنسل WO (بدون SO جدید)"""
+    _ensure_management_access()
+    if not order_name:
+        frappe.throw(_("Order name is required."))
 
-	so_name = _resolve_sales_order_name(order_name)
-	if not so_name:
-		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name:
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
-	doc = frappe.get_doc("Sales Order", so_name)
-	status = _core_order_status(doc)
+    doc = frappe.get_doc("Sales Order", so_name)
+    status = _core_order_status(doc)
 
-	if status not in ("paid", "delivered", "completed", "cancelled"):
-		frappe.throw(_("فقط سفارش‌های پرداخت‌شده یا تحویل‌شده قابل برگشت هستند."))
+    if status not in ("paid", "delivered", "completed", "cancelled"):
+        frappe.throw(_("فقط سفارش‌های پرداخت‌شده یا تحویل‌شده قابل برگشت هستند."))
 
-	reason_text = (reason or "درخواست مشتری").strip()
-	original_code = doc.get("restaurant_order_code") or doc.name
+    reason_text = (reason or "درخواست مشتری").strip()
+    original_code = doc.name
+    
+    result = {
+        "original_order_name": so_name,
+        "original_order_code": original_code,
+    }
 
-	return_doc = frappe.new_doc("Sales Order")
-	return_doc.customer = doc.customer
-	return_doc.company = doc.company
-	return_doc.currency = doc.currency
-	return_doc.selling_price_list = doc.selling_price_list
-	return_doc.transaction_date = frappe.utils.today()
-	return_doc.delivery_date = frappe.utils.today()
+    # 1. ساخت SI برگشتی از روی فاکتور فروش اصلی
+    try:
+        si_name = _existing_si_for_so(so_name)
+        if si_name:
+            return_si = _create_return_si(si_name, reason_text)
+            if return_si:
+                result["return_si"] = return_si
+        else:
+            result["return_si"] = "no_si_found"
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Return SI Creation")
+        result["return_si_error"] = "SI creation failed"
 
-	if _has_column("Sales Order", "restaurant_note"):
-		return_doc.restaurant_note = f"[RETURN] {reason_text} | برگشت از: {original_code}"
-	if _has_column("Sales Order", "restaurant_order_type"):
-		return_doc.restaurant_order_type = doc.get("restaurant_order_type") or "takeaway"
-	if _has_column("Sales Order", "restaurant_customer_mobile"):
-		return_doc.restaurant_customer_mobile = doc.get("restaurant_customer_mobile") or ""
-	if _has_column("Sales Order", "restaurant_payment_method"):
-		return_doc.restaurant_payment_method = doc.get("restaurant_payment_method") or "cash"
-	if _has_column("Sales Order", "restaurant_payment_status"):
-		return_doc.restaurant_payment_status = "paid"
-	if _has_column("Sales Order", "restaurant_status"):
-		return_doc.restaurant_status = "returned"
+    # 2. ساخت DN برگشتی از روی رسید تحویل اصلی
+    try:
+        dn_name = _existing_delivery_note_for_sales_order(so_name)
+        if dn_name:
+            return_dn = _create_return_dn(dn_name, reason_text)
+            if return_dn:
+                result["return_dn"] = return_dn
+        else:
+            result["return_dn"] = "no_dn_found"
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Return DN Creation")
+        result["return_dn_error"] = "DN creation failed"
 
-	for row in doc.items or []:
-		return_doc.append(
-			"items",
-			{
-				"item_code": row.item_code,
-				"item_name": row.item_name,
-				"qty": flt(row.qty),
-				"rate": flt(row.rate),
-				"warehouse": row.warehouse,
-				"uom": row.uom,
-				"stock_uom": row.stock_uom,
-				"conversion_factor": flt(row.conversion_factor) or 1,
-				"delivery_date": frappe.utils.today(),
-			},
-		)
+    # 3. کنسل کردن دستور کارهای فعال
+    try:
+        if frappe.db.exists("DocType", "Work Order"):
+            wo_names = frappe.get_all("Work Order",
+                filters={"sales_order": so_name, "docstatus": 1},
+                pluck="name", ignore_permissions=True)
+            for wo_name in wo_names:
+                wo = frappe.get_doc("Work Order", wo_name)
+                se_names = frappe.get_all("Stock Entry",
+                    filters={"work_order": wo_name, "docstatus": 1},
+                    pluck="name", ignore_permissions=True)
+                for se_name in se_names:
+                    se = frappe.get_doc("Stock Entry", se_name)
+                    se.flags.ignore_permissions = True
+                    se.cancel()
+                wo.flags.ignore_permissions = True
+                wo.cancel()
+            result["cancelled_work_orders"] = wo_names
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Return Cancel WO")
+        result["wo_cancel_error"] = "Work Order cancellation failed"
 
-	return_doc.flags.ignore_permissions = True
-	return_doc.flags.ignore_mandatory = True
-	return_doc.flags.ignore_validate = True
+    # 4. کنسل کردن سفارش فروش اصلی
+    if doc.docstatus == 1:
+        try:
+            doc.flags.ignore_permissions = True
+            doc.cancel()
+            result["cancelled_so"] = so_name
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Return Cancel SO")
+            result["so_cancel_error"] = "SO cancellation failed"
 
-	try:
-		return_doc.insert()
-	except Exception as insert_err:
-		frappe.log_error(frappe.get_traceback(), "Create Return Order Error")
-		frappe.throw(f"خطا در ساخت فاکتور برگشتی: {str(insert_err)}")
+    if _has_column("Sales Order", "restaurant_status"):
+        frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
 
-	return_code = f"RET-{original_code}"
-	if _has_column("Sales Order", "restaurant_order_code"):
-		frappe.db.set_value(
-			"Sales Order", return_doc.name, "restaurant_order_code", return_code, update_modified=False
-		)
+    _append_sales_order_note(so_name, f"[RETURN] برگشت کامل انجام شد. {reason_text}")
+    frappe.db.commit()
 
-	if _has_column("Sales Order", "restaurant_status"):
-		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "returned", update_modified=False)
-
-	_append_sales_order_note(so_name, f"[RETURN] فاکتور برگشتی ساخته شد: {return_doc.name} ({return_code})")
-	frappe.db.commit()
-
-	return {
-		"status": "success",
-		"return_order_name": return_doc.name,
-		"return_order_code": return_code,
-		"original_order_name": so_name,
-		"original_order_code": original_code,
-		"customer_name": doc.customer_name,
-		"grand_total": flt(doc.grand_total or doc.total or 0),
-	}
-
+    result.update({
+        "status": "success",
+        "customer_name": doc.customer_name,
+        "grand_total": flt(doc.grand_total or doc.total or 0),
+    })
+    return result
 
 def _management_resolve_item_name(item_name):
 	raw_value = (item_name or "").strip()
@@ -15626,9 +16279,7 @@ def _management_template_variants_payload(template_doc):
 				else (0 if cint(row.get("disabled") or 0) else 1),
 				"is_disabled": cint(row.get("disabled") or 0),
 				"show_in_website": cint(row.get("show_in_website") or 0) if has_show_in_website else 1,
-				"base_price": flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0)
-				if has_restaurant_base_price
-				else flt(row.get("standard_rate") or 0),
+				"base_price": _get_default_item_price_rate(row) if _get_default_item_price_rate(row) is not None else (flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0) if has_restaurant_base_price else flt(row.get("standard_rate") or 0)),
 				"attributes": attribute_rows,
 			}
 		)
@@ -17075,6 +17726,19 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"website_image": item_doc.get("website_image") or "",
 			"restaurant_slug": item_doc.get("restaurant_slug") or "",
 			"restaurant_enabled": cint(item_doc.get("restaurant_enabled") or 0),
+			"restaurant_out_of_stock": cint(item_doc.get("restaurant_out_of_stock") or 0)
+			if _has_column("Item", "restaurant_out_of_stock")
+			else 0,
+			"restaurant_packaging_price": flt(item_doc.get("restaurant_packaging_price") or 0)
+			if _has_column("Item", "restaurant_packaging_price")
+			else 0,
+			"barcodes": [
+				(barcode_row.get("barcode") or "").strip()
+				for barcode_row in (item_doc.get("barcodes") or [])
+				if (barcode_row.get("barcode") or "").strip()
+			]
+			if frappe.db.exists("DocType", "Item Barcode")
+			else [],
 			"restaurant_is_featured": cint(item_doc.get("restaurant_is_featured") or 0),
 			"restaurant_is_best_seller": cint(item_doc.get("restaurant_is_best_seller") or 0),
 			"restaurant_sort_order": cint(item_doc.get("restaurant_sort_order") or 0),
@@ -17198,8 +17862,9 @@ def update_management_product_settings(payload=None):
 		"restaurant_allow_direct_add",
 		"restaurant_show_nutrition_summary",
 		"restaurant_show_allergen_warnings",
+		"restaurant_out_of_stock",
 	}
-	float_fields = {"restaurant_auto_add_qty"}
+	float_fields = {"restaurant_auto_add_qty", "restaurant_packaging_price"}
 	nutrition_fields = set(NUTRITION_KEY_FIELD_MAP.values())
 
 	changed = False
@@ -17807,6 +18472,10 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		item_fields.append("restaurant_item_tags")
 	if _has_column("Item", "restaurant_coming_soon"):
 		item_fields.append("restaurant_coming_soon")
+	if _has_column("Item", "restaurant_out_of_stock"):
+		item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_packaging_price"):
+		item_fields.append("restaurant_packaging_price")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -17851,6 +18520,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 				"custom_snapp_code": row.get("custom_snapp_code") or "",
 				"is_active": cint(row.restaurant_enabled),
 				"is_disabled": cint(row.disabled),
+				"out_of_stock": cint(row.get("restaurant_out_of_stock") or 0),
+				"packaging_price": flt(row.get("restaurant_packaging_price") or 0),
 				"stock_qty": flt(stock_by_item.get(row.name) or 0),
 			}
 		)
@@ -17942,9 +18613,54 @@ def delete_management_product(item_name=None, allow_archive_on_link=1, force_del
 def list_management_customers(search=None, date_from=None, date_to=None):
 	_ensure_management_access()
 	search_text = (search or "").strip().lower()
-	orders = _management_fetch_web_orders(date_from=date_from, date_to=date_to)
+	
+	# Fetch all ERPNext Customers
+	fields = ["name", "customer_name"]
+	if _has_column("Customer", "mobile_no"):
+		fields.append("mobile_no")
+	if _has_column("Customer", "customer_primary_mobile"):
+		fields.append("customer_primary_mobile")
+		
+	filters = {"disabled": 0}
+	or_filters = {}
+	if search_text:
+		or_filters = {
+			"customer_name": ["like", f"%{search_text}%"],
+			"name": ["like", f"%{search_text}%"]
+		}
+		if _has_column("Customer", "mobile_no"):
+			or_filters["mobile_no"] = ["like", f"%{search_text}%"]
+		if _has_column("Customer", "customer_primary_mobile"):
+			or_filters["customer_primary_mobile"] = ["like", f"%{search_text}%"]
 
+	get_all_kwargs = {
+		"doctype": "Customer",
+		"fields": fields,
+		"filters": filters,
+		"ignore_permissions": True,
+		"limit_page_length": 5000
+	}
+	if or_filters:
+		get_all_kwargs["or_filters"] = or_filters
+	customer_docs = frappe.get_all(**get_all_kwargs)
+	
 	grouped = {}
+	for doc in customer_docs:
+		customer_name = (doc.get("customer_name") or doc.get("name") or "").strip()
+		mobile = (doc.get("mobile_no") or doc.get("customer_primary_mobile") or "").strip()
+		if search_text and search_text not in f"{customer_name} {mobile}".lower():
+			continue
+		key = f"{customer_name}::{mobile}"
+		grouped[key] = {
+			"customer_name": customer_name,
+			"mobile": mobile,
+			"orders_count": 0,
+			"total_spent": 0.0,
+			"last_order_at": None,
+		}
+
+	# Fetch orders for stats
+	orders = _management_fetch_web_orders(date_from=date_from, date_to=date_to)
 	for order in orders:
 		if not _is_revenue_order(order):
 			continue
@@ -17995,6 +18711,286 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			for row in rows
 		]
 	}
+
+
+def _serialize_management_courier(row, vehicle_count_map=None):
+	vehicle_count_map = vehicle_count_map or {}
+	return {
+		"name": row.get("name") or "",
+		"courier_name": (row.get("courier_name") or "").strip(),
+		"courier_code": (row.get("courier_code") or "").strip(),
+		"mobile": (row.get("mobile") or "").strip(),
+		"access_code": (row.get("access_code") or "").strip(),
+		"vehicle_type": (row.get("vehicle_type") or "").strip(),
+		"plate_number": (row.get("plate_number") or "").strip(),
+		"zone": (row.get("zone") or "").strip(),
+		"assignment_priority": cint(row.get("assignment_priority") or 0),
+		"is_active": cint(row.get("is_active") or 0),
+		"notes": (row.get("notes") or "").strip(),
+		"vehicle_count": cint(vehicle_count_map.get(row.get("name")) or 0),
+		"modified": _json_safe_datetime(row.get("modified")),
+	}
+
+
+def _serialize_management_courier_vehicle(row, courier_map=None):
+	courier_map = courier_map or {}
+	courier_name = (row.get("courier") or "").strip()
+	courier_row = courier_map.get(courier_name) or {}
+	return {
+		"name": row.get("name") or "",
+		"title": (row.get("title") or "").strip(),
+		"courier": courier_name,
+		"courier_label": (courier_row.get("courier_name") or courier_name).strip(),
+		"vehicle_type": (row.get("vehicle_type") or "").strip(),
+		"plate_number": (row.get("plate_number") or "").strip(),
+		"is_primary": cint(row.get("is_primary") or 0),
+		"is_active": cint(row.get("is_active") or 0),
+		"notes": (row.get("notes") or "").strip(),
+		"modified": _json_safe_datetime(row.get("modified")),
+	}
+
+
+def _management_courier_vehicle_count_map():
+	if not frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		return {}
+	rows = frappe.get_all(
+		"Restaurant Courier Vehicle",
+		fields=["courier"],
+		filters={},
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	counts = {}
+	for row in rows:
+		courier_name = (row.get("courier") or "").strip()
+		if courier_name:
+			counts[courier_name] = cint(counts.get(courier_name) or 0) + 1
+	return counts
+
+
+def _management_courier_summary():
+	summary = {
+		"courier_count": 0,
+		"active_courier_count": 0,
+		"vehicle_count": 0,
+		"active_vehicle_count": 0,
+	}
+	if frappe.db.exists("DocType", "Restaurant Courier"):
+		summary["courier_count"] = cint(frappe.db.count("Restaurant Courier"))
+		summary["active_courier_count"] = cint(frappe.db.count("Restaurant Courier", {"is_active": 1}))
+	if frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		summary["vehicle_count"] = cint(frappe.db.count("Restaurant Courier Vehicle"))
+		summary["active_vehicle_count"] = cint(
+			frappe.db.count("Restaurant Courier Vehicle", {"is_active": 1})
+		)
+	return summary
+
+
+def _list_management_courier_options(active_only=True):
+	if not frappe.db.exists("DocType", "Restaurant Courier"):
+		return []
+	filters = {}
+	if active_only:
+		filters["is_active"] = 1
+	rows = frappe.get_all(
+		"Restaurant Courier",
+		fields=["name", "courier_name", "courier_code", "mobile", "zone", "assignment_priority"],
+		filters=filters,
+		order_by="assignment_priority asc, courier_name asc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	return [
+		{
+			"name": row.get("name") or "",
+			"label": (row.get("courier_name") or "").strip(),
+			"courier_code": (row.get("courier_code") or "").strip(),
+			"mobile": (row.get("mobile") or "").strip(),
+			"zone": (row.get("zone") or "").strip(),
+		}
+		for row in rows
+	]
+
+
+@frappe.whitelist()
+def list_management_couriers(search=None, active_only=None):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", "Restaurant Courier"):
+		return {"couriers": [], "summary": _management_courier_summary()}
+	search_text = (search or "").strip().lower()
+	filters = {}
+	if cint(active_only):
+		filters["is_active"] = 1
+	fields = [
+		"name",
+		"courier_name",
+		"courier_code",
+		"mobile",
+		"vehicle_type",
+		"plate_number",
+		"zone",
+		"assignment_priority",
+		"is_active",
+		"notes",
+		"modified",
+	]
+	if _has_column("Restaurant Courier", "access_code"):
+		fields.insert(4, "access_code")
+	or_filters = None
+	if search_text:
+		or_filters = {
+			"courier_name": ["like", f"%{search_text}%"],
+			"courier_code": ["like", f"%{search_text}%"],
+			"mobile": ["like", f"%{search_text}%"],
+			"plate_number": ["like", f"%{search_text}%"],
+			"zone": ["like", f"%{search_text}%"],
+		}
+	rows = frappe.get_all(
+		"Restaurant Courier",
+		fields=fields,
+		filters=filters,
+		or_filters=or_filters,
+		order_by="assignment_priority asc, courier_name asc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	vehicle_count_map = _management_courier_vehicle_count_map()
+	return {
+		"couriers": [_serialize_management_courier(row, vehicle_count_map) for row in rows],
+		"summary": _management_courier_summary(),
+	}
+
+
+@frappe.whitelist()
+def save_management_courier(payload=None):
+	_ensure_management_access()
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid payload format."))
+	docname = (data.get("name") or "").strip()
+	if docname and frappe.db.exists("Restaurant Courier", docname):
+		doc = frappe.get_doc("Restaurant Courier", docname)
+	else:
+		doc = frappe.new_doc("Restaurant Courier")
+	for fieldname in (
+		"courier_name",
+		"courier_code",
+		"mobile",
+		"access_code",
+		"vehicle_type",
+		"plate_number",
+		"zone",
+		"assignment_priority",
+		"is_active",
+		"notes",
+	):
+		if fieldname in data and (fieldname != "access_code" or hasattr(doc, "access_code")):
+			doc.set(fieldname, data.get(fieldname))
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success", "courier": _serialize_management_courier(doc.as_dict())}
+
+
+@frappe.whitelist()
+def delete_management_courier(name):
+	_ensure_management_access()
+	docname = (name or "").strip()
+	if not docname or not frappe.db.exists("Restaurant Courier", docname):
+		frappe.throw(_("Courier not found."))
+	linked_vehicle_count = 0
+	if frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		linked_vehicle_count = cint(
+			frappe.db.count("Restaurant Courier Vehicle", {"courier": docname})
+		)
+	if linked_vehicle_count:
+		frappe.throw(_("Delete courier vehicles first."))
+	frappe.delete_doc("Restaurant Courier", docname, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success"}
+
+
+@frappe.whitelist()
+def list_management_courier_vehicles(search=None, courier=None, active_only=None):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", "Restaurant Courier Vehicle"):
+		return {"vehicles": [], "summary": _management_courier_summary()}
+	search_text = (search or "").strip().lower()
+	courier_name = (courier or "").strip()
+	filters = {}
+	if courier_name:
+		filters["courier"] = courier_name
+	if cint(active_only):
+		filters["is_active"] = 1
+	or_filters = None
+	if search_text:
+		or_filters = {
+			"title": ["like", f"%{search_text}%"],
+			"plate_number": ["like", f"%{search_text}%"],
+			"vehicle_type": ["like", f"%{search_text}%"],
+		}
+	rows = frappe.get_all(
+		"Restaurant Courier Vehicle",
+		fields=[
+			"name",
+			"title",
+			"courier",
+			"vehicle_type",
+			"plate_number",
+			"is_primary",
+			"is_active",
+			"notes",
+			"modified",
+		],
+		filters=filters,
+		or_filters=or_filters,
+		order_by="is_primary desc, modified desc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	courier_rows = frappe.get_all(
+		"Restaurant Courier",
+		fields=["name", "courier_name"],
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	courier_map = {(row.get("name") or "").strip(): row for row in courier_rows}
+	return {
+		"vehicles": [_serialize_management_courier_vehicle(row, courier_map) for row in rows],
+		"summary": _management_courier_summary(),
+	}
+
+
+@frappe.whitelist()
+def save_management_courier_vehicle(payload=None):
+	_ensure_management_access()
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid payload format."))
+	docname = (data.get("name") or "").strip()
+	if docname and frappe.db.exists("Restaurant Courier Vehicle", docname):
+		doc = frappe.get_doc("Restaurant Courier Vehicle", docname)
+	else:
+		doc = frappe.new_doc("Restaurant Courier Vehicle")
+	for fieldname in ("courier", "title", "vehicle_type", "plate_number", "is_primary", "is_active", "notes"):
+		if fieldname in data:
+			doc.set(fieldname, data.get(fieldname))
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"vehicle": _serialize_management_courier_vehicle(doc.as_dict()),
+	}
+
+
+@frappe.whitelist()
+def delete_management_courier_vehicle(name):
+	_ensure_management_access()
+	docname = (name or "").strip()
+	if not docname or not frappe.db.exists("Restaurant Courier Vehicle", docname):
+		frappe.throw(_("Courier vehicle not found."))
+	frappe.delete_doc("Restaurant Courier Vehicle", docname, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success"}
 
 
 def _management_customer_match(order, mobile="", customer_name=""):
@@ -18508,6 +19504,30 @@ def get_management_bi_report(report_key, date_from=None, date_to=None, compare_m
 		"cashier-performance": get_management_report_cashier_performance,
 		"cancellations": get_management_report_cancellations,
 		"modifier-usage": get_management_report_modifier_usage,
+		"category-sales": get_management_report_category_sales,
+		"table-sales": get_management_report_table_sales,
+		"payment-methods": get_management_report_payment_methods,
+		"product-sales": get_management_report_product_sales,
+		"shift-sales": get_management_report_shift_sales,
+		"inventory-valuation": get_management_report_inventory_valuation,
+		"stock-movements": get_management_report_stock_movements,
+		"inventory-waste": get_management_report_inventory_waste,
+		"customer-analytics": get_management_report_customer_analytics,
+		"campaign-performance": get_management_report_campaign_performance,
+		"wallet-summary": get_management_report_wallet_summary,
+		"credit-transactions": get_management_report_credit_transactions,
+		"care-feedback": get_management_report_care_feedback,
+		"survey-analytics": get_management_report_survey_analytics,
+		"courier-performance": get_management_report_courier_performance,
+		"waiter-performance": get_management_report_waiter_performance,
+		"kitchen-performance": get_management_report_kitchen_performance,
+		"profit-loss": get_management_report_profit_loss,
+		"breakeven": get_management_report_breakeven,
+		"menu-engineering": get_management_report_menu_engineering,
+		"tax-reconciliation": get_management_report_tax_reconciliation,
+		"branch-performance": get_management_report_branch_performance,
+		"vendor-sales": get_management_report_vendor_sales,
+		"receipt-payment-balance": get_management_report_receipt_payment_balance,
 	}
 	fn = dispatch.get(normalized_key)
 	if not fn:
@@ -18790,15 +19810,14 @@ def _get_session_request_docs(session_name):
 def _refresh_session_total_confirmed_amount(session_name):
 	rows = frappe.get_all(
 		"Restaurant Table Order",
-		fields=["sum(grand_total) as total"],
+		fields=["grand_total"],
 		filters={
 			"session": session_name,
 			"status": ["in", list(TABLE_ORDER_BILLING_STATUSES)],
 		},
-		limit_page_length=1,
 		ignore_permissions=True,
 	)
-	total = flt((rows[0].get("total") if rows else 0) or 0)
+	total = sum(flt(row.get("grand_total") or 0) for row in (rows or []))
 	frappe.db.set_value(
 		"Restaurant Table Session",
 		session_name,
@@ -19856,6 +20875,7 @@ def _management_doc_type_label(doctype_name):
 		"Leave Application": "درخواست مرخصی",
 		"Payment Entry": "سند ثبت تنخواه",
 		"Restaurant POS Payment Log": "گزارش صندوق پوز",
+		"Restaurant Register Closing": "اختتامیه صندوق",
 		"Sales Invoice": "فاکتور فروش",
 		"Sales Order": "سفارش فروش",
 		"Purchase Order": "سفارش خرید",
@@ -19896,6 +20916,9 @@ def _management_get_print_brand_settings():
 		"table_header_background_color": "#F7F2E3",
 		"border_color": "#D8C8B3",
 		"footer_text": "این نسخه برای چاپ داخلی مجموعه است.",
+		"print_font_family": "Peyda",
+		"print_font_size": 11,
+		"print_receipt_font_scale": "متوسط",
 	}
 	if not frappe.db.exists("DocType", "Restaurant Print Brand Settings"):
 		return defaults
@@ -20069,6 +21092,8 @@ def _management_fallback_bom_html(print_format_name):
 	footer_text = html_escape(str(brand.get("footer_text") or "این نسخه برای چاپ داخلی مجموعه است."))
 	brand_logo = html_escape(str(brand.get("logo") or ""))
 	title = html_escape(_management_print_format_title(print_format_name))
+	print_font_family = html_escape(str(brand.get("print_font_family") or "Peyda"))
+	print_font_size = min(max(cint(brand.get("print_font_size") or 11), 8), 24)
 
 	material_rows = "".join(
 		f"<tr><td>{index}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>"
@@ -20086,7 +21111,7 @@ def _management_fallback_bom_html(print_format_name):
 
 	return f"""
     <style>
-      body {{ margin: 0; direction: rtl; color: #2f3c36; font-family: Peyda, Tahoma, sans-serif; }}
+      body {{ margin: 0; direction: rtl; color: #2f3c36; font-family: {print_font_family}, Peyda, Tahoma, sans-serif; font-size: {print_font_size}px; }}
       .sheet {{ border: 1px solid {border_color}; border-radius: 12px; overflow: hidden; }}
       .header {{ background: {header_bg}; color: {header_text}; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
       .logo {{ width: 52px; height: 52px; border-radius: 10px; object-fit: cover; background: #fff; border: 1px solid {border_color}; }}
@@ -20259,9 +21284,13 @@ def _management_fallback_print_html(print_format_name, doctype_name, error_messa
 			f"خطا در رندر کامل قالب: {html_escape(str(error_message))}</p>"
 		)
 
+	brand_settings = _management_get_print_brand_settings()
+	print_font_family = html_escape(str(brand_settings.get("print_font_family") or "Peyda"))
+	print_font_size = min(max(cint(brand_settings.get("print_font_size") or 11), 8), 24)
+
 	return f"""
     <style>
-      body {{ direction: rtl; font-family: Peyda, Tahoma, sans-serif; margin: 18px; color: #1f3b32; }}
+      body {{ direction: rtl; font-family: {print_font_family}, Peyda, Tahoma, sans-serif; font-size: {print_font_size}px; margin: 18px; color: #1f3b32; }}
       .sheet {{ border: 1px solid #d9d9d9; border-radius: 12px; padding: 16px; }}
       h1 {{ margin: 0 0 10px; font-size: 18px; }}
       .line {{ border-bottom: 1px dashed #bcc7c1; min-height: 18px; margin-bottom: 8px; }}
@@ -22665,6 +23694,83 @@ def _is_restaurant_admin(user=None):
 
 
 @frappe.whitelist()
+def list_management_users(search=None):
+	if not _is_restaurant_admin():
+		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	search_text = (search or "").strip().lower()
+	filters = {}
+	rows = frappe.get_all(
+		"User",
+		fields=["name", "full_name", "email", "enabled", "user_type", "mobile_no", "last_login"],
+		filters=filters,
+		order_by="enabled desc, full_name asc",
+		ignore_permissions=True,
+		limit_page_length=1000,
+	)
+	role_map = {}
+	for row in rows:
+		role_map[row.name] = [r.role for r in frappe.get_all("Has Role", filters={"parent": row.name}, fields=["role"], ignore_permissions=True)]
+	result = []
+	for row in rows:
+		if search_text and search_text not in " ".join(str(row.get(k) or "").lower() for k in ("name", "full_name", "email", "mobile_no")):
+			continue
+		result.append({**row, "roles": sorted(role_map.get(row.name, []))})
+	roles = frappe.get_all("Role", filters={"disabled": 0}, pluck="name", order_by="name asc", ignore_permissions=True)
+	return {"users": result, "roles": roles}
+
+
+@frappe.whitelist()
+def save_management_user(payload=None):
+	if not _is_restaurant_admin():
+		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	data = _parse_json(payload, {})
+	if not isinstance(data, dict):
+		frappe.throw(_("Invalid user payload."))
+	user_name = (data.get("name") or data.get("email") or "").strip()
+	if user_name and frappe.db.exists("User", user_name):
+		doc = frappe.get_doc("User", user_name)
+		if doc.name == frappe.session.user and not cint(data.get("enabled", 1)):
+			frappe.throw(_("You cannot disable your own account."))
+	else:
+		email = (data.get("email") or "").strip().lower()
+		if not email:
+			frappe.throw(_("Email is required."))
+		doc = frappe.new_doc("User")
+		doc.email = email
+		doc.user_type = "System User"
+	for fieldname in ("email", "full_name", "mobile_no", "user_type"):
+		if fieldname in data and data.get(fieldname) is not None:
+			doc.set(fieldname, str(data.get(fieldname)).strip())
+	doc.enabled = 1 if data.get("enabled", 1) else 0
+	password = str(data.get("new_password") or "")
+	if password:
+		doc.new_password = password
+	requested_roles = data.get("roles") if isinstance(data.get("roles"), list) else []
+	allowed_roles = set(frappe.get_all("Role", filters={"disabled": 0}, pluck="name", ignore_permissions=True))
+	requested_roles = [str(role).strip() for role in requested_roles if str(role).strip() in allowed_roles]
+	if not requested_roles:
+		requested_roles = ["Desk User"] if "Desk User" in allowed_roles else []
+	doc.set("roles", [])
+	for role in requested_roles:
+		doc.append("roles", {"role": role})
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "user": {"name": doc.name, "email": doc.email, "full_name": doc.full_name, "enabled": cint(doc.enabled), "roles": requested_roles}}
+
+
+@frappe.whitelist()
+def delete_management_user(name=None):
+	if not _is_restaurant_admin():
+		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	user_name = (name or "").strip()
+	if not user_name or user_name in {"Administrator", frappe.session.user} or not frappe.db.exists("User", user_name):
+		frappe.throw(_("This user cannot be deleted."))
+	frappe.delete_doc("User", user_name, force=1, ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True}
+
+
+@frappe.whitelist()
 def get_session_roles():
 	"""
 	Return role information for the currently logged-in user.
@@ -22688,3 +23794,306 @@ def get_session_roles():
 		"is_admin": _is_restaurant_admin(user),
 		"has_employee_record": has_employee,
 	}
+
+
+def _resolve_canonical_kitchen_status(so_name, has_restaurant_status=True):
+    # 1. Check Delivery Note
+    dn_exists = frappe.db.exists("Delivery Note Item", {"against_sales_order": so_name, "docstatus": 1})
+    if dn_exists:
+        return "closed"
+    
+    per_delivered = frappe.db.get_value("Sales Order", so_name, "per_delivered") or 0
+    if per_delivered >= 100:
+        return "closed"
+
+    manual_status = "new"
+    if has_restaurant_status:
+        manual_status = frappe.db.get_value("Sales Order", so_name, "restaurant_status") or "new"
+
+    # 2. Check Work Orders
+    if frappe.db.exists("DocType", "Work Order"):
+        wos = frappe.get_all("Work Order", filters={"sales_order": so_name}, fields=["status", "docstatus", "produced_qty", "qty"])
+        if wos:
+            all_draft = True
+            all_completed = True
+            any_in_progress = False
+            
+            for wo in wos:
+                if wo.docstatus == 1:
+                    all_draft = False
+                    if wo.status == "Completed" or float(wo.produced_qty or 0) >= float(wo.qty or 0):
+                        pass
+                    else:
+                        all_completed = False
+                        any_in_progress = True
+                else:
+                    all_completed = False
+                    
+            if not all_draft:
+                if all_completed:
+                    return "ready"
+                if any_in_progress:
+                    return "preparing"
+            
+            # If all WOs are draft, rely on manual KDS status (operator intent)
+            if manual_status in ["preparing", "ready"]:
+                return manual_status
+            return "new"
+            
+    # 3. Direct fulfillment (No BOM / No Work Order)
+    if manual_status in ["preparing", "ready"]:
+        return manual_status
+        
+    return "new"
+
+
+
+def _start_kitchen_production(so_name):
+    # 1. Create tickets and Work Orders if they don't exist
+    so_doc = frappe.get_doc("Sales Order", so_name)
+    has_tickets = False
+    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+        has_tickets = bool(frappe.db.exists("Restaurant Production Ticket", {"sales_order": so_name}))
+        
+    if not has_tickets:
+        _create_production_for_sales_order(so_doc)
+
+    # 2. Submit Work Orders and do Material Transfer
+    if frappe.db.exists("DocType", "Work Order"):
+        wos = frappe.get_all("Work Order", filters={"sales_order": so_name})
+        settings = _production_auto_settings()
+        for wo in wos:
+            wo_doc = frappe.get_doc("Work Order", wo.name)
+            # Submit if draft
+            if settings.get("submit_work_order") and wo_doc.docstatus == 0:
+                wo_doc.flags.ignore_permissions = True
+                wo_doc.submit()
+            
+            # Material Transfer (Start production)
+            wo_doc = frappe.get_doc("Work Order", wo.name)
+            if wo_doc.docstatus == 1:
+                pending_transfer = max(float(wo_doc.qty or 0) - float(wo_doc.material_transferred_for_manufacturing or 0), 0)
+                if settings.get("material_transfer") and pending_transfer > 0 and not int(wo_doc.skip_transfer or 0):
+                    _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=settings.get("submit_stock_entries"))
+                
+                # Mark ticket in_progress
+                if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+                    tickets = frappe.get_all("Restaurant Production Ticket", filters={"work_order": wo.name})
+                    for t in tickets:
+                        frappe.db.set_value("Restaurant Production Ticket", t.name, "status", "in_progress", update_modified=False)
+    try:
+        ops_kitchen_mark(so_name, "preparing")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Kitchen Mark Preparing")
+
+def _complete_kitchen_production(so_name):
+    settings = _production_auto_settings()
+    if frappe.db.exists("DocType", "Work Order"):
+        wos = frappe.get_all("Work Order", filters={"sales_order": so_name, "docstatus": 1})
+        for wo in wos:
+            wo_doc = frappe.get_doc("Work Order", wo.name)
+            pending_manufacture = max(float(wo_doc.qty or 0) - float(wo_doc.produced_qty or 0), 0)
+            if settings.get("manufacture") and pending_manufacture > 0:
+                _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=settings.get("submit_stock_entries"))
+            
+            # Mark ticket completed
+            if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+                    tickets = frappe.get_all("Restaurant Production Ticket", filters={"work_order": wo.name})
+                    for t in tickets:
+                        frappe.db.set_value("Restaurant Production Ticket", t.name, "status", "completed", update_modified=False)
+    try:
+        ops_kitchen_mark(so_name, "ready")
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Kitchen Mark Ready")
+
+
+@frappe.whitelist()
+def get_kitchen_display_orders(limit=50, date=None):
+    """Get production-ready orders for kitchen display"""
+    _ensure_management_access()
+    limit = cint(limit) or 100
+    orders = []
+    
+    if not frappe.db.exists("DocType", "Sales Order"):
+        return {"orders": []}
+    
+    has_restaurant_status = _has_column("Sales Order", "restaurant_status")
+    has_restaurant_note = _has_column("Sales Order Item", "restaurant_note")
+    has_order_type = _has_column("Sales Order", "restaurant_order_type")
+    has_prod_ticket = frappe.db.exists("DocType", "Restaurant Production Ticket")
+    
+    # Canonical filter: no pre-filtering on restaurant_status
+    filters = {"docstatus": 1, "status": ["!=", "Cancelled"]}
+    
+    if date:
+        filters["transaction_date"] = date
+    else:
+        filters["transaction_date"] = frappe.utils.today()
+    
+    so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
+    if has_order_type:
+        so_fields.append("restaurant_order_type")
+    has_kitchen_timestamps = _has_column("Sales Order", "restaurant_kitchen_started_at") and _has_column("Sales Order", "restaurant_kitchen_ready_at")
+    if has_kitchen_timestamps:
+        so_fields.extend(["restaurant_kitchen_started_at", "restaurant_kitchen_ready_at"])
+    
+    rows = frappe.get_all("Sales Order",
+        fields=so_fields,
+        filters=filters,
+        order_by="creation desc",
+        limit=limit,
+        ignore_permissions=True,
+    )
+    
+    so_item_fields = ["item_code", "item_name", "qty", "rate", "description"]
+    if has_restaurant_note:
+        so_item_fields.append("restaurant_note")
+    
+    for so in rows:
+        so_name = so.name
+        items = []
+        tickets = []
+        
+        so_items = frappe.get_all("Sales Order Item",
+            fields=so_item_fields,
+            filters={"parent": so_name},
+            order_by="idx asc",
+            ignore_permissions=True
+        )
+        item_codes = [i.item_code for i in so_items if i.item_code]
+        item_meta = {}
+        if item_codes:
+            has_item_image = _has_column("Item", "image")
+            has_prep_time = _has_column("Item", "restaurant_prep_time_mins")
+            has_vendor = _has_column("Item", "restaurant_vendor")
+            meta_fields = ["name"]
+            if has_item_image:
+                meta_fields.append("image")
+            if has_prep_time:
+                meta_fields.append("restaurant_prep_time_mins")
+            if has_vendor:
+                meta_fields.append("restaurant_vendor")
+            try:
+                for meta_row in frappe.get_all("Item", fields=meta_fields, filters={"name": ["in", item_codes]}, ignore_permissions=True):
+                    item_meta[meta_row["name"]] = meta_row
+            except Exception:
+                item_meta = {}
+        for item in so_items:
+            meta = item_meta.get(item.item_code) or {}
+            items.append({
+                "item_code": item.item_code,
+                "title": item.item_name,
+                "description": item.description or "",
+                "qty": flt(item.qty),
+                "rate": flt(item.rate),
+                "note": item.restaurant_note if has_restaurant_note else "",
+                "image": meta.get("image") or "",
+                "prep_time_mins": cint(meta.get("restaurant_prep_time_mins") or 0),
+                "vendor": meta.get("restaurant_vendor") or "",
+            })
+        
+        if has_prod_ticket:
+            tickets = frappe.get_all("Restaurant Production Ticket",
+                fields=["name", "menu_item", "qty", "status", "work_order"],
+                filters={"sales_order": so_name},
+                ignore_permissions=True
+            )
+        
+        status = _resolve_canonical_kitchen_status(so_name, has_restaurant_status)
+        
+        channel = so.restaurant_order_type if has_order_type else ""
+        order_code = so_name
+        
+        orders.append({
+            "name": so_name,
+            "order_code": order_code,
+            "customer_name": so.customer_name or "POS Customer",
+            "status": status,
+            "channel": channel or "حضوری",
+            "items": items,
+            "production_tickets": tickets,
+            "creation": str(so.creation or ""),
+            "created_at": str(so.transaction_date or so.creation or ""),
+            "kitchen_started_at": str(so.get("restaurant_kitchen_started_at") or "") if has_kitchen_timestamps else "",
+            "kitchen_ready_at": str(so.get("restaurant_kitchen_ready_at") or "") if has_kitchen_timestamps else "",
+        })
+
+    return {"orders": orders}
+
+
+@frappe.whitelist()
+def update_kitchen_order_status(order_name, status):
+    """Update kitchen order status"""
+    _ensure_management_access()
+    if not order_name or not status:
+        frappe.throw(_("Order name and status are required."))
+    
+    so_name = _resolve_sales_order_name(order_name)
+    if not so_name or not frappe.db.exists("Sales Order", so_name):
+        frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    
+    # 1. Execute strictly stage-separated canonical backend action flows FIRST.
+    # If any underlying document creation/submission fails, it raises an exception 
+    # which bubbles up and stops the UI from advancing incorrectly.
+    if status == "preparing":
+        _start_kitchen_production(so_name)
+    elif status == "ready":
+        _complete_kitchen_production(so_name)
+    elif status == "delivered":
+        if frappe.db.exists("DocType", "Delivery Note"):
+            dn_exists = frappe.db.exists("Delivery Note Item", {"against_sales_order": so_name, "docstatus": 1})
+            if not dn_exists:
+                _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+
+    # 2. Only if the canonical documents succeeded (or no documents apply for this item),
+    # update the manual text statuses for operator visibility.
+    if _has_column("Sales Order", "restaurant_status"):
+        _set_restaurant_order_status(so_name, status, force=True)
+    
+    if frappe.db.exists("DocType", "Restaurant Production Ticket"):
+        tickets = frappe.get_all("Restaurant Production Ticket",
+            filters={"sales_order": so_name},
+            pluck="name",
+            ignore_permissions=True
+        )
+        for ticket_name in tickets:
+            ticket = frappe.get_doc("Restaurant Production Ticket", ticket_name)
+            if status == "ready":
+                ticket.db_set("status", "completed", update_modified=False)
+            elif status == "preparing":
+                ticket.db_set("status", "in_progress", update_modified=False)
+    
+    _append_sales_order_note(so_name, f"[KITCHEN] Status changed to: {status}")
+    frappe.db.commit()
+        
+    return {"status": "success"}
+
+# Triggering a direct push for E2E verification as requested
+
+@frappe.whitelist(allow_guest=True)
+def get_csrf_token():
+    return frappe.sessions.get_csrf_token()
+
+@frappe.whitelist(allow_guest=True)
+def get_management_csrf_token():
+    return frappe.sessions.get_csrf_token()
+
+
+# ---------------------------------------------------------------------------
+# POS feature pack: bulk product ops, Excel import/export, barcode lookup,
+# combos, packaging fees, work shifts, register closing, extra sales reports,
+# printer fonts and dashboard layout. Endpoints are re-exported here so they
+# are reachable as /api/method/restaurant.api.<endpoint>.
+# ---------------------------------------------------------------------------
+from restaurant.api_feature_pack import *  # noqa: F401,F403,E402
+from restaurant.api_inventory import *  # noqa: F401,F403,E402
+from restaurant.api_club import *  # noqa: F401,F403,E402
+from restaurant.api_ops import *  # noqa: F401,F403,E402
+from restaurant.api_menueng import *  # noqa: F401,F403,E402
+from restaurant.api_reserve import *  # noqa: F401,F403,E402
+from restaurant.api_tax import *  # noqa: F401,F403,E402
+from restaurant.api_branch import *  # noqa: F401,F403,E402
+from restaurant.api_callcenter import *  # noqa: F401,F403,E402
+from restaurant.api_kiosk import *  # noqa: F401,F403,E402
+from restaurant.api_accounting import *  # noqa: F401,F403,E402
+from restaurant.api_org import *  # noqa: F401,F403,E402

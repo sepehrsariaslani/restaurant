@@ -45,6 +45,31 @@
 				</div>
 			</header>
 
+			<!-- Confirmed Orders for this table -->
+			<div class="cart-list confirmed-orders-list" v-if="orderMode === 'dine_in' && confirmedTableOrders.length">
+				<div class="cart-section-title">سفارش‌های تایید شده</div>
+				<article
+					v-for="order in confirmedTableOrders"
+					:key="order.name"
+					class="cart-row confirmed-row"
+				>
+					<div class="line-main" style="width: 100%;">
+						<div class="confirmed-order-header">
+							<span>{{ order.order_code || order.name }}</span>
+							<span class="status-badge" :class="'status-' + order.status">{{ formatStatus(order.status) || 'تایید شده' }}</span>
+						</div>
+						<div v-for="item in order.items" :key="item.row_name" class="confirmed-item-row">
+							<div class="line-title-row">
+								<strong>{{ toPersianNumber(item.quantity || 1) }}x {{ item.menu_item_title }}</strong>
+								<span class="line-price">{{ formatMoney(item.line_total, currency) }}</span>
+							</div>
+							<small class="line-note" v-if="item.note">{{ item.note }}</small>
+						</div>
+					</div>
+				</article>
+				<div class="cart-section-title mt-2" v-if="cartLines.length">سفارش جدید</div>
+			</div>
+
 			<div class="cart-list" v-if="cartLines.length">
 				<article
 					v-for="line in cartLines"
@@ -66,7 +91,7 @@
 					</div>
 					<div class="line-actions">
 						<button v-if="canEditCustomization(line)" type="button" class="act-btn bom" title="ویرایش سفارشی سازی" @click.stop="$emit('edit-line-customization', line)">BOM</button>
-						<button type="button" class="act-btn" title="یادداشت" @click.stop="$emit('edit-line-note', line)">✎</button>
+						<button type="button" class="act-btn" title="یادداشت" @click.stop="$emit('edit-line-note', line)">Note</button>
 						<div class="counter">
 							<button type="button" @click.stop="$emit('decrement-line', line)">−</button>
 							<span>{{ qtyText(line.qty) }}</span>
@@ -77,7 +102,7 @@
 				</article>
 			</div>
 
-			<div class="cart-empty" v-else>
+			<div class="cart-empty" v-else-if="!(orderMode === 'dine_in' && confirmedTableOrders.length)">
 				<span class="cart-empty-icon"><ShoppingCart :size="22" :stroke-width="2.1" /></span>
 				<p>سبد خرید خالی است</p>
 			</div>
@@ -199,6 +224,10 @@
 				<span>حق سرویس</span>
 				<strong>{{ formatMoney(totals.serviceAmount || 0, currency) }}</strong>
 			</div>
+			<div class="sum-line" v-if="isNonZero(totals.packagingAmount)">
+				<span>بسته‌بندی</span>
+				<strong>{{ formatMoney(totals.packagingAmount || 0, currency) }}</strong>
+			</div>
 			<div class="sum-line payable">
 				<span>مبلغ قابل پرداخت</span>
 				<strong>{{ formatMoney(totals.payableAmount || 0, currency) }}</strong>
@@ -224,7 +253,7 @@
 					type="button"
 					class="settle-btn-custom"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
-					@click="$emit('submit-and-settle')"
+					@click="openPaymentPopup(null, 'settle')"
 				>{{ submitting ? "در حال ثبت..." : "تسویه و تحویل" }}</button>
 			</div>
 			<button
@@ -362,7 +391,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { Banknote, CreditCard, FileClock, Plus, ShoppingCart, X } from "lucide-vue-next";
+import { Banknote, CreditCard, FileClock, Plus, ShoppingCart, X, MessageSquare } from "lucide-vue-next";
 import SearchableDropdown from "@/components/SearchableDropdown.vue";
 import PersianNumberInput from "@/components/PersianNumberInput.vue";
 import AmountPercentToggle from "@/components/AmountPercentToggle.vue";
@@ -483,6 +512,7 @@ const emit = defineEmits([
 ]);
 
 const showPaymentPopup = ref(false);
+const paymentPopupIntent = ref("pay");
 const paymentSplits = ref([]);
 const discountInputRef = ref(null);
 
@@ -595,13 +625,14 @@ function updateSplitOption(split, optionKey) {
 	Object.assign(split, syncSplitOption({ ...split, optionKey }));
 }
 
-function openPaymentPopup(preferredMethod = null) {
+function openPaymentPopup(preferredMethod = null, intent = "pay") {
 	const total = Number(props.totals?.payableAmount || 0);
 	const preferredOption =
 		paymentOptionList.value.find((option) => option.method === preferredMethod) ||
 		paymentOptionList.value.find((option) => option.method === props.paymentMethod) ||
 		defaultPaymentOption.value;
 	paymentSplits.value = [buildSplit(preferredOption?.key || "", total)];
+	paymentPopupIntent.value = intent === "settle" ? "settle" : "pay";
 	showPaymentPopup.value = true;
 }
 
@@ -633,7 +664,7 @@ function confirmPayment() {
 		validSplits[0] || buildSplit(defaultPaymentOption.value?.key || "", 0),
 	);
 	emit("update:paymentMethod", primary.method);
-	emit("submit-and-pay", {
+	const payload = {
 		splits: validSplits.map((split) => ({
 			optionKey: split.optionKey,
 			method: split.method,
@@ -641,8 +672,14 @@ function confirmPayment() {
 			label: split.label,
 			amount: Number(split.amount || 0),
 		})),
-	});
+	};
+	if (paymentPopupIntent.value === "settle") {
+		emit("submit-and-settle", payload);
+	} else {
+		emit("submit-and-pay", payload);
+	}
 	showPaymentPopup.value = false;
+	paymentPopupIntent.value = "pay";
 }
 
 function rowTotal(line) {
@@ -777,6 +814,7 @@ function canEditCustomization(line) {
 	const customization = line?.customization || {};
 	return Boolean(
 		line?.has_customization ||
+		line?.variant_of ||
 		Number((line?.customization_ingredients || []).length || 0) > 0 ||
 		Number((customization.ingredient_adjustments || []).length || 0) > 0 ||
 		Number((customization.selected_modifiers || []).length || 0) > 0 ||
@@ -798,60 +836,59 @@ defineExpose({
 <style scoped>
 /* ─── Panel Shell ─── */
 .cart-panel {
-	border-radius: 16px;
-	background: var(--pos-white);
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.1);
+	--mg-primary: var(--mg-primary);
+	--mg-primary-rgb: var(--mg-primary-rgb);
+	--mg-primary: var(--mg-success);
+	--mg-primary-rgb: var(--mg-success-rgb);
+	--mg-danger: var(--mg-danger);
+	--mg-danger-rgb: var(--mg-danger-rgb);
+	--mg-success: var(--mg-success);
+	--mg-success-rgb: var(--mg-success-rgb);
+	border-radius: 24px;
+	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 52%, var(--mg-bg-surface) 48%) 0%, var(--mg-bg-surface) 100%);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	padding: 0;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+	box-shadow: 0 22px 42px rgb(52 38 31 / 0.1);
 }
 
 /* ─── Segmented Control ─── */
 .mode-seg {
 	display: flex;
-	gap: 2px;
-	padding: 0.5rem 0.65rem 0;
-	background: transparent;
+	margin: 0.75rem 0.8rem 0;
+	background: var(--mg-bg-surface);
+	border-radius: 14px;
+	padding: 0.35rem;
+	gap: 0.25rem;
+	border: 1px solid var(--mg-border-light);
 }
 
 .mode-seg button {
 	flex: 1;
 	border: none;
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: rgb(var(--pos-primary-rgb) / 0.6);
-	padding: 0.5rem 0.25rem;
+	background: transparent;
+	color: var(--mg-text-muted);
+	padding: 0.6rem 0.35rem;
 	font-size: 0.78rem;
-	font-weight: 500;
+	font-weight: 700;
 	font-family: inherit;
 	cursor: pointer;
 	transition: all 0.2s ease;
-	position: relative;
-}
-
-.mode-seg button:first-child {
-	border-radius: 0 10px 10px 0;
-}
-
-.mode-seg button:last-child {
-	border-radius: 10px 0 0 10px;
-}
-
-.mode-seg button:not(:first-child):not(:last-child) {
-	border-radius: 0;
+	border-radius: 10px;
+	min-height: 40px;
 }
 
 .mode-seg button.active {
-	background: var(--pos-primary);
-	color: #fff;
-	font-weight: 700;
-	box-shadow: 0 2px 8px rgb(var(--pos-primary-rgb) / 0.25);
+	background: var(--mg-bg-page);
+	color: var(--mg-primary);
+	box-shadow: var(--mg-shadow-sm, 0 8px 24px rgba(52, 38, 31, 0.06));
 }
 
 .mode-seg button:not(.active):hover {
-	background: rgb(var(--pos-primary-rgb) / 0.1);
-	color: var(--pos-primary);
+	color: var(--mg-text-main);
 }
 
 /* ─── Place Field ─── */
@@ -859,14 +896,14 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0.45rem 0.65rem;
-	border-bottom: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	padding: 0.65rem 0.8rem 0.55rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 }
 
 .place-label {
 	font-size: 0.74rem;
 	font-weight: 600;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 	flex-shrink: 0;
 }
 
@@ -883,14 +920,14 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 0.55rem 0.65rem 0.35rem;
+	padding: 0.8rem 0.8rem 0.45rem;
 }
 
 .cart-head h3 {
 	margin: 0;
-	font-size: 0.82rem;
+	font-size: 0.96rem;
 	font-weight: 700;
-	color: var(--pos-primary);
+	color: var(--mg-text-main);
 }
 
 .cart-head-actions {
@@ -900,9 +937,9 @@ defineExpose({
 }
 
 .undo-btn {
-	background: none;
-	border: 1px solid rgb(var(--pos-accent-rgb) / 0.3);
-	color: var(--pos-accent);
+	background: color-mix(in srgb, var(--mg-success) 9%, var(--mg-bg-surface) 91%);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 24%, transparent);
+	color: var(--mg-primary);
 	border-radius: 6px;
 	font-size: 0.68rem;
 	font-family: inherit;
@@ -916,15 +953,15 @@ defineExpose({
 }
 
 .undo-btn:hover {
-	background: var(--pos-accent);
-	border-color: var(--pos-accent);
-	color: #fff;
+	background: var(--mg-primary);
+	border-color: var(--mg-primary);
+	color: var(--mg-bg-surface);
 }
 
 .clear-btn {
 	background: none;
 	border: none;
-	color: rgb(var(--pos-primary-rgb) / 0.4);
+	color: color-mix(in srgb, var(--mg-primary) 40%, transparent);
 	font-size: 0.72rem;
 	font-family: inherit;
 	cursor: pointer;
@@ -934,18 +971,18 @@ defineExpose({
 }
 
 .clear-btn:hover {
-	color: var(--pos-danger);
-	background: rgb(var(--pos-danger-rgb) / 0.08);
+	color: var(--mg-danger);
+	background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
 }
 
 /* ─── Cart List ─── */
 .cart-list {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 0.45rem;
 	overflow-y: auto;
 	scrollbar-width: thin;
-	padding: 0 0.45rem 0.35rem;
+	padding: 0 0.8rem 0.55rem;
 	flex: 1;
 	min-height: 0;
 }
@@ -955,21 +992,22 @@ defineExpose({
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 0.4rem;
-	padding: 0.5rem 0.55rem;
-	border-radius: 10px;
-	background: rgb(var(--pos-primary-rgb) / 0.025);
+	padding: 0.7rem 0.75rem;
+	border-radius: 16px;
+	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-page) 82%, var(--mg-bg-surface) 18%) 100%);
 	cursor: pointer;
 	transition: all 0.15s ease;
-	border: 1.5px solid transparent;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 }
 
 .cart-row:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.05);
+	background: color-mix(in srgb, var(--mg-primary) 6%, var(--mg-bg-surface) 94%);
 }
 
 .cart-row.active {
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	border-color: rgb(var(--pos-primary-rgb) / 0.18);
+	background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface) 92%);
+	border-color: color-mix(in srgb, var(--mg-primary) 38%, var(--mg-border-light) 62%);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--mg-primary) 8%, transparent);
 }
 
 .line-main {
@@ -988,26 +1026,26 @@ defineExpose({
 .line-title-row strong {
 	font-size: 0.78rem;
 	font-weight: 600;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 .line-price {
 	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-primary);
 	font-weight: 500;
 	flex-shrink: 0;
 }
 
 .line-custom {
 	font-size: 0.66rem;
-	color: rgb(var(--pos-primary-rgb) / 0.5);
+	color: var(--mg-text-muted);
 	font-style: italic;
 }
 
 .line-custom-list {
 	margin: 0;
 	padding-right: 0.6rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 	font-size: 0.66rem;
 	line-height: 1.5;
 	display: flex;
@@ -1021,7 +1059,7 @@ defineExpose({
 
 .line-note {
 	font-size: 0.66rem;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 }
 
 .line-actions {
@@ -1035,8 +1073,8 @@ defineExpose({
 	width: 26px;
 	height: 26px;
 	border: none;
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: rgb(var(--pos-primary-rgb) / 0.6);
+	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
+	color: var(--mg-primary);
 	border-radius: 7px;
 	cursor: pointer;
 	font-size: 0.78rem;
@@ -1049,8 +1087,8 @@ defineExpose({
 }
 
 .act-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.12);
-	color: var(--pos-primary);
+	background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	color: var(--mg-primary);
 }
 
 .act-btn.bom {
@@ -1058,27 +1096,27 @@ defineExpose({
 	padding: 0 0.35rem;
 	font-size: 0.62rem;
 	font-weight: 700;
-	color: var(--pos-accent);
-	background: rgb(var(--pos-accent-rgb) / 0.08);
+	color: var(--mg-primary);
+	background: color-mix(in srgb, var(--mg-success) 12%, var(--mg-bg-surface) 88%);
 }
 
 .act-btn.bom:hover {
-	background: rgb(var(--pos-accent-rgb) / 0.18);
+	background: color-mix(in srgb, var(--mg-success) 18%, var(--mg-bg-surface) 82%);
 }
 
 .act-btn.remove {
-	color: rgb(var(--pos-danger-rgb) / 0.5);
+	color: color-mix(in srgb, var(--mg-danger) 50%, transparent);
 }
 
 .act-btn.remove:hover {
-	background: rgb(var(--pos-danger-rgb) / 0.1);
-	color: var(--pos-danger);
+	background: color-mix(in srgb, var(--mg-danger) 10%, transparent);
+	color: var(--mg-danger);
 }
 
 .counter {
 	display: inline-flex;
 	align-items: center;
-	background: rgb(var(--pos-primary-rgb) / 0.04);
+	background: color-mix(in srgb, var(--mg-bg-page) 56%, var(--mg-bg-surface) 44%);
 	border-radius: 8px;
 	overflow: hidden;
 }
@@ -1088,7 +1126,7 @@ defineExpose({
 	height: 26px;
 	border: none;
 	background: transparent;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 	cursor: pointer;
 	font-size: 0.88rem;
 	font-weight: 600;
@@ -1097,7 +1135,7 @@ defineExpose({
 }
 
 .counter button:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.1);
+	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
 .counter span {
@@ -1105,7 +1143,7 @@ defineExpose({
 	text-align: center;
 	font-size: 0.76rem;
 	font-weight: 600;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 /* ─── Empty State ─── */
@@ -1127,13 +1165,13 @@ defineExpose({
 .cart-empty p {
 	margin: 0;
 	font-size: 0.78rem;
-	color: rgb(var(--pos-primary-rgb) / 0.35);
+	color: var(--mg-text-muted);
 }
 
 /* ─── Financial Section ─── */
 .fin-section {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
-	padding: 0.5rem 0.65rem;
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	padding: 0.7rem 0.8rem;
 	display: flex;
 	flex-direction: column;
 	gap: 0.45rem;
@@ -1143,14 +1181,14 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	background: rgb(var(--pos-primary-rgb) / 0.02);
-	border-radius: 10px;
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	background: color-mix(in srgb, var(--mg-bg-surface) 40%, var(--mg-bg-page) 60%);
+	border-radius: 14px;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
 	overflow: hidden;
 }
 
 .fin-group .fin-row + .fin-row {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.05);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 }
 
 .fin-row {
@@ -1164,7 +1202,7 @@ defineExpose({
 
 .fin-label {
 	font-size: 0.72rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 	font-weight: 600;
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -1180,7 +1218,7 @@ defineExpose({
 .fin-checkbox {
 	width: 14px;
 	height: 14px;
-	accent-color: var(--pos-primary);
+	accent-color: var(--mg-primary);
 	cursor: pointer;
 	flex-shrink: 0;
 }
@@ -1194,9 +1232,9 @@ defineExpose({
 }
 
 .fin-input {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.1);
-	background: rgb(var(--pos-primary-rgb) / 0.03);
-	color: var(--pos-text);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: var(--mg-bg-page);
+	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.32rem 0.5rem;
 	font-size: 0.74rem;
@@ -1209,9 +1247,9 @@ defineExpose({
 }
 
 .fin-input:focus {
-	border-color: rgb(var(--pos-primary-rgb) / 0.3);
-	background: var(--pos-white);
-	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.06);
+	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border-light) 58%);
+	background: var(--mg-bg-surface);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 6%, transparent);
 }
 
 .fin-input:disabled {
@@ -1220,9 +1258,9 @@ defineExpose({
 }
 
 .fin-action-btn {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
-	background: rgb(var(--pos-primary-rgb) / 0.05);
-	color: var(--pos-primary);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: var(--mg-bg-page);
+	color: var(--mg-primary);
 	font-size: 0.7rem;
 	font-weight: 600;
 	cursor: pointer;
@@ -1236,7 +1274,7 @@ defineExpose({
 }
 
 .fin-action-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.1);
+	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
 .fin-note-row {
@@ -1245,9 +1283,9 @@ defineExpose({
 
 .fin-note-input {
 	width: 100%;
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
-	background: rgb(var(--pos-primary-rgb) / 0.02);
-	color: var(--pos-text);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	background: var(--mg-bg-page);
+	color: var(--mg-text-main);
 	border-radius: 8px;
 	padding: 0.35rem 0.55rem;
 	font-size: 0.72rem;
@@ -1258,22 +1296,23 @@ defineExpose({
 }
 
 .fin-note-input::placeholder {
-	color: rgb(var(--pos-primary-rgb) / 0.3);
+	color: color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .fin-note-input:focus {
-	border-color: rgb(var(--pos-primary-rgb) / 0.25);
-	background: var(--pos-white);
-	box-shadow: 0 0 0 2px rgb(var(--pos-primary-rgb) / 0.05);
+	border-color: color-mix(in srgb, var(--mg-primary) 25%, transparent);
+	background: var(--mg-bg-surface);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 5%, transparent);
 }
 
 /* ─── Summary ─── */
 .summary-box {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
-	padding: 0.5rem 0.65rem;
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
+	padding: 0.7rem 0.8rem 0.55rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.22rem;
+	gap: 0.32rem;
+	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
 }
 
 .sum-line {
@@ -1281,55 +1320,56 @@ defineExpose({
 	justify-content: space-between;
 	align-items: center;
 	font-size: 0.74rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: var(--mg-text-muted);
 }
 
 .sum-line strong {
 	font-weight: 600;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 .sum-line strong.discount {
-	color: var(--pos-success);
+	color: var(--mg-success);
 }
 
 .sum-line.payable {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
 	margin-top: 0.25rem;
 	padding-top: 0.4rem;
 	font-size: 0.84rem;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 	font-weight: 500;
 }
 
 .sum-line.payable strong {
 	font-size: 0.92rem;
 	font-weight: 800;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 /* ─── Checkout Actions ─── */
 .checkout-actions {
-	padding: 0.5rem 0.65rem 0.6rem;
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	padding: 0.75rem 0.8rem 0.9rem;
+	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	display: flex;
 	flex-direction: column;
-	gap: 0.4rem;
+	gap: 0.55rem;
 }
 
 .checkout-btns {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 0.35rem;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.45rem;
 }
 
 .save-btn,
 .pay-btn,
-.print-btn {
+.print-btn,
+.settle-btn-custom {
 	border: 0;
-	border-radius: 10px;
-	color: #fff;
-	padding: 0.55rem 0.5rem;
+	border-radius: 14px;
+	color: var(--mg-bg-surface);
+	padding: 0.78rem 0.55rem;
 	cursor: pointer;
 	font-family: inherit;
 	font-size: 0.78rem;
@@ -1338,59 +1378,50 @@ defineExpose({
 }
 
 .save-btn {
-	background: var(--pos-primary);
+	background: var(--mg-primary);
+	color: #fff;
 }
 
 .save-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 12px rgb(var(--pos-primary-rgb) / 0.3);
+	background: color-mix(in srgb, var(--mg-primary) 85%, var(--mg-text-main));
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .settle-btn-custom {
-	background: #16a34a;
+	background: var(--mg-success);
 	color: #fff;
-	border: none;
-	padding: 12px 16px;
-	border-radius: 10px;
-	font-size: 13px;
-	font-weight: 600;
-	cursor: pointer;
-	white-space: nowrap;
-	flex: 1;
-	min-width: 0;
-	transition: all 0.15s;
 }
+
 .settle-btn-custom:hover:not(:disabled) {
-	background: #15803d;
-}
-.settle-btn-custom:disabled {
-	background: #86efac;
-	cursor: not-allowed;
-	opacity: 0.6;
+	background: color-mix(in srgb, var(--mg-success) 85%, var(--mg-text-main));
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-success) 30%, transparent);
 }
 
 .pay-btn {
-	background: var(--pos-accent);
+	background: var(--mg-text-main);
+	color: var(--mg-bg-surface);
 }
 
 .pay-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 12px rgb(var(--pos-accent-rgb) / 0.3);
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-text-main) 20%, transparent);
 }
 
 .print-btn {
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	color: var(--mg-text-muted);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	font-weight: 600;
 }
 
 .print-btn:hover:not(:disabled) {
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: var(--pos-primary);
-	border-color: rgb(var(--pos-primary-rgb) / 0.2);
+	background: color-mix(in srgb, var(--mg-primary) 6%, transparent);
+	color: var(--mg-primary);
+	border-color: color-mix(in srgb, var(--mg-primary) 20%, transparent);
 }
 
 .save-btn:disabled,
 .pay-btn:disabled,
+.settle-btn-custom:disabled,
 .print-btn:disabled {
 	opacity: 0.35;
 	cursor: not-allowed;
@@ -1400,7 +1431,8 @@ defineExpose({
 .checkout-opts {
 	display: flex;
 	align-items: center;
-	gap: 0.75rem;
+	gap: 0.9rem;
+	flex-wrap: wrap;
 }
 
 .checkout-opts label {
@@ -1408,19 +1440,19 @@ defineExpose({
 	align-items: center;
 	gap: 0.3rem;
 	font-size: 0.68rem;
-	color: rgb(var(--pos-primary-rgb) / 0.45);
+	color: var(--mg-text-muted);
 	cursor: pointer;
 	transition: color 0.12s;
 }
 
 .checkout-opts label:hover {
-	color: rgb(var(--pos-primary-rgb) / 0.7);
+	color: color-mix(in srgb, var(--mg-primary) 70%, transparent);
 }
 
 .checkout-opts input[type="checkbox"] {
 	width: 13px;
 	height: 13px;
-	accent-color: var(--pos-primary);
+	accent-color: var(--mg-primary);
 	cursor: pointer;
 }
 
@@ -1429,13 +1461,17 @@ defineExpose({
 	.cart-panel {
 		max-height: none;
 	}
+
+	.checkout-btns {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 /* ─── Payment Popup ─── */
 .pay-popup-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 300;
+	z-index: 9999;
 	background: rgb(0 0 0 / 0.45);
 	backdrop-filter: blur(4px);
 	display: grid;
@@ -1444,8 +1480,8 @@ defineExpose({
 }
 
 .pay-popup {
-	background: var(--pos-white);
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	background: var(--mg-bg-surface);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
 	border-radius: 20px;
 	width: min(520px, calc(100vw - 2rem));
 	max-height: min(760px, calc(100dvh - 2rem));
@@ -1455,7 +1491,7 @@ defineExpose({
 	flex-direction: column;
 	gap: 0.85rem;
 	padding: 1.15rem;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 .pay-popup-head {
@@ -1468,14 +1504,14 @@ defineExpose({
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5rem;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-popup-head h3 {
 	margin: 0;
 	font-size: 0.95rem;
 	font-weight: 800;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-popup-close {
@@ -1483,8 +1519,8 @@ defineExpose({
 	height: 2rem;
 	border: none;
 	border-radius: 8px;
-	background: rgb(var(--pos-primary-rgb) / 0.06);
-	color: rgb(var(--pos-primary-rgb) / 0.5);
+	background: color-mix(in srgb, var(--mg-primary) 6%, transparent);
+	color: color-mix(in srgb, var(--mg-primary) 50%, transparent);
 	font-size: 1.1rem;
 	cursor: pointer;
 	display: inline-flex;
@@ -1494,25 +1530,25 @@ defineExpose({
 }
 
 .pay-popup-close:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.12);
-	color: var(--pos-text);
+	background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	color: var(--mg-text-main);
 }
 
 .pay-total-banner {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background: rgb(var(--pos-primary-rgb) / 0.04);
+	background: color-mix(in srgb, var(--mg-primary) 4%, transparent);
 	border-radius: 12px;
 	padding: 0.7rem 0.85rem;
 	font-size: 0.8rem;
-	color: rgb(var(--pos-primary-rgb) / 0.6);
+	color: color-mix(in srgb, var(--mg-primary) 60%, transparent);
 }
 
 .pay-total-banner strong {
 	font-size: 1.05rem;
 	font-weight: 800;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-splits {
@@ -1531,8 +1567,8 @@ defineExpose({
 	gap: 0.65rem;
 	padding: 0.8rem;
 	border-radius: 14px;
-	background: rgb(var(--pos-primary-rgb) / 0.03);
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.08);
+	background: color-mix(in srgb, var(--mg-primary) 3%, transparent);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 8%, transparent);
 }
 
 .pay-split-head {
@@ -1548,7 +1584,7 @@ defineExpose({
 	gap: 0.45rem;
 	font-size: 0.82rem;
 	font-weight: 700;
-	color: var(--pos-primary);
+	color: var(--mg-primary);
 }
 
 .pay-split-controls {
@@ -1563,9 +1599,9 @@ defineExpose({
 	padding: 0.6rem 0.7rem;
 	font-size: 0.78rem;
 	min-width: 0;
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
-	background: rgb(var(--pos-primary-rgb) / 0.03);
-	color: var(--pos-text);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	background: color-mix(in srgb, var(--mg-primary) 3%, transparent);
+	color: var(--mg-text-main);
 	font-family: inherit;
 	height: 44px;
 }
@@ -1583,8 +1619,8 @@ defineExpose({
 	height: 26px;
 	border: none;
 	border-radius: 7px;
-	background: rgb(var(--pos-danger-rgb) / 0.08);
-	color: var(--pos-danger);
+	background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
+	color: var(--mg-danger);
 	font-size: 0.95rem;
 	cursor: pointer;
 	display: inline-flex;
@@ -1598,14 +1634,14 @@ defineExpose({
 	margin: 0;
 	font-size: 0.74rem;
 	line-height: 1.6;
-	color: rgb(var(--pos-primary-rgb) / 0.62);
-	background: rgb(var(--pos-accent-rgb) / 0.08);
+	color: color-mix(in srgb, var(--mg-primary) 62%, transparent);
+	background: color-mix(in srgb, var(--mg-primary) 8%, transparent);
 	border-radius: 10px;
 	padding: 0.5rem 0.65rem;
 }
 
 .pay-split-remove:hover {
-	background: rgb(var(--pos-danger-rgb) / 0.15);
+	background: color-mix(in srgb, var(--mg-danger) 15%, transparent);
 }
 
 .pay-add-split-btn {
@@ -1613,10 +1649,10 @@ defineExpose({
 	align-items: center;
 	justify-content: center;
 	gap: 0.4rem;
-	border: 1px dashed rgb(var(--pos-primary-rgb) / 0.15);
+	border: 1px dashed color-mix(in srgb, var(--mg-primary) 15%, transparent);
 	border-radius: 10px;
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb) / 0.5);
+	color: color-mix(in srgb, var(--mg-primary) 50%, transparent);
 	font-size: 0.76rem;
 	font-family: inherit;
 	padding: 0.42rem;
@@ -1625,9 +1661,9 @@ defineExpose({
 }
 
 .pay-add-split-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.04);
-	color: var(--pos-primary);
-	border-color: rgb(var(--pos-primary-rgb) / 0.25);
+	background: color-mix(in srgb, var(--mg-primary) 4%, transparent);
+	color: var(--mg-primary);
+	border-color: color-mix(in srgb, var(--mg-primary) 25%, transparent);
 }
 
 .pay-remaining-row {
@@ -1636,25 +1672,25 @@ defineExpose({
 	justify-content: space-between;
 	padding: 0.55rem 0.75rem;
 	border-radius: 10px;
-	background: rgb(var(--pos-accent-rgb) / 0.08);
+	background: color-mix(in srgb, var(--mg-primary) 8%, transparent);
 	font-size: 0.8rem;
 	font-weight: 600;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 	transition: all 0.2s ease;
 }
 
 .pay-remaining-row.zero {
-	background: rgb(var(--pos-success-rgb) / 0.08);
-	color: var(--pos-success);
+	background: color-mix(in srgb, var(--mg-success) 8%, transparent);
+	color: var(--mg-success);
 }
 
 .pay-remaining-row.over {
-	background: rgb(var(--pos-danger-rgb) / 0.08);
-	color: var(--pos-danger);
+	background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
+	color: var(--mg-danger);
 }
 
 .pay-split-summary {
-	border-top: 1px solid rgb(var(--pos-primary-rgb) / 0.06);
+	border-top: 1px solid color-mix(in srgb, var(--mg-primary) 6%, transparent);
 	padding-top: 0.45rem;
 	display: flex;
 	flex-direction: column;
@@ -1666,7 +1702,7 @@ defineExpose({
 	justify-content: space-between;
 	align-items: center;
 	font-size: 0.76rem;
-	color: rgb(var(--pos-primary-rgb) / 0.55);
+	color: color-mix(in srgb, var(--mg-primary) 55%, transparent);
 }
 
 .pay-split-summary-label {
@@ -1683,9 +1719,9 @@ defineExpose({
 }
 
 .pay-cancel-btn {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
 	background: transparent;
-	color: rgb(var(--pos-primary-rgb) / 0.6);
+	color: color-mix(in srgb, var(--mg-primary) 60%, transparent);
 	border-radius: 10px;
 	padding: 0.6rem;
 	cursor: pointer;
@@ -1695,15 +1731,15 @@ defineExpose({
 }
 
 .pay-cancel-btn:hover {
-	background: rgb(var(--pos-primary-rgb) / 0.05);
-	color: var(--pos-text);
+	background: color-mix(in srgb, var(--mg-primary) 5%, transparent);
+	color: var(--mg-text-main);
 }
 
 .pay-confirm-btn {
 	border: 0;
 	border-radius: 10px;
-	background: var(--pos-primary);
-	color: #fff;
+	background: var(--mg-primary);
+	color: var(--mg-bg-surface);
 	padding: 0.6rem;
 	cursor: pointer;
 	font-size: 0.82rem;
@@ -1713,7 +1749,7 @@ defineExpose({
 }
 
 .pay-confirm-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 14px rgb(var(--pos-primary-rgb) / 0.3);
+	box-shadow: 0 4px 14px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .pay-confirm-btn:disabled {
@@ -1722,16 +1758,20 @@ defineExpose({
 }
 
 .dark-input {
-	border: 1px solid rgb(var(--pos-primary-rgb) / 0.12);
-	background: rgb(var(--pos-primary-rgb) / 0.03);
-	color: var(--pos-text);
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	background: color-mix(in srgb, var(--mg-primary) 3%, transparent);
+	color: var(--mg-text-main);
 }
 
 .dark-input::placeholder {
-	color: rgb(var(--pos-primary-rgb) / 0.35);
+	color: color-mix(in srgb, var(--mg-primary) 35%, transparent);
 }
 
 @media (max-width: 640px) {
+	.checkout-btns {
+		grid-template-columns: 1fr;
+	}
+
 	.pay-popup {
 		width: min(100vw - 1rem, 100%);
 		padding: 1rem;
@@ -1746,4 +1786,45 @@ defineExpose({
 		grid-template-columns: 1fr;
 	}
 }
+
+.cart-section-title {
+	font-size: 0.75rem;
+	font-weight: 800;
+	color: var(--mg-text-muted);
+	padding: 0.2rem 0.5rem;
+	margin-bottom: 0.2rem;
+}
+.cart-section-title.mt-2 {
+	margin-top: 0.5rem;
+	border-top: 1px dashed var(--mg-border-light);
+	padding-top: 0.5rem;
+}
+.confirmed-orders-list {
+	padding-bottom: 0;
+	margin-bottom: 0.5rem;
+}
+.confirmed-row {
+	opacity: 0.8;
+	pointer-events: none;
+	background: color-mix(in srgb, var(--mg-bg-surface) 60%, var(--mg-bg-page) 40%);
+}
+.confirmed-order-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 0.7rem;
+	color: var(--mg-primary);
+	margin-bottom: 0.4rem;
+	padding-bottom: 0.2rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--mg-primary) 15%, transparent);
+}
+.confirmed-item-row {
+	margin-bottom: 0.3rem;
+}
+.status-badge {
+	padding: 0.1rem 0.3rem;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
+}
+
 </style>

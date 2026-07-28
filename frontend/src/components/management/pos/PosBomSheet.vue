@@ -130,7 +130,7 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	position: fixed;
 	inset: 0;
 	z-index: 120;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.24);
+	background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.24);
 	display: grid;
 	place-items: center;
 	padding: 1rem;
@@ -141,9 +141,9 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	max-height: calc(100vh - 2rem);
 	overflow: auto;
 	border-radius: 18px;
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-text);
+	border: 1px solid var(--mg-border-light);
+	background: var(--mg-bg-surface);
+	color: var(--mg-text-main);
 	padding: 0.8rem;
 	display: grid;
 	gap: 0.65rem;
@@ -163,15 +163,15 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 
 .sheet-head p {
 	margin-top: 0.2rem;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
 }
 
 .close-btn,
 .submit-btn,
 .counter button {
-	border: 1px solid var(--pos-border);
-	background: var(--pos-white);
-	color: var(--pos-primary);
+	border: 1px solid var(--mg-border-light);
+	background: var(--mg-bg-surface);
+	color: var(--mg-primary);
 	border-radius: 10px;
 	cursor: pointer;
 	font-family: inherit;
@@ -189,14 +189,14 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 	justify-content: space-between;
 	padding: 0.6rem 0.8rem;
 	border-radius: 14px;
-	background: rgb(var(--pos-primary-rgb, 1 90 114) / 0.04);
-	border: 1px solid var(--pos-border);
+	background: rgb(var(--mg-primary-rgb, 1 90 114) / 0.04);
+	border: 1px solid var(--mg-border-light);
 }
 
 .qty-row small {
 	font-size: 0.92rem;
 	font-weight: 600;
-	color: var(--pos-text);
+	color: var(--mg-text-main);
 }
 
 .counter {
@@ -221,18 +221,18 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 
 .hint {
 	margin: 0;
-	color: rgb(var(--pos-primary-rgb, 1 90 114) / 0.72);
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.72);
 	font-size: 0.92rem;
 }
 
 .error {
 	margin: 0;
-	color: var(--pos-accent);
+	color: var(--mg-primary);
 	font-size: 0.92rem;
 }
 
 .sheet-foot {
-	border-top: 1px dashed var(--pos-border);
+	border-top: 1px dashed var(--mg-border-light);
 	padding-top: 0.6rem;
 	display: flex;
 	flex-wrap: wrap;
@@ -246,9 +246,9 @@ defineEmits(["close", "update:qty", "update-customization", "update-modifiers", 
 }
 
 .submit-btn {
-	background: var(--pos-accent);
-	border-color: var(--pos-accent);
-	color: var(--pos-white);
+	background: var(--mg-primary);
+	border-color: var(--mg-primary);
+	color: var(--mg-bg-surface);
 	padding: 0.7rem 1.4rem;
 	font-size: 0.98rem;
 	font-weight: 700;

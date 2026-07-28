@@ -46,10 +46,10 @@ defineEmits(['update:modelValue'])
 <style scoped>
 .toggle-switch {
   min-height: 3.25rem;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, var(--mg-border-light));
   border-radius: 12px;
   background: var(--bg-card, #fff);
-  color: var(--text-primary, #0f172a);
+  color: var(--text-primary, var(--mg-text-main));
   padding: 0.55rem 0.65rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -120,7 +120,7 @@ defineEmits(['update:modelValue'])
 }
 
 .toggle-switch.checked .switch-track {
-  background: var(--module-500, #8b5e34);
+  background: var(--module-500, var(--mg-primary));
 }
 
 .toggle-switch.checked .switch-thumb {
@@ -147,7 +147,7 @@ defineEmits(['update:modelValue'])
 }
 
 .switch-copy small {
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, var(--mg-text-muted));
   font-size: 0.74rem;
   line-height: 1.6;
 }

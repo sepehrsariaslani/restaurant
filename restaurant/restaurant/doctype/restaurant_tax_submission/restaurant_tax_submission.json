@@ -1,0 +1,108 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-28 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "sales_invoice",
+  "status",
+  "reference_id",
+  "tax_id",
+  "submitted_at",
+  "retry_count",
+  "error",
+  "payload_json",
+  "response_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "TAX-{YYYY}-{#####}",
+   "hidden": 1
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "options": "Sales Invoice",
+   "label": "فاکتور فروش",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "وضعیت ارسال",
+   "options": "در صف\nارسال‌شده\nخطا\nلغوشده",
+   "default": "در صف",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reference_id",
+   "fieldtype": "Data",
+   "label": "شماره منحصر‌به‌فرد",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "کد رهگیری مالیاتی",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "submitted_at",
+   "fieldtype": "Datetime",
+   "label": "زمان ارسال"
+  },
+  {
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "تعداد تلاش",
+   "default": "0"
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Text",
+   "label": "خطا"
+  },
+  {
+   "fieldname": "payload_json",
+   "fieldtype": "Long Text",
+   "label": "صورتحساب (JSON)"
+  },
+  {
+   "fieldname": "response_json",
+   "fieldtype": "Long Text",
+   "label": "پاسخ سامانه"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Tax Submission",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "naming_series:TAX-{YYYY}-{#####}"
+}
