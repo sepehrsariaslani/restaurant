@@ -298,7 +298,7 @@
         </div>
         <div class="lines-editor">
           <div v-for="(line, i) in movementForm.lines" :key="i" class="line-row">
-            <SearchableDropdown v-model="line.item_code" :options="materialOptions" placeholder="کالا..." search-placeholder="جستجوی کالا..." />
+            <SearchableDropdown v-model="line.item_code" allow-item-create :options="materialOptions" placeholder="کالا..." search-placeholder="جستجوی کالا..." />
             <input class="input" type="number" min="0.0001" step="0.001" v-model.number="line.qty" placeholder="مقدار" />
             <input class="input" type="number" min="0" v-model.number="line.rate" placeholder="نرخ (فقط ورود)" :disabled="movementForm.movement_type !== 'receipt'" />
             <button type="button" class="tertiary-btn danger" @click="movementForm.lines.splice(i, 1)" :disabled="movementForm.lines.length <= 1">حذف</button>
@@ -478,6 +478,7 @@
             <div v-for="(line, index) in materialRequestForm.items" :key="index" class="request-line-row">
               <SearchableDropdown
                 v-model="line.item_code"
+                allow-item-create
                 :options="materialOptions"
                 placeholder="انتخاب ماده اولیه..."
                 search-placeholder="جستجوی ماده..."
@@ -578,7 +579,7 @@
           </div>
           <div class="lines-editor">
             <div v-for="(line, i) in purchaseForm.items" :key="i" class="line-row">
-              <SearchableDropdown v-model="line.item_code" :options="materialOptions" placeholder="کالا..." search-placeholder="جستجوی کالا..." />
+              <SearchableDropdown v-model="line.item_code" allow-item-create :options="materialOptions" placeholder="کالا..." search-placeholder="جستجوی کالا..." />
               <input class="input" type="number" min="0.0001" step="0.001" v-model.number="line.qty" placeholder="مقدار" />
               <input class="input" type="number" min="0" v-model.number="line.rate" placeholder="نرخ (اختیاری)" />
               <button type="button" class="tertiary-btn danger" @click="purchaseForm.items.splice(i, 1)" :disabled="purchaseForm.items.length <= 1">حذف</button>
@@ -736,7 +737,7 @@
       <ManagementSurfaceCard title="ثبت تولید دستی" subtitle="مصرف خودکار مواد بر اساس فرمول و ورود محصول به انبار">
         <div class="form-grid">
           <label>محصول
-            <SearchableDropdown v-model="productionForm.menu_item" :options="productOptions" placeholder="انتخاب محصول..." search-placeholder="جستجوی محصول..." />
+            <SearchableDropdown v-model="productionForm.menu_item" allow-item-create :options="productOptions" placeholder="انتخاب محصول..." search-placeholder="جستجوی محصول..." />
           </label>
           <label>تعداد تولید
             <input class="input" type="number" min="0.5" step="0.5" v-model.number="productionForm.qty" />
@@ -822,7 +823,7 @@
             <input class="input" v-model.trim="lossForm.source_reference" placeholder="شماره سفارش / میز" />
           </label>
           <label>کالا / محصول
-            <SearchableDropdown v-model="lossForm.item_code" :options="allItemOptions" placeholder="انتخاب..." search-placeholder="جستجو..." />
+            <SearchableDropdown v-model="lossForm.item_code" allow-item-create :options="allItemOptions" placeholder="انتخاب..." search-placeholder="جستجو..." />
           </label>
           <label>مقدار
             <input class="input" type="number" min="0.0001" step="0.001" v-model.number="lossForm.qty" />

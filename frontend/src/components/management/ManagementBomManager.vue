@@ -6,6 +6,7 @@
         <SearchableDropdown
           v-model="selectedItemCode"
           :options="itemSelectOptions"
+          allow-item-create
           placeholder="انتخاب محصول"
           search-placeholder="جستجوی محصول..."
           include-empty-option
@@ -240,6 +241,7 @@
             <SearchableDropdown
               v-model="form.item"
               :options="itemSelectOptions"
+              allow-item-create
               placeholder="انتخاب محصول"
               search-placeholder="جستجوی محصول..."
               :disabled="hasFixedItem"

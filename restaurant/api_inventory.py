@@ -69,6 +69,7 @@ __all__ = [
 	"create_management_purchase_from_material_request",
 	"get_management_material_request_print",
 	"list_management_uoms",
+	"create_management_inventory_item",
 	# raw materials
 	"list_management_raw_materials",
 	"get_management_raw_material_detail",
@@ -701,6 +702,61 @@ def list_management_uoms(search="", limit=100):
 		or_filters = {"name": ["like", f"%{search}%"]}
 	rows = frappe.get_all("UOM", filters=filters, or_filters=or_filters, fields=["name"], order_by="name asc", limit_page_length=min(max(cint(limit) or 100, 1), 500), ignore_permissions=True)
 	return {"uoms": [row.get("name") for row in rows if row.get("name")]}
+
+
+@frappe.whitelist()
+def create_management_inventory_item(payload=None):
+	"""Create a stock item from an item picker and optionally open its stock."""
+	_ensure_management_access()
+	data = _inv_parse_payload(payload)
+	item_code = _inv_clean_item_code(data.get("item_code") or data.get("name"))
+	item_name = str(data.get("item_name") or item_code).strip()
+	stock_uom = str(data.get("stock_uom") or "").strip()
+	if not item_code or not item_name:
+		frappe.throw(_("کد و نام کالا الزامی است."))
+	if not stock_uom or not frappe.db.exists("UOM", stock_uom):
+		frappe.throw(_("واحد اندازه‌گیری معتبر انتخاب کنید."))
+	if frappe.db.exists("Item", item_code):
+		frappe.throw(_("کالایی با کد {0} از قبل وجود دارد.").format(item_code))
+
+	item_group = str(data.get("item_group") or "").strip()
+	if not item_group or not frappe.db.exists("Item Group", item_group):
+		item_group = frappe.db.get_value("Item Group", {"is_group": 1}, "name") or "All Item Groups"
+	if not frappe.db.exists("Item Group", item_group):
+		frappe.throw(_("گروه کالا برای ساخت کالا مشخص نشده است."))
+
+	doc = frappe.new_doc("Item")
+	doc.item_code = item_code
+	doc.item_name = item_name
+	doc.item_group = item_group
+	doc.stock_uom = stock_uom
+	doc.is_stock_item = cint(data.get("is_stock_item") if data.get("is_stock_item") not in (None, "") else 1)
+	doc.is_purchase_item = 1
+	if _has_column("Item", "restaurant_raw_material"):
+		doc.restaurant_raw_material = 1
+	if _has_column("Item", "restaurant_purchase_rate") and flt(data.get("purchase_rate")):
+		doc.restaurant_purchase_rate = flt(data.get("purchase_rate"))
+	if _has_column("Item", "restaurant_default_supplier") and data.get("default_supplier"):
+		doc.restaurant_default_supplier = str(data.get("default_supplier")).strip()
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+
+	opening_qty = flt(data.get("opening_qty") or 0)
+	opening_warehouse = str(data.get("opening_warehouse") or "").strip()
+	opening_entry = ""
+	if opening_qty > 0:
+		if not opening_warehouse or not _inv_warehouse_exists(opening_warehouse):
+			frappe.throw(_("برای موجودی اولیه، انبار معتبر انتخاب کنید."))
+		entry = _inv_build_stock_entry(
+			entry_type="Material Receipt",
+			kind_label=STOCK_MOVEMENT_KINDS["manual_receipt"],
+			lines=[{"item_code": item_code, "qty": opening_qty, "uom": stock_uom, "rate": flt(data.get("purchase_rate") or 0)}],
+			target_warehouse=opening_warehouse,
+			note=_("موجودی اولیه هنگام ساخت کالا"),
+		)
+		opening_entry = entry.name
+	frappe.db.commit()
+	return {"status": "success", "item_code": doc.name, "item_name": doc.item_name, "stock_uom": stock_uom, "opening_entry": opening_entry}
 
 
 # ---------------------------------------------------------------------------

@@ -196,6 +196,7 @@
               <SearchableDropdown
                 :model-value="draft.option_item"
                 :options="itemOptions"
+                allow-item-create
                 placeholder="انتخاب آیتم"
                 search-placeholder="جستجوی آیتم..."
                 @update:model-value="draft.option_item = $event"
@@ -207,6 +208,7 @@
               <SearchableDropdown
                 :model-value="draft.replacement_for_item"
                 :options="itemOptions"
+                allow-item-create
                 placeholder="انتخاب آیتم"
                 search-placeholder="جستجوی آیتم..."
                 @update:model-value="draft.replacement_for_item = $event"

@@ -60,6 +60,7 @@
             <SearchableDropdown
               :model-value="draft.item_code"
               :options="resolvedItemOptions"
+              allow-item-create
               placeholder="انتخاب آیتم"
               search-placeholder="جستجوی آیتم..."
               @update:model-value="setDraftItem(draft, $event)"

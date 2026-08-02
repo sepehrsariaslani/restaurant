@@ -77,14 +77,71 @@
           <span class="option-check">+</span>
         </button>
 
-        <p v-if="!filteredOptions.length && !createOption" class="empty-text">{{ noResultsText }}</p>
+        <button
+          v-if="missingItemOption"
+          type="button"
+          class="option-btn create-item-option"
+          @click="openItemCreator"
+        >
+          <span class="option-label">ایجاد کالا «{{ missingItemOption.value }}»</span>
+          <span class="option-check">+</span>
+        </button>
+        <p v-if="!filteredOptions.length && !createOption && !missingItemOption" class="empty-text">{{ noResultsText }}</p>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="itemCreatorOpen" class="item-create-backdrop" @click.self="closeItemCreator">
+        <section class="item-create-modal" dir="rtl" role="dialog" aria-modal="true" aria-label="ایجاد کالای جدید" @click.stop>
+          <header class="item-create-head">
+            <div>
+              <span class="item-create-kicker">کالای جدید</span>
+              <h3>ایجاد «{{ itemForm.item_name }}»</h3>
+            </div>
+            <button type="button" class="item-create-close" @click="closeItemCreator">×</button>
+          </header>
+          <p class="item-create-hint">این کالا در ERPNext ساخته می‌شود و سپس در همین فهرست انتخاب خواهد شد.</p>
+          <p v-if="itemCreateError" class="item-create-error">{{ itemCreateError }}</p>
+          <div class="item-create-grid">
+            <label>نام کالا
+              <input class="input" v-model.trim="itemForm.item_name" />
+            </label>
+            <label>کد کالا
+              <input class="input" v-model.trim="itemForm.item_code" dir="ltr" />
+            </label>
+            <label>واحد پیش‌فرض
+              <select class="input" v-model="itemForm.stock_uom" :disabled="itemUomsLoading">
+                <option v-for="uom in itemUomOptions" :key="uom" :value="uom">{{ uom }}</option>
+              </select>
+            </label>
+            <label>گروه کالا
+              <input class="input" v-model.trim="itemForm.item_group" placeholder="All Item Groups" />
+            </label>
+            <label>موجودی اولیه
+              <input class="input" type="number" min="0" step="0.001" v-model.number="itemForm.opening_qty" />
+            </label>
+            <label>انبار موجودی اولیه
+              <select class="input" v-model="itemForm.opening_warehouse" :disabled="warehousesLoading">
+                <option value="">بدون موجودی اولیه</option>
+                <option v-for="warehouse in itemWarehouses" :key="warehouse" :value="warehouse">{{ warehouse }}</option>
+              </select>
+            </label>
+          </div>
+          <footer class="item-create-actions">
+            <button type="button" class="secondary-btn" @click="closeItemCreator">انصراف</button>
+            <button type="button" class="primary-btn" :disabled="itemCreateSaving || !itemForm.item_name || !itemForm.item_code || !itemForm.stock_uom" @click="createMissingItem">
+              {{ itemCreateSaving ? 'در حال ساخت...' : 'ساخت و انتخاب کالا' }}
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { createManagementInventoryItem, listManagementUOMs, listManagementWarehouses } from '@/utils/api'
 
 const props = defineProps({
   modelValue: {
@@ -143,19 +200,43 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  allowItemCreate: {
+    type: Boolean,
+    default: false,
+  },
+  itemCreateDefaults: {
+    type: Object,
+    default: () => ({}),
+  },
   createOptionLabel: {
     type: String,
     default: 'افزودن مقدار جدید',
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'create-option'])
+const emit = defineEmits(['update:modelValue', 'create-option', 'item-created'])
 
 const rootRef = ref(null)
 const searchInputRef = ref(null)
 const isOpen = ref(false)
 const searchQuery = ref('')
 const highlightedIndex = ref(-1)
+const itemCreatorOpen = ref(false)
+const itemCreateSaving = ref(false)
+const itemCreateError = ref('')
+const itemUomsLoading = ref(false)
+const warehousesLoading = ref(false)
+const itemUomOptions = ref([])
+const itemWarehouses = ref([])
+const itemForm = reactive({
+  item_name: '',
+  item_code: '',
+  stock_uom: '',
+  item_group: 'All Item Groups',
+  opening_qty: 0,
+  opening_warehouse: '',
+})
+const createdOptions = ref([])
 
 const normalizedOptions = computed(() => {
   const mapped = (props.options || []).map((option) => {
@@ -173,11 +254,12 @@ const normalizedOptions = computed(() => {
     }
   })
 
+  const merged = [...createdOptions.value, ...mapped]
   if (props.includeEmptyOption) {
-    mapped.unshift({ label: props.emptyLabel, value: '' })
+    merged.unshift({ label: props.emptyLabel, value: '' })
   }
 
-  return mapped
+  return merged
 })
 
 const filteredOptions = computed(() => {
@@ -190,6 +272,13 @@ const filteredOptions = computed(() => {
     const value = String(option.value || '').toLowerCase()
     return label.includes(query) || value.includes(query)
   })
+})
+
+const missingItemOption = computed(() => {
+  if (!props.allowItemCreate) return null
+  const query = String(searchQuery.value || '').trim()
+  if (!query || filteredOptions.value.length) return null
+  return { value: query, label: query }
 })
 
 const createOption = computed(() => {
@@ -357,6 +446,69 @@ function createOptionFromSearch() {
   selectOption(option.value)
 }
 
+async function openItemCreator() {
+  const query = String(missingItemOption.value?.value || searchQuery.value || '').trim()
+  if (!query) return
+  itemCreateError.value = ''
+  itemForm.item_name = query
+  itemForm.item_code = query
+  itemForm.stock_uom = String(props.itemCreateDefaults?.stock_uom || '')
+  itemForm.item_group = String(props.itemCreateDefaults?.item_group || 'All Item Groups')
+  itemForm.opening_qty = Number(props.itemCreateDefaults?.opening_qty || 0)
+  itemForm.opening_warehouse = String(props.itemCreateDefaults?.opening_warehouse || '')
+  itemCreatorOpen.value = true
+  isOpen.value = false
+  itemUomsLoading.value = true
+  warehousesLoading.value = true
+  try {
+    const [uomPayload, warehousePayload] = await Promise.all([
+      listManagementUOMs({ limit: 300 }),
+      listManagementWarehouses(),
+    ])
+    itemUomOptions.value = Array.isArray(uomPayload?.uoms) ? uomPayload.uoms : []
+    itemWarehouses.value = (warehousePayload?.warehouses || [])
+      .filter((row) => Number(row?.is_group || 0) !== 1 && Number(row?.disabled || 0) !== 1)
+      .map((row) => row.name || row.warehouse_name)
+      .filter(Boolean)
+    if (!itemForm.stock_uom) itemForm.stock_uom = itemUomOptions.value[0] || 'Nos'
+    if (!itemForm.opening_warehouse) itemForm.opening_warehouse = itemWarehouses.value[0] || ''
+  } catch (error) {
+    itemCreateError.value = error?.message || 'دریافت واحدها و انبارها ناموفق بود.'
+    if (!itemForm.stock_uom) itemForm.stock_uom = 'Nos'
+  } finally {
+    itemUomsLoading.value = false
+    warehousesLoading.value = false
+  }
+}
+
+function closeItemCreator() {
+  if (itemCreateSaving.value) return
+  itemCreatorOpen.value = false
+  itemCreateError.value = ''
+}
+
+async function createMissingItem() {
+  if (itemCreateSaving.value) return
+  itemCreateSaving.value = true
+  itemCreateError.value = ''
+  try {
+    const result = await createManagementInventoryItem({ ...itemForm, is_stock_item: 1 })
+    const value = result.item_code || result.name
+    createdOptions.value = [
+      { value, label: `${result.item_name || value} (${value})` },
+      ...createdOptions.value.filter((option) => String(option.value) !== String(value)),
+    ]
+    emit('update:modelValue', value)
+    emit('item-created', result)
+    itemCreatorOpen.value = false
+    itemCreateError.value = ''
+  } catch (error) {
+    itemCreateError.value = error?.message || 'ساخت کالا ناموفق بود.'
+  } finally {
+    itemCreateSaving.value = false
+  }
+}
+
 function isSameValue(left, right) {
   return String(left ?? '') === String(right ?? '')
 }
@@ -497,6 +649,121 @@ onBeforeUnmount(() => {
 .create-option-btn {
   border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.28);
   margin-top: 0.24rem;
+}
+
+.create-item-option {
+  margin-top: 0.3rem;
+  border: 1px dashed color-mix(in srgb, var(--mg-primary, #c97852) 45%, transparent);
+  background: color-mix(in srgb, var(--mg-primary, #c97852) 8%, transparent);
+  color: var(--mg-primary, #c97852);
+  font-weight: 800;
+}
+
+.item-create-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(30 22 17 / 0.48);
+  backdrop-filter: blur(4px);
+}
+
+.item-create-modal {
+  width: min(600px, 100%);
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--mg-border, #d8c8b4) 84%, transparent);
+  border-radius: 22px;
+  background: var(--mg-bg-surface, #fbf7f1);
+  color: var(--mg-text-main, #34261f);
+  box-shadow: 0 28px 70px rgb(30 22 17 / 0.28);
+}
+
+.item-create-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.item-create-kicker {
+  color: var(--mg-primary, #c97852);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.item-create-head h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1rem;
+}
+
+.item-create-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--mg-border-light, #d8c8b4);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--mg-text-muted, #746454);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.item-create-hint {
+  margin: 0;
+  color: var(--mg-text-muted, #746454);
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+
+.item-create-error {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  color: var(--mg-danger, #a6543f);
+  background: color-mix(in srgb, var(--mg-danger, #a6543f) 9%, transparent);
+  font-size: 0.75rem;
+}
+
+.item-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.item-create-grid label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--mg-text-muted, #746454);
+  font-size: 0.75rem;
+}
+
+.item-create-grid .input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--mg-border-light, #d8c8b4);
+  border-radius: 10px;
+  background: var(--mg-bg-surface, #fbf7f1);
+  color: var(--mg-text-main, #34261f);
+  font: inherit;
+}
+
+.item-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--mg-border-light, #d8c8b4);
+}
+
+@media (max-width: 600px) {
+  .item-create-backdrop { align-items: end; padding: 0; }
+  .item-create-modal { width: 100%; max-height: 92dvh; overflow-y: auto; border-radius: 22px 22px 0 0; padding: 0.85rem; }
+  .item-create-grid { grid-template-columns: 1fr; }
+  .item-create-actions { flex-direction: column-reverse; }
+  .item-create-actions > button { width: 100%; }
 }
 
 .option-label {
