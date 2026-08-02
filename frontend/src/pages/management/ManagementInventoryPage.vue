@@ -405,6 +405,154 @@
       </ManagementSurfaceCard>
     </section>
 
+    <!-- ======================= درخواست مواد ======================= -->
+    <section v-if="activeTab === 'requests'" class="tab-body material-request-page">
+      <p class="error" v-if="requestError">{{ requestError }}</p>
+      <p class="success-msg" v-if="requestMessage">{{ requestMessage }}</p>
+
+      <ManagementSurfaceCard title="درخواست مواد اولیه" subtitle="نیاز مواد را ثبت کنید، مقدار و واحد را ببینید و سپس به خرید منتقل کنید">
+        <div class="request-toolbar">
+          <select class="input" v-model="requestFilters.status" @change="loadMaterialRequests">
+            <option value="">همه وضعیت‌ها</option>
+            <option value="draft">پیش‌نویس</option>
+            <option value="pending">در انتظار خرید</option>
+            <option value="ordered">خرید کامل</option>
+            <option value="cancelled">لغوشده</option>
+          </select>
+          <input class="input" type="date" v-model="requestFilters.date_from" @change="loadMaterialRequests" />
+          <input class="input" type="date" v-model="requestFilters.date_to" @change="loadMaterialRequests" />
+          <input class="input request-search" v-model.trim="requestFilters.search" placeholder="جستجوی شماره یا ماده..." @keyup.enter="loadMaterialRequests" />
+          <button type="button" class="secondary-btn" @click="loadMaterialRequests" :disabled="requestLoading">{{ requestLoading ? '...' : 'جستجو' }}</button>
+          <button type="button" class="primary-btn" @click="openMaterialRequestForm()">+ درخواست جدید</button>
+        </div>
+
+        <p class="muted" v-if="requestLoading">در حال دریافت درخواست‌ها...</p>
+        <div v-else class="material-request-list">
+          <article
+            v-for="request in materialRequests"
+            :key="request.name"
+            class="material-request-card"
+            @click="openMaterialRequestDetail(request.name)"
+          >
+            <header class="material-request-card-head">
+              <div>
+                <strong>{{ request.name }}</strong>
+                <small>{{ request.transaction_date }} • نیاز تا {{ request.schedule_date || '—' }}</small>
+              </div>
+              <span :class="['pill', requestStatusClass(request.status)]">{{ request.status_label }}</span>
+            </header>
+            <div class="material-request-card-body">
+              <div class="request-item-preview" v-for="item in request.items_preview" :key="item.item_code">
+                <span>{{ item.item_name }}</span>
+                <strong>{{ formatQty(item.qty) }} {{ item.uom }}</strong>
+              </div>
+              <span v-if="request.item_count > request.items_preview.length" class="request-more-items">+ {{ formatQty(request.item_count - request.items_preview.length) }} قلم دیگر</span>
+            </div>
+            <footer class="material-request-card-foot">
+              <span>{{ formatQty(request.item_count) }} قلم • {{ formatQty(request.total_qty) }} مقدار</span>
+              <span v-if="request.purchase_orders?.length" class="ok-text">خرید ایجاد شده</span>
+              <span v-else class="muted">برای مشاهده جزئیات کلیک کنید</span>
+            </footer>
+          </article>
+          <p v-if="!materialRequests.length" class="muted request-empty-state">درخواستی برای نمایش وجود ندارد.</p>
+        </div>
+      </ManagementSurfaceCard>
+
+      <div v-if="materialRequestForm" class="popup-backdrop" @click.self="materialRequestForm = null">
+        <div class="popup wide material-request-popup">
+          <header class="request-popup-head">
+            <div>
+              <span class="request-kicker">فرم درخواست مواد</span>
+              <h3>{{ materialRequestForm.name ? `ویرایش ${materialRequestForm.name}` : 'درخواست مواد جدید' }}</h3>
+            </div>
+            <button type="button" class="icon-close-btn" @click="materialRequestForm = null">×</button>
+          </header>
+          <p class="error" v-if="requestFormError">{{ requestFormError }}</p>
+          <div class="form-grid">
+            <label>تاریخ درخواست
+              <input class="input" type="date" v-model="materialRequestForm.transaction_date" />
+            </label>
+            <label>تاریخ نیاز
+              <input class="input" type="date" v-model="materialRequestForm.schedule_date" />
+            </label>
+            <label>انبار مقصد
+              <select class="input" v-model="materialRequestForm.set_warehouse">
+                <option value="">انتخاب انبار</option>
+                <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
+              </select>
+            </label>
+            <label class="full-row">توضیحات درخواست
+              <textarea class="input" rows="2" v-model.trim="materialRequestForm.note" placeholder="مثلاً خرید هفتگی آشپزخانه..."></textarea>
+            </label>
+          </div>
+          <div class="request-lines-editor">
+            <div class="request-lines-head"><strong>اقلام موردنیاز</strong><span>با انتخاب ماده، واحد اندازه‌گیری خودکار می‌آید.</span></div>
+            <div v-for="(line, index) in materialRequestForm.items" :key="index" class="request-line-row">
+              <SearchableDropdown
+                v-model="line.item_code"
+                :options="materialOptions"
+                placeholder="انتخاب ماده اولیه..."
+                search-placeholder="جستجوی ماده..."
+                @update:model-value="syncMaterialRequestLine(line, $event)"
+              />
+              <input class="input request-qty-input" type="number" min="0.001" step="0.001" v-model.number="line.qty" placeholder="مقدار" />
+              <div class="request-uom-field"><small>واحد</small><strong>{{ line.uom || 'خودکار' }}</strong></div>
+              <button type="button" class="tertiary-btn danger" @click="removeMaterialRequestLine(index)" :disabled="materialRequestForm.items.length <= 1">حذف</button>
+            </div>
+            <button type="button" class="secondary-btn add-line-btn" @click="addMaterialRequestLine">+ افزودن ماده</button>
+          </div>
+          <footer class="request-popup-actions">
+            <button type="button" class="secondary-btn" @click="materialRequestForm = null">انصراف</button>
+            <button type="button" class="secondary-btn" @click="saveMaterialRequest(false)" :disabled="requestSaving">ذخیره پیش‌نویس</button>
+            <button type="button" class="primary-btn" @click="saveMaterialRequest(true)" :disabled="requestSaving">{{ requestSaving ? 'در حال ثبت...' : 'ثبت نهایی درخواست' }}</button>
+          </footer>
+        </div>
+      </div>
+
+      <div v-if="materialRequestDetail" class="popup-backdrop" @click.self="materialRequestDetail = null">
+        <div class="popup wide material-request-detail-popup">
+          <header class="request-popup-head">
+            <div>
+              <span class="request-kicker">جزئیات درخواست</span>
+              <h3>{{ materialRequestDetail.name }}</h3>
+            </div>
+            <button type="button" class="icon-close-btn" @click="materialRequestDetail = null">×</button>
+          </header>
+          <div class="request-detail-meta">
+            <div><small>وضعیت</small><strong><span :class="['pill', requestStatusClass(materialRequestDetail.status)]">{{ materialRequestDetail.status_label }}</span></strong></div>
+            <div><small>تاریخ درخواست</small><strong>{{ materialRequestDetail.transaction_date }}</strong></div>
+            <div><small>تاریخ نیاز</small><strong>{{ materialRequestDetail.schedule_date || '—' }}</strong></div>
+            <div><small>انبار مقصد</small><strong>{{ materialRequestDetail.set_warehouse || '—' }}</strong></div>
+            <div><small>مجموع مقدار</small><strong>{{ formatQty(materialRequestDetail.total_qty) }}</strong></div>
+          </div>
+          <div class="material-request-detail-lines">
+            <article v-for="line in materialRequestDetail.items" :key="line.idx + '-' + line.item_code" class="request-detail-line">
+              <div class="request-detail-line-main">
+                <span class="request-line-index">{{ formatQty(line.idx) }}</span>
+                <div><strong>{{ line.item_name }}</strong><small>{{ line.item_code }}</small></div>
+              </div>
+              <div class="request-detail-line-qty"><strong>{{ formatQty(line.qty) }}</strong><span>{{ line.uom || line.stock_uom }}</span></div>
+            </article>
+          </div>
+          <p v-if="materialRequestDetail.note" class="request-note">{{ materialRequestDetail.note }}</p>
+          <div v-if="materialRequestDetail.purchase_orders?.length" class="request-purchase-links">
+            <strong>سفارش‌های خرید مرتبط</strong>
+            <button v-for="purchase in materialRequestDetail.purchase_orders" :key="purchase.name" type="button" class="purchase-link" @click="openLinkedPurchase(purchase.name)">
+              {{ purchase.name }} • {{ purchase.status }}
+            </button>
+          </div>
+          <footer class="request-popup-actions">
+            <button v-if="materialRequestDetail.docstatus === 0" type="button" class="secondary-btn" @click="editMaterialRequestDetail">ویرایش</button>
+            <button v-if="materialRequestDetail.docstatus === 0" type="button" class="secondary-btn" @click="changeMaterialRequestStatus('submit')">ثبت نهایی</button>
+            <button v-if="materialRequestDetail.docstatus === 1" type="button" class="primary-btn" @click="createPurchaseFromMaterialRequest" :disabled="requestPurchaseSaving">{{ requestPurchaseSaving ? 'در حال ساخت خرید...' : 'ایجاد پیش‌نویس خرید' }}</button>
+            <button v-if="materialRequestDetail.docstatus === 1" type="button" class="tertiary-btn danger" @click="changeMaterialRequestStatus('cancel')">لغو درخواست</button>
+            <button type="button" class="secondary-btn" @click="printMaterialRequest">چاپ فیش</button>
+            <button type="button" class="secondary-btn" @click="materialRequestDetail = null">بستن</button>
+          </footer>
+        </div>
+      </div>
+    </section>
+
     <!-- ======================= خرید ======================= -->
     <section v-if="activeTab === 'purchase'" class="tab-body">
       <p class="error" v-if="purchaseError">{{ purchaseError }}</p>
@@ -900,11 +1048,14 @@ import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   createManagementProductionEntry,
   createManagementPurchaseFromAlerts,
+  createManagementPurchaseFromMaterialRequest,
   createManagementStockMovement,
   deleteManagementWarehouse,
   exportManagementMaterialsExcel,
   getManagementInventoryBoot,
   getManagementInventoryPurchasePrint,
+  getManagementMaterialRequest,
+  getManagementMaterialRequestPrint,
   getManagementProductCostReport,
   getManagementProductionPlan,
   getManagementPurchaseOrder,
@@ -914,6 +1065,7 @@ import {
   getManagementStockReconciliation,
   getManagementWasteLossReport,
   importManagementMaterialsExcel,
+  listManagementMaterialRequests,
   listManagementOrderLosses,
   listManagementProducts,
   listManagementPurchaseOrders,
@@ -922,12 +1074,14 @@ import {
   listManagementStockReconciliations,
   listManagementWarehouses,
   receiveManagementPurchaseOrder,
+  saveManagementMaterialRequest,
   saveManagementOrderLoss,
   saveManagementPurchaseOrder,
   saveManagementRawMaterial,
   saveManagementSupplier,
   saveManagementWarehouse,
   submitManagementStockReconciliation,
+  updateManagementMaterialRequestStatus,
   updateManagementPurchaseOrderStatus,
   uploadFileToFrappe,
 } from '@/utils/api'
@@ -939,6 +1093,7 @@ const tabs = [
   { key: 'warehouses', label: 'انبارها' },
   { key: 'movements', label: 'ورود و خروج' },
   { key: 'reorder', label: 'نقطه سفارش' },
+  { key: 'requests', label: 'درخواست مواد' },
   { key: 'purchase', label: 'خرید' },
   { key: 'production', label: 'برنامه تولید' },
   { key: 'losses', label: 'ضایعات و اوتی‌ها' },
@@ -950,7 +1105,7 @@ const activeTab = ref('overview')
 const boot = ref(null)
 const bootLoading = ref(false)
 
-const loadingAny = computed(() => bootLoading.value)
+const loadingAny = computed(() => bootLoading.value || requestLoading.value || purchaseLoading.value)
 
 const leafWarehouses = computed(() => (boot.value ? boot.value.leaf_warehouses || [] : []))
 const supplierOptions = computed(() =>
@@ -1022,6 +1177,197 @@ const materialSaving = ref(false)
 const materialOptions = computed(() =>
   materialOptionsPool.value.map((m) => ({ value: m.name, label: `${m.item_name} (${m.name})` })),
 )
+
+// ------------------------- material requests -------------------------
+const materialRequests = ref([])
+const requestLoading = ref(false)
+const requestError = ref('')
+const requestMessage = ref('')
+const requestFilters = reactive({ status: '', search: '', date_from: '', date_to: '' })
+const materialRequestForm = ref(null)
+const materialRequestDetail = ref(null)
+const requestFormError = ref('')
+const requestSaving = ref(false)
+const requestPurchaseSaving = ref(false)
+
+function requestStatusClass(status) {
+  const normalized = String(status || '').toLowerCase()
+  if (['ordered', 'partially ordered'].includes(normalized)) return 'ok'
+  if (['cancelled', 'stopped'].includes(normalized)) return 'warn'
+  return ''
+}
+
+function todayDateValue() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function materialMeta(itemCode) {
+  return materialOptionsPool.value.find((item) => item.name === itemCode) || null
+}
+
+function syncMaterialRequestLine(line, itemCode = line.item_code) {
+  line.item_code = itemCode
+  const meta = materialMeta(itemCode)
+  if (!meta) return
+  line.uom = line.uom || meta.stock_uom || 'Nos'
+  line.stock_uom = meta.stock_uom || line.uom
+  line.conversion_factor = Number(line.conversion_factor || 1)
+}
+
+function addMaterialRequestLine() {
+  materialRequestForm.value?.items.push({ item_code: '', qty: 1, uom: '', stock_uom: '', conversion_factor: 1, warehouse: '' })
+}
+
+function removeMaterialRequestLine(index) {
+  if (!materialRequestForm.value || materialRequestForm.value.items.length <= 1) return
+  materialRequestForm.value.items.splice(index, 1)
+}
+
+function openMaterialRequestForm(request = null) {
+  requestFormError.value = ''
+  if (request) {
+    materialRequestForm.value = {
+      name: request.name,
+      transaction_date: request.transaction_date || todayDateValue(),
+      schedule_date: request.schedule_date || request.transaction_date || todayDateValue(),
+      set_warehouse: request.set_warehouse || boot.value?.settings?.default_warehouse || '',
+      note: request.note || '',
+      items: (request.items || []).map((line) => ({ ...line, conversion_factor: Number(line.conversion_factor || 1) })),
+    }
+  } else {
+    materialRequestForm.value = {
+      name: '',
+      transaction_date: todayDateValue(),
+      schedule_date: todayDateValue(),
+      set_warehouse: boot.value?.settings?.default_warehouse || '',
+      note: '',
+      items: [{ item_code: '', qty: 1, uom: '', stock_uom: '', conversion_factor: 1, warehouse: '' }],
+    }
+  }
+  materialRequestForm.value.items.forEach((line) => syncMaterialRequestLine(line))
+}
+
+async function loadMaterialRequests() {
+  requestLoading.value = true
+  requestError.value = ''
+  try {
+    if (!materialOptionsPool.value.length) await loadMaterials()
+    const payload = await listManagementMaterialRequests({ ...requestFilters, limit: 100 })
+    if (payload?.doctype_available === false) {
+      throw new Error('داکتایپ Material Request در ERPNext در دسترس نیست.')
+    }
+    materialRequests.value = payload.requests || []
+  } catch (err) {
+    requestError.value = err.message || 'دریافت درخواست‌های مواد ناموفق بود.'
+    materialRequests.value = []
+  } finally {
+    requestLoading.value = false
+  }
+}
+
+async function openMaterialRequestDetail(name) {
+  requestError.value = ''
+  try {
+    const payload = await getManagementMaterialRequest(name)
+    materialRequestDetail.value = payload.request
+    materialRequestDetail.value.purchase_orders = payload.purchase_orders || []
+  } catch (err) {
+    requestError.value = err.message || 'دریافت جزئیات درخواست ناموفق بود.'
+  }
+}
+
+async function saveMaterialRequest(submit = false) {
+  if (!materialRequestForm.value) return
+  requestSaving.value = true
+  requestFormError.value = ''
+  try {
+    const items = materialRequestForm.value.items
+      .filter((line) => line.item_code && Number(line.qty) > 0)
+      .map((line) => ({
+        item_code: line.item_code,
+        qty: Number(line.qty),
+        uom: line.uom,
+        stock_uom: line.stock_uom,
+        conversion_factor: Number(line.conversion_factor || 1),
+        warehouse: materialRequestForm.value.set_warehouse || '',
+      }))
+    if (!items.length) throw new Error('حداقل یک ماده با مقدار بیشتر از صفر انتخاب کنید.')
+    const result = await saveManagementMaterialRequest({
+      ...materialRequestForm.value,
+      items,
+      submit: submit ? 1 : 0,
+    })
+    requestMessage.value = submit ? `درخواست ${result.request.name} ثبت نهایی شد.` : `پیش‌نویس ${result.request.name} ذخیره شد.`
+    materialRequestForm.value = null
+    await loadMaterialRequests()
+    await openMaterialRequestDetail(result.request.name)
+  } catch (err) {
+    requestFormError.value = err.message || 'ذخیره درخواست مواد ناموفق بود.'
+  } finally {
+    requestSaving.value = false
+  }
+}
+
+function openLinkedPurchase(name) {
+  materialRequestDetail.value = null
+  openPurchaseDetail(name)
+}
+
+function editMaterialRequestDetail() {
+  if (!materialRequestDetail.value || materialRequestDetail.value.docstatus !== 0) return
+  openMaterialRequestForm(materialRequestDetail.value)
+  materialRequestDetail.value = null
+}
+
+async function changeMaterialRequestStatus(action) {
+  if (!materialRequestDetail.value) return
+  requestError.value = ''
+  try {
+    const result = await updateManagementMaterialRequestStatus({ name: materialRequestDetail.value.name, action })
+    materialRequestDetail.value = result.request
+    requestMessage.value = 'وضعیت درخواست مواد به‌روزرسانی شد.'
+    await loadMaterialRequests()
+  } catch (err) {
+    requestError.value = err.message || 'تغییر وضعیت درخواست ناموفق بود.'
+  }
+}
+
+async function createPurchaseFromMaterialRequest() {
+  if (!materialRequestDetail.value) return
+  requestPurchaseSaving.value = true
+  requestError.value = ''
+  try {
+    const result = await createManagementPurchaseFromMaterialRequest({
+      name: materialRequestDetail.value.name,
+      target_warehouse: materialRequestDetail.value.set_warehouse || boot.value?.settings?.default_warehouse || '',
+      items: materialRequestDetail.value.items.map((line) => ({
+        item_code: line.item_code,
+        qty: line.qty,
+        uom: line.uom || line.stock_uom,
+        rate: line.rate || 0,
+      })),
+    })
+    requestMessage.value = `پیش‌نویس خرید ${result.purchase.name} ساخته شد.`
+    purchaseMessage.value = `از درخواست ${materialRequestDetail.value.name} پیش‌نویس خرید ${result.purchase.name} ساخته شد.`
+    materialRequestDetail.value = null
+    await loadPurchases()
+    setActiveTab('purchase')
+  } catch (err) {
+    requestError.value = err.message || 'ساخت پیش‌نویس خرید ناموفق بود.'
+  } finally {
+    requestPurchaseSaving.value = false
+  }
+}
+
+async function printMaterialRequest() {
+  if (!materialRequestDetail.value) return
+  try {
+    const payload = await getManagementMaterialRequestPrint(materialRequestDetail.value.name)
+    if (payload?.html) printReceipt(payload.html, `درخواست مواد ${payload.name}`)
+  } catch (err) {
+    requestError.value = err.message || 'آماده‌سازی چاپ درخواست ناموفق بود.'
+  }
+}
 
 // ------------------------- materials excel -------------------------
 const materialExcelBusy = ref(false)
@@ -1799,6 +2145,7 @@ function loadTabData(key) {
   if (key === 'warehouses' && !warehouses.value.length) loadWarehouses()
   if (key === 'movements' && !movements.value.length) loadMovements()
   if (key === 'reorder' && !reorderAlerts.value.length) loadReorderAlerts()
+  if (key === 'requests' && !materialRequests.value.length) loadMaterialRequests()
   if (key === 'purchase' && !purchases.value.length) loadPurchases()
   if (key === 'production' && !plan.value) loadProductionPlan()
   if (key === 'losses') {
@@ -1816,6 +2163,7 @@ function reloadActiveTab() {
     warehouses: loadWarehouses,
     movements: loadMovements,
     reorder: loadReorderAlerts,
+    requests: loadMaterialRequests,
     purchase: loadPurchases,
     production: loadProductionPlan,
     losses: () => Promise.all([loadWasteReport(), loadOrderLosses()]),
@@ -2033,6 +2381,320 @@ onMounted(async () => {
 .popup.wide {
   width: min(860px, 100%);
 }
+.request-toolbar {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(140px, 0.9fr) minmax(140px, 0.9fr) minmax(180px, 1.4fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.request-toolbar .input {
+  min-width: 0;
+}
+
+.material-request-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.65rem;
+}
+
+.material-request-card {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border-color, #d8d2c4);
+  border-radius: 16px;
+  background: var(--surface-bg, #fff);
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.material-request-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-green, #2f6f5c);
+  box-shadow: 0 12px 28px rgb(47 111 92 / 0.1);
+}
+
+.material-request-card-head,
+.material-request-card-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.material-request-card-head strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.material-request-card-head small,
+.material-request-card-foot {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.72rem;
+}
+
+.material-request-card-body {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.5rem;
+  border-radius: 12px;
+  background: var(--surface-soft, #f7f4ee);
+}
+
+.request-item-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.77rem;
+}
+
+.request-item-preview span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-item-preview strong {
+  flex: 0 0 auto;
+  color: var(--accent-green, #2f6f5c);
+  font-size: 0.72rem;
+}
+
+.request-more-items {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.68rem;
+}
+
+.request-empty-state {
+  grid-column: 1 / -1;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.material-request-popup,
+.material-request-detail-popup {
+  max-height: min(92vh, 860px);
+}
+
+.request-popup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.request-popup-head h3 {
+  margin: 0.1rem 0 0;
+}
+
+.request-kicker {
+  color: var(--accent-green, #2f6f5c);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.icon-close-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-color, #d8d2c4);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted, #6b7a72);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.request-lines-editor {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border-color, #d8d2c4);
+  border-radius: 14px;
+  background: var(--surface-soft, #f7f4ee);
+}
+
+.request-lines-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.request-lines-head span {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.7rem;
+}
+
+.request-line-row {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(90px, 1fr) minmax(75px, 0.75fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.45rem;
+  border-radius: 12px;
+  background: var(--surface-bg, #fff);
+}
+
+.request-uom-field {
+  min-height: 38px;
+  display: grid;
+  align-content: center;
+  gap: 0.1rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--border-color, #d8d2c4);
+  border-radius: 9px;
+}
+
+.request-uom-field small {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.62rem;
+}
+
+.request-uom-field strong {
+  font-size: 0.75rem;
+}
+
+.add-line-btn {
+  width: fit-content;
+}
+
+.request-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border-color, #d8d2c4);
+}
+
+.request-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.55rem;
+}
+
+.request-detail-meta > div {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.55rem;
+  border-radius: 11px;
+  background: var(--surface-soft, #f7f4ee);
+}
+
+.request-detail-meta small {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.68rem;
+}
+
+.request-detail-meta strong {
+  font-size: 0.77rem;
+}
+
+.material-request-detail-lines {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.request-detail-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.62rem 0.7rem;
+  border: 1px solid var(--border-color, #d8d2c4);
+  border-radius: 12px;
+  background: var(--surface-bg, #fff);
+}
+
+.request-detail-line-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.request-detail-line-main > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.request-detail-line-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.request-detail-line-main small {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.67rem;
+}
+
+.request-line-index {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(47, 111, 92, 0.12);
+  color: var(--accent-green, #2f6f5c);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.request-detail-line-qty {
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+  flex: 0 0 auto;
+}
+
+.request-detail-line-qty strong {
+  color: var(--accent-green, #2f6f5c);
+  font-size: 0.86rem;
+}
+
+.request-detail-line-qty span {
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.68rem;
+}
+
+.request-note {
+  margin: 0;
+  padding: 0.65rem;
+  border-radius: 11px;
+  background: var(--surface-soft, #f7f4ee);
+  color: var(--text-muted, #6b7a72);
+  white-space: pre-line;
+  font-size: 0.78rem;
+}
+
+.request-purchase-links {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  border-radius: 12px;
+  background: rgba(47, 111, 92, 0.07);
+}
+
+.purchase-link {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--accent-green, #2f6f5c);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
 .inline-form {
   border: 1px dashed var(--border-color, #d8d2c4);
   border-radius: 12px;
@@ -2097,6 +2759,57 @@ onMounted(async () => {
   .toolbar .input {
     flex: 1 1 100%;
     min-width: 100%;
+  }
+  .request-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .request-toolbar .request-search,
+  .request-toolbar button:last-child {
+    grid-column: 1 / -1;
+  }
+  .request-line-row {
+    grid-template-columns: minmax(0, 1fr) minmax(90px, 1fr);
+  }
+  .request-line-row .request-uom-field,
+  .request-line-row .tertiary-btn {
+    min-height: 38px;
+  }
+  .request-lines-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .request-popup-actions {
+    justify-content: stretch;
+  }
+  .request-popup-actions > button {
+    flex: 1 1 100%;
+  }
+  .material-request-card-head,
+  .material-request-card-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .request-detail-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+  .material-request-popup,
+  .material-request-detail-popup {
+    width: 100%;
+    max-height: 94vh;
+    padding: 0.85rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .request-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .request-toolbar .request-search,
+  .request-toolbar button:last-child {
+    grid-column: auto;
+  }
+  .request-detail-meta {
+    grid-template-columns: 1fr;
   }
 }
 </style>

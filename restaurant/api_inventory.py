@@ -61,6 +61,13 @@ __all__ = [
 	"_inv_ensure_ops_ready",
 	# boot
 	"get_management_inventory_boot",
+	# material requests
+	"list_management_material_requests",
+	"get_management_material_request",
+	"save_management_material_request",
+	"update_management_material_request_status",
+	"create_management_purchase_from_material_request",
+	"get_management_material_request_print",
 	# raw materials
 	"list_management_raw_materials",
 	"get_management_raw_material_detail",
@@ -136,6 +143,18 @@ PURCHASE_STATUS_SENT = PURCHASE_ORDER_STATUSES[1]
 PURCHASE_STATUS_PARTIAL = PURCHASE_ORDER_STATUSES[2]
 PURCHASE_STATUS_COMPLETE = PURCHASE_ORDER_STATUSES[3]
 PURCHASE_STATUS_CANCELLED = PURCHASE_ORDER_STATUSES[4]
+MATERIAL_REQUEST_DOCTYPE = "Material Request"
+MATERIAL_REQUEST_ITEM_DOCTYPE = "Material Request Item"
+MATERIAL_REQUEST_STATUS_LABELS = {
+	"draft": "پیش‌نویس",
+	"pending": "در انتظار خرید",
+	"partially ordered": "خرید جزئی",
+	"ordered": "خرید کامل",
+	"stopped": "متوقف‌شده",
+	"cancelled": "لغوشده",
+	"issued": "صادرشده",
+	"transferred": "منتقل‌شده",
+}
 ORDER_LOSS_KINDS = ["اوت شده", "خسارت", "مرجوعی به انبار"]
 
 INVENTORY_MODULE_ERRORS = _("Restaurant Inventory")
@@ -667,6 +686,368 @@ def get_management_inventory_boot():
 		"purchase_statuses": PURCHASE_ORDER_STATUSES,
 		"loss_kinds": ORDER_LOSS_KINDS,
 	}
+
+
+# ---------------------------------------------------------------------------
+# Material requests (ERPNext Material Request)
+# ---------------------------------------------------------------------------
+
+
+def _inv_material_request_status(doc):
+	if cint(doc.get("docstatus") or 0) == 0:
+		return "draft"
+	if cint(doc.get("docstatus") or 0) == 2:
+		return "cancelled"
+	return (doc.get("status") or "pending").strip().lower() or "pending"
+
+
+def _inv_material_request_status_label(status):
+	return MATERIAL_REQUEST_STATUS_LABELS.get(str(status or "").strip().lower(), str(status or "ثبت‌شده"))
+
+
+def _inv_material_request_item_payload(row):
+	return {
+		"idx": cint(row.get("idx") or 0),
+		"item_code": row.get("item_code") or "",
+		"item_name": row.get("item_name") or row.get("item_code") or "",
+		"description": row.get("description") or "",
+		"qty": flt(row.get("qty")),
+		"uom": row.get("uom") or row.get("stock_uom") or "",
+		"stock_uom": row.get("stock_uom") or row.get("uom") or "",
+		"conversion_factor": flt(row.get("conversion_factor") or 1),
+		"warehouse": row.get("warehouse") or "",
+		"schedule_date": str(row.get("schedule_date") or ""),
+		"rate": flt(row.get("rate")),
+		"amount": flt(row.get("amount")),
+		"ordered_qty": flt(row.get("ordered_qty")),
+	}
+
+
+def _inv_material_request_payload(doc, include_items=True):
+	status = _inv_material_request_status(doc)
+	payload = {
+		"name": doc.name,
+		"status": status,
+		"status_label": _inv_material_request_status_label(status),
+		"docstatus": cint(doc.get("docstatus") or 0),
+		"material_request_type": doc.get("material_request_type") or "Purchase",
+		"transaction_date": str(doc.get("transaction_date") or ""),
+		"schedule_date": str(doc.get("schedule_date") or ""),
+		"company": doc.get("company") or "",
+		"set_warehouse": doc.get("set_warehouse") or "",
+		"owner": doc.get("owner") or "",
+		"creation": str(doc.get("creation") or ""),
+		"note": doc.get("remarks") or doc.get("description") or "",
+		"total_qty": 0.0,
+		"item_count": 0,
+		"items_preview": [],
+		"items": [],
+	}
+	if include_items:
+		items = [_inv_material_request_item_payload(row) for row in (doc.get("items") or [])]
+		payload["items"] = items
+		payload["item_count"] = len(items)
+		payload["total_qty"] = flt(sum(flt(row.get("qty")) for row in items))
+		payload["items_preview"] = [
+			{"item_code": row["item_code"], "item_name": row["item_name"], "qty": row["qty"], "uom": row["uom"]}
+			for row in items[:4]
+		]
+	return payload
+
+
+def _inv_material_request_purchases(request_name):
+	if not frappe.db.exists("DocType", PURCHASE_ORDER_DOCTYPE):
+		return []
+	needle = f"%درخواست مواد {request_name}%"
+	rows = frappe.get_all(
+		PURCHASE_ORDER_DOCTYPE,
+		filters={"note": ["like", needle]},
+		fields=["name", "supplier_name", "status", "posting_date", "grand_total"],
+		order_by="creation desc",
+		limit_page_length=20,
+	)
+	return [
+		{
+			"name": row.name,
+			"supplier_name": row.get("supplier_name") or "",
+			"status": row.get("status") or PURCHASE_STATUS_DRAFT,
+			"posting_date": str(row.get("posting_date") or ""),
+			"grand_total": flt(row.get("grand_total")),
+		}
+		for row in rows
+	]
+
+
+@frappe.whitelist()
+def list_management_material_requests(status="", search="", date_from="", date_to="", limit=50, offset=0):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", MATERIAL_REQUEST_DOCTYPE):
+		return {"requests": [], "count": 0, "doctype_available": False}
+	limit = min(max(cint(limit) or 50, 1), 200)
+	offset = max(cint(offset) or 0, 0)
+	filters = {}
+	status_key = str(status or "").strip().lower()
+	if status_key == "draft":
+		filters["docstatus"] = 0
+	elif status_key == "cancelled":
+		filters["docstatus"] = 2
+	elif status_key:
+		filters["docstatus"] = 1
+		filters["status"] = status
+	if date_from:
+		filters["transaction_date"] = [">=", getdate(date_from)]
+	if date_to:
+		filters["transaction_date"] = ["between", [getdate(date_from or date_to), getdate(date_to)]]
+
+	rows = frappe.get_all(
+		MATERIAL_REQUEST_DOCTYPE,
+		filters=filters,
+		fields=[
+			"name", "status", "docstatus", "material_request_type", "transaction_date",
+			"schedule_date", "company", "set_warehouse", "owner", "creation",
+		],
+		order_by="transaction_date desc, creation desc",
+		limit_start=offset,
+		limit_page_length=limit,
+		ignore_permissions=True,
+	)
+	search_text = str(search or "").strip().lower()
+	result = []
+	for row in rows:
+		payload = _inv_material_request_payload(row, include_items=False)
+		if search_text:
+			if search_text not in str(row.name or "").lower() and search_text not in str(row.get("company") or "").lower():
+				child_match = frappe.db.exists(
+					MATERIAL_REQUEST_ITEM_DOCTYPE,
+					{"parent": row.name, "item_code": ["like", f"%{search_text}%"]},
+				)
+				if not child_match:
+					child_match = frappe.db.exists(
+						MATERIAL_REQUEST_ITEM_DOCTYPE,
+						{"parent": row.name, "item_name": ["like", f"%{search_text}%"]},
+					)
+				if not child_match:
+					continue
+		# Keep list queries light, but expose a useful item preview.
+			child_rows = frappe.get_all(
+				MATERIAL_REQUEST_ITEM_DOCTYPE,
+				filters={"parent": row.name},
+				fields=["item_code", "item_name", "qty", "uom", "stock_uom"],
+				order_by="idx asc",
+				limit_page_length=4,
+				ignore_permissions=True,
+			)
+			payload["items_preview"] = [_inv_material_request_item_payload(child) for child in child_rows]
+			payload["item_count"] = frappe.db.count(MATERIAL_REQUEST_ITEM_DOCTYPE, {"parent": row.name}) or 0
+			payload["total_qty"] = flt(
+				frappe.db.sql(
+					f"SELECT COALESCE(SUM(qty),0) FROM `tab{MATERIAL_REQUEST_ITEM_DOCTYPE}` WHERE parent=%s",
+					(row.name,),
+				)[0][0]
+			)
+		payload["purchase_orders"] = _inv_material_request_purchases(row.name)
+		result.append(payload)
+	return {"requests": result, "count": len(result), "doctype_available": True}
+
+
+@frappe.whitelist()
+def get_management_material_request(name=""):
+	_ensure_management_access()
+	name = str(name or "").strip()
+	if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
+		frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name or "-"))
+	doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
+	return {
+		"request": _inv_material_request_payload(doc),
+		"purchase_orders": _inv_material_request_purchases(name),
+	}
+
+
+def _inv_set_doc_field(doc, fieldname, value):
+	if doc.meta.get_field(fieldname):
+		doc.set(fieldname, value)
+
+
+@frappe.whitelist()
+def save_management_material_request(payload=None):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", MATERIAL_REQUEST_DOCTYPE):
+		frappe.throw(_("داکتایپ Material Request در ERPNext فعال نیست."))
+	data = _inv_parse_payload(payload)
+	name = str(data.get("name") or "").strip()
+	if name:
+		if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
+			frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name))
+		doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
+		if cint(doc.docstatus) != 0:
+			frappe.throw(_("فقط درخواست‌های پیش‌نویس قابل ویرایش هستند."))
+	else:
+		doc = frappe.new_doc(MATERIAL_REQUEST_DOCTYPE)
+
+	company = str(data.get("company") or _inv_default_company() or "").strip()
+	if not company:
+		frappe.throw(_("شرکت پیش‌فرض برای درخواست مواد مشخص نشده است."))
+	transaction_date = data.get("transaction_date") or today()
+	schedule_date = data.get("schedule_date") or transaction_date
+	_inv_set_doc_field(doc, "material_request_type", str(data.get("material_request_type") or "Purchase"))
+	_inv_set_doc_field(doc, "company", company)
+	_inv_set_doc_field(doc, "transaction_date", transaction_date)
+	_inv_set_doc_field(doc, "schedule_date", schedule_date)
+	_inv_set_doc_field(doc, "set_warehouse", str(data.get("set_warehouse") or "").strip())
+	_inv_set_doc_field(doc, "remarks", str(data.get("note") or "").strip())
+	_inv_set_doc_field(doc, "description", str(data.get("note") or "").strip())
+
+	doc.set("items", [])
+	valid_rows = 0
+	for line in _inv_normalize_list(data.get("items")):
+		item_code = _inv_clean_item_code(line.get("item_code"))
+		qty = flt(line.get("qty"))
+		if not item_code or qty <= 0 or not frappe.db.exists("Item", item_code):
+			continue
+		meta = frappe.db.get_value("Item", item_code, ["item_name", "stock_uom"], as_dict=True) or {}
+		uom = str(line.get("uom") or meta.get("stock_uom") or "").strip()
+		factor = flt(line.get("conversion_factor") or 0)
+		if factor <= 0:
+			factor = flt(_item_uom_conversion_to_stock(item_code, uom) or 1)
+		row = doc.append("items", {})
+		_inv_set_doc_field(row, "item_code", item_code)
+		_inv_set_doc_field(row, "item_name", meta.get("item_name") or item_code)
+		_inv_set_doc_field(row, "description", str(line.get("description") or "").strip())
+		_inv_set_doc_field(row, "qty", qty)
+		_inv_set_doc_field(row, "uom", uom)
+		_inv_set_doc_field(row, "stock_uom", meta.get("stock_uom") or uom)
+		_inv_set_doc_field(row, "conversion_factor", factor)
+		_inv_set_doc_field(row, "warehouse", str(line.get("warehouse") or data.get("set_warehouse") or "").strip())
+		_inv_set_doc_field(row, "schedule_date", line.get("schedule_date") or schedule_date)
+		_inv_set_doc_field(row, "rate", flt(line.get("rate") or 0))
+		_inv_set_doc_field(row, "amount", flt(line.get("amount") or 0))
+		valid_rows += 1
+
+	if not valid_rows:
+		frappe.throw(_("حداقل یک ماده معتبر با مقدار بیشتر از صفر لازم است."))
+
+	doc.flags.ignore_permissions = True
+	if doc.is_new():
+		doc.insert(ignore_permissions=True)
+	else:
+		doc.save(ignore_permissions=True)
+	if cint(data.get("submit") or 0) == 1 and cint(doc.docstatus) == 0:
+		doc.submit()
+	frappe.db.commit()
+	return {"status": "success", "request": _inv_material_request_payload(doc)}
+
+
+@frappe.whitelist()
+def update_management_material_request_status(payload=None):
+	_ensure_management_access()
+	data = _inv_parse_payload(payload)
+	name = str(data.get("name") or "").strip()
+	action = str(data.get("action") or data.get("status") or "").strip().lower()
+	if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
+		frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name or "-"))
+	doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
+	doc.flags.ignore_permissions = True
+	if action in {"submit", "ثبت", "ثبت نهایی"} and cint(doc.docstatus) == 0:
+		doc.submit()
+	elif action in {"cancel", "cancelled", "لغو", "لغوشده"} and cint(doc.docstatus) == 1:
+		doc.cancel()
+	else:
+		frappe.throw(_("عملیات وضعیت درخواست مواد مجاز نیست."))
+	frappe.db.commit()
+	return {"status": "success", "request": _inv_material_request_payload(doc)}
+
+
+@frappe.whitelist()
+def create_management_purchase_from_material_request(payload=None):
+	_ensure_management_access()
+	data = _inv_parse_payload(payload)
+	name = str(data.get("name") or "").strip()
+	if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
+		frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name or "-"))
+	doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
+	if cint(doc.docstatus) == 2:
+		frappe.throw(_("از درخواست لغوشده نمی‌توان سفارش خرید ساخت."))
+
+	selected = {}
+	for line in _inv_normalize_list(data.get("items")):
+		code = _inv_clean_item_code(line.get("item_code"))
+		qty = flt(line.get("qty"))
+		if code and qty > 0:
+			selected[code] = selected.get(code, 0.0) + qty
+	if not selected:
+		for row in doc.get("items") or []:
+			selected[row.item_code] = selected.get(row.item_code, 0.0) + flt(row.qty)
+
+	purchase_lines = []
+	for row in doc.get("items") or []:
+		code = row.item_code
+		qty = min(flt(row.qty), selected.get(code, 0.0))
+		if not code or qty <= 0:
+			continue
+		purchase_lines.append({
+			"item_code": code,
+			"qty": qty,
+			"uom": row.uom or row.stock_uom or "",
+			"rate": flt(row.rate) or _inv_purchase_rate(code),
+		})
+		selected[code] = max(selected.get(code, 0.0) - qty, 0.0)
+	if not purchase_lines:
+		frappe.throw(_("هیچ قلمی برای انتقال به خرید انتخاب نشده است."))
+
+	purchase = save_management_purchase_order({
+		"supplier": str(data.get("supplier") or "").strip(),
+		"target_warehouse": str(data.get("target_warehouse") or doc.get("set_warehouse") or "").strip(),
+		"posting_date": today(),
+		"note": f"درخواست مواد {name}",
+		"items": purchase_lines,
+	})
+	return {"status": "success", "material_request": name, "purchase": purchase.get("order") or {}}
+
+
+def _inv_material_request_print_html(payload):
+	brand = _management_get_print_brand_settings()
+	font_family = html_escape(str(brand.get("print_font_family") or "Peyda"))
+	font_size = min(max(cint(brand.get("print_font_size") or 11), 8), 24)
+	items = []
+	for index, row in enumerate(payload.get("items") or [], 1):
+		items.append(
+			f"<div class='line'><span class='index'>{index}</span><span class='name'>{html_escape(str(row.get('item_name') or row.get('item_code') or ''))}<small>{html_escape(str(row.get('item_code') or ''))}</small></span><strong>{flt(row.get('qty')):,.3f} {html_escape(str(row.get('uom') or ''))}</strong></div>"
+		)
+	return f"""
+<style>
+@page {{ size: 80mm auto; margin: 3mm; }}
+* {{ box-sizing: border-box; }}
+body {{ direction: rtl; margin: 0; font-family: '{font_family}', Peyda, Tahoma, sans-serif; color: #34261F; font-size: {font_size}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+.receipt {{ width: 74mm; margin: 0 auto; }}
+.head {{ text-align: center; border-bottom: 1px dashed #D8C8B4; padding-bottom: 8px; }}
+.head h1 {{ margin: 0; font-size: {font_size + 3}px; }}
+.head p {{ margin: 3px 0 0; color: #6F7B56; font-size: 10px; }}
+.meta {{ display: grid; gap: 3px; padding: 8px 0; border-bottom: 1px dashed #D8C8B4; }}
+.meta-row {{ display: flex; justify-content: space-between; gap: 5px; }}
+.lines {{ display: grid; gap: 4px; padding: 8px 0; }}
+.line {{ display: flex; align-items: flex-start; gap: 5px; padding-bottom: 4px; border-bottom: 1px dotted #E5DCCF; }}
+.index {{ width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%; background: #F3E1DA; text-align: center; font-size: 10px; }}
+.name {{ flex: 1; font-weight: 700; }}
+.name small {{ display: block; color: #746454; font-size: 9px; font-weight: 400; }}
+.line strong {{ white-space: nowrap; font-size: 10px; }}
+.total {{ display: flex; justify-content: space-between; border-top: 1px dashed #D8C8B4; padding-top: 6px; font-weight: 800; }}
+.note {{ margin-top: 8px; color: #746454; font-size: 10px; white-space: pre-line; }}
+</style>
+<div class='receipt'>
+  <div class='head'><h1>{html_escape(str(brand.get('brand_name') or 'درخواست مواد'))}</h1><p>درخواست مواد اولیه • {html_escape(str(payload.get('name') or ''))}</p></div>
+  <div class='meta'><div class='meta-row'><span>تاریخ ثبت</span><strong>{html_escape(str(payload.get('transaction_date') or ''))}</strong></div><div class='meta-row'><span>تاریخ نیاز</span><strong>{html_escape(str(payload.get('schedule_date') or ''))}</strong></div><div class='meta-row'><span>انبار مقصد</span><strong>{html_escape(str(payload.get('set_warehouse') or '—'))}</strong></div></div>
+  <div class='lines'>{''.join(items)}</div>
+  <div class='total'><span>تعداد اقلام</span><span>{len(payload.get('items') or [])} قلم • {flt(payload.get('total_qty')):,.3f}</span></div>
+  {f"<div class='note'>یادداشت: {html_escape(str(payload.get('note') or ''))}</div>" if payload.get('note') else ''}
+</div>
+"""
+
+
+@frappe.whitelist()
+def get_management_material_request_print(name=""):
+	_ensure_management_access()
+	result = get_management_material_request(name)
+	return {"status": "success", "name": name, "html": _inv_material_request_print_html(result["request"])}
 
 
 # ---------------------------------------------------------------------------
@@ -3004,66 +3385,79 @@ def get_management_inventory_alerts_summary():
 
 
 def _inv_purchase_order_print_html(doc):
+	"""POS/thermal-width purchase receipt using the dashboard print settings."""
 	brand = _management_get_print_brand_settings()
 	font_family = html_escape(str(brand.get("print_font_family") or "Peyda"))
 	font_size = min(max(cint(brand.get("print_font_size") or 11), 8), 24)
-	brand_name = html_escape(str(brand.get("brand_name") or ""))
-	header_bg = html_escape(str(brand.get("header_background_color") or "#4A2522"))
-	header_text = html_escape(str(brand.get("header_text_color") or "#FFFFFF"))
+	brand_name = html_escape(str(brand.get("brand_name") or "رستوران"))
 	currency = html_escape(_get_currency())
 
 	item_rows = []
 	for idx, row in enumerate(doc.get("items") or [], start=1):
+		item_name = html_escape(str(row.get("item_name") or row.get("item_code") or ""))
+		item_code = html_escape(str(row.get("item_code") or ""))
+		uom = html_escape(str(row.get("uom") or ""))
+		qty = flt(row.get("qty"))
+		rate = flt(row.get("rate"))
+		amount = flt(row.get("amount"))
+		received = flt(row.get("received_qty"))
 		item_rows.append(
-			"<tr>"
-			f"<td>{idx}</td>"
-			f"<td>{html_escape(str(row.get('item_name') or row.get('item_code') or ''))}<br/><small>{html_escape(str(row.get('item_code') or ''))}</small></td>"
-			f"<td class='num'>{flt(row.get('qty')):,.3f} {html_escape(str(row.get('uom') or ''))}</td>"
-			f"<td class='num'>{flt(row.get('rate')):,.0f}</td>"
-			f"<td class='num'>{flt(row.get('amount')):,.0f}</td>"
-			f"<td class='num'>{flt(row.get('received_qty')):,.3f}</td>"
-			"</tr>"
+			f"""
+			<div class="item-row">
+				<div class="item-head"><span class="item-index">{idx}</span><strong>{item_name}</strong><b>{qty:,.3f} {uom}</b></div>
+				<div class="item-code">{item_code}</div>
+				<div class="item-meta"><span>نرخ: {rate:,.0f}</span><span>مبلغ: {amount:,.0f}</span><span>دریافت: {received:,.3f}</span></div>
+			</div>
+			"""
 		)
 
 	return f"""
-<div style="direction: rtl; font-family: '{font_family}', sans-serif; font-size: {font_size}px; max-width: 720px; margin: 0 auto; border: 1px solid #d8d2c4; border-radius: 12px; overflow: hidden;">
-	<div style="background: {header_bg}; color: {header_text}; padding: 14px 18px;">
-		<div style="font-size: {font_size + 4}px; font-weight: bold;">{brand_name}</div>
-		<div>سفارش خرید مواد اولیه — {html_escape(doc.name)}</div>
-	</div>
-	<div style="padding: 14px 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; background: #f7f4ee;">
-		<div><small>تأمین‌کننده</small><br/><strong>{html_escape(str(doc.get('supplier_name') or doc.get('supplier') or '—'))}</strong></div>
-		<div><small>وضعیت</small><br/><strong>{html_escape(str(doc.get('status') or ''))}</strong></div>
-		<div><small>تاریخ سفارش</small><br/><strong>{html_escape(str(doc.get('posting_date') or ''))}</strong></div>
-		<div><small>انبار مقصد</small><br/><strong>{html_escape(str(doc.get('target_warehouse') or '—'))}</strong></div>
-	</div>
-	<table style="width: 100%; border-collapse: collapse;">
-		<thead>
-			<tr style="background: #efe9dc;">
-				<th style="padding: 8px; text-align: right;">#</th>
-				<th style="padding: 8px; text-align: right;">کالا</th>
-				<th style="padding: 8px; text-align: left;">مقدار سفارش</th>
-				<th style="padding: 8px; text-align: left;">نرخ</th>
-				<th style="padding: 8px; text-align: left;">مبلغ</th>
-				<th style="padding: 8px; text-align: left;">دریافت‌شده</th>
-			</tr>
-		</thead>
-		<tbody>
-			{''.join(item_rows)}
-		</tbody>
-	</table>
-	<div style="padding: 12px 18px; border-top: 1px dashed #d8d2c4; display: flex; justify-content: space-between;">
-		<span>جمع تعداد: {flt(doc.get('total_qty')):,.3f}</span>
-		<strong>مبلغ کل: {flt(doc.get('grand_total')):,.0f} {currency}</strong>
-	</div>
-	{f"<div style='padding: 0 18px 14px; color: #6b7a72;'><small>یادداشت: {html_escape(str(doc.get('note') or ''))}</small></div>" if doc.get('note') else ""}
-</div>
 <style>
-	td, th {{ border-bottom: 1px solid #eee4d8; }}
-	td {{ padding: 8px; }}
-	.num {{ text-align: left; }}
+@page {{ size: 80mm auto; margin: 3mm; }}
+@font-face {{ font-family: Peyda; src: url('/fonts/Pevda-Reqular.ttf') format('truetype'); font-weight: 400; }}
+@font-face {{ font-family: Peyda; src: url('/fonts/Peyda-Bold.ttf') format('truetype'); font-weight: 700; }}
+@font-face {{ font-family: Peyda; src: url('/fonts/Peyda-ExtraBold.ttf') format('truetype'); font-weight: 800; }}
+* {{ box-sizing: border-box; }}
+body {{ direction: rtl; margin: 0; font-family: '{font_family}', Peyda, Tahoma, sans-serif; color: #34261F; font-size: {font_size}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+.receipt {{ width: 74mm; margin: 0 auto; line-height: 1.45; }}
+.header {{ text-align: center; padding: 4px 0 8px; border-bottom: 1px dashed #D8C8B4; }}
+.header h1 {{ margin: 0; font-size: {font_size + 3}px; font-weight: 800; }}
+.header p {{ margin: 2px 0 0; color: #6F7B56; font-size: 10px; }}
+.meta {{ display: grid; gap: 3px; padding: 8px 0; border-bottom: 1px dashed #D8C8B4; }}
+.meta-row {{ display: flex; justify-content: space-between; gap: 6px; font-size: 10px; }}
+.meta-row strong {{ font-weight: 700; text-align: left; }}
+.items {{ display: grid; gap: 5px; padding: 8px 0; }}
+.item-row {{ padding: 4px 0 6px; border-bottom: 1px dotted #E5DCCF; }}
+.item-head {{ display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 4px; align-items: start; }}
+.item-index {{ width: 18px; height: 18px; border-radius: 50%; background: #F3E1DA; text-align: center; font-size: 10px; line-height: 18px; }}
+.item-head strong {{ min-width: 0; font-size: 10px; }}
+.item-head b {{ white-space: nowrap; font-size: 10px; }}
+.item-code {{ margin-right: 22px; color: #746454; font-size: 9px; }}
+.item-meta {{ display: flex; justify-content: space-between; gap: 5px; margin-right: 22px; color: #6F7B56; font-size: 9px; }}
+.totals {{ display: grid; gap: 4px; border-top: 1px dashed #D8C8B4; padding-top: 7px; }}
+.total-row {{ display: flex; justify-content: space-between; gap: 6px; font-size: 10px; }}
+.total-row strong {{ font-weight: 800; }}
+.total-row.final {{ font-size: 12px; font-weight: 800; }}
+.note {{ margin-top: 8px; color: #746454; font-size: 9px; white-space: pre-line; }}
+.footer {{ margin-top: 8px; padding-top: 6px; border-top: 1px dashed #D8C8B4; text-align: center; color: #6F7B56; font-size: 9px; }}
 </style>
-	"""
+<div class="receipt">
+  <header class="header"><h1>{brand_name}</h1><p>سفارش خرید مواد اولیه • {html_escape(str(doc.name))}</p></header>
+  <div class="meta">
+    <div class="meta-row"><span>تأمین‌کننده</span><strong>{html_escape(str(doc.get('supplier_name') or doc.get('supplier') or '—'))}</strong></div>
+    <div class="meta-row"><span>وضعیت</span><strong>{html_escape(str(doc.get('status') or ''))}</strong></div>
+    <div class="meta-row"><span>تاریخ سفارش</span><strong>{html_escape(str(doc.get('posting_date') or ''))}</strong></div>
+    <div class="meta-row"><span>انبار مقصد</span><strong>{html_escape(str(doc.get('target_warehouse') or '—'))}</strong></div>
+  </div>
+  <div class="items">{''.join(item_rows)}</div>
+  <div class="totals">
+    <div class="total-row"><span>جمع تعداد</span><strong>{flt(doc.get('total_qty')):,.3f}</strong></div>
+    <div class="total-row final"><span>مبلغ کل</span><strong>{flt(doc.get('grand_total')):,.0f} {currency}</strong></div>
+  </div>
+  {f"<div class='note'>یادداشت: {html_escape(str(doc.get('note') or ''))}</div>" if doc.get('note') else ''}
+  <div class="footer">فرم خرید داخلی مجموعه</div>
+</div>
+"""
 
 
 @frappe.whitelist()

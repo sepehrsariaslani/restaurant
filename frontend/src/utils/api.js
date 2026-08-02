@@ -3303,6 +3303,30 @@ export function getManagementInventoryBoot() {
 	return callRestaurantAPI("get_management_inventory_boot", {});
 }
 
+export function listManagementMaterialRequests({ status = "", search = "", date_from = "", date_to = "", limit = 50, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_material_requests", { status, search, date_from, date_to, limit, offset });
+}
+
+export function getManagementMaterialRequest(name = "") {
+	return callRestaurantAPI("get_management_material_request", { name });
+}
+
+export function saveManagementMaterialRequest(payload = {}) {
+	return callRestaurantAPI("save_management_material_request", { payload });
+}
+
+export function updateManagementMaterialRequestStatus(payload = {}) {
+	return callRestaurantAPI("update_management_material_request_status", { payload });
+}
+
+export function createManagementPurchaseFromMaterialRequest(payload = {}) {
+	return callRestaurantAPI("create_management_purchase_from_material_request", { payload });
+}
+
+export function getManagementMaterialRequestPrint(name = "") {
+	return callRestaurantAPI("get_management_material_request_print", { name });
+}
+
 export function listManagementRawMaterials({ search = "", include_inactive = 0, limit = 100, offset = 0 } = {}) {
 	return callRestaurantAPI("list_management_raw_materials", { search, include_inactive, limit, offset });
 }
