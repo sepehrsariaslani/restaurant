@@ -1293,15 +1293,106 @@ async function deliverOrder(order) {
   }
 }
 
+function printReceiptDocument(html) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return false
+  }
+
+  const triggerPrint = (target, cleanup = () => {}) => {
+    try {
+      target.focus?.()
+      target.print()
+    } catch (printError) {
+      console.error(printError)
+    }
+    window.setTimeout(cleanup, 1200)
+  }
+
+  try {
+    const printWindow = window.open('', '_blank', 'width=420,height=760')
+    if (printWindow && !printWindow.closed) {
+      printWindow.document.open()
+      printWindow.document.write(html)
+      printWindow.document.close()
+      window.setTimeout(() => {
+        triggerPrint(printWindow, () => {
+          try {
+            printWindow.close()
+          } catch (_) {
+            // Ignore browsers that do not allow closing the print tab.
+          }
+        })
+      }, 350)
+      return true
+    }
+  } catch (openError) {
+    console.warn('POS print window was blocked; using iframe fallback.', openError)
+  }
+
+  // Popup blockers can reject window.open after an awaited payment request.
+  // Printing an isolated iframe still sends the browser print command without
+  // replacing or navigating away from the POS page.
+  try {
+    const frame = document.createElement('iframe')
+    frame.setAttribute('title', 'رسید چاپ POS')
+    frame.style.position = 'fixed'
+    frame.style.insetInlineStart = '-10000px'
+    frame.style.bottom = '0'
+    frame.style.width = '1px'
+    frame.style.height = '1px'
+    frame.style.border = '0'
+    frame.style.opacity = '0.01'
+    frame.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(frame)
+    frame.contentDocument?.open()
+    frame.contentDocument?.write(html)
+    frame.contentDocument?.close()
+    window.setTimeout(() => {
+      if (frame.contentWindow) {
+        triggerPrint(frame.contentWindow, () => frame.remove())
+      } else {
+        frame.remove()
+      }
+    }, 450)
+    return true
+  } catch (iframeError) {
+    console.error('POS iframe print failed.', iframeError)
+    return false
+  }
+}
+
+const AUTOMATIC_RECEIPT_NOTE_MARKERS = [
+  '[ORDER]',
+  '[SETTLE]',
+  '[PRODUCE]',
+  '[DELIVER_ONLY]',
+  '[PAYMENT]',
+  '[KITCHEN]',
+  '[ERROR]',
+  '[PRINT_PRODUCTION]',
+  'روش پرداخت:',
+  'جایگاه:',
+  'مهمان:',
+  'ادامه فاکتور',
+]
+
+function cleanReceiptNote(value) {
+  return String(value || '')
+    .split(/[|\n]/)
+    .map((part) => part.trim())
+    .filter((part) => part && !AUTOMATIC_RECEIPT_NOTE_MARKERS.some((marker) => part.includes(marker)))
+    .join(' | ')
+}
+
 async function printOrderReceipt(order) {
   if (!order?.name) return
   try {
     const detail = await getManagementOrderDetail(order.name)
     const orderData = detail?.order || detail
     const items = orderData?.items || []
-    const customer = order.customer_name || 'مشتری POS'
-    const orderCode = order.name
-    const total = order.grand_total || 0
+    const customer = orderData.customer_name || order.customer_name || 'مشتری POS'
+    const orderCode = orderData.order_code || order.order_code || order.name
+    const total = orderData.grand_total || order.grand_total || 0
     
     // Build receipt using the same format as POS
     const printableItems = buildReceiptPrintableItemsFromLines(items.map(item => ({
@@ -1310,7 +1401,7 @@ async function printOrderReceipt(order) {
       price: item.unit_price || item.price || 0,
       note: item.note || '',
       customization_ingredients: [],
-      customization: {}
+      customization: {},
     })))
     
     const totalsRows = buildReceiptTotalsRowsHtml({
@@ -1323,9 +1414,11 @@ async function printOrderReceipt(order) {
       payableAmount: Number(total || 0),
     })
     
-    const paymentLabel = order.payment_method 
-      ? (paymentMethodDisplayLabel(order.payment_method) || order.payment_method)
+    const resolvedPaymentMethod = orderData.payment_method || order.payment_method || ''
+    const paymentLabel = resolvedPaymentMethod
+      ? (paymentMethodDisplayLabel(resolvedPaymentMethod) || resolvedPaymentMethod)
       : '-'
+    const orderNote = cleanReceiptNote(orderData.note || order.note || '')
     
     const html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>' +
       '<style>' + receiptStylesCss() + '</style></head><body>' +
@@ -1334,21 +1427,18 @@ async function printOrderReceipt(order) {
         totalsRows,
         paymentLabel,
         customerName: customer,
-        mobile: order.mobile || '',
-        orderMode: order.channel || 'takeaway',
-        place: order.place || '-',
-        note: order.note || '',
+        mobile: orderData.mobile || order.mobile || '',
+        orderMode: orderData.channel || order.channel || 'takeaway',
+        place: orderData.place || order.place || orderData.order_context?.place || '-',
+        note: orderNote,
         invoiceNo: orderCode,
         heading: 'فیش فروش POS',
       }) +
       '</body></html>'
 
-    const w = window.open('', '_blank', 'width=380,height=700')
-    if (!w) return
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => { w.print() }, 300)
+    if (!printReceiptDocument(html)) {
+      error.value = 'ارسال دستور چاپ ممکن نشد.'
+    }
   } catch(err) {
     error.value = 'خطا در پرینت: ' + (err.message || '')
   }
@@ -2085,19 +2175,9 @@ function printConfirmedTableOrders() {
     </html>
   `
 
-  const printWindow = window.open('', '_blank', 'width=520,height=760')
-  if (!printWindow) {
-    error.value = 'پنجره چاپ باز نشد. لطفا popup blocker را غیرفعال کنید.'
-    return
+  if (!printReceiptDocument(content)) {
+    error.value = 'ارسال دستور چاپ ممکن نشد.'
   }
-  printWindow.document.open()
-  printWindow.document.write(content)
-  printWindow.document.close()
-  printWindow.focus()
-  window.setTimeout(() => {
-    printWindow.print()
-    printWindow.close()
-  }, 180)
 }
 
 function setOrderMode(mode) {
@@ -2423,8 +2503,11 @@ async function settleSelectedOpenInvoice() {
         source: 'management-pos-open-invoice',
       },
     })
+    if (normalizePaymentMethodKind(payment.method) !== 'credit') {
+      void printOrderReceipt({ ...selectedOpenInvoice.value, payment_method: payment.method })
+    }
     successMessage.value = `پرداخت فاکتور ${selectedOpenInvoice.value.order_code} ثبت شد.`
-    loadOpenInvoices(true)
+    refreshPOSAfterSubmit()
   } catch (payErr) {
     error.value = payErr.message || 'ثبت پرداخت فاکتور باز ناموفق بود.'
   } finally {
@@ -2536,12 +2619,9 @@ async function selectAndLoadInvoice(invoice) {
       }
     }
     
-    // Restore note
+    // Restore only the note explicitly entered by the cashier.
     if (order.note) {
-      // Strip automatically generated audit notes
-      let cleanNote = order.note.split(' | روش پرداخت:')[0]
-      cleanNote = cleanNote.split(' | ادامه فاکتور')[0]
-      form.note = cleanNote.trim()
+      form.note = cleanReceiptNote(order.note)
     }
 
     // Apply financial modifiers from order if available
@@ -2607,10 +2687,12 @@ async function settleSelectedInvoice(invoice) {
       },
     })
     const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+    if (result.sales_invoice && normalizePaymentMethodKind(payment.method) !== 'credit') {
+      void printOrderReceipt({ ...invoice, payment_method: payment.method })
+    }
     successMessage.value = `فاکتور ${invoice.order_code || invoice.name} تسویه شد.${siInfo}`
     openInvoices.value = openInvoices.value.filter(o => o.name !== invoice.name)
-    await loadOpenInvoices(true)
-    await loadTodayTransactions(true)
+    refreshPOSAfterSubmit()
   } catch (payErr) {
     error.value = payErr.message || 'تسویه فاکتور باز ناموفق بود.'
   } finally {
@@ -2635,10 +2717,12 @@ async function settleAndDeliverFromInvoice(invoice) {
     const deliverResult = invoice.delivery_exists ? {} : await deliverInvoiceOnly(invoice.name)
     const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
     const dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
+    if (payResult.sales_invoice && normalizePaymentMethodKind(payment.method) !== 'credit') {
+      void printOrderReceipt({ ...invoice, payment_method: payment.method })
+    }
     successMessage.value = `فاکتور ${invoice.order_code || invoice.name} تسویه و تحویل شد.${siInfo}${dnInfo}`
     openInvoices.value = openInvoices.value.filter(o => o.name !== invoice.name)
-    await loadOpenInvoices(true)
-    await loadTodayTransactions(true)
+    refreshPOSAfterSubmit()
   } catch (err) {
     error.value = err.message || 'تسویه و تحویل فاکتور باز ناموفق بود.'
   } finally {
@@ -3157,13 +3241,15 @@ async function confirmSettleOrder() {
       },
     })
     const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
+    const settledOrder = { ...orderDetailModal.order, payment_method: selectedMethod }
+    if (result.sales_invoice && selectedMethod !== 'credit') {
+      void printOrderReceipt(settledOrder)
+    }
     successMessage.value = selectedMethod === 'credit'
       ? `فاکتور ${orderDetailModal.order.order_code || orderDetailModal.order.name} اعتباری ثبت شد و بدهکار ماند.${siInfo}`
       : `فاکتور ${orderDetailModal.order.order_code || orderDetailModal.order.name} تسویه شد.${siInfo}`
     closeOrderDetailModal()
-    await loadOpenInvoices(true)
-    await loadTodayTransactions(true)
-    await loadRecentOrders(true)
+    refreshPOSAfterSubmit()
   } catch (err) {
     orderDetailModal.settleError = err.message || 'تسویه سفارش ناموفق بود.'
   } finally {
@@ -3700,40 +3786,10 @@ async function handleScaleBarcodeScan() {
 }
 
 function buildOrderNote() {
-  const noteParts = [form.note]
-  if (form.place) {
-    noteParts.push(`جایگاه: ${form.place}`)
-  }
-  noteParts.push(`مهمان: ${form.guest_count}`)
-  if (financial.printProduction) {
-    noteParts.push('[PRINT_PRODUCTION]')
-  }
-  if (financial.couponCode) {
-    noteParts.push(`کد تخفیف: ${financial.couponCode}`)
-  }
-  if (financial.creditCardCode) {
-    noteParts.push(`کارت اعتباری: ${financial.creditCardCode}`)
-  }
-  return noteParts.filter(Boolean).join(' | ')
-}
-
-function buildPaymentSplitAuditLine(splits = []) {
-  const normalizedSplits = (splits || [])
-    .map((row) => ({
-      method: normalizePaymentMethodKind(row?.method),
-      amount: Number(row?.amount || 0),
-      label: String(row?.label || row?.mode_of_payment || '').trim(),
-      mode_of_payment: String(row?.mode_of_payment || '').trim(),
-    }))
-    .filter((row) => row.amount > 0)
-
-  if (!normalizedSplits.length) {
-    return ''
-  }
-
-  return normalizedSplits
-    .map((row) => `${row.label || row.mode_of_payment || row.method}: ${formatMoney(row.amount, currency.value)}`)
-    .join(' | ')
+  // Only the cashier's note belongs in the customer-facing note field.
+  // Place, guests, payment and production flags are structured payload data,
+  // not text that should be printed on every receipt.
+  return String(form.note || '').trim()
 }
 
 function resolvePaymentSubmission(paymentMeta = {}) {
@@ -3757,7 +3813,6 @@ function resolvePaymentSubmission(paymentMeta = {}) {
         mode_of_payment: '',
         option_key: '',
       },
-      auditLine: '',
     }
   }
 
@@ -3768,7 +3823,6 @@ function resolvePaymentSubmission(paymentMeta = {}) {
   return {
     splits,
     primary: creditSplit || cardSplit || cashSplit || splits[0],
-    auditLine: buildPaymentSplitAuditLine(splits),
   }
 }
 
@@ -4028,38 +4082,61 @@ function receiptFontSizePx() {
   return base
 }
 
+function receiptFontFamilyCss() {
+  // Use the same setting selected in the management dashboard.  Peyda is
+  // bundled with the app; the remaining supported dashboard choices fall
+  // back to the installed system font with the same name.
+  const configured = String(printFontSettings.font_family || 'Peyda')
+    .replace(/["'\\;]/g, '')
+    .trim()
+  const family = configured || 'Peyda'
+  return `"${family}", "Peyda", Tahoma, Arial, sans-serif`
+}
+
 function receiptStylesCss() {
   return `
-    @font-face { font-family: Peyda; src: url('/fonts/Pevda-Reqular.ttf') format('truetype'); font-weight: 400; font-style: normal; }
-    @font-face { font-family: Peyda; src: url('/fonts/Peyda-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; }
-    @font-face { font-family: Peyda; src: url('/fonts/Peyda-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; }
-    @font-face { font-family: Peyda; src: url('/fonts/Peyda-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; }
-    @page { size: 80mm auto; margin: 4mm; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Thin.ttf') format('truetype'); font-weight: 100; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/peyda-extralight.ttf') format('truetype'); font-weight: 200; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/peyda-light.ttf') format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Pevda-Reqular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-ExtraBold.ttf') format('truetype'); font-weight: 800; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Black.ttf') format('truetype'); font-weight: 900; font-style: normal; font-display: swap; }
+    @page { size: 80mm auto; margin: 3mm; }
     html, body { width: 100%; margin: 0; padding: 0; }
-    body { font-family: ${printFontSettings.font_family || 'Peyda'}, Peyda, sans-serif; color: var(--mg-text-main); background: var(--mg-bg-surface); }
-    .receipt { width: 72mm; margin: 0 auto; font-size: ${receiptFontSizePx()}px; line-height: 1.35; }
+    body {
+      direction: rtl;
+      font-family: ${receiptFontFamilyCss()};
+      color: #34261F;
+      background: #FFFFFF;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .receipt { width: 74mm; margin: 0 auto; font-size: ${receiptFontSizePx()}px; line-height: 1.45; }
     .center { text-align: center; }
-    .brand-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
-    .title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
-    .muted { color: var(--mg-success); font-size: 10px; }
-    .sep { border-top: 1px dashed var(--mg-success-bg); margin: 6px 0; }
+    .brand-name { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+    .title { font-size: 14px; font-weight: 800; margin-bottom: 2px; }
+    .muted { color: #6F7B56; font-size: 10px; }
+    .sep { border-top: 1px dashed #D8C8B4; margin: 6px 0; }
     .meta-row { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
-    .meta-block { margin-top: 4px; border: 1px dashed var(--mg-success-bg); border-radius: 7px; padding: 4px 5px; }
-    .meta-block strong { display: block; font-size: 10px; color: var(--mg-success); margin-bottom: 2px; }
+    .meta-block { margin-top: 4px; border: 1px dashed #D8C8B4; border-radius: 7px; padding: 4px 5px; }
+    .meta-block strong { display: block; font-size: 10px; color: #6F7B56; margin-bottom: 2px; }
     .meta-block p { margin: 0; white-space: pre-wrap; font-size: 10px; }
-    .item-row { padding: 4px 0; border-bottom: 1px dashed var(--mg-success-bg); }
+    .item-row { padding: 4px 0; border-bottom: 1px dashed #D8C8B4; }
     .item-head { display: grid; grid-template-columns: auto 1fr auto; gap: 4px; align-items: start; }
     .item-index { font-weight: 600; }
     .item-title { font-weight: 600; }
-    .item-total { font-weight: 700; }
-    .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: var(--mg-success); }
-    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: var(--mg-success); }
+    .item-total { font-weight: 800; }
+    .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: #6F7B56; }
+    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: #6F7B56; }
     .item-custom li { margin: 1px 0; }
-    .item-note { margin-top: 3px; font-size: 10px; color: var(--mg-success); }
+    .item-note { margin-top: 3px; font-size: 10px; color: #6F7B56; }
     .totals { margin-top: 6px; display: grid; gap: 3px; }
     .total-row { display: flex; justify-content: space-between; gap: 6px; }
-    .payable { border-top: 1px dashed var(--mg-success-bg); margin-top: 2px; padding-top: 4px; font-size: 12px; font-weight: 700; }
-    .note { margin-top: 6px; font-size: 10px; color: var(--mg-success); white-space: pre-wrap; }
+    .payable { border-top: 1px dashed #D8C8B4; margin-top: 2px; padding-top: 4px; font-size: 12px; font-weight: 800; }
+    .note { margin-top: 6px; font-size: 10px; color: #6F7B56; white-space: pre-wrap; }
   `
 }
 
@@ -4179,11 +4256,11 @@ function buildReceiptMarkup({
   `
 }
 
-function buildCurrentTicketReceiptMarkup() {
+function buildCurrentTicketReceiptMarkup(paymentMethodOverride = '') {
   return buildReceiptMarkup({
     printableItems: buildReceiptPrintableItems(),
     totalsRows: buildReceiptTotalsRowsHtml(),
-    paymentLabel: paymentMethodDisplayLabel(payment.method),
+    paymentLabel: paymentMethodDisplayLabel(paymentMethodOverride || payment.method),
     customerName: form.customer_name || 'مشتری POS',
     mobile: form.mobile || '',
     orderMode: form.order_mode,
@@ -4199,8 +4276,9 @@ function buildConfirmedTableReceiptContext() {
   const noteParts = []
   for (const order of confirmedDineInOrders.value) {
     const orderCode = String(order.name || '').trim()
-    if (order.note) {
-      noteParts.push(`${orderCode || 'سفارش'}: ${String(order.note).trim()}`)
+    const cleanTableNote = cleanReceiptNote(order.note)
+    if (cleanTableNote) {
+      noteParts.push(`${orderCode || 'سفارش'}: ${cleanTableNote}`)
     }
     for (const item of order.items || []) {
       flatLines.push({
@@ -4273,25 +4351,21 @@ function closePrintEditor() {
   printEditorOpen.value = false
 }
 
-function autoPrintReceipt() {
-  if (normalizePaymentMethodKind(payment.method) === 'credit') {
+function autoPrintReceipt(methodOverride = '') {
+  const method = normalizePaymentMethodKind(methodOverride || payment.method)
+  if (method === 'credit') {
     return
   }
   // چاپ خودکار رسید بعد از تسویه
-  if (!cart.length) {
-    // Try building from last receipt info
-    printCurrentTicket()
-    return
-  }
-  printCurrentTicket()
+  printCurrentTicket(method)
 }
 
-function printCurrentTicket() {
+function printCurrentTicket(methodOverride = '') {
   if (!cart.length) {
     error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
     return
   }
-  if (normalizePaymentMethodKind(payment.method) === 'credit') {
+  if (normalizePaymentMethodKind(methodOverride || payment.method) === 'credit') {
     error.value = 'برای پرداخت اعتباری، فیش پرداخت POS چاپ نمی‌شود چون مبلغ هنوز دریافت نشده است.'
     return
   }
@@ -4304,24 +4378,14 @@ function printCurrentTicket() {
         <style>${receiptStylesCss()}</style>
       </head>
       <body>
-        ${buildCurrentTicketReceiptMarkup()}
+        ${buildCurrentTicketReceiptMarkup(methodOverride)}
       </body>
     </html>
   `
 
-  const printWindow = window.open('', '_blank', 'width=480,height=760')
-  if (!printWindow) {
-    error.value = 'پنجره چاپ باز نشد. لطفا popup blocker را غیرفعال کنید.'
-    return
+  if (!printReceiptDocument(content)) {
+    error.value = 'ارسال دستور چاپ ممکن نشد.'
   }
-  printWindow.document.open()
-  printWindow.document.write(content)
-  printWindow.document.close()
-  printWindow.focus()
-  window.setTimeout(() => {
-    printWindow.print()
-    printWindow.close()
-  }, 180)
 }
 
 function resolveCustomerFromQuery() {
@@ -4406,8 +4470,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
   }
 
   resolveCustomerFromQuery()
-  let paymentSelection = resolvePaymentSubmission(paymentMeta)
-  let paymentNoteLine = paymentSelection.auditLine
+  const paymentSelection = resolvePaymentSubmission(paymentMeta)
 
   const paymentPayload = payNow
     ? {
@@ -4449,6 +4512,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       const code = editingOriginalOrder.name
       const payResult = await settlePOSOrder(code, paymentPayload)
       let siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
+      if (payResult.sales_invoice) {
+        autoPrintReceipt(paymentPayload.method)
+      }
       
       if (withProduction) {
         // Payment is the customer-facing critical path.  Delivery/production
@@ -4516,11 +4582,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     customer_name: form.customer_name || 'مشتری POS',
     mobile: form.mobile || '',
     order_type: form.order_mode,
-    note: [
-      buildOrderNote(),
-      editingOriginalOrder.isEditing ? `ادامه فاکتور ${editingOriginalOrder.name}` : '',
-      paymentNoteLine ? `روش پرداخت: ${paymentNoteLine}` : '',
-    ].filter(Boolean).join(' | '),
+    note: buildOrderNote(),
     customer_type: form.customer_type,
     guest_count: form.guest_count,
     place: form.place,
@@ -5981,7 +6043,8 @@ onBeforeUnmount(() => {
 .cart-fab {
   position: fixed;
   bottom: 1.2rem;
-  left: 10.4rem;
+  right: 1.2rem;
+  left: auto;
   z-index: 200;
   background: var(--mg-primary);
   color: var(--mg-bg-surface);
@@ -6010,7 +6073,8 @@ onBeforeUnmount(() => {
 .cart-fab-badge {
   position: absolute;
   top: -4px;
-  right: -4px;
+  left: -4px;
+  right: auto;
   min-width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -6454,8 +6518,38 @@ kbd {
 
   .ops-overlay-sheet {
     width: 100%;
-    height: calc(100vh - 0.7rem);
+    max-width: 100%;
+    height: calc(100dvh - 0.7rem);
+    max-height: calc(100dvh - 0.7rem);
     border-radius: 16px;
+  }
+
+  .ops-overlay-sheet .left-col {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding-inline: 0.45rem;
+  }
+
+  .ops-overlay-sheet .left-col-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+  }
+
+  .ops-overlay-sheet .left-tab-btn {
+    min-height: 46px;
+    padding: 0.45rem 0.3rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    flex-wrap: wrap;
+  }
+
+  .ops-overlay-sheet .table-session-preview,
+  .ops-overlay-sheet .open-invoices-panel,
+  .ops-overlay-sheet .history-panel,
+  .ops-overlay-sheet .recent-orders-panel {
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .ops-trigger,
@@ -6465,8 +6559,9 @@ kbd {
   }
 
   .cart-fab {
-    left: 1rem;
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    right: 1rem;
+    left: auto;
+    bottom: calc(1rem + env(safe-area-inset-bottom));
   }
 
   .open-invoices-head,

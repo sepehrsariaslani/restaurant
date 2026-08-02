@@ -57,6 +57,23 @@ CORE_ORDER_STATUS_MAP = {
 # Schema helpers are called from every POS write.  Keep their warm-state in
 # the worker so normal orders do not repeat Custom Field metadata queries.
 _CHECKOUT_SALES_ORDER_FIELDS_READY_SITES = set()
+# These markers were historically appended to the customer note field by
+# POS state transitions. They are internal audit data, not cashier notes and
+# must never be shown on or printed with the customer receipt.
+_AUTOMATIC_POS_NOTE_MARKERS = (
+    "[ORDER]",
+    "[SETTLE]",
+    "[PRODUCE]",
+    "[DELIVER_ONLY]",
+    "[PAYMENT]",
+    "[KITCHEN]",
+    "[ERROR]",
+    "[PRINT_PRODUCTION]",
+    "روش پرداخت:",
+    "جایگاه:",
+    "مهمان:",
+    "ادامه فاکتور",
+)
 
 DEFAULT_CHECKOUT_MAP_CONFIG = {
 	"provider": "neshan",
@@ -2338,12 +2355,38 @@ def _insert_management_hardware_event(
 		frappe.log_error(frappe.get_traceback(), "Restaurant POS Hardware Event Insert Failed")
 
 
+def _clean_automatic_pos_note(note_value):
+	"""Return only text explicitly entered by the cashier/customer."""
+	parts = []
+	for raw_part in re.split(r"[|\n]", str(note_value or "")):
+		part = raw_part.strip()
+		if not part:
+			continue
+		if any(marker in part for marker in _AUTOMATIC_POS_NOTE_MARKERS):
+			continue
+		parts.append(part)
+	return " | ".join(parts)
+
+
 def _append_sales_order_note(order_name, note_line):
-	if not note_line or not order_name or not _has_column("Sales Order", "restaurant_note"):
+	if not order_name or not _has_column("Sales Order", "restaurant_note"):
 		return
 
 	existing_note = frappe.db.get_value("Sales Order", order_name, "restaurant_note") or ""
-	merged_note = f"{existing_note}\n{note_line}".strip() if existing_note else note_line
+	clean_existing = _clean_automatic_pos_note(existing_note)
+	is_automatic = any(marker in str(note_line or "") for marker in _AUTOMATIC_POS_NOTE_MARKERS)
+	if is_automatic:
+		# Also clean legacy POS markers when the order changes state.
+		if clean_existing != str(existing_note or "").strip():
+			frappe.db.set_value("Sales Order", order_name, "restaurant_note", clean_existing, update_modified=False)
+		return
+
+	clean_line = str(note_line or "").strip()
+	if not clean_line:
+		if clean_existing != str(existing_note or "").strip():
+			frappe.db.set_value("Sales Order", order_name, "restaurant_note", clean_existing, update_modified=False)
+		return
+	merged_note = f"{clean_existing} | {clean_line}".strip(" |") if clean_existing else clean_line
 	frappe.db.set_value("Sales Order", order_name, "restaurant_note", merged_note, update_modified=False)
 
 
@@ -6161,7 +6204,7 @@ def _get_sales_order_payload(so_name):
 		if _has_column("Sales Order", "restaurant_delivery_lng")
 		else None,
 		"delivery_details": delivery_details if isinstance(delivery_details, dict) else {},
-		"note": doc.get("restaurant_note") or "",
+		"note": _clean_automatic_pos_note(doc.get("restaurant_note") or ""),
 		"include_service_items": cint(doc.get("restaurant_include_service_items") or 1)
 		if _has_column("Sales Order", "restaurant_include_service_items")
 		else 1,
@@ -12524,7 +12567,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"delivery_exists": delivery_exists,
 				"created_at": _json_safe_datetime(created_at),
 				"cashier": row.owner or "",
-				"note": row.restaurant_note if has_note else "",
+				"note": _clean_automatic_pos_note(row.restaurant_note) if has_note else "",
 				"payment_method": row.restaurant_payment_method if has_payment_method else "",
 				"payment_status": row.restaurant_payment_status if has_payment_status else "",
 				"payment_provider": row.restaurant_payment_provider if has_payment_provider else "",
@@ -14539,8 +14582,15 @@ def _create_pos_order_payload(payload, commit=True):
     if waiter_name and not order_context.get("waiter_name"):
         order_context["waiter_name"] = waiter_name
     table = (payload.get("table") or "").strip()
+    place = (payload.get("place") or "").strip()
+    guest_count = max(cint(payload.get("guest_count") or 1), 1)
     if table and not order_context.get("table"):
         order_context["table"] = table
+    if place and not order_context.get("place"):
+        order_context["place"] = place
+    if place and order_type == "dine_in" and not order_context.get("table"):
+        order_context["table"] = place
+    order_context["guest_count"] = guest_count
 
     result = place_order(
         customer_info={"name": customer_name, "mobile": mobile},
@@ -15594,6 +15644,15 @@ def get_management_order_detail(order_name, source=None):
 			order_status = _core_order_status(doc)
 			if delivery_exists:
 				order_status = "delivered"
+			order_context = _parse_json(doc.get("restaurant_order_context_json"), {})
+			if not isinstance(order_context, dict):
+				order_context = {}
+			place_label = (
+				order_context.get("place")
+				or order_context.get("table")
+				or doc.get("restaurant_table")
+				or ""
+			)
 			items = []
 			for row in doc.items or []:
 				amount = row.get("amount")
@@ -15624,6 +15683,8 @@ def get_management_order_detail(order_name, source=None):
 					"customer_name": doc.customer_name,
 					"mobile": doc.get("restaurant_customer_mobile") or "",
 					"channel": doc.get("restaurant_order_type") or "takeaway",
+					"place": place_label,
+					"order_context": order_context,
 					"status": order_status,
 					"subtotal": flt(doc.total or doc.net_total),
 					"grand_total": flt(doc.grand_total or doc.total or doc.net_total),
@@ -15640,7 +15701,7 @@ def get_management_order_detail(order_name, source=None):
 						or doc.creation
 					),
 					"cashier": doc.owner,
-					"note": doc.get("restaurant_note") or "",
+					"note": _clean_automatic_pos_note(doc.get("restaurant_note") or ""),
 					"payment_method": doc.get("restaurant_payment_method") or "",
 					"payment_status": doc.get("restaurant_payment_status") or "",
 					"payment_provider": doc.get("restaurant_payment_provider") or "",
