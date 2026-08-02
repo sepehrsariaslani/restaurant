@@ -27,6 +27,20 @@
       <ManagementReportsIndexPage v-else-if="page === 'management-reports'" />
       <ManagementReportPage v-else-if="page === 'management-report'" :boot="boot" />
       <ManagementRegisterPage v-else-if="page === 'management-register'" />
+      <ManagementInventoryDashboardPage v-else-if="page === 'management-inventory-dashboard'" />
+      <ManagementInventoryMaterialsPage v-else-if="page === 'management-inventory-materials'" />
+      <ManagementInventoryMaterialDetailPage v-else-if="page === 'management-inventory-material-detail'" />
+      <ManagementMaterialRequestsPage v-else-if="page === 'management-material-requests'" />
+      <ManagementMaterialRequestDetailPage v-else-if="page === 'management-material-request-detail'" />
+      <ManagementInventoryPurchasesPage v-else-if="page === 'management-inventory-purchases'" />
+      <ManagementInventoryPurchaseDetailPage v-else-if="page === 'management-inventory-purchase-detail'" />
+      <ManagementInventoryWarehousesPage v-else-if="page === 'management-inventory-warehouses'" />
+      <ManagementInventoryMovementsPage v-else-if="page === 'management-inventory-movements'" />
+      <ManagementInventoryReorderPage v-else-if="page === 'management-inventory-reorder'" />
+      <ManagementInventoryProductionPage v-else-if="page === 'management-inventory-production'" />
+      <ManagementInventoryLossesPage v-else-if="page === 'management-inventory-losses'" />
+      <ManagementInventoryCountPage v-else-if="page === 'management-inventory-count'" />
+      <ManagementInventoryCostsPage v-else-if="page === 'management-inventory-costs'" />
       <ManagementInventoryPage v-else-if="page === 'management-inventory'" />
       <ManagementClubPage v-else-if="page === 'management-club'" />
       <ManagementSurveysPage v-else-if="page === 'management-surveys'" />
@@ -191,6 +205,20 @@ import ManagementReportsIndexPage from './pages/management/ManagementReportsInde
 import ManagementReportPage from './pages/management/ManagementReportPage.vue'
 import ManagementRegisterPage from './pages/management/ManagementRegisterPage.vue'
 import ManagementInventoryPage from './pages/management/ManagementInventoryPage.vue'
+import ManagementInventoryDashboardPage from './pages/management/ManagementInventoryDashboardPage.vue'
+import ManagementInventoryMaterialsPage from './pages/management/ManagementInventoryMaterialsPage.vue'
+import ManagementInventoryMaterialDetailPage from './pages/management/ManagementInventoryMaterialDetailPage.vue'
+import ManagementMaterialRequestsPage from './pages/management/ManagementMaterialRequestsPage.vue'
+import ManagementMaterialRequestDetailPage from './pages/management/ManagementMaterialRequestDetailPage.vue'
+import ManagementInventoryPurchasesPage from './pages/management/ManagementInventoryPurchasesPage.vue'
+import ManagementInventoryPurchaseDetailPage from './pages/management/ManagementInventoryPurchaseDetailPage.vue'
+import ManagementInventoryWarehousesPage from './pages/management/ManagementInventoryWarehousesPage.vue'
+import ManagementInventoryMovementsPage from './pages/management/ManagementInventoryMovementsPage.vue'
+import ManagementInventoryReorderPage from './pages/management/ManagementInventoryReorderPage.vue'
+import ManagementInventoryProductionPage from './pages/management/ManagementInventoryProductionPage.vue'
+import ManagementInventoryLossesPage from './pages/management/ManagementInventoryLossesPage.vue'
+import ManagementInventoryCountPage from './pages/management/ManagementInventoryCountPage.vue'
+import ManagementInventoryCostsPage from './pages/management/ManagementInventoryCostsPage.vue'
 import ManagementClubPage from './pages/management/ManagementClubPage.vue'
 import ManagementSurveysPage from './pages/management/ManagementSurveysPage.vue'
 import ManagementCostControlPage from './pages/management/ManagementCostControlPage.vue'
@@ -237,8 +265,22 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/reports/')) return 'management-report'
     if (pathname.startsWith('/management/reports')) return 'management-reports'
     if (pathname.startsWith('/management/register')) return 'management-register'
-  if (pathname.startsWith('/management/inventory')) return 'management-inventory'
-  if (pathname.startsWith('/management/club')) return 'management-club'
+    if (pathname.startsWith('/management/inventory/materials/detail')) return 'management-inventory-material-detail'
+    if (pathname.startsWith('/management/inventory/materials')) return 'management-inventory-materials'
+    if (pathname.startsWith('/management/inventory/requests/detail')) return 'management-material-request-detail'
+    if (pathname.startsWith('/management/inventory/requests')) return 'management-material-requests'
+    if (pathname.startsWith('/management/inventory/purchases/detail')) return 'management-inventory-purchase-detail'
+    if (pathname.startsWith('/management/inventory/purchases')) return 'management-inventory-purchases'
+    if (pathname.startsWith('/management/inventory/warehouses')) return 'management-inventory-warehouses'
+    if (pathname.startsWith('/management/inventory/movements')) return 'management-inventory-movements'
+    if (pathname.startsWith('/management/inventory/reorder')) return 'management-inventory-reorder'
+    if (pathname.startsWith('/management/inventory/production')) return 'management-inventory-production'
+    if (pathname.startsWith('/management/inventory/losses')) return 'management-inventory-losses'
+    if (pathname.startsWith('/management/inventory/count')) return 'management-inventory-count'
+    if (pathname.startsWith('/management/inventory/costs')) return 'management-inventory-costs'
+    if (pathname === '/management/inventory' || pathname === '/management/inventory/') return 'management-inventory-dashboard'
+    if (pathname.startsWith('/management/inventory')) return 'management-inventory'
+    if (pathname.startsWith('/management/club')) return 'management-club'
   if (pathname.startsWith('/management/surveys')) return 'management-surveys'
   if (pathname.startsWith('/management/cost-control')) return 'management-cost-control'
   if (pathname.startsWith('/management/reservations')) return 'management-reservations'

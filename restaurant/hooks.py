@@ -149,6 +149,7 @@ website_route_rules = [
 	{"from_route": "/management/kitchen", "to_route": "management/kitchen"},
 	{"from_route": "/management/register", "to_route": "management/register"},
 	{"from_route": "/management/inventory", "to_route": "management/inventory"},
+	{"from_route": "/management/inventory/<path:route>", "to_route": "management/inventory"},
 	{"from_route": "/management/club", "to_route": "management/club"},
 	{"from_route": "/management/surveys", "to_route": "management/surveys"},
 	{"from_route": "/management/cost-control", "to_route": "management/cost_control"},

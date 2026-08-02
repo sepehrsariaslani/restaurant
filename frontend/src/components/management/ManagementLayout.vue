@@ -459,7 +459,7 @@ const navLinks = computed(() => {
 			shortLabel: "موجودی",
 			caption: "موجودی مقداری و مبلغی",
 			iconComponent: InventoryIcon,
-			url: "/management/inventory?tab=overview",
+			url: "/management/inventory",
 			group: "inventory",
 		},
 		{
@@ -468,7 +468,7 @@ const navLinks = computed(() => {
 			shortLabel: "درخواست مواد",
 			caption: "ثبت نیاز و انتقال به خرید",
 			iconComponent: OrdersIcon,
-			url: "/management/inventory?tab=requests",
+			url: "/management/inventory/requests",
 			group: "inventory",
 		},
 		{
@@ -477,7 +477,7 @@ const navLinks = computed(() => {
 			shortLabel: "مواد",
 			caption: "کالاها، واحدها و نقطه سفارش",
 			iconComponent: ProductsIcon,
-			url: "/management/inventory?tab=materials",
+			url: "/management/inventory/materials",
 			group: "inventory",
 		},
 		{
@@ -486,7 +486,7 @@ const navLinks = computed(() => {
 			shortLabel: "خرید",
 			caption: "سفارش خرید و دریافت",
 			iconComponent: StoreIcon,
-			url: "/management/inventory?tab=purchase",
+			url: "/management/inventory/purchases",
 			group: "inventory",
 		},
 		{
@@ -495,7 +495,7 @@ const navLinks = computed(() => {
 			shortLabel: "انبارها",
 			caption: "مدیریت انبار و مقصد دریافت",
 			iconComponent: LayersIcon,
-			url: "/management/inventory?tab=warehouses",
+			url: "/management/inventory/warehouses",
 			group: "inventory",
 		},
 		{
@@ -504,7 +504,7 @@ const navLinks = computed(() => {
 			shortLabel: "گردش",
 			caption: "گردش، انتقال و ضایعات",
 			iconComponent: FileTextIcon,
-			url: "/management/inventory?tab=movements",
+			url: "/management/inventory/movements",
 			group: "inventory",
 		},
 		{
@@ -513,7 +513,7 @@ const navLinks = computed(() => {
 			shortLabel: "هشدار",
 			caption: "کمبود و پیشنهاد خرید",
 			iconComponent: SurveyIcon,
-			url: "/management/inventory?tab=reorder",
+			url: "/management/inventory/reorder",
 			group: "inventory",
 		},
 		{
@@ -522,7 +522,7 @@ const navLinks = computed(() => {
 			shortLabel: "تولید",
 			caption: "نیاز مواد و تولید دستی",
 			iconComponent: KitchenIcon,
-			url: "/management/inventory?tab=production",
+			url: "/management/inventory/production",
 			group: "inventory",
 		},
 		{
@@ -531,7 +531,7 @@ const navLinks = computed(() => {
 			shortLabel: "ضایعات",
 			caption: "ثبت و گزارش خسارت",
 			iconComponent: WalletIcon,
-			url: "/management/inventory?tab=losses",
+			url: "/management/inventory/losses",
 			group: "inventory",
 		},
 		{
@@ -540,7 +540,7 @@ const navLinks = computed(() => {
 			shortLabel: "گردش شمارش",
 			caption: "شمارش و مغایرت‌گیری",
 			iconComponent: SettingsIcon,
-			url: "/management/inventory?tab=count",
+			url: "/management/inventory/count",
 			group: "inventory",
 		},
 		{
@@ -549,7 +549,7 @@ const navLinks = computed(() => {
 			shortLabel: "هزینه مواد",
 			caption: "محاسبه بهای مواد و فرمول",
 			iconComponent: CalculatorIcon,
-			url: "/management/inventory?tab=costs",
+			url: "/management/inventory/costs",
 			group: "inventory",
 		},
 		{
@@ -915,28 +915,29 @@ function isGroupOpen(key) {
 }
 
 function isLinkActive(key) {
-	if (props.page === "management-inventory") {
-		const inventoryTabs = {
-			"management-inventory-overview": "overview",
-			"management-material-requests": "requests",
-			"management-inventory-materials": "materials",
-			"management-inventory-purchase": "purchase",
-			"management-inventory-warehouses": "warehouses",
-			"management-inventory-movements": "movements",
-			"management-inventory-reorder": "reorder",
-			"management-inventory-production": "production",
-			"management-inventory-losses": "losses",
-			"management-inventory-count": "count",
-			"management-inventory-costs": "costs",
+	const inventoryPageMap = {
+		"management-inventory": "management-inventory-dashboard",
+		"management-inventory-overview": "management-inventory-dashboard",
+		"management-material-requests": "management-material-requests",
+		"management-inventory-materials": "management-inventory-materials",
+		"management-inventory-purchase": "management-inventory-purchases",
+		"management-inventory-warehouses": "management-inventory-warehouses",
+		"management-inventory-movements": "management-inventory-movements",
+		"management-inventory-reorder": "management-inventory-reorder",
+		"management-inventory-production": "management-inventory-production",
+		"management-inventory-losses": "management-inventory-losses",
+		"management-inventory-count": "management-inventory-count",
+		"management-inventory-costs": "management-inventory-costs",
+	};
+	if (inventoryPageMap[key]) {
+		const detailPages = {
+			"management-inventory-materials": "management-inventory-material-detail",
+			"management-material-requests": "management-material-request-detail",
+			"management-inventory-purchase": "management-inventory-purchase-detail",
 		};
-		if (key === "management-inventory") {
-			const currentTab = new URLSearchParams(window.location.search).get("tab") || "overview";
-			return currentTab === "overview";
-		}
-		if (inventoryTabs[key]) {
-			const currentTab = new URLSearchParams(window.location.search).get("tab") || "overview";
-			return currentTab === inventoryTabs[key];
-		}
+		return props.page === inventoryPageMap[key] ||
+			props.page === detailPages[key] ||
+			(props.page === "management-inventory" && key === "management-inventory");
 	}
 	if (props.page === key) return true;
 	if (props.page.startsWith(key + "-")) return true;

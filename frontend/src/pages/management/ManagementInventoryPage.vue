@@ -290,7 +290,7 @@
             </select>
           </label>
           <label>تاریخ سند
-            <input class="input" type="date" v-model="movementForm.posting_date" />
+            <PersianDateInput v-model="movementForm.posting_date" />
           </label>
           <label class="full-row">شرح گردش
             <input class="input" v-model.trim="movementForm.reason" placeholder="علت یا توضیح (اختیاری)" />
@@ -312,8 +312,8 @@
 
       <ManagementSurfaceCard title="سوابق گردش‌ها" subtitle="تاریخچه ورود و خروج انبار">
         <div class="toolbar">
-          <input class="input" type="date" v-model="movementFilters.date_from" />
-          <input class="input" type="date" v-model="movementFilters.date_to" />
+          <PersianDateInput v-model="movementFilters.date_from" />
+          <PersianDateInput v-model="movementFilters.date_to" />
           <select class="input" v-model="movementFilters.warehouse">
             <option value="">همه انبارها</option>
             <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
@@ -407,8 +407,8 @@
             <option value="ordered">خرید کامل</option>
             <option value="cancelled">لغوشده</option>
           </select>
-          <input class="input" type="date" v-model="requestFilters.date_from" @change="loadMaterialRequests" />
-          <input class="input" type="date" v-model="requestFilters.date_to" @change="loadMaterialRequests" />
+        <PersianDateInput v-model="requestFilters.date_from" @update:model-value="loadMaterialRequests" />
+        <PersianDateInput v-model="requestFilters.date_to" @update:model-value="loadMaterialRequests" />
           <input class="input request-search" v-model.trim="requestFilters.search" placeholder="جستجوی شماره یا ماده..." @keyup.enter="loadMaterialRequests" />
           <button type="button" class="secondary-btn" @click="loadMaterialRequests" :disabled="requestLoading">{{ requestLoading ? '...' : 'جستجو' }}</button>
           <button type="button" class="primary-btn" @click="openMaterialRequestForm()">+ درخواست جدید</button>
@@ -458,10 +458,10 @@
           <p class="error" v-if="requestFormError">{{ requestFormError }}</p>
           <div class="form-grid">
             <label>تاریخ درخواست
-              <input class="input" type="date" v-model="materialRequestForm.transaction_date" />
+              <PersianDateInput v-model="materialRequestForm.transaction_date" />
             </label>
             <label>تاریخ نیاز
-              <input class="input" type="date" v-model="materialRequestForm.schedule_date" />
+              <PersianDateInput v-model="materialRequestForm.schedule_date" />
             </label>
             <label>انبار مقصد
               <select class="input" v-model="materialRequestForm.set_warehouse">
@@ -572,8 +572,8 @@
                 <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
               </select>
             </label>
-            <label>تاریخ سفارش <input class="input" type="date" v-model="purchaseForm.posting_date" /></label>
-            <label>تاریخ تحویل مورد انتظار <input class="input" type="date" v-model="purchaseForm.expected_date" /></label>
+            <label>تاریخ سفارش <PersianDateInput v-model="purchaseForm.posting_date" /></label>
+            <label>تاریخ تحویل مورد انتظار <PersianDateInput v-model="purchaseForm.expected_date" /></label>
             <label class="full-row">یادداشت <input class="input" v-model.trim="purchaseForm.note" /></label>
           </div>
           <div class="lines-editor">
@@ -686,8 +686,8 @@
       <p class="success-msg" v-if="productionMessage">{{ productionMessage }}</p>
       <ManagementSurfaceCard title="برنامه‌ریزی تولید" subtitle="نیاز مواد اولیه بر اساس سفارش‌های باز در مقایسه با موجودی">
         <div class="toolbar">
-          <input class="input" type="date" v-model="planFilters.date_from" />
-          <input class="input" type="date" v-model="planFilters.date_to" />
+          <PersianDateInput v-model="planFilters.date_from" />
+          <PersianDateInput v-model="planFilters.date_to" />
           <button type="button" class="secondary-btn" @click="loadProductionPlan" :disabled="planLoading">{{ planLoading ? '...' : 'محاسبه برنامه' }}</button>
         </div>
         <p class="muted" v-if="planLoading">در حال محاسبه...</p>
@@ -768,8 +768,8 @@
       <p class="success-msg" v-if="lossesMessage">{{ lossesMessage }}</p>
       <ManagementSurfaceCard title="گزارش ضایعات و خسارات" subtitle="ارزش سوخت‌شده بر اساس اسناد انبار">
         <div class="toolbar">
-          <input class="input" type="date" v-model="lossFilters.date_from" />
-          <input class="input" type="date" v-model="lossFilters.date_to" />
+          <PersianDateInput v-model="lossFilters.date_from" />
+          <PersianDateInput v-model="lossFilters.date_to" />
           <select class="input" v-model="lossFilters.warehouse">
             <option value="">همه انبارها</option>
             <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
@@ -1034,6 +1034,7 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import PersianDateInput from '@/components/PersianDateInput.vue'
 import {
   createManagementProductionEntry,
   createManagementPurchaseFromAlerts,
@@ -1076,6 +1077,8 @@ import {
 } from '@/utils/api'
 import { formatMoney as formatMoneyUtil } from '@/utils/format'
 
+const pageProps = defineProps({ initialTab: { type: String, default: '' } })
+
 const tabs = [
   { key: 'overview', label: 'موجودی و ارزش' },
   { key: 'materials', label: 'مواد اولیه' },
@@ -1094,7 +1097,7 @@ const inventoryTabKeys = new Set(tabs.map((tab) => tab.key))
 
 function initialInventoryTab() {
   if (typeof window === 'undefined') return 'overview'
-  const requested = new URLSearchParams(window.location.search).get('tab') || 'overview'
+  const requested = pageProps.initialTab || new URLSearchParams(window.location.search).get('tab') || 'overview'
   return inventoryTabKeys.has(requested) ? requested : 'overview'
 }
 
