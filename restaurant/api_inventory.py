@@ -68,6 +68,7 @@ __all__ = [
 	"update_management_material_request_status",
 	"create_management_purchase_from_material_request",
 	"get_management_material_request_print",
+	"list_management_uoms",
 	# raw materials
 	"list_management_raw_materials",
 	"get_management_raw_material_detail",
@@ -688,6 +689,20 @@ def get_management_inventory_boot():
 	}
 
 
+@frappe.whitelist()
+def list_management_uoms(search="", limit=100):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", "UOM"):
+		return {"uoms": []}
+	search = str(search or "").strip()
+	filters = {"enabled": 1} if _has_column("UOM", "enabled") else {}
+	or_filters = None
+	if search:
+		or_filters = {"name": ["like", f"%{search}%"]}
+	rows = frappe.get_all("UOM", filters=filters, or_filters=or_filters, fields=["name"], order_by="name asc", limit_page_length=min(max(cint(limit) or 100, 1), 500), ignore_permissions=True)
+	return {"uoms": [row.get("name") for row in rows if row.get("name")]}
+
+
 # ---------------------------------------------------------------------------
 # Material requests (ERPNext Material Request)
 # ---------------------------------------------------------------------------
@@ -907,9 +922,12 @@ def save_management_material_request(payload=None):
 			continue
 		meta = frappe.db.get_value("Item", item_code, ["item_name", "stock_uom"], as_dict=True) or {}
 		uom = str(line.get("uom") or meta.get("stock_uom") or "").strip()
-		factor = flt(line.get("conversion_factor") or 0)
+		# Always resolve the ERPNext conversion for the selected UOM. The
+		# frontend sends the default factor as a convenience, but a cashier may
+		# change the UOM before saving the request.
+		factor = flt(_item_uom_conversion_to_stock(item_code, uom) or 0)
 		if factor <= 0:
-			factor = flt(_item_uom_conversion_to_stock(item_code, uom) or 1)
+			factor = flt(line.get("conversion_factor") or 1)
 		row = doc.append("items", {})
 		_inv_set_doc_field(row, "item_code", item_code)
 		_inv_set_doc_field(row, "item_name", meta.get("item_name") or item_code)

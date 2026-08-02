@@ -3303,6 +3303,10 @@ export function getManagementInventoryBoot() {
 	return callRestaurantAPI("get_management_inventory_boot", {});
 }
 
+export function listManagementUOMs({ search = "", limit = 100 } = {}) {
+	return callRestaurantAPI("list_management_uoms", { search, limit });
+}
+
 export function listManagementMaterialRequests({ status = "", search = "", date_from = "", date_to = "", limit = 50, offset = 0 } = {}) {
 	return callRestaurantAPI("list_management_material_requests", { status, search, date_from, date_to, limit, offset });
 }
