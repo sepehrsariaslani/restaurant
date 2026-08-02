@@ -1,5 +1,5 @@
 <template>
-  <ManagementPageScaffold :title="title" :subtitle="subtitle">
+  <ManagementPageScaffold v-if="showHeader" :title="title" :subtitle="subtitle">
     <template #actions>
       <slot name="actions" />
     </template>
@@ -7,6 +7,10 @@
       <slot />
     </section>
   </ManagementPageScaffold>
+
+  <section v-else class="inventory-section-shell" dir="rtl">
+    <slot />
+  </section>
 </template>
 
 <script setup>
@@ -15,6 +19,7 @@ import ManagementPageScaffold from '@/components/management/ManagementPageScaffo
 defineProps({
   title: { type: String, default: 'انبارداری' },
   subtitle: { type: String, default: '' },
+  showHeader: { type: Boolean, default: true },
 })
 </script>
 

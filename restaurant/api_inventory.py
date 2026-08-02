@@ -965,7 +965,15 @@ def save_management_material_request(payload=None):
 	_inv_set_doc_field(doc, "requested_by", str(data.get("requested_by") or frappe.session.user or "").strip())
 	_inv_set_doc_field(doc, "transaction_date", transaction_date)
 	_inv_set_doc_field(doc, "schedule_date", schedule_date)
-	_inv_set_doc_field(doc, "set_warehouse", str(data.get("set_warehouse") or "").strip())
+
+	# ERPNext requires a warehouse on every stock-item row. The old form left
+	# the destination empty when no warehouse had been configured in settings,
+	# which made the standard validation fail with HTTP 417. Prefer the value
+	# sent by the form, then the configured/default leaf warehouse.
+	set_warehouse = _inv_resolve_warehouse(data.get("set_warehouse"))
+	if not set_warehouse:
+		frappe.throw(_("برای ثبت درخواست مواد، یک انبار مقصد انتخاب کنید."))
+	_inv_set_doc_field(doc, "set_warehouse", set_warehouse)
 	_inv_set_doc_field(doc, "remarks", str(data.get("note") or "").strip())
 	_inv_set_doc_field(doc, "description", str(data.get("note") or "").strip())
 
@@ -992,7 +1000,8 @@ def save_management_material_request(payload=None):
 		_inv_set_doc_field(row, "uom", uom)
 		_inv_set_doc_field(row, "stock_uom", meta.get("stock_uom") or uom)
 		_inv_set_doc_field(row, "conversion_factor", factor)
-		_inv_set_doc_field(row, "warehouse", str(line.get("warehouse") or data.get("set_warehouse") or "").strip())
+		row_warehouse = _inv_resolve_warehouse(line.get("warehouse"), set_warehouse)
+		_inv_set_doc_field(row, "warehouse", row_warehouse or set_warehouse)
 		_inv_set_doc_field(row, "schedule_date", line.get("schedule_date") or schedule_date)
 		_inv_set_doc_field(row, "rate", flt(line.get("rate") or 0))
 		_inv_set_doc_field(row, "amount", flt(line.get("amount") or 0))

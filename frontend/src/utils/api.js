@@ -87,6 +87,17 @@ async function refreshCsrfToken() {
 	return getCSRFToken();
 }
 
+function cleanServerMessage(value) {
+	return String(value || "")
+		.replace(/<[^>]*>/g, "")
+		.replace(/&amp;/g, "&")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.trim();
+}
+
 function unpackServerMessages(payload) {
 	if (!payload || !payload._server_messages) {
 		return "";
@@ -95,7 +106,7 @@ function unpackServerMessages(payload) {
 	try {
 		const raw = JSON.parse(payload._server_messages);
 		const parsed = Array.isArray(raw) ? raw.map((line) => JSON.parse(line).message) : [];
-		return parsed.filter(Boolean).join(" | ");
+		return parsed.map(cleanServerMessage).filter(Boolean).join(" | ");
 	} catch (error) {
 		return "";
 	}

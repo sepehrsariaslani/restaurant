@@ -488,7 +488,7 @@
               <div class="request-uom-field"><small>واحد</small><strong>{{ line.uom || 'خودکار' }}</strong></div>
               <button type="button" class="tertiary-btn danger" @click="removeMaterialRequestLine(index)" :disabled="materialRequestForm.items.length <= 1">حذف</button>
             </div>
-            <button type="button" class="secondary-btn add-line-btn" @click="addMaterialRequestLine">+ افزودن ماده</button>
+            <button type="button" class="secondary-btn add-line-btn" @click="addMaterialRequestLine">+ افزودن ردیف</button>
           </div>
           <footer class="request-popup-actions">
             <button type="button" class="secondary-btn" @click="materialRequestForm = null">انصراف</button>
@@ -1246,7 +1246,7 @@ function openMaterialRequestForm(request = null) {
       name: request.name,
       transaction_date: request.transaction_date || todayDateValue(),
       schedule_date: request.schedule_date || request.transaction_date || todayDateValue(),
-      set_warehouse: request.set_warehouse || boot.value?.settings?.default_warehouse || '',
+      set_warehouse: request.set_warehouse || boot.value?.settings?.default_warehouse || leafWarehouses.value?.[0] || '',
       note: request.note || '',
       items: (request.items || []).map((line) => ({ ...line, conversion_factor: Number(line.conversion_factor || 1) })),
     }
@@ -1255,7 +1255,7 @@ function openMaterialRequestForm(request = null) {
       name: '',
       transaction_date: todayDateValue(),
       schedule_date: todayDateValue(),
-      set_warehouse: boot.value?.settings?.default_warehouse || '',
+      set_warehouse: boot.value?.settings?.default_warehouse || leafWarehouses.value?.[0] || '',
       note: '',
       items: [{ item_code: '', qty: 1, uom: '', stock_uom: '', conversion_factor: 1, warehouse: '' }],
     }
@@ -1300,6 +1300,8 @@ async function saveMaterialRequest(submit = false) {
   requestSaving.value = true
   requestFormError.value = ''
   try {
+    const warehouse = materialRequestForm.value.set_warehouse || boot.value?.settings?.default_warehouse || leafWarehouses.value?.[0] || ''
+    if (!warehouse) throw new Error('برای ثبت درخواست، یک انبار مقصد انتخاب کنید.')
     const items = materialRequestForm.value.items
       .filter((line) => line.item_code && Number(line.qty) > 0)
       .map((line) => ({
@@ -1308,11 +1310,12 @@ async function saveMaterialRequest(submit = false) {
         uom: line.uom,
         stock_uom: line.stock_uom,
         conversion_factor: Number(line.conversion_factor || 1),
-        warehouse: materialRequestForm.value.set_warehouse || '',
+        warehouse: line.warehouse || warehouse,
       }))
     if (!items.length) throw new Error('حداقل یک ماده با مقدار بیشتر از صفر انتخاب کنید.')
     const result = await saveManagementMaterialRequest({
       ...materialRequestForm.value,
+      set_warehouse: warehouse,
       items,
       submit: submit ? 1 : 0,
     })
