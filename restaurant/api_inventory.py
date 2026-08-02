@@ -891,6 +891,7 @@ def save_management_material_request(payload=None):
 	schedule_date = data.get("schedule_date") or transaction_date
 	_inv_set_doc_field(doc, "material_request_type", str(data.get("material_request_type") or "Purchase"))
 	_inv_set_doc_field(doc, "company", company)
+	_inv_set_doc_field(doc, "requested_by", str(data.get("requested_by") or frappe.session.user or "").strip())
 	_inv_set_doc_field(doc, "transaction_date", transaction_date)
 	_inv_set_doc_field(doc, "schedule_date", schedule_date)
 	_inv_set_doc_field(doc, "set_warehouse", str(data.get("set_warehouse") or "").strip())
@@ -1056,7 +1057,7 @@ def get_management_material_request_print(name=""):
 
 
 @frappe.whitelist()
-def list_management_raw_materials(search="", include_inactive=0, limit=100, offset=0):
+def list_management_raw_materials(search="", include_inactive=0, limit=100, offset=0, include_all_stock=0):
 	"""List raw materials with live stock quantity and value."""
 	_ensure_management_access()
 	limit = min(max(cint(limit) or 100, 1), 500)
@@ -1093,7 +1094,7 @@ def list_management_raw_materials(search="", include_inactive=0, limit=100, offs
 	has_more = len(rows) > limit
 	rows = rows[:limit]
 
-	materials = [row for row in rows if _inv_item_is_raw_material(row)]
+	materials = rows if cint(include_all_stock) else [row for row in rows if _inv_item_is_raw_material(row)]
 	names = [row["name"] for row in materials]
 	stock = _inv_stock_map(item_codes=names)
 

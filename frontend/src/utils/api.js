@@ -3327,8 +3327,8 @@ export function getManagementMaterialRequestPrint(name = "") {
 	return callRestaurantAPI("get_management_material_request_print", { name });
 }
 
-export function listManagementRawMaterials({ search = "", include_inactive = 0, limit = 100, offset = 0 } = {}) {
-	return callRestaurantAPI("list_management_raw_materials", { search, include_inactive, limit, offset });
+export function listManagementRawMaterials({ search = "", include_inactive = 0, limit = 100, offset = 0, include_all_stock = 0 } = {}) {
+	return callRestaurantAPI("list_management_raw_materials", { search, include_inactive, limit, offset, include_all_stock });
 }
 
 export function getManagementRawMaterialDetail(item_code) {
