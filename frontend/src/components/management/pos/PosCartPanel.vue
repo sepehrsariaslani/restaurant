@@ -90,14 +90,37 @@
 						<small class="line-note" v-if="line.note">{{ line.note }}</small>
 					</div>
 					<div class="line-actions">
-						<button v-if="canEditCustomization(line)" type="button" class="act-btn bom" title="ویرایش سفارشی سازی" @click.stop="$emit('edit-line-customization', line)">BOM</button>
-						<button type="button" class="act-btn" title="یادداشت" @click.stop="$emit('edit-line-note', line)">Note</button>
-						<div class="counter">
-							<button type="button" @click.stop="$emit('decrement-line', line)">−</button>
+						<button
+							v-if="canEditCustomization(line)"
+							type="button"
+							class="act-btn bom"
+							title="ویرایش سفارشی سازی"
+							aria-label="ویرایش سفارشی سازی"
+							@click.stop="$emit('edit-line-customization', line)"
+						>
+							<span>BOM</span>
+						</button>
+						<button
+							type="button"
+							class="act-btn note"
+							title="یادداشت آیتم"
+							aria-label="یادداشت آیتم"
+							@click.stop="$emit('edit-line-note', line)"
+						>
+							<MessageSquare :size="14" :stroke-width="2.2" aria-hidden="true" />
+						</button>
+						<div class="counter" :aria-label="`تعداد ${qtyText(line.qty)}`">
+							<button type="button" aria-label="کم کردن تعداد" title="کم کردن تعداد" @click.stop="$emit('decrement-line', line)">−</button>
 							<span>{{ qtyText(line.qty) }}</span>
-							<button type="button" @click.stop="$emit('increment-line', line)">+</button>
+							<button type="button" aria-label="زیاد کردن تعداد" title="زیاد کردن تعداد" @click.stop="$emit('increment-line', line)">+</button>
 						</div>
-						<button type="button" class="act-btn remove" title="حذف" @click.stop="$emit('remove-line', line)">×</button>
+						<button
+							type="button"
+							class="act-btn remove"
+							title="حذف آیتم"
+							aria-label="حذف آیتم"
+							@click.stop="$emit('remove-line', line)"
+						>×</button>
 					</div>
 				</article>
 			</div>
@@ -241,20 +264,44 @@
 					type="button"
 					class="save-btn"
 					:disabled="submitting || !cartLines.length"
+					:title="orderMode === 'dine_in' ? 'ثبت آیتم‌ها روی میز انتخاب‌شده' : 'ثبت فاکتور بدون دریافت وجه'"
+					aria-label="ثبت سفارش"
 					@click="$emit('submit-order')"
-				>{{ submitting ? "در حال ثبت..." : orderMode === "dine_in" ? "افزودن به میز" : "ثبت سفارش" }}</button>
+				>
+					<template v-if="submitting">در حال ثبت...</template>
+					<span v-else class="checkout-btn-content">
+						<ReceiptText :size="17" :stroke-width="2.2" aria-hidden="true" />
+						<span>{{ orderMode === "dine_in" ? "افزودن به میز" : "ثبت سفارش" }}</span>
+					</span>
+				</button>
 				<button
 					type="button"
 					class="pay-btn"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
+					title="ثبت فاکتور و دریافت وجه، بدون ارسال مستقیم برای تحویل"
+						aria-label="ثبت و تسویه"
 					@click="openPaymentPopup"
-				>{{ submitting ? "در حال پرداخت..." : orderMode === "dine_in" ? "تسویه از تب میزها" : "تسویه فاکتور" }}</button>
+				>
+					<template v-if="submitting">در حال پرداخت...</template>
+					<span v-else class="checkout-btn-content">
+						<CreditCard :size="17" :stroke-width="2.2" aria-hidden="true" />
+						<span>{{ orderMode === "dine_in" ? "تسویه از تب میزها" : "ثبت و تسویه" }}</span>
+					</span>
+				</button>
 				<button
 					type="button"
 					class="settle-btn-custom"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
+						title="ثبت، تسویه و ارسال دستور تولید/تحویل در پس‌زمینه"
+						aria-label="ثبت، تسویه و تحویل"
 					@click="openPaymentPopup(null, 'settle')"
-				>{{ submitting ? "در حال ثبت..." : "تسویه و تحویل" }}</button>
+				>
+					<template v-if="submitting">در حال ثبت...</template>
+					<span v-else class="checkout-btn-content">
+						<CheckCheck :size="17" :stroke-width="2.2" aria-hidden="true" />
+						<span>ثبت، تسویه و تحویل</span>
+					</span>
+				</button>
 			</div>
 			<button
 				type="button"
@@ -392,7 +439,17 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { Banknote, CreditCard, FileClock, Plus, ShoppingCart, X, MessageSquare } from "lucide-vue-next";
+import {
+	Banknote,
+	CheckCheck,
+	CreditCard,
+	FileClock,
+	MessageSquare,
+	Plus,
+	ReceiptText,
+	ShoppingCart,
+	X,
+} from "lucide-vue-next";
 import SearchableDropdown from "@/components/SearchableDropdown.vue";
 import PersianNumberInput from "@/components/PersianNumberInput.vue";
 import AmountPercentToggle from "@/components/AmountPercentToggle.vue";
@@ -838,14 +895,16 @@ defineExpose({
 <style scoped>
 /* ─── Panel Shell ─── */
 .cart-panel {
-	--mg-primary: var(--mg-primary);
-	--mg-primary-rgb: var(--mg-primary-rgb);
-	--mg-primary: var(--mg-success);
-	--mg-primary-rgb: var(--mg-success-rgb);
-	--mg-danger: var(--mg-danger);
-	--mg-danger-rgb: var(--mg-danger-rgb);
-	--mg-success: var(--mg-success);
-	--mg-success-rgb: var(--mg-success-rgb);
+	/* Keep the canonical management colors intact. Self-referential
+	 * custom-property aliases make the success/danger declarations
+	 * invalid, which used to turn the settle/remove controls into
+	 * unreadable transparent buttons once the cart had a line. */
+	--pos-primary: var(--mg-primary);
+	--pos-primary-rgb: var(--mg-primary-rgb);
+	--pos-success: var(--mg-success);
+	--pos-success-rgb: var(--mg-success-rgb);
+	--pos-danger: var(--mg-danger);
+	--pos-danger-rgb: var(--mg-danger-rgb);
 	border-radius: 24px;
 	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 52%, var(--mg-bg-surface) 48%) 0%, var(--mg-bg-surface) 100%);
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
@@ -1064,47 +1123,55 @@ defineExpose({
 	color: var(--mg-primary);
 }
 
-.line-actions {
-	display: flex;
-	align-items: center;
-	gap: 3px;
-	flex-shrink: 0;
-}
+	.line-actions {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+		padding-inline-start: 0.15rem;
+	}
 
-.act-btn {
-	width: 26px;
-	height: 26px;
-	border: none;
-	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
-	color: var(--mg-primary);
-	border-radius: 7px;
-	cursor: pointer;
-	font-size: 0.78rem;
-	font-family: inherit;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	transition: all 0.12s ease;
-	padding: 0;
-}
+	.act-btn {
+		width: 30px;
+		height: 30px;
+		border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+		background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
+		color: var(--mg-primary);
+		border-radius: 8px;
+		cursor: pointer;
+		font-size: 0.78rem;
+		font-family: inherit;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.12s ease;
+		padding: 0;
+		flex-shrink: 0;
+	}
 
-.act-btn:hover {
-	background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
-	color: var(--mg-primary);
-}
+	.act-btn:hover,
+	.act-btn:focus-visible {
+		background: color-mix(in srgb, var(--mg-primary) 12%, var(--mg-bg-surface) 88%);
+		border-color: color-mix(in srgb, var(--mg-primary) 34%, var(--mg-border-light) 66%);
+		color: var(--mg-primary);
+	}
 
-.act-btn.bom {
-	width: auto;
-	padding: 0 0.35rem;
-	font-size: 0.62rem;
-	font-weight: 700;
-	color: var(--mg-primary);
-	background: color-mix(in srgb, var(--mg-success) 12%, var(--mg-bg-surface) 88%);
-}
+	.act-btn.bom {
+		width: auto;
+		min-width: 34px;
+		padding: 0 0.38rem;
+		font-size: 0.62rem;
+		font-weight: 700;
+		color: var(--mg-primary);
+		background: color-mix(in srgb, var(--mg-success) 12%, var(--mg-bg-surface) 88%);
+		border-color: color-mix(in srgb, var(--mg-success) 28%, var(--mg-border-light) 72%);
+	}
 
-.act-btn.bom:hover {
-	background: color-mix(in srgb, var(--mg-success) 18%, var(--mg-bg-surface) 82%);
-}
+	.act-btn.bom:hover,
+	.act-btn.bom:focus-visible {
+		background: color-mix(in srgb, var(--mg-success) 18%, var(--mg-bg-surface) 82%);
+		border-color: color-mix(in srgb, var(--mg-success) 42%, var(--mg-border-light) 58%);
+	}
 
 .act-btn.remove {
 	color: color-mix(in srgb, var(--mg-danger) 50%, transparent);
@@ -1123,18 +1190,23 @@ defineExpose({
 	overflow: hidden;
 }
 
-.counter button {
-	width: 26px;
-	height: 26px;
-	border: none;
-	background: transparent;
-	color: var(--mg-primary);
-	cursor: pointer;
-	font-size: 0.88rem;
-	font-weight: 600;
-	font-family: inherit;
-	transition: background 0.12s ease;
-}
+	.counter button {
+		width: 28px;
+		height: 28px;
+		border: 1px solid transparent;
+		background: transparent;
+		color: var(--mg-primary);
+		cursor: pointer;
+		font-size: 0.9rem;
+		font-weight: 700;
+		font-family: inherit;
+		transition: background 0.12s ease, border-color 0.12s ease;
+	}
+
+	.counter button:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--mg-primary) 42%, transparent);
+		outline-offset: -1px;
+	}
 
 .counter button:hover {
 	background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
@@ -1358,58 +1430,83 @@ defineExpose({
 	gap: 0.42rem;
 }
 
-.checkout-btns {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.35rem;
-}
+	.checkout-btns {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.45rem;
+	}
 
-.save-btn,
-.pay-btn,
-.print-btn,
-.settle-btn-custom {
-	border: 0;
-	border-radius: 12px;
-	color: var(--mg-bg-surface);
-	min-height: 42px;
-	padding: 0.45rem 0.4rem;
-	cursor: pointer;
-	font-family: inherit;
-	font-size: 0.72rem;
-	font-weight: 700;
-	line-height: 1.35;
-	text-align: center;
-	transition: all 0.15s ease;
-}
+	.save-btn,
+	.pay-btn,
+	.print-btn,
+	.settle-btn-custom {
+		border: 1px solid transparent;
+		border-radius: 12px;
+		color: #fff;
+		min-height: 48px;
+		min-width: 0;
+		padding: 0.45rem 0.35rem;
+		cursor: pointer;
+		font-family: inherit;
+		font-size: 0.73rem;
+		font-weight: 700;
+		line-height: 1.35;
+		text-align: center;
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease,
+			filter 0.15s ease;
+	}
 
-.save-btn {
-	background: var(--mg-primary);
-	color: #fff;
-}
+	.checkout-btn-content {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.28rem;
+		max-width: 100%;
+		white-space: normal;
+	}
 
-.save-btn:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--mg-primary) 85%, var(--mg-text-main));
-	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-primary) 30%, transparent);
-}
+	.checkout-btn-content > span {
+		min-width: 0;
+	}
 
-.settle-btn-custom {
-	background: var(--mg-success);
-	color: #fff;
-}
+	.save-btn {
+		background: var(--mg-primary);
+		border-color: color-mix(in srgb, var(--mg-primary) 82%, #000 18%);
+		box-shadow: 0 5px 14px color-mix(in srgb, var(--mg-primary) 20%, transparent);
+	}
 
-.settle-btn-custom:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--mg-success) 85%, var(--mg-text-main));
-	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-success) 30%, transparent);
-}
+	.save-btn:hover:not(:disabled),
+	.pay-btn:hover:not(:disabled),
+	.settle-btn-custom:hover:not(:disabled) {
+		transform: translateY(-1px);
+		filter: brightness(0.96);
+	}
 
-.pay-btn {
-	background: var(--mg-text-main);
-	color: var(--mg-bg-surface);
-}
+	.save-btn:hover:not(:disabled) {
+		box-shadow: 0 7px 18px color-mix(in srgb, var(--mg-primary) 32%, transparent);
+	}
 
-.pay-btn:hover:not(:disabled) {
-	box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-text-main) 20%, transparent);
-}
+	.settle-btn-custom {
+		background: var(--mg-success);
+		border-color: color-mix(in srgb, var(--mg-success) 82%, #000 18%);
+		box-shadow: 0 5px 14px color-mix(in srgb, var(--mg-success) 20%, transparent);
+	}
+
+	.settle-btn-custom:hover:not(:disabled) {
+		box-shadow: 0 7px 18px color-mix(in srgb, var(--mg-success) 32%, transparent);
+	}
+
+	.pay-btn {
+		background: var(--mg-text-main);
+		border-color: color-mix(in srgb, var(--mg-text-main) 82%, #000 18%);
+		box-shadow: 0 5px 14px color-mix(in srgb, var(--mg-text-main) 14%, transparent);
+	}
+
+	.pay-btn:hover:not(:disabled) {
+		box-shadow: 0 7px 18px color-mix(in srgb, var(--mg-text-main) 24%, transparent);
+	}
 
 .print-btn {
 	background: transparent;
@@ -1425,17 +1522,26 @@ defineExpose({
 	border-color: color-mix(in srgb, var(--mg-primary) 20%, transparent);
 }
 
-.save-btn:disabled,
-.pay-btn:disabled,
-.settle-btn-custom:disabled,
-.print-btn:disabled {
-	opacity: 1;
-	background: color-mix(in srgb, var(--mg-border-light) 34%, var(--mg-bg-page) 66%);
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
-	color: color-mix(in srgb, var(--mg-text-muted) 78%, var(--mg-bg-page) 22%);
-	cursor: not-allowed;
-	box-shadow: none;
-}
+	.save-btn:disabled,
+	.pay-btn:disabled,
+	.settle-btn-custom:disabled,
+	.print-btn:disabled {
+		opacity: 0.62;
+		background: color-mix(in srgb, var(--mg-border-light) 34%, var(--mg-bg-page) 66%);
+		border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+		color: color-mix(in srgb, var(--mg-text-muted) 78%, var(--mg-bg-page) 22%);
+		cursor: not-allowed;
+		box-shadow: none;
+		transform: none;
+	}
+
+	.save-btn:focus-visible,
+	.pay-btn:focus-visible,
+	.settle-btn-custom:focus-visible,
+	.print-btn:focus-visible {
+		outline: 3px solid color-mix(in srgb, var(--mg-primary) 42%, transparent);
+		outline-offset: 2px;
+	}
 
 .checkout-opts {
 	display: flex;

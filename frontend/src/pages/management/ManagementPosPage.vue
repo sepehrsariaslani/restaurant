@@ -510,7 +510,7 @@
 
     <PosBomSheet
       :open="customizationSheet.open"
-      :بارگذاری="customizationSheet.بارگذاری"
+      :loading="customizationSheet.بارگذاری"
       :error="customizationSheet.error"
       :item="customizationSheet.item"
       :ingredients="customizationSheet.ingredients"
@@ -1717,12 +1717,18 @@ function closeTicketTab(ticketId) {
   applyTicketSnapshot(fallbackTicket?.snapshot || createEmptyTicketSnapshot())
 }
 
-function resetCurrentInvoiceState() {
+function resetCurrentInvoiceState({ preserveFeedback = false } = {}) {
+  const previousSuccess = successMessage.value
+  const previousError = error.value
   editingOriginalOrder.isEditing = false
   editingOriginalOrder.name = ''
   editingOriginalOrder.order_code = ''
   editingOriginalOrder.draftSignature = ''
   applyTicketSnapshot(createEmptyTicketSnapshot())
+  if (preserveFeedback) {
+    successMessage.value = previousSuccess
+    error.value = previousError
+  }
 }
 
 function patchFinancial(partial) {
@@ -3428,6 +3434,12 @@ function confirmCustomizationAdd() {
     return
   }
   const normalized = normalizeCartCustomization(customizationSheet.customization, customizationSheet.ingredients)
+  const customizationIngredients = (customizationSheet.ingredients || []).map((ingredient) => ({
+    key: String(ingredient.key || ingredient.name || '').trim(),
+    name: String(ingredient.name || '').trim(),
+    customer_label: String(ingredient.customer_label || '').trim(),
+    is_included_by_default: Number(ingredient.is_included_by_default || 0),
+  }))
   
   // Detect if this is a variant-only selection
   const hasVariantSelectors = customizationSheet.modifierGroups.some(g => g.group_name.startsWith('variant::'));
@@ -3512,12 +3524,6 @@ function confirmCustomizationAdd() {
     }
   }
 
-  const customizationIngredients = (customizationSheet.ingredients || []).map((ingredient) => ({
-    key: String(ingredient.key || ingredient.name || '').trim(),
-    name: String(ingredient.name || '').trim(),
-    customer_label: String(ingredient.customer_label || '').trim(),
-    is_included_by_default: Number(ingredient.is_included_by_default || 0),
-  }))
   const nextQty = Number(Number(customizationSheet.qty || 1).toFixed(3))
   const nextPrice = Number(sheetPreview.value.unitPrice || customizationSheet.item.base_price || 0)
 
@@ -4336,6 +4342,23 @@ function resolveCustomerFromQuery() {
   }
 }
 
+function refreshPOSAfterSubmit() {
+  const requests = [loadOpenInvoices(true)]
+
+  // The cashier should be ready for the next ticket as soon as the write
+  // endpoint succeeds.  History panes are refreshed in the background only
+  // when they are visible (or already populated), instead of keeping the
+  // checkout button in a loading state for two extra list requests.
+  if (leftPanelTab.value === 'history' || todayTransactions.value.length) {
+    requests.push(loadTodayTransactions(true))
+  }
+  if (leftPanelTab.value === 'recent' || recentOrders.value.length) {
+    requests.push(loadRecentOrders(true))
+  }
+
+  Promise.allSettled(requests).catch(() => {})
+}
+
 async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {
   if (!cart.length) {
     error.value = 'حداقل یک محصول به سبد اضافه کنید.'
@@ -4370,7 +4393,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       })
       successMessage.value = `آیتم‌ها به میز ${selectedTable.table_number} اضافه شد.`
       await refreshSelectedDineInTableOrders()
-      resetCurrentInvoiceState()
+      resetCurrentInvoiceState({ preserveFeedback: true })
       form.order_mode = 'dine_in'
       form.place = selectedTable.label
       saveActiveTicketSnapshot()
@@ -4411,7 +4434,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     if (editingOriginalOrder.draftSignature && currentSignature === editingOriginalOrder.draftSignature) {
       successMessage.value = `فاکتور ${editingOriginalOrder.order_code || editingOriginalOrder.name} بدون تغییر باز ماند.`
       error.value = ''
-      await loadOpenInvoices(true)
+      refreshPOSAfterSubmit()
       saveActiveTicketSnapshot()
       return
     }
@@ -4427,11 +4450,23 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       const payResult = await settlePOSOrder(code, paymentPayload)
       let siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
       
-      let dnInfo = ''
       if (withProduction) {
-        const deliverResult = await deliverInvoiceOnly(code)
-        dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
-        successMessage.value = `فاکتور ${code} تسویه و تحویل شد.${siInfo}${dnInfo}`
+        // Payment is the customer-facing critical path.  Delivery/production
+        // may create several stock documents, so let it finish in the
+        // background instead of holding the cashier for another request.
+        successMessage.value = `فاکتور ${code} تسویه شد.${siInfo} صدور رسید تحویل در پس‌زمینه ادامه دارد.`
+        void deliverInvoiceOnly(code)
+          .then((deliverResult) => {
+            const dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
+            successMessage.value = `فاکتور ${code} تسویه و تحویل شد.${siInfo}${dnInfo}`
+            refreshPOSAfterSubmit()
+          })
+          .catch((deliveryErr) => {
+            // The invoice is already paid; surface a retryable delivery error
+            // without treating the completed payment as failed.
+            error.value = deliveryErr.message || `تحویل فاکتور ${code} ناموفق بود.`
+            refreshPOSAfterSubmit()
+          })
       } else {
         successMessage.value = `فاکتور ${code} با موفقیت تسویه شد.${siInfo}`
       }
@@ -4440,7 +4475,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       editingOriginalOrder.name = ''
       
       if (financial.createNextInvoice) {
-        resetCurrentInvoiceState()
+        resetCurrentInvoiceState({ preserveFeedback: true })
         saveActiveTicketSnapshot()
       } else {
         saveActiveTicketSnapshot()
@@ -4463,8 +4498,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         recentOrders.value[recentIdx].status = withProduction ? 'delivered' : 'paid'
         recentOrders.value[recentIdx].payment_method = paymentPayload.method
       }
-      await loadTodayTransactions(true)
-      await loadRecentOrders(true)
+      refreshPOSAfterSubmit()
       window.setTimeout(() => {
         refreshHardwareStatus()
       }, 0)
@@ -4577,7 +4611,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
         // ثبت و تسویه یکجا (همه چی)
         const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
         const dnInfo = result.delivery_note ? ` | رسید: ${result.delivery_note}` : ''
-        successMessage.value = `سفارش ${orderCode} تسویه و برای تولید/تحویل ثبت شد.${siInfo}${dnInfo}`
+        successMessage.value = `سفارش ${orderCode} ثبت و تسویه شد؛ دستور تولید/تحویل در پس‌زمینه صف شد.${siInfo}${dnInfo}`
       } else if (editingOriginalOrder.isEditing) {
         // تسویه از فاکتور باز
         successMessage.value = `فاکتور ${orderCode} تسویه شد.`
@@ -4616,22 +4650,16 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       autoPrintReceipt()
     }
 
-    if (payNow) {
-      await loadTodayTransactions(true)
-      await loadRecentOrders(true)
-    }
-
     if (financial.createNextInvoice) {
-      resetCurrentInvoiceState()
+      resetCurrentInvoiceState({ preserveFeedback: true })
       saveActiveTicketSnapshot()
     } else {
       saveActiveTicketSnapshot()
       window.location.href = '/management/orders'
     }
 
-    // Refresh only open invoices to keep the badge up to date.
-    // Recent orders and today transactions will fetch when their tabs are opened.
-    loadOpenInvoices()
+    // Refresh operational lists without blocking the next customer.
+    refreshPOSAfterSubmit()
     window.setTimeout(() => {
       refreshHardwareStatus()
     }, 0)

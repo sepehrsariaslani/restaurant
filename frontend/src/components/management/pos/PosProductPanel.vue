@@ -209,13 +209,14 @@
 											<Plus :size="14" :stroke-width="2.4" />
 										</button>
 										<button
-											v-if="supportsCustomization(item)"
 											type="button"
-											class="compact-action-btn"
-											:title="`سفارشی سازی ${item.title || item.name}`"
+											class="compact-action-btn compact-action-btn--bom"
+											title="`BOM و سفارشی سازی ${item.title || item.name}`"
+											aria-label="BOM و سفارشی سازی"
 											@click="$emit('open-bom', item)"
 										>
 											<SlidersHorizontal :size="14" :stroke-width="2.3" />
+											<span class="compact-bom-label">BOM</span>
 										</button>
 									</div>
 								</article>
@@ -224,7 +225,10 @@
 							<template v-else>
 								<article
 									class="product-card"
-									:class="{ 'out-of-stock': Number(item.out_of_stock) === 1 }"
+									:class="{
+										'out-of-stock': Number(item.out_of_stock) === 1,
+										'has-qty': quantityValue(item.slug) > 0,
+									}"
 									v-for="item in group.items"
 									:key="item.slug || item.name"
 								>
@@ -263,8 +267,15 @@
 												+
 											</button>
 										</div>
-										<button type="button" class="bom-btn" @click="$emit('open-bom', item)">
-											BOM
+										<button
+											type="button"
+											class="bom-btn"
+											title="BOM و سفارشی سازی محصول"
+											aria-label="BOM و سفارشی سازی محصول"
+											@click.stop="$emit('open-bom', item)"
+										>
+											<SlidersHorizontal :size="13" :stroke-width="2.3" aria-hidden="true" />
+											<span>BOM</span>
 										</button>
 									</div>
 								</article>
@@ -546,24 +557,20 @@ function quantityValue(slug) {
 	return Number(props.quantityMap?.[slug] || 0);
 }
 
-function supportsCustomization(item = {}) {
-	return Boolean(
-		Number(item?.has_customization || 0) === 1 ||
-		Number(item?.restaurant_builder_active || 0) === 1,
-	);
-}
 </script>
 
 <style scoped>
 .products-panel {
-	--mg-primary: var(--mg-primary);
-	--mg-primary-rgb: var(--mg-primary-rgb);
-	--mg-primary: var(--mg-success);
-	--mg-primary-rgb: var(--mg-success-rgb);
+	/* Use the page-level management tokens directly. The previous
+	 * self-referential aliases made some controls resolve to `unset` in
+	 * Chromium (especially after the cart changed state). */
 	--pos-white: var(--mg-bg-surface);
-	--mg-text-main: var(--mg-text-main);
-	--mg-border-light: var(--mg-border-light);
-	--mg-bg-page: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
+	--pos-primary: var(--mg-primary);
+	--pos-primary-rgb: var(--mg-primary-rgb);
+	--pos-success: var(--mg-success);
+	--pos-success-rgb: var(--mg-success-rgb);
+	--pos-border: var(--mg-border-light);
+	--pos-page: var(--mg-bg-page);
 	border-radius: 24px;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	background: linear-gradient(180deg, color-mix(in srgb, var(--mg-bg-surface) 62%, var(--mg-bg-surface) 38%) 0%, color-mix(in srgb, var(--mg-bg-surface) 96%, var(--mg-bg-surface) 4%) 100%);
@@ -968,11 +975,20 @@ function supportsCustomization(item = {}) {
 		border-color 0.15s ease;
 }
 
-.product-card.out-of-stock {
-	opacity: 0.55;
-}
+	.product-card.out-of-stock {
+		opacity: 0.55;
+	}
 
-.product-card.out-of-stock .product-image {
+	.product-card.has-qty {
+		border-color: color-mix(in srgb, var(--mg-primary) 72%, var(--mg-border-light) 28%);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 12%, transparent), 0 16px 32px color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	}
+
+	.product-card.has-qty .counter {
+		background: color-mix(in srgb, var(--mg-primary) 10%, var(--mg-bg-surface) 90%);
+	}
+
+	.product-card.out-of-stock .product-image {
 	filter: grayscale(0.9);
 }
 
@@ -1071,14 +1087,15 @@ function supportsCustomization(item = {}) {
 	font-variant-numeric: tabular-nums;
 }
 
-.product-actions {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.35rem;
-	padding: 0.3rem 0.6rem 0.55rem;
-	margin-top: auto;
-}
+	.product-actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.35rem;
+		padding: 0.3rem 0.6rem 0.55rem;
+		margin-top: auto;
+		flex-wrap: wrap;
+	}
 
 .products-grid.mode-list .product-actions {
 	padding: 0.3rem 0.55rem;
@@ -1117,22 +1134,34 @@ function supportsCustomization(item = {}) {
 	font-variant-numeric: tabular-nums;
 }
 
-.bom-btn {
-	border: 1px solid var(--mg-primary);
-	background: var(--mg-primary);
-	color: var(--mg-bg-surface);
-	border-radius: 10px;
-	padding: 0.38rem 0.72rem;
-	cursor: pointer;
-	font-size: 0.72rem;
-	font-weight: 600;
-	min-height: 28px;
-	transition: opacity 0.12s ease;
-}
+	.bom-btn {
+		border: 1px solid color-mix(in srgb, var(--mg-primary) 84%, #000 16%);
+		background: var(--mg-primary);
+		color: #fff;
+		border-radius: 10px;
+		padding: 0.32rem 0.48rem;
+		cursor: pointer;
+		font-size: 0.68rem;
+		font-weight: 700;
+		min-height: 30px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.2rem;
+		white-space: nowrap;
+		transition: opacity 0.12s ease, transform 0.12s ease;
+	}
 
-.bom-btn:hover {
-	opacity: 0.88;
-}
+	.bom-btn:hover,
+	.bom-btn:focus-visible {
+		opacity: 0.92;
+		transform: translateY(-1px);
+	}
+
+	.bom-btn:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--mg-primary) 46%, transparent);
+		outline-offset: 2px;
+	}
 
 .dark-input {
 	border: 1px solid var(--mg-border-light);
@@ -1236,6 +1265,19 @@ function supportsCustomization(item = {}) {
 	background: var(--mg-primary);
 	color: var(--mg-bg-surface);
 	border-color: var(--mg-primary);
+}
+
+.compact-action-btn--bom {
+	width: auto;
+	min-width: 48px;
+	padding: 0 0.38rem;
+	gap: 0.18rem;
+	font-size: 0.62rem;
+	font-weight: 800;
+}
+
+.compact-bom-label {
+	line-height: 1;
 }
 
 .compact-action-btn--primary:hover {
