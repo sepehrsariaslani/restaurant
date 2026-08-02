@@ -1,11 +1,12 @@
 <template>
-  <ManagementPageScaffold title="انبارداری هوشمند" subtitle="مواد اولیه، انبارها، موجودی، خرید، تولید، ضایعات و انبارگردانی">
+  <ManagementPageScaffold :title="activeTabLabel" :subtitle="activeTabSubtitle">
     <template #actions>
       <button type="button" class="secondary-btn" @click="reloadActiveTab" :disabled="loadingAny">
         {{ loadingAny ? 'در حال بروزرسانی...' : 'بروزرسانی' }}
       </button>
     </template>
 
+    <div class="inventory-workspace">
     <div v-if="boot" class="totals-grid boot-kpis">
       <div class="total-box"><small>مواد اولیه</small><strong>{{ formatQty(boot.kpis.materials_total) }}</strong></div>
       <div class="total-box"><small>انبارها</small><strong>{{ formatQty(boot.kpis.warehouses_total) }}</strong></div>
@@ -16,19 +17,6 @@
       <div class="total-box"><small>ضایعات/خسارت ۳۰ روز</small><strong>{{ formatMoneyValue(boot.kpis.waste_damage_30d_value) }}</strong></div>
       <div class="total-box"><small>خریدهای باز</small><strong>{{ formatQty(boot.kpis.open_purchase_orders) }}</strong></div>
     </div>
-
-    <nav class="tabs-bar">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        type="button"
-        :class="['tab-btn', { active: activeTab === tab.key }]"
-        @click="setActiveTab(tab.key)"
-      >
-        {{ tab.label }}
-        <span v-if="tab.key === 'reorder' && boot && boot.kpis.below_reorder > 0" class="badge">{{ formatQty(boot.kpis.below_reorder) }}</span>
-      </button>
-    </nav>
 
     <!-- ======================= موجودی و ارزش ======================= -->
     <section v-if="activeTab === 'overview'" class="tab-body">
@@ -144,7 +132,7 @@
         </div>
       </ManagementSurfaceCard>
 
-      <div v-if="materialForm" class="popup-backdrop" @click.self="materialForm = null">
+      <div v-if="materialForm" class="inventory-inline-detail material-form-inline" @click.self="materialForm = null">
         <div class="popup">
           <h3>{{ materialForm.name ? 'ویرایش ماده اولیه' : 'ماده اولیه جدید' }}</h3>
           <p class="error" v-if="materialFormError">{{ materialFormError }}</p>
@@ -249,7 +237,7 @@
         </div>
       </ManagementSurfaceCard>
 
-      <div v-if="warehouseForm" class="popup-backdrop" @click.self="warehouseForm = null">
+      <div v-if="warehouseForm" class="inventory-inline-detail warehouse-form-inline" @click.self="warehouseForm = null">
         <div class="popup">
           <h3>{{ warehouseForm.name ? 'ویرایش انبار' : 'انبار جدید' }}</h3>
           <p class="error" v-if="warehouseFormError">{{ warehouseFormError }}</p>
@@ -458,7 +446,7 @@
         </div>
       </ManagementSurfaceCard>
 
-      <div v-if="materialRequestForm" class="popup-backdrop" @click.self="materialRequestForm = null">
+      <div v-if="materialRequestForm" class="inventory-inline-detail request-form-inline" @click.self="materialRequestForm = null">
         <div class="popup wide material-request-popup">
           <header class="request-popup-head">
             <div>
@@ -509,7 +497,7 @@
         </div>
       </div>
 
-      <div v-if="materialRequestDetail" class="popup-backdrop" @click.self="materialRequestDetail = null">
+      <div v-if="materialRequestDetail" class="inventory-inline-detail request-detail-inline" @click.self="materialRequestDetail = null">
         <div class="popup wide material-request-detail-popup">
           <header class="request-popup-head">
             <div>
@@ -624,7 +612,7 @@
         </div>
       </ManagementSurfaceCard>
 
-      <div v-if="purchaseDetail" class="popup-backdrop" @click.self="purchaseDetail = null">
+      <div v-if="purchaseDetail" class="inventory-inline-detail purchase-detail-inline" @click.self="purchaseDetail = null">
         <div class="popup wide">
           <h3>سفارش خرید {{ purchaseDetail.name }}</h3>
           <div class="meta-grid">
@@ -675,7 +663,7 @@
         </div>
       </div>
 
-      <div v-if="supplierForm" class="popup-backdrop" @click.self="supplierForm = null">
+      <div v-if="supplierForm" class="inventory-inline-detail supplier-form-inline" @click.self="supplierForm = null">
         <div class="popup">
           <h3>تأمین‌کننده جدید</h3>
           <p class="error" v-if="supplierFormError">{{ supplierFormError }}</p>
@@ -1037,11 +1025,12 @@
         </div>
       </ManagementSurfaceCard>
     </section>
+    </div>
   </ManagementPageScaffold>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
@@ -1101,7 +1090,30 @@ const tabs = [
   { key: 'costs', label: 'بهای تمام‌شده' },
 ]
 
-const activeTab = ref('overview')
+const inventoryTabKeys = new Set(tabs.map((tab) => tab.key))
+
+function initialInventoryTab() {
+  if (typeof window === 'undefined') return 'overview'
+  const requested = new URLSearchParams(window.location.search).get('tab') || 'overview'
+  return inventoryTabKeys.has(requested) ? requested : 'overview'
+}
+
+const activeTab = ref(initialInventoryTab())
+const tabSubtitles = {
+  overview: 'موجودی مقداری و ارزش ریالی انبارها',
+  materials: 'تعریف مواد اولیه، واحدها و نقطه سفارش',
+  warehouses: 'مدیریت انبارها و مقصد دریافت خرید',
+  movements: 'ثبت ورود، خروج، انتقال و ضایعات',
+  reorder: 'هشدار کمبود و پیشنهاد خرید',
+  requests: 'ثبت نیاز مواد و انتقال به مرحله خرید',
+  purchase: 'سفارش خرید، دریافت جزئی و دریافت کامل',
+  production: 'برنامه‌ریزی تولید و مصرف مواد',
+  losses: 'ثبت اوتی، خسارت و مرجوعی',
+  count: 'شمارش موجودی و مغایرت‌گیری',
+  costs: 'محاسبه بهای مواد و فرمول ساخت',
+}
+const activeTabLabel = computed(() => tabs.find((tab) => tab.key === activeTab.value)?.label || 'انبارداری هوشمند')
+const activeTabSubtitle = computed(() => tabSubtitles[activeTab.value] || 'مدیریت هوشمند انبار')
 const boot = ref(null)
 const bootLoading = ref(false)
 
@@ -1245,6 +1257,7 @@ function openMaterialRequestForm(request = null) {
     }
   }
   materialRequestForm.value.items.forEach((line) => syncMaterialRequestLine(line))
+  nextTick(() => document.querySelector('.request-form-inline')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 }
 
 async function loadMaterialRequests() {
@@ -1271,6 +1284,8 @@ async function openMaterialRequestDetail(name) {
     const payload = await getManagementMaterialRequest(name)
     materialRequestDetail.value = payload.request
     materialRequestDetail.value.purchase_orders = payload.purchase_orders || []
+    await nextTick()
+    document.querySelector('.request-detail-inline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   } catch (err) {
     requestError.value = err.message || 'دریافت جزئیات درخواست ناموفق بود.'
   }
@@ -1310,6 +1325,7 @@ async function saveMaterialRequest(submit = false) {
 
 function openLinkedPurchase(name) {
   materialRequestDetail.value = null
+  setActiveTab('purchase')
   openPurchaseDetail(name)
 }
 
@@ -1792,6 +1808,8 @@ async function openPurchaseDetail(name) {
       receiveLines[row.item_code] = 0
     })
     receiveWarehouse.value = payload.order.target_warehouse || boot.value?.settings?.default_warehouse || ''
+    await nextTick()
+    document.querySelector('.purchase-detail-inline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   } catch (err) {
     purchaseError.value = err.message || 'خطا در دریافت جزئیات سفارش.'
   }
@@ -2136,6 +2154,10 @@ function toggleCostDetail(code) {
 // ------------------------- tab orchestration -------------------------
 function setActiveTab(key) {
   activeTab.value = key
+  if (typeof window !== 'undefined' && window.history?.replaceState) {
+    const url = `/management/inventory?tab=${encodeURIComponent(key)}`
+    window.history.replaceState({}, '', url)
+  }
   loadTabData(key)
 }
 
@@ -2183,6 +2205,34 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.inventory-workspace {
+  --accent-green: var(--mg-primary);
+  --accent-gold: var(--mg-success);
+  --surface-bg: var(--mg-bg-surface);
+  --surface-soft: var(--mg-bg-page);
+  --text-primary: var(--mg-text-main);
+  --text-muted: var(--mg-text-muted);
+  --border-color: var(--mg-border-light);
+  display: grid;
+  gap: 0.9rem;
+  color: var(--mg-text-main);
+}
+
+.inventory-workspace :deep(.surface-card) {
+  border-color: color-mix(in srgb, var(--mg-border) 78%, transparent);
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-page) 8%) 100%);
+  box-shadow: 0 16px 34px rgb(52 38 31 / 0.07);
+}
+
+.inventory-workspace :deep(.surface-head h3) {
+  color: var(--mg-text-main);
+}
+
+.inventory-workspace :deep(.surface-head p),
+.inventory-workspace .muted {
+  color: var(--mg-text-muted);
+}
+
 .tabs-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2359,27 +2409,38 @@ onMounted(async () => {
   gap: 0.5rem;
   align-items: center;
 }
-.popup-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(20, 24, 22, 0.45);
-  display: grid;
-  place-items: center;
-  z-index: 60;
+.inventory-inline-detail {
+  width: 100%;
+  display: block;
+  margin-top: 0.9rem;
+}
+
+.inventory-inline-detail .popup {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-page) 8%) 100%);
+  border: 1px solid color-mix(in srgb, var(--mg-border) 78%, transparent);
+  border-radius: 20px;
   padding: 1rem;
+  box-shadow: 0 16px 34px rgb(52 38 31 / 0.07);
 }
-.popup {
-  background: var(--surface-bg, #fff);
-  border-radius: 16px;
-  padding: 1rem 1.1rem;
-  width: min(680px, 100%);
-  max-height: 88vh;
-  overflow-y: auto;
-  display: grid;
-  gap: 0.65rem;
+
+.inventory-inline-detail .popup.wide {
+  width: 100%;
 }
-.popup.wide {
-  width: min(860px, 100%);
+
+.inventory-inline-detail .popup h3 {
+  color: var(--mg-text-main);
+}
+
+.inventory-inline-detail .popup .input,
+.inventory-inline-detail .popup select,
+.inventory-inline-detail .popup textarea {
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
+  border-color: var(--mg-border-light);
 }
 .request-toolbar {
   display: grid;

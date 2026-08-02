@@ -451,7 +451,106 @@ const navLinks = computed(() => {
 			caption: "موجودی، خرید، تولید و ضایعات",
 			iconComponent: InventoryIcon,
 			url: "/management/inventory",
-			group: "sales",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-overview",
+			label: "موجودی و ارزش",
+			shortLabel: "موجودی",
+			caption: "موجودی مقداری و مبلغی",
+			iconComponent: InventoryIcon,
+			url: "/management/inventory?tab=overview",
+			group: "inventory",
+		},
+		{
+			key: "management-material-requests",
+			label: "درخواست مواد",
+			shortLabel: "درخواست مواد",
+			caption: "ثبت نیاز و انتقال به خرید",
+			iconComponent: OrdersIcon,
+			url: "/management/inventory?tab=requests",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-materials",
+			label: "مواد اولیه",
+			shortLabel: "مواد",
+			caption: "کالاها، واحدها و نقطه سفارش",
+			iconComponent: ProductsIcon,
+			url: "/management/inventory?tab=materials",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-purchase",
+			label: "خرید مواد",
+			shortLabel: "خرید",
+			caption: "سفارش خرید و دریافت",
+			iconComponent: StoreIcon,
+			url: "/management/inventory?tab=purchase",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-warehouses",
+			label: "انبارها",
+			shortLabel: "انبارها",
+			caption: "مدیریت انبار و مقصد دریافت",
+			iconComponent: LayersIcon,
+			url: "/management/inventory?tab=warehouses",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-movements",
+			label: "ورود و خروج",
+			shortLabel: "گردش",
+			caption: "گردش، انتقال و ضایعات",
+			iconComponent: FileTextIcon,
+			url: "/management/inventory?tab=movements",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-reorder",
+			label: "نقطه سفارش",
+			shortLabel: "هشدار",
+			caption: "کمبود و پیشنهاد خرید",
+			iconComponent: SurveyIcon,
+			url: "/management/inventory?tab=reorder",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-production",
+			label: "برنامه تولید",
+			shortLabel: "تولید",
+			caption: "نیاز مواد و تولید دستی",
+			iconComponent: KitchenIcon,
+			url: "/management/inventory?tab=production",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-losses",
+			label: "ضایعات و اوتی‌ها",
+			shortLabel: "ضایعات",
+			caption: "ثبت و گزارش خسارت",
+			iconComponent: WalletIcon,
+			url: "/management/inventory?tab=losses",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-count",
+			label: "انبارگردانی",
+			shortLabel: "گردش شمارش",
+			caption: "شمارش و مغایرت‌گیری",
+			iconComponent: SettingsIcon,
+			url: "/management/inventory?tab=count",
+			group: "inventory",
+		},
+		{
+			key: "management-inventory-costs",
+			label: "بهای تمام‌شده",
+			shortLabel: "هزینه مواد",
+			caption: "محاسبه بهای مواد و فرمول",
+			iconComponent: CalculatorIcon,
+			url: "/management/inventory?tab=costs",
+			group: "inventory",
 		},
 		{
 			key: "management-club",
@@ -816,6 +915,29 @@ function isGroupOpen(key) {
 }
 
 function isLinkActive(key) {
+	if (props.page === "management-inventory") {
+		const inventoryTabs = {
+			"management-inventory-overview": "overview",
+			"management-material-requests": "requests",
+			"management-inventory-materials": "materials",
+			"management-inventory-purchase": "purchase",
+			"management-inventory-warehouses": "warehouses",
+			"management-inventory-movements": "movements",
+			"management-inventory-reorder": "reorder",
+			"management-inventory-production": "production",
+			"management-inventory-losses": "losses",
+			"management-inventory-count": "count",
+			"management-inventory-costs": "costs",
+		};
+		if (key === "management-inventory") {
+			const currentTab = new URLSearchParams(window.location.search).get("tab") || "overview";
+			return currentTab === "overview";
+		}
+		if (inventoryTabs[key]) {
+			const currentTab = new URLSearchParams(window.location.search).get("tab") || "overview";
+			return currentTab === inventoryTabs[key];
+		}
+	}
 	if (props.page === key) return true;
 	if (props.page.startsWith(key + "-")) return true;
 	if (key === "management-products" && props.page.startsWith("management-product")) return true;
