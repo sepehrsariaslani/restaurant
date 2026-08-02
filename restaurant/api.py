@@ -54,6 +54,10 @@ CORE_ORDER_STATUS_MAP = {
 	"completed": "delivered",
 	"cancelled": "cancelled",
 }
+# Schema helpers are called from every POS write.  Keep their warm-state in
+# the worker so normal orders do not repeat Custom Field metadata queries.
+_CHECKOUT_SALES_ORDER_FIELDS_READY_SITES = set()
+
 DEFAULT_CHECKOUT_MAP_CONFIG = {
 	"provider": "neshan",
 	"script_url": "https://static.neshan.org/sdk/leaflet/1.4.0/leaflet.js",
@@ -5052,6 +5056,7 @@ def _create_sales_order(
 	order_context=None,
 	financial_modifiers=None,
 	totals=None,
+	commit=True,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5473,7 +5478,8 @@ def _create_sales_order(
 	if _has_column("Sales Order", "restaurant_status"):
 		so_doc.db_set("restaurant_status", "confirmed", update_modified=False)
 
-	frappe.db.commit()
+	if commit:
+		frappe.db.commit()
 
 	return {
 		"status": "success",
@@ -7223,6 +7229,10 @@ def _ensure_checkout_address_fields():
 
 
 def _ensure_checkout_sales_order_fields():
+	global _CHECKOUT_SALES_ORDER_FIELDS_READY_SITES
+	site_key = getattr(getattr(frappe, "local", None), "site", "__default__") or "__default__"
+	if site_key in _CHECKOUT_SALES_ORDER_FIELDS_READY_SITES:
+		return
 	if not frappe.db.exists("DocType", "Sales Order"):
 		return
 
@@ -7312,6 +7322,7 @@ def _ensure_checkout_sales_order_fields():
 
 	if changed:
 		frappe.clear_cache(doctype="Sales Order")
+	_CHECKOUT_SALES_ORDER_FIELDS_READY_SITES.add(site_key)
 
 
 def _normalize_delivery_geo(lat_value, lng_value, required=False):
@@ -10859,6 +10870,7 @@ def place_order(
 	order_context=None,
 	financial_modifiers=None,
 	totals=None,
+	commit=True,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -10948,6 +10960,7 @@ def place_order(
 		order_context=order_context,
 		financial_modifiers=financial_modifiers,
 		totals=totals,
+		commit=commit,
 	)
 
 
@@ -14496,10 +14509,14 @@ def get_management_pos_boot(branch=None):
 	}
 
 
-@frappe.whitelist()
-def create_pos_order(payload):
-    # ثبت سفارش: فقط SO بساز (بدون تولید، بدون پرداخت)
-    _ensure_management_access()
+def _create_pos_order_payload(payload, commit=True):
+    """Create the POS Sales Order and optionally leave the transaction open.
+
+    Combined POS actions used to call the public create endpoint first, which
+    committed the Sales Order, and then start a second transaction for the
+    Sales Invoice.  Keeping both writes in one request/transaction removes a
+    full commit round-trip while preserving the same public API behavior.
+    """
     payload = _parse_json(payload, {})
     if not isinstance(payload, dict):
         payload = {}
@@ -14533,16 +14550,28 @@ def create_pos_order(payload):
         order_context=order_context,
         financial_modifiers=financial_modifiers,
         totals=totals_payload,
+        # The wrapper owns the commit so combined POS actions can include the
+        # Sales Invoice in the same transaction.
+        commit=False,
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
     _append_sales_order_note(so_name, "[ORDER] Order created.")
-    frappe.db.commit()
+    if commit:
+        frappe.db.commit()
     return {
         "status": "success",
         "order_id": so_name,
         "order_code": result.get("order_code") or "",
     }
+
+
+@frappe.whitelist()
+def create_pos_order(payload):
+    # ثبت سفارش: فقط SO بساز (بدون تولید، بدون پرداخت)
+    _ensure_management_access()
+    return _create_pos_order_payload(payload, commit=True)
+
 
 @frappe.whitelist()
 def produce_pos_order(order_name):
@@ -14575,17 +14604,19 @@ def create_and_pay_pos_order(payload):
     if not isinstance(payload, dict):
         payload = {}
     
-    # 1. فقط SO بساز (بدون پرداخت)
-    order_result = create_pos_order(payload)
+    # Build the SO and invoice in one request/transaction.  The old path
+    # committed once in create_pos_order and again in settle_pos_order.
+    order_result = _create_pos_order_payload(payload, commit=False)
     so_name = order_result.get("order_id", "")
-    
-    # 2. از روی همون SO, SI + Payment بزن
+
     payment_info = _parse_json(payload.get("payment"), {})
     settle_result = settle_pos_order(
         order_name=so_name,
         payment=payment_info,
+        commit=False,
     )
-    
+    frappe.db.commit()
+
     return {
         "order_id": so_name,
         "order_code": order_result.get("order_code", ""),
@@ -14684,7 +14715,7 @@ def _set_sales_order_payment_method(so_name, method):
         )
 
 @frappe.whitelist()
-def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
+def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, commit=True):
     _ensure_management_access()
     if not order_name:
         frappe.throw(_("Order name is required."))
@@ -14890,7 +14921,8 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Settle POS Club Effects")
 
-    frappe.db.commit()
+    if commit:
+        frappe.db.commit()
     return result
 
 
@@ -15150,14 +15182,16 @@ def create_and_settle_pos_order(payload):
     # تسویه و تحویل: SO + SI + Payment (Sync) -> Production + DN (Background)
     _ensure_management_access()
     payload = _parse_json(payload, {})
+    if not isinstance(payload, dict):
+        payload = {}
 
-    # 1. ثبت سفارش (Sync)
-    order_result = create_pos_order(payload)
+    # Keep the Sales Order and Sales Invoice in one transaction.  Production
+    # and delivery remain outside the cashier's critical path below.
+    order_result = _create_pos_order_payload(payload, commit=False)
     so_name = order_result.get("order_id", "")
 
-    # 2. تسویه (SI + Payment) (Sync)
     payment = payload.get("payment", {})
-    settle_result = settle_pos_order(order_name=so_name, payment=payment)
+    settle_result = settle_pos_order(order_name=so_name, payment=payment, commit=False)
 
     # 3. Production + Delivery Note (Background)
     _set_restaurant_order_status(so_name, "preparing", force=True)
