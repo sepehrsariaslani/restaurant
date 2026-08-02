@@ -1877,7 +1877,9 @@ def _pos_shift_settings():
 	}
 
 
-def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=True):
+def _create_work_order_stock_entry(
+	work_order_name, purpose, qty, submit_doc=True, allow_negative_stock=False
+):
 	"""Create Stock Entry for a Work Order - uses get_items() before insert()"""
 	wo = frappe.get_doc("Work Order", work_order_name)
 	se = frappe.new_doc("Stock Entry")
@@ -1938,7 +1940,7 @@ def _create_work_order_stock_entry(work_order_name, purpose, qty, submit_doc=Tru
 	se.flags.ignore_validate = True
 	se.insert()
 	if submit_doc:
-		se.submit()
+		_submit_stock_document(se, allow_negative_stock=allow_negative_stock)
 	else:
 		se.save()
 	return se.name
@@ -1963,8 +1965,30 @@ def _existing_delivery_note_for_sales_order(so_name, submitted_only=False):
 	return ""
 
 
-def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit_doc=True):
+def _submit_stock_document(doc, allow_negative_stock=False):
+	if not allow_negative_stock:
+		doc.submit()
+		return
+
+	previous_value = cint(frappe.db.get_single_value("Stock Settings", "allow_negative_stock"))
+	changed = previous_value != 1
+	if changed:
+		frappe.db.set_single_value("Stock Settings", "allow_negative_stock", 1)
+		frappe.clear_cache(doctype="Stock Settings")
+
+	try:
+		doc.submit()
+	finally:
+		if changed:
+			frappe.db.set_single_value("Stock Settings", "allow_negative_stock", previous_value)
+			frappe.clear_cache(doctype="Stock Settings")
+
+
+def _create_delivery_note_for_sales_order(
+	so_name, fg_warehouse_map=None, submit_doc=True, allow_negative_stock=False
+):
 	"""Create Delivery Note from SO - forces qty regardless of delivered_qty"""
+	fg_warehouse_map = fg_warehouse_map or {}
 	# Check if a DN already exists
 	if so_name and frappe.db.exists("DocType", "Delivery Note Item"):
 		row = frappe.get_all("Delivery Note Item",
@@ -1989,7 +2013,7 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 		pending_qty = flt(item.qty) - flt(item.delivered_qty)
 		if pending_qty <= 0:
 			continue
-		warehouse = item.warehouse or default_wh
+		warehouse = fg_warehouse_map.get(item.item_code) or item.warehouse or default_wh
 		if not warehouse:
 			item_default = frappe.get_all("Item Default",
 				filters={"parent": item.item_code, "company": so.company},
@@ -2017,9 +2041,11 @@ def _create_delivery_note_for_sales_order(so_name, fg_warehouse_map=None, submit
 
 	dn.insert()
 	if submit_doc:
-		dn.submit()
+		_submit_stock_document(dn, allow_negative_stock=allow_negative_stock)
 	return dn.name
-def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None, force=False):
+def _run_sales_order_auto_flow(
+	order_name, trigger="manual", payment_status=None, force=False, allow_negative_stock=False
+):
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		return {"status": "skipped", "reason": "order_not_found"}
@@ -2043,6 +2069,7 @@ def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None
 		"submitted_work_orders": [],
 		"stock_entries": [],
 		"delivery_note": "",
+		"fg_warehouse_map": {},
 		"errors": [],
 		"final_restaurant_status": "",
 	}
@@ -2116,6 +2143,7 @@ def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None
 					"Material Transfer for Manufacture",
 					pending_transfer,
 					submit_doc=settings.get("submit_stock_entries"),
+					allow_negative_stock=allow_negative_stock,
 				)
 				if se_name:
 					summary["stock_entries"].append(se_name)
@@ -2137,6 +2165,7 @@ def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None
 					"Manufacture",
 					pending_manufacture,
 					submit_doc=settings.get("submit_stock_entries"),
+					allow_negative_stock=allow_negative_stock,
 				)
 				if se_name:
 					summary["stock_entries"].append(se_name)
@@ -2170,6 +2199,7 @@ def _run_sales_order_auto_flow(order_name, trigger="manual", payment_status=None
 				ticket_doc.db_set("status", "in_progress", update_modified=False)
 
 	has_production = bool(ticket_docs)
+	summary["fg_warehouse_map"] = fg_warehouse_map
 	all_completed = has_production and completed_tickets == len(ticket_docs)
 	if any_started:
 		_set_restaurant_order_status(so_name, "preparing")
@@ -9430,6 +9460,45 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 			continue
 		count = selected_by_group.get(group["group_name"], 0)
 		if count < cint(group["min_select"]):
+			default_option = next(
+				(
+					option
+					for option in group.get("options", [])
+					if cint(option.get("is_default"))
+					and cint(option.get("is_selectable") if option.get("is_selectable") not in (None, "") else 1) == 1
+					and not (option.get("option_item") or "").strip()
+					and flt(option.get("unit_rate") or option.get("price_delta") or option.get("base_price") or 0) == 0
+				),
+				None,
+			)
+			if (
+				count == 0
+				and default_option
+				and (group.get("selection_mode") or "single") == "single"
+				and cint(group["min_select"]) <= 1
+			):
+				option_name = (default_option.get("name") or "").strip()
+				option_qty = flt(
+					default_option.get("option_qty")
+					or default_option.get("base_qty")
+					or default_option.get("qty_step")
+					or 1
+				)
+				if option_name:
+					selected_by_group[group["group_name"]] += 1
+					count = selected_by_group[group["group_name"]]
+					normalized_selected_modifiers.append(
+						{
+							"group": group["group_name"],
+							"option": option_name,
+							"qty": option_qty if option_qty > 0 else 1,
+							"type": default_option.get("action_type") or default_option.get("modifier_type") or "add_on",
+							"item_code": "",
+							"replacement_for_item": "",
+							"alternative_bom": "",
+						}
+					)
+		if count < cint(group["min_select"]):
 			frappe.throw(_("Please select more options for group: {0}").format(group["title"]))
 		if count > cint(group["max_select"]):
 			frappe.throw(_("Too many selected options for group: {0}").format(group["title"]))
@@ -12382,6 +12451,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	
 	# Fetch outstanding amounts in bulk to avoid N+1
 	outstanding_map = {}
+	sales_invoice_map = {}
 	if parent_names and frappe.db.exists("DocType", "Sales Invoice Item"):
 		si_items = frappe.get_all("Sales Invoice Item", filters={"sales_order": ["in", parent_names], "docstatus": 1}, fields=["parent", "sales_order"], ignore_permissions=True)
 		if si_items:
@@ -12389,13 +12459,29 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 			si_docs = frappe.get_all("Sales Invoice", filters={"name": ["in", si_names]}, fields=["name", "outstanding_amount"], ignore_permissions=True)
 			si_outstanding = {doc.name: flt(doc.outstanding_amount) for doc in si_docs}
 			for si_item in si_items:
+				sales_invoice_map.setdefault(si_item.sales_order, set()).add(si_item.parent)
 				if si_item.sales_order not in outstanding_map:
 					outstanding_map[si_item.sales_order] = 0.0
 				outstanding_map[si_item.sales_order] += si_outstanding.get(si_item.parent, 0.0)
 
+	delivery_exists_map = {}
+	if parent_names and frappe.db.exists("DocType", "Delivery Note Item"):
+		dn_items = frappe.get_all(
+			"Delivery Note Item",
+			filters={"against_sales_order": ["in", parent_names], "docstatus": 1},
+			fields=["against_sales_order"],
+			ignore_permissions=True,
+		)
+		for dn_item in dn_items:
+			if dn_item.against_sales_order:
+				delivery_exists_map[dn_item.against_sales_order] = True
+
 	payload = []
 	for row in rows:
 		order_status = _core_order_status(row)
+		delivery_exists = bool(delivery_exists_map.get(row.name))
+		if delivery_exists:
+			order_status = "delivered"
 		if normalized_status and order_status != normalized_status:
 			continue
 
@@ -12420,6 +12506,9 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"subtotal": flt(row.total or row.net_total),
 				"grand_total": flt(row.grand_total or row.total or row.net_total),
 				"outstanding_amount": flt(outstanding_map.get(row.name, flt(row.grand_total or row.total or row.net_total))),
+				"has_sales_invoice": bool(sales_invoice_map.get(row.name)),
+				"sales_invoices": sorted(sales_invoice_map.get(row.name, [])),
+				"delivery_exists": delivery_exists,
 				"created_at": _json_safe_datetime(created_at),
 				"cashier": row.owner or "",
 				"note": row.restaurant_note if has_note else "",
@@ -14583,6 +14672,17 @@ def _resolve_pos_mode_of_payment(method):
         return all_modes[0].name
     return method
 
+
+def _set_sales_order_payment_method(so_name, method):
+    if _has_column("Sales Order", "restaurant_payment_method"):
+        frappe.db.set_value(
+            "Sales Order",
+            so_name,
+            "restaurant_payment_method",
+            _normalize_payment_method(method),
+            update_modified=False,
+        )
+
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     _ensure_management_access()
@@ -14618,6 +14718,10 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
             "amount": 0, # Will be set to grand_total below
             "reference_no": (reference_no or payment.get("reference_no") or "").strip()
         }]
+    for split in splits:
+        split["method"] = _normalize_payment_method(split.get("method") or method)
+    primary_method = splits[0].get("method") if splits else method
+    credit_only = bool(splits) and all((split.get("method") or "") == "credit" for split in splits)
 
     result = {"sales_order": so_name}
     
@@ -14626,15 +14730,15 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
             make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
             si_doc = make_si(so_name)
             if hasattr(si_doc, "as_dict"):
-                si_doc.is_pos = 1
+                si_doc.is_pos = 0 if credit_only else 1
                 si_doc.update_stock = 0
             elif isinstance(si_doc, dict):
-                si_doc["is_pos"] = 1
+                si_doc["is_pos"] = 0 if credit_only else 1
                 si_doc["update_stock"] = 0
                 si_doc = frappe.get_doc(si_doc)
             else:
                 si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
-                si_doc.is_pos = 1
+                si_doc.is_pos = 0 if credit_only else 1
     
             grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
     
@@ -14751,7 +14855,13 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
             si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
             if si_outstanding <= 0.1:
                 frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
-                _set_restaurant_order_status(so_name, "paid", force=True)
+                current_restaurant_status = (
+                    frappe.db.get_value("Sales Order", so_name, "restaurant_status")
+                    if _has_column("Sales Order", "restaurant_status")
+                    else ""
+                ) or ""
+                if current_restaurant_status.strip().lower() != "delivered":
+                    _set_restaurant_order_status(so_name, "paid", force=True)
                 _append_sales_order_note(so_name, "[SETTLE] Invoice created and payment recorded.")
             else:
                 _append_sales_order_note(so_name, f"[SETTLE] Partially paid. Outstanding: {si_outstanding}")
@@ -14760,11 +14870,19 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None):
         frappe.log_error(frappe.get_traceback(), "Settle POS SI")
         frappe.throw(str(e))
         
-    if _has_column("Sales Order", "restaurant_payment_method"):
-        so_doc = frappe.get_doc("Sales Order", so_name)
-        # Store primary method
-        so_doc.restaurant_payment_method = splits[0].get("method") if splits else method
-        so_doc.save(ignore_permissions=True)
+    _set_sales_order_payment_method(so_name, primary_method)
+    _save_management_pos_payment(
+        so_name,
+        {
+            "method": primary_method,
+            "provider": (payment.get("provider") or "manual").strip().lower() or "manual",
+            "status": "paid" if flt(getattr(si_doc, "outstanding_amount", 0) or 0) <= 0.1 else "pending",
+            "reference_no": (reference_no or payment.get("reference_no") or "").strip(),
+            "rrn": (rrn or payment.get("rrn") or "").strip(),
+            "provider_payload": payment.get("provider_payload") or {},
+        },
+        run_auto_flow=False,
+    )
 
     # Customer club effects: wallet debit + cashback credit (idempotent).
     try:
@@ -14788,13 +14906,26 @@ def deliver_invoice_only(order_name):
     
     result = {"sales_order": so_name}
     try:
-        dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+        auto_flow = _run_sales_order_auto_flow(
+            so_name,
+            trigger="manual",
+            force=True,
+            allow_negative_stock=True,
+        )
+        result["auto_flow"] = auto_flow
+        dn_name = _create_delivery_note_for_sales_order(
+            so_name,
+            fg_warehouse_map=auto_flow.get("fg_warehouse_map") or {},
+            submit_doc=True,
+            allow_negative_stock=True,
+        )
         if dn_name:
             result["delivery_note"] = dn_name
     except Exception:
         frappe.log_error(frappe.get_traceback(), "DeliverInvoiceOnly DN")
         frappe.throw(_("Delivery Note creation failed."))
     
+    _set_restaurant_order_status(so_name, "delivered", force=True)
     _append_sales_order_note(so_name, "[DELIVER_ONLY] Delivery Note created. Invoice remains open.")
     frappe.db.commit()
     return result
@@ -15171,7 +15302,7 @@ def mark_management_order_paid(order_name, reference_no=None, rrn=None, provider
 		rrn=rrn,
 		provider_payload=provider_payload,
 	)
-	_save_management_pos_payment(so_name, payment_result, run_auto_flow=False)
+	settle_result = settle_pos_order(order_name=so_name, payment=payment_result)
 	_append_sales_order_note(so_name, "[PAYMENT] پرداخت سفارش ثبت شد (paid)")
 
 	frappe.db.commit()
@@ -15179,6 +15310,8 @@ def mark_management_order_paid(order_name, reference_no=None, rrn=None, provider
 		"status": "success",
 		"order_name": so_name,
 		"order_code": so_name,
+		"sales_invoice": settle_result.get("sales_invoice", ""),
+		"payment_entries": settle_result.get("payment_entries", []),
 		"payment": payment_result,
 		"restaurant_status": _core_order_status(frappe.get_doc("Sales Order", so_name)),
 	}
@@ -15398,6 +15531,35 @@ def get_management_order_detail(order_name, source=None):
 		if so_name:
 			doc = frappe.get_doc("Sales Order", so_name)
 			has_item_customization = _has_column("Sales Order Item", "restaurant_customization_json")
+			sales_invoice_names = []
+			outstanding_amount = flt(doc.grand_total or doc.total or doc.net_total)
+			if frappe.db.exists("DocType", "Sales Invoice Item"):
+				si_items = frappe.get_all(
+					"Sales Invoice Item",
+					filters={"sales_order": so_name, "docstatus": 1},
+					fields=["parent"],
+					ignore_permissions=True,
+				)
+				sales_invoice_names = sorted({row.parent for row in si_items if row.parent})
+				if sales_invoice_names:
+					si_docs = frappe.get_all(
+						"Sales Invoice",
+						filters={"name": ["in", sales_invoice_names]},
+						fields=["name", "outstanding_amount"],
+						ignore_permissions=True,
+					)
+					outstanding_amount = sum(flt(row.outstanding_amount) for row in si_docs)
+			delivery_exists = False
+			if frappe.db.exists("DocType", "Delivery Note Item"):
+				delivery_exists = bool(
+					frappe.db.exists(
+						"Delivery Note Item",
+						{"against_sales_order": so_name, "docstatus": 1},
+					)
+				)
+			order_status = _core_order_status(doc)
+			if delivery_exists:
+				order_status = "delivered"
 			items = []
 			for row in doc.items or []:
 				amount = row.get("amount")
@@ -15428,9 +15590,13 @@ def get_management_order_detail(order_name, source=None):
 					"customer_name": doc.customer_name,
 					"mobile": doc.get("restaurant_customer_mobile") or "",
 					"channel": doc.get("restaurant_order_type") or "takeaway",
-					"status": _core_order_status(doc),
+					"status": order_status,
 					"subtotal": flt(doc.total or doc.net_total),
 					"grand_total": flt(doc.grand_total or doc.total or doc.net_total),
+					"outstanding_amount": flt(outstanding_amount),
+					"has_sales_invoice": bool(sales_invoice_names),
+					"sales_invoices": sales_invoice_names,
+					"delivery_exists": delivery_exists,
 					"discount_amount": flt(doc.get("discount_amount") or doc.get("additional_discount_amount") or 0),
 					"tax_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Tax" in t.description or "مالیات" in t.description]),
 					"service_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Service" in t.description or "سرویس" in t.description]),

@@ -259,7 +259,8 @@
 			<button
 				type="button"
 				class="print-btn"
-				:disabled="orderMode === 'dine_in' ? !canPrintTableOrders : !cartLines.length"
+				:disabled="orderMode === 'dine_in' ? !canPrintTableOrders : (!cartLines.length || isCreditPaymentSelected)"
+				:title="isCreditPaymentSelected && orderMode !== 'dine_in' ? 'پرداخت اعتباری هنوز دریافت نشده است.' : ''"
 				@click="$emit('print-ticket')"
 			>{{ orderMode === "dine_in" ? "چاپ تاییدشده‌ها" : "چاپ فاکتور" }}</button>
 			<div class="checkout-opts">
@@ -522,6 +523,7 @@ const splitTotal = computed(() =>
 const splitRemaining = computed(() => Number(props.totals?.payableAmount || 0) - splitTotal.value);
 const isSplitBalanced = computed(() => Math.abs(splitRemaining.value) <= 0.001);
 const isSplitOver = computed(() => splitRemaining.value < -0.001);
+const isCreditPaymentSelected = computed(() => String(props.paymentMethod || "").trim().toLowerCase() === "credit");
 
 const orderModes = [
 	{ value: "dine_in", label: "سالن" },
@@ -1171,10 +1173,10 @@ defineExpose({
 /* ─── Financial Section ─── */
 .fin-section {
 	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	padding: 0.7rem 0.8rem;
+	padding: 0.5rem 0.65rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.45rem;
+	gap: 0.35rem;
 }
 
 .fin-group {
@@ -1182,7 +1184,7 @@ defineExpose({
 	flex-direction: column;
 	gap: 0;
 	background: color-mix(in srgb, var(--mg-bg-surface) 40%, var(--mg-bg-page) 60%);
-	border-radius: 14px;
+	border-radius: 12px;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 85%, transparent);
 	overflow: hidden;
 }
@@ -1195,9 +1197,9 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.5rem;
-	padding: 0.38rem 0.55rem;
-	min-height: 36px;
+	gap: 0.42rem;
+	padding: 0.3rem 0.5rem;
+	min-height: 32px;
 }
 
 .fin-label {
@@ -1226,9 +1228,9 @@ defineExpose({
 .fin-control {
 	display: flex;
 	align-items: center;
-	gap: 0.3rem;
+	gap: 0.25rem;
 	flex-shrink: 0;
-	max-width: 170px;
+	max-width: 156px;
 }
 
 .fin-input {
@@ -1236,12 +1238,12 @@ defineExpose({
 	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 8px;
-	padding: 0.32rem 0.5rem;
+	padding: 0.25rem 0.45rem;
 	font-size: 0.74rem;
 	font-family: inherit;
 	width: 100%;
 	min-width: 0;
-	height: 30px;
+	height: 28px;
 	outline: none;
 	transition: all 0.15s ease;
 }
@@ -1269,8 +1271,8 @@ defineExpose({
 	font-family: inherit;
 	white-space: nowrap;
 	border-radius: 8px;
-	padding: 0.32rem 0.6rem;
-	height: 30px;
+	padding: 0.25rem 0.5rem;
+	height: 28px;
 }
 
 .fin-action-btn:hover {
@@ -1287,10 +1289,10 @@ defineExpose({
 	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 8px;
-	padding: 0.35rem 0.55rem;
+	padding: 0.28rem 0.5rem;
 	font-size: 0.72rem;
 	font-family: inherit;
-	height: 30px;
+	height: 28px;
 	outline: none;
 	transition: all 0.15s ease;
 }
@@ -1308,10 +1310,10 @@ defineExpose({
 /* ─── Summary ─── */
 .summary-box {
 	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	padding: 0.7rem 0.8rem 0.55rem;
+	padding: 0.5rem 0.65rem 0.45rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.32rem;
+	gap: 0.24rem;
 	background: color-mix(in srgb, var(--mg-bg-page) 62%, var(--mg-bg-surface) 38%);
 }
 
@@ -1334,8 +1336,8 @@ defineExpose({
 
 .sum-line.payable {
 	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 92%, transparent);
-	margin-top: 0.25rem;
-	padding-top: 0.4rem;
+	margin-top: 0.18rem;
+	padding-top: 0.32rem;
 	font-size: 0.84rem;
 	color: var(--mg-text-main);
 	font-weight: 500;
@@ -1349,17 +1351,17 @@ defineExpose({
 
 /* ─── Checkout Actions ─── */
 .checkout-actions {
-	padding: 0.75rem 0.8rem 0.9rem;
+	padding: 0.55rem 0.65rem 0.65rem;
 	border-top: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	display: flex;
 	flex-direction: column;
-	gap: 0.55rem;
+	gap: 0.42rem;
 }
 
 .checkout-btns {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.45rem;
+	gap: 0.35rem;
 }
 
 .save-btn,
@@ -1367,13 +1369,16 @@ defineExpose({
 .print-btn,
 .settle-btn-custom {
 	border: 0;
-	border-radius: 14px;
+	border-radius: 12px;
 	color: var(--mg-bg-surface);
-	padding: 0.78rem 0.55rem;
+	min-height: 42px;
+	padding: 0.45rem 0.4rem;
 	cursor: pointer;
 	font-family: inherit;
-	font-size: 0.78rem;
+	font-size: 0.72rem;
 	font-weight: 700;
+	line-height: 1.35;
+	text-align: center;
 	transition: all 0.15s ease;
 }
 
@@ -1411,6 +1416,7 @@ defineExpose({
 	color: var(--mg-text-muted);
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	font-weight: 600;
+	min-height: 38px;
 }
 
 .print-btn:hover:not(:disabled) {
@@ -1423,7 +1429,10 @@ defineExpose({
 .pay-btn:disabled,
 .settle-btn-custom:disabled,
 .print-btn:disabled {
-	opacity: 0.35;
+	opacity: 1;
+	background: color-mix(in srgb, var(--mg-border-light) 34%, var(--mg-bg-page) 66%);
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 88%, transparent);
+	color: color-mix(in srgb, var(--mg-text-muted) 78%, var(--mg-bg-page) 22%);
 	cursor: not-allowed;
 	box-shadow: none;
 }
@@ -1431,14 +1440,15 @@ defineExpose({
 .checkout-opts {
 	display: flex;
 	align-items: center;
-	gap: 0.9rem;
+	justify-content: space-between;
+	gap: 0.45rem;
 	flex-wrap: wrap;
 }
 
 .checkout-opts label {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.3rem;
+	gap: 0.25rem;
 	font-size: 0.68rem;
 	color: var(--mg-text-muted);
 	cursor: pointer;
@@ -1460,10 +1470,6 @@ defineExpose({
 @media (max-width: 980px) {
 	.cart-panel {
 		max-height: none;
-	}
-
-	.checkout-btns {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
@@ -1769,7 +1775,7 @@ defineExpose({
 
 @media (max-width: 640px) {
 	.checkout-btns {
-		grid-template-columns: 1fr;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 
 	.pay-popup {
