@@ -91,7 +91,7 @@ const wordLabel = computed(() => {
 
 function onFocus() {
   focused.value = true
-  inputText.value = toEditableText(props.modelValue)
+  inputText.value = formatForDisplay(toNumeric(props.modelValue))
 }
 
 function onBlur() {
@@ -102,24 +102,15 @@ function onBlur() {
 function onInput(event) {
   const rawValue = String(event?.target?.value || '')
   const normalized = normalizeRawValue(rawValue)
-  inputText.value = normalized
-
   const parsed = parseNumeric(normalized)
   const clamped = clampValue(parsed)
+  inputText.value = clamped ? formatForDisplay(clamped) : ''
   emit('update:modelValue', clamped)
   emit('change', clamped)
 }
 
-function toEditableText(value) {
-  const numeric = toNumeric(value)
-  if (!numeric) {
-    return ''
-  }
-  return props.allowFloat ? String(numeric) : String(Math.round(numeric))
-}
-
 function normalizeRawValue(value) {
-  const english = toEnglishDigits(value).replace(/[٬,\s]/g, '')
+  const english = toEnglishDigits(value).replace(/[٬,\s]/g, '').replace(/٫/g, '.')
   return props.allowFloat ? english.replace(/[^0-9.-]/g, '') : english.replace(/[^0-9-]/g, '')
 }
 
@@ -155,9 +146,21 @@ function formatForDisplay(value) {
   if (!numeric) {
     return ''
   }
-  return new Intl.NumberFormat('fa-IR', {
-    maximumFractionDigits: props.allowFloat ? 3 : 0,
-  }).format(numeric)
+
+  const raw = props.allowFloat
+    ? Number(numeric.toFixed(3)).toString()
+    : String(Math.round(numeric))
+  const [integerPart, decimalPart] = raw.split('.')
+  const groupSeparator = props.allowFloat ? '٬' : '.'
+  const decimalSeparator = props.allowFloat ? '٫' : '.'
+  const grouped = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, groupSeparator)
+  const formatted = decimalPart ? `${grouped}${decimalSeparator}${decimalPart}` : grouped
+  return toPersianDigits(formatted)
+}
+
+function toPersianDigits(value) {
+  const digits = '۰۱۲۳۴۵۶۷۸۹'
+  return String(value).replace(/\d/g, (digit) => digits[Number(digit)])
 }
 
 function toEnglishDigits(value) {
