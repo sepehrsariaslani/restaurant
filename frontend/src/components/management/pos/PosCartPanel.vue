@@ -386,6 +386,7 @@
 								input-class="pay-amount-input"
 								placeholder="مبلغ"
 								:min="0"
+								:max="Math.max(Number(totals.payableAmount || 0), 0)"
 								show-words
 								@update:model-value="split.amount = $event"
 							/>
@@ -481,6 +482,20 @@ import { formatMoney, formatStatus, toPersianNumber } from "@/utils/format";
 function isNonZero(value) {
 	const num = Number(value);
 	return Number.isFinite(num) && Math.abs(num) > 0.0001;
+}
+
+function normalizeMoneyNumber(value) {
+	if (typeof value === "number") {
+		return Number.isFinite(value) ? Math.max(Math.round(value), 0) : 0;
+	}
+	const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+	let raw = String(value ?? "");
+	for (let index = 0; index < persianDigits.length; index += 1) {
+		raw = raw.replace(new RegExp(persianDigits[index], "g"), String(index));
+	}
+	const normalized = raw.replace(/[٬,\.\s]/g, "");
+	const parsed = Number(normalized);
+	return Number.isFinite(parsed) ? Math.max(Math.round(parsed), 0) : 0;
 }
 
 const props = defineProps({
@@ -600,9 +615,9 @@ const paymentSplits = ref([]);
 const discountInputRef = ref(null);
 
 const splitTotal = computed(() =>
-	paymentSplits.value.reduce((sum, s) => sum + Number(s.amount || 0), 0),
+	paymentSplits.value.reduce((sum, s) => sum + normalizeMoneyNumber(s.amount), 0),
 );
-const splitRemaining = computed(() => Number(props.totals?.payableAmount || 0) - splitTotal.value);
+const splitRemaining = computed(() => normalizeMoneyNumber(props.totals?.payableAmount) - splitTotal.value);
 const isSplitBalanced = computed(() => Math.abs(splitRemaining.value) <= 0.001);
 const isSplitOver = computed(() => splitRemaining.value < -0.001);
 const isCreditPaymentSelected = computed(() => String(props.paymentMethod || "").trim().toLowerCase() === "credit");
@@ -695,7 +710,7 @@ function buildSplit(optionKey = "", amount = 0) {
 		method: option?.method || "cash",
 		mode_of_payment: option?.mode_of_payment || option?.label || "نقدی",
 		label: option?.label || "نقدی",
-		amount,
+		amount: normalizeMoneyNumber(amount),
 	};
 }
 
@@ -707,7 +722,7 @@ function syncSplitOption(split = {}) {
 			method: "cash",
 			mode_of_payment: "نقدی",
 			label: "نقدی",
-			amount: Number(split.amount || 0),
+			amount: normalizeMoneyNumber(split.amount),
 		};
 	}
 	return {
@@ -716,7 +731,7 @@ function syncSplitOption(split = {}) {
 		method: option.method,
 		mode_of_payment: option.mode_of_payment || option.label,
 		label: option.label,
-		amount: Number(split.amount || 0),
+		amount: normalizeMoneyNumber(split.amount),
 	};
 }
 
@@ -725,7 +740,7 @@ function updateSplitOption(split, optionKey) {
 }
 
 function openPaymentPopup(preferredMethod = null, intent = "pay") {
-	const total = Number(props.totals?.payableAmount || 0);
+	const total = normalizeMoneyNumber(props.totals?.payableAmount);
 	const preferredOption =
 		paymentOptionList.value.find((option) => option.method === preferredMethod) ||
 		paymentOptionList.value.find((option) => option.method === props.paymentMethod) ||
@@ -757,9 +772,9 @@ function splitMethodLabel(split = {}) {
 function confirmPayment() {
 	const validSplits = paymentSplits.value
 		.map((split) => syncSplitOption(split))
-		.filter((s) => Number(s.amount || 0) > 0);
+		.filter((s) => normalizeMoneyNumber(s.amount) > 0);
 	const primary = validSplits.reduce(
-		(a, b) => (Number(b.amount || 0) > Number(a.amount || 0) ? b : a),
+		(a, b) => (normalizeMoneyNumber(b.amount) > normalizeMoneyNumber(a.amount) ? b : a),
 		validSplits[0] || buildSplit(defaultPaymentOption.value?.key || "", 0),
 	);
 	emit("update:paymentMethod", primary.method);
@@ -769,7 +784,7 @@ function confirmPayment() {
 			method: split.method,
 			mode_of_payment: split.mode_of_payment,
 			label: split.label,
-			amount: Number(split.amount || 0),
+			amount: normalizeMoneyNumber(split.amount),
 		})),
 	};
 	if (paymentPopupIntent.value === "settle") {

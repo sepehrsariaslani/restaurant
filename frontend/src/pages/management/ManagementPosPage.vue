@@ -3012,8 +3012,16 @@ function resolveProductBySlug(itemSlug, fallback = {}) {
   }
 }
 
+function resetFinalAmountTarget() {
+  if (financial.targetAmount == null) return
+  financial.targetAmount = null
+  financial.discountType = 'fixed'
+  financial.discountValue = 0
+}
+
 function setCartQty(line, qty) {
   const safeQty = Math.max(Number(qty || 0), 0)
+  if (safeQty !== Number(line?.qty || 0)) resetFinalAmountTarget()
   if (safeQty === 0) {
     const idx = cart.findIndex((row) => row.line_id === line.line_id)
     if (idx >= 0) {
@@ -3030,6 +3038,7 @@ function setCartQty(line, qty) {
 
 function undoLastRemoval() {
   if (!lastRemovedLine.value) return
+  resetFinalAmountTarget()
   cart.push({ ...lastRemovedLine.value })
   selectedCartLineId.value = lastRemovedLine.value.line_id
   lastRemovedLine.value = null
@@ -3044,6 +3053,7 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
   if (!itemSlug) {
     return
   }
+  resetFinalAmountTarget()
 
   const normalizedCustomization = customizationPayload || {
     ingredient_adjustments: [],
@@ -3112,6 +3122,7 @@ async function editLineNote(line) {
 }
 
 function clearCartState({ preserveEditing = false } = {}) {
+  resetFinalAmountTarget()
   if (!preserveEditing) {
     editingOriginalOrder.isEditing = false
     editingOriginalOrder.name = ''
@@ -3581,6 +3592,7 @@ function confirmCustomizationAdd() {
   if (!customizationSheet.item) {
     return
   }
+  resetFinalAmountTarget()
   const normalized = normalizeCartCustomization(customizationSheet.customization, customizationSheet.ingredients)
   const customizationIngredients = (customizationSheet.ingredients || []).map((ingredient) => ({
     key: String(ingredient.key || ingredient.name || '').trim(),
