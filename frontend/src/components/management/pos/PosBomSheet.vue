@@ -300,8 +300,9 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 11000;
-  overflow: hidden;
-  touch-action: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,6 +428,7 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   touch-action: pan-y;
   padding: 0.95rem 1.1rem 1.1rem;
   display: grid;

@@ -7,7 +7,7 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
-export function calculatePosTotals({
+function calculateTotalsWithoutTarget({
   cartLines = [],
   discountType = 'fixed',
   discountValue = 0,
@@ -57,5 +57,42 @@ export function calculatePosTotals({
     tipAmount: tip,
     packagingAmount: packaging,
     payableAmount,
+  }
+}
+
+export function calculatePosTotals(args = {}) {
+  const target = Number(args.targetPayableAmount)
+  if (!Number.isFinite(target) || target <= 0) {
+    return calculateTotalsWithoutTarget(args)
+  }
+
+  const baseArgs = { ...args, targetPayableAmount: null }
+  const baseTotals = calculateTotalsWithoutTarget(baseArgs)
+  const desired = clamp(target, 0, baseTotals.payableAmount)
+  let low = 0
+  let high = baseTotals.itemsTotal
+
+  // Find the fixed discount that makes the payable amount converge to the
+  // requested final invoice amount, including percentage tax/service and wallet rules.
+  for (let index = 0; index < 42; index += 1) {
+    const candidate = (low + high) / 2
+    const candidateTotals = calculateTotalsWithoutTarget({
+      ...baseArgs,
+      discountType: 'fixed',
+      discountValue: candidate,
+    })
+    if (candidateTotals.payableAmount > desired) low = candidate
+    else high = candidate
+  }
+
+  const result = calculateTotalsWithoutTarget({
+    ...baseArgs,
+    discountType: 'fixed',
+    discountValue: high,
+  })
+  return {
+    ...result,
+    targetPayableAmount: desired,
+    automaticDiscount: true,
   }
 }

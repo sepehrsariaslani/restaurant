@@ -143,12 +143,23 @@
 							@update:model-value="patchFinancial({ discountType: $event === 'percent' ? 'percent' : 'fixed' })"
 						/>
 						<PersianNumberInput
-							:model-value="financial.discountValue"
+							:model-value="financial.targetAmount != null ? totals.discountAmount : financial.discountValue"
 							input-class="fin-input"
 							placeholder="0"
 							:min="0"
+							:disabled="financial.targetAmount != null"
 							@update:model-value="patchFinancial({ discountValue: $event })"
 						/>
+						<button
+							type="button"
+							class="final-amount-trigger"
+							:class="{ active: financial.targetAmount != null }"
+							title="تعیین مبلغ نهایی فاکتور"
+							aria-label="تعیین مبلغ نهایی فاکتور"
+							@click="openFinalAmountModal"
+						>
+							<Target :size="15" :stroke-width="2.3" />
+						</button>
 					</div>
 				</div>
 				<div class="fin-row">
@@ -434,6 +445,17 @@
 			</footer>
 		</section>
 	</div>
+
+	<FinalAmountModal
+		:open="finalAmountModalOpen"
+		:model-value="financial.targetAmount || totals.payableAmount || 0"
+		:current-total="totals.payableAmount || 0"
+		:discount-amount="totals.discountAmount || 0"
+		:currency="currency"
+		@close="finalAmountModalOpen = false"
+		@clear="clearFinalAmount"
+		@confirm="applyFinalAmount"
+	/>
 </template>
 
 <script setup>
@@ -447,11 +469,13 @@ import {
 	Plus,
 	ReceiptText,
 	ShoppingCart,
+	Target,
 	X,
 } from "lucide-vue-next";
 import SearchableDropdown from "@/components/SearchableDropdown.vue";
 import PersianNumberInput from "@/components/PersianNumberInput.vue";
 import AmountPercentToggle from "@/components/AmountPercentToggle.vue";
+import FinalAmountModal from "@/components/management/pos/FinalAmountModal.vue";
 import { formatMoney, formatStatus, toPersianNumber } from "@/utils/format";
 
 function isNonZero(value) {
@@ -547,6 +571,7 @@ const emit = defineEmits([
 	"update:orderMode",
 	"update:place",
 	"update:note",
+	"set-final-amount",
 	"update:paymentMethod",
 	"update:paymentReference",
 	"update:paymentRrn",
@@ -569,6 +594,7 @@ const emit = defineEmits([
 ]);
 
 const showPaymentPopup = ref(false);
+const finalAmountModalOpen = ref(false);
 const paymentPopupIntent = ref("pay");
 const paymentSplits = ref([]);
 const discountInputRef = ref(null);
@@ -641,6 +667,21 @@ watch(
 
 function patchFinancial(partial) {
 	emit("patch-financial", partial);
+}
+
+function openFinalAmountModal() {
+	finalAmountModalOpen.value = true;
+}
+
+function applyFinalAmount(value) {
+	const amount = Math.max(Number(value || 0), 0);
+	emit("set-final-amount", amount > 0 ? amount : null);
+	finalAmountModalOpen.value = false;
+}
+
+function clearFinalAmount() {
+	emit("set-final-amount", null);
+	finalAmountModalOpen.value = false;
 }
 
 function resolvePaymentOption(optionKey = "") {
@@ -1301,7 +1342,30 @@ defineExpose({
 	align-items: center;
 	gap: 0.25rem;
 	flex-shrink: 0;
-	max-width: 156px;
+	max-width: 205px;
+}
+
+.final-amount-trigger {
+	width: 28px;
+	height: 28px;
+	flex: 0 0 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid color-mix(in srgb, var(--mg-primary) 30%, var(--mg-border-light) 70%);
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--mg-primary) 7%, var(--mg-bg-page) 93%);
+	color: var(--mg-primary);
+	cursor: pointer;
+	transition: 0.15s ease;
+}
+
+.final-amount-trigger:hover,
+.final-amount-trigger:focus-visible,
+.final-amount-trigger.active {
+	border-color: var(--mg-primary);
+	background: color-mix(in srgb, var(--mg-primary) 15%, var(--mg-bg-surface) 85%);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
 .fin-input {
@@ -1326,7 +1390,7 @@ defineExpose({
 }
 
 .fin-input:disabled {
-	opacity: 0.35;
+	opacity: 0.68;
 	cursor: not-allowed;
 }
 

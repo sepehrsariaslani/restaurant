@@ -92,6 +92,7 @@
             @update:payment-reference="payment.reference_no = $event"
             @update:payment-rrn="payment.rrn = $event"
             @patch-financial="patchFinancial"
+            @set-final-amount="setFinalAmount"
             @increment-line="setCartQty($event, Number($event.qty || 0) + 1)"
             @decrement-line="setCartQty($event, Number($event.qty || 0) - 1)"
             @remove-line="setCartQty($event, 0)"
@@ -506,6 +507,7 @@
             @update:payment-reference="payment.reference_no = $event"
             @update:payment-rrn="payment.rrn = $event"
             @patch-financial="patchFinancial"
+            @set-final-amount="setFinalAmount"
             @increment-line="setCartQty($event, Number($event.qty || 0) + 1)"
             @decrement-line="setCartQty($event, Number($event.qty || 0) - 1)"
             :undo-line="lastRemovedLine"
@@ -923,6 +925,7 @@ function defaultFinancialState() {
     couponCode: '',
     discountType: 'fixed',
     discountValue: 0,
+    targetAmount: null,
     taxExempt: false,
     taxType: 'fixed',
     taxValue: 0,
@@ -1640,7 +1643,17 @@ const totals = computed(() =>
     packagingAmount: packagingAmount.value,
     useWallet: financial.useWallet,
     walletBalance: financial.walletBalance,
+    targetPayableAmount: financial.targetAmount,
   }),
+)
+
+watch(
+  () => [financial.targetAmount, totals.value.discountAmount],
+  () => {
+    if (financial.targetAmount == null) return
+    financial.discountType = 'fixed'
+    financial.discountValue = Number(totals.value.discountAmount || 0)
+  },
 )
 
 const sheetPreview = computed(() => {
@@ -1852,6 +1865,15 @@ function resetCurrentInvoiceState({ preserveFeedback = false } = {}) {
 
 function patchFinancial(partial) {
   Object.assign(financial, partial || {})
+}
+
+function setFinalAmount(value) {
+  const amount = Number(value)
+  financial.targetAmount = Number.isFinite(amount) && amount > 0 ? amount : null
+  if (financial.targetAmount == null) {
+    financial.discountType = 'fixed'
+    financial.discountValue = 0
+  }
 }
 
 function applyPOSProfileSummary(summary = {}) {
@@ -2944,8 +2966,8 @@ function currentOrderDraftSignature() {
       note: String(form.note || '').trim(),
     },
     financial: {
-      discountType: financial.discountType,
-      discountValue: Number(financial.discountValue || 0),
+      discountType: financial.targetAmount != null ? 'fixed' : financial.discountType,
+      discountValue: financial.targetAmount != null ? Number(totals.value.discountAmount || 0) : Number(financial.discountValue || 0),
       serviceType: financial.serviceType,
       serviceValue: Number(financial.serviceValue || 0),
       taxType: financial.taxExempt ? 'fixed' : financial.taxType,
@@ -4633,8 +4655,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       currency: currency.value,
     },
     financial_modifiers: {
-      discount_type: financial.discountType,
-      discount_value: financial.discountValue,
+      discount_type: financial.targetAmount != null ? 'fixed' : financial.discountType,
+      discount_value: financial.targetAmount != null ? Number(totals.value.discountAmount || 0) : financial.discountValue,
       service_type: financial.serviceType,
       service_value: financial.serviceValue,
       tax_type: financial.taxExempt ? 'fixed' : financial.taxType,
