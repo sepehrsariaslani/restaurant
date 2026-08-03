@@ -731,7 +731,13 @@
                 <option value="">انتخاب روش پرداخت</option>
                 <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
               </select>
-              <textarea class="od-textarea" v-model="orderDetailModal.editForm.note" rows="2" placeholder="یادداشت..."></textarea>
+              <ManagementNoteField
+                v-model="orderDetailModal.editForm.note"
+                class="pos-note-field"
+                label="یادداشت سفارش"
+                rows="2"
+                placeholder="یادداشت سفارش..."
+              />
               <p class="od-err" v-if="orderDetailModal.saveError">{{ orderDetailModal.saveError }}</p>
               <button class="od-btn" :disabled="orderDetailModal.saving" @click="saveOrderDetailEdit">
                 <Save :size="14" v-if="!orderDetailModal.saving" /> {{ orderDetailModal.saving ? '...' : 'ذخیره' }}
@@ -837,6 +843,7 @@ import PersianDateInput from '@/components/PersianDateInput.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
 import PosBomSheet from '@/components/management/pos/PosBomSheet.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import TableSplitBillSheet from '@/components/management/TableSplitBillSheet.vue'
 import {
   assignTableSessionCustomer,

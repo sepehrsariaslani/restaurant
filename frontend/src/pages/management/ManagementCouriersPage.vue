@@ -104,10 +104,13 @@
           </label>
         </div>
 
-        <label class="full-width">
-          یادداشت
-          <textarea v-model.trim="courierForm.notes" class="input" rows="3"></textarea>
-        </label>
+        <ManagementNoteField
+          v-model="courierForm.notes"
+          class="full-width"
+          label="یادداشت"
+          rows="3"
+          placeholder="یادداشت داخلی پیک..."
+        />
 
         <div class="form-actions">
           <button class="primary-btn" type="button" :disabled="savingCourier" @click="saveCourier">
@@ -236,10 +239,13 @@
           </label>
         </div>
 
-        <label class="full-width">
-          یادداشت
-          <textarea v-model.trim="vehicleForm.notes" class="input" rows="3"></textarea>
-        </label>
+        <ManagementNoteField
+          v-model="vehicleForm.notes"
+          class="full-width"
+          label="یادداشت"
+          rows="3"
+          placeholder="یادداشت داخلی وسیله..."
+        />
 
         <div class="form-actions">
           <button class="primary-btn" type="button" :disabled="savingVehicle" @click="saveVehicle">
@@ -300,10 +306,13 @@
           </label>
         </div>
 
-        <label class="full-width">
-          یادداشت
-          <textarea v-model.trim="zoneForm.notes" class="input" rows="2"></textarea>
-        </label>
+        <ManagementNoteField
+          v-model="zoneForm.notes"
+          class="full-width"
+          label="یادداشت"
+          rows="2"
+          placeholder="یادداشت داخلی محدوده..."
+        />
 
         <div class="form-actions">
           <button class="primary-btn" type="button" :disabled="savingZone" @click="saveZone">
@@ -414,6 +423,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   deleteManagementCourier,

@@ -3346,8 +3346,8 @@ export function getManagementMaterialRequestPrint(name = "") {
 	return callRestaurantAPI("get_management_material_request_print", { name });
 }
 
-export function listManagementRawMaterials({ search = "", include_inactive = 0, limit = 100, offset = 0, include_all_stock = 0 } = {}) {
-	return callRestaurantAPI("list_management_raw_materials", { search, include_inactive, limit, offset, include_all_stock });
+export function listManagementRawMaterials({ search = "", include_inactive = 0, limit = 100, offset = 0, include_all_stock = 0, options_only = 0 } = {}) {
+	return callRestaurantAPI("list_management_raw_materials", { search, include_inactive, limit, offset, include_all_stock, options_only });
 }
 
 export function getManagementRawMaterialDetail(item_code) {
@@ -3358,8 +3358,8 @@ export function saveManagementRawMaterial(payload = {}) {
 	return callRestaurantAPI("save_management_raw_material", { payload });
 }
 
-export function listManagementWarehouses() {
-	return callRestaurantAPI("list_management_warehouses", {});
+export function listManagementWarehouses({ options_only = 0 } = {}) {
+	return callRestaurantAPI("list_management_warehouses", { options_only });
 }
 
 export function saveManagementWarehouse(payload = {}) {

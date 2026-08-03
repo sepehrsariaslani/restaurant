@@ -126,8 +126,13 @@
                   </select>
                 </div>
                 <div class="form-group full-width">
-                  <label>یادداشت رزرو</label>
-                  <textarea class="input" rows="3" :value="reservationDraft.note" @input="emitField('note', $event.target.value)" placeholder="درخواست‌های ویژه، مناسبت‌ها و..."></textarea>
+                  <ManagementNoteField
+                    :model-value="reservationDraft.note"
+                    label="یادداشت رزرو"
+                    rows="3"
+                    placeholder="درخواست‌های ویژه، مناسبت‌ها و..."
+                    @update:model-value="emitField('note', $event)"
+                  />
                 </div>
               </div>
             </section>
@@ -158,6 +163,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { CalendarClock, Users, Armchair, CalendarDays, Save, LayoutGrid } from 'lucide-vue-next'
+import ManagementNoteField from '../ManagementNoteField.vue'
 import ManagementTableStatusBadge from './ManagementTableStatusBadge.vue'
 
 const props = defineProps({

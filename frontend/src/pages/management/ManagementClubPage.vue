@@ -266,7 +266,13 @@
               <span class="pill" v-for="(a, i) in contractForm.allowed_addresses" :key="a" @click="contractForm.allowed_addresses.splice(i, 1)">{{ a }} ✕</span>
             </label>
             <label class="full-row">کد دسترسی پورتال حسابدار (خالی = بدون تغییر)<input class="input" v-model.trim="contractForm.portal_access_code" :placeholder="contractForm.portal_access_code_set ? '••••••' : ''" /></label>
-            <label class="full-row">یادداشت<textarea class="input" rows="2" v-model="contractForm.note"></textarea></label>
+            <ManagementNoteField
+              v-model="contractForm.note"
+              class="full-row"
+              label="یادداشت"
+              rows="2"
+              placeholder="یادداشت داخلی قرارداد..."
+            />
           </div>
           <p class="error" v-if="contractFormError">{{ contractFormError }}</p>
           <div class="btn-row">
@@ -558,7 +564,13 @@
             <label v-if="walletAction.mode === 'adjust'">جهت
               <select class="input" v-model="walletAction.direction"><option value="واریز">واریز (افزایش)</option><option value="برداشت">برداشت (کاهش)</option></select>
             </label>
-            <label class="full-row">شرح<input class="input" v-model.trim="walletAction.note" /></label>
+            <ManagementNoteField
+              v-model="walletAction.note"
+              class="full-row"
+              label="شرح"
+              :multiline="false"
+              placeholder="شرح عملیات کیف پول..."
+            />
           </div>
           <p class="error" v-if="walletActionError">{{ walletActionError }}</p>
           <div class="btn-row">
@@ -744,7 +756,13 @@
             </label>
             <label>حداقل مبلغ سفارش<input class="input" type="number" min="0" v-model.number="campaignForm.min_order_amount" /></label>
             <label class="full-row">متن پیامک کمپین<textarea class="input" rows="2" v-model="campaignForm.sms_text"></textarea></label>
-            <label class="full-row">یادداشت<textarea class="input" rows="2" v-model="campaignForm.notes"></textarea></label>
+            <ManagementNoteField
+              v-model="campaignForm.notes"
+              class="full-row"
+              label="یادداشت کمپین"
+              rows="2"
+              placeholder="یادداشت داخلی کمپین..."
+            />
           </div>
           <p class="error" v-if="campaignFormError">{{ campaignFormError }}</p>
           <div class="btn-row">
@@ -843,6 +861,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getManagementClubBoot,

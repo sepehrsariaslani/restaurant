@@ -463,7 +463,7 @@ async function openItemCreator() {
   try {
     const [uomPayload, warehousePayload] = await Promise.all([
       listManagementUOMs({ limit: 300 }),
-      listManagementWarehouses(),
+      listManagementWarehouses({ options_only: 1 }),
     ])
     itemUomOptions.value = Array.isArray(uomPayload?.uoms) ? uomPayload.uoms : []
     itemWarehouses.value = (warehousePayload?.warehouses || [])

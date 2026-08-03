@@ -469,9 +469,13 @@
                 <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
               </select>
             </label>
-            <label class="full-row">توضیحات درخواست
-              <textarea class="input" rows="2" v-model.trim="materialRequestForm.note" placeholder="مثلاً خرید هفتگی آشپزخانه..."></textarea>
-            </label>
+            <ManagementNoteField
+              v-model="materialRequestForm.note"
+              class="full-row"
+              label="توضیحات درخواست"
+              rows="2"
+              placeholder="مثلاً خرید هفتگی آشپزخانه..."
+            />
           </div>
           <div class="request-lines-editor">
             <div class="request-lines-head"><strong>اقلام موردنیاز</strong><span>با انتخاب ماده، واحد اندازه‌گیری خودکار می‌آید.</span></div>
@@ -575,7 +579,13 @@
             </label>
             <label>تاریخ سفارش <PersianDateInput v-model="purchaseForm.posting_date" /></label>
             <label>تاریخ تحویل مورد انتظار <PersianDateInput v-model="purchaseForm.expected_date" /></label>
-            <label class="full-row">یادداشت <input class="input" v-model.trim="purchaseForm.note" /></label>
+            <ManagementNoteField
+              v-model="purchaseForm.note"
+              class="full-row"
+              label="یادداشت سفارش خرید"
+              :multiline="false"
+              placeholder="توضیح اختیاری برای سفارش خرید..."
+            />
           </div>
           <div class="lines-editor">
             <div v-for="(line, i) in purchaseForm.items" :key="i" class="line-row">
@@ -1034,6 +1044,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import {

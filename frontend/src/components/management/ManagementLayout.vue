@@ -1570,6 +1570,48 @@ onBeforeUnmount(() => {
 .utility-link:hover { background: var(--mg-bg-soft); }
 .text-danger { color: var(--mg-danger); }
 
+/* Shared management action buttons. Keeping these here prevents native
+   browser buttons from leaking into inventory and other routed forms. */
+.management-layout :deep(.tertiary-btn) {
+	min-height: 35px;
+	padding: 0.38rem 0.78rem;
+	border: 1px solid var(--mg-border);
+	border-radius: 10px;
+	background: transparent;
+	color: var(--mg-text-muted);
+	font: inherit;
+	font-size: 0.76rem;
+	font-weight: 800;
+	line-height: 1.25;
+	cursor: pointer;
+	transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.management-layout :deep(.tertiary-btn:hover:not(:disabled)) {
+	transform: translateY(-1px);
+	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border) 58%);
+	background: color-mix(in srgb, var(--mg-primary) 8%, transparent);
+	color: var(--mg-primary);
+}
+
+.management-layout :deep(.tertiary-btn.danger) {
+	border-color: color-mix(in srgb, var(--mg-danger) 34%, var(--mg-border) 66%);
+	background: color-mix(in srgb, var(--mg-danger) 7%, transparent);
+	color: var(--mg-danger);
+}
+
+.management-layout :deep(.tertiary-btn.danger:hover:not(:disabled)) {
+	border-color: var(--mg-danger);
+	background: var(--mg-danger-bg);
+	color: var(--mg-danger);
+}
+
+.management-layout :deep(.tertiary-btn:disabled) {
+	opacity: 0.52;
+	cursor: not-allowed;
+	transform: none;
+}
+
 /* --- Desktop Floating Menu (Integrated in Header) --- */
 	.dfm-wrapper.inline-dfm {
 		position: relative;

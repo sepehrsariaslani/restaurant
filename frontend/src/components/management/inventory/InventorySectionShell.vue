@@ -1,5 +1,5 @@
 <template>
-  <ManagementPageScaffold v-if="showHeader" :title="title" :subtitle="subtitle">
+  <ManagementPageScaffold v-if="showHeader" class="inventory-scaffold" :title="title" :subtitle="subtitle">
     <template #actions>
       <slot name="actions" />
     </template>
@@ -61,6 +61,18 @@ defineProps({
 .inventory-section-shell :deep(.primary-btn) {
   background: var(--inv-primary);
   border-color: var(--inv-primary);
+}
+
+.inventory-scaffold :deep(.primary-btn) {
+  background: var(--mg-primary);
+  border: 1px solid var(--mg-primary);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--mg-primary) 24%, transparent);
+}
+
+.inventory-scaffold :deep(.primary-btn:hover:not(:disabled)) {
+  background: var(--mg-primary-hover);
+  border-color: var(--mg-primary-hover);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--mg-primary) 30%, transparent);
 }
 
 .inventory-section-shell :deep(.secondary-btn) {

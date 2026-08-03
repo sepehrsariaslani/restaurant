@@ -93,8 +93,13 @@
                   <input class="input" :value="sessionDraft.customer_mobile || ''" readonly disabled dir="ltr" />
                 </div>
                 <div class="form-group full-width">
-                  <label>یادداشت میز / سشن</label>
-                  <textarea class="input" rows="3" :value="sessionDraft.note" @input="emitField('note', $event.target.value)" placeholder="هرگونه توضیحات خاص..."></textarea>
+                  <ManagementNoteField
+                    :model-value="sessionDraft.note"
+                    label="یادداشت میز / سشن"
+                    rows="3"
+                    placeholder="هرگونه توضیحات خاص..."
+                    @update:model-value="emitField('note', $event)"
+                  />
                 </div>
               </div>
             </section>
@@ -118,6 +123,7 @@
 
 <script setup>
 import { Clock3, Receipt, UserRound, History, Save, LayoutGrid } from 'lucide-vue-next'
+import ManagementNoteField from '../ManagementNoteField.vue'
 import ManagementTableStatusBadge from './ManagementTableStatusBadge.vue'
 import { formatMoney } from '@/utils/format'
 

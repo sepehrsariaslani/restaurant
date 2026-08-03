@@ -82,10 +82,12 @@
               <input type="checkbox" v-model="posShiftForm.opening.checklist_required" />
               چک‌لیست افتتاحیه اجباری باشد
             </label>
-            <label>
-              متن پیش‌فرض افتتاحیه
-              <textarea class="input" rows="3" v-model="posShiftForm.opening.note_template"></textarea>
-            </label>
+            <ManagementNoteField
+              v-model="posShiftForm.opening.note_template"
+              label="متن پیش‌فرض افتتاحیه"
+              rows="3"
+              placeholder="متن چاپ یا توضیح افتتاحیه..."
+            />
           </article>
 
           <article class="pos-shift-box">
@@ -110,10 +112,12 @@
               <input type="checkbox" v-model="posShiftForm.closing.checklist_required" />
               چک‌لیست اختتامیه اجباری باشد
             </label>
-            <label>
-              متن پیش‌فرض اختتامیه
-              <textarea class="input" rows="3" v-model="posShiftForm.closing.note_template"></textarea>
-            </label>
+            <ManagementNoteField
+              v-model="posShiftForm.closing.note_template"
+              label="متن پیش‌فرض اختتامیه"
+              rows="3"
+              placeholder="متن چاپ یا توضیح اختتامیه..."
+            />
           </article>
         </div>
 
@@ -391,6 +395,7 @@ import ManagementDataTable from '@/components/management/ManagementDataTable.vue
 import ManagementLineChart from '@/components/management/bi/ManagementLineChart.vue'
 import ManagementBarList from '@/components/management/bi/ManagementBarList.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getManagementDashboard,

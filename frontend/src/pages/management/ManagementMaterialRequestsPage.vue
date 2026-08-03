@@ -48,7 +48,7 @@ function qty(value) { return Number(value || 0).toLocaleString('fa-IR', { maximu
 function statusClass(status) { return ['ordered', 'partially ordered'].includes(String(status || '').toLowerCase()) ? 'ok' : ['cancelled', 'stopped'].includes(String(status || '').toLowerCase()) ? 'danger' : '' }
 function openDetail(name) { window.location.href = name === 'new' ? '/management/inventory/requests/detail?new=1' : `/management/inventory/requests/detail?name=${encodeURIComponent(name.name || name)}` }
 function openRow(row) { openDetail(row.name) }
-async function load() { loading.value = true; error.value = ''; try { const payload = await listManagementMaterialRequests({ ...filters, limit: 200 }); requests.value = payload.requests || [] } catch (err) { error.value = err.message || 'دریافت درخواست‌ها ناموفق بود.' } finally { loading.value = false } }
+async function load() { loading.value = true; error.value = ''; try { const payload = await listManagementMaterialRequests({ ...filters, limit: 50 }); requests.value = payload.requests || [] } catch (err) { error.value = err.message || 'دریافت درخواست‌ها ناموفق بود.' } finally { loading.value = false } }
 onMounted(load)
 </script>
 

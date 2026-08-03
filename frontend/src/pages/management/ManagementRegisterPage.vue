@@ -64,10 +64,13 @@
             وجه شمارش‌شده (نقد)
             <input class="input" type="number" min="0" v-model.number="closingForm.counted_cash" />
           </label>
-          <label class="full-row">
-            یادداشت اختتامیه
-            <textarea class="input" rows="2" v-model="closingForm.note" placeholder="توضیح اختیاری برای اختتامیه صندوق"></textarea>
-          </label>
+          <ManagementNoteField
+            v-model="closingForm.note"
+            class="full-row"
+            label="یادداشت اختتامیه"
+            rows="2"
+            placeholder="توضیح اختیاری برای اختتامیه صندوق"
+          />
         </div>
 
         <div class="expected-line" v-if="closingSummary">
@@ -326,6 +329,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {

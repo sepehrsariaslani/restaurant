@@ -1140,8 +1140,13 @@ def get_management_material_request_print(name=""):
 
 
 @frappe.whitelist()
-def list_management_raw_materials(search="", include_inactive=0, limit=100, offset=0, include_all_stock=0):
-	"""List raw materials with live stock quantity and value."""
+def list_management_raw_materials(search="", include_inactive=0, limit=100, offset=0, include_all_stock=0, options_only=0):
+	"""List raw materials with live stock quantity and value.
+
+	``options_only`` is intentionally lightweight for pickers. Detail forms do
+	not need Bin quantities, reorder calculations, or valuation aggregates just
+	to render an item dropdown.
+	"""
 	_ensure_management_access()
 	limit = min(max(cint(limit) or 100, 1), 500)
 	offset = max(cint(offset) or 0, 0)
@@ -1178,6 +1183,23 @@ def list_management_raw_materials(search="", include_inactive=0, limit=100, offs
 	rows = rows[:limit]
 
 	materials = rows if cint(include_all_stock) else [row for row in rows if _inv_item_is_raw_material(row)]
+	if cint(options_only):
+		return {
+			"items": [
+				{
+					"name": row.get("name"),
+					"item_name": row.get("item_name") or row.get("name"),
+					"item_group": row.get("item_group") or "",
+					"stock_uom": row.get("stock_uom") or "",
+					"disabled": cint(row.get("disabled") or 0),
+				}
+				for row in materials
+			],
+			"has_more": has_more,
+			"count": len(materials),
+			"total_value": 0.0,
+		}
+
 	names = [row["name"] for row in materials]
 	stock = _inv_stock_map(item_codes=names)
 
@@ -1407,8 +1429,11 @@ def save_management_raw_material(payload=None):
 
 
 @frappe.whitelist()
-def list_management_warehouses():
-	"""All warehouses with quantity/value aggregates."""
+def list_management_warehouses(options_only=0):
+	"""All warehouses with quantity/value aggregates.
+
+	Picker dialogs can request ``options_only`` to skip the full Bin aggregate.
+	"""
 	_ensure_management_access()
 	rows = frappe.get_all(
 		"Warehouse",
@@ -1416,6 +1441,29 @@ def list_management_warehouses():
 		order_by="name",
 		limit_page_length=1000,
 	)
+	if cint(options_only):
+		settings = _inv_get_inventory_settings()
+		return {
+			"warehouses": [
+				{
+					"name": row["name"],
+					"warehouse_name": row.get("warehouse_name") or row["name"],
+					"parent_warehouse": row.get("parent_warehouse") or "",
+					"is_group": cint(row.get("is_group") or 0),
+					"disabled": cint(row.get("disabled") or 0),
+					"company": row.get("company") or "",
+				}
+				for row in rows
+			],
+			"leaf_warehouses": [
+				row["name"]
+				for row in rows
+				if not cint(row.get("is_group") or 0) and not cint(row.get("disabled") or 0)
+			],
+			"default_warehouse": settings.get("default_warehouse") or "",
+			"count": len(rows),
+		}
+
 	stats = frappe.db.sql(
 		"""
 		SELECT warehouse, COALESCE(SUM(actual_qty),0) AS qty, COALESCE(SUM(stock_value),0) AS value

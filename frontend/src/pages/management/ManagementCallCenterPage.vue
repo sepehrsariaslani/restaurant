@@ -106,7 +106,14 @@
         <div class="form-grid">
           <label>کد سفارش (اختیاری)<input class="input" v-model.trim="noteForm.order_name" placeholder="SO-..." /></label>
           <label>شعبه مقصد<input class="input" v-model.trim="noteForm.branch" :placeholder="profile?.suggested_branch || '—'" /></label>
-          <label class="full-row">متن یادداشت <span class="req">*</span><textarea class="input" rows="3" v-model="noteForm.note" placeholder="مثلاً مشتری تماس گرفت؛ سفارش بدون پیاز باشد."></textarea></label>
+          <ManagementNoteField
+            v-model="noteForm.note"
+            class="full-row"
+            label="متن یادداشت"
+            rows="3"
+            required
+            placeholder="مثلاً مشتری تماس گرفت؛ سفارش بدون پیاز باشد."
+          />
         </div>
         <p class="error" v-if="noteError">{{ noteError }}</p>
         <div class="btn-row">
@@ -121,6 +128,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getManagementCallCenterBoot,

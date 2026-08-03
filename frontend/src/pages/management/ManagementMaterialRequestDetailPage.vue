@@ -1,10 +1,15 @@
 <template>
   <InventorySectionShell :show-header="false">
+    <div v-if="loading" class="detail-loading" role="status" aria-live="polite">
+      <span class="loading-orb" aria-hidden="true"></span>
+      <strong>در حال آماده‌سازی درخواست...</strong>
+      <small>اطلاعات درخواست در حال دریافت است.</small>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="success">{{ message }}</p>
 
     <ManagementSurfaceCard
-      v-if="isNew || editing"
+      v-if="!loading && (isNew || editing)"
       title="فرم درخواست مواد"
       subtitle="واحد ماده بعد از انتخاب، خودکار از ERPNext خوانده می‌شود."
     >
@@ -12,6 +17,7 @@
         <button type="button" class="inline-back-btn" @click="goBack">بازگشت به لیست</button>
       </template>
 
+      <p v-if="editorLoading" class="editor-loading">در حال آماده‌سازی فهرست کالاها و انبارها...</p>
       <div class="form-grid">
         <label>
           تاریخ درخواست
@@ -23,17 +29,20 @@
         </label>
         <label>
           انبار مقصد
-          <select class="input" v-model="form.set_warehouse" @change="syncLineWarehouses">
+          <select class="input" v-model="form.set_warehouse" :disabled="editorLoading" @change="syncLineWarehouses">
             <option value="">انتخاب انبار</option>
             <option v-for="warehouse in boot?.leaf_warehouses || []" :key="warehouse" :value="warehouse">
               {{ warehouse }}
             </option>
           </select>
         </label>
-        <label class="full">
-          یادداشت
-          <textarea class="input" rows="2" v-model.trim="form.note"></textarea>
-        </label>
+        <ManagementNoteField
+          v-model="form.note"
+          class="full"
+          label="یادداشت"
+          rows="2"
+          placeholder="توضیحات تکمیلی درخواست را وارد کنید..."
+        />
       </div>
 
       <div class="request-lines">
@@ -49,6 +58,7 @@
           <SearchableDropdown
             v-model="line.item_code"
             allow-item-create
+            :disabled="editorLoading"
             :item-create-defaults="{ opening_warehouse: form.set_warehouse }"
             :options="materialOptions"
             placeholder="انتخاب ماده..."
@@ -66,6 +76,7 @@
           />
           <SearchableDropdown
             v-model="line.uom"
+            :disabled="editorLoading"
             :options="uomOptions"
             placeholder="واحد"
             search-placeholder="جستجوی واحد..."
@@ -103,7 +114,7 @@
       </footer>
     </ManagementSurfaceCard>
 
-    <template v-else-if="request">
+    <template v-else-if="!loading && request">
       <ManagementSurfaceCard title="خلاصه درخواست" subtitle="جزئیات ثبت‌شده و مسیر تأمین">
         <template #head>
           <div class="detail-head-actions">
@@ -182,15 +193,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   createManagementPurchaseFromMaterialRequest,
-  getManagementInventoryBoot,
   getManagementMaterialRequest,
   getManagementMaterialRequestPrint,
   listManagementRawMaterials,
   listManagementUOMs,
+  listManagementWarehouses,
   saveManagementMaterialRequest,
   updateManagementMaterialRequestStatus,
 } from '@/utils/api'
@@ -202,7 +214,9 @@ const request = ref(null)
 const purchases = ref([])
 const boot = ref(null)
 const editing = ref(isNew)
-const loading = ref(false)
+const loading = ref(true)
+const editorLoading = ref(false)
+const editorReady = ref(false)
 const saving = ref(false)
 const purchaseSaving = ref(false)
 const error = ref('')
@@ -226,7 +240,7 @@ const materialOptions = computed(() =>
 const uomOptions = computed(() => uoms.value.map((value) => ({ value, label: value })))
 const hasValidItems = computed(() => form.items.some((line) => line.item_code && Number(line.qty) > 0))
 const hasWarehouse = computed(() => Boolean(String(form.set_warehouse || '').trim()))
-const canSave = computed(() => hasValidItems.value && hasWarehouse.value)
+const canSave = computed(() => editorReady.value && hasValidItems.value && hasWarehouse.value)
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -328,23 +342,52 @@ function applyRequest(value, linked = []) {
   syncLineWarehouses()
 }
 
+async function loadEditorContext() {
+  if (editorReady.value || editorLoading.value) return
+  editorLoading.value = true
+  error.value = ''
+  try {
+    const [materialsPayload, uomPayload, warehousePayload] = await Promise.all([
+      listManagementRawMaterials({ limit: 500, include_all_stock: 1, options_only: 1 }),
+      listManagementUOMs({ limit: 500 }),
+      listManagementWarehouses({ options_only: 1 }),
+    ])
+    const warehouseRows = warehousePayload?.warehouses || []
+    const leafWarehouses = warehousePayload?.leaf_warehouses?.length
+      ? warehousePayload.leaf_warehouses
+      : warehouseRows
+          .filter((row) => Number(row?.is_group || 0) !== 1 && Number(row?.disabled || 0) !== 1)
+          .map((row) => row.name || row.warehouse_name)
+          .filter(Boolean)
+
+    boot.value = {
+      materials: materialsPayload?.items || [],
+      leaf_warehouses: leafWarehouses,
+      settings: { default_warehouse: warehousePayload?.default_warehouse || '' },
+    }
+    uoms.value = uomPayload?.uoms || []
+    if (!form.set_warehouse) form.set_warehouse = defaultWarehouse(boot.value)
+    syncLineWarehouses()
+    editorReady.value = true
+  } catch (err) {
+    error.value = err.message || 'آماده‌سازی فرم درخواست ناموفق بود.'
+    throw err
+  } finally {
+    editorLoading.value = false
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [bootPayload, materialsPayload, uomPayload] = await Promise.all([
-      getManagementInventoryBoot(),
-      listManagementRawMaterials({ limit: 500, include_all_stock: 1 }),
-      listManagementUOMs({ limit: 500 }),
-    ])
-    boot.value = { ...bootPayload, materials: materialsPayload.items || [] }
-    uoms.value = uomPayload.uoms || []
-    if (!isNew) {
+    if (isNew) {
+      await loadEditorContext()
+    } else {
+      // The read-only detail view only needs the request itself. Loading the
+      // full inventory dashboard here used to block the page for minutes.
       const payload = await getManagementMaterialRequest(requestName)
       applyRequest(payload.request, payload.purchase_orders || [])
-    } else {
-      form.set_warehouse = defaultWarehouse(boot.value)
-      syncLineWarehouses()
     }
   } catch (err) {
     error.value = err.message || 'دریافت درخواست ناموفق بود.'
@@ -353,8 +396,16 @@ async function load() {
   }
 }
 
-function edit() {
-  if (request.value?.docstatus === 0) editing.value = true
+async function edit() {
+  if (request.value?.docstatus !== 0) return
+  editing.value = true
+  if (!editorReady.value) {
+    try {
+      await loadEditorContext()
+    } catch (_) {
+      // The visible error message is set by loadEditorContext.
+    }
+  }
 }
 
 async function save(submit) {
@@ -443,6 +494,45 @@ onMounted(load)
 </script>
 
 <style scoped>
+.detail-loading {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  min-height: 220px;
+  padding: 3.5rem 1rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 18px;
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
+  text-align: center;
+}
+
+.detail-loading small,
+.editor-loading {
+  color: var(--mg-text-muted);
+  font-size: 0.74rem;
+}
+
+.loading-orb {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 3px solid color-mix(in srgb, var(--mg-primary) 22%, transparent);
+  border-top-color: var(--mg-primary);
+  border-radius: 50%;
+  animation: detail-spin 0.8s linear infinite;
+}
+
+.editor-loading {
+  margin: 0 0 0.8rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mg-primary) 7%, transparent);
+}
+
+@keyframes detail-spin {
+  to { transform: rotate(360deg); }
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));

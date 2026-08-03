@@ -82,7 +82,13 @@
           <label>منشأ
             <select class="input" v-model="form.source"><option v-for="s in boot.sources || []" :key="s" :value="s">{{ s }}</option></select>
           </label>
-          <label class="full-row">یادداشت<textarea class="input" rows="2" v-model="form.note"></textarea></label>
+          <ManagementNoteField
+            v-model="form.note"
+            class="full-row"
+            label="یادداشت"
+            rows="2"
+            placeholder="درخواست ویژه یا توضیحات رزرو..."
+          />
         </div>
         <p class="error" v-if="formError">{{ formError }}</p>
         <div class="btn-row">
@@ -97,6 +103,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getManagementReservationBoot,

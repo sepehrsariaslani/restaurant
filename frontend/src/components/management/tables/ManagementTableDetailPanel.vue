@@ -37,10 +37,14 @@
               <label>موقعیت فیزیکی</label>
               <input class="input" :value="tableDraft.location" @input="emitField('location', $event.target.value)" placeholder="مثال: سالن اصلی، تراس، پنجره..." />
             </div>
-            <div class="form-group full-width">
-              <label>یادداشت میز</label>
-              <textarea class="input" rows="2" :value="tableDraft.notes" @input="emitField('notes', $event.target.value)" placeholder="یادداشت‌های داخلی..."></textarea>
-            </div>
+            <ManagementNoteField
+              class="form-group full-width"
+              :model-value="tableDraft.notes"
+              label="یادداشت میز"
+              rows="2"
+              placeholder="یادداشت‌های داخلی..."
+              @update:model-value="emitField('notes', $event)"
+            />
             <div class="form-group full-width checkbox-group">
               <label class="check-label">
                 <input
@@ -157,6 +161,7 @@ import {
   Users,
 } from 'lucide-vue-next'
 import { formatMoney } from '@/utils/format'
+import ManagementNoteField from '../ManagementNoteField.vue'
 import ManagementTableStatusBadge from './ManagementTableStatusBadge.vue'
 
 const props = defineProps({
