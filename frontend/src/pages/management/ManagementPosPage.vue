@@ -370,9 +370,9 @@
                     </div>
                     <div class="accordion-footer">
                       <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)"><Download :size="13" /> انتخاب و بارگذاری</button>
-                      <button type="button" class="tbl-btn" @click.stop="settleSelectedInvoice(invoice)"><CreditCard :size="13" /> تسویه</button>
+                      <button type="button" class="tbl-btn" @click.stop="openOpenInvoiceSettlementModal(invoice, false)"><CreditCard :size="13" /> تسویه</button>
                       <template v-if="!invoice.delivery_exists">
-                        <button type="button" class="tbl-btn success settle-btn" @click.stop="settleAndDeliverFromInvoice(invoice)"><CheckCheck :size="13" /> تسویه و تحویل</button>
+                        <button type="button" class="tbl-btn success settle-btn" @click.stop="openOpenInvoiceSettlementModal(invoice, true)"><CheckCheck :size="13" /> تسویه و تحویل</button>
                         <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)"><Truck :size="13" /> تحویل</button>
                       </template>
                       <button type="button" class="tbl-btn danger" style="margin-right: auto;" @click.stop="openPurgeModalFromList(invoice)"><Trash2 :size="13" /> حذف کامل</button>
@@ -761,6 +761,18 @@
       </div>
     </div>
 
+    <OpenInvoiceSettlementModal
+      :open="openInvoiceSettlementModal.open"
+      :invoice="openInvoiceSettlementModal.invoice"
+      :payment-options="posPaymentOptions"
+      :currency="currency"
+      :loading="openInvoiceSettlementModal.loading"
+      :error="openInvoiceSettlementModal.error"
+      :default-option-key="defaultPaymentOptionKey"
+      @close="closeOpenInvoiceSettlementModal"
+      @confirm="confirmOpenInvoiceSettlement"
+    />
+
     <!-- Shared Prompt Modal -->
     <div v-if="promptModal.open" class="pos-modal-backdrop" @click.self="cancelPrompt">
       <section class="pos-modal" dir="rtl">
@@ -845,6 +857,7 @@ import PersianDateInput from '@/components/PersianDateInput.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
 import PosBomSheet from '@/components/management/pos/PosBomSheet.vue'
+import OpenInvoiceSettlementModal from '@/components/management/pos/OpenInvoiceSettlementModal.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import TableSplitBillSheet from '@/components/management/TableSplitBillSheet.vue'
 import {
@@ -1073,6 +1086,13 @@ const moveTableTarget = ref('')
 const mergeTableTarget = ref('')
 const showSplitBill = ref(false)
 const openInvoices = ref([])
+const openInvoiceSettlementModal = reactive({
+  open: false,
+  invoice: null,
+  deliverAfter: false,
+  loading: false,
+  error: '',
+})
 const openInvoicesDate = ref(new Date().toISOString().split('T')[0])
 const openInvoicesبارگذاری = ref(false)
 const openInvoiceError = ref('')
@@ -1581,6 +1601,12 @@ const posPaymentOptions = computed(() => {
   }
 
   return [...dedup.values()]
+})
+
+const defaultPaymentOptionKey = computed(() => {
+  const configured = String(paymentBoot.default_option || '').trim()
+  const configuredOption = posPaymentOptions.value.find((option) => option.key === configured || option.mode_of_payment === configured)
+  return configuredOption?.key || posPaymentOptions.value.find((option) => option.default)?.key || posPaymentOptions.value[0]?.key || ''
 })
 
 const editablePaymentMethodOptions = computed(() => {
@@ -2760,7 +2786,43 @@ async function selectAndLoadInvoice(invoice) {
   }
 }
 
-async function settleSelectedInvoice(invoice) {
+function openOpenInvoiceSettlementModal(invoice, deliverAfter = false) {
+  if (!invoice?.name) return
+  openInvoiceSettlementModal.open = true
+  openInvoiceSettlementModal.invoice = invoice
+  openInvoiceSettlementModal.deliverAfter = Boolean(deliverAfter)
+  openInvoiceSettlementModal.loading = false
+  openInvoiceSettlementModal.error = ''
+}
+
+function closeOpenInvoiceSettlementModal() {
+  openInvoiceSettlementModal.open = false
+  openInvoiceSettlementModal.invoice = null
+  openInvoiceSettlementModal.deliverAfter = false
+  openInvoiceSettlementModal.loading = false
+  openInvoiceSettlementModal.error = ''
+}
+
+async function confirmOpenInvoiceSettlement(paymentSelection) {
+  const invoice = openInvoiceSettlementModal.invoice
+  if (!invoice?.name) return
+  openInvoiceSettlementModal.loading = true
+  openInvoiceSettlementModal.error = ''
+  try {
+    if (openInvoiceSettlementModal.deliverAfter) {
+      await settleAndDeliverFromInvoice(invoice, paymentSelection)
+    } else {
+      await settleSelectedInvoice(invoice, paymentSelection)
+    }
+    closeOpenInvoiceSettlementModal()
+  } catch (err) {
+    openInvoiceSettlementModal.error = err.message || 'تسویه فاکتور ناموفق بود.'
+  } finally {
+    openInvoiceSettlementModal.loading = false
+  }
+}
+
+async function settleSelectedInvoice(invoice, paymentSelection = {}) {
   if (!invoice?.name) return
   settlingOpenInvoice.value = true
   error.value = ''
@@ -2768,27 +2830,30 @@ async function settleSelectedInvoice(invoice) {
   try {
     const result = await markManagementOrderPaid({
       order_name: invoice.name,
-      reference_no: payment.reference_no || '',
-      rrn: payment.rrn || '',
+      payment_method: paymentSelection.method || payment.method || 'cash',
+      mode_of_payment: paymentSelection.mode_of_payment || '',
+      reference_no: paymentSelection.reference_no || payment.reference_no || '',
+      rrn: paymentSelection.rrn || payment.rrn || '',
       provider_payload: {
         source: 'management-pos-open-invoice-list',
+        mode_of_payment: paymentSelection.mode_of_payment || '',
       },
     })
     const siInfo = result.sales_invoice ? ` | فاکتور: ${result.sales_invoice}` : ''
-    if (result.sales_invoice && normalizePaymentMethodKind(payment.method) !== 'credit') {
-      void printOrderReceipt({ ...invoice, payment_method: payment.method })
+    if (result.sales_invoice && normalizePaymentMethodKind(paymentSelection.method || payment.method) !== 'credit') {
+      void printOrderReceipt({ ...invoice, payment_method: paymentSelection.method || payment.method })
     }
     successMessage.value = `فاکتور ${invoice.order_code || invoice.name} تسویه شد.${siInfo}`
     openInvoices.value = openInvoices.value.filter(o => o.name !== invoice.name)
     refreshPOSAfterSubmit()
   } catch (payErr) {
-    error.value = payErr.message || 'تسویه فاکتور باز ناموفق بود.'
+    throw payErr
   } finally {
     settlingOpenInvoice.value = false
   }
 }
 
-async function settleAndDeliverFromInvoice(invoice) {
+async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {
   if (!invoice?.name) return
   settlingOpenInvoice.value = true
   error.value = ''
@@ -2796,10 +2861,13 @@ async function settleAndDeliverFromInvoice(invoice) {
   try {
     const payResult = await markManagementOrderPaid({
       order_name: invoice.name,
-      reference_no: payment.reference_no || '',
-      rrn: payment.rrn || '',
+      payment_method: paymentSelection.method || payment.method || 'cash',
+      mode_of_payment: paymentSelection.mode_of_payment || '',
+      reference_no: paymentSelection.reference_no || payment.reference_no || '',
+      rrn: paymentSelection.rrn || payment.rrn || '',
       provider_payload: {
         source: 'management-pos-open-invoice-list-settle-deliver',
+        mode_of_payment: paymentSelection.mode_of_payment || '',
       },
     })
     const deliverResult = invoice.delivery_exists ? {} : await deliverInvoiceOnly(invoice.name)
@@ -2813,6 +2881,7 @@ async function settleAndDeliverFromInvoice(invoice) {
     refreshPOSAfterSubmit()
   } catch (err) {
     error.value = err.message || 'تسویه و تحویل فاکتور باز ناموفق بود.'
+    throw err
   } finally {
     settlingOpenInvoice.value = false
   }
@@ -6829,7 +6898,7 @@ kbd {
 .pos-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: 12500;
   background: rgb(0 0 0 / 0.6);
   display: flex;
   align-items: center;
@@ -7252,7 +7321,7 @@ kbd {
 
 /* ─── Redesigned Order Detail Modal ─── */
 .od-modal-overlay {
-  position: fixed; inset: 0; z-index: 1000;
+  position: fixed; inset: 0; z-index: 12000;
   background: rgb(25 20 14 / 0.42); display: flex;
   align-items: center; justify-content: center;
   padding: 1rem;

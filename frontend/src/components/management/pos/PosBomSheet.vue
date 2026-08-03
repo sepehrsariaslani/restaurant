@@ -600,7 +600,7 @@ onBeforeUnmount(() => {
 }
 
 .pos-bom-editor-card {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .pos-bom-editor-head {

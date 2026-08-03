@@ -1370,6 +1370,8 @@ export async function markManagementOrderPaid({
 	reference_no = "",
 	rrn = "",
 	provider_payload = {},
+	payment_method = "",
+	mode_of_payment = "",
 } = {}) {
 	try {
 		return await callRestaurantAPI("mark_management_order_paid", {
@@ -1377,6 +1379,8 @@ export async function markManagementOrderPaid({
 			reference_no,
 			rrn,
 			provider_payload,
+			payment_method,
+			mode_of_payment,
 		});
 	} catch (error) {
 		const message = String(error?.message || "");

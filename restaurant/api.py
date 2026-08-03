@@ -15372,7 +15372,8 @@ def confirm_management_pos_payment(
 
 
 def _manual_management_payment_result(
-	so_name, status="paid", reference_no=None, rrn=None, provider_payload=None
+	so_name, status="paid", reference_no=None, rrn=None, provider_payload=None,
+	payment_method=None, mode_of_payment=None,
 ):
 	existing_method = "card"
 	if _has_column("Sales Order", "restaurant_payment_method"):
@@ -15384,8 +15385,17 @@ def _manual_management_payment_result(
 			frappe.db.get_value("Sales Order", so_name, "restaurant_payment_provider") or "manual"
 		)
 
+	method = _normalize_payment_method(payment_method or existing_method)
+	selected_mode = str(mode_of_payment or _resolve_pos_mode_of_payment(method) or "").strip()
 	return {
-		"method": _normalize_payment_method(existing_method),
+		"method": method,
+		"mode_of_payment": selected_mode,
+		"splits": [{
+			"method": method,
+			"mode_of_payment": selected_mode,
+			"amount": 0,
+			"reference_no": (reference_no or "").strip(),
+		}],
 		"provider": (existing_provider or "manual").strip().lower() or "manual",
 		"status": _normalize_payment_status(status),
 		"reference_no": (reference_no or "").strip(),
@@ -15396,7 +15406,10 @@ def _manual_management_payment_result(
 
 
 @frappe.whitelist()
-def mark_management_order_paid(order_name, reference_no=None, rrn=None, provider_payload=None):
+def mark_management_order_paid(
+	order_name, reference_no=None, rrn=None, provider_payload=None,
+	payment_method=None, mode_of_payment=None,
+):
 	_ensure_management_access()
 
 	so_name = _resolve_sales_order_name(order_name)
@@ -15409,6 +15422,8 @@ def mark_management_order_paid(order_name, reference_no=None, rrn=None, provider
 		reference_no=reference_no,
 		rrn=rrn,
 		provider_payload=provider_payload,
+		payment_method=payment_method,
+		mode_of_payment=mode_of_payment,
 	)
 	settle_result = settle_pos_order(order_name=so_name, payment=payment_result)
 	_append_sales_order_note(so_name, "[PAYMENT] پرداخت سفارش ثبت شد (paid)")
