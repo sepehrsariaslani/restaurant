@@ -15070,12 +15070,12 @@ def _background_deliver_pos_order(so_name):
 
             pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
             if pending_transfer > 1e-8 and not cint(wo.skip_transfer):
-                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
+                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True, allow_negative_stock=True)
 
             wo = frappe.get_doc("Work Order", wo.name)
             pending_manufacture = max(flt(wo.qty) - flt(wo.produced_qty), 0)
             if pending_manufacture > 1e-8:
-                _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True)
+                _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=True, allow_negative_stock=True)
 
             wo = frappe.get_doc("Work Order", wo.name)
             if hasattr(wo, "update_work_order_qty"):
@@ -15089,7 +15089,7 @@ def _background_deliver_pos_order(so_name):
                     ticket.db_set("status", "completed", update_modified=False)
 
         try:
-            _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+            _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
         except Exception:
             pass
 
@@ -15193,7 +15193,7 @@ def _background_production_and_delivery(so_name):
         # 1. Delivery Note
         dn_name = None
         try:
-            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+            dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
         except Exception:
             frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error Background")
 
@@ -15224,11 +15224,11 @@ def _background_production_and_delivery(so_name):
                 continue
             pending_transfer = max(flt(wo.qty) - flt(wo.material_transferred_for_manufacturing), 0)
             if pending_transfer > 1e-8 and not cint(wo.skip_transfer):
-                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True)
+                _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=True, allow_negative_stock=True)
             wo = frappe.get_doc("Work Order", wo.name)
             pending_mfg = max(flt(wo.qty) - flt(wo.produced_qty), 0)
             if pending_mfg > 1e-8:
-                _create_work_order_stock_entry(wo.name, "Manufacture", pending_mfg, submit_doc=True)
+                _create_work_order_stock_entry(wo.name, "Manufacture", pending_mfg, submit_doc=True, allow_negative_stock=True)
             wo = frappe.get_doc("Work Order", wo.name)
             if hasattr(wo, "update_work_order_qty"):
                 try: wo.update_work_order_qty()
@@ -15240,7 +15240,7 @@ def _background_production_and_delivery(so_name):
         # 3. Retry Delivery Note if it failed earlier
         if not dn_name:
             try:
-                _create_delivery_note_for_sales_order(so_name, submit_doc=True)
+                _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
             except Exception:
                 pass
                 
