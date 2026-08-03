@@ -926,6 +926,7 @@ function defaultFinancialState() {
     discountType: 'fixed',
     discountValue: 0,
     targetAmount: null,
+    targetServiceSnapshot: null,
     taxExempt: false,
     taxType: 'fixed',
     taxValue: 0,
@@ -1112,6 +1113,7 @@ const scaleConfig = reactive({
 const paymentBoot = reactive({
   enabled: false,
   supports_card: false,
+  default_option: '',
   provider: 'manual',
   provider_label: 'حالت دستی',
   terminal_id: '',
@@ -1653,6 +1655,10 @@ watch(
     if (financial.targetAmount == null) return
     financial.discountType = 'fixed'
     financial.discountValue = Number(totals.value.discountAmount || 0)
+    if (totals.value.automaticService) {
+      financial.serviceType = 'fixed'
+      financial.serviceValue = Number(totals.value.serviceAmount || 0)
+    }
   },
 )
 
@@ -1869,11 +1875,31 @@ function patchFinancial(partial) {
 
 function setFinalAmount(value) {
   const amount = Number(value)
-  financial.targetAmount = Number.isFinite(amount) && amount > 0 ? amount : null
-  if (financial.targetAmount == null) {
+  const nextTarget = Number.isFinite(amount) && amount > 0 ? amount : null
+
+  if (nextTarget != null) {
+    if (financial.targetAmount == null && !financial.targetServiceSnapshot) {
+      financial.targetServiceSnapshot = {
+        type: financial.serviceType,
+        value: Number(financial.serviceValue || 0),
+      }
+    } else if (financial.targetServiceSnapshot) {
+      financial.serviceType = financial.targetServiceSnapshot.type
+      financial.serviceValue = financial.targetServiceSnapshot.value
+    }
     financial.discountType = 'fixed'
-    financial.discountValue = 0
+    financial.targetAmount = nextTarget
+    return
   }
+
+  if (financial.targetServiceSnapshot) {
+    financial.serviceType = financial.targetServiceSnapshot.type
+    financial.serviceValue = financial.targetServiceSnapshot.value
+  }
+  financial.targetServiceSnapshot = null
+  financial.targetAmount = null
+  financial.discountType = 'fixed'
+  financial.discountValue = 0
 }
 
 function applyPOSProfileSummary(summary = {}) {
@@ -2968,8 +2994,8 @@ function currentOrderDraftSignature() {
     financial: {
       discountType: financial.targetAmount != null ? 'fixed' : financial.discountType,
       discountValue: financial.targetAmount != null ? Number(totals.value.discountAmount || 0) : Number(financial.discountValue || 0),
-      serviceType: financial.serviceType,
-      serviceValue: Number(financial.serviceValue || 0),
+      serviceType: totals.value.automaticService ? 'fixed' : financial.serviceType,
+      serviceValue: totals.value.automaticService ? Number(totals.value.serviceAmount || 0) : Number(financial.serviceValue || 0),
       taxType: financial.taxExempt ? 'fixed' : financial.taxType,
       taxValue: financial.taxExempt ? 0 : Number(financial.taxValue || 0),
       tipAmount: Number(financial.tipAmount || 0),
@@ -3013,7 +3039,12 @@ function resolveProductBySlug(itemSlug, fallback = {}) {
 }
 
 function resetFinalAmountTarget() {
-  if (financial.targetAmount == null) return
+  if (financial.targetAmount == null && !financial.targetServiceSnapshot) return
+  if (financial.targetServiceSnapshot) {
+    financial.serviceType = financial.targetServiceSnapshot.type
+    financial.serviceValue = financial.targetServiceSnapshot.value
+  }
+  financial.targetServiceSnapshot = null
   financial.targetAmount = null
   financial.discountType = 'fixed'
   financial.discountValue = 0
@@ -4669,8 +4700,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     financial_modifiers: {
       discount_type: financial.targetAmount != null ? 'fixed' : financial.discountType,
       discount_value: financial.targetAmount != null ? Number(totals.value.discountAmount || 0) : financial.discountValue,
-      service_type: financial.serviceType,
-      service_value: financial.serviceValue,
+      service_type: totals.value.automaticService ? 'fixed' : financial.serviceType,
+      service_value: totals.value.automaticService ? Number(totals.value.serviceAmount || 0) : financial.serviceValue,
       tax_type: financial.taxExempt ? 'fixed' : financial.taxType,
       tax_value: financial.taxExempt ? 0 : financial.taxValue,
       tax_amount: totals.value.taxAmount || 0,
@@ -4898,6 +4929,7 @@ async function loadPOSBoot() {
     const bootPayment = payload.payment || {}
     paymentBoot.enabled = Boolean(bootPayment.enabled)
     paymentBoot.supports_card = Boolean(bootPayment.supports_card)
+    paymentBoot.default_option = String(bootPayment.default_option || bootPosConfig?.default_payment_option || '').trim()
     paymentBoot.provider = bootPayment.provider || 'manual'
     paymentBoot.provider_label =
       paymentBoot.provider === 'local_node'
@@ -4908,7 +4940,10 @@ async function loadPOSBoot() {
     paymentBoot.terminal_id = bootPayment.terminal_id || ''
     paymentBoot.methods = [...posPaymentOptions.value]
 
-    payment.method = bootPayment.default_method || 'cash'
+    const configuredPaymentOption = posPaymentOptions.value.find((option) =>
+      option.key === paymentBoot.default_option || option.mode_of_payment === paymentBoot.default_option,
+    )
+    payment.method = configuredPaymentOption?.method || bootPayment.default_method || 'cash'
     bootDefaultPaymentMethod = payment.method
     if (!posPaymentOptions.value.some((row) => row.method === payment.method)) {
       payment.method = posPaymentOptions.value[0]?.method || 'cash'

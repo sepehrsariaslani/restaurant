@@ -661,12 +661,16 @@ const paymentOptionList = computed(() =>
 );
 
 const defaultPaymentOption = computed(() => {
-	const exactMethod = paymentOptionList.value.find((option) => option.method === props.paymentMethod);
-	if (exactMethod) {
-		return exactMethod;
-	}
+	const configured = String(props.paymentBoot?.default_option || '').trim();
+	const configuredOption = configured
+		? paymentOptionList.value.find((option) => option.key === configured || option.mode_of_payment === configured)
+		: null;
+	if (configuredOption) return configuredOption;
+	const exactMethod = paymentOptionList.value.find((option) => option.method === props.paymentMethod && option.default);
+	if (exactMethod) return exactMethod;
 	return (
 		paymentOptionList.value.find((option) => Boolean(option.default)) ||
+		paymentOptionList.value.find((option) => option.method === props.paymentMethod) ||
 		paymentOptionList.value[0] ||
 		null
 	);
@@ -743,8 +747,9 @@ function openPaymentPopup(preferredMethod = null, intent = "pay") {
 	const total = normalizeMoneyNumber(props.totals?.payableAmount);
 	const preferredOption =
 		paymentOptionList.value.find((option) => option.method === preferredMethod) ||
+		defaultPaymentOption.value ||
 		paymentOptionList.value.find((option) => option.method === props.paymentMethod) ||
-		defaultPaymentOption.value;
+		paymentOptionList.value[0];
 	paymentSplits.value = [buildSplit(preferredOption?.key || "", total)];
 	paymentPopupIntent.value = intent === "settle" ? "settle" : "pay";
 	showPaymentPopup.value = true;

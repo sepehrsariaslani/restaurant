@@ -914,10 +914,16 @@ def _get_pos_payment_settings():
 
 def _management_pos_payment_boot():
 	settings = _get_pos_payment_settings()
+	pos_defaults = _parse_json(frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}", {})
+	if not isinstance(pos_defaults, dict):
+		pos_defaults = {}
+	default_method = _normalize_payment_method(pos_defaults.get("default_payment_method") or settings["default_method"])
+	default_option = str(pos_defaults.get("default_payment_option") or "").strip()
 	return {
 		"enabled": settings["enabled"],
 		"provider": settings["provider"],
-		"default_method": settings["default_method"],
+		"default_method": default_method,
+		"default_option": default_option,
 		"terminal_id": settings["terminal_id"],
 		"supports_card": settings["enabled"],
 		"local_node": {
@@ -14385,6 +14391,19 @@ def get_management_pos_config():
 	if not default_delivery_courier and delivery_couriers:
 		default_delivery_courier = delivery_couriers[0].get("label") or ""
 
+	payment_profile = _management_pos_profile_summary()
+	payment_options = payment_profile.get("payments") or []
+	if not payment_options and frappe.db.exists("DocType", "Mode of Payment"):
+		payment_options = [
+			{"mode_of_payment": row.get("name"), "type": row.get("type") or ""}
+			for row in frappe.get_all(
+				"Mode of Payment",
+				fields=["name", "type"],
+				filters={"enabled": 1} if _has_column("Mode of Payment", "enabled") else {},
+				order_by="name asc",
+				limit_page_length=200,
+			)
+		]
 	defaults = {
 		"default_order_mode": config.get("default_order_mode", "dine_in"),
 		"default_customers": config.get(
@@ -14400,6 +14419,9 @@ def get_management_pos_config():
 		"delivery_places": config.get("delivery_places", ["پیک 1", "پیک 2", "پیک 3", "ارسال اکسپرس"]),
 		"default_delivery_place": config.get("default_delivery_place", "پیک 1"),
 		"default_delivery_courier": default_delivery_courier,
+		"default_payment_option": (config.get("default_payment_option") or "").strip(),
+		"default_payment_method": _normalize_payment_method(config.get("default_payment_method") or "cash"),
+		"payment_options": payment_options,
 		"delivery_couriers": delivery_couriers,
 	}
 	return defaults
@@ -14431,6 +14453,8 @@ def set_management_pos_config(payload=None):
 		"delivery_places",
 		"default_delivery_place",
 		"default_delivery_courier",
+		"default_payment_option",
+		"default_payment_method",
 	):
 		if key in data:
 			current[key] = data[key]

@@ -60,6 +60,23 @@
       </div>
     </ManagementSurfaceCard>
 
+    <!-- Default Payment Method -->
+    <ManagementSurfaceCard title="روش پرداخت پیش‌فرض" subtitle="روش پرداخت اصلی را برای فاکتورهای جدید POS انتخاب کنید">
+      <div class="payment-default-settings">
+        <label>
+          روش پرداخت اصلی
+          <SearchableDropdown
+            v-model="localConfig.default_payment_option"
+            :options="paymentOptions"
+            placeholder="انتخاب روش پرداخت"
+            search-placeholder="جستجوی روش پرداخت..."
+          />
+        </label>
+        <p class="muted hint" v-if="!paymentOptions.length">روش پرداختی از پروفایل POS دریافت نشد؛ ابتدا روش‌های پرداخت پروفایل را تنظیم کنید.</p>
+        <p class="muted hint" v-else>این انتخاب در فرم تسویه به‌عنوان روش اصلی پیشنهاد می‌شود و همچنان قابل تغییر است.</p>
+      </div>
+    </ManagementSurfaceCard>
+
     <!-- Takeaway Places -->
     <ManagementSurfaceCard title="جایگاه‌های بیرون بر (مشتری)" subtitle="لیست جایگاه‌هایی که در حالت بیرون بر نمایش داده می‌شود">
       <div class="places-editor">
@@ -116,6 +133,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   getManagementPOSConfig,
   listManagementCouriers,
@@ -129,6 +147,7 @@ const error = ref('')
 const successMessage = ref('')
 const customerOptions = ref([])
 const courierOptions = ref([])
+const paymentOptions = ref([])
 
 const orderModes = [
   { value: 'dine_in', label: 'سالن' },
@@ -148,6 +167,8 @@ const defaultConfig = {
   delivery_places: ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس'],
   default_delivery_place: 'پیک 1',
   default_delivery_courier: '',
+  default_payment_option: '',
+  default_payment_method: 'cash',
 }
 
 const localConfig = reactive({
@@ -162,6 +183,8 @@ const localConfig = reactive({
   delivery_places: ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس'],
   default_delivery_place: 'پیک 1',
   default_delivery_courier: '',
+  default_payment_option: '',
+  default_payment_method: 'cash',
 })
 
 function applyConfig(cfg) {
@@ -177,6 +200,14 @@ function applyConfig(cfg) {
   localConfig.delivery_places = Array.isArray(cfg.delivery_places) ? [...cfg.delivery_places] : ['پیک 1', 'پیک 2', 'پیک 3', 'ارسال اکسپرس']
   localConfig.default_delivery_place = cfg.default_delivery_place || (localConfig.delivery_places[0] || '')
   localConfig.default_delivery_courier = cfg.default_delivery_courier || ''
+  localConfig.default_payment_option = cfg.default_payment_option || ''
+  localConfig.default_payment_method = cfg.default_payment_method || 'cash'
+  paymentOptions.value = (cfg.payment_options || [])
+    .map((row) => {
+      const value = String(row?.mode_of_payment || row?.payment_method || row?.name || '').trim()
+      return value ? { value, label: value } : null
+    })
+    .filter(Boolean)
 }
 
 async function loadConfig() {
@@ -224,6 +255,8 @@ async function saveConfig() {
       delivery_places: localConfig.delivery_places.filter(Boolean),
       default_delivery_place: localConfig.default_delivery_place,
       default_delivery_courier: localConfig.default_delivery_courier,
+      default_payment_option: localConfig.default_payment_option,
+      default_payment_method: localConfig.default_payment_method,
     }
     await setManagementPOSConfig(payload)
     successMessage.value = 'تنظیمات با موفقیت ذخیره شد.'
@@ -329,6 +362,24 @@ onMounted(() => {
   margin-top: 4px;
   box-sizing: border-box;
 }
+.payment-default-settings {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 520px;
+}
+
+.payment-default-settings > label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--mg-text-main);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.payment-default-settings :deep(.searchable-dropdown) {
+  width: 100%;
+}
+
 .places-editor {
   display: flex;
   flex-direction: column;

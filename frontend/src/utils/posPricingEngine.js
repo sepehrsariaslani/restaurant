@@ -68,7 +68,23 @@ export function calculatePosTotals(args = {}) {
 
   const baseArgs = { ...args, targetPayableAmount: null }
   const baseTotals = calculateTotalsWithoutTarget(baseArgs)
-  const desired = clamp(target, 0, baseTotals.payableAmount)
+  const desired = Math.max(target, 0)
+
+  // A target above the current invoice is a surcharge, not a discount. Keep
+  // the difference visible in service charges so the final payable amount
+  // remains exactly what the cashier entered.
+  if (desired >= baseTotals.payableAmount) {
+    const serviceAdjustment = desired - baseTotals.payableAmount
+    return {
+      ...baseTotals,
+      serviceAmount: baseTotals.serviceAmount + serviceAdjustment,
+      payableAmount: desired,
+      targetPayableAmount: desired,
+      automaticDiscount: false,
+      automaticService: serviceAdjustment > 0,
+    }
+  }
+
   let low = 0
   let high = baseTotals.itemsTotal
 
@@ -94,5 +110,6 @@ export function calculatePosTotals(args = {}) {
     ...result,
     targetPayableAmount: desired,
     automaticDiscount: true,
+    automaticService: false,
   }
 }
