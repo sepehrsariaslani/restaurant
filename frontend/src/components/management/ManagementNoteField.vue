@@ -133,7 +133,7 @@ defineExpose({ fieldRef })
   min-height: 42px;
   resize: vertical;
   border-color: var(--mg-border, #d8c8b4);
-  background: var(--mg-bg-surface, #fbf7f1);
+  background: color-mix(in srgb, var(--mg-bg-surface, #fbf7f1) 84%, #ffffff 16%);
   color: var(--mg-text-main, #34261f);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
@@ -141,6 +141,11 @@ defineExpose({ fieldRef })
 textarea.note-field-control {
   min-height: 76px;
   line-height: 1.75;
+}
+
+:global(.dark) .note-field-control,
+:global(body.management-theme-dark) .note-field-control {
+  background: color-mix(in srgb, var(--mg-bg-surface, #25221f) 94%, #ffffff 6%);
 }
 
 .note-field-control::placeholder {

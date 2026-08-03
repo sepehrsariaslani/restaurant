@@ -12,13 +12,13 @@
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="loading" class="muted">در حال دریافت درخواست‌ها...</p>
       <InventoryResponsiveList v-else :columns="columns" :rows="requests" row-key="name" @row-click="openRow" empty-text="درخواستی ثبت نشده است.">
-        <template #cell-name="{ row }"><strong>{{ row.name }}</strong><small class="sub">{{ row.transaction_date }}</small></template>
+        <template #cell-name="{ row }"><strong>{{ row.name }}</strong><small class="sub">{{ formatPersianDate(row.transaction_date) }}</small></template>
         <template #cell-status_label="{ row }"><span :class="['status-pill', statusClass(row.status)]">{{ row.status_label }}</span></template>
         <template #cell-items="{ row }">{{ qty(row.item_count) }} قلم</template>
         <template #cell-total_qty="{ value }">{{ qty(value) }}</template>
-        <template #cell-schedule_date="{ value }">{{ value || '—' }}</template>
+        <template #cell-schedule_date="{ value }">{{ formatPersianDate(value) }}</template>
         <template #cell-purchase="{ row }">{{ row.purchase_orders?.length ? 'خرید ایجاد شده' : '—' }}</template>
-        <template #card="{ row }"><div class="card-head"><strong>{{ row.name }}</strong><span :class="['status-pill', statusClass(row.status)]">{{ row.status_label }}</span></div><small class="sub">درخواست: {{ row.transaction_date }} • نیاز: {{ row.schedule_date || '—' }}</small><div class="card-meta"><span>{{ qty(row.item_count) }} قلم • {{ qty(row.total_qty) }} مقدار</span><span>{{ row.set_warehouse || 'همه انبارها' }}</span></div><small class="sub">{{ row.purchase_orders?.length ? 'پیش‌نویس خرید متصل دارد' : 'برای جزئیات لمس کنید' }}</small></template>
+        <template #card="{ row }"><div class="card-head"><strong>{{ row.name }}</strong><span :class="['status-pill', statusClass(row.status)]">{{ row.status_label }}</span></div><small class="sub">درخواست: {{ formatPersianDate(row.transaction_date) }} • نیاز: {{ formatPersianDate(row.schedule_date) }}</small><div class="card-meta"><span>{{ qty(row.item_count) }} قلم • {{ qty(row.total_qty) }} مقدار</span><span>{{ row.set_warehouse || 'همه انبارها' }}</span></div><small class="sub">{{ row.purchase_orders?.length ? 'پیش‌نویس خرید متصل دارد' : 'برای جزئیات لمس کنید' }}</small></template>
       </InventoryResponsiveList>
     </ManagementSurfaceCard>
   </InventorySectionShell>
@@ -30,6 +30,7 @@ import InventoryResponsiveList from '@/components/management/inventory/Inventory
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
+import { formatPersianDate } from '@/utils/persianDate'
 import { listManagementMaterialRequests } from '@/utils/api'
 
 const requests = ref([])

@@ -278,16 +278,20 @@
             </select>
           </label>
           <label v-if="movementForm.movement_type !== 'receipt'">انبار مبدأ
-            <select class="input" v-model="movementForm.from_warehouse">
-              <option value="">انتخاب...</option>
-              <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-            </select>
+            <SearchableDropdown
+              v-model="movementForm.from_warehouse"
+              :options="warehouseOptions"
+              placeholder="انتخاب انبار"
+              search-placeholder="جستجوی انبار..."
+            />
           </label>
           <label v-if="movementForm.movement_type === 'receipt' || movementForm.movement_type === 'transfer'">انبار مقصد
-            <select class="input" v-model="movementForm.to_warehouse">
-              <option value="">انتخاب...</option>
-              <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-            </select>
+            <SearchableDropdown
+              v-model="movementForm.to_warehouse"
+              :options="warehouseOptions"
+              placeholder="انتخاب انبار"
+              search-placeholder="جستجوی انبار..."
+            />
           </label>
           <label>تاریخ سند
             <PersianDateInput v-model="movementForm.posting_date" />
@@ -332,7 +336,7 @@
             </thead>
             <tbody>
               <tr v-for="(row, i) in movements" :key="i">
-                <td>{{ row.posting_date }}<br><small class="muted">{{ row.posting_time }}</small></td>
+                <td>{{ formatPersianDate(row.posting_date) }}<br><small class="muted">{{ row.posting_time }}</small></td>
                 <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
                 <td>{{ row.warehouse }}</td>
                 <td :class="row.qty_change >= 0 ? 'ok-text' : 'warn-text'">{{ row.qty_change >= 0 ? '+' : '' }}{{ formatQty(row.qty_change) }} {{ row.stock_uom }}</td>
@@ -425,7 +429,7 @@
             <header class="material-request-card-head">
               <div>
                 <strong>{{ request.name }}</strong>
-                <small>{{ request.transaction_date }} • نیاز تا {{ request.schedule_date || '—' }}</small>
+                <small>{{ formatPersianDate(request.transaction_date) }} • نیاز تا {{ formatPersianDate(request.schedule_date) }}</small>
               </div>
               <span :class="['pill', requestStatusClass(request.status)]">{{ request.status_label }}</span>
             </header>
@@ -464,10 +468,12 @@
               <PersianDateInput v-model="materialRequestForm.schedule_date" />
             </label>
             <label>انبار مقصد
-              <select class="input" v-model="materialRequestForm.set_warehouse">
-                <option value="">انتخاب انبار</option>
-                <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-              </select>
+              <SearchableDropdown
+                v-model="materialRequestForm.set_warehouse"
+                :options="warehouseOptions"
+                placeholder="انتخاب انبار"
+                search-placeholder="جستجوی انبار..."
+              />
             </label>
             <ManagementNoteField
               v-model="materialRequestForm.note"
@@ -513,8 +519,8 @@
           </header>
           <div class="request-detail-meta">
             <div><small>وضعیت</small><strong><span :class="['pill', requestStatusClass(materialRequestDetail.status)]">{{ materialRequestDetail.status_label }}</span></strong></div>
-            <div><small>تاریخ درخواست</small><strong>{{ materialRequestDetail.transaction_date }}</strong></div>
-            <div><small>تاریخ نیاز</small><strong>{{ materialRequestDetail.schedule_date || '—' }}</strong></div>
+            <div><small>تاریخ درخواست</small><strong>{{ formatPersianDate(materialRequestDetail.transaction_date) }}</strong></div>
+            <div><small>تاریخ نیاز</small><strong>{{ formatPersianDate(materialRequestDetail.schedule_date) }}</strong></div>
             <div><small>انبار مقصد</small><strong>{{ materialRequestDetail.set_warehouse || '—' }}</strong></div>
             <div><small>مجموع مقدار</small><strong>{{ formatQty(materialRequestDetail.total_qty) }}</strong></div>
           </div>
@@ -572,10 +578,12 @@
               </select>
             </label>
             <label>انبار مقصد
-              <select class="input" v-model="purchaseForm.target_warehouse">
-                <option value="">—</option>
-                <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-              </select>
+              <SearchableDropdown
+                v-model="purchaseForm.target_warehouse"
+                :options="warehouseOptions"
+                placeholder="انتخاب انبار"
+                search-placeholder="جستجوی انبار..."
+              />
             </label>
             <label>تاریخ سفارش <PersianDateInput v-model="purchaseForm.posting_date" /></label>
             <label>تاریخ تحویل مورد انتظار <PersianDateInput v-model="purchaseForm.expected_date" /></label>
@@ -611,7 +619,7 @@
               <tr v-for="row in purchases" :key="row.name">
                 <td><strong>{{ row.name }}</strong></td>
                 <td>{{ row.supplier_name || '—' }}</td>
-                <td>{{ row.posting_date }}</td>
+                <td>{{ formatPersianDate(row.posting_date) }}</td>
                 <td><span :class="['pill', purchaseStatusClass(row.status)]">{{ row.status }}</span></td>
                 <td>{{ formatQty(row.total_qty) }}</td>
                 <td>{{ formatMoneyValue(row.grand_total) }}</td>
@@ -954,7 +962,7 @@
             <tbody>
               <tr v-for="row in reconciliations" :key="row.name">
                 <td><strong>{{ row.name }}</strong></td>
-                <td>{{ row.posting_date }}</td>
+                <td>{{ formatPersianDate(row.posting_date) }}</td>
                 <td>{{ row.company }}</td>
                 <td :class="row.difference_amount === 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.difference_amount) }}</td>
                 <td><button type="button" class="tertiary-btn" @click="viewReconciliation(row.name)">جزئیات</button></td>
@@ -1088,6 +1096,7 @@ import {
   uploadFileToFrappe,
 } from '@/utils/api'
 import { formatMoney as formatMoneyUtil } from '@/utils/format'
+import { formatPersianDate } from '@/utils/persianDate'
 
 const pageProps = defineProps({ initialTab: { type: String, default: '' } })
 
@@ -1135,6 +1144,7 @@ const bootLoading = ref(false)
 const loadingAny = computed(() => bootLoading.value || requestLoading.value || purchaseLoading.value)
 
 const leafWarehouses = computed(() => (boot.value ? boot.value.leaf_warehouses || [] : []))
+const warehouseOptions = computed(() => leafWarehouses.value.map((value) => ({ value, label: value })))
 const supplierOptions = computed(() =>
   (boot.value ? boot.value.suppliers || [] : []).map((s) => ({ value: s.name, label: s.supplier_name || s.name })),
 )
@@ -1330,7 +1340,16 @@ async function saveMaterialRequest(submit = false) {
       items,
       submit: submit ? 1 : 0,
     })
-    requestMessage.value = submit ? `درخواست ${result.request.name} ثبت نهایی شد.` : `پیش‌نویس ${result.request.name} ذخیره شد.`
+    if (submit) {
+      const purchase = await createManagementPurchaseFromMaterialRequest({
+        name: result.request.name,
+        target_warehouse: result.request.set_warehouse || warehouse,
+        items: result.request.items.map((line) => ({ item_code: line.item_code, qty: line.qty, uom: line.uom || line.stock_uom, rate: line.rate || 0 })),
+      })
+      window.location.href = `/management/inventory/purchases/detail?name=${encodeURIComponent(purchase.purchase.name)}`
+      return
+    }
+    requestMessage.value = `پیش‌نویس ${result.request.name} ذخیره شد.`
     materialRequestForm.value = null
     await loadMaterialRequests()
     await openMaterialRequestDetail(result.request.name)
@@ -1358,6 +1377,15 @@ async function changeMaterialRequestStatus(action) {
   requestError.value = ''
   try {
     const result = await updateManagementMaterialRequestStatus({ name: materialRequestDetail.value.name, action })
+    if (action === 'submit') {
+      const purchase = await createManagementPurchaseFromMaterialRequest({
+        name: result.request.name,
+        target_warehouse: result.request.set_warehouse || boot.value?.settings?.default_warehouse || '',
+        items: result.request.items.map((line) => ({ item_code: line.item_code, qty: line.qty, uom: line.uom || line.stock_uom, rate: line.rate || 0 })),
+      })
+      window.location.href = `/management/inventory/purchases/detail?name=${encodeURIComponent(purchase.purchase.name)}`
+      return
+    }
     materialRequestDetail.value = result.request
     requestMessage.value = 'وضعیت درخواست مواد به‌روزرسانی شد.'
     await loadMaterialRequests()

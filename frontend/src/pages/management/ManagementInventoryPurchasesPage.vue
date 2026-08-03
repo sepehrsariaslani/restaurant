@@ -5,12 +5,12 @@
       <div class="inventory-toolbar"><select class="input" v-model="filters.status" @change="load"><option value="">همه وضعیت‌ها</option><option v-for="status in statuses" :key="status" :value="status">{{ status }}</option></select><input class="input" v-model.trim="filters.search" placeholder="شماره یا تأمین‌کننده..." @keyup.enter="load" /><button type="button" class="secondary-btn" @click="load" :disabled="loading">{{ loading ? '...' : 'جستجو' }}</button></div>
       <p v-if="error" class="error">{{ error }}</p><p v-if="loading" class="muted">در حال دریافت سفارش‌های خرید...</p>
       <InventoryResponsiveList v-else :columns="columns" :rows="orders" row-key="name" @row-click="openRow" empty-text="سفارش خریدی ثبت نشده است.">
-        <template #cell-name="{ row }"><strong>{{ row.name }}</strong><small class="sub">{{ row.posting_date }}</small></template>
+        <template #cell-name="{ row }"><strong>{{ row.name }}</strong><small class="sub">{{ formatPersianDate(row.posting_date) }}</small></template>
         <template #cell-status="{ value }"><span :class="['status-pill', statusClass(value)]">{{ value }}</span></template>
         <template #cell-supplier_name="{ value }">{{ value || '—' }}</template>
         <template #cell-total_qty="{ value }">{{ qty(value) }}</template>
         <template #cell-grand_total="{ value }">{{ money(value) }}</template>
-        <template #card="{ row }"><div class="card-head"><strong>{{ row.name }}</strong><span :class="['status-pill', statusClass(row.status)]">{{ row.status }}</span></div><small class="sub">{{ row.supplier_name || 'بدون تأمین‌کننده' }} • {{ row.posting_date }}</small><div class="card-meta"><span>{{ qty(row.total_qty) }} قلم</span><strong>{{ money(row.grand_total) }}</strong></div></template>
+        <template #card="{ row }"><div class="card-head"><strong>{{ row.name }}</strong><span :class="['status-pill', statusClass(row.status)]">{{ row.status }}</span></div><small class="sub">{{ row.supplier_name || 'بدون تأمین‌کننده' }} • {{ formatPersianDate(row.posting_date) }}</small><div class="card-meta"><span>{{ qty(row.total_qty) }} قلم</span><strong>{{ money(row.grand_total) }}</strong></div></template>
       </InventoryResponsiveList>
     </ManagementSurfaceCard>
   </InventorySectionShell>
@@ -21,6 +21,7 @@ import { onMounted, reactive, ref } from 'vue'
 import InventoryResponsiveList from '@/components/management/inventory/InventoryResponsiveList.vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import { formatPersianDate } from '@/utils/persianDate'
 import { listManagementPurchaseOrders } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 const orders=ref([]), loading=ref(false), error=ref(''), filters=reactive({status:'',search:''})

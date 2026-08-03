@@ -3402,6 +3402,10 @@ export function saveManagementPurchaseOrder(payload = {}) {
 	return callRestaurantAPI("save_management_purchase_order", { payload });
 }
 
+export function saveManagementPurchaseOrderProgress(payload = {}) {
+	return callRestaurantAPI("save_management_purchase_order_progress", { payload });
+}
+
 export function updateManagementPurchaseOrderStatus(payload = {}) {
 	return callRestaurantAPI("update_management_purchase_order_status", { payload });
 }

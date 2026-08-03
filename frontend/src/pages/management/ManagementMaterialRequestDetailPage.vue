@@ -29,12 +29,14 @@
         </label>
         <label>
           انبار مقصد
-          <select class="input" v-model="form.set_warehouse" :disabled="editorLoading" @change="syncLineWarehouses">
-            <option value="">انتخاب انبار</option>
-            <option v-for="warehouse in boot?.leaf_warehouses || []" :key="warehouse" :value="warehouse">
-              {{ warehouse }}
-            </option>
-          </select>
+          <SearchableDropdown
+            v-model="form.set_warehouse"
+            :disabled="editorLoading"
+            :options="warehouseOptions"
+            placeholder="انتخاب انبار"
+            search-placeholder="جستجوی انبار..."
+            @update:model-value="syncLineWarehouses"
+          />
         </label>
         <ManagementNoteField
           v-model="form.note"
@@ -132,11 +134,11 @@
           </div>
           <div>
             <small>تاریخ درخواست</small>
-            <strong>{{ request.transaction_date }}</strong>
+            <strong>{{ formatPersianDate(request.transaction_date) }}</strong>
           </div>
           <div>
             <small>تاریخ نیاز</small>
-            <strong>{{ request.schedule_date || '—' }}</strong>
+            <strong>{{ formatPersianDate(request.schedule_date) }}</strong>
           </div>
           <div>
             <small>انبار مقصد</small>
@@ -196,6 +198,7 @@ import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import { formatPersianDate } from '@/utils/persianDate'
 import {
   createManagementPurchaseFromMaterialRequest,
   getManagementMaterialRequest,
@@ -238,6 +241,7 @@ const materialOptions = computed(() =>
   })),
 )
 const uomOptions = computed(() => uoms.value.map((value) => ({ value, label: value })))
+const warehouseOptions = computed(() => (boot.value?.leaf_warehouses || []).map((value) => ({ value, label: value })))
 const hasValidItems = computed(() => form.items.some((line) => line.item_code && Number(line.qty) > 0))
 const hasWarehouse = computed(() => Boolean(String(form.set_warehouse || '').trim()))
 const canSave = computed(() => editorReady.value && hasValidItems.value && hasWarehouse.value)
@@ -429,7 +433,11 @@ async function save(submit) {
       items,
       submit: submit ? 1 : 0,
     })
-    message.value = submit ? 'درخواست نهایی ثبت شد.' : 'پیش‌نویس ذخیره شد.'
+    if (submit) {
+      await openPurchaseFromRequest(result.request)
+      return
+    }
+    message.value = 'پیش‌نویس ذخیره شد.'
     if (isNew) {
       window.location.href = `/management/inventory/requests/detail?name=${encodeURIComponent(result.request.name)}`
     } else {
@@ -443,12 +451,30 @@ async function save(submit) {
   }
 }
 
+async function openPurchaseFromRequest(value) {
+  const result = await createManagementPurchaseFromMaterialRequest({
+    name: value.name,
+    target_warehouse: value.set_warehouse || defaultWarehouse(),
+    items: (value.items || []).map((line) => ({
+      item_code: line.item_code,
+      qty: line.qty,
+      uom: line.uom || line.stock_uom,
+      rate: line.rate || 0,
+    })),
+  })
+  window.location.href = `/management/inventory/purchases/detail?name=${encodeURIComponent(result.purchase.name)}`
+}
+
 async function changeStatus(action) {
   try {
     const result = await updateManagementMaterialRequestStatus({ name: request.value.name, action })
+    if (action === 'submit') {
+      await openPurchaseFromRequest(result.request)
+      return
+    }
     request.value = result.request
     editing.value = false
-    message.value = action === 'submit' ? 'درخواست نهایی ثبت شد.' : 'درخواست لغو شد.'
+    message.value = 'درخواست لغو شد.'
   } catch (err) {
     error.value = err.message || 'تغییر وضعیت ناموفق بود.'
   }
@@ -458,17 +484,7 @@ async function createPurchase() {
   purchaseSaving.value = true
   error.value = ''
   try {
-    const result = await createManagementPurchaseFromMaterialRequest({
-      name: request.value.name,
-      target_warehouse: request.value.set_warehouse || defaultWarehouse(),
-      items: request.value.items.map((line) => ({
-        item_code: line.item_code,
-        qty: line.qty,
-        uom: line.uom || line.stock_uom,
-        rate: line.rate || 0,
-      })),
-    })
-    window.location.href = `/management/inventory/purchases/detail?name=${encodeURIComponent(result.purchase.name)}`
+    await openPurchaseFromRequest(request.value)
   } catch (err) {
     error.value = err.message || 'ساخت خرید ناموفق بود.'
   } finally {

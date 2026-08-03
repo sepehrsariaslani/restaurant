@@ -89,6 +89,7 @@ __all__ = [
 	"list_management_purchase_orders",
 	"get_management_purchase_order",
 	"save_management_purchase_order",
+	"save_management_purchase_order_progress",
 	"update_management_purchase_order_status",
 	"receive_management_purchase_order",
 	# reorder alerts
@@ -1965,12 +1966,18 @@ def save_management_purchase_order(payload=None):
 	payload = _inv_parse_payload(payload)
 	name = (payload.get("name") or "").strip()
 
+	existing_received = {}
 	if name:
 		if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, name):
 			frappe.throw(_("سفارش خرید یافت نشد: {0}").format(name))
 		doc = frappe.get_doc(PURCHASE_ORDER_DOCTYPE, name)
 		if doc.status != PURCHASE_STATUS_DRAFT:
 			frappe.throw(_("فقط سفارش‌های پیش‌نویس قابل ویرایش هستند."))
+		existing_received = {
+			str(row.get("item_code") or ""): flt(row.get("received_qty"))
+			for row in (doc.get("items") or [])
+			if row.get("item_code")
+		}
 	else:
 		doc = frappe.new_doc(PURCHASE_ORDER_DOCTYPE)
 
@@ -2004,7 +2011,7 @@ def save_management_purchase_order(payload=None):
 		row.qty = qty
 		row.rate = rate
 		row.amount = flt(qty * rate)
-		row.received_qty = 0
+		row.received_qty = flt(existing_received.get(item_code, line.get("received_qty") or 0))
 		total_qty += qty
 		grand_total += row.amount
 
@@ -2013,6 +2020,44 @@ def save_management_purchase_order(payload=None):
 	doc.total_qty = flt(total_qty)
 	doc.grand_total = flt(grand_total)
 	doc.status = PURCHASE_STATUS_DRAFT
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"status": "success", "order": _inv_po_doc_payload(doc)}
+
+
+@frappe.whitelist()
+def save_management_purchase_order_progress(payload=None):
+	"""Persist per-item purchase rates without changing the order workflow.
+
+	The purchase checklist edits actual prices while an order may already be
+	sent or partially received. Draft-save is intentionally restricted to the
+	full form above, while this small endpoint is safe for debounced checklist
+	updates.
+	"""
+	_ensure_management_access()
+	data = _inv_parse_payload(payload)
+	name = (data.get("name") or "").strip()
+	if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, name):
+		frappe.throw(_("سفارش خرید یافت نشد: {0}").format(name or "-"))
+	doc = frappe.get_doc(PURCHASE_ORDER_DOCTYPE, name)
+	if doc.status == PURCHASE_STATUS_CANCELLED:
+		frappe.throw(_("سفارش لغوشده قابل ویرایش نیست."))
+
+	rates = {}
+	for line in _inv_normalize_list(data.get("items") or data.get("lines")):
+		code = _inv_clean_item_code(line.get("item_code"))
+		if code and "rate" in line:
+			rates[code] = max(flt(line.get("rate")), 0.0)
+
+	if rates:
+		for row in doc.get("items") or []:
+			code = _inv_clean_item_code(row.get("item_code"))
+			if code not in rates:
+				continue
+			row.rate = rates[code]
+			row.amount = flt(row.qty) * rates[code]
+		doc.grand_total = flt(sum(flt(row.get("amount")) for row in (doc.get("items") or [])))
+
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "success", "order": _inv_po_doc_payload(doc)}
@@ -2054,19 +2099,23 @@ def receive_management_purchase_order(payload=None):
 	if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, name):
 		frappe.throw(_("سفارش خرید یافت نشد: {0}").format(name or "-"))
 	doc = frappe.get_doc(PURCHASE_ORDER_DOCTYPE, name)
-	if doc.status not in (PURCHASE_STATUS_SENT, PURCHASE_STATUS_PARTIAL):
-		frappe.throw(_("دریافت فقط برای سفارش‌های «ارسال‌شده» یا «دریافت جزئی» ممکن است."))
+	if doc.status not in (PURCHASE_STATUS_DRAFT, PURCHASE_STATUS_SENT, PURCHASE_STATUS_PARTIAL):
+		frappe.throw(_("دریافت فقط برای سفارش‌های پیش‌نویس، ارسال‌شده یا دریافت جزئی ممکن است."))
 
 	warehouse = _inv_resolve_warehouse(payload.get("warehouse") or doc.target_warehouse)
 	if not warehouse:
 		frappe.throw(_("انبار مقصد برای دریافت کالا مشخص نشده است."))
 
 	requested = {}
-	for line in _inv_normalize_list(payload.get("lines")):
+	rate_map = {}
+	received_lines = _inv_normalize_list(payload.get("lines"))
+	for line in received_lines:
 		key = _inv_clean_item_code(line.get("item_code"))
 		qty = flt(line.get("qty"))
 		if key and qty > 0:
 			requested[key] = requested.get(key, 0.0) + qty
+		if key and "rate" in line:
+			rate_map[key] = max(flt(line.get("rate")), 0.0)
 	if not requested:
 		frappe.throw(_("هیچ مقدار دریافتی معتبری ارسال نشده است."))
 
@@ -2079,6 +2128,10 @@ def receive_management_purchase_order(payload=None):
 		receive_qty = min(requested.pop(code), remaining)
 		if receive_qty <= 0:
 			continue
+		rate_override = flt(rate_map.get(code) or 0)
+		if rate_override > 0:
+			row.rate = rate_override
+			row.amount = flt(row.qty) * rate_override
 		rate = flt(row.get("rate")) or _inv_purchase_rate(code)
 		lines.append({"item_code": code, "qty": receive_qty, "rate": rate})
 		row.received_qty = flt(row.get("received_qty")) + receive_qty
