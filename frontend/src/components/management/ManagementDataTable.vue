@@ -1,34 +1,61 @@
 <template>
-  <div class="table-shell">
-    <table class="table">
-      <thead>
-        <tr>
-          <th v-for="column in columns" :key="column.key">{{ column.label }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="!rows.length">
-          <td :colspan="columns.length" class="empty-row">
-            <slot name="empty">داده‌ای برای نمایش وجود ندارد.</slot>
-          </td>
-        </tr>
-        <tr
-          v-for="(row, rowIndex) in rows"
-          :key="resolveRowKey(row, rowIndex)"
-          :class="{ clickable: rowClickable }"
-          :tabindex="rowClickable ? 0 : undefined"
-          @click="handleRowClick($event, row)"
-          @keydown.enter.prevent="handleRowKeydown(row)"
-          @keydown.space.prevent="handleRowKeydown(row)"
-        >
-          <td v-for="column in columns" :key="`${resolveRowKey(row, rowIndex)}-${column.key}`">
-            <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :row-index="rowIndex">
-              {{ row[column.key] }}
-            </slot>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+  <div class="desktop-data-table">
+    <div class="table-shell">
+      <table class="table">
+        <thead>
+          <tr>
+            <th v-for="column in columns" :key="column.key">{{ column.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!rows.length">
+            <td :colspan="columns.length" class="empty-row">
+              <slot name="empty">داده‌ای برای نمایش وجود ندارد.</slot>
+            </td>
+          </tr>
+          <tr
+            v-for="(row, rowIndex) in rows"
+            :key="resolveRowKey(row, rowIndex)"
+            :class="{ clickable: rowClickable }"
+            :tabindex="rowClickable ? 0 : undefined"
+            @click="handleRowClick($event, row)"
+            @keydown.enter.prevent="handleRowKeydown(row)"
+            @keydown.space.prevent="handleRowKeydown(row)"
+          >
+            <td v-for="column in columns" :key="`${resolveRowKey(row, rowIndex)}-${column.key}`">
+              <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :row-index="rowIndex">
+                {{ row[column.key] }}
+              </slot>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="mobile-data-table">
+    <p v-if="!rows.length" class="mobile-empty-row">
+      <slot name="empty">داده‌ای برای نمایش وجود ندارد.</slot>
+    </p>
+    <article
+      v-for="(row, rowIndex) in rows"
+      :key="`mobile-${resolveRowKey(row, rowIndex)}`"
+      class="mobile-data-card"
+      :class="{ clickable: rowClickable }"
+      :tabindex="rowClickable ? 0 : undefined"
+      @click="handleRowClick($event, row)"
+      @keydown.enter.prevent="handleRowKeydown(row)"
+      @keydown.space.prevent="handleRowKeydown(row)"
+    >
+      <div v-for="column in columns" :key="`mobile-${resolveRowKey(row, rowIndex)}-${column.key}`" class="mobile-data-field">
+        <small>{{ column.label }}</small>
+        <div>
+          <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :row-index="rowIndex">
+            {{ row[column.key] }}
+          </slot>
+        </div>
+      </div>
+    </article>
   </div>
 </template>
 
@@ -123,5 +150,70 @@ function handleRowKeydown(row) {
   text-align: center;
   color: var(--muted, var(--text-muted));
   white-space: normal;
+}
+
+.mobile-data-table {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .desktop-data-table {
+    display: none;
+  }
+
+  .mobile-data-table {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .mobile-data-card {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.65rem;
+    border: 1px solid var(--mg-border-light, var(--border));
+    border-radius: 13px;
+    background: var(--mg-bg-surface, var(--bg-card));
+  }
+
+  .mobile-data-card.clickable {
+    cursor: pointer;
+  }
+
+  .mobile-data-card.clickable:active {
+    border-color: var(--mg-primary, var(--palette-deep-sapphire));
+  }
+
+  .mobile-data-field {
+    min-width: 0;
+    padding: 0.4rem 0.45rem;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--mg-bg-page, var(--bg-soft)) 58%, var(--mg-bg-surface, var(--bg-card)) 42%);
+  }
+
+  .mobile-data-field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .mobile-data-field small {
+    display: block;
+    margin-bottom: 0.12rem;
+    color: var(--mg-text-muted, var(--muted));
+    font-size: 0.64rem;
+  }
+
+  .mobile-data-field > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--mg-text-main, var(--text));
+    font-size: 0.74rem;
+  }
+
+  .mobile-empty-row {
+    margin: 0;
+    padding: 0.75rem;
+    color: var(--mg-text-muted, var(--muted));
+    text-align: center;
+  }
 }
 </style>

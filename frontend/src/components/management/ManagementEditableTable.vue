@@ -13,31 +13,57 @@
       </div>
     </header>
 
-    <ManagementDataTable :columns="tableColumns" :rows="rows" :row-key="rowKey">
-      <template v-for="column in columns" :key="`slot-${column.key}`" #[`cell-${column.key}`]="slotProps">
-        <slot :name="`cell-${column.key}`" v-bind="slotProps">
-          {{ slotProps.value }}
-        </slot>
-      </template>
+    <div class="desktop-editable-table">
+      <ManagementDataTable :columns="tableColumns" :rows="rows" :row-key="rowKey">
+        <template v-for="column in columns" :key="`slot-${column.key}`" #[`cell-${column.key}`]="slotProps">
+          <slot :name="`cell-${column.key}`" v-bind="slotProps">
+            {{ slotProps.value }}
+          </slot>
+        </template>
 
-      <template #cell-actions="{ row, rowIndex }">
-        <div class="row-actions">
+        <template #cell-actions="{ row, rowIndex }">
+          <div class="row-actions">
+            <button type="button" class="secondary-btn mini" @click="openEdit(row, rowIndex)" :disabled="disabled || !allowEdit">
+              {{ editButtonLabel }}
+            </button>
+            <button
+              type="button"
+              class="secondary-btn mini danger"
+              @click="removeRow(rowIndex)"
+              :disabled="disabled || !allowDelete"
+            >
+              {{ deleteButtonLabel }}
+            </button>
+          </div>
+        </template>
+
+        <template #empty>{{ emptyText }}</template>
+      </ManagementDataTable>
+    </div>
+
+    <div class="mobile-editable-table">
+      <p v-if="!rows.length" class="mobile-empty">{{ emptyText }}</p>
+      <article v-for="(row, rowIndex) in rows" :key="resolveRowKey(row, rowIndex)" class="mobile-editable-row">
+        <div class="mobile-row-fields">
+          <div v-for="column in columns" :key="`mobile-${resolveRowKey(row, rowIndex)}-${column.key}`" class="mobile-row-field">
+            <small>{{ column.label }}</small>
+            <div class="mobile-row-value">
+              <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :row-index="rowIndex">
+                {{ row[column.key] }}
+              </slot>
+            </div>
+          </div>
+        </div>
+        <div class="mobile-row-actions">
           <button type="button" class="secondary-btn mini" @click="openEdit(row, rowIndex)" :disabled="disabled || !allowEdit">
-            {{ editButtonLabel }}
+            ویرایش ردیف
           </button>
-          <button
-            type="button"
-            class="secondary-btn mini danger"
-            @click="removeRow(rowIndex)"
-            :disabled="disabled || !allowDelete"
-          >
+          <button type="button" class="secondary-btn mini danger" @click="removeRow(rowIndex)" :disabled="disabled || !allowDelete">
             {{ deleteButtonLabel }}
           </button>
         </div>
-      </template>
-
-      <template #empty>{{ emptyText }}</template>
-    </ManagementDataTable>
+      </article>
+    </div>
 
     <ManagementPopup v-model:open="editorOpen" :title="popupTitle" :subtitle="popupSubtitle">
       <p v-if="editorError" class="error">{{ editorError }}</p>
@@ -160,6 +186,12 @@ const draft = reactive({})
 
 const popupTitle = computed(() => (editorMode.value === 'edit' ? props.popupTitleEdit : props.popupTitleAdd))
 
+function resolveRowKey(row, rowIndex) {
+  if (typeof props.rowKey === 'function') return props.rowKey(row, rowIndex)
+  if (typeof props.rowKey === 'string' && props.rowKey) return row?.[props.rowKey] ?? rowIndex
+  return row?.name || row?.id || rowIndex
+}
+
 function cloneValue(value) {
   if (typeof structuredClone === 'function') {
     try {
@@ -276,10 +308,71 @@ function saveDraft() {
   justify-content: end;
 }
 
-.row-actions {
+.row-actions,
+.mobile-row-actions {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 0.26rem;
+}
+
+.mobile-editable-table {
+  display: none;
+}
+
+.mobile-editable-row {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  border: 1px solid var(--mg-border-light, var(--border));
+  border-radius: 13px;
+  background: var(--mg-bg-surface, var(--bg-card));
+}
+
+.mobile-row-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.48rem;
+}
+
+.mobile-row-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+  padding: 0.42rem 0.48rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
+}
+
+.mobile-row-field:first-child {
+  grid-column: 1 / -1;
+}
+
+.mobile-row-field small {
+  color: var(--mg-text-muted, var(--muted));
+  font-size: 0.65rem;
+}
+
+.mobile-row-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--mg-text-main, var(--text));
+  font-size: 0.75rem;
+}
+
+.mobile-row-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.mobile-row-actions .mini {
+  min-height: 36px;
+}
+
+.mobile-empty {
+  margin: 0;
+  padding: 0.8rem;
+  color: var(--mg-text-muted, var(--muted));
+  text-align: center;
 }
 
 .mini {
@@ -306,6 +399,15 @@ function saveDraft() {
 }
 
 @media (max-width: 760px) {
+  .desktop-editable-table {
+    display: none;
+  }
+
+  .mobile-editable-table {
+    display: grid;
+    gap: 0.55rem;
+  }
+
   .table-head {
     display: grid;
   }

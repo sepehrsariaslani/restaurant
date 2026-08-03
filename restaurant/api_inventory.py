@@ -547,6 +547,11 @@ def _inv_build_stock_entry(*, entry_type, kind_label, lines, source_warehouse=""
 	entry.purpose = entry_type
 	entry.posting_date = posting_date or today()
 	entry.company = _inv_default_company()
+	warehouse_for_company = target_warehouse or source_warehouse
+	if warehouse_for_company:
+		warehouse_company = frappe.db.get_value("Warehouse", warehouse_for_company, "company")
+		if warehouse_company:
+			entry.company = warehouse_company
 	if source_warehouse:
 		entry.from_warehouse = source_warehouse
 	if target_warehouse:
@@ -562,16 +567,18 @@ def _inv_build_stock_entry(*, entry_type, kind_label, lines, source_warehouse=""
 		if not item_code or not frappe.db.exists("Item", item_code):
 			frappe.throw(_("کالای نامعتبر: {0}").format(item_code or "-"))
 		qty = flt(line.get("qty"))
-		uom = (line.get("uom") or "").strip()
-		if uom:
-			factor = _item_uom_conversion_to_stock(item_code, uom)
-			qty = qty * factor
-		qty = flt(qty, 4)
+		stock_uom = str(frappe.db.get_value("Item", item_code, "stock_uom") or "").strip()
+		uom = str(line.get("uom") or stock_uom).strip()
+		factor = _item_uom_conversion_to_stock(item_code, uom) if uom else 1
+		qty = flt(qty * factor, 4)
 		if qty <= 0:
 			frappe.throw(_("مقدار برای {0} باید بزرگ‌تر از صفر باشد.").format(item_code))
 		row = entry.append("items", {})
 		row.item_code = item_code
 		row.qty = qty
+		_inv_set_doc_field(row, "uom", uom or stock_uom)
+		_inv_set_doc_field(row, "stock_uom", stock_uom or uom)
+		_inv_set_doc_field(row, "conversion_factor", factor or 1)
 		if source_warehouse and entry_type != "Material Receipt":
 			row.s_warehouse = source_warehouse
 		if target_warehouse and entry_type != "Material Issue":
@@ -1808,6 +1815,110 @@ def list_management_stock_movements(
 # ---------------------------------------------------------------------------
 
 
+def _inv_ensure_purchase_order_link_field():
+	"""Expose the linked standard ERPNext Purchase Order when available."""
+	if not frappe.db.exists("DocType", PURCHASE_ORDER_DOCTYPE) or not frappe.db.exists("DocType", "Purchase Order"):
+		return
+	_inv_fp_call(
+		"_fp_ensure_custom_fields",
+		PURCHASE_ORDER_DOCTYPE,
+		[
+			{
+				"fieldname": "erpnext_purchase_order",
+				"label": _("سفارش خرید ERPNext"),
+				"fieldtype": "Link",
+				"options": "Purchase Order",
+			},
+		],
+		anchor_candidates=["note", "grand_total"],
+	)
+
+
+def _inv_sync_erpnext_purchase_order(doc):
+	"""Mirror a custom restaurant purchase draft into ERPNext when possible.
+
+	The restaurant workflow keeps its lightweight custom document for the UI,
+	while the linked standard Purchase Order gives accounting/procurement a
+	native ERPNext document. Sites without ERPNext Purchase Order simply keep
+	the existing custom workflow.
+	"""
+	if not frappe.db.exists("DocType", "Purchase Order"):
+		return ""
+	supplier = str(doc.get("supplier") or "").strip()
+	if not supplier or not frappe.db.exists("Supplier", supplier):
+		return ""
+
+	linked_name = str(doc.get("erpnext_purchase_order") or "").strip()
+	if linked_name and frappe.db.exists("Purchase Order", linked_name):
+		purchase = frappe.get_doc("Purchase Order", linked_name)
+		if int(purchase.get("docstatus") or 0) != 0:
+			return purchase.name
+	else:
+		purchase = frappe.new_doc("Purchase Order")
+
+	company = _inv_default_company()
+	if not company:
+		return ""
+	_inv_set_doc_field(purchase, "supplier", supplier)
+	_inv_set_doc_field(purchase, "company", company)
+	_inv_set_doc_field(purchase, "transaction_date", doc.get("posting_date") or today())
+	_inv_set_doc_field(purchase, "schedule_date", doc.get("expected_date") or doc.get("posting_date") or today())
+	_inv_set_doc_field(purchase, "set_warehouse", doc.get("target_warehouse") or "")
+	_inv_set_doc_field(purchase, "custom_restaurant_purchase_order", doc.name)
+	purchase.set("items", [])
+
+	for row in doc.get("items") or []:
+		item_code = _inv_clean_item_code(row.get("item_code"))
+		if not item_code:
+			continue
+		purchase_row = purchase.append("items", {})
+		stock_uom = frappe.db.get_value("Item", item_code, "stock_uom") or row.get("uom") or ""
+		uom = str(row.get("uom") or stock_uom or "").strip()
+		factor = flt(_item_uom_conversion_to_stock(item_code, uom) or 1)
+		for fieldname, value in {
+			"item_code": item_code,
+			"item_name": row.get("item_name") or item_code,
+			"qty": flt(row.get("qty")),
+			"rate": flt(row.get("rate")),
+			"uom": uom,
+			"stock_uom": stock_uom,
+			"conversion_factor": factor,
+			"schedule_date": doc.get("expected_date") or doc.get("posting_date") or today(),
+			"warehouse": doc.get("target_warehouse") or "",
+		}.items():
+			_inv_set_doc_field(purchase_row, fieldname, value)
+
+	if not purchase.get("items"):
+		return ""
+	purchase.flags.ignore_permissions = True
+	if purchase.is_new():
+		purchase.insert(ignore_permissions=True)
+	else:
+		purchase.save(ignore_permissions=True)
+	if _has_doctype_field(PURCHASE_ORDER_DOCTYPE, "erpnext_purchase_order"):
+		doc.set("erpnext_purchase_order", purchase.name)
+		doc.db_set("erpnext_purchase_order", purchase.name, update_modified=False)
+	return purchase.name
+
+
+def _inv_sync_erpnext_purchase_order_status(doc, target_status):
+	"""Best-effort lifecycle sync for the linked standard Purchase Order."""
+	if not frappe.db.exists("DocType", "Purchase Order"):
+		return
+	name = str(doc.get("erpnext_purchase_order") or "").strip()
+	if not name:
+		name = _inv_sync_erpnext_purchase_order(doc)
+	if not name or not frappe.db.exists("Purchase Order", name):
+		return
+	purchase = frappe.get_doc("Purchase Order", name)
+	if target_status == PURCHASE_STATUS_SENT and int(purchase.get("docstatus") or 0) == 0:
+		purchase.flags.ignore_permissions = True
+		purchase.submit()
+	elif target_status == PURCHASE_STATUS_CANCELLED and int(purchase.get("docstatus") or 0) == 1:
+		purchase.flags.ignore_permissions = True
+		purchase.cancel()
+
+
 @frappe.whitelist()
 def list_management_suppliers(search="", limit=100, offset=0):
 	_ensure_management_access()
@@ -1874,6 +1985,7 @@ def _inv_po_doc_payload(doc, include_items=True):
 		"expected_date": str(doc.get("expected_date") or ""),
 		"status": doc.get("status") or PURCHASE_STATUS_DRAFT,
 		"target_warehouse": doc.get("target_warehouse") or "",
+		"erpnext_purchase_order": doc.get("erpnext_purchase_order") or "",
 		"total_qty": flt(doc.get("total_qty")),
 		"grand_total": flt(doc.get("grand_total")),
 		"note": doc.get("note") or "",
@@ -1885,6 +1997,11 @@ def _inv_po_doc_payload(doc, include_items=True):
 		items = []
 		received_total = 0.0
 		qty_total = 0.0
+		stock_uoms = {
+			row.get("item_code"): frappe.db.get_value("Item", row.get("item_code"), "stock_uom") or ""
+			for row in (doc.get("items") or [])
+			if row.get("item_code")
+		}
 		for row in doc.get("items") or []:
 			received_qty = flt(row.get("received_qty"))
 			qty = flt(row.get("qty"))
@@ -1895,7 +2012,8 @@ def _inv_po_doc_payload(doc, include_items=True):
 					"idx": row.get("idx"),
 					"item_code": row.get("item_code"),
 					"item_name": row.get("item_name") or row.get("item_code"),
-					"uom": row.get("uom") or "",
+					"uom": row.get("uom") or stock_uoms.get(row.get("item_code")) or "",
+					"stock_uom": stock_uoms.get(row.get("item_code")) or "",
 					"qty": qty,
 					"rate": flt(row.get("rate")),
 					"amount": flt(row.get("amount")),
@@ -1963,6 +2081,7 @@ def get_management_purchase_order(name=""):
 def save_management_purchase_order(payload=None):
 	"""Create or update a draft purchase order for raw materials."""
 	_ensure_management_access()
+	_inv_ensure_purchase_order_link_field()
 	payload = _inv_parse_payload(payload)
 	name = (payload.get("name") or "").strip()
 
@@ -2021,6 +2140,12 @@ def save_management_purchase_order(payload=None):
 	doc.grand_total = flt(grand_total)
 	doc.status = PURCHASE_STATUS_DRAFT
 	doc.save(ignore_permissions=True)
+	erpnext_purchase_order = ""
+	if doc.get("supplier"):
+		try:
+			erpnext_purchase_order = _inv_sync_erpnext_purchase_order(doc)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), INVENTORY_MODULE_ERRORS)
 	frappe.db.commit()
 	return {"status": "success", "order": _inv_po_doc_payload(doc)}
 
@@ -2085,6 +2210,10 @@ def update_management_purchase_order_status(payload=None):
 		frappe.throw(_("تغییر وضعیت از «{0}» به «{1}» مجاز نیست.").format(doc.status, target_status))
 	doc.status = target_status
 	doc.save(ignore_permissions=True)
+	try:
+		_inv_sync_erpnext_purchase_order_status(doc, target_status)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), INVENTORY_MODULE_ERRORS)
 	frappe.db.commit()
 	return {"status": "success", "order": _inv_po_doc_payload(doc)}
 

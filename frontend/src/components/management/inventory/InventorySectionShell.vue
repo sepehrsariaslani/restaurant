@@ -52,10 +52,19 @@ defineProps({
   color: var(--inv-muted);
 }
 
-.inventory-section-shell :deep(.input) {
-  border-color: var(--inv-border);
-  background: var(--inv-surface);
+.inventory-section-shell :deep(.input),
+.inventory-section-shell :deep(.select),
+.inventory-section-shell :deep(.management-date-input) {
+  border-color: color-mix(in srgb, var(--inv-border) 84%, var(--mg-primary) 16%);
+  background: color-mix(in srgb, var(--inv-surface) 82%, #ffffff 18%);
   color: var(--inv-text);
+}
+
+.inventory-section-shell :deep(.input:focus),
+.inventory-section-shell :deep(.select:focus),
+.inventory-section-shell :deep(.management-date-input:focus) {
+  border-color: var(--mg-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg-primary) 13%, transparent);
 }
 
 .inventory-section-shell :deep(.primary-btn) {

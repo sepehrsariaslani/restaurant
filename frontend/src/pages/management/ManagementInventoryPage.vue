@@ -572,10 +572,12 @@
           <h4>{{ purchaseForm.name ? 'ویرایش پیش‌نویس ' + purchaseForm.name : 'سفارش خرید جدید' }}</h4>
           <div class="form-grid">
             <label>تأمین‌کننده
-              <select class="input" v-model="purchaseForm.supplier">
-                <option value="">بدون تأمین‌کننده</option>
-                <option v-for="s in supplierOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
-              </select>
+              <SearchableDropdown
+                v-model="purchaseForm.supplier"
+                :options="supplierOptions"
+                placeholder="انتخاب تأمین‌کننده"
+                search-placeholder="جستجوی تأمین‌کننده..."
+              />
             </label>
             <label>انبار مقصد
               <SearchableDropdown

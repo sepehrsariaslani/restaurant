@@ -23,12 +23,12 @@
       <div class="form-grid">
         <label>
           تأمین‌کننده
-          <select class="input" v-model="form.supplier">
-            <option value="">بدون تأمین‌کننده</option>
-            <option v-for="supplier in boot?.suppliers || []" :key="supplier.name" :value="supplier.name">
-              {{ supplier.supplier_name || supplier.name }}
-            </option>
-          </select>
+          <SearchableDropdown
+            v-model="form.supplier"
+            :options="supplierOptions"
+            placeholder="انتخاب تأمین‌کننده"
+            search-placeholder="جستجوی تأمین‌کننده..."
+          />
         </label>
         <label>
           انبار مقصد
@@ -131,6 +131,13 @@
         </div>
 
         <p v-if="order.note" class="order-note">{{ order.note }}</p>
+        <p v-if="order.erpnext_purchase_order" class="erpnext-link">
+          <span>سند خرید ERPNext:</span>
+          <a :href="`/app/purchase-order/${encodeURIComponent(order.erpnext_purchase_order)}`" target="_blank" rel="noreferrer">
+            {{ order.erpnext_purchase_order }} ↗
+          </a>
+        </p>
+        <p v-else class="erpnext-hint">با انتخاب تأمین‌کننده و ذخیره سفارش، سند استاندارد Purchase Order در ERPNext نیز ساخته می‌شود.</p>
 
         <section class="purchase-checklist" aria-label="چک‌لیست خرید اقلام">
           <header class="checklist-head">
@@ -320,6 +327,12 @@ const uomOptions = computed(() => (boot.value?.uoms || []).map((value) => ({ val
 const warehouseOptions = computed(() =>
   (boot.value?.leaf_warehouses || []).map((value) => ({ value, label: value })),
 )
+const supplierOptions = computed(() =>
+  (boot.value?.suppliers || []).map((supplier) => ({
+    value: supplier.name,
+    label: supplier.supplier_name || supplier.name,
+  })),
+)
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -398,7 +411,10 @@ function apply(value) {
     posting_date: value.posting_date || today(),
     expected_date: value.expected_date || '',
     note: value.note || '',
-    items: (value.items || []).map((line) => ({ ...line })),
+    items: (value.items || []).map((line) => ({
+      ...line,
+      uom: line.uom || boot.value?.materials?.find((item) => item.name === line.item_code)?.stock_uom || 'Nos',
+    })),
   })
   receiveWarehouse.value = value.target_warehouse || boot.value?.settings?.default_warehouse || boot.value?.leaf_warehouses?.[0] || ''
   buildChecklist(value)
@@ -528,11 +544,22 @@ async function receiveChecklistLine(index) {
   receivingIndex.value = index
   error.value = ''
   try {
-    const result = await receiveManagementPurchaseOrder({
+    const receivePayload = {
       name: order.value.name,
       warehouse: receiveWarehouse.value,
       lines: [{ item_code: line.item_code, qty: actualQty, rate: Number(line.rate || 0) }],
-    })
+    }
+    let result
+    try {
+      result = await receiveManagementPurchaseOrder(receivePayload)
+    } catch (firstError) {
+      // Older deployed workers only accepted sent orders. Move a draft to
+      // sent once, then retry the same receive operation for compatibility.
+      const oldWorkflowMessage = /ارسال‌شده|دریافت جزئی|پیش‌نویس.*ممکن نیست|دریافت فقط/.test(String(firstError?.message || ''))
+      if (order.value.status !== 'پیش‌نویس' || !oldWorkflowMessage) throw firstError
+      await updateManagementPurchaseOrderStatus({ name: order.value.name, status: 'ارسال‌شده' })
+      result = await receiveManagementPurchaseOrder(receivePayload)
+    }
     apply(result.order)
     message.value = `خرید «${line.item_name}» ثبت و موجودی انبار به‌روزرسانی شد.`
   } catch (err) {
@@ -864,6 +891,21 @@ onBeforeUnmount(() => {
   color: var(--mg-text-main);
   white-space: pre-line;
 }
+
+.erpnext-link,
+.erpnext-hint {
+  margin: 0.65rem 0 0;
+  color: var(--mg-text-muted);
+  font-size: 0.72rem;
+}
+
+.erpnext-link a {
+  color: var(--mg-primary);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.erpnext-link a:hover { text-decoration: underline; }
 
 .table-wrap { overflow-x: auto; margin-top: 1rem; }
 .data-table { width: 100%; border-collapse: collapse; }
