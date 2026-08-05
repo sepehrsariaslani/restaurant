@@ -2873,8 +2873,8 @@ async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {
     const deliverResult = invoice.delivery_exists ? {} : await deliverInvoiceOnly(invoice.name)
     const siInfo = payResult.sales_invoice ? ` | فاکتور: ${payResult.sales_invoice}` : ''
     const dnInfo = deliverResult.delivery_note ? ` | رسید: ${deliverResult.delivery_note}` : ''
-    if (payResult.sales_invoice && normalizePaymentMethodKind(payment.method) !== 'credit') {
-      void printOrderReceipt({ ...invoice, payment_method: payment.method })
+    if (payResult.sales_invoice && normalizePaymentMethodKind(paymentSelection.method || payment.method) !== 'credit') {
+      void printOrderReceipt({ ...invoice, payment_method: paymentSelection.method || payment.method })
     }
     successMessage.value = `فاکتور ${invoice.order_code || invoice.name} تسویه و تحویل شد.${siInfo}${dnInfo}`
     openInvoices.value = openInvoices.value.filter(o => o.name !== invoice.name)

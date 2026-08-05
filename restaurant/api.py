@@ -14819,7 +14819,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
     if not splits:
         splits = [{
             "method": method,
-            "mode_of_payment": _resolve_pos_mode_of_payment(method),
+            "mode_of_payment": payment.get("mode_of_payment") or _resolve_pos_mode_of_payment(method),
             "amount": 0, # Will be set to grand_total below
             "reference_no": (reference_no or payment.get("reference_no") or "").strip()
         }]
@@ -14894,7 +14894,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
                     # Fallback to outstanding
                     splits = [{
                         "method": method,
-                        "mode_of_payment": _resolve_pos_mode_of_payment(method),
+                        "mode_of_payment": payment.get("mode_of_payment") or _resolve_pos_mode_of_payment(method),
                         "amount": si_outstanding,
                         "reference_no": (reference_no or payment.get("reference_no") or "").strip()
                     }]
