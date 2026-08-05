@@ -4548,6 +4548,14 @@ def _get_core_item_detail(item_slug, branch=None):
 		frappe.throw(_("Menu item not found."), frappe.DoesNotExistError)
 
 	template_doc = frappe.get_doc("Item", item_name)
+	# A direct request for a variant must still retain the parent template
+	# context. The selected variant supplies the BOM/price, while the parent
+	# supplies the variant selector groups so POS can switch between single
+	# and double without falling back to the first/default recipe.
+	variant_parent = (template_doc.get("variant_of") or "").strip()
+	if variant_parent:
+		source_variant_name = template_doc.name
+		template_doc = frappe.get_doc("Item", variant_parent)
 	doc, fixed_attribute_values = _resolve_display_doc_for_item_detail(
 		template_doc,
 		source_variant_name=source_variant_name,
