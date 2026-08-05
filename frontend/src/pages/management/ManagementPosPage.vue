@@ -3585,11 +3585,75 @@ function setSheetCustomization(next) {
   )
 }
 
-function setSheetModifiers(next) {
+function resolveSheetVariant(modifiers = []) {
+  const variants = customizationSheet.variantsMapping || []
+  if (!variants.length) return null
+
+  const selected = Object.fromEntries(
+    (modifiers || [])
+      .filter((row) => String(row?.group || '').startsWith('variant::'))
+      .map((row) => [String(row.group).slice('variant::'.length), String(row.option || '').trim()]),
+  )
+  if (!Object.keys(selected).length) return null
+
+  const fixedAttributes = customizationSheet.item?.variant_fixed_attributes || {}
+  return variants.find((variant) => {
+    return (variant.attributes || []).every((attribute) => {
+      const name = String(attribute?.attribute || '').trim()
+      const value = String(attribute?.value || '').trim()
+      if (!name || fixedAttributes[name] === value) return true
+      const isVisibleSelector = (customizationSheet.modifierGroups || []).some(
+        (group) => group.group_name === `variant::${name}`,
+      )
+      if (!isVisibleSelector) return true
+      return selected[name] === value
+    })
+  }) || null
+}
+
+async function setSheetModifiers(next) {
+  const nextModifiers = Array.isArray(next) ? next : []
+  const selectedVariant = resolveSheetVariant(nextModifiers)
+  const currentVariant = String(customizationSheet.item?.name || '').trim()
+  const targetVariant = String(selectedVariant?.name || '').trim()
+
+  if (selectedVariant && targetVariant && targetVariant !== currentVariant) {
+    customizationSheet.بارگذاری = true
+    customizationSheet.error = ''
+    try {
+      const variantSlug = selectedVariant.slug || selectedVariant.name
+      const payload = detailCache.get(variantSlug) || (await getItemDetail(variantSlug))
+      detailCache.set(variantSlug, payload)
+      const ingredients = payload.ingredients || []
+      const modifierGroups = payload.modifier_groups || []
+      const validIngredientKeys = new Set(ingredients.map((row) => String(row.key || row.name || '').trim()))
+      const preservedAlternatives = (customizationSheet.customization.selected_alternatives || [])
+        .filter((row) => validIngredientKeys.has(String(row.ingredient_key || '').trim()))
+
+      customizationSheet.item = { ...customizationSheet.item, ...(payload.item || {}) }
+      customizationSheet.ingredients = ingredients
+      customizationSheet.modifierGroups = modifierGroups
+      customizationSheet.variantsMapping = payload.variants_mapping || customizationSheet.variantsMapping || []
+      customizationSheet.customization = sanitizeCustomization(
+        {
+          ...customizationSheet.customization,
+          selected_modifiers: nextModifiers,
+          selected_alternatives: preservedAlternatives,
+        },
+        ingredients,
+      )
+    } catch (variantError) {
+      customizationSheet.error = variantError.message || 'دریافت BOM گونه انتخاب‌شده ناموفق بود.'
+    } finally {
+      customizationSheet.بارگذاری = false
+    }
+    return
+  }
+
   customizationSheet.customization = sanitizeCustomization(
     {
       ...customizationSheet.customization,
-      selected_modifiers: next,
+      selected_modifiers: nextModifiers,
     },
     customizationSheet.ingredients || [],
   )
@@ -3737,7 +3801,7 @@ function confirmCustomizationAdd() {
     
     if (matchedVariant) {
       const nextQty = Number(Number(customizationSheet.qty || 1).toFixed(3));
-      const nextPrice = Number(matchedVariant.base_price || 0);
+      const nextPrice = Number(customizationSheet.item?.base_price || matchedVariant.base_price || 0);
       const nextSlug = matchedVariant.slug || matchedVariant.name;
       
       if (customizationSheet.editing_line_id) {
