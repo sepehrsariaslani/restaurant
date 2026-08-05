@@ -14972,10 +14972,23 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
             if total_split <= 0:
                 splits[0]["amount"] = grand_total
     
-            # Validate splits total
+            # The browser may have calculated the amount from a stale cart
+            # snapshot (especially after changing a BOM variant or final
+            # amount). The ERPNext invoice is authoritative, so reconcile a
+            # single split to the actual grand total instead of failing the
+            # whole POS request with HTTP 500.
             total_split = sum(flt(s.get("amount") or 0) for s in splits)
-            if abs(total_split - grand_total) > 0.5: # Allow small rounding
-                frappe.throw(f"Payment splits total ({total_split}) does not match invoice total ({grand_total})")
+            if abs(total_split - grand_total) > 0.5:
+                if len(splits) == 1:
+                    splits[0]["amount"] = grand_total
+                elif total_split > 0:
+                    ratio = grand_total / total_split
+                    for split in splits:
+                        split["amount"] = flt(flt(split.get("amount") or 0) * ratio, 2)
+                    rounding_delta = grand_total - sum(flt(s.get("amount") or 0) for s in splits)
+                    splits[0]["amount"] = flt(splits[0].get("amount") or 0) + rounding_delta
+                else:
+                    splits[0]["amount"] = grand_total
     
             # Add payments to SI
             if hasattr(si_doc, "payments"):
@@ -15021,7 +15034,15 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
                     total_split = si_outstanding
                     
                 if total_split > si_outstanding + 0.5:
-                    frappe.throw(f"Payment splits total ({total_split}) exceeds outstanding amount ({si_outstanding})")
+                    if len(splits) == 1:
+                        splits[0]["amount"] = si_outstanding
+                    elif total_split > 0:
+                        ratio = si_outstanding / total_split
+                        for split in splits:
+                            split["amount"] = flt(flt(split.get("amount") or 0) * ratio, 2)
+                        rounding_delta = si_outstanding - sum(flt(s.get("amount") or 0) for s in splits)
+                        splits[0]["amount"] = flt(splits[0].get("amount") or 0) + rounding_delta
+                    total_split = si_outstanding
             from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
             payment_entries = []
             
