@@ -6365,6 +6365,11 @@ def _get_item_alternative_options(
 		item_meta = item_meta_cache.get(option["alternative_item"], {})
 		option["item_name"] = item_meta.get("item_name") or option["alternative_item"]
 		option["stock_uom"] = item_meta.get("stock_uom") or option["uom"] or ""
+		# ``uom`` is the unit shown to the cashier, while ``pricing_uom`` is
+		# the unit in which the BOM quantity is authored. If the alternative
+		# does not define its own source unit, price the same 10g/20g quantity
+		# as the BOM row and let ERPNext convert it to the alternative stock UOM.
+		option["pricing_uom"] = option.get("uom") or base_uom or option.get("stock_uom") or ""
 		if not option["uom"]:
 			option["uom"] = option["stock_uom"]
 		option["item_disabled"] = 1 if cint(item_meta.get("disabled") or 0) == 1 else 0
@@ -6404,7 +6409,7 @@ def _get_item_alternative_options(
 				base_uom,
 				option["alternative_item"],
 				alternative_qty,
-				alternative_uom=option.get("uom") or option.get("stock_uom") or "",
+				alternative_uom=option.get("pricing_uom") or base_uom or option.get("stock_uom") or "",
 				price_list=price_list,
 			)
 			option.update(pricing_payload)
@@ -9160,6 +9165,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		selected_item_code = ingredient_item
 		selected_base_qty = base_qty
 		selected_stock_uom = row.get("qty_uom") or ""
+		selected_pricing_uom = row.get("qty_uom") or ""
 		selected_item_name = (
 			frappe.db.get_value("Item", ingredient_item, "item_name") if ingredient_item else label
 		)
@@ -9180,10 +9186,17 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 			if selected_multiplier > 0 and selected_base_qty <= 0:
 				frappe.throw(_("Alternative quantity for {0} must be greater than zero.").format(label))
 
-			selected_stock_uom = (
-				selected_alternative.get("uom")
+			selected_pricing_uom = (
+				selected_alternative.get("pricing_uom")
+				or row.get("qty_uom")
+				or selected_alternative.get("uom")
 				or selected_alternative.get("stock_uom")
+				or ""
+			)
+			selected_stock_uom = (
+				selected_alternative.get("stock_uom")
 				or frappe.db.get_value("Item", selected_item_code, "stock_uom")
+				or selected_alternative.get("uom")
 				or selected_stock_uom
 			)
 			selected_item_name = (
@@ -9214,7 +9227,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 			_resolve_default_selling_item_pricing(
 				selected_item_code,
 				selected_component_qty,
-				uom=selected_stock_uom or row.get("qty_uom") or "",
+				uom=selected_pricing_uom or selected_stock_uom or "",
 			)
 			if selected_item_code
 			else {}
@@ -9237,7 +9250,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 					row.get("qty_uom") or "",
 					selected_item_code,
 					selected_component_qty,
-					alternative_uom=selected_stock_uom,
+					alternative_uom=selected_pricing_uom or selected_stock_uom,
 				)
 				if cint(alternative_pricing.get("is_selectable") or 0) != 1:
 					frappe.throw(
