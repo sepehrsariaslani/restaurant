@@ -4527,7 +4527,7 @@ def _get_menu_items_public_fallback(
 	}
 
 
-def _get_core_item_detail(item_slug, branch=None):
+def _get_core_item_detail(item_slug, branch=None, bom_name=None):
 	slug = _normalize_slug(item_slug)
 	if not slug:
 		frappe.throw(_("Item slug is required."))
@@ -4561,7 +4561,21 @@ def _get_core_item_detail(item_slug, branch=None):
 		source_variant_name=source_variant_name,
 		branch=branch,
 	)
-	modifier_groups, _group_map, _title_map = _build_modifier_groups(doc)
+	primary_bom_doc = _get_bom_doc(doc)
+	selected_bom_doc = primary_bom_doc
+	requested_bom_name = str(bom_name or "").strip()
+	if requested_bom_name and frappe.db.exists("BOM", requested_bom_name):
+		candidate_bom = frappe.get_doc("BOM", requested_bom_name)
+		if (
+			candidate_bom.item in {str(doc.name or ""), str(template_doc.name or "")}
+			and cint(candidate_bom.docstatus) == 1
+			and cint(candidate_bom.is_active)
+		):
+			selected_bom_doc = candidate_bom
+	modifier_groups, _group_map, _title_map = _build_modifier_groups(
+		doc,
+		primary_bom_doc=selected_bom_doc,
+	)
 
 	if template_doc.name != doc.name:
 		template_variants = frappe.get_all(
@@ -4582,7 +4596,7 @@ def _get_core_item_detail(item_slug, branch=None):
 	if variant_groups:
 		modifier_groups = [*variant_groups, *modifier_groups]
 
-	ingredient_rows = _get_bom_ingredient_rows(doc)
+	ingredient_rows = _get_bom_ingredient_rows(doc, bom_doc=selected_bom_doc)
 	ingredient_codes = sorted(
 		{(row.get("ingredient_item") or "").strip() for row in ingredient_rows if row.get("ingredient_item")}
 	)
@@ -4737,6 +4751,11 @@ def _get_core_item_detail(item_slug, branch=None):
 		if _price_list_rate is not None
 		else flt(doc.restaurant_base_price or doc.standard_rate)
 	)
+	if selected_bom_doc and primary_bom_doc and selected_bom_doc.name != primary_bom_doc.name:
+		primary_components_price = _bom_component_price_total(primary_bom_doc)
+		selected_components_price = _bom_component_price_total(selected_bom_doc)
+		if primary_components_price is not None and selected_components_price is not None:
+			_base_price += selected_components_price - primary_components_price
 
 	# Resolve image: try multiple fields
 	_image = getattr(doc, image_field, "") or ""
@@ -4815,6 +4834,8 @@ def _get_core_item_detail(item_slug, branch=None):
 			
 	return {
 		"item": item_payload,
+		"bom_name": selected_bom_doc.name if selected_bom_doc else "",
+		"primary_bom_name": primary_bom_doc.name if primary_bom_doc else "",
 		"ingredients": ingredients,
 		"modifier_groups": modifier_groups,
 		"allergens": _split_tags(doc.restaurant_allergen_tags),
@@ -6281,6 +6302,68 @@ def _get_modifier_source_bom_doc(menu_item_doc, primary_bom_doc=None):
 	return frappe.get_doc("BOM", fallback_bom_name)
 
 
+def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=None, primary_bom_doc=None):
+	"""Resolve a BOM-variant modifier to the BOM selected in the POS sheet."""
+	primary_bom_doc = primary_bom_doc or _get_bom_doc(menu_item_doc)
+	groups = modifier_groups or []
+	group_map = {
+		str(group.get("group_name") or "").strip(): group
+		for group in groups
+		if str(group.get("group_name") or "").strip()
+	}
+	group_title_map = {
+		str(group.get("title") or "").strip(): str(group.get("group_name") or "").strip()
+		for group in groups
+		if str(group.get("title") or "").strip()
+	}
+	for selected in _normalize_selected_modifiers((customization or {}).get("selected_modifiers")):
+		raw_group = str(selected.get("group") or "").strip()
+		group_name = raw_group if raw_group in group_map else group_title_map.get(raw_group)
+		if not group_name:
+			continue
+		option_name = str(selected.get("option") or "").strip()
+		option = next(
+			(row for row in group_map[group_name].get("options") or [] if str(row.get("name") or "").strip() == option_name),
+			none,
+		)
+		if not option or (option.get("action_type") or option.get("modifier_type") or "") != "bom_variant":
+			continue
+		bom_name = str(option.get("alternative_bom") or "").strip()
+		if not bom_name or not frappe.db.exists("BOM", bom_name):
+			frappe.throw(_("BOM گونه انتخاب‌شده پیدا نشد: {0}").format(option_name))
+		bom_meta = frappe.db.get_value("BOM", bom_name, ["item", "docstatus", "is_active"], as_dict=True) or {}
+		valid_items = {str(menu_item_doc.name or "").strip(), str(menu_item_doc.item_code or "").strip()}
+		if (
+			bom_meta.get("item") not in valid_items
+			or cint(bom_meta.get("docstatus") or 0) != 1
+			or not cint(bom_meta.get("is_active") or 0)
+		):
+			frappe.throw(_("BOM گونه انتخاب‌شده برای این محصول معتبر نیست: {0}").format(option_name))
+		return frappe.get_doc("BOM", bom_name)
+	return primary_bom_doc
+
+
+def _bom_component_price_total(bom_doc):
+	if not bom_doc:
+		return None
+	total = 0.0
+	resolved = 0
+	for row in bom_doc.get("items") or []:
+		item_code = str(row.get("item_code") or "").strip()
+		if not item_code:
+			continue
+		pricing = _resolve_default_selling_item_pricing(
+			item_code,
+			flt(row.get("qty") or 0),
+			uom=row.get("uom") or row.get("stock_uom") or "",
+		)
+		if cint(pricing.get("is_selectable") or 0) != 1:
+			continue
+		total += flt(pricing.get("total_price") or 0)
+		resolved += 1
+	return total if resolved else None
+
+
 def _get_item_alternative_options(
 	base_item,
 	allow_alternative_item=0,
@@ -6439,8 +6522,8 @@ def _get_bom_row_alternative_options(bom_doc, bom_row, item_meta_cache=None):
 	)
 
 
-def _get_bom_ingredient_rows(menu_item_doc):
-	bom_doc = _get_bom_doc(menu_item_doc)
+def _get_bom_ingredient_rows(menu_item_doc, bom_doc=None):
+	bom_doc = bom_doc or _get_bom_doc(menu_item_doc)
 	if not bom_doc:
 		return []
 
@@ -6511,7 +6594,7 @@ def _get_bom_ingredient_rows(menu_item_doc):
 	return rows
 
 
-def _build_modifier_groups(menu_item_doc):
+def _build_modifier_groups(menu_item_doc, primary_bom_doc=None):
 	groups = []
 	group_map = {}
 	group_title_map = {}
@@ -6520,7 +6603,10 @@ def _build_modifier_groups(menu_item_doc):
 	if menu_item_doc.doctype != "Item":
 		return groups, group_map, group_title_map
 
-	bom_doc = _get_modifier_source_bom_doc(menu_item_doc, primary_bom_doc=_get_bom_doc(menu_item_doc))
+	bom_doc = _get_modifier_source_bom_doc(
+		menu_item_doc,
+		primary_bom_doc=primary_bom_doc or _get_bom_doc(menu_item_doc),
+	)
 	modifier_rows = sorted(
 		(bom_doc.get("restaurant_modifier_rows") if bom_doc else []) or [],
 		key=lambda d: cint(d.get("idx") or 0),
@@ -6729,10 +6815,10 @@ def get_menu_items(category_slug=None, subcategory_slug=None, search=None, page=
 
 
 @frappe.whitelist(allow_guest=True)
-def get_item_detail(item_slug, branch=None):
+def get_item_detail(item_slug, branch=None, bom_name=None):
 	_ensure_item_tags_field()
 	try:
-		return _get_core_item_detail(item_slug=item_slug, branch=branch)
+		return _get_core_item_detail(item_slug=item_slug, branch=branch, bom_name=bom_name)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "restaurant.api.get_item_detail")
 		raise
@@ -9064,10 +9150,24 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 
 	quantity = max(flt(quantity or 1), 1)
 	cfg = _menu_doc_config(menu_doc)
-	base_price = flt(cfg["base_price"])
+	primary_bom_doc = _get_bom_doc(menu_doc)
+	modifier_groups, group_map, title_map = _build_modifier_groups(menu_doc, primary_bom_doc=primary_bom_doc)
+	selected_bom_doc = _resolve_selected_bom_variant(
+		menu_doc,
+		customization,
+		modifier_groups=modifier_groups,
+		primary_bom_doc=primary_bom_doc,
+	)
+	bom_price_delta = 0.0
+	if selected_bom_doc and primary_bom_doc and selected_bom_doc.name != primary_bom_doc.name:
+		primary_components_price = _bom_component_price_total(primary_bom_doc)
+		selected_components_price = _bom_component_price_total(selected_bom_doc)
+		if primary_components_price is not None and selected_components_price is not None:
+			bom_price_delta = selected_components_price - primary_components_price
+	base_price = flt(cfg["base_price"]) + bom_price_delta
 	unit_price = base_price
 
-	ingredient_rows = _get_bom_ingredient_rows(menu_doc)
+	ingredient_rows = _get_bom_ingredient_rows(menu_doc, bom_doc=selected_bom_doc)
 	adjustments = _normalize_ingredient_adjustments(menu_doc, customization)
 	ingredient_keys = {
 		(row.get("ingredient_name") or "").strip()
@@ -9345,7 +9445,6 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		)
 		_add_nutrition_to_totals(nutrition_totals, selected_item_nutrition, nutrition_factor)
 
-	modifier_groups, group_map, title_map = _build_modifier_groups(menu_doc)
 	selected_raw_all = _normalize_selected_modifiers(customization.get("selected_modifiers"))
 	variant_selected_rows = [
 		row for row in selected_raw_all if (row.get("group") or "").startswith("variant::")
@@ -9366,7 +9465,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		if (row.get("group") or "").strip() and (row.get("option") or "").strip()
 	]
 	line_recipe_multiplier = 1.0
-	selected_bom = ""
+	selected_bom = selected_bom_doc.name if selected_bom_doc else ""
 
 	for selected in selected_raw:
 		raw_group = (

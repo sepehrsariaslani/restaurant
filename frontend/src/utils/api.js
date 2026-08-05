@@ -1127,8 +1127,8 @@ export async function getMenuItems({
 	}
 }
 
-export async function getItemDetail(item_slug, branch = "") {
-	const args = { item_slug, branch };
+export async function getItemDetail(item_slug, branch = "", bom_name = "") {
+	const args = { item_slug, branch, bom_name };
 	if (shouldPreferPublicGET()) {
 		return callMethodByPathGET("restaurant.api.get_item_detail", args);
 	}

@@ -1174,6 +1174,7 @@ const customizationSheet = reactive({
   },
   qty: 1,
   editing_line_id: '',
+  active_bom_name: '',
 })
 
 const fallbackImage =
@@ -3573,6 +3574,7 @@ function closeCustomizationSheet() {
   }
   customizationSheet.qty = 1
   customizationSheet.editing_line_id = ''
+  customizationSheet.active_bom_name = ''
 }
 
 function setSheetCustomization(next) {
@@ -3611,19 +3613,43 @@ function resolveSheetVariant(modifiers = []) {
   }) || null
 }
 
+function resolveSheetBomVariant(modifiers = []) {
+  const groups = customizationSheet.modifierGroups || []
+  for (const selected of modifiers || []) {
+    const rawGroup = String(selected?.group || '').trim()
+    const group = groups.find((row) => row.group_name === rawGroup || row.title === rawGroup)
+    if (!group) continue
+    const option = (group.options || []).find((row) => String(row.name || '').trim() === String(selected?.option || '').trim())
+    if ((option?.action_type || option?.modifier_type) !== 'bom_variant') continue
+    const bomName = String(option?.alternative_bom || '').trim()
+    if (bomName) return { bomName, option }
+  }
+  return null
+}
+
 async function setSheetModifiers(next) {
   const nextModifiers = Array.isArray(next) ? next : []
   const selectedVariant = resolveSheetVariant(nextModifiers)
+  const selectedBomVariant = resolveSheetBomVariant(nextModifiers)
   const currentVariant = String(customizationSheet.item?.name || '').trim()
   const targetVariant = String(selectedVariant?.name || '').trim()
+  const currentBom = String(customizationSheet.active_bom_name || '').trim()
+  const targetBom = String(selectedBomVariant?.bomName || '').trim()
+  const variantChanged = selectedVariant && targetVariant && targetVariant !== currentVariant
+  const bomChanged = selectedBomVariant && targetBom && targetBom !== currentBom
 
-  if (selectedVariant && targetVariant && targetVariant !== currentVariant) {
+  if (variantChanged || bomChanged) {
     customizationSheet.بارگذاری = true
     customizationSheet.error = ''
     try {
-      const variantSlug = selectedVariant.slug || selectedVariant.name
-      const payload = detailCache.get(variantSlug) || (await getItemDetail(variantSlug))
-      detailCache.set(variantSlug, payload)
+      const itemSlug = getItemSlug(customizationSheet.item) || customizationSheet.item?.name
+      const cacheKey = bomChanged ? `${itemSlug}::bom::${targetBom}` : (selectedVariant.slug || selectedVariant.name)
+      const payload = detailCache.get(cacheKey) || (
+        bomChanged
+          ? await getItemDetail(itemSlug, '', targetBom)
+          : await getItemDetail(selectedVariant.slug || selectedVariant.name)
+      )
+      detailCache.set(cacheKey, payload)
       const ingredients = payload.ingredients || []
       const modifierGroups = payload.modifier_groups || []
       const validIngredientKeys = new Set(ingredients.map((row) => String(row.key || row.name || '').trim()))
@@ -3634,6 +3660,7 @@ async function setSheetModifiers(next) {
       customizationSheet.ingredients = ingredients
       customizationSheet.modifierGroups = modifierGroups
       customizationSheet.variantsMapping = payload.variants_mapping || customizationSheet.variantsMapping || []
+      customizationSheet.active_bom_name = payload.bom_name || targetBom || customizationSheet.active_bom_name
       customizationSheet.customization = sanitizeCustomization(
         {
           ...customizationSheet.customization,
@@ -3642,8 +3669,8 @@ async function setSheetModifiers(next) {
         },
         ingredients,
       )
-    } catch (variantError) {
-      customizationSheet.error = variantError.message || 'دریافت BOM گونه انتخاب‌شده ناموفق بود.'
+    } catch (selectionError) {
+      customizationSheet.error = selectionError.message || 'دریافت BOM گونه انتخاب‌شده ناموفق بود.'
     } finally {
       customizationSheet.بارگذاری = false
     }
@@ -3685,6 +3712,7 @@ async function openCustomizationSheet(item, options = {}) {
     const ingredients = payload.ingredients || []
     const modifierGroups = payload.modifier_groups || []
     customizationSheet.variantsMapping = payload.variants_mapping || []
+    customizationSheet.active_bom_name = payload.bom_name || payload.primary_bom_name || ''
     customizationSheet.item = {
       ...sourceItem,
       ...detailItem,
