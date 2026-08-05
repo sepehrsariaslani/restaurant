@@ -6323,8 +6323,12 @@ def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=
 			continue
 		option_name = str(selected.get("option") or "").strip()
 		option = next(
-			(row for row in group_map[group_name].get("options") or [] if str(row.get("name") or "").strip() == option_name),
-			none,
+			(
+				row
+				for row in group_map[group_name].get("options") or []
+				if str(row.get("name") or "").strip() == option_name
+			),
+			None,
 		)
 		if not option or (option.get("action_type") or option.get("modifier_type") or "") != "bom_variant":
 			continue
