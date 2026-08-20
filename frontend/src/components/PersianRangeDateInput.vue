@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootRef" class="persian-range-date-input" :class="{ disabled }">
+  <div class="persian-range-date-input" :class="{ disabled }">
     <div class="date-input-shell">
       <input
         ref="inputRef"
@@ -12,9 +12,9 @@
         :disabled="disabled"
         :aria-expanded="isOpen"
         aria-haspopup="dialog"
-        @click="toggleCalendar"
-        @keydown.enter.prevent="toggleCalendar"
-        @keydown.space.prevent="toggleCalendar"
+        @click="openCalendar"
+        @keydown.enter.prevent="openCalendar"
+        @keydown.space.prevent="openCalendar"
       />
       <button
         type="button"
@@ -22,7 +22,7 @@
         :disabled="disabled"
         aria-label="باز کردن انتخابگر بازه تاریخ"
         :aria-expanded="isOpen"
-        @click="toggleCalendar"
+        @click="openCalendar"
       >
         <CalendarRange :size="17" :stroke-width="2.1" />
       </button>
@@ -30,88 +30,85 @@
 
     <Teleport to="body">
       <Transition name="persian-calendar">
-        <div
-          v-if="isOpen"
-          ref="popupRef"
-          class="calendar-popover"
-          :style="popoverStyle"
-          dir="rtl"
-          role="dialog"
-          aria-label="انتخاب بازه تاریخ شمسی"
-          @click.stop
-        >
-          <header class="calendar-header">
-            <div class="calendar-heading">
-              <span class="calendar-kicker">انتخاب بازه تاریخ</span>
-              <button type="button" class="calendar-month-button" @click="showMonthPicker = !showMonthPicker">
-                {{ monthNames[activeMonth - 1] }} {{ faNumber(activeYear) }}
-                <ChevronDown :size="15" :class="{ rotated: showMonthPicker }" />
-              </button>
-            </div>
-            <button type="button" class="calendar-close" aria-label="بستن" @click="closeCalendar">
-              <X :size="16" />
-            </button>
-          </header>
+        <div v-if="isOpen" class="calendar-layer" dir="rtl">
+          <!-- پس‌زمینه: کلیک روی آن تقویم را می‌بندد -->
+          <div class="calendar-backdrop" @click="closeCalendar"></div>
 
-          <div v-if="showMonthPicker" class="month-picker" aria-label="انتخاب ماه">
-            <button
-              v-for="(month, index) in monthNames"
-              :key="month"
-              type="button"
-              class="month-option"
-              :class="{ active: activeMonth === index + 1 }"
-              @click="selectMonth(index + 1)"
-            >
-              {{ month }}
-            </button>
-          </div>
-
-          <template v-else>
-            <div class="calendar-toolbar">
-              <button type="button" class="nav-button" aria-label="ماه قبل" @click="moveMonth(-1)">
-                <ChevronRight :size="18" />
-              </button>
-              <span class="calendar-year-label">سال {{ faNumber(activeYear) }}</span>
-              <button type="button" class="nav-button" aria-label="ماه بعد" @click="moveMonth(1)">
-                <ChevronLeft :size="18" />
-              </button>
-            </div>
-
-            <div class="weekday-row" aria-hidden="true">
-              <span v-for="day in weekDays" :key="day">{{ day }}</span>
-            </div>
-
-            <div class="calendar-grid" role="grid">
-              <template v-for="cell in calendarCells" :key="cell.key">
-                <span v-if="cell.blank" class="calendar-cell calendar-cell--blank"></span>
-                <button
-                  v-else
-                  type="button"
-                  role="gridcell"
-                  class="calendar-day"
-                  :class="dayClasses(cell.iso)"
-                  :aria-label="`${monthNames[activeMonth - 1]} ${cell.day}`"
-                  :aria-selected="cell.iso === tempStart || cell.iso === tempEnd"
-                  @click="pickDate(cell.iso)"
-                >
-                  {{ faNumber(cell.day) }}
+          <div
+            class="calendar-popover"
+            :style="popoverStyle"
+            role="dialog"
+            aria-label="انتخاب بازه تاریخ شمسی"
+            @click.stop
+          >
+            <header class="calendar-header">
+              <div class="calendar-heading">
+                <span class="calendar-kicker">انتخاب بازه تاریخ</span>
+                <button type="button" class="calendar-month-button" @click="showMonthPicker = !showMonthPicker">
+                  {{ monthNames[activeMonth - 1] }} {{ faNumber(activeYear) }}
+                  <ChevronDown :size="15" :class="{ rotated: showMonthPicker }" />
                 </button>
-              </template>
-            </div>
-          </template>
+              </div>
+              <button type="button" class="calendar-close" aria-label="بستن" @click="closeCalendar">
+                <X :size="16" />
+              </button>
+            </header>
 
-          <footer class="calendar-footer">
-            <button type="button" class="today-button" @click="pickToday">امروز</button>
-            <button type="button" class="clear-date-button" @click="clearRange">پاک کردن</button>
-            <span v-if="!tempStart" class="calendar-hint">تاریخ شروع را انتخاب کنید</span>
-            <span v-else-if="!tempEnd" class="calendar-hint">حالا تاریخ پایان را انتخاب کنید</span>
-            <button
-              v-else
-              type="button"
-              class="confirm-button"
-              @click="confirmRange"
-            >تأیید بازه</button>
-          </footer>
+            <div v-if="showMonthPicker" class="month-picker" aria-label="انتخاب ماه">
+              <button
+                v-for="(month, index) in monthNames"
+                :key="month"
+                type="button"
+                class="month-option"
+                :class="{ active: activeMonth === index + 1 }"
+                @click="selectMonth(index + 1)"
+              >
+                {{ month }}
+              </button>
+            </div>
+
+            <template v-else>
+              <div class="calendar-toolbar">
+                <button type="button" class="nav-button" aria-label="ماه قبل" @click="moveMonth(-1)">
+                  <ChevronRight :size="18" />
+                </button>
+                <span class="calendar-year-label">سال {{ faNumber(activeYear) }}</span>
+                <button type="button" class="nav-button" aria-label="ماه بعد" @click="moveMonth(1)">
+                  <ChevronLeft :size="18" />
+                </button>
+              </div>
+
+              <div class="weekday-row" aria-hidden="true">
+                <span v-for="day in weekDays" :key="day">{{ day }}</span>
+              </div>
+
+              <div class="calendar-grid" role="grid">
+                <template v-for="cell in calendarCells" :key="cell.key">
+                  <span v-if="cell.blank" class="calendar-cell calendar-cell--blank"></span>
+                  <button
+                    v-else
+                    type="button"
+                    role="gridcell"
+                    class="calendar-day"
+                    :class="dayClasses(cell.iso)"
+                    :aria-label="`${monthNames[activeMonth - 1]} ${cell.day}`"
+                    :aria-selected="cell.iso === tempStart || cell.iso === tempEnd"
+                    @click="pickDate(cell.iso)"
+                  >
+                    {{ faNumber(cell.day) }}
+                  </button>
+                </template>
+              </div>
+            </template>
+
+            <footer class="calendar-footer">
+              <button type="button" class="today-button" @click="pickToday">امروز</button>
+              <button type="button" class="clear-date-button" @click="clearRange">پاک کردن</button>
+              <span v-if="!tempStart" class="calendar-hint">تاریخ شروع را انتخاب کنید</span>
+              <span v-else-if="!tempEnd" class="calendar-hint">حالا تاریخ پایان را انتخاب کنید</span>
+              <button v-else type="button" class="confirm-button" @click="confirmRange">تأیید بازه</button>
+            </footer>
+          </div>
         </div>
       </Transition>
     </Teleport>
@@ -119,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { CalendarRange, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-vue-next'
 import { jalaaliMonthLength, jalaaliToDateObject, toGregorian, toJalaali } from 'jalaali-js'
 
@@ -132,9 +129,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const rootRef = ref(null)
 const inputRef = ref(null)
-const popupRef = ref(null)
 const isOpen = ref(false)
 const showMonthPicker = ref(false)
 const popoverStyle = ref({})
@@ -150,17 +145,8 @@ const todayJalali = isoToJalali(todayIso)
 const activeYear = ref(todayJalali.year)
 const activeMonth = ref(todayJalali.month)
 
-// انتخاب موقت در تقویم (قبل از تأیید)
 const tempStart = ref(normalizeDateOnly(props.modelValue?.date_from))
 const tempEnd = ref(normalizeDateOnly(props.modelValue?.date_to))
-
-watch(
-  () => [props.modelValue?.date_from, props.modelValue?.date_to],
-  ([from, to]) => {
-    tempStart.value = normalizeDateOnly(from)
-    tempEnd.value = normalizeDateOnly(to)
-  },
-)
 
 const displayValue = computed(() => {
   const from = isoToJalali(tempStart.value)
@@ -223,6 +209,32 @@ function pickDate(iso) {
     tempEnd.value = iso
   }
   syncActiveMonth(iso)
+  // بازه کامل شد — فوراً اعمال و ببند (حتی بدون دکمه تأیید)
+  if (tempStart.value && tempEnd.value) {
+    emit('update:modelValue', {
+      date_from: tempStart.value,
+      date_to: tempEnd.value,
+    })
+    closeCalendar()
+  }
+}
+
+function openCalendar() {
+  if (props.disabled) return
+  // اگر انتخاب داخلی ناقص/خالی است از props بخوان
+  if (!tempStart.value && !tempEnd.value) {
+    tempStart.value = normalizeDateOnly(props.modelValue?.date_from)
+    tempEnd.value = normalizeDateOnly(props.modelValue?.date_to)
+  }
+  syncActiveMonth(tempStart.value || tempEnd.value || '')
+  isOpen.value = true
+  showMonthPicker.value = false
+  nextTick(updatePopoverPosition)
+}
+
+function closeCalendar() {
+  isOpen.value = false
+  showMonthPicker.value = false
 }
 
 function pickToday() {
@@ -285,32 +297,6 @@ function jalaliToIso(year, month, day) {
   return `${gregorian.gy}-${pad(gregorian.gm)}-${pad(gregorian.gd)}`
 }
 
-function syncActiveMonth(value) {
-  const jalali = isoToJalali(value) || todayJalali
-  activeYear.value = jalali.year
-  activeMonth.value = jalali.month
-}
-
-function toggleCalendar() {
-  if (props.disabled) return
-  isOpen.value = !isOpen.value
-  showMonthPicker.value = false
-  if (isOpen.value) {
-    // فقط وقتی انتخاب داخلی وجود ندارد از props بخوان — تا انتخاب ناقص کاربر از بین نرود
-    if (!tempStart.value && !tempEnd.value) {
-      tempStart.value = normalizeDateOnly(props.modelValue?.date_from)
-      tempEnd.value = normalizeDateOnly(props.modelValue?.date_to)
-    }
-    syncActiveMonth(tempStart.value || tempEnd.value || '')
-    nextTick(updatePopoverPosition)
-  }
-}
-
-function closeCalendar() {
-  isOpen.value = false
-  showMonthPicker.value = false
-}
-
 function selectMonth(month) {
   activeMonth.value = month
   showMonthPicker.value = false
@@ -330,16 +316,21 @@ function moveMonth(offset) {
   activeMonth.value = nextMonth
 }
 
+function syncActiveMonth(value) {
+  const jalali = isoToJalali(value) || todayJalali
+  activeYear.value = jalali.year
+  activeMonth.value = jalali.month
+}
+
 function updatePopoverPosition() {
   if (!isOpen.value || !inputRef.value || typeof window === 'undefined') return
   const rect = inputRef.value.getBoundingClientRect()
   const width = Math.min(380, Math.max(window.innerWidth - 24, 300))
-  const estimatedHeight = showMonthPicker.value ? 360 : 440
   let left = rect.right - width
   left = Math.max(12, Math.min(left, window.innerWidth - width - 12))
   let top = rect.bottom + 8
-  if (top + estimatedHeight > window.innerHeight - 12 && rect.top > estimatedHeight + 12) {
-    top = rect.top - estimatedHeight - 8
+  if (top + 460 > window.innerHeight - 12 && rect.top > 472) {
+    top = rect.top - 460 - 8
   }
   popoverStyle.value = {
     top: `${Math.max(12, top)}px`,
@@ -347,26 +338,6 @@ function updatePopoverPosition() {
     width: `${width}px`,
   }
 }
-
-function onDocumentPointerdown(event) {
-  if (!isOpen.value) return
-  if (rootRef.value?.contains(event.target) || popupRef.value?.contains(event.target)) return
-  closeCalendar()
-}
-
-function onWindowResize() {
-  updatePopoverPosition()
-}
-
-onMounted(() => {
-  document.addEventListener('pointerdown', onDocumentPointerdown)
-  window.addEventListener('resize', onWindowResize)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onDocumentPointerdown)
-  window.removeEventListener('resize', onWindowResize)
-})
 </script>
 
 <style scoped>
@@ -435,9 +406,21 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.calendar-popover {
+/* لایه تقویم: پشت‌زمینه + پاپ‌آپ */
+.calendar-layer {
   position: fixed;
+  inset: 0;
   z-index: 13000;
+}
+
+.calendar-backdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.calendar-popover {
+  position: absolute;
   overflow: hidden;
   color: var(--mg-text-main, #34261f);
   background: var(--mg-bg-surface, #fbf7f1);
