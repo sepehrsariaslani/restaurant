@@ -14,15 +14,11 @@
           <small>{{ todayLabel }}</small>
         </div>
 
-        <label>
-          از تاریخ
-          <PersianDateInput v-model="filters.date_from" />
-        </label>
-
-        <label>
-          تا تاریخ
-          <PersianDateInput v-model="filters.date_to" />
-        </label>
+        <PersianRangeDateInput
+          :model-value="{ date_from: filters.date_from, date_to: filters.date_to }"
+          placeholder="انتخاب بازه تاریخ..."
+          @update:model-value="applyRangeFilter"
+        />
 
         <button type="button" class="primary-btn" @click="loadAll" :disabled="loading">اجرای فیلتر</button>
       </div>
@@ -259,7 +255,7 @@ import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard
 import ManagementBarList from '@/components/management/bi/ManagementBarList.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import SalesHourlyChart from '@/components/management/sales/SalesHourlyChart.vue'
-import PersianDateInput from '@/components/PersianDateInput.vue'
+import PersianRangeDateInput from '@/components/PersianRangeDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   getManagementCustomerDetail,
@@ -515,6 +511,15 @@ async function selectCustomer(customer) {
 
 const recentOrders = computed(() => (dashboard.value?.recent_orders || []).slice(0, 8))
 
+// اعمال بازه انتخاب‌شده از RangeDatePicker
+function applyRangeFilter(range) {
+  filters.date_from = String(range?.date_from || '').trim()
+  filters.date_to = String(range?.date_to || '').trim()
+  if (filters.date_from && filters.date_to) {
+    loadAll()
+  }
+}
+
 async function loadAll() {
   loading.value = true
   error.value = ''
@@ -577,6 +582,11 @@ onMounted(loadAll)
   align-items: flex-end;
   gap: 0.7rem;
   flex-wrap: wrap;
+}
+
+.global-controls :deep(.persian-range-date-input) {
+  width: min(340px, 100%);
+  flex: 1 1 280px;
 }
 
 .control-meta {

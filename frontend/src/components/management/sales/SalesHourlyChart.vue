@@ -1,48 +1,41 @@
 <template>
   <div class="sales-hourly-chart">
-    <svg viewBox="0 0 640 230" preserveAspectRatio="none" class="hourly-svg" role="img" aria-label="نمودار ساعتی">
-      <!-- خطوط شبکه -->
-      <line v-for="step in 4" :key="step" :x1="14" :x2="626" :y1="gridY(step)" :y2="gridY(step)" class="hgrid" />
-      <!-- خط محور -->
-      <line x1="14" x2="626" y1="150" y2="150" class="haxis" />
+    <div class="hourly-chart-body">
+      <svg viewBox="0 0 640 150" preserveAspectRatio="none" class="hourly-svg" role="img" aria-label="نمودار ساعتی">
+        <!-- خطوط شبکه -->
+        <line v-for="step in 4" :key="step" :x1="14" :x2="626" :y1="gridY(step)" :y2="gridY(step)" class="hgrid" />
+        <!-- خط محور -->
+        <line x1="14" x2="626" y1="150" y2="150" class="haxis" />
 
-      <!-- ستون‌ها -->
-      <g v-for="(value, idx) in values" :key="idx">
-        <rect
-          :x="barX(idx)"
-          :y="barY(value)"
-          :width="barW"
-          :height="barH(value)"
-          :fill="color"
-          rx="2"
-          class="hbar"
-        >
-          <title>{{ faHour(idx) }}:00 — {{ formatValue(value) }}</title>
-        </rect>
-      </g>
+        <!-- ستون‌ها -->
+        <g v-for="(value, idx) in values" :key="idx">
+          <rect
+            :x="barX(idx)"
+            :y="barY(value)"
+            :width="barW"
+            :height="barH(value)"
+            :fill="color"
+            rx="2"
+            class="hbar"
+          >
+            <title>{{ faHour(idx) }}:00 — {{ formatValue(value) }}</title>
+          </rect>
+        </g>
+      </svg>
 
-      <!-- برچسب ساعت‌ها — ردیف اول: ۰ تا ۱۱ -->
-      <text
-        v-for="idx in 12"
-        :key="`r1-${idx}`"
-        :x="barX(idx - 1) + barW / 2"
-        y="174"
-        text-anchor="middle"
-        class="hlbl"
-      >{{ faHour(idx - 1) }}</text>
+      <!-- برچسب ساعت‌ها در دو ردیف (خارج از SVG تا کشیده نشوند) -->
+      <div class="hour-labels" dir="ltr">
+        <span
+          v-for="hour in 24"
+          :key="hour"
+          class="hour-label"
+          :class="{ 'row-second': hour > 12 }"
+          :style="{ left: labelLeft(hour - 1) }"
+        >{{ faHour(hour - 1) }}</span>
+      </div>
+    </div>
 
-      <!-- برچسب ساعت‌ها — ردیف دوم: ۱۲ تا ۲۳ -->
-      <text
-        v-for="idx in 12"
-        :key="`r2-${idx}`"
-        :x="barX(idx + 11) + barW / 2"
-        y="196"
-        text-anchor="middle"
-        class="hlbl"
-      >{{ faHour(idx + 11) }}</text>
-
-      <text x="320" y="220" text-anchor="middle" class="haxis-lbl">ساعت (دو ردیف: ۰ تا ۲۳)</text>
-    </svg>
+    <div class="hour-axis-note">ساعت (دو ردیف: ۰ تا ۲۳)</div>
 
     <div class="hourly-legend">
       <span class="legend-dot" :style="{ background: color }"></span>
@@ -111,6 +104,12 @@ function barH(value) {
   return Math.max((numeric / maxValue.value) * CHART_HEIGHT, 1.5)
 }
 
+// موقعیت دقیق مرکز هر ستون نسبت به عرض چارت (درصد)
+function labelLeft(idx) {
+  const center = CHART_LEFT + idx * SLOT + SLOT / 2
+  return `${(center / CHART_RIGHT) * 100}%`
+}
+
 function faHour(hour) {
   return toPersianNumber(hour)
 }
@@ -127,7 +126,11 @@ function formatValue(value) {
 <style scoped>
 .sales-hourly-chart {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.35rem;
+}
+
+.hourly-chart-body {
+  position: relative;
 }
 
 .hourly-svg {
@@ -154,17 +157,33 @@ function formatValue(value) {
   opacity: 0.78;
 }
 
-.hlbl {
-  font-size: 11px;
-  fill: var(--mg-text-muted);
-  font-family: inherit;
+/* برچسب ساعت‌ها — دو ردیف، دقیقاً زیر ستون‌ها */
+.hour-labels {
+  position: relative;
+  height: 40px;
+  direction: ltr;
 }
 
-.haxis-lbl {
+.hour-label {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  color: var(--mg-text-muted);
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.hour-label.row-second {
+  top: 21px;
+}
+
+.hour-axis-note {
   font-size: 10px;
-  fill: var(--mg-text-muted);
-  font-family: inherit;
+  color: var(--mg-text-muted);
   opacity: 0.8;
+  text-align: center;
 }
 
 .hourly-legend {
