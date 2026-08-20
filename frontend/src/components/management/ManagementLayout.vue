@@ -8,7 +8,7 @@
 		dir="rtl"
 	>
 		<article v-if="authLoading" class="management-auth-card">
-			<ManagementBearLoader :size="210" label="در حال آماده‌سازی پنل..." />
+			<ManagementBearLoader :size="210" :brand="brandName" label="در حال آماده‌سازی پنل..." />
 			<p class="auth-card-title">در حال بررسی وضعیت ورود...</p>
 			<p class="auth-card-muted">چند لحظه صبر کنید.</p>
 		</article>
@@ -122,7 +122,7 @@
 			<!-- Mobile Content -->
 			<main class="mobile-main module-content">
 				<div v-if="authLoading" class="auth-gate-card">
-					<ManagementBearLoader :size="188" label="در حال همگام‌سازی نشست..." />
+					<ManagementBearLoader :size="188" :brand="brandName" label="در حال همگام‌سازی نشست..." />
 					<p class="auth-gate-title">در حال بروزرسانی نشست کاربر...</p>
 					<p class="auth-card-muted">کمی صبر کنید.</p>
 				</div>
@@ -274,7 +274,7 @@
 					:class="{ 'desktop-main--fullbleed': isPosPage || isKitchenPage }"
 				>
 					<section v-if="authLoading" class="auth-gate-card">
-						<ManagementBearLoader :size="188" label="در حال همگام‌سازی نشست..." />
+						<ManagementBearLoader :size="188" :brand="brandName" label="در حال همگام‌سازی نشست..." />
 						<p class="auth-gate-title">در حال بروزرسانی نشست کاربر...</p>
 						<p class="auth-card-muted">کمی صبر کنید.</p>
 					</section>

@@ -1,41 +1,65 @@
 <template>
   <div class="sales-hourly-chart">
-    <div class="hourly-chart-body">
-      <svg viewBox="0 0 640 150" preserveAspectRatio="none" class="hourly-svg" role="img" aria-label="نمودار ساعتی">
+    <div class="hourly-chart-body" @mouseleave="hoverIndex = -1">
+      <svg viewBox="0 0 640 150" preserveAspectRatio="none" class="hourly-svg" role="img" aria-label="نمودار">
         <!-- خطوط شبکه -->
         <line v-for="step in 4" :key="step" :x1="14" :x2="626" :y1="gridY(step)" :y2="gridY(step)" class="hgrid" />
         <!-- خط محور -->
         <line x1="14" x2="626" y1="150" y2="150" class="haxis" />
 
         <!-- ستون‌ها -->
-        <g v-for="(value, idx) in values" :key="idx">
+        <g
+          v-for="(value, idx) in values"
+          :key="idx"
+          @mouseenter="hoverIndex = idx"
+          @mousemove="onHoverMove"
+        >
           <rect
             :x="barX(idx)"
             :y="barY(value)"
             :width="barW"
             :height="barH(value)"
             :fill="color"
+            :opacity="hoverIndex === null || hoverIndex === idx ? 1 : 0.45"
             rx="2"
             class="hbar"
-          >
-            <title>{{ faHour(idx) }}:00 — {{ formatValue(value) }}</title>
-          </rect>
+          />
         </g>
+
+        <!-- خط راهنمای هاور -->
+        <line
+          v-if="hoverIndex !== null"
+          :x1="barX(hoverIndex) + barW / 2"
+          :x2="barX(hoverIndex) + barW / 2"
+          y1="26"
+          y2="150"
+          class="hhover-line"
+        />
       </svg>
 
-      <!-- برچسب ساعت‌ها در دو ردیف (خارج از SVG تا کشیده نشوند) -->
-      <div class="hour-labels" dir="ltr">
+      <!-- برچسب‌ها (خارج از SVG تا کشیده نشوند) -->
+      <div class="hour-labels" :dir="twoRowLabels ? 'ltr' : 'rtl'">
         <span
-          v-for="hour in 24"
-          :key="hour"
+          v-for="(label, idx) in displayLabels"
+          :key="idx"
           class="hour-label"
-          :class="{ 'row-second': hour > 12 }"
-          :style="{ left: labelLeft(hour - 1) }"
-        >{{ faHour(hour - 1) }}</span>
+          :class="{ 'row-second': twoRowLabels && idx >= Math.ceil(displayLabels.length / 2) }"
+          :style="{ left: labelLeft(idx) }"
+        >{{ label }}</span>
+      </div>
+
+      <!-- Tooltip هاور -->
+      <div
+        v-if="hoverIndex !== null && hoverValue !== null"
+        class="hover-tooltip"
+        :style="{ left: tooltipLeft, top: tooltipTop }"
+      >
+        <strong>{{ hoverLabel }}</strong>
+        <span>{{ hoverValueText }}</span>
       </div>
     </div>
 
-    <div class="hour-axis-note">ساعت (دو ردیف: ۰ تا ۲۳)</div>
+    <div v-if="twoRowLabels" class="hour-axis-note">ساعت (دو ردیف: ۰ تا ۲۳)</div>
 
     <div class="hourly-legend">
       <span class="legend-dot" :style="{ background: color }"></span>
@@ -45,13 +69,21 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { formatMoney, toPersianNumber } from '@/utils/format'
 
 const props = defineProps({
   values: {
     type: Array,
     default: () => [],
+  },
+  labels: {
+    type: Array,
+    default: null,
+  },
+  twoRowLabels: {
+    type: Boolean,
+    default: false,
   },
   color: {
     type: String,
@@ -79,11 +111,22 @@ const CHART_WIDTH = CHART_RIGHT - CHART_LEFT
 const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP
 const SLOT = CHART_WIDTH / 24
 
+const hoverIndex = ref(null)
+const hoverX = ref(0)
+
 const barW = computed(() => Math.max(SLOT - 3, 6))
 
 const maxValue = computed(() => {
   const max = Math.max(...(props.values || []).map((v) => Number(v || 0)))
   return max > 0 ? max : 1
+})
+
+// برچسب‌های نمایشی: پیش‌فرض ۰ تا ۲۳ (ساعتی)
+const displayLabels = computed(() => {
+  if (Array.isArray(props.labels) && props.labels.length) {
+    return props.labels.map((label, idx) => (String(label || '').trim() ? label : `${idx + 1}`))
+  }
+  return Array.from({ length: 24 }, (_, i) => toPersianNumber(i))
 })
 
 function gridY(step) {
@@ -110,16 +153,45 @@ function labelLeft(idx) {
   return `${(center / CHART_RIGHT) * 100}%`
 }
 
-function faHour(hour) {
-  return toPersianNumber(hour)
-}
+const hoverValue = computed(() => {
+  if (hoverIndex.value === null) return null
+  const value = Number(props.values?.[hoverIndex.value] || 0)
+  return value > 0 || true ? value : value
+})
 
-function formatValue(value) {
-  const numeric = Number(value || 0)
+const hoverLabel = computed(() => {
+  if (hoverIndex.value === null) return ''
+  return String(displayLabels.value[hoverIndex.value] || '')
+})
+
+const hoverValueText = computed(() => {
+  if (hoverValue.value === null) return ''
+  const numeric = Number(hoverValue.value || 0)
   if (props.mode === 'count') {
     return `${numeric.toLocaleString('fa-IR')} عدد`
   }
   return formatMoney(numeric, props.currency)
+})
+
+const tooltipLeft = computed(() => {
+  if (hoverIndex.value === null) return '0px'
+  const center = CHART_LEFT + hoverIndex.value * SLOT + SLOT / 2
+  const percent = (center / CHART_RIGHT) * 100
+  return `${percent}%`
+})
+
+const tooltipTop = computed(() => {
+  const value = Number(props.values?.[hoverIndex.value] || 0)
+  const h = barH(value)
+  const topPx = 150 - h - 8
+  return `${(topPx / 150) * 100}%`
+})
+
+function onHoverMove(event) {
+  const rect = event.currentTarget?.parentElement?.getBoundingClientRect?.()
+  if (rect) {
+    hoverX.value = event.clientX - rect.left
+  }
 }
 </script>
 
@@ -149,19 +221,22 @@ function formatValue(value) {
   stroke-width: 1.2;
 }
 
+.hhover-line {
+  stroke: color-mix(in srgb, var(--mg-primary, #c97852) 55%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
 .hbar {
   transition: opacity 0.15s ease;
+  cursor: pointer;
 }
 
-.hbar:hover {
-  opacity: 0.78;
-}
-
-/* برچسب ساعت‌ها — دو ردیف، دقیقاً زیر ستون‌ها */
+/* برچسب‌ها — برای حالت ساعتی دو ردیف، برای روزانه/هفتگی یک ردیف */
 .hour-labels {
   position: relative;
   height: 40px;
-  direction: ltr;
 }
 
 .hour-label {
@@ -200,5 +275,33 @@ function formatValue(value) {
   height: 10px;
   border-radius: 999px;
   display: inline-block;
+}
+
+/* Tooltip هاور */
+.hover-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  z-index: 5;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 10px;
+  background: var(--mg-bg-surface, #fbf7f1);
+  border: 1px solid color-mix(in srgb, var(--mg-primary, #c97852) 30%, var(--mg-border-light));
+  box-shadow: 0 10px 22px rgb(52 38 31 / 0.18);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.hover-tooltip strong {
+  font-size: 0.68rem;
+  color: var(--mg-text-muted);
+  font-weight: 700;
+}
+
+.hover-tooltip span {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--mg-text-main);
 }
 </style>

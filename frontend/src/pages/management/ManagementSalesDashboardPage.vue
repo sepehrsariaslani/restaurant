@@ -65,66 +65,7 @@
     <p class="error" v-if="error">{{ error }}</p>
 
     <template v-if="!loading && !error">
-      <!-- ─── KPI ها ─── -->
-      <section class="kpi-grid" v-if="kpis.length">
-        <article class="kpi-card" :class="`kpi-${kpi.key}`" v-for="kpi in kpis" :key="kpi.key">
-          <small>{{ kpi.label }}</small>
-          <strong>{{ formatKpiValue(kpi) }}</strong>
-          <div class="meta-row">
-            <span class="change" :class="trendClass(kpi.trend)">{{ formatChange(kpi.change_pct) }}</span>
-            <small>{{ kpi.change_label || 'نسبت به بازه قبل' }}</small>
-          </div>
-        </article>
-      </section>
-
-      <!-- ─── چارت‌ها ─── -->
-      <section class="charts-grid">
-        <ReportChartRenderer
-          v-for="chart in trendCharts"
-          :key="chart.key"
-          :chart="chart"
-          :currency="currency"
-        />
-      </section>
-
-      <!-- ─── چارت ساعتی (با برچسب دو ردیفه) ─── -->
-      <section class="charts-grid two-col" v-if="hourlySalesValues.length || hourlyOrdersValues.length">
-        <ManagementSurfaceCard title="فروش ساعتی" subtitle="توزیع فروش در ساعات روز (۰ تا ۲۳)">
-          <SalesHourlyChart
-            :values="hourlySalesValues"
-            color="#6F7B56"
-            mode="money"
-            :currency="currency"
-            legend-label="فروش"
-          />
-        </ManagementSurfaceCard>
-        <ManagementSurfaceCard title="سفارش‌های ساعتی" subtitle="تعداد سفارش در هر ساعت از روز">
-          <SalesHourlyChart
-            :values="hourlyOrdersValues"
-            color="#C97852"
-            mode="count"
-            :currency="currency"
-            legend-label="سفارش‌ها"
-          />
-        </ManagementSurfaceCard>
-      </section>
-
-      <section class="charts-grid two-col">
-        <ReportChartRenderer
-          v-for="chart in topProductsCharts"
-          :key="chart.key"
-          :chart="chart"
-          :currency="currency"
-        />
-        <ReportChartRenderer
-          v-for="chart in channelCharts"
-          :key="chart.key"
-          :chart="chart"
-          :currency="currency"
-        />
-      </section>
-
-      <!-- ─── مشتریان برتر ─── -->
+      <!-- ─── مشتریان برتر (بالای صفحه) ─── -->
       <ManagementSurfaceCard
         v-if="topCustomers.length || customerSearchOptions.length"
         title="مشتریان برتر"
@@ -202,6 +143,85 @@
         </div>
       </ManagementSurfaceCard>
 
+      <!-- ─── KPI ها ─── -->
+      <section class="kpi-grid" v-if="kpis.length">
+        <article class="kpi-card" :class="`kpi-${kpi.key}`" v-for="kpi in kpis" :key="kpi.key">
+          <small>{{ kpi.label }}</small>
+          <strong>{{ formatKpiValue(kpi) }}</strong>
+          <div class="meta-row">
+            <span class="change" :class="trendClass(kpi.trend)">{{ formatChange(kpi.change_pct) }}</span>
+            <small>{{ kpi.change_label || 'نسبت به بازه قبل' }}</small>
+          </div>
+        </article>
+      </section>
+
+      <!-- ─── روند فروش (ساعتی / روزانه / هفتگی) ─── -->
+      <ManagementSurfaceCard
+        v-if="trendValues.length"
+        title="روند فروش"
+        subtitle="تغییرات فروش بر اساس بازه نمایش انتخابی"
+      >
+        <div class="trend-toolbar">
+          <div class="trend-segments" role="tablist" aria-label="بازه نمایش روند">
+            <button
+              v-for="option in trendOptions"
+              :key="option.value"
+              type="button"
+              class="trend-seg"
+              :class="{ active: trendMode === option.value }"
+              role="tab"
+              :aria-selected="trendMode === option.value"
+              @click="trendMode = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <span class="trend-summary" v-if="trendTotal">
+            مجموع: <strong>{{ formatMoney(trendTotal, currency) }}</strong>
+          </span>
+        </div>
+
+        <SalesHourlyChart
+          :values="trendValues"
+          :labels="trendLabels"
+          :two-row-labels="trendMode === 'hourly'"
+          :color="trendColor"
+          mode="money"
+          :currency="currency"
+          :legend-label="trendLegendLabel"
+        />
+      </ManagementSurfaceCard>
+
+      <!-- ─── چارت روند روزانه و تجمعی ─── -->
+      <section class="charts-grid" v-if="trendCharts.length">
+        <ReportChartRenderer
+          v-for="chart in trendCharts"
+          :key="chart.key"
+          :chart="chart"
+          :currency="currency"
+        />
+      </section>
+
+      <!-- ─── پرفروش‌ترین محصولات ─── -->
+      <section class="charts-grid two-col" v-if="topProductsRows.length">
+        <ManagementSurfaceCard title="پرفروش‌ترین محصولات (بر اساس مبلغ)" subtitle="۱۰ محصول برتر از نظر فروش ریالی">
+          <ManagementBarList :rows="topProductsRows" mode="money" :currency="currency" />
+        </ManagementSurfaceCard>
+        <ManagementSurfaceCard title="پرفروش‌ترین محصولات (بر اساس تعداد)" subtitle="۱۰ محصول برتر از نظر تعداد فروش">
+          <ManagementBarList :rows="topProductsQtyRows" mode="count" :currency="currency" />
+        </ManagementSurfaceCard>
+      </section>
+
+      <!-- ─── فروش بر اساس کانال ─── -->
+      <section class="charts-grid two-col" v-if="channelRows.length">
+        <ManagementSurfaceCard title="فروش بر اساس کانال" subtitle="مبلغ فروش هر کانال">
+          <ManagementBarList :rows="channelRows" mode="money" :currency="currency" />
+        </ManagementSurfaceCard>
+        <ManagementSurfaceCard title="سفارش بر اساس کانال" subtitle="تعداد سفارش هر کانال">
+          <ManagementBarList :rows="channelCountRows" mode="count" :currency="currency" />
+        </ManagementSurfaceCard>
+      </section>
+
       <!-- ─── وضعیت سفارش‌ها ─── -->
       <ManagementSurfaceCard
         v-if="statusRows.length"
@@ -213,27 +233,6 @@
           mode="count"
           :currency="currency"
         />
-      </ManagementSurfaceCard>
-
-      <!-- ─── سفارش‌های اخیر ─── -->
-      <ManagementSurfaceCard
-        v-if="recentOrders.length"
-        title="سفارش‌های اخیر"
-        subtitle="آخرین تراکنش‌های ثبت‌شده در این بازه"
-      >
-        <div class="recent-orders-list">
-          <article v-for="order in recentOrders" :key="order.name" class="recent-order-row">
-            <div class="ro-main">
-              <strong>{{ order.name }}</strong>
-              <span>{{ order.customer_name || 'مشتری POS' }}</span>
-            </div>
-            <div class="ro-meta">
-              <span class="order-status-badge" :class="`status-${order.status}`">{{ formatStatus(order.status) }}</span>
-              <span class="ro-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
-              <strong class="ro-amount">{{ formatMoney(order.grand_total || 0, currency) }}</strong>
-            </div>
-          </article>
-        </div>
       </ManagementSurfaceCard>
     </template>
   </ManagementPageScaffold>
@@ -295,6 +294,14 @@ const customerDetail = ref(null)
 const customerDetailLoading = ref(false)
 const customerDetailError = ref('')
 
+// حالت نمایش روند: ساعتی / روزانه / هفتگی
+const trendMode = ref('daily')
+const trendOptions = [
+  { value: 'hourly', label: 'ساعتی' },
+  { value: 'daily', label: 'روزانه' },
+  { value: 'weekly', label: 'هفتگی' },
+]
+
 const breadcrumbItems = [
   { label: 'مدیریت', href: '/management' },
   { label: 'داشبورد فروش' },
@@ -332,33 +339,12 @@ function formatInvoiceDateTime(value) {
 
 const kpis = computed(() => {
   const summary = dashboard.value?.kpis || {}
-  const kpiList = [
-    {
-      key: 'total_sales',
-      label: 'فروش کل',
-      value: summary.total_sales || 0,
-      unit: 'money',
-    },
-    {
-      key: 'total_orders',
-      label: 'تعداد سفارش',
-      value: summary.total_orders || 0,
-      unit: 'count',
-    },
-    {
-      key: 'avg_ticket',
-      label: 'میانگین فاکتور',
-      value: summary.avg_ticket || 0,
-      unit: 'money',
-    },
-    {
-      key: 'total_items',
-      label: 'آیتم فروخته‌شده',
-      value: summary.total_items || 0,
-      unit: 'count',
-    },
+  return [
+    { key: 'total_sales', label: 'فروش کل', value: summary.total_sales || 0, unit: 'money' },
+    { key: 'total_orders', label: 'تعداد سفارش', value: summary.total_orders || 0, unit: 'count' },
+    { key: 'avg_ticket', label: 'میانگین فاکتور', value: summary.avg_ticket || 0, unit: 'money' },
+    { key: 'total_items', label: 'آیتم فروخته‌شده', value: summary.total_items || 0, unit: 'count' },
   ]
-  return kpiList
 })
 
 function formatKpiValue(kpi) {
@@ -382,10 +368,78 @@ function trendClass(trend) {
   return ''
 }
 
-const trendCharts = computed(() => localizeCharts(applySystemChartColors((trendReport.value?.charts || []).slice(0, 2))))
-const hourlyCharts = computed(() => localizeCharts(applySystemChartColors((hourlyReport.value?.charts || []).slice(0, 2))))
-const topProductsCharts = computed(() => localizeCharts(applySystemChartColors((topProductsReport.value?.charts || []).slice(0, 2))))
-const channelCharts = computed(() => localizeCharts(applySystemChartColors((channelReport.value?.charts || []).slice(0, 2))))
+// ─── چارت روند: ساعتی / روزانه / هفتگی ───
+const hourlySalesValues = computed(() => {
+  const chart = (hourlyReport.value?.charts || [])[0]
+  return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
+})
+
+const dailySalesValues = computed(() => {
+  const chart = (trendReport.value?.charts || [])[0]
+  return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
+})
+
+const dailyLabels = computed(() => {
+  const chart = (trendReport.value?.charts || [])[0]
+  return (chart?.labels || []).map((label) => {
+    const raw = String(label || '')
+    if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw
+    try {
+      return new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric' }).format(new Date(raw))
+    } catch (err) {
+      return raw
+    }
+  })
+})
+
+// گروه‌بندی هفتگی از داده روزانه
+const weeklyData = computed(() => {
+  const values = dailySalesValues.value
+  const labels = dailyLabels.value
+  if (!values.length) return { values: [], labels: [] }
+  const weeks = []
+  for (let i = 0; i < values.length; i += 7) {
+    const chunk = values.slice(i, i + 7)
+    const weekLabels = labels.slice(i, i + 7).filter(Boolean)
+    weeks.push({
+      total: chunk.reduce((sum, v) => sum + Number(v || 0), 0),
+      label: weekLabels.length ? `${weekLabels[0]} تا ${weekLabels[weekLabels.length - 1]}` : `هفته ${weeks.length + 1}`,
+    })
+  }
+  return {
+    values: weeks.map((w) => w.total),
+    labels: weeks.map((w) => w.label),
+  }
+})
+
+const trendValues = computed(() => {
+  if (trendMode.value === 'hourly') return hourlySalesValues.value
+  if (trendMode.value === 'weekly') return weeklyData.value.values
+  return dailySalesValues.value
+})
+
+const trendLabels = computed(() => {
+  if (trendMode.value === 'hourly') return null
+  if (trendMode.value === 'weekly') return weeklyData.value.labels
+  return dailyLabels.value
+})
+
+const trendTotal = computed(() => trendValues.value.reduce((sum, v) => sum + Number(v || 0), 0))
+
+const trendColor = computed(() => {
+  if (trendMode.value === 'hourly') return '#C97852'
+  if (trendMode.value === 'weekly') return '#8A8B63'
+  return '#6F7B56'
+})
+
+const trendLegendLabel = computed(() => {
+  if (trendMode.value === 'hourly') return 'فروش ساعتی'
+  if (trendMode.value === 'weekly') return 'فروش هفتگی'
+  return 'فروش روزانه'
+})
+
+// ─── چارت‌های روند روزانه (از API) ───
+const trendCharts = computed(() => localizeCharts(applySystemChartColors((trendReport.value?.charts || []).slice(1, 3))))
 
 // پالت رنگ‌های سیستم: سبز موفقیت، نارنجی اصلی، زیتونی
 const SYSTEM_PALETTE = ['#6F7B56', '#C97852', '#8A8B63']
@@ -445,24 +499,55 @@ function localizeCharts(charts = []) {
   })
 }
 
+// ─── پرفروش‌ترین‌ها با رنگ‌های سیستم ───
+function chartBarRows(chartIndex, mode) {
+  const chart = (topProductsReport.value?.charts || [])[chartIndex]
+  const labels = chart?.labels || []
+  const values = chart?.series?.[0]?.values || []
+  return labels.map((label, idx) => ({
+    key: `${label}-${idx}`,
+    label,
+    value: Number(values[idx] || 0),
+    color: SYSTEM_PALETTE[idx % SYSTEM_PALETTE.length],
+  }))
+}
+
+const topProductsRows = computed(() => chartBarRows(0, 'money'))
+const topProductsQtyRows = computed(() => chartBarRows(1, 'count'))
+
+// ─── کانال‌ها با لیبل فارسی و رنگ سیستم ───
+const CHANNEL_FA = {
+  'dine_in': 'سالن',
+  'takeaway': 'بیرون‌بر',
+  'delivery': 'پیک',
+  'online': 'آنلاین',
+  'unknown': 'نامشخص',
+}
+
+function channelRowsFrom(chartIndex) {
+  const chart = (channelReport.value?.charts || [])[chartIndex]
+  const labels = chart?.labels || []
+  const values = chart?.series?.[0]?.values || []
+  return labels.map((label, idx) => ({
+    key: `${label}-${idx}`,
+    label: CHANNEL_FA[String(label || '').toLowerCase()] || label,
+    value: Number(values[idx] || 0),
+    color: SYSTEM_PALETTE[idx % SYSTEM_PALETTE.length],
+  }))
+}
+
+const channelRows = computed(() => channelRowsFrom(0))
+const channelCountRows = computed(() => channelRowsFrom(1))
+
+// ─── وضعیت سفارش‌ها ───
 const statusRows = computed(() => {
-  const rows = (dashboard.value?.status_breakdown || []).map((row) => ({
-    key: row.status || 'unknown',
+  const rows = (dashboard.value?.status_breakdown || []).map((row, idx) => ({
+    key: row.status || `status-${idx}`,
     label: formatStatus(row.status),
     value: Number(row.orders || 0),
+    color: SYSTEM_PALETTE[idx % SYSTEM_PALETTE.length],
   }))
   return rows
-})
-
-// داده چارت‌های ساعتی: chart اول = فروش، chart دوم = سفارش‌ها
-const hourlySalesValues = computed(() => {
-  const chart = (hourlyReport.value?.charts || [])[0]
-  return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
-})
-
-const hourlyOrdersValues = computed(() => {
-  const chart = (hourlyReport.value?.charts || [])[1]
-  return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
 })
 
 function toFa(value) {
@@ -508,8 +593,6 @@ async function selectCustomer(customer) {
     customerDetailLoading.value = false
   }
 }
-
-const recentOrders = computed(() => (dashboard.value?.recent_orders || []).slice(0, 8))
 
 // اعمال بازه انتخاب‌شده از RangeDatePicker
 function applyRangeFilter(range) {
@@ -778,6 +861,54 @@ onMounted(loadAll)
   background: color-mix(in srgb, var(--mg-danger) 12%, transparent);
 }
 
+/* ─── روند فروش ─── */
+.trend-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.trend-segments {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 999px;
+  padding: 0.2rem;
+  background: var(--mg-bg-soft, #f0f0ea);
+}
+
+.trend-seg {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mg-text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.32rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.trend-seg.active {
+  background: var(--mg-primary, #c97852);
+  color: #fff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mg-primary, #c97852) 30%, transparent);
+}
+
+.trend-summary {
+  font-size: 0.74rem;
+  color: var(--mg-text-muted);
+}
+
+.trend-summary strong {
+  color: var(--mg-text-main);
+}
+
 /* ─── چارت‌ها ─── */
 .charts-grid {
   display: grid;
@@ -794,83 +925,6 @@ onMounted(loadAll)
   .charts-grid.two-col {
     grid-template-columns: 1fr;
   }
-}
-
-/* ─── سفارش‌های اخیر ─── */
-.recent-orders-list {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.recent-order-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  border: 1px solid var(--mg-border-light);
-  border-radius: 12px;
-  padding: 0.5rem 0.75rem;
-  background: var(--mg-bg-surface);
-  flex-wrap: wrap;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.recent-order-row:hover {
-  border-color: color-mix(in srgb, var(--mg-success, #6f7b56) 50%, var(--mg-border-light));
-  background: color-mix(in srgb, var(--mg-success, #6f7b56) 5%, var(--mg-bg-surface) 95%);
-}
-
-.ro-main {
-  display: grid;
-  gap: 0.1rem;
-}
-
-.ro-main strong {
-  font-size: 0.8rem;
-  color: var(--mg-text-main);
-}
-
-.ro-main span {
-  font-size: 0.7rem;
-  color: var(--mg-text-muted);
-}
-
-.ro-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.ro-time {
-  font-size: 0.68rem;
-  color: var(--mg-text-muted);
-}
-
-.ro-amount {
-  font-size: 0.82rem;
-  color: var(--mg-text-main);
-}
-
-.order-status-badge {
-  font-size: 0.64rem;
-  font-weight: 800;
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
-  background: var(--mg-bg-soft);
-  color: var(--mg-text-muted);
-}
-
-.order-status-badge.status-paid,
-.order-status-badge.status-delivered,
-.order-status-badge.status-completed {
-  background: var(--mg-success-bg);
-  color: var(--mg-success);
-}
-
-.order-status-badge.status-cancelled {
-  background: color-mix(in srgb, var(--mg-danger) 12%, transparent);
-  color: var(--mg-danger);
 }
 
 /* ─── مشتریان برتر ─── */
@@ -1074,5 +1128,36 @@ onMounted(loadAll)
   margin-inline-start: auto;
   font-size: 0.74rem;
   color: var(--mg-text-main);
+}
+
+/* ─── موبایل ─── */
+@media (max-width: 640px) {
+  .page-breadcrumbs {
+    margin-bottom: 0.55rem;
+    padding-inline: 0;
+  }
+
+  :deep(.management-page) {
+    padding: 0 0.6rem;
+    gap: 0.8rem;
+  }
+
+  .quick-actions {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.45rem;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .top-customers {
+    gap: 0.6rem;
+  }
+
+  .customer-picker {
+    padding: 0.6rem;
+  }
 }
 </style>

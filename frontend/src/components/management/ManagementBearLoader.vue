@@ -1,35 +1,46 @@
 <template>
   <div class="bear-loader" :style="{ '--loader-size': `${size}px` }" role="status" aria-live="polite">
-    <svg class="bear-svg" viewBox="0 0 340 320" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-      <g class="bear-shape">
-        <polygon
-          v-for="(piece, idx) in pieces"
-          :key="`piece-${idx}`"
-          class="piece"
-          :class="`enter-${piece.e}`"
-          :points="piece.p"
-          :style="{ '--delay': `${piece.d}s`, '--piece': piece.c }"
-        />
-      </g>
+    <div class="bear-stage">
+      <span class="bear-halo" aria-hidden="true"></span>
+      <span class="bear-ground" aria-hidden="true"></span>
+      <svg class="bear-svg" viewBox="0 0 340 320" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <g class="bear-shape">
+          <polygon
+            v-for="(piece, idx) in pieces"
+            :key="`piece-${idx}`"
+            class="piece"
+            :class="`enter-${piece.e}`"
+            :points="piece.p"
+            :style="{ '--delay': `${piece.d}s`, '--piece': piece.c }"
+          />
+        </g>
 
-      <g class="nose-layer">
-        <polygon class="nose-top" points="149,222 191,222 170,236" />
-        <polygon class="nose-left" points="149,222 170,236 158,254" />
-        <polygon class="nose-right" points="191,222 170,236 182,254" />
-        <polygon class="nose-bottom" points="158,254 182,254 170,270" />
-      </g>
+        <g class="nose-layer">
+          <polygon class="nose-top" points="149,222 191,222 170,236" />
+          <polygon class="nose-left" points="149,222 170,236 158,254" />
+          <polygon class="nose-right" points="191,222 170,236 182,254" />
+          <polygon class="nose-bottom" points="158,254 182,254 170,270" />
+        </g>
 
-      <g class="eyes-layer">
-        <ellipse class="eye-socket" cx="131" cy="167" rx="20" ry="13" />
-        <ellipse class="eye-socket" cx="209" cy="167" rx="20" ry="13" />
-        <circle class="eye-iris" cx="131" cy="168" r="8.3" />
-        <circle class="eye-iris" cx="209" cy="168" r="8.3" />
-        <circle class="eye-pupil" cx="131" cy="168" r="4.3" />
-        <circle class="eye-pupil" cx="209" cy="168" r="4.3" />
-        <circle class="eye-glint" cx="134" cy="165" r="1.55" />
-        <circle class="eye-glint" cx="212" cy="165" r="1.55" />
-      </g>
-    </svg>
+        <g class="eyes-layer">
+          <ellipse class="eye-socket" cx="131" cy="167" rx="20" ry="13" />
+          <ellipse class="eye-socket" cx="209" cy="167" rx="20" ry="13" />
+          <circle class="eye-iris" cx="131" cy="168" r="8.3" />
+          <circle class="eye-iris" cx="209" cy="168" r="8.3" />
+          <circle class="eye-pupil" cx="131" cy="168" r="4.3" />
+          <circle class="eye-pupil" cx="209" cy="168" r="4.3" />
+          <circle class="eye-glint" cx="134" cy="165" r="1.55" />
+          <circle class="eye-glint" cx="212" cy="165" r="1.55" />
+        </g>
+
+        <g class="cheek-layer" aria-hidden="true">
+          <ellipse class="cheek" cx="102" cy="196" rx="14" ry="9" />
+          <ellipse class="cheek" cx="238" cy="196" rx="14" ry="9" />
+        </g>
+      </svg>
+    </div>
+
+    <p v-if="brand" class="loader-brand">{{ brand }}</p>
     <p v-if="label" class="loader-label">{{ label }}</p>
   </div>
 </template>
@@ -40,59 +51,71 @@ const props = defineProps({
     type: String,
     default: 'در حال بارگذاری مدیریت...',
   },
+  brand: {
+    type: String,
+    default: '',
+  },
   size: {
     type: Number,
     default: 236,
   },
 })
 
+// پالت رنگ‌های اصلی سیستم: سبز موفقیت، زیتونی، نارنجی + سایه‌ها
+const PALETTE = [
+  '#6F7B56', '#8A8B63', '#C97852',
+  '#7F8B60', '#9A9B74', '#D4885F',
+  '#5F6B4C', '#7A7B58', '#B46845',
+]
+
 const rawPieces = [
-  { p: '52,88 90,34 112,108', c: '#7d5534', e: 'tl' },
-  { p: '112,108 90,34 142,72', c: '#a5754a', e: 'top' },
-  { p: '289,88 250,34 228,108', c: '#7d5534', e: 'tr' },
-  { p: '228,108 250,34 198,72', c: '#a5754a', e: 'top' },
-  { p: '74,98 90,58 104,104', c: '#c9a57e', e: 'tl' },
-  { p: '266,98 250,58 236,104', c: '#c9a57e', e: 'tr' },
+  { p: '52,88 90,34 112,108', e: 'tl' },
+  { p: '112,108 90,34 142,72', e: 'top' },
+  { p: '289,88 250,34 228,108', e: 'tr' },
+  { p: '228,108 250,34 198,72', e: 'top' },
+  { p: '74,98 90,58 104,104', e: 'tl' },
+  { p: '266,98 250,58 236,104', e: 'tr' },
 
-  { p: '112,108 142,72 170,108', c: '#9b6d43', e: 'top' },
-  { p: '228,108 198,72 170,108', c: '#8f633c', e: 'top' },
-  { p: '142,72 170,61 170,108', c: '#b4885d', e: 'top' },
-  { p: '198,72 170,61 170,108', c: '#a8774c', e: 'top' },
+  { p: '112,108 142,72 170,108', e: 'top' },
+  { p: '228,108 198,72 170,108', e: 'top' },
+  { p: '142,72 170,61 170,108', e: 'top' },
+  { p: '198,72 170,61 170,108', e: 'top' },
 
-  { p: '62,138 112,108 126,146', c: '#9c6d44', e: 'left' },
-  { p: '278,138 228,108 214,146', c: '#8f603a', e: 'right' },
-  { p: '62,138 126,146 95,188', c: '#7e5434', e: 'left' },
-  { p: '278,138 214,146 245,188', c: '#6f482e', e: 'right' },
+  { p: '62,138 112,108 126,146', e: 'left' },
+  { p: '278,138 228,108 214,146', e: 'right' },
+  { p: '62,138 126,146 95,188', e: 'left' },
+  { p: '278,138 214,146 245,188', e: 'right' },
 
-  { p: '112,108 126,146 145,142', c: '#c8a178', e: 'center' },
-  { p: '228,108 214,146 195,142', c: '#c19a72', e: 'center' },
-  { p: '145,142 170,108 195,142', c: '#d7b58c', e: 'center' },
-  { p: '126,146 145,142 141,182', c: '#ae7f55', e: 'center' },
-  { p: '214,146 195,142 199,182', c: '#a5734c', e: 'center' },
+  { p: '112,108 126,146 145,142', e: 'center' },
+  { p: '228,108 214,146 195,142', e: 'center' },
+  { p: '145,142 170,108 195,142', e: 'center' },
+  { p: '126,146 145,142 141,182', e: 'center' },
+  { p: '214,146 195,142 199,182', e: 'center' },
 
-  { p: '145,142 141,182 170,198', c: '#d7bc98', e: 'bottom' },
-  { p: '195,142 199,182 170,198', c: '#ccae89', e: 'bottom' },
-  { p: '141,182 170,198 149,222', c: '#e0c6a3', e: 'bottom' },
-  { p: '199,182 170,198 191,222', c: '#d5b693', e: 'bottom' },
+  { p: '145,142 141,182 170,198', e: 'bottom' },
+  { p: '195,142 199,182 170,198', e: 'bottom' },
+  { p: '141,182 170,198 149,222', e: 'bottom' },
+  { p: '199,182 170,198 191,222', e: 'bottom' },
 
-  { p: '95,188 126,146 141,182', c: '#7a5133', e: 'bl' },
-  { p: '245,188 214,146 199,182', c: '#6b442c', e: 'br' },
-  { p: '95,188 141,182 138,236', c: '#664127', e: 'bl' },
-  { p: '245,188 199,182 202,236', c: '#5b3924', e: 'br' },
+  { p: '95,188 126,146 141,182', e: 'bl' },
+  { p: '245,188 214,146 199,182', e: 'br' },
+  { p: '95,188 141,182 138,236', e: 'bl' },
+  { p: '245,188 199,182 202,236', e: 'br' },
 
-  { p: '138,236 149,222 170,270', c: '#90643f', e: 'bottom' },
-  { p: '202,236 191,222 170,270', c: '#83593a', e: 'bottom' },
-  { p: '138,236 170,270 170,305', c: '#6c472d', e: 'bottom' },
-  { p: '202,236 170,270 170,305', c: '#5e3d27', e: 'bottom' },
+  { p: '138,236 149,222 170,270', e: 'bottom' },
+  { p: '202,236 191,222 170,270', e: 'bottom' },
+  { p: '138,236 170,270 170,305', e: 'bottom' },
+  { p: '202,236 170,270 170,305', e: 'bottom' },
 
-  { p: '102,232 138,236 170,305', c: '#5a3a26', e: 'bl' },
-  { p: '238,232 202,236 170,305', c: '#4e3322', e: 'br' },
-  { p: '112,108 62,138 52,88', c: '#6d492e', e: 'left' },
-  { p: '228,108 278,138 289,88', c: '#654329', e: 'right' },
+  { p: '102,232 138,236 170,305', e: 'bl' },
+  { p: '238,232 202,236 170,305', e: 'br' },
+  { p: '112,108 62,138 52,88', e: 'left' },
+  { p: '228,108 278,138 289,88', e: 'right' },
 ]
 
 const pieces = rawPieces.map((piece, index) => ({
   ...piece,
+  c: PALETTE[index % PALETTE.length],
   d: Number(index * 0.045 + 0.08).toFixed(3),
 }))
 </script>
@@ -102,14 +125,53 @@ const pieces = rawPieces.map((piece, index) => ({
   --loader-size: 236px;
   display: grid;
   justify-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.bear-stage {
+  position: relative;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  display: grid;
+  place-items: center;
+}
+
+/* هاله نرم رنگی پشت خرس */
+.bear-halo {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 45%,
+    color-mix(in srgb, var(--mg-primary, #c97852) 20%, transparent) 0%,
+    color-mix(in srgb, var(--mg-success, #6f7b56) 14%, transparent) 48%,
+    color-mix(in srgb, var(--mg-olive, #8a8b63) 8%, transparent) 72%,
+    transparent 100%
+  );
+  animation: halo-pulse 3.2s ease-in-out infinite;
+}
+
+/* سایه زمین زیر خرس */
+.bear-ground {
+  position: absolute;
+  bottom: 4%;
+  left: 50%;
+  width: 52%;
+  height: 11px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgb(52 38 31 / 0.22) 0%, transparent 70%);
+  animation: ground-breathe 2.6s ease-in-out infinite;
 }
 
 .bear-svg {
-  width: var(--loader-size);
-  height: var(--loader-size);
+  width: 86%;
+  height: 86%;
   overflow: visible;
-  filter: drop-shadow(0 20px 28px rgb(var(--palette-deep-sapphire-rgb) / 0.24));
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 16px 22px rgb(52 38 31 / 0.2));
 }
 
 .bear-shape {
@@ -191,7 +253,7 @@ const pieces = rawPieces.map((piece, index) => ({
 }
 
 .eye-iris {
-  fill: #6b4628;
+  fill: var(--mg-primary, #c97852);
 }
 
 .eye-pupil {
@@ -203,9 +265,34 @@ const pieces = rawPieces.map((piece, index) => ({
   opacity: 0.9;
 }
 
+.cheek-layer {
+  animation: blush 3.2s ease-in-out infinite;
+}
+
+.cheek {
+  fill: color-mix(in srgb, var(--mg-primary, #c97852) 34%, transparent);
+  opacity: 0.55;
+}
+
+.loader-brand {
+  margin: 0.3rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  background: linear-gradient(
+    120deg,
+    var(--mg-primary, #c97852) 0%,
+    var(--mg-olive, #8a8b63) 55%,
+    var(--mg-success, #6f7b56) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .loader-label {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -223,7 +310,7 @@ const pieces = rawPieces.map((piece, index) => ({
     filter: brightness(1);
   }
   50% {
-    filter: brightness(1.06);
+    filter: brightness(1.07);
   }
 }
 
@@ -233,7 +320,31 @@ const pieces = rawPieces.map((piece, index) => ({
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-3px);
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes halo-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.045);
+  }
+}
+
+@keyframes ground-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translateX(-50%) scale(1.08);
   }
 }
 
@@ -258,6 +369,16 @@ const pieces = rawPieces.map((piece, index) => ({
   46.5% {
     transform: scaleY(0.22);
     transform-origin: center;
+  }
+}
+
+@keyframes blush {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.75;
   }
 }
 </style>

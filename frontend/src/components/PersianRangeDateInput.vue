@@ -296,8 +296,11 @@ function toggleCalendar() {
   isOpen.value = !isOpen.value
   showMonthPicker.value = false
   if (isOpen.value) {
-    tempStart.value = normalizeDateOnly(props.modelValue?.date_from)
-    tempEnd.value = normalizeDateOnly(props.modelValue?.date_to)
+    // فقط وقتی انتخاب داخلی وجود ندارد از props بخوان — تا انتخاب ناقص کاربر از بین نرود
+    if (!tempStart.value && !tempEnd.value) {
+      tempStart.value = normalizeDateOnly(props.modelValue?.date_from)
+      tempEnd.value = normalizeDateOnly(props.modelValue?.date_to)
+    }
     syncActiveMonth(tempStart.value || tempEnd.value || '')
     nextTick(updatePopoverPosition)
   }
