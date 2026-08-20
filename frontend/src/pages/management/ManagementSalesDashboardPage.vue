@@ -89,12 +89,28 @@
           :chart="chart"
           :currency="currency"
         />
-        <ReportChartRenderer
-          v-for="chart in hourlyCharts"
-          :key="chart.key"
-          :chart="chart"
-          :currency="currency"
-        />
+      </section>
+
+      <!-- ─── چارت ساعتی (با برچسب دو ردیفه) ─── -->
+      <section class="charts-grid two-col" v-if="hourlySalesValues.length || hourlyOrdersValues.length">
+        <ManagementSurfaceCard title="فروش ساعتی" subtitle="توزیع فروش در ساعات روز (۰ تا ۲۳)">
+          <SalesHourlyChart
+            :values="hourlySalesValues"
+            color="#6F7B56"
+            mode="money"
+            :currency="currency"
+            legend-label="فروش"
+          />
+        </ManagementSurfaceCard>
+        <ManagementSurfaceCard title="سفارش‌های ساعتی" subtitle="تعداد سفارش در هر ساعت از روز">
+          <SalesHourlyChart
+            :values="hourlyOrdersValues"
+            color="#C97852"
+            mode="count"
+            :currency="currency"
+            legend-label="سفارش‌ها"
+          />
+        </ManagementSurfaceCard>
       </section>
 
       <section class="charts-grid two-col">
@@ -111,6 +127,84 @@
           :currency="currency"
         />
       </section>
+
+      <!-- ─── مشتریان برتر ─── -->
+      <ManagementSurfaceCard
+        v-if="topCustomers.length || customerSearchOptions.length"
+        title="مشتریان برتر"
+        subtitle="پرفروش‌ترین مشتریان این بازه — برای مشاهده جزئیات فروش هر مشتری، روی آن کلیک کنید"
+      >
+        <div class="top-customers">
+          <div class="top-customers-list">
+            <button
+              v-for="(customer, idx) in topCustomers"
+              :key="customer.customer_name || idx"
+              type="button"
+              class="top-customer-row"
+              :class="{ active: selectedCustomerName === customer.customer_name }"
+              @click="selectCustomer(customer)"
+            >
+              <span class="tc-rank">{{ toFa(idx + 1) }}</span>
+              <span class="tc-main">
+                <strong>{{ customer.customer_name || 'بدون نام' }}</strong>
+                <small>{{ Number(customer.orders_count || 0).toLocaleString('fa-IR') }} سفارش</small>
+              </span>
+              <span class="tc-amount">{{ formatMoney(customer.total_spent || 0, currency) }}</span>
+            </button>
+            <p v-if="!topCustomers.length" class="muted">در این بازه مشتری‌ای ثبت نشده است.</p>
+          </div>
+
+          <div class="customer-picker">
+            <label class="customer-picker-label">
+              جستجو و انتخاب مشتری
+              <SearchableDropdown
+                v-model="selectedCustomerName"
+                :options="customerSearchOptions"
+                placeholder="نام یا موبایل مشتری..."
+                search-placeholder="جستجوی مشتری..."
+              />
+            </label>
+
+            <div v-if="customerDetailLoading" class="muted customer-picker-loading">در حال دریافت اطلاعات مشتری...</div>
+            <p v-else-if="customerDetailError" class="error">{{ customerDetailError }}</p>
+
+            <template v-else-if="customerDetail">
+              <div class="customer-detail-kpis">
+                <article>
+                  <small>فروش کل</small>
+                  <strong>{{ formatMoney(customerDetail.customer?.total_spent || 0, currency) }}</strong>
+                </article>
+                <article>
+                  <small>تعداد سفارش</small>
+                  <strong>{{ Number(customerDetail.customer?.orders_count || 0).toLocaleString('fa-IR') }}</strong>
+                </article>
+                <article>
+                  <small>میانگین فاکتور</small>
+                  <strong>{{ formatMoney(customerDetail.customer?.avg_ticket || 0, currency) }}</strong>
+                </article>
+                <article>
+                  <small>آخرین خرید</small>
+                  <strong>{{ formatPersianDate(customerDetail.customer?.last_order_at) }}</strong>
+                </article>
+              </div>
+
+              <div class="customer-detail-orders" v-if="(customerDetail.orders || []).length">
+                <strong class="cdo-title">آخرین سفارش‌های این مشتری</strong>
+                <article v-for="order in customerDetail.orders.slice(0, 6)" :key="order.name" class="cdo-row">
+                  <span class="cdo-name">{{ order.name }}</span>
+                  <span class="cdo-status" :class="`status-${order.status}`">{{ formatStatus(order.status) }}</span>
+                  <span class="cdo-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
+                  <strong class="cdo-amount">{{ formatMoney(order.grand_total || 0, currency) }}</strong>
+                </article>
+              </div>
+            </template>
+
+            <p v-else class="muted customer-picker-hint">
+              مشتری را از لیست برترها انتخاب کنید یا با جستجو پیدا کنید تا فروش او نمایش داده شود.
+            </p>
+          </div>
+        </div>
+      </ManagementSurfaceCard>
 
       <!-- ─── وضعیت سفارش‌ها ─── -->
       <ManagementSurfaceCard
@@ -150,7 +244,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   MonitorCog as PosIcon,
   ClipboardList as OrdersIcon,
@@ -164,15 +258,19 @@ import ManagementPageScaffold from '@/components/management/ManagementPageScaffo
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementBarList from '@/components/management/bi/ManagementBarList.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
+import SalesHourlyChart from '@/components/management/sales/SalesHourlyChart.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
+  getManagementCustomerDetail,
   getManagementDashboard,
   getManagementReportSalesTrend,
   getManagementReportSalesHourly,
   getManagementReportTopProducts,
   getManagementReportChannelSplit,
+  listManagementCustomers,
 } from '@/utils/api'
-import { formatMoney, formatStatus } from '@/utils/format'
+import { formatMoney, formatStatus, toPersianNumber } from '@/utils/format'
 
 const loading = ref(false)
 const error = ref('')
@@ -192,6 +290,14 @@ const trendReport = ref(null)
 const hourlyReport = ref(null)
 const topProductsReport = ref(null)
 const channelReport = ref(null)
+
+// مشتریان برتر و انتخاب مشتری
+const topCustomers = ref([])
+const customerSearchOptions = ref([])
+const selectedCustomerName = ref('')
+const customerDetail = ref(null)
+const customerDetailLoading = ref(false)
+const customerDetailError = ref('')
 
 const breadcrumbItems = [
   { label: 'مدیریت', href: '/management' },
@@ -352,6 +458,61 @@ const statusRows = computed(() => {
   return rows
 })
 
+// داده چارت‌های ساعتی: chart اول = فروش، chart دوم = سفارش‌ها
+const hourlySalesValues = computed(() => {
+  const chart = (hourlyReport.value?.charts || [])[0]
+  return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
+})
+
+const hourlyOrdersValues = computed(() => {
+  const chart = (hourlyReport.value?.charts || [])[1]
+  return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
+})
+
+function toFa(value) {
+  return toPersianNumber(value)
+}
+
+async function loadTopCustomers() {
+  try {
+    const payload = await listManagementCustomers({
+      date_from: filters.date_from,
+      date_to: filters.date_to,
+    })
+    const rows = Array.isArray(payload?.customers) ? payload.customers : []
+    topCustomers.value = rows.slice(0, 5)
+    customerSearchOptions.value = rows.map((row) => ({
+      value: row.customer_name || '',
+      label: `${row.customer_name || 'بدون نام'}${row.mobile ? ` - ${row.mobile}` : ''}`,
+    }))
+  } catch (err) {
+    console.error('Failed to load top customers:', err)
+  }
+}
+
+async function selectCustomer(customer) {
+  const name = String(customer?.customer_name || customer || '').trim()
+  if (!name) {
+    return
+  }
+  selectedCustomerName.value = name
+  customerDetailLoading.value = true
+  customerDetailError.value = ''
+  customerDetail.value = null
+  try {
+    const payload = await getManagementCustomerDetail({
+      customer_name: name,
+      date_from: filters.date_from,
+      date_to: filters.date_to,
+    })
+    customerDetail.value = payload || null
+  } catch (err) {
+    customerDetailError.value = err?.message || 'دریافت اطلاعات مشتری ناموفق بود.'
+  } finally {
+    customerDetailLoading.value = false
+  }
+}
+
 const recentOrders = computed(() => (dashboard.value?.recent_orders || []).slice(0, 8))
 
 async function loadAll() {
@@ -386,12 +547,21 @@ async function loadAll() {
     topProductsReport.value = topProducts
     channelReport.value = channels
     currency.value = dash?.currency || 'IRR'
+    await loadTopCustomers()
   } catch (err) {
     error.value = err?.message || 'خطا در بارگذاری داشبورد فروش'
   } finally {
     loading.value = false
   }
 }
+
+// انتخاب مشتری از دراپ‌داون جستجو
+watch(selectedCustomerName, (name) => {
+  const clean = String(name || '').trim()
+  if (clean) {
+    selectCustomer(clean)
+  }
+})
 
 onMounted(loadAll)
 </script>
@@ -691,5 +861,208 @@ onMounted(loadAll)
 .order-status-badge.status-cancelled {
   background: color-mix(in srgb, var(--mg-danger) 12%, transparent);
   color: var(--mg-danger);
+}
+
+/* ─── مشتریان برتر ─── */
+.top-customers {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(340px, 1.4fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .top-customers {
+    grid-template-columns: 1fr;
+  }
+}
+
+.top-customers-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.top-customer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 12px;
+  background: var(--mg-bg-surface);
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  text-align: right;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.top-customer-row:hover {
+  border-color: color-mix(in srgb, var(--mg-success, #6f7b56) 50%, var(--mg-border-light));
+  background: color-mix(in srgb, var(--mg-success, #6f7b56) 5%, var(--mg-bg-surface) 95%);
+}
+
+.top-customer-row.active {
+  border-color: var(--mg-primary);
+  background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface) 92%);
+}
+
+.tc-rank {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--mg-primary) 13%, transparent);
+  color: var(--mg-primary);
+}
+
+.tc-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.tc-main strong {
+  font-size: 0.8rem;
+  color: var(--mg-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-main small {
+  font-size: 0.68rem;
+  color: var(--mg-text-muted);
+}
+
+.tc-amount {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--mg-text-main);
+  white-space: nowrap;
+}
+
+.customer-picker {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--mg-bg-surface) 70%, var(--mg-bg-page) 30%);
+  padding: 0.75rem;
+}
+
+.customer-picker-label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--mg-text-muted);
+}
+
+.customer-picker :deep(.searchable-dropdown) {
+  width: 100%;
+}
+
+.customer-picker-loading {
+  font-size: 0.78rem;
+}
+
+.customer-picker-hint {
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.customer-detail-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.5rem;
+}
+
+.customer-detail-kpis article {
+  border: 1px solid var(--mg-border-light);
+  border-radius: 12px;
+  background: var(--mg-bg-surface);
+  padding: 0.55rem 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.customer-detail-kpis small {
+  font-size: 0.66rem;
+  color: var(--mg-text-muted);
+  font-weight: 700;
+}
+
+.customer-detail-kpis strong {
+  font-size: 0.8rem;
+  color: var(--mg-text-main);
+}
+
+.customer-detail-orders {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.cdo-title {
+  font-size: 0.74rem;
+  color: var(--mg-text-main);
+}
+
+.cdo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 10px;
+  background: var(--mg-bg-surface);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.7rem;
+  transition: border-color 0.15s ease;
+}
+
+.cdo-row:hover {
+  border-color: color-mix(in srgb, var(--mg-success, #6f7b56) 50%, var(--mg-border-light));
+}
+
+.cdo-name {
+  font-weight: 700;
+  color: var(--mg-text-main);
+}
+
+.cdo-status {
+  font-size: 0.62rem;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  background: var(--mg-bg-soft);
+  color: var(--mg-text-muted);
+}
+
+.cdo-status.status-paid,
+.cdo-status.status-delivered,
+.cdo-status.status-completed {
+  background: var(--mg-success-bg);
+  color: var(--mg-success);
+}
+
+.cdo-status.status-cancelled {
+  background: color-mix(in srgb, var(--mg-danger) 12%, transparent);
+  color: var(--mg-danger);
+}
+
+.cdo-time {
+  color: var(--mg-text-muted);
+}
+
+.cdo-amount {
+  margin-inline-start: auto;
+  font-size: 0.74rem;
+  color: var(--mg-text-main);
 }
 </style>
