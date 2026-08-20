@@ -12,7 +12,7 @@
           v-for="(value, idx) in values"
           :key="idx"
           @mouseenter="hoverIndex = idx"
-          @mousemove="onHoverMove"
+          
         >
           <rect
             :x="barX(idx)"
@@ -109,12 +109,13 @@ const CHART_LEFT = 14
 const CHART_RIGHT = 626
 const CHART_WIDTH = CHART_RIGHT - CHART_LEFT
 const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP
-const SLOT = CHART_WIDTH / 24
 
 const hoverIndex = ref(null)
-const hoverX = ref(0)
 
-const barW = computed(() => Math.max(SLOT - 3, 6))
+const count = computed(() => Math.max(props.values?.length || 0, 1))
+const SLOT = computed(() => CHART_WIDTH / count.value)
+
+const barW = computed(() => Math.max(SLOT.value - (count.value > 16 ? 3 : 8), 4))
 
 const maxValue = computed(() => {
   const max = Math.max(...(props.values || []).map((v) => Number(v || 0)))
@@ -134,7 +135,7 @@ function gridY(step) {
 }
 
 function barX(idx) {
-  return CHART_LEFT + idx * SLOT + 1.5
+  return CHART_LEFT + idx * SLOT.value + (count.value > 16 ? 1.5 : 4)
 }
 
 function barY(value) {
@@ -149,7 +150,7 @@ function barH(value) {
 
 // موقعیت دقیق مرکز هر ستون نسبت به عرض چارت (درصد)
 function labelLeft(idx) {
-  const center = CHART_LEFT + idx * SLOT + SLOT / 2
+  const center = CHART_LEFT + idx * SLOT.value + SLOT.value / 2
   return `${(center / CHART_RIGHT) * 100}%`
 }
 
@@ -175,7 +176,7 @@ const hoverValueText = computed(() => {
 
 const tooltipLeft = computed(() => {
   if (hoverIndex.value === null) return '0px'
-  const center = CHART_LEFT + hoverIndex.value * SLOT + SLOT / 2
+  const center = CHART_LEFT + hoverIndex.value * SLOT.value + SLOT.value / 2
   const percent = (center / CHART_RIGHT) * 100
   return `${percent}%`
 })
@@ -186,13 +187,6 @@ const tooltipTop = computed(() => {
   const topPx = 150 - h - 8
   return `${(topPx / 150) * 100}%`
 })
-
-function onHoverMove(event) {
-  const rect = event.currentTarget?.parentElement?.getBoundingClientRect?.()
-  if (rect) {
-    hoverX.value = event.clientX - rect.left
-  }
-}
 </script>
 
 <style scoped>

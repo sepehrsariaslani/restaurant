@@ -155,51 +155,52 @@
         </article>
       </section>
 
-      <!-- ─── روند فروش (ساعتی / روزانه / هفتگی) ─── -->
-      <ManagementSurfaceCard
-        v-if="trendValues.length"
-        title="روند فروش"
-        subtitle="تغییرات فروش بر اساس بازه نمایش انتخابی"
-      >
-        <div class="trend-toolbar">
-          <div class="trend-segments" role="tablist" aria-label="بازه نمایش روند">
-            <button
-              v-for="option in trendOptions"
-              :key="option.value"
-              type="button"
-              class="trend-seg"
-              :class="{ active: trendMode === option.value }"
-              role="tab"
-              :aria-selected="trendMode === option.value"
-              @click="trendMode = option.value"
-            >
-              {{ option.label }}
-            </button>
+      <!-- ─── روند فروش + فروش تجمعی (کنار هم) ─── -->
+      <section class="charts-grid two-col" v-if="trendValues.length">
+        <ManagementSurfaceCard
+          title="روند فروش"
+          subtitle="تغییرات فروش بر اساس بازه نمایش انتخابی"
+        >
+          <div class="trend-toolbar">
+            <div class="trend-segments" role="tablist" aria-label="بازه نمایش روند">
+              <button
+                v-for="option in trendOptions"
+                :key="option.value"
+                type="button"
+                class="trend-seg"
+                :class="{ active: trendMode === option.value }"
+                role="tab"
+                :aria-selected="trendMode === option.value"
+                @click="trendMode = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+            <span class="trend-summary" v-if="trendTotal">
+              مجموع: <strong>{{ formatMoney(trendTotal, currency) }}</strong>
+            </span>
           </div>
-          <span class="trend-summary" v-if="trendTotal">
-            مجموع: <strong>{{ formatMoney(trendTotal, currency) }}</strong>
-          </span>
-        </div>
 
-        <SalesHourlyChart
-          :values="trendValues"
-          :labels="trendLabels"
-          :two-row-labels="trendMode === 'hourly'"
-          :color="trendColor"
-          mode="money"
-          :currency="currency"
-          :legend-label="trendLegendLabel"
-        />
-      </ManagementSurfaceCard>
+          <SalesHourlyChart
+            :values="trendValues"
+            :labels="trendLabels"
+            :two-row-labels="trendMode === 'hourly'"
+            :color="trendColor"
+            mode="money"
+            :currency="currency"
+            :legend-label="trendLegendLabel"
+          />
+        </ManagementSurfaceCard>
 
-      <!-- ─── چارت روند روزانه و تجمعی ─── -->
-      <section class="charts-grid" v-if="trendCharts.length">
-        <ReportChartRenderer
-          v-for="chart in trendCharts"
-          :key="chart.key"
-          :chart="chart"
-          :currency="currency"
-        />
+        <ManagementSurfaceCard
+          title="فروش تجمعی"
+          subtitle="مجموع روی هم‌رفته فروش در همین بازه نمایش"
+        >
+          <ManagementLineChart
+            :labels="cumulativeLabels"
+            :series="cumulativeSeries"
+          />
+        </ManagementSurfaceCard>
       </section>
 
       <!-- ─── پرفروش‌ترین محصولات ─── -->
@@ -252,7 +253,7 @@ import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementBarList from '@/components/management/bi/ManagementBarList.vue'
-import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
+import ManagementLineChart from '@/components/management/bi/ManagementLineChart.vue'
 import SalesHourlyChart from '@/components/management/sales/SalesHourlyChart.vue'
 import PersianRangeDateInput from '@/components/PersianRangeDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
@@ -368,10 +369,18 @@ function trendClass(trend) {
   return ''
 }
 
-// ─── چارت روند: ساعتی / روزانه / هفتگی ───
+// ─── چارت روند: ساعتی / روزانه (روزهای هفته) / هفتگی (۴ هفته) ───
+const WEEKDAY_NAMES = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
+
 const hourlySalesValues = computed(() => {
   const chart = (hourlyReport.value?.charts || [])[0]
   return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
+})
+
+// تاریخ‌ها و مقادیر روزانه از API
+const dailyDates = computed(() => {
+  const chart = (trendReport.value?.charts || [])[0]
+  return (chart?.labels || []).map((label) => String(label || '').slice(0, 10))
 })
 
 const dailySalesValues = computed(() => {
@@ -379,31 +388,48 @@ const dailySalesValues = computed(() => {
   return (chart?.series?.[0]?.values || []).map((v) => Number(v || 0))
 })
 
-const dailyLabels = computed(() => {
-  const chart = (trendReport.value?.charts || [])[0]
-  return (chart?.labels || []).map((label) => {
-    const raw = String(label || '')
-    if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw
-    try {
-      return new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric' }).format(new Date(raw))
-    } catch (err) {
-      return raw
-    }
+// گروه‌بندی روزانه بر اساس روزهای هفته: شنبه‌ها چقدر فروش داشتیم و...
+const weekdayData = computed(() => {
+  const dates = dailyDates.value
+  const values = dailySalesValues.value
+  const totals = Array(7).fill(0)
+  const counts = Array(7).fill(0)
+  dates.forEach((date, idx) => {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(date)) return
+    const day = new Date(`${date}T00:00:00`).getDay()
+    const weekdayIndex = (day + 1) % 7 // شنبه = 0
+    totals[weekdayIndex] += Number(values[idx] || 0)
+    counts[weekdayIndex] += 1
   })
+  return {
+    values: totals,
+    labels: WEEKDAY_NAMES,
+    hasData: counts.some((c) => c > 0),
+  }
 })
 
-// گروه‌بندی هفتگی از داده روزانه
+// ۴ هفته اخیر از داده روزانه
 const weeklyData = computed(() => {
   const values = dailySalesValues.value
-  const labels = dailyLabels.value
+  const dates = dailyDates.value
   if (!values.length) return { values: [], labels: [] }
   const weeks = []
-  for (let i = 0; i < values.length; i += 7) {
+  for (let i = 0; i < 28 && i < values.length; i += 7) {
     const chunk = values.slice(i, i + 7)
-    const weekLabels = labels.slice(i, i + 7).filter(Boolean)
+    const chunkDates = dates.slice(i, i + 7).filter((d) => /^\d{4}-\d{2}-\d{2}/.test(d))
+    let label = `هفته ${weeks.length + 1}`
+    if (chunkDates.length) {
+      try {
+        const fmt = (iso) =>
+          new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric' }).format(new Date(`${iso}T00:00:00`))
+        label = `${fmt(chunkDates[0])} تا ${fmt(chunkDates[chunkDates.length - 1])}`
+      } catch (err) {
+        label = `هفته ${weeks.length + 1}`
+      }
+    }
     weeks.push({
       total: chunk.reduce((sum, v) => sum + Number(v || 0), 0),
-      label: weekLabels.length ? `${weekLabels[0]} تا ${weekLabels[weekLabels.length - 1]}` : `هفته ${weeks.length + 1}`,
+      label,
     })
   }
   return {
@@ -415,13 +441,13 @@ const weeklyData = computed(() => {
 const trendValues = computed(() => {
   if (trendMode.value === 'hourly') return hourlySalesValues.value
   if (trendMode.value === 'weekly') return weeklyData.value.values
-  return dailySalesValues.value
+  return weekdayData.value.hasData ? weekdayData.value.values : dailySalesValues.value
 })
 
 const trendLabels = computed(() => {
   if (trendMode.value === 'hourly') return null
   if (trendMode.value === 'weekly') return weeklyData.value.labels
-  return dailyLabels.value
+  return WEEKDAY_NAMES
 })
 
 const trendTotal = computed(() => trendValues.value.reduce((sum, v) => sum + Number(v || 0), 0))
@@ -434,70 +460,38 @@ const trendColor = computed(() => {
 
 const trendLegendLabel = computed(() => {
   if (trendMode.value === 'hourly') return 'فروش ساعتی'
-  if (trendMode.value === 'weekly') return 'فروش هفتگی'
-  return 'فروش روزانه'
+  if (trendMode.value === 'weekly') return 'فروش هفتگی (۴ هفته)'
+  return 'فروش روزهای هفته'
 })
 
-// ─── چارت‌های روند روزانه (از API) ───
-const trendCharts = computed(() => localizeCharts(applySystemChartColors((trendReport.value?.charts || []).slice(1, 3))))
+// فروش تجمعی خطی — همان حالت انتخابی روند
+const cumulativeValues = computed(() => {
+  const values = trendValues.value
+  let running = 0
+  return values.map((v) => {
+    running += Number(v || 0)
+    return running
+  })
+})
+
+const cumulativeLabels = computed(() => {
+  if (trendMode.value === 'hourly') {
+    return Array.from({ length: 24 }, (_, i) => toPersianNumber(i))
+  }
+  return trendLabels.value || []
+})
+
+const cumulativeSeries = computed(() => [
+  {
+    key: 'cumulative',
+    label: 'فروش تجمعی',
+    color: 'var(--mg-primary, #c97852)',
+    values: cumulativeValues.value,
+  },
+])
 
 // پالت رنگ‌های سیستم: سبز موفقیت، نارنجی اصلی، زیتونی
 const SYSTEM_PALETTE = ['#6F7B56', '#C97852', '#8A8B63']
-
-function applySystemChartColors(charts = []) {
-  return charts.map((chart) => ({
-    ...chart,
-    series: (chart.series || []).map((series, idx) => ({
-      ...series,
-      color: SYSTEM_PALETTE[idx % SYSTEM_PALETTE.length] || series.color,
-    })),
-  }))
-}
-
-// ترجمه عنوان چارت‌ها و لیبل سری‌ها به فارسی
-const CHART_TITLE_FA = {
-  'Sales vs Expected': 'فروش در برابر پیش‌بینی',
-  'Cumulative Sales': 'فروش تجمعی',
-  'Hourly Sales': 'فروش ساعتی',
-  'Hourly Orders': 'سفارش‌های ساعتی',
-  'Top Products by Sales': 'پرفروش‌ترین محصولات (بر اساس مبلغ)',
-  'Top Products by Quantity': 'پرفروش‌ترین محصولات (بر اساس تعداد)',
-  'Sales by Channel': 'فروش بر اساس کانال',
-  'Orders by Channel': 'سفارش بر اساس کانال',
-  'Sales Trend': 'روند فروش',
-  'Top Products': 'پرفروش‌ترین محصولات',
-  'Channel Split': 'تفکیک کانال‌ها',
-  'Hourly Sales Trend': 'روند فروش ساعتی',
-}
-
-const SERIES_LABEL_FA = {
-  'Sales': 'فروش',
-  'Expected': 'پیش‌بینی',
-  'Cumulative': 'تجمعی',
-  'Orders': 'سفارش‌ها',
-  'Quantity': 'تعداد',
-  'Amount': 'مبلغ',
-  'Qty': 'تعداد',
-  'Count': 'تعداد',
-}
-
-function localizeCharts(charts = []) {
-  return charts.map((chart) => {
-    const title = String(chart.title || '')
-    const localizedTitle = CHART_TITLE_FA[title] || title
-    const subtitle = String(chart.subtitle || '')
-    const localizedSubtitle = CHART_TITLE_FA[subtitle] || SERIES_LABEL_FA[subtitle] || subtitle
-    return {
-      ...chart,
-      title: localizedTitle,
-      subtitle: localizedSubtitle || undefined,
-      series: (chart.series || []).map((series) => ({
-        ...series,
-        label: SERIES_LABEL_FA[String(series.label || '')] || series.label,
-      })),
-    }
-  })
-}
 
 // ─── پرفروش‌ترین‌ها با رنگ‌های سیستم ───
 function chartBarRows(chartIndex, mode) {
