@@ -288,6 +288,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { navbarTitle } from "@/utils/navbarTitle";
 import ManagementBearLoader from "@/components/management/ManagementBearLoader.vue";
 import ManagementLoginGate from "@/components/management/ManagementLoginGate.vue";
 import { getManagementSessionProfile, logoutManagementUser } from "@/utils/api";
@@ -329,6 +330,7 @@ import {
 	Headset as HeadsetIcon,
 	Building2 as BuildingIcon,
 	LifeBuoy as LifeBuoyIcon,
+	TrendingUp as SalesDashIcon,
 } from "lucide-vue-next";
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
@@ -415,6 +417,15 @@ const navLinks = computed(() => {
 			caption: "فروش حضوری",
 			iconComponent: PosIcon,
 			url: "/management/pos",
+			group: "sales",
+		},
+		{
+			key: "management-sales-dashboard",
+			label: "داشبورد فروش",
+			shortLabel: "فروش",
+			caption: "نمودار و دسترسی سریع",
+			iconComponent: SalesDashIcon,
+			url: "/management/sales",
 			group: "sales",
 		},
 		{
@@ -857,6 +868,9 @@ const mobilePrimaryLinks = computed(() =>
 );
 
 const activeTitle = computed(() => {
+	if (navbarTitle.value) {
+		return navbarTitle.value;
+	}
 	const active = navLinks.value.find((link) => isLinkActive(link.key));
 	return active?.label || "پنل مدیریت";
 });
@@ -1990,6 +2004,12 @@ onBeforeUnmount(() => {
 	.dropdown-anim-enter-from, .dropdown-anim-leave-to {
 		opacity: 0;
 		transform: scale(0.95) translateY(-10px);
+	}
+
+	.mobile-main {
+		flex: 1;
+		padding: 0.7rem 0.8rem calc(0.7rem + env(safe-area-inset-bottom));
+		overflow-y: auto;
 	}
 
 	.desktop-main {

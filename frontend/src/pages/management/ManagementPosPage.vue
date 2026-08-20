@@ -2,7 +2,13 @@
   <section class="pos-theme pos-fullpage">
     <p class="offline-banner" v-if="isOffline">اینترنت قطع است.</p>
     <p class="error pos-inline-error" v-if="error">{{ error }}</p>
-    <p class="success pos-inline-success" v-if="successMessage">{{ successMessage }}</p>
+
+    <Transition name="pos-toast">
+      <div v-if="toastVisible" class="pos-toast" dir="rtl" role="status" aria-live="polite">
+        <CheckCheck :size="15" :stroke-width="2.4" />
+        <span>{{ toastText }}</span>
+      </div>
+    </Transition>
 
     <div class="ticket-tabs-bar">
       <div class="ticket-tabs">
@@ -48,7 +54,11 @@
           :currency="currency"
           :customer-query="form.customer_query"
           :customer-options="customerOptions"
+          :secondary-customer="form.secondary_customer"
+          :secondary-customer-visible="isSecondaryCustomerFieldVisible"
           @update:customer-query="setCustomerQuery"
+          @update:secondary-customer="form.secondary_customer = $event"
+          @secondary-query="onSecondaryCustomerQuery"
           @select-customer="selectCustomerFromHistory"
           @create-customer="createCustomerFromQuery"
           @add-customer="addQuickCustomer"
@@ -337,20 +347,29 @@
               <p class="error" v-else-if="openInvoiceError">{{ openInvoiceError }}</p>
               <p class="muted" v-else-if="!openInvoices.length">فاکتور بازی وجود ندارد.</p>
               <div v-else class="open-invoice-accordion">
-                <article
-                  v-for="invoice in openInvoices"
-                  :key="invoice.invoice_key"
-                  class="accordion-card"
-                  :class="{ expanded: expandedInvoiceKey === invoice.invoice_key }"
-                >
-                  <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
-                    <strong>{{ invoice.name }}</strong>
-                    <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت"><Printer :size="14" /></button>
-                    <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
-                    <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
-                    <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
-                    <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
+                <!-- گروه‌بندی بر اساس مشتری اصلی (مثل اسنپ) -->
+                <div v-for="group in groupedOpenInvoices" :key="group.customer_name" class="open-invoice-group">
+                  <div class="open-invoice-group-head">
+                    <span class="oig-title">{{ group.customer_name }}</span>
+                    <span class="oig-count">{{ toFaDigits(group.invoices.length) }} فاکتور</span>
                   </div>
+                  <article
+                    v-for="invoice in group.invoices"
+                    :key="invoice.invoice_key"
+                    class="accordion-card"
+                    :class="{ expanded: expandedInvoiceKey === invoice.invoice_key }"
+                  >
+                    <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
+                      <strong>{{ invoice.name }}</strong>
+                      <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت"><Printer :size="14" /></button>
+                      <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
+                      <small v-if="invoice.secondary_customer" class="accordion-secondary" :title="'سفارش‌دهنده: ' + invoice.secondary_customer">
+                        ← {{ invoice.secondary_customer }}
+                      </small>
+                      <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
+                      <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
+                      <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
+                    </div>
                   <div class="accordion-body" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.detail">
                     <div class="accordion-items">
                       <div
@@ -382,7 +401,8 @@
                     <small>در حال دریافت...</small>
                   </div>
                   <small class="error" v-if="expandedInvoiceKey === invoice.invoice_key && invoice.loadError">{{ invoice.loadError }}</small>
-                </article>
+                  </article>
+                </div>
               </div>
             </section>
 
@@ -664,6 +684,12 @@
               <div class="od-summary-item">
                 <span class="od-label">مشتری</span>
                 <span class="od-value">{{ orderDetailModal.order.customer_name || 'مشتری POS' }}</span>
+                <span
+                  v-if="orderDetailModal.order.secondary_customer"
+                  class="od-value od-secondary-value"
+                >
+                  ← {{ orderDetailModal.order.secondary_customer }}
+                </span>
               </div>
               <div class="od-summary-item">
                 <span class="od-label">روش پرداخت</span>
@@ -728,7 +754,14 @@
               <span class="od-chevron" :class="{ open: editExpanded }">▼</span>
             </div>
             <div class="od-edit" v-if="editExpanded">
-              <input class="od-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
+              <div class="od-edit-row">
+                <input class="od-input" v-model="orderDetailModal.editForm.customer_name" placeholder="نام مشتری" />
+                <input
+                  class="od-input"
+                  v-model="orderDetailModal.editForm.secondary_customer"
+                  placeholder="مشتری ثانویه..."
+                />
+              </div>
               <select class="od-select" v-model="orderDetailModal.editForm.payment_method">
                 <option value="">انتخاب روش پرداخت</option>
                 <option v-for="opt in editablePaymentMethodOptions" :key="opt.method" :value="opt.method">{{ opt.label }}</option>
@@ -871,6 +904,7 @@ import {
   getItemDetail,
   listManagementOrders,
   listManagementCustomers,
+  addManagementCustomer,
   markManagementOrderPaid,
   createPOSOrder,
   producePOSOrder,
@@ -913,6 +947,7 @@ function defaultFormState() {
     customer_name: modeCustomer.name || 'مشتری POS',
     mobile: modeCustomer.mobile || '',
     customer_type: 'normal',
+    secondary_customer: '',
     guest_count: 1,
     order_mode: defaultMode,
     place: '',
@@ -936,15 +971,15 @@ function defaultFinancialState() {
     walletBalance: bootWalletBalance,
     creditCardCode: '',
     couponCode: '',
-    discountType: 'fixed',
+    discountType: 'percent',
     discountValue: 0,
     targetAmount: null,
     targetServiceSnapshot: null,
     taxExempt: false,
-    taxType: 'fixed',
+    taxType: 'percent',
     taxValue: 0,
     tipAmount: 0,
-    serviceType: 'fixed',
+    serviceType: 'percent',
     serviceValue: 0,
     printProduction: true,
     createNextInvoice: true,
@@ -956,6 +991,28 @@ const submitting = ref(false)
 const hardwareبارگذاری = ref(false)
 const error = ref('')
 const successMessage = ref('')
+
+// پیام موفقیت به‌صورت toast پایین-راست: ۲ ثانیه نمایش داده و خودکار بسته می‌شود
+const toastText = ref('')
+const toastVisible = ref(false)
+let toastTimer = null
+watch(successMessage, (msg) => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+  const text = String(msg || '').trim()
+  if (text) {
+    toastText.value = text
+    toastVisible.value = true
+    toastTimer = window.setTimeout(() => {
+      toastVisible.value = false
+      toastTimer = null
+    }, 2200)
+  } else {
+    toastVisible.value = false
+  }
+})
 const scannerFeedback = ref('')
 const syncReminder = ref('')
 const categories = ref([])
@@ -1014,6 +1071,7 @@ const orderDetailModal = reactive({
     payment_method: '',
     note: '',
     customer_name: '',
+    secondary_customer: '',
   },
 })
 
@@ -1180,6 +1238,11 @@ const customizationSheet = reactive({
 const fallbackImage =
   ''
 
+// نمایش فیلد «مشتری ثانویه»: به محض اینکه مشتری انتخاب شده باشد (یا مقداری دارد)
+const isSecondaryCustomerFieldVisible = computed(() => {
+  return Boolean(String(form.customer_name || '').trim()) || Boolean(String(form.secondary_customer || '').trim())
+})
+
 const leftPanelTabLabel = computed(() => {
   switch (leftPanelTab.value) {
     case 'tables':
@@ -1272,6 +1335,19 @@ const selectedTableCustomer = computed(() => {
 const selectedOpenInvoice = computed(() =>
   openInvoices.value.find((row) => row.invoice_key === selectedOpenInvoiceKey.value) || null,
 )
+
+// فاکتورهای باز گروه‌بندی‌شده بر اساس مشتری اصلی (مثل اسنپ)
+const groupedOpenInvoices = computed(() => {
+  const map = new Map()
+  for (const invoice of openInvoices.value || []) {
+    const key = String(invoice.customer_name || 'سایر').trim()
+    if (!map.has(key)) {
+      map.set(key, { customer_name: key, invoices: [] })
+    }
+    map.get(key).invoices.push(invoice)
+  }
+  return Array.from(map.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name, 'fa'))
+})
 
 const filteredProducts = computed(() => {
   const query = search.value.trim().toLowerCase()
@@ -1897,7 +1973,21 @@ function resetCurrentInvoiceState({ preserveFeedback = false } = {}) {
 }
 
 function patchFinancial(partial) {
-  Object.assign(financial, partial || {})
+  const next = { ...(partial || {}) }
+
+  // ── دروازه تخفیف: درصد هرگز بیشتر از ۱۰۰ نمی‌شود ──
+  // اگر کاربر در حالت «درصدی» عددی بیشتر از ۱۰۰ وارد کند، خودکار به
+  // «مبلغی» سوییچ می‌شود و مقدار به مبلغ معادل همان درصد تبدیل می‌گردد.
+  const nextType = next.discountType !== undefined ? next.discountType : financial.discountType
+  const nextValue = next.discountValue !== undefined ? Number(next.discountValue || 0) : Number(financial.discountValue || 0)
+  if (nextType === 'percent' && nextValue > 100) {
+    const itemsTotal = Number(totals.value?.itemsTotal || 0)
+    const equivalentAmount = Math.round((itemsTotal * nextValue) / 100)
+    next.discountType = 'fixed'
+    next.discountValue = Math.max(equivalentAmount, 0)
+  }
+
+  Object.assign(financial, next)
 }
 
 function setFinalAmount(value) {
@@ -2386,7 +2476,7 @@ async function loadCustomers(search = '') {
         last_order_at: c.last_order_at,
       }
     })
-    
+
     if (search) {
       // Merge results preserving existing
       const existing = [...customerOptions.value]
@@ -2404,6 +2494,19 @@ async function loadCustomers(search = '') {
   } catch (err) {
     console.error('Failed to load customers:', err)
   }
+}
+
+// جستجوی مشتری‌ها از داخل فیلد «مشتری ثانویه» — تا لیست کشویی آن هم از مشتری‌های موجود پر شود
+let secondaryCustomerSearchTimeout = null
+function onSecondaryCustomerQuery(value) {
+  const text = String(value || '').trim()
+  if (!text || text.length < 2) {
+    return
+  }
+  if (secondaryCustomerSearchTimeout) clearTimeout(secondaryCustomerSearchTimeout)
+  secondaryCustomerSearchTimeout = setTimeout(() => {
+    loadCustomers(text)
+  }, 350)
 }
 
 function buildCustomerOptions(orders = []) {
@@ -2513,6 +2616,7 @@ function applyOpenInvoiceProfile(order = {}) {
   if (customerType) {
     form.customer_type = customerType
   }
+  form.secondary_customer = String(order.secondary_customer || '').trim()
   form.customer_query = mobile ? `${form.customer_name} - ${mobile}` : form.customer_name
 
   if (['takeaway', 'delivery', 'dine_in'].includes(channel)) {
@@ -2920,6 +3024,8 @@ function selectCustomerFromHistory(customer) {
   if (customer.mobile) {
     form.mobile = String(customer.mobile).trim()
   }
+  // با تغییر مشتری اصلی، مشتری ثانویه قبلی پاک می‌شود
+  form.secondary_customer = ''
   form.customer_query = customer.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
 }
 
@@ -2961,6 +3067,7 @@ async function createCustomerFromQuery(payload) {
 
   form.customer_name = resolvedName
   form.mobile = normalizedMobile || ''
+  form.secondary_customer = ''
   form.customer_query = normalizedMobile ? `${resolvedName} - ${normalizedMobile}` : resolvedName
 
   const optionKey = normalizedMobile || resolvedName.toLowerCase()
@@ -2980,17 +3087,50 @@ async function createCustomerFromQuery(payload) {
 }
 
 async function addQuickCustomer() {
-  const name = await showPrompt('نام مشتری را وارد کنید:', form.customer_name || '')
+  const name = await showPrompt('نام مشتری جدید:', form.customer_name || '')
   if (name === null) {
     return
   }
-  const mobile = await showPrompt('شماره موبایل را وارد کنید:', form.mobile || '')
+  const mobile = await showPrompt('شماره موبایل مشتری جدید (اختیاری):', form.mobile || '')
   if (mobile === null) {
     return
   }
-  form.customer_name = String(name || '').trim() || 'مشتری POS'
-  form.mobile = String(mobile || '').trim()
-  form.customer_query = `${form.customer_name} - ${form.mobile}`
+  const cleanedName = String(name || '').trim() || 'مشتری POS'
+  const cleanedMobile = normalizeCustomerMobile(mobile)
+  if (String(mobile || '').trim() && !cleanedMobile) {
+    error.value = 'شماره موبایل باید حداقل 10 رقم باشد.'
+    return
+  }
+
+  // ذخیره واقعی مشتری در لیست مشتری‌ها — حتی بدون ثبت سفارش
+  try {
+    const payload = await addManagementCustomer({
+      customer_name: cleanedName,
+      mobile: cleanedMobile,
+    })
+    successMessage.value = `مشتری «${payload?.customer_name || cleanedName}» به لیست مشتری‌ها اضافه شد.`
+    form.customer_name = payload?.customer_name || cleanedName
+    form.mobile = cleanedMobile || ''
+    form.secondary_customer = ''
+    form.customer_query = form.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
+
+    // تازه‌سازی لیست کشویی مشتری‌ها
+    await loadCustomers('')
+    const optionKey = form.mobile || form.customer_name.toLowerCase()
+    if (!customerOptions.value.some((row) => row.key === optionKey)) {
+      customerOptions.value.unshift({
+        key: optionKey,
+        label: form.customer_name,
+        mobile: form.mobile,
+        orders_count: 0,
+        total_sales: 0,
+        last_order_at: Date.now(),
+      })
+    }
+    error.value = ''
+  } catch (err) {
+    error.value = err.message || 'افزودن مشتری ناموفق بود.'
+  }
 }
 
 function closePOS() {
@@ -3116,7 +3256,7 @@ function resetFinalAmountTarget() {
   }
   financial.targetServiceSnapshot = null
   financial.targetAmount = null
-  financial.discountType = 'fixed'
+  financial.discountType = 'percent'
   financial.discountValue = 0
 }
 
@@ -3186,6 +3326,8 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? item.price ?? 0),
     item_code: item.name,
     packaging_price: Number(item.packaging_price || 0),
+    category: String(item.category || '').trim(),
+    category_title: String(item.category_title || item.category || '').trim(),
     note: '',
     has_customization: Boolean(hasCustomization),
     customization: normalizedCustomization,
@@ -3330,6 +3472,7 @@ async function openOrderDetailModal(tx) {
   orderDetailModal.editForm.payment_method = ''
   orderDetailModal.editForm.note = ''
   orderDetailModal.editForm.customer_name = ''
+  orderDetailModal.editForm.secondary_customer = ''
 
   try {
     const orderName = String(tx.name || tx.order_code || '').trim()
@@ -3342,6 +3485,7 @@ async function openOrderDetailModal(tx) {
       orderDetailModal.editForm.payment_method = orderDetailModal.order.payment_method || ''
       orderDetailModal.editForm.note = orderDetailModal.order.note || ''
       orderDetailModal.editForm.customer_name = orderDetailModal.order.customer_name || ''
+      orderDetailModal.editForm.secondary_customer = orderDetailModal.order.secondary_customer || ''
     }
   } catch (err) {
     orderDetailModal.loadError = err.message || 'خطا در بارگذاری جزئیات سفارش'
@@ -3374,11 +3518,13 @@ async function saveOrderDetailEdit() {
       payment_method: orderDetailModal.editForm.payment_method || undefined,
       note: orderDetailModal.editForm.note,
       customer_name: orderDetailModal.editForm.customer_name || undefined,
+      secondary_customer: orderDetailModal.editForm.secondary_customer || undefined,
     })
     successMessage.value = 'سفارش با موفقیت ویرایش شد.'
     orderDetailModal.order.payment_method = orderDetailModal.editForm.payment_method
     orderDetailModal.order.note = orderDetailModal.editForm.note
     orderDetailModal.order.customer_name = orderDetailModal.editForm.customer_name
+    orderDetailModal.order.secondary_customer = orderDetailModal.editForm.secondary_customer
     closeOrderDetailModal()
     if (leftPanelTab.value === 'history') {
       loadTodayTransactions(true)
@@ -3686,6 +3832,22 @@ async function setSheetModifiers(next) {
   )
 }
 
+// پیش‌فرض گروه سایز/واریانت (اولین گزینه با is_default یا اولین گزینه)
+function defaultVariantSelection(groups = []) {
+  for (const group of groups || []) {
+    if (!String(group?.group_name || '').startsWith('variant::')) continue
+    const options = group.options || []
+    const def = options.find((o) => Number(o?.is_default) === 1) || options[0]
+    if (def) {
+      return [{
+        group: group.group_name,
+        option: String(def.name || def.value || def.label || '').trim(),
+      }]
+    }
+  }
+  return []
+}
+
 async function openCustomizationSheet(item, options = {}) {
   const editingLine = options?.editingLine || null
   const itemSlug = getItemSlug(item) || getItemSlug(editingLine || {})
@@ -3705,7 +3867,10 @@ async function openCustomizationSheet(item, options = {}) {
   customizationSheet.qty = 1
   customizationSheet.editing_line_id = editingLine?.line_id || ''
   try {
-    const payload = detailCache.get(itemSlug) || (await getItemDetail(itemSlug))
+    // همیشه fetch تازه — کش کهنه (مثلاً payload دبل قدیمی) می‌تواند با
+    // پیش‌فرض گروه سایز (سینگل) ناهماهنگ شود.
+    detailCache.clear()
+    const payload = await getItemDetail(itemSlug)
     detailCache.set(itemSlug, payload)
 
     const detailItem = payload.item || sourceItem
@@ -3728,6 +3893,17 @@ async function openCustomizationSheet(item, options = {}) {
     } else {
       customizationSheet.customization = createDefaultCustomization(ingredients, modifierGroups)
       customizationSheet.qty = 1
+    }
+
+    // هماهنگ‌سازی خودکار با پیش‌فرض گروه سایز/واریانت:
+    // اگر آیتم بارگذاری‌شده با پیش‌فرض گروه (مثلاً سینگل) فرق داشته باشد،
+    // خودکار همان واریانت را لود می‌کند تا مواد/قیمت همیشه هماهنگ باشد —
+    // بدون نیاز به کلیک دوباره روی دبل/سینگل.
+    if (!editingLine) {
+      const defaultSelection = defaultVariantSelection(modifierGroups)
+      if (defaultSelection.length) {
+        await setSheetModifiers(defaultSelection)
+      }
     }
     
     // Auto-confirm variant-only items that don't need user input if it's a new add
@@ -4384,25 +4560,31 @@ function receiptStylesCss() {
     .center { text-align: center; }
     .brand-name { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
     .title { font-size: 14px; font-weight: 800; margin-bottom: 2px; }
-    .muted { color: #6F7B56; font-size: 10px; }
+    .muted { color: var(--mg-text-muted); font-size: 10px; }
     .sep { border-top: 1px dashed #D8C8B4; margin: 6px 0; }
     .meta-row { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
     .meta-block { margin-top: 4px; border: 1px dashed #D8C8B4; border-radius: 7px; padding: 4px 5px; }
-    .meta-block strong { display: block; font-size: 10px; color: #6F7B56; margin-bottom: 2px; }
+    .meta-block strong { display: block; font-size: 10px; color: var(--mg-text-muted); margin-bottom: 2px; }
     .meta-block p { margin: 0; white-space: pre-wrap; font-size: 10px; }
     .item-row { padding: 4px 0; border-bottom: 1px dashed #D8C8B4; }
     .item-head { display: grid; grid-template-columns: auto 1fr auto; gap: 4px; align-items: start; }
     .item-index { font-weight: 600; }
     .item-title { font-weight: 600; }
     .item-total { font-weight: 800; }
-    .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: #6F7B56; }
-    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: #6F7B56; }
+    .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: var(--mg-text-muted); }
+    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: var(--mg-text-muted); }
     .item-custom li { margin: 1px 0; }
-    .item-note { margin-top: 3px; font-size: 10px; color: #6F7B56; }
+    .item-note { margin-top: 3px; font-size: 10px; color: var(--mg-text-muted); }
+    .receipt-title { font-size: 15px; font-weight: 800; text-align: center; margin: 0 0 4px; }
+    .receipt-meta { margin: 1px 0; font-size: 10px; color: var(--mg-text-muted); }
+    .receipt-printer { font-size: 10px; color: var(--mg-text-muted); margin: 1px 0; }
+    .receipt-footer { text-align: center; font-size: 10px; color: var(--mg-text-muted); border-top: 1px dashed #D8C8B4; margin-top: 6px; padding-top: 4px; }
+    .item-qty { font-weight: 800; font-size: 12px; }
+    .item-qty-line { margin-top: 2px; font-size: 10px; color: var(--mg-text-muted); }
     .totals { margin-top: 6px; display: grid; gap: 3px; }
     .total-row { display: flex; justify-content: space-between; gap: 6px; }
     .payable { border-top: 1px dashed #D8C8B4; margin-top: 2px; padding-top: 4px; font-size: 12px; font-weight: 800; }
-    .note { margin-top: 6px; font-size: 10px; color: #6F7B56; white-space: pre-wrap; }
+    .note { margin-top: 6px; font-size: 10px; color: var(--mg-text-muted); white-space: pre-wrap; }
   `
 }
 
@@ -4626,6 +4808,98 @@ function autoPrintReceipt(methodOverride = '') {
   printCurrentTicket(method)
 }
 
+function buildKitchenBarReceiptMarkup(profile, lines = []) {
+  const kind = profile?.kind === 'bar' ? 'بار' : 'آشپزخانه'
+  const printerName = String(profile?.printer_name || '').trim()
+  const now = new Date()
+  const dateLabel = now.toLocaleDateString('fa-IR')
+  const timeLabel = now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+  const showPrices = Boolean(profile?.show_prices)
+
+  const itemsHtml = (lines || [])
+    .map((line, index) => {
+      const qty = Number(line.qty || 0)
+      const customizationLines = buildCustomizationPrintLines(line)
+      const customizationHtml = customizationLines.length
+        ? `
+          <ul class="item-custom">
+            ${customizationLines.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}
+          </ul>
+        `
+        : ''
+      const lineNoteText = String(line.note || '').trim()
+      const lineNoteHtml = lineNoteText ? `<div class="item-note">یادداشت: ${escapeHtml(lineNoteText)}</div>` : ''
+      const priceHtml = showPrices
+        ? `<span class="item-total">${escapeHtml(formatMoney(Number(line.price || 0) * qty, currency.value))}</span>`
+        : `<span class="item-qty">× ${escapeHtml(formatCompactNumber(qty))}</span>`
+
+      return `
+        <section class="item-row">
+          <div class="item-head">
+            <span class="item-index">${toPersianNumber(index + 1)}.</span>
+            <span class="item-title">${escapeHtml(line.title || '')}</span>
+            ${priceHtml}
+          </div>
+          ${!showPrices ? `<div class="item-qty-line">تعداد: ${escapeHtml(formatCompactNumber(qty))}</div>` : ''}
+          ${customizationHtml}
+          ${lineNoteHtml}
+        </section>
+      `
+    })
+    .join('')
+
+  return `
+    <!doctype html>
+    <html lang="fa" dir="rtl">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(printerName || `چاپ ${kind}`)}</title>
+        <style>${receiptStylesCss()}</style>
+      </head>
+      <body>
+        <header class="receipt-header">
+          <h1 class="receipt-title">چاپ ${kind}</h1>
+          ${printerName ? `<p class="receipt-meta">پرینتر: ${escapeHtml(printerName)}</p>` : ''}
+          <p class="receipt-meta">${dateLabel} — ${timeLabel}</p>
+          <p class="receipt-meta">فیش: ${escapeHtml(receiptInvoiceNumber.value || '-')}</p>
+          <p class="receipt-meta">مشتری: ${escapeHtml(form.customer_name || 'مشتری POS')}</p>
+        </header>
+        <div class="receipt-items">${itemsHtml}</div>
+        <footer class="receipt-footer">${escapeHtml(kind)}</footer>
+      </body>
+    </html>
+  `
+}
+
+// چاپ پروفایل‌های آشپزخانه/بار: هر پروفایل فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
+function printKitchenBarProfiles() {
+  const profiles = (bootPosConfig?.print_profiles || []).filter(
+    (p) => p && String(p.kind || '').toLowerCase() !== 'customer' && p.enabled
+  )
+  if (!profiles.length) {
+    return
+  }
+  let delay = 0
+  for (const profile of profiles) {
+    const groups = (profile.item_groups || []).map((g) => String(g).trim()).filter(Boolean)
+    const lines = cart.filter((line) => {
+      if (!groups.length) {
+        return false
+      }
+      const lineGroup = String(line.category_title || line.category || '').trim()
+      return groups.includes(lineGroup)
+    })
+    if (!lines.length) {
+      continue
+    }
+    delay += 1000
+    const content = buildKitchenBarReceiptMarkup(profile, lines)
+    window.setTimeout(() => {
+      printReceiptDocument(content)
+    }, delay)
+  }
+}
+
 function printCurrentTicket(methodOverride = '') {
   if (!cart.length) {
     error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
@@ -4652,6 +4926,8 @@ function printCurrentTicket(methodOverride = '') {
   if (!printReceiptDocument(content)) {
     error.value = 'ارسال دستور چاپ ممکن نشد.'
   }
+  // چاپ پروفایل‌های آشپزخانه/بار (بدون قیمت، فقط گروه‌های انتخابی)
+  printKitchenBarProfiles()
 }
 
 function resolveCustomerFromQuery() {
@@ -4846,6 +5122,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
 
   const payload = {
     customer_name: form.customer_name || 'مشتری POS',
+    secondary_customer: form.secondary_customer || '',
     mobile: form.mobile || '',
     order_type: form.order_mode,
     note: buildOrderNote(),
@@ -5384,6 +5661,20 @@ watch(
   },
 )
 
+// وقتی سبد خرید کاملاً خالی شد (دونه‌دونه یا یکجا)، تخفیف/مبلغ هدف/کد تخفیف
+// برداشته شود تا سفارش بعدی با state تمیز شروع شود.
+watch(
+  () => cart.length,
+  (length) => {
+    if (length !== 0) return
+    financial.discountType = 'percent'
+    financial.discountValue = 0
+    financial.targetAmount = null
+    financial.targetServiceSnapshot = null
+    financial.couponCode = ''
+  },
+)
+
 // ---------------------------------------------------------------------------
 // Kitchen → POS notifications: toast when an order becomes ready
 // ---------------------------------------------------------------------------
@@ -5438,6 +5729,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
   saveActiveTicketSnapshot()
   window.removeEventListener('keydown', onWindowKeydown)
   window.removeEventListener('resize', syncViewportMode)
@@ -5468,12 +5763,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  background: #2f6f5c;
+  background: linear-gradient(135deg, var(--mg-primary) 0%, var(--mg-primary-hover) 100%);
   color: #fff;
   border-radius: 14px;
   padding: 0.7rem 1rem;
   font-size: 0.85rem;
-  box-shadow: 0 10px 30px rgba(20, 40, 33, 0.35);
+  box-shadow: 0 10px 30px rgb(var(--mg-primary-rgb) / 0.35);
   animation: kitchen-toast-in 0.25s ease-out;
 }
 .kitchen-ready-toast .toast-close {
@@ -5968,10 +6263,39 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
 }
 
-.pos-inline-success {
-  margin: 0 0 0.35rem;
-  color: var(--mg-primary);
-  font-size: 0.8rem;
+.pos-toast {
+  position: fixed;
+  bottom: 1.1rem;
+  right: 1.1rem;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0.6rem 0.95rem;
+  border-radius: 12px;
+  background: var(--mg-success, #6f7b56);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.24);
+  border: 1px solid color-mix(in srgb, #ffffff 26%, var(--mg-success, #6f7b56));
+  pointer-events: none;
+}
+
+.pos-toast svg {
+  flex-shrink: 0;
+}
+
+.pos-toast-enter-active,
+.pos-toast-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.pos-toast-enter-from,
+.pos-toast-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
 }
 
 .pos-shell {
@@ -7301,6 +7625,51 @@ kbd {
   font-size: 11px;
   color: var(--mg-text-muted);
 }
+
+/* گروه‌بندی فاکتورهای باز بر اساس مشتری */
+.open-invoice-group {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.open-invoice-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--mg-primary) 10%, var(--mg-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 22%, var(--mg-border-light));
+}
+
+.oig-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--mg-primary);
+}
+
+.oig-count {
+  font-size: 0.68rem;
+  color: var(--mg-text-muted);
+  background: color-mix(in srgb, var(--mg-bg-surface) 70%, transparent);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.accordion-secondary {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mg-olive, #8a8b63);
+  background: color-mix(in srgb, var(--mg-olive, #8a8b63) 10%, transparent);
+  border-radius: 999px;
+  padding: 0.08rem 0.4rem;
+  white-space: nowrap;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .accordion-amount {
   font-size: 12px;
   font-weight: 700;
@@ -7454,6 +7823,7 @@ kbd {
 .od-label { font-size: 0.65rem; color: var(--mg-text-muted, var(--mg-text-muted)); }
 .od-value { font-size: 0.82rem; font-weight: 600; color: var(--mg-text-main, var(--mg-text-main)); }
 .od-value.muted { color: var(--mg-text-muted, var(--mg-text-muted)); }
+.od-secondary-value { font-size: 0.74rem; font-weight: 500; color: var(--mg-olive, #8a8b63); }
 .od-price { direction: ltr; text-align: left; }
 
 .od-items { margin: 0.75rem 1.25rem; }
@@ -7503,10 +7873,12 @@ kbd {
 .od-chevron { transition: transform 0.2s; font-size: 0.6rem; }
 .od-chevron.open { transform: rotate(180deg); }
 .od-edit { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem; background: color-mix(in srgb, var(--mg-bg-page) 64%, var(--mg-bg-surface) 36%); border-radius: 8px; }
+.od-edit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
 .od-bottom { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.25rem; }
 
 @media (max-width: 500px) {
   .od-summary-row { grid-template-columns: 1fr 1fr; }
+  .od-edit-row { grid-template-columns: 1fr; }
   .od-modal { max-width: 100%; margin: 0.5rem; border-radius: 12px; }
 }
 

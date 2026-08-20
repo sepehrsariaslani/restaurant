@@ -22,13 +22,16 @@
           {{ node.isExpanded ? '▾' : '▸' }}
         </button>
         <span v-else class="tree-toggle tree-toggle--ghost" aria-hidden="true"></span>
+        <span v-if="$slots.icon" class="tree-icon">
+          <slot name="icon" :node="node" />
+        </span>
         <div class="tree-copy">
           <strong>{{ node.label || '-' }}</strong>
           <small v-if="node.caption">{{ node.caption }}</small>
         </div>
       </div>
 
-      <span v-if="node.badge" class="tree-badge">{{ node.badge }}</span>
+      <span v-if="node.badge" :class="['tree-badge', node.badge === 'دسته' ? 'tree-badge--category' : 'tree-badge--product']">{{ node.badge }}</span>
       <span v-if="node.status?.label" :class="['tree-status', node.status?.tone ? `tone-${node.status.tone}` : '']">
         {{ node.status.label }}
       </span>
@@ -183,36 +186,35 @@ watch(
 <style scoped>
 .tree-view {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .tree-row {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  border-radius: 12px;
-  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 10px;
+  padding: 0.4rem 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.38rem;
   flex-wrap: wrap;
-  background: rgb(var(--palette-eggshell-rgb) / 0.56);
+  background: var(--mg-bg-surface);
   position: relative;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .tree-row.nested {
-  background:
-    linear-gradient(90deg, rgb(var(--palette-deep-sapphire-rgb) / 0.03), transparent 38%),
-    rgb(var(--palette-eggshell-rgb) / 0.56);
+  background: color-mix(in srgb, var(--mg-bg-soft) 30%, var(--mg-bg-surface));
 }
 
 .tree-row.nested::before {
   content: '';
   position: absolute;
   inset-inline-start: calc(var(--tree-depth-indent) - 0.48rem);
-  top: 0.36rem;
-  bottom: 0.36rem;
+  top: 0.3rem;
+  bottom: 0.3rem;
   width: 2px;
   border-radius: 999px;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.34);
+  background: color-mix(in srgb, var(--mg-primary) 30%, var(--mg-border-light));
   pointer-events: none;
 }
 
@@ -221,8 +223,9 @@ watch(
 }
 
 .tree-row.clickable:hover {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.38);
-  box-shadow: 0 8px 18px rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-color: color-mix(in srgb, var(--mg-primary) 40%, var(--mg-border-light));
+  background: color-mix(in srgb, var(--mg-primary) 5%, var(--mg-bg-surface));
+  box-shadow: 0 6px 16px rgb(var(--mg-primary-rgb) / 0.1);
 }
 
 .tree-main {
@@ -234,24 +237,39 @@ watch(
 }
 
 .tree-toggle {
-  width: 1.05rem;
-  height: 1.05rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.26);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--text-primary);
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 35%, var(--mg-border-light));
+  border-radius: 7px;
+  background: var(--mg-bg-page);
+  color: var(--mg-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   line-height: 1;
   cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+
+.tree-toggle:hover {
+  background: color-mix(in srgb, var(--mg-primary) 12%, var(--mg-bg-surface));
+  border-color: var(--mg-primary);
 }
 
 .tree-toggle--ghost {
   border: none;
   background: transparent;
   pointer-events: none;
+}
+
+.tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mg-primary);
+  flex-shrink: 0;
 }
 
 .tree-copy {
@@ -263,38 +281,68 @@ watch(
 .tree-copy strong {
   font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--ink-900);
+  color: var(--mg-text-main);
 }
 
 .tree-copy small {
-  font-size: 0.7rem;
-  color: var(--text-muted);
+  font-size: 0.68rem;
+  color: var(--mg-text-muted);
 }
 
 .tree-badge {
   border-radius: 999px;
-  padding: 0.12rem 0.48rem;
-  font-size: 0.68rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.24);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 0.88);
-  background: #fff;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.64rem;
+  border: 1px solid color-mix(in srgb, var(--mg-olive) 30%, var(--mg-border-light));
+  color: var(--mg-olive);
+  background: color-mix(in srgb, var(--mg-olive-soft) 40%, var(--mg-bg-surface));
+  flex-shrink: 0;
+}
+
+.tree-badge--category {
+  color: var(--mg-success);
+  border-color: color-mix(in srgb, var(--mg-success) 30%, var(--mg-border-light));
+  background: var(--mg-success-bg);
+}
+
+.tree-badge--product {
+  color: var(--mg-primary);
+  border-color: color-mix(in srgb, var(--mg-primary) 30%, var(--mg-border-light));
+  background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface));
 }
 
 .tree-status {
   border-radius: 999px;
-  padding: 0.14rem 0.5rem;
-  font-size: 0.68rem;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.1);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
+  padding: 0.12rem 0.45rem;
+  font-size: 0.64rem;
+  flex-shrink: 0;
 }
 
 .tree-status.tone-success {
-  background: rgb(var(--palette-june-bud-rgb) / 0.35);
-  color: var(--accent-green);
+  background: var(--mg-success-bg);
+  color: var(--mg-success);
+  border: 1px solid color-mix(in srgb, var(--mg-success) 25%, transparent);
 }
 
 .tree-status.tone-warning {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.2);
-  color: var(--accent-gold);
+  background: rgb(254 243 199 / 0.95);
+  color: #92400e;
+  border: 1px solid rgb(146 64 14 / 0.2);
+}
+
+@media (max-width: 520px) {
+  .tree-row {
+    padding: 0.35rem 0.45rem;
+  }
+
+  .tree-copy strong {
+    font-size: 0.74rem;
+  }
+
+  .tree-badge,
+  .tree-status {
+    font-size: 0.58rem;
+    padding: 0.08rem 0.35rem;
+  }
 }
 </style>

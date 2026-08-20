@@ -62,6 +62,9 @@
           <button class="secondary-btn" type="button" @click="resetCustomerFilters">
             ریست فیلتر
           </button>
+          <button class="primary-btn" type="button" @click="openAddCustomerModal">
+            + افزودن مشتری
+          </button>
         </div>
       </div>
 
@@ -136,8 +139,7 @@
       <ManagementSurfaceCard
         title="لیست مشتریان"
         :subtitle="`تعداد: ${customers.length.toLocaleString('fa-IR')} مشتری`"
-      >
-        <ManagementDataTable
+      >        <ManagementDataTable
           v-if="viewMode === 'table'"
           :columns="customerColumns"
           :rows="customers"
@@ -373,6 +375,36 @@
         <a class="secondary-btn" href="/management/customers">بازگشت</a>
       </ManagementSurfaceCard>
     </template>
+
+    <!-- مودال افزودن مشتری جدید (بدون نیاز به سفارش) -->
+    <div v-if="addCustomerModalOpen" class="add-customer-backdrop" @click.self="addCustomerModalOpen = false">
+      <section class="add-customer-modal" dir="rtl" role="dialog" aria-modal="true" aria-label="افزودن مشتری جدید">
+        <header class="add-customer-head">
+          <h3>افزودن مشتری جدید</h3>
+          <button type="button" class="add-customer-close" @click="addCustomerModalOpen = false">×</button>
+        </header>
+
+        <label class="add-customer-field">
+          <span>نام مشتری</span>
+          <input class="input" v-model.trim="addCustomerForm.name" placeholder="مثلاً: زهرا محمدی" />
+        </label>
+
+        <label class="add-customer-field">
+          <span>شماره موبایل (اختیاری)</span>
+          <input class="input" v-model.trim="addCustomerForm.mobile" placeholder="مثلاً: 0912 345 6789" inputmode="tel" />
+        </label>
+
+        <p v-if="addCustomerError" class="error add-customer-error">{{ addCustomerError }}</p>
+        <p v-if="addCustomerSuccess" class="add-customer-success">{{ addCustomerSuccess }}</p>
+
+        <div class="add-customer-actions">
+          <button class="secondary-btn" type="button" @click="addCustomerModalOpen = false">انصراف</button>
+          <button class="primary-btn" type="button" :disabled="addCustomerSaving" @click="submitAddCustomer">
+            {{ addCustomerSaving ? 'در حال ذخیره...' : 'افزودن به مشتری‌ها' }}
+          </button>
+        </div>
+      </section>
+    </div>
   </ManagementPageScaffold>
 </template>
 
@@ -385,7 +417,7 @@ import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard
 import ManagementViewSwitcher from '@/components/management/ManagementViewSwitcher.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import ReportKpiGrid from '@/components/management/bi/ReportKpiGrid.vue'
-import { getManagementCustomerDetail, listManagementCustomers } from '@/utils/api'
+import { addManagementCustomer, getManagementCustomerDetail, listManagementCustomers } from '@/utils/api'
 import { formatMoney, formatStatus, parseQuery } from '@/utils/format'
 
 const query = parseQuery()
@@ -409,6 +441,59 @@ const filters = reactive({
   date_from: String(query.date_from || start.toISOString().slice(0, 10)),
   date_to: String(query.date_to || today.toISOString().slice(0, 10)),
 })
+
+// افزودن مشتری جدید (بدون نیاز به سفارش)
+const addCustomerModalOpen = ref(false)
+const addCustomerSaving = ref(false)
+const addCustomerError = ref('')
+const addCustomerSuccess = ref('')
+const addCustomerForm = reactive({ name: '', mobile: '' })
+
+function openAddCustomerModal() {
+  addCustomerForm.name = ''
+  addCustomerForm.mobile = ''
+  addCustomerError.value = ''
+  addCustomerSuccess.value = ''
+  addCustomerModalOpen.value = true
+}
+
+function normalizeAddCustomerMobile(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (!digits) {
+    return ''
+  }
+  if (digits.length < 10) {
+    return ''
+  }
+  return digits.startsWith('0') ? digits : `0${digits.slice(-10)}`
+}
+
+async function submitAddCustomer() {
+  const name = String(addCustomerForm.name || '').trim()
+  if (!name) {
+    addCustomerError.value = 'نام مشتری را وارد کنید.'
+    return
+  }
+  const mobile = normalizeAddCustomerMobile(addCustomerForm.mobile)
+  if (String(addCustomerForm.mobile || '').trim() && !mobile) {
+    addCustomerError.value = 'شماره موبایل باید حداقل 10 رقم باشد.'
+    return
+  }
+
+  addCustomerSaving.value = true
+  addCustomerError.value = ''
+  addCustomerSuccess.value = ''
+  try {
+    const payload = await addManagementCustomer({ customer_name: name, mobile })
+    addCustomerSuccess.value = `مشتری «${payload?.customer_name || name}» با موفقیت اضافه شد.`
+    addCustomerModalOpen.value = false
+    await loadCustomers()
+  } catch (errObj) {
+    addCustomerError.value = errObj.message || 'افزودن مشتری ناموفق بود.'
+  } finally {
+    addCustomerSaving.value = false
+  }
+}
 
 const viewModes = [
   { value: 'table', label: 'جدولی', icon: '☷' },
@@ -1147,5 +1232,76 @@ onMounted(() => {
   .customer-detail-ident {
     width: 100%;
   }
+}
+
+/* مودال افزودن مشتری */
+.add-customer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgb(10 12 10 / 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.add-customer-modal {
+  width: min(420px, 100%);
+  background: var(--bg-card, var(--mg-bg-surface));
+  border: 1px solid var(--mg-border);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.75rem;
+  box-shadow: 0 24px 50px rgb(0 0 0 / 0.25);
+}
+
+.add-customer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.add-customer-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--mg-text-main);
+}
+
+.add-customer-close {
+  border: 0;
+  background: transparent;
+  color: var(--mg-text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.2rem;
+}
+
+.add-customer-field {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--mg-text-main);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.add-customer-error {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.add-customer-success {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--mg-success, #6f7b56);
+}
+
+.add-customer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.2rem;
 }
 </style>

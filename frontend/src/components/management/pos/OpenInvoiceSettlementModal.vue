@@ -12,7 +12,12 @@
         </header>
 
         <div class="invoice-settlement-summary">
-          <span>{{ invoice?.customer_name || 'مشتری POS' }}</span>
+          <span>
+            {{ invoice?.customer_name || 'مشتری POS' }}
+            <small v-if="invoice?.secondary_customer" class="invoice-settlement-secondary">
+              ← {{ invoice.secondary_customer }}
+            </small>
+          </span>
           <strong>{{ formatMoney(invoice?.grand_total || 0, currency) }}</strong>
         </div>
 
@@ -131,6 +136,7 @@ function confirm() {
 }
 .invoice-settlement-summary span { color: var(--mg-text-muted); font-size: 0.75rem; }
 .invoice-settlement-summary strong { color: var(--mg-primary); direction: ltr; font-size: 0.85rem; }
+.invoice-settlement-secondary { display: block; font-weight: 600; font-size: 0.7rem; color: var(--mg-olive, #8a8b63); margin-top: 0.15rem; }
 
 .invoice-settlement-field { display: grid; gap: 0.28rem; color: var(--mg-text-main); font-size: 0.76rem; font-weight: 800; }
 .invoice-settlement-credit-hint { margin: 0; padding: 0.6rem; border-radius: 10px; background: color-mix(in srgb, var(--mg-primary) 8%, transparent); color: var(--mg-text-muted); font-size: 0.73rem; line-height: 1.7; }

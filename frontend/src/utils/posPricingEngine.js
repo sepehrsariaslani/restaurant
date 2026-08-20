@@ -66,18 +66,21 @@ export function calculatePosTotals(args = {}) {
     return calculateTotalsWithoutTarget(args)
   }
 
-  const baseArgs = { ...args, targetPayableAmount: null }
-  const baseTotals = calculateTotalsWithoutTarget(baseArgs)
+  // هدف مبلغ نهایی است: مبلغی که مشتری باید بپردازد.
+  // همه‌ی اجزا (تخفیف + حق سرویس + مالیات + پکیج + انعام) باید طوری
+  // تنظیم شوند که جمع نهایی دقیقاً برابر همان هدف باشد — نه بیشتر.
   const desired = Math.max(target, 0)
+  const baseArgs = { ...args, targetPayableAmount: null }
 
-  // A target above the current invoice is a surcharge, not a discount. Keep
-  // the difference visible in service charges so the final payable amount
-  // remains exactly what the cashier entered.
-  if (desired >= baseTotals.payableAmount) {
-    const serviceAdjustment = desired - baseTotals.payableAmount
+  // ۱) حالت بدون تخفیف: اگر حتی با صفر تخفیف، جمع نهایی از هدف کمتر است
+  //    (یعنی هدف بزرگ‌تر از مبلغ کالاهاست) — مابه‌التفاوت به عنوان حق سرویس
+  //    اضافه می‌شود تا مبلغ نهایی دقیقاً هدف باشد.
+  const noDiscountTotals = calculateTotalsWithoutTarget({ ...baseArgs, discountType: 'fixed', discountValue: 0 })
+  if (noDiscountTotals.payableAmount < desired) {
+    const serviceAdjustment = desired - noDiscountTotals.payableAmount
     return {
-      ...baseTotals,
-      serviceAmount: baseTotals.serviceAmount + serviceAdjustment,
+      ...noDiscountTotals,
+      serviceAmount: noDiscountTotals.serviceAmount + serviceAdjustment,
       payableAmount: desired,
       targetPayableAmount: desired,
       automaticDiscount: false,
@@ -85,12 +88,12 @@ export function calculatePosTotals(args = {}) {
     }
   }
 
+  // ۲) حالت با تخفیف: تخفیف ثابت را طوری پیدا می‌کنیم که جمع نهایی
+  //    (با همان حق سرویس و مالیات و پکیج) دقیقاً برابر هدف شود.
   let low = 0
-  let high = baseTotals.itemsTotal
+  let high = noDiscountTotals.itemsTotal
 
-  // Find the fixed discount that makes the payable amount converge to the
-  // requested final invoice amount, including percentage tax/service and wallet rules.
-  for (let index = 0; index < 42; index += 1) {
+  for (let index = 0; index < 48; index += 1) {
     const candidate = (low + high) / 2
     const candidateTotals = calculateTotalsWithoutTarget({
       ...baseArgs,
@@ -106,8 +109,13 @@ export function calculatePosTotals(args = {}) {
     discountType: 'fixed',
     discountValue: high,
   })
+
   return {
     ...result,
+    // اگر حق سرویس / مالیات / پکیج باعث شد مبلغ نهایی از هدف بیشتر شود،
+    // تخفیف را کمی بیشتر می‌کنیم تا دقیقاً روی هدف بنشیند.
+    discountAmount: Math.min(result.discountAmount + Math.max(result.payableAmount - desired, 0), result.itemsTotal),
+    payableAmount: Math.max(desired, 0),
     targetPayableAmount: desired,
     automaticDiscount: true,
     automaticService: false,

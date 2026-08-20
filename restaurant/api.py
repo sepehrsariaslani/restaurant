@@ -350,6 +350,20 @@ def _json_safe_datetime(value):
 		return str(value)
 
 
+def _date_value_to_iso(value):
+	"""Date (or datetime) -> 'YYYY-MM-DD' string; safe for missing/odd values."""
+	if value in (None, ""):
+		return ""
+	if isinstance(value, str):
+		return value[:10]
+	if hasattr(value, "strftime"):
+		try:
+			return value.strftime("%Y-%m-%d")
+		except Exception:
+			return str(value)
+	return str(value)[:10]
+
+
 def _optional_float(source, fieldname):
 	value = _read_field(source, fieldname)
 	if value in (None, ""):
@@ -3457,6 +3471,8 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"tags": _split_tags(getattr(row, "restaurant_item_tags", None))
 		or _get_item_tag_titles(getattr(row, "name", None)),
 		"coming_soon": cint(getattr(row, "restaurant_coming_soon", 0)),
+		"calendar_date": _date_value_to_iso(getattr(row, "restaurant_calendar_date", None)),
+		"kitchen_ticket": cint(getattr(row, "restaurant_kitchen_ticket", 1)),
 	}
 
 
@@ -5056,6 +5072,15 @@ def _get_auto_order_service_items(branches=None):
 
 def _ensure_customer(customer_name, mobile):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
+	# اول با نام پیدا کن (مشتری‌های واسطه مثل اسنپ حتی با موبایل جدید باید برگردند)
+	existing_by_name = frappe.db.get_value("Customer", {"customer_name": customer_name, "disabled": 0}, "name")
+	if existing_by_name:
+		if normalized_mobile and _has_column("Customer", "mobile_no"):
+			current_mobile = frappe.db.get_value("Customer", existing_by_name, "mobile_no")
+			if not current_mobile:
+				frappe.db.set_value("Customer", existing_by_name, "mobile_no", normalized_mobile, update_modified=False)
+		return existing_by_name
+
 	existing = _find_customer_by_mobile(mobile)
 	if existing:
 		if normalized_mobile and _has_column("Customer", "mobile_no"):
@@ -5063,11 +5088,6 @@ def _ensure_customer(customer_name, mobile):
 			if not current_mobile:
 				frappe.db.set_value("Customer", existing, "mobile_no", normalized_mobile, update_modified=False)
 		return existing
-
-	if not normalized_mobile:
-		existing_by_name = frappe.db.get_value("Customer", {"customer_name": customer_name, "disabled": 0}, "name")
-		if existing_by_name:
-			return existing_by_name
 
 	customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or frappe.db.get_value(
 		"Customer Group", {}, "name"
@@ -5135,6 +5155,7 @@ def _create_sales_order(
 	financial_modifiers=None,
 	totals=None,
 	commit=True,
+	secondary_customer="",
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5142,6 +5163,10 @@ def _create_sales_order(
 		frappe.throw(_("Default company is not configured."))
 
 	customer = _ensure_customer(customer_name, mobile)
+	# مشتری ثانویه (سفارش‌دهنده واسطه مثل اسنپ) هم به‌عنوان مشتری واقعی ذخیره می‌شود
+	secondary_name_text = (secondary_customer or "").strip()
+	if secondary_name_text:
+		_ensure_customer(secondary_name_text, "")
 	currency = frappe.db.get_value("Company", company, "default_currency") or _get_currency(company)
 	selling_price_list = _default_selling_price_list(currency) or _default_selling_price_list()
 	if not selling_price_list:
@@ -5183,6 +5208,8 @@ def _create_sales_order(
 		doc_payload["restaurant_table"] = order_context.get("table") or ""
 	if _has_column("Sales Order", "restaurant_delivery_fee"):
 		doc_payload["restaurant_delivery_fee"] = flt(order_context.get("delivery_fee") or 0)
+	if _has_column("Sales Order", "restaurant_secondary_customer"):
+		doc_payload["restaurant_secondary_customer"] = (secondary_customer or "").strip()
 	if delivery_payload and _has_column("Sales Order", "restaurant_delivery_address_name"):
 		doc_payload["restaurant_delivery_address_name"] = (
 			delivery_address_name or delivery_payload.get("id") or ""
@@ -6789,6 +6816,11 @@ def _build_modifier_groups(menu_item_doc, primary_bom_doc=None):
 def get_menu_boot(branch=None):
 	branch = (branch or "").strip()
 	try:
+		# فیلدهای سفارشی (مانند تاریخ تقویم) را در اولین بارگذاری تضمین کن
+		_fp_ensure_item_ops_fields()
+	except Exception:
+		pass
+	try:
 		return _get_core_menu_boot(branch=branch)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "restaurant.api.get_menu_boot")
@@ -7380,6 +7412,26 @@ def _ensure_checkout_address_fields():
 		frappe.clear_cache(doctype="Address")
 
 
+def _ensure_sales_invoice_secondary_customer_field():
+	"""فیلد مشتری ثانویه روی Sales Invoice (برای فاکتورهای واسطه مثل اسنپ)."""
+	if not frappe.db.exists("DocType", "Sales Invoice"):
+		return
+	if frappe.db.exists("Custom Field", {"dt": "Sales Invoice", "fieldname": "restaurant_secondary_customer"}):
+		return
+	try:
+		frappe.get_doc({
+			"doctype": "Custom Field",
+			"dt": "Sales Invoice",
+			"module": "Restaurant",
+			"fieldname": "restaurant_secondary_customer",
+			"label": "مشتری ثانویه (سفارش‌دهنده)",
+			"fieldtype": "Data",
+		}).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype="Sales Invoice")
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Ensure SI secondary customer field")
+
+
 def _ensure_checkout_sales_order_fields():
 	global _CHECKOUT_SALES_ORDER_FIELDS_READY_SITES
 	site_key = getattr(getattr(frappe, "local", None), "site", "__default__") or "__default__"
@@ -7438,6 +7490,12 @@ def _ensure_checkout_sales_order_fields():
 			"label": "Delivery Fee",
 			"fieldtype": "Currency",
 			"insert_after": "restaurant_table",
+		},
+		{
+			"fieldname": "restaurant_secondary_customer",
+			"label": "مشتری ثانویه (سفارش‌دهنده)",
+			"fieldtype": "Data",
+			"insert_after": "restaurant_delivery_fee",
 		},
 	]
 
@@ -8116,7 +8174,21 @@ def _variant_item_sort_key(item_name):
 		flags = _item_attribute_flags(attribute_name)
 		show_on_website = cint(flags.get("show_in_website") or 0)
 		selection_only = cint(flags.get("selection_only") or 0)
-		if not show_on_website or selection_only:
+		if not show_on_website:
+			continue
+		# ویژگی‌های «فقط انتخاب» (مثل سایز) در signature نیستند ولی برای
+		# تعیین واریانت پیش‌فرض (representative) باید default آن‌ها لحاظ شود.
+		if selection_only:
+			if _has_column("Item Attribute Value", "restaurant_is_default"):
+				default_flag = cint(
+					frappe.db.get_value(
+						"Item Attribute Value",
+						{"parent": attribute_name, "attribute_value": value_name},
+						"restaurant_is_default",
+					)
+					or 0
+				)
+				order_chunks.append((default_flag, (1, value_name)))
 			continue
 
 		default_flag = 0
@@ -8630,6 +8702,15 @@ def _resolve_display_doc_for_item_detail(item_doc, source_variant_name=None, bra
 		for row in variants:
 			if (row.get("name") or "").strip() == source_variant_name:
 				return frappe.get_doc("Item", source_variant_name), row.get("variant_fixed_attributes") or {}
+		# اگر واریانت درخواستی در representative ها نبود (مثلاً انتخاب مستقیم
+		# «سینگل» در POS)، همان واریانت را مستقیم برگردان — نه representative.
+		if source_variant_name and frappe.db.exists("Item", source_variant_name):
+			direct_variant = frappe.get_doc("Item", source_variant_name)
+			if (
+				not cint(direct_variant.get("disabled") or 0)
+				and cint(direct_variant.get("restaurant_enabled") or 0) == 1
+			):
+				return direct_variant, {}
 
 	representatives = sorted(variants, key=lambda row: _variant_item_sort_key(row.get("name")))
 	selected = representatives[0]
@@ -11044,6 +11125,7 @@ def place_order(
 	financial_modifiers=None,
 	totals=None,
 	commit=True,
+	secondary_customer="",
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -11134,6 +11216,7 @@ def place_order(
 		financial_modifiers=financial_modifiers,
 		totals=totals,
 		commit=commit,
+		secondary_customer=(secondary_customer or "").strip(),
 	)
 
 
@@ -12553,6 +12636,8 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_table")
 	if _has_column("Sales Order", "restaurant_status"):
 		fields.append("restaurant_status")
+	if _has_column("Sales Order", "restaurant_secondary_customer"):
+		fields.append("restaurant_secondary_customer")
 
 	order_by = "transaction_date desc, creation desc" if has_transaction_date else "creation desc"
 	rows = frappe.get_all(
@@ -12685,6 +12770,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"name": row.name,
 				"order_code": row.name,
 				"customer_name": row.customer_name or "POS Customer",
+				"secondary_customer": (row.restaurant_secondary_customer if hasattr(row, "restaurant_secondary_customer") else "") or "",
 				"mobile": (row.restaurant_customer_mobile if has_mobile else "")
 				or mobile_by_customer.get(row.customer, ""),
 				"channel": (row.restaurant_order_type if has_order_type else "") or "takeaway",
@@ -14497,6 +14583,21 @@ def report_management_pos_hardware_event(
 
 
 @frappe.whitelist()
+def _management_print_item_group_options():
+	"""دسته‌های محصول (همان دسته‌های POS) برای انتخاب در پروفایل‌های چاپ."""
+	groups = []
+	category_meta_map = _get_core_category_meta_map()
+	seen = set()
+	for key, value in category_meta_map.items():
+		label = (value.get("title") or key or "").strip()
+		if not label or label in seen:
+			continue
+		seen.add(label)
+		groups.append({"name": label, "title": label})
+	return sorted(groups, key=lambda row: row["title"])
+
+
+@frappe.whitelist()
 def get_management_pos_config():
 	"""Get POS default configuration (order mode defaults, place presets)."""
 	_ensure_management_access()
@@ -14528,6 +14629,9 @@ def get_management_pos_config():
 				limit_page_length=200,
 			)
 		]
+	print_profiles = config.get("print_profiles") or []
+	if not isinstance(print_profiles, list):
+		print_profiles = []
 	defaults = {
 		"default_order_mode": config.get("default_order_mode", "dine_in"),
 		"default_customers": config.get(
@@ -14547,6 +14651,8 @@ def get_management_pos_config():
 		"default_payment_method": _normalize_payment_method(config.get("default_payment_method") or "cash"),
 		"payment_options": payment_options,
 		"delivery_couriers": delivery_couriers,
+		"print_profiles": print_profiles,
+		"print_item_groups": _management_print_item_group_options(),
 	}
 	return defaults
 
@@ -14582,6 +14688,31 @@ def set_management_pos_config(payload=None):
 	):
 		if key in data:
 			current[key] = data[key]
+
+	if "print_profiles" in data:
+		profiles = data.get("print_profiles") or []
+		clean_profiles = []
+		if isinstance(profiles, list):
+			for profile in profiles:
+				if not isinstance(profile, dict):
+					continue
+				label = (profile.get("label") or "").strip()
+				kind = (profile.get("kind") or "").strip().lower()
+				if kind not in ("customer", "kitchen", "bar"):
+					kind = "kitchen"
+				item_groups = profile.get("item_groups") or []
+				if not isinstance(item_groups, list):
+					item_groups = []
+				item_groups = [str(g).strip() for g in item_groups if str(g).strip()]
+				clean_profiles.append({
+					"label": label or ("چاپ مشتری" if kind == "customer" else "چاپ آشپزخانه"),
+					"kind": kind,
+					"printer_name": (profile.get("printer_name") or "").strip(),
+					"item_groups": item_groups,
+					"show_prices": cint(profile.get("show_prices", 1 if kind == "customer" else 0)),
+					"enabled": cint(profile.get("enabled", 1)),
+				})
+		current["print_profiles"] = clean_profiles
 
 	frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
 	frappe.db.commit()
@@ -14751,6 +14882,7 @@ def _create_pos_order_payload(payload, commit=True):
         # The wrapper owns the commit so combined POS actions can include the
         # Sales Invoice in the same transaction.
         commit=False,
+        secondary_customer=(payload.get("secondary_customer") or "").strip(),
     )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
     _set_restaurant_order_status(so_name, "confirmed", force=True)
@@ -14804,6 +14936,7 @@ def create_and_pay_pos_order(payload):
     
     # Build the SO and invoice in one request/transaction.  The old path
     # committed once in create_pos_order and again in settle_pos_order.
+    _ensure_sales_invoice_secondary_customer_field()
     order_result = _create_pos_order_payload(payload, commit=False)
     so_name = order_result.get("order_id", "")
 
@@ -14922,6 +15055,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
         
     # Check if order is already invoiced
+    _ensure_sales_invoice_secondary_customer_field()
     si = frappe.db.get_value("Sales Invoice Item", {"sales_order": so_name}, "parent")
     si_doc = None
     if si:
@@ -14961,6 +15095,10 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
             if hasattr(si_doc, "as_dict"):
                 si_doc.is_pos = 0 if credit_only else 1
                 si_doc.update_stock = 0
+                # انتقال مشتری ثانویه به فاکتور
+                if _has_column("Sales Invoice", "restaurant_secondary_customer"):
+                    secondary_value = frappe.db.get_value("Sales Order", so_name, "restaurant_secondary_customer") or ""
+                    si_doc.restaurant_secondary_customer = (secondary_value or "").strip()
             elif isinstance(si_doc, dict):
                 si_doc["is_pos"] = 0 if credit_only else 1
                 si_doc["update_stock"] = 0
@@ -15865,6 +16003,7 @@ def get_management_order_detail(order_name, source=None):
 					"name": doc.name,
 					"order_code": doc.name,
 					"customer_name": doc.customer_name,
+					"secondary_customer": doc.get("restaurant_secondary_customer") or "",
 					"mobile": doc.get("restaurant_customer_mobile") or "",
 					"channel": doc.get("restaurant_order_type") or "takeaway",
 					"place": place_label,
@@ -15971,7 +16110,7 @@ def get_management_order_detail(order_name, source=None):
 
 
 @frappe.whitelist()
-def update_management_order(order_name, payment_method=None, note=None, customer_name=None, mobile=None):
+def update_management_order(order_name, payment_method=None, note=None, customer_name=None, mobile=None, secondary_customer=None):
 	_ensure_management_access()
 	if not order_name:
 		frappe.throw(_("Order name is required."))
@@ -16000,8 +16139,29 @@ def update_management_order(order_name, payment_method=None, note=None, customer
 		if _has_column("Sales Order", "restaurant_customer_mobile"):
 			updates["restaurant_customer_mobile"] = mobile_text
 
+	secondary_value = (secondary_customer or "").strip() if secondary_customer is not None else None
+	if secondary_customer is not None:
+		if _has_column("Sales Order", "restaurant_secondary_customer"):
+			updates["restaurant_secondary_customer"] = secondary_value
+		if secondary_value:
+			# مشتری ثانویه همیشه به‌عنوان مشتری واقعی هم ذخیره می‌شود
+			_ensure_customer(secondary_value, "")
+
 	for field, value in updates.items():
 		frappe.db.set_value("Sales Order", so_name, field, value, update_modified=False)
+
+	# اگر فاکتور فروش (SI) هم ساخته شده، مشتری ثانویه را روی آن‌ها هم همگام کن
+	if secondary_value is not None and _has_column("Sales Invoice", "restaurant_secondary_customer"):
+		si_items = frappe.get_all(
+			"Sales Invoice Item",
+			filters={"sales_order": so_name, "docstatus": 1},
+			fields=["parent"],
+			ignore_permissions=True,
+		)
+		for si_item in si_items:
+			frappe.db.set_value(
+				"Sales Invoice", si_item.parent, "restaurant_secondary_customer", secondary_value, update_modified=False
+			)
 
 	_append_sales_order_note(so_name, "[EDIT] اطلاعات سفارش ویرایش شد")
 	frappe.db.commit()
@@ -18196,6 +18356,7 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_requires_bom": cint(item_doc.get("restaurant_requires_bom") or 0),
 			"restaurant_auto_add_to_order": cint(item_doc.get("restaurant_auto_add_to_order") or 0),
 			"restaurant_coming_soon": cint(item_doc.get("restaurant_coming_soon") or 0),
+			"restaurant_kitchen_ticket": cint(item_doc.get("restaurant_kitchen_ticket", 1)),
 			"restaurant_auto_add_qty": flt(item_doc.get("restaurant_auto_add_qty") or 0),
 			"restaurant_is_customizable": cint(item_doc.get("restaurant_is_customizable") or 0),
 			"restaurant_customize_button_label": item_doc.get("restaurant_customize_button_label") or "",
@@ -18308,6 +18469,7 @@ def update_management_product_settings(payload=None):
 		"restaurant_show_nutrition_summary",
 		"restaurant_show_allergen_warnings",
 		"restaurant_out_of_stock",
+		"restaurant_kitchen_ticket",
 	}
 	float_fields = {"restaurant_auto_add_qty", "restaurant_packaging_price"}
 	nutrition_fields = set(NUTRITION_KEY_FIELD_MAP.values())
@@ -18909,6 +19071,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		"restaurant_category",
 		"restaurant_subcategory",
 		"restaurant_sort_order",
+		"creation",
+		"modified",
 		f"{image_field} as image",
 	]
 	if _has_column("Item", "custom_snapp_code"):
@@ -18921,6 +19085,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		item_fields.append("restaurant_out_of_stock")
 	if _has_column("Item", "restaurant_packaging_price"):
 		item_fields.append("restaurant_packaging_price")
+	if _has_column("Item", "restaurant_calendar_date"):
+		item_fields.append("restaurant_calendar_date")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -18968,6 +19134,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 				"out_of_stock": cint(row.get("restaurant_out_of_stock") or 0),
 				"packaging_price": flt(row.get("restaurant_packaging_price") or 0),
 				"stock_qty": flt(stock_by_item.get(row.name) or 0),
+				"creation": (row.get("creation") or "").strftime("%Y-%m-%d") if getattr(row.get("creation"), "strftime", None) else str(row.get("creation") or ""),
+				"modified": (row.get("modified") or "").strftime("%Y-%m-%d") if getattr(row.get("modified"), "strftime", None) else str(row.get("modified") or ""),
 			}
 		)
 	return {
@@ -19055,6 +19223,25 @@ def delete_management_product(item_name=None, allow_archive_on_link=1, force_del
 
 
 @frappe.whitelist()
+def add_management_customer(customer_name=None, mobile=None):
+	"""افزودن مشتری جدید به‌صورت مستقیم — بدون نیاز به ثبت سفارش."""
+	_ensure_management_access()
+	name_text = (customer_name or "").strip()
+	if not name_text:
+		frappe.throw(_("Customer name is required."))
+	mobile_text = _ensure_mobile(mobile, allow_empty=True)
+	customer = _ensure_customer(name_text, mobile_text)
+	if customer:
+		frappe.db.commit()
+	return {
+		"status": "success",
+		"customer": customer,
+		"customer_name": frappe.db.get_value("Customer", customer, "customer_name") or name_text,
+		"mobile": mobile_text or "",
+	}
+
+
+@frappe.whitelist()
 def list_management_customers(search=None, date_from=None, date_to=None):
 	_ensure_management_access()
 	search_text = (search or "").strip().lower()
@@ -19090,6 +19277,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 	customer_docs = frappe.get_all(**get_all_kwargs)
 	
 	grouped = {}
+	name_key_map = {}
 	for doc in customer_docs:
 		customer_name = (doc.get("customer_name") or doc.get("name") or "").strip()
 		mobile = (doc.get("mobile_no") or doc.get("customer_primary_mobile") or "").strip()
@@ -19103,6 +19291,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			"total_spent": 0.0,
 			"last_order_at": None,
 		}
+		name_key_map[customer_name.lower()] = key
 
 	# Fetch orders for stats
 	orders = _management_fetch_web_orders(date_from=date_from, date_to=date_to)
@@ -19112,32 +19301,59 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 
 		customer_name = (order.get("customer_name") or "").strip() or "POS Customer"
 		mobile = (order.get("mobile") or "").strip()
-		if search_text and search_text not in f"{customer_name} {mobile}".lower():
+		secondary_name = (order.get("secondary_customer") or "").strip()
+
+		primary_matches = (not search_text) or search_text in f"{customer_name} {mobile}".lower()
+		secondary_matches = (not search_text) or (
+			bool(secondary_name) and search_text in secondary_name.lower()
+		)
+		if not primary_matches and not secondary_matches:
 			continue
 
-		key = f"{customer_name}::{mobile}"
-		bucket = grouped.setdefault(
-			key,
-			{
-				"customer_name": customer_name,
-				"mobile": mobile,
-				"orders_count": 0,
-				"total_spent": 0.0,
-				"last_order_at": None,
-			},
-		)
-		bucket["orders_count"] += 1
-		bucket["total_spent"] += flt(order.get("grand_total"))
-
 		created_at = order.get("created_at")
+		created_dt = None
 		if created_at:
 			try:
 				created_dt = get_datetime(created_at)
 			except Exception:
 				created_dt = None
+
+		if primary_matches:
+			key = f"{customer_name}::{mobile}"
+			bucket = grouped.setdefault(
+				key,
+				{
+					"customer_name": customer_name,
+					"mobile": mobile,
+					"orders_count": 0,
+					"total_spent": 0.0,
+					"last_order_at": None,
+				},
+			)
+			bucket["orders_count"] += 1
+			bucket["total_spent"] += flt(order.get("grand_total"))
 			previous = bucket.get("last_order_at")
 			if created_dt and (not previous or created_dt > previous):
 				bucket["last_order_at"] = created_dt
+
+		if secondary_matches and secondary_name:
+			# آمار سفارش‌های ثانویه روی همان مشتری (مثلاً زهرا قاسمی) حساب می‌شود
+			sec_key = name_key_map.get(secondary_name.lower()) or f"{secondary_name}::"
+			sec_bucket = grouped.setdefault(
+				sec_key,
+				{
+					"customer_name": secondary_name,
+					"mobile": "",
+					"orders_count": 0,
+					"total_spent": 0.0,
+					"last_order_at": None,
+				},
+			)
+			sec_bucket["orders_count"] += 1
+			sec_bucket["total_spent"] += flt(order.get("grand_total"))
+			previous = sec_bucket.get("last_order_at")
+			if created_dt and (not previous or created_dt > previous):
+				sec_bucket["last_order_at"] = created_dt
 
 	rows = sorted(
 		grouped.values(),
@@ -19443,12 +19659,20 @@ def _management_customer_match(order, mobile="", customer_name=""):
 	normalized_name = (customer_name or "").strip().lower()
 	order_mobile = (order.get("mobile") or "").strip()
 	order_name = ((order.get("customer_name") or "").strip() or "POS Customer").lower()
+	order_secondary = ((order.get("secondary_customer") or "").strip()).lower()
 
-	if normalized_mobile and order_mobile != normalized_mobile:
+	# اگر موبایل داده شده و سفارش موبایل متفاوتی دارد → رد
+	if normalized_mobile and order_mobile and order_mobile != normalized_mobile:
 		return False
-	if normalized_name and order_name != normalized_name and not normalized_mobile:
-		return False
-	return bool(normalized_mobile or normalized_name)
+	if normalized_name:
+		# مشتری اصلی سفارش باشد یا سفارش‌دهنده ثانویه آن (مثل اسنپ)
+		if order_name == normalized_name:
+			return True
+		if order_secondary and order_secondary == normalized_name:
+			return True
+	if normalized_mobile and order_mobile == normalized_mobile:
+		return True
+	return False
 
 
 def _management_filter_customer_orders(orders, mobile="", customer_name=""):

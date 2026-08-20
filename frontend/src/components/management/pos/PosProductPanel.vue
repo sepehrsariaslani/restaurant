@@ -1,6 +1,6 @@
 <template>
 	<section class="products-panel">
-		<div class="customer-search-bar">
+		<div class="customer-row">
 			<div class="customer-search-wrap">
 				<span class="cust-icon"><UserRound :size="15" :stroke-width="2.1" /></span>
 				<input
@@ -58,6 +58,58 @@
 			>
 				<Plus :size="15" :stroke-width="2.4" />
 			</button>
+
+			<div
+				v-if="secondaryCustomerVisible"
+				class="secondary-customer-field"
+				:title="'نام مشتری ثانویه (سفارش‌دهنده) — از لیست مشتری‌ها انتخاب کنید یا نام جدید بنویسید'"
+			>
+				<span class="sc-icon"><UserRound :size="14" :stroke-width="2.1" /></span>
+				<div class="sc-wrap">
+					<input
+						class="input dark-input sc-input"
+						:value="secondaryCustomer"
+						@input="onSecondaryInput"
+						@focus="openSecondaryDropdown"
+						@blur="onSecondaryBlur"
+						@keydown.down.prevent="moveSecondaryActive(1)"
+						@keydown.up.prevent="moveSecondaryActive(-1)"
+						@keydown.enter.prevent="selectSecondaryActive"
+						@keydown.esc="closeSecondaryDropdown"
+						placeholder="مشتری ثانویه..."
+					/>
+					<div
+						v-if="secondaryDropdownOpen && secondaryDropdownOptions.length"
+						class="cust-dropdown"
+					>
+						<button
+							v-for="(customer, index) in secondaryDropdownOptions"
+							:key="customer.key || index"
+							type="button"
+							class="cust-option"
+							:class="{ active: index === secondaryActiveIndex }"
+							@mousedown.prevent="pickSecondaryCustomer(customer)"
+						>
+							<span class="cust-option-name">{{ customer.is_new ? `جدید: ${customer.label}` : customer.label }}</span>
+							<span class="cust-option-meta">
+								<span v-if="customer.is_new" class="cust-new-tag">جدید</span>
+								<span v-if="customer.mobile">{{ customer.mobile }}</span>
+								<span>{{ Number(customer.orders_count || 0).toLocaleString('fa-IR') }} خرید</span>
+							</span>
+						</button>
+					</div>
+				</div>
+				<button
+					v-if="secondaryCustomer"
+					type="button"
+					class="sc-clear"
+					title="پاک کردن مشتری ثانویه"
+					aria-label="پاک کردن مشتری ثانویه"
+					@click="clearSecondaryCustomer"
+				>
+					×
+				</button>
+			</div>
 		</div>
 
 		<div class="panel-top">
@@ -308,6 +360,8 @@ const props = defineProps({
 	selectedCategory: { type: String, default: "" },
 	customerQuery: { type: String, default: "" },
 	customerOptions: { type: Array, default: () => [] },
+	secondaryCustomer: { type: String, default: "" },
+	secondaryCustomerVisible: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -323,11 +377,109 @@ const emit = defineEmits([
 	"select-customer",
 	"create-customer",
 	"add-customer",
+	"update:secondaryCustomer",
+	"secondary-query",
 ]);
 
 const customerInputRef = ref(null);
 const dropdownOpen = ref(false);
 const activeIndex = ref(-1);
+
+// دراپ‌داون «مشتری ثانویه» — از همان لیست مشتری‌ها
+const secondaryDropdownOpen = ref(false);
+const secondaryActiveIndex = ref(-1);
+const secondaryQuery = ref("");
+
+const secondaryFilteredOptions = computed(() => {
+	const all = Array.isArray(props.customerOptions) ? props.customerOptions : [];
+	const q = String(secondaryQuery.value || "")
+		.trim()
+		.toLowerCase();
+	if (!q) return all.slice(0, 8);
+	const digits = q.replace(/\D/g, "");
+	return all
+		.filter((c) => {
+			const label = String(c.label || "").toLowerCase();
+			const mobile = String(c.mobile || "");
+			if (label.includes(q)) return true;
+			if (digits && mobile.replace(/\D/g, "").includes(digits)) return true;
+			return false;
+		})
+		.slice(0, 8);
+});
+
+const secondaryCreateOption = computed(() => {
+	const q = String(secondaryQuery.value || "").trim();
+	// گزینه «جدید» فقط وقتی نمایش داده می‌شود که هیچ مشتری‌ای با این نام پیدا نشود
+	// تا تایپ «زهرا» + Enter اشتباهاً «زهرا» جدید نسازد و «زهرا قاسمی» انتخاب شود
+	if (!q || secondaryFilteredOptions.value.length) return null;
+	return {
+		key: `sec-create-${q}`,
+		label: q,
+		mobile: "",
+		orders_count: 0,
+		is_new: true,
+	};
+});
+
+const secondaryDropdownOptions = computed(() => {
+	const opts = [...secondaryFilteredOptions.value];
+	if (secondaryCreateOption.value) opts.unshift(secondaryCreateOption.value);
+	return opts;
+});
+
+function onSecondaryInput(event) {
+	const value = event.target.value;
+	secondaryQuery.value = value;
+	emit("update:secondaryCustomer", value);
+	emit("secondary-query", value);
+	secondaryDropdownOpen.value = true;
+	secondaryActiveIndex.value = -1;
+}
+
+function openSecondaryDropdown() {
+	secondaryQuery.value = String(props.secondaryCustomer || "");
+	secondaryDropdownOpen.value = true;
+	secondaryActiveIndex.value = -1;
+}
+
+function onSecondaryBlur() {
+	// فرصت بده کلیک روی گزینه‌های دراپ‌داون اول اجرا شود
+	window.setTimeout(() => {
+		secondaryDropdownOpen.value = false;
+	}, 120);
+}
+
+function closeSecondaryDropdown() {
+	secondaryDropdownOpen.value = false;
+}
+
+function moveSecondaryActive(delta) {
+	const count = secondaryDropdownOptions.value.length;
+	if (!count) return;
+	secondaryActiveIndex.value = (secondaryActiveIndex.value + delta + count) % count;
+}
+
+function selectSecondaryActive() {
+	const option = secondaryDropdownOptions.value[secondaryActiveIndex.value];
+	if (option) pickSecondaryCustomer(option);
+}
+
+function pickSecondaryCustomer(customer) {
+	if (!customer) return;
+	const name = String(customer.label || "").trim();
+	emit("update:secondaryCustomer", name);
+	secondaryQuery.value = name;
+	secondaryDropdownOpen.value = false;
+	secondaryActiveIndex.value = -1;
+}
+
+function clearSecondaryCustomer() {
+	emit("update:secondaryCustomer", "");
+	secondaryQuery.value = "";
+	secondaryDropdownOpen.value = false;
+	secondaryActiveIndex.value = -1;
+}
 
 const filteredCustomers = computed(() => {
 	const all = Array.isArray(props.customerOptions) ? props.customerOptions : [];
@@ -584,15 +736,16 @@ function quantityValue(slug) {
 	box-shadow: 0 22px 44px rgb(52 38 31 / 0.08);
 }
 
-.customer-search-bar {
-	display: grid;
-	grid-template-columns: 1fr 36px;
-	gap: 0.55rem;
+.customer-row {
+	display: flex;
 	align-items: center;
+	gap: 0.55rem;
 }
 
 .customer-search-wrap {
 	position: relative;
+	flex: 1;
+	min-width: 0;
 	display: grid;
 	grid-template-columns: 26px 1fr auto;
 	align-items: center;
@@ -600,7 +753,7 @@ function quantityValue(slug) {
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	background: var(--mg-bg-surface);
 	padding: 0 0.65rem;
-	min-height: 46px;
+	min-height: 44px;
 }
 
 .cust-icon {
@@ -690,6 +843,59 @@ function quantityValue(slug) {
 	font-size: 0.75rem;
 	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.68);
 	text-align: center;
+}
+
+.secondary-customer-field {
+	flex: 1;
+	min-width: 0;
+	display: grid;
+	grid-template-columns: 26px 1fr auto;
+	align-items: center;
+	gap: 0.35rem;
+	margin: 0;
+	padding: 0 0.65rem;
+	min-height: 44px;
+	border-radius: 14px;
+	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
+	background: var(--mg-bg-surface);
+}
+
+.sc-icon {
+	font-size: 0.85rem;
+	color: var(--mg-text-muted);
+	display: inline-flex;
+}
+
+.sc-wrap {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+}
+
+.sc-input {
+	width: 100%;
+	min-width: 0;
+	min-height: 2rem;
+	border-radius: 9px;
+	font-size: 0.82rem;
+	border: 0;
+	background: transparent;
+	padding-right: 0;
+}
+
+.sc-clear {
+	border: 0;
+	background: transparent;
+	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
+	cursor: pointer;
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	font-size: 0.9rem;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .cust-add-btn {

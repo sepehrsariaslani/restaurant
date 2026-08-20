@@ -13,6 +13,8 @@
         @focus="onFocus"
         @blur="onBlur"
         @input="onInput"
+        @keydown.enter.prevent="$emit('enter')"
+        @keydown.esc.prevent="$emit('esc')"
       />
       <span v-if="suffix" class="suffix">{{ suffix }}</span>
     </div>
@@ -66,7 +68,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'change'])
+const emit = defineEmits(['update:modelValue', 'change', 'blur', 'enter', 'esc'])
 
 const focused = ref(false)
 const inputText = ref('')
@@ -97,6 +99,7 @@ function onFocus() {
 function onBlur() {
   focused.value = false
   inputText.value = formatForDisplay(toNumeric(props.modelValue))
+  emit('blur')
 }
 
 function onInput(event) {
@@ -234,6 +237,11 @@ function numberToWords(value) {
 
 .number-input {
   padding-left: 3rem;
+}
+
+.input-wrap:not(:has(.suffix)) .number-input,
+.number-input:not(:has(+ .suffix)) {
+  padding-left: 0.6rem;
 }
 
 .suffix {

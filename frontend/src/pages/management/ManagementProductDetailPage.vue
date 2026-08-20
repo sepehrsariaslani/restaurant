@@ -1,162 +1,77 @@
 <template>
-  <ManagementPageScaffold :title="pageTitle" :subtitle="pageSubtitle">
-    <template #actions>
-      <div class="page-sticky-actions">
-        <span v-if="hasUnsavedChanges" class="unsaved-chip">تغییرات ذخیره نشده</span>
-        <a class="secondary-btn" href="/management/products">بازگشت</a>
-        <button class="primary-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
-          {{ savingSettings ? 'در حال ذخیره...' : hasUnsavedChanges ? 'ذخیره تغییرات' : 'بدون تغییر' }}
-        </button>
-      </div>
-    </template>
+  <ManagementBreadcrumbs class="page-breadcrumbs" :items="breadcrumbItems" />
+  <ManagementPageScaffold>
 
-    <ManagementSurfaceCard v-if="detail" class="product-general-card" title="چیزهای عمومی">
+    <ManagementSurfaceCard v-if="detail" class="product-general-card product-general-card--compact" title="اطلاعات کلی" subtitle="تصویر و تنظیمات سریع محصول">
       <div class="product-general-layout">
         <aside class="product-general-media" aria-label="عکس محصول">
-          <div class="general-image-shell">
+          <div class="general-image-shell is-clickable" @click="openMediaDialog">
             <img v-if="mainImage" :src="mainImage" :alt="settingsForm.item_name || 'عکس محصول'" class="general-product-image" />
             <div v-else class="general-image-empty">
               <span aria-hidden="true">+</span>
-              <p>عکس محصول ثبت نشده</p>
             </div>
+            <button
+              type="button"
+              class="pg-image-edit-btn"
+              title="مدیریت تصاویر"
+              aria-label="مدیریت تصاویر"
+              @click.stop="openMediaDialog"
+            >
+              <Camera :size="13" />
+            </button>
           </div>
         </aside>
 
         <div class="product-general-main">
           <div class="product-general-fields">
-            <label>
+            <label class="pg-name-field">
               نام کالا
               <input class="input" v-model="settingsForm.item_name" placeholder="نام نمایشی محصول" />
             </label>
 
-            <label>
-              گروه کالا
-              <SearchableDropdown
-                v-model="settingsForm.item_group"
-                :options="fieldOptions.item_groups || []"
-                placeholder="انتخاب گروه کالا"
-                search-placeholder="جستجوی گروه کالا..."
-                include-empty-option
-                empty-label="انتخاب گروه کالا"
-              />
-            </label>
-
-            <label>
-              زیرگروه کالا
-              <SearchableDropdown
-                v-model="settingsForm.restaurant_subcategory"
-                :options="filteredSubcategoryOptions"
-                placeholder="بدون زیرگروه"
-                search-placeholder="جستجوی زیرگروه..."
-                include-empty-option
-                empty-label="بدون زیرگروه"
-              />
-            </label>
-
-            <label class="price-inline-field">
-              قیمت کالا
-              <span class="price-inline-control">
-                <PersianNumberInput v-model="priceForm.price_list_rate" :min="0" suffix="ریال" />
-                <button class="secondary-btn quick-price-save" type="button" @click="savePrice" :disabled="savingPrice">
-                  {{ savingPrice ? 'در حال ثبت...' : 'ثبت قیمت' }}
-                </button>
+            <div class="pg-status-row">
+              <span class="pg-status-pill" :class="settingsForm.restaurant_enabled ? 'is-on' : 'is-off'">
+                {{ settingsForm.restaurant_enabled ? 'فعال در منو' : 'غیرفعال در منو' }}
               </span>
-            </label>
+              <span v-if="settingsForm.restaurant_coming_soon" class="pg-status-pill is-soon">به‌زودی</span>
+              <span v-if="Number(detail?.item?.restaurant_out_of_stock || 0)" class="pg-status-pill is-warn">ناموجود</span>
+              <span v-if="settingsForm.disabled" class="pg-status-pill is-off">غیرفعال در ERPNext</span>
+              <button
+                type="button"
+                class="pg-status-pill pg-status-pill--btn"
+                :class="settingsForm.restaurant_kitchen_ticket ? 'is-kitchen-on' : 'is-kitchen-off'"
+                title="فیش آشپزخانه — با کلیک روشن/خاموش می‌شود"
+                @click="settingsForm.restaurant_kitchen_ticket = !settingsForm.restaurant_kitchen_ticket"
+              >
+                فیش آشپزخانه
+              </button>
+              <span class="pg-status-pill is-code" :title="settingsForm.item_code">{{ settingsForm.item_code }}</span>
+            </div>
+
+            <div class="pg-meta-row">
+              <span v-if="selectedCategoryLabel || selectedSubcategoryLabel" class="pg-meta-chip">
+                <strong>دسته‌بندی</strong>
+                {{ [selectedCategoryLabel, selectedSubcategoryLabel].filter(Boolean).join(' / ') || '-' }}
+              </span>
+              <span v-if="productReadinessChecks.length" class="pg-readiness" :class="readinessScore === productReadinessChecks.length ? 'is-ready' : ''">
+                آمادگی: {{ readinessScore.toLocaleString('fa-IR') }} / {{ productReadinessChecks.length.toLocaleString('fa-IR') }}
+              </span>
+            </div>
           </div>
 
-          <section class="nutrition-box product-general-nutrition" aria-label="ارزش غذایی">
-            <header class="nutrition-head">
-              <strong>ارزش غذایی</strong>
-              <small>اعداد اختیاری هستند و در صفحه محصول مشتری نمایش داده می‌شوند.</small>
-            </header>
-            <div class="nutrition-grid">
-              <label>
-                کالری
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                پروتئین (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                کربوهیدرات (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                قند (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
-              </label>
-              <label>
-                چربی (g)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
-              </label>
-            </div>
-          </section>
-        </div>
+          <label class="price-inline-field">
+            قیمت کالا
+            <span class="price-inline-control">
+              <PersianNumberInput v-model="priceForm.price_list_rate" :min="0" suffix="ریال" />
+              <button class="secondary-btn quick-price-save" type="button" @click="savePrice" :disabled="savingPrice">
+                {{ savingPrice ? 'در حال ثبت...' : 'ثبت قیمت' }}
+              </button>
+            </span>
+          </label>
 
-        <div class="product-general-side">
-          <div class="product-general-toggles">
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_enabled"
-              label="نمایش در منوی سایت"
-              hint="مشتری محصول را در منو می‌بیند."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.show_in_print"
-              label="نمایش در پرینت"
-              hint="در رسیدها و چاپ‌ها نمایش داده شود."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_is_featured"
-              label="محصول ویژه"
-              hint="در بخش‌های برجسته سایت استفاده می‌شود."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_is_best_seller"
-              label="پرفروش"
-              hint="برای برچسب و مرتب‌سازی محصولات پرفروش."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_requires_bom"
-              label="نیازمند BOM"
-              hint="اگر مواد اولیه و فرمول ساخت دارد روشن باشد."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_coming_soon"
-              label="به‌زودی"
-              hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.restaurant_auto_add_to_order"
-              label="افزودن خودکار"
-              hint="برای آیتم‌های مکمل یا اجباری سفارش."
-            />
-            <ManagementToggleSwitch
-              v-model="settingsForm.disabled"
-              label="غیرفعال در ERPNext"
-              hint="در کل سیستم ERP غیرفعال می‌شود."
-            />
-          </div>
-
-          <div class="product-general-meta-row">
-            <div class="mini-meta-chip" v-if="selectedCategoryLabel || selectedSubcategoryLabel">
-              <strong>دسته‌بندی</strong>
-              <span>{{ [selectedCategoryLabel, selectedSubcategoryLabel].filter(Boolean).join(' / ') || '-' }}</span>
-            </div>
-
-            <div class="mini-readiness-row" v-if="productReadinessChecks.length">
-              <span class="mini-readiness-score">{{ readinessScore.toLocaleString('fa-IR') }} / {{ productReadinessChecks.length.toLocaleString('fa-IR') }}</span>
-              <div class="mini-readiness-items">
-                <span
-                  v-for="check in productReadinessChecks"
-                  :key="check.key"
-                  class="mini-readiness-pill"
-                  :class="check.ok ? 'is-ok' : 'is-missing'"
-                >
-                  {{ check.label }}
-                </span>
-              </div>
-            </div>
+          <div class="pg-quick-toggles">
+            <ManagementToggleSwitch v-model="settingsForm.restaurant_enabled" label="فعال در منو" />
+            <ManagementToggleSwitch v-model="settingsForm.restaurant_coming_soon" label="به‌زودی" />
           </div>
         </div>
       </div>
@@ -222,6 +137,30 @@
                 empty-label="انتخاب واحد"
               />
             </label>
+            <label>
+              گروه کالا
+              <SearchableDropdown
+                v-model="settingsForm.item_group"
+                :options="fieldOptions.item_groups || []"
+                placeholder="انتخاب گروه کالا"
+                search-placeholder="جستجوی گروه کالا..."
+                include-empty-option
+                empty-label="انتخاب گروه کالا"
+              />
+            </label>
+
+            <label>
+              زیرگروه کالا
+              <SearchableDropdown
+                v-model="settingsForm.restaurant_subcategory"
+                :options="filteredSubcategoryOptions"
+                placeholder="بدون زیرگروه"
+                search-placeholder="جستجوی زیرگروه..."
+                include-empty-option
+                empty-label="بدون زیرگروه"
+              />
+            </label>
+
           </div>
 
           <label>
@@ -234,55 +173,82 @@
             <textarea class="textarea" v-model="settingsForm.restaurant_long_desc"></textarea>
             <small class="field-help">این بخش در صفحه جزئیات محصول سایت کنار اطلاعات اصلی نشان داده می‌شود.</small>
           </label>
+
+          <section class="nutrition-box " aria-label="ارزش غذایی">
+            <header class="nutrition-head">
+              <strong>ارزش غذایی</strong>
+              <small>اعداد اختیاری هستند و در صفحه محصول مشتری نمایش داده می‌شوند.</small>
+            </header>
+            <div class="nutrition-grid">
+              <label>
+                کالری
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                پروتئین (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                کربوهیدرات (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                قند (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
+              </label>
+              <label>
+                چربی (g)
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
+              </label>
+            </div>
+          </section>
         </ManagementSurfaceCard>
 
-        <ManagementSurfaceCard title="تصاویر محصول" subtitle="تصویر اصلی + گالری پیوست‌ها">
-          <div class="image-shell">
-            <img v-if="mainImage" :src="mainImage" alt="product image" class="main-image" />
-            <p v-else class="muted">تصویری ثبت نشده است.</p>
+        <ManagementSurfaceCard title="وضعیت‌ها" subtitle="نمایش در منو، برجسته‌سازی و حالت‌های فروش">
+          <div class="product-general-toggles">
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_enabled"
+              label="نمایش در منوی سایت"
+              hint="مشتری محصول را در منو می‌بیند."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.show_in_print"
+              label="نمایش در پرینت"
+              hint="در رسیدها و چاپ‌ها نمایش داده شود."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_featured"
+              label="محصول ویژه"
+              hint="در بخش‌های برجسته سایت استفاده می‌شود."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_is_best_seller"
+              label="پرفروش"
+              hint="برای برچسب و مرتب‌سازی محصولات پرفروش."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_requires_bom"
+              label="نیازمند BOM"
+              hint="اگر مواد اولیه و فرمول ساخت دارد روشن باشد."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_coming_soon"
+              label="به‌زودی"
+              hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.restaurant_auto_add_to_order"
+              label="افزودن خودکار"
+              hint="برای آیتم‌های مکمل یا اجباری سفارش."
+            />
+            <ManagementToggleSwitch
+              v-model="settingsForm.disabled"
+              label="غیرفعال در ERPNext"
+              hint="در کل سیستم ERP غیرفعال می‌شود."
+            />
           </div>
-          <section class="menu-preview-inline">
-            <header class="menu-preview-inline-head">
-              <div class="menu-preview-inline-meta">
-                <strong>نمایش منو (Preview)</strong>
-                <small>خروجی واقعی کارت‌های منو با تنظیمات فعلی این محصول</small>
-              </div>
-              <span class="muted menu-preview-inline-note">برای بازبینی کامل، روی کارت بزنید.</span>
-            </header>
-            <div v-if="previewMenuCardRows.length" class="menu-preview-list menu-preview-list--inline">
-              <div
-                v-for="row in previewMenuCardRows"
-                :key="`${row.slug}-${row.name}`"
-                class="menu-preview-row"
-                role="button"
-                tabindex="0"
-                @click="openPreviewCard(row)"
-                @keydown.enter.prevent="openPreviewCard(row)"
-                @keydown.space.prevent="openPreviewCard(row)"
-              >
-                <MenuProductCard
-                  :item="row"
-                  currency="TOMAN"
-                  :cart-qty="0"
-                  class="product-card-anim preview-static-card"
-                />
-              </div>
-            </div>
-            <p v-else class="muted">در حال حاضر خروجی منوی قابل نمایش وجود ندارد.</p>
-          </section>
-          <p class="error" v-if="mediaError">{{ mediaError }}</p>
-          <p class="success" v-if="mediaSuccess">{{ mediaSuccess }}</p>
-          <ManagementImageUploaderView
-            :items="mediaItems"
-            :uploading="mediaUploading"
-            :busy="mediaSaving"
-            @select="selectImage"
-            @upload="uploadImages"
-            @set-cover="setCoverImage"
-            @set-secondary="setSecondaryImage"
-            @remove="removeImage"
-          />
         </ManagementSurfaceCard>
+
       </section>
 
       <section class="product-settings-grid" v-if="activeTab === 'settings'">
@@ -413,6 +379,54 @@
           </button>
         </ManagementSurfaceCard>
 
+      </section>
+
+      <section v-else-if="activeTab === 'changes'" class="product-changes-grid">
+        <ManagementSurfaceCard title="تاریخچه تغییرات" subtitle="نسخه‌های ثبت‌شده این محصول در ERPNext">
+          <p v-if="activityLoading" class="muted">در حال بارگذاری تاریخچه...</p>
+          <p v-else-if="!activityVersions.length" class="muted">تغییری روی این محصول ثبت نشده است.</p>
+          <ol v-else class="changes-timeline">
+            <li v-for="ver in activityVersions" :key="ver.name" class="change-item">
+              <div class="change-item-head">
+                <strong>{{ ver.owner }}</strong>
+                <span class="change-item-date">{{ formatPersianDate(ver.creation, true) }}</span>
+              </div>
+              <ul v-if="parseVersionChanges(ver).length" class="change-fields">
+                <li v-for="(ch, idx) in parseVersionChanges(ver).slice(0, 8)" :key="idx">
+                  <span class="change-field">{{ fieldLabel(ch.field) }}</span>
+                  <span class="change-old">{{ ch.old }}</span>
+                  <span class="change-arrow" aria-hidden="true">←</span>
+                  <span class="change-new">{{ ch.new }}</span>
+                </li>
+                <li v-if="parseVersionChanges(ver).length > 8" class="change-more">
+                  +{{ parseVersionChanges(ver).length - 8 }} تغییر دیگر
+                </li>
+              </ul>
+              <p v-else class="muted change-empty">جزئیات این نسخه ثبت نشده است.</p>
+            </li>
+          </ol>
+        </ManagementSurfaceCard>
+
+        <ManagementSurfaceCard title="نظرات" subtitle="یادداشت‌های شما و تیم روی این محصول">
+          <div class="comments-list">
+            <div v-for="cm in activityComments" :key="cm.name" class="comment-item">
+              <div class="comment-item-head">
+                <strong>{{ cm.owner }}</strong>
+                <span class="comment-item-date">{{ formatPersianDate(cm.creation, true) }}</span>
+              </div>
+              <p class="comment-content">{{ cm.content }}</p>
+            </div>
+            <p v-if="!activityComments.length" class="muted">هنوز نظری ثبت نشده است.</p>
+          </div>
+          <div class="comment-form">
+            <textarea v-model="commentDraft" class="textarea" rows="2" placeholder="نظر خود را بنویسید..."></textarea>
+            <div class="comment-form-actions">
+              <button class="primary-btn" type="button" :disabled="!String(commentDraft || '').trim() || commentSaving" @click="submitComment">
+                {{ commentSaving ? 'در حال ثبت...' : 'ثبت نظر' }}
+              </button>
+            </div>
+          </div>
+        </ManagementSurfaceCard>
       </section>
 
             <section v-if="activeTab === 'formula'" class="variants-grid">
@@ -1015,83 +1029,56 @@
         </ManagementSurfaceCard>
       </section>
 
-      <ManagementPopup
-        v-model:open="previewModalOpen"
-        title="پیش‌نمایش کامل محصول در منو"
-        subtitle="نمایش کارت + نمای واقعی صفحه مشتری برای بازبینی نهایی"
-        :size="isCompactViewport ? 'md' : 'xl'"
-      >
-        <section v-if="previewModalItem" class="menu-preview-modal-body">
-          <MenuProductCard
-            :item="previewModalItem"
-            currency="TOMAN"
-            :cart-qty="0"
-            class="product-card-anim preview-static-card"
-          />
-          <section class="menu-preview-modal-details">
-            <article>
-              <strong>نام محصول</strong>
-              <p>{{ previewModalItem.title || '-' }}</p>
-            </article>
-            <article>
-              <strong>اسلاگ</strong>
-              <p>{{ previewModalItem.slug || '-' }}</p>
-            </article>
-            <article>
-              <strong>دسته / زیردسته</strong>
-              <p>{{ previewModalItem.category_title || '-' }} / {{ previewModalItem.subcategory_title || '-' }}</p>
-            </article>
-            <article>
-              <strong>توضیح کوتاه</strong>
-              <p>{{ previewModalItem.short_desc || '-' }}</p>
-            </article>
-            <article>
-              <strong>توضیح کامل</strong>
-              <p>{{ previewModalItem.long_desc || '-' }}</p>
-            </article>
-            <article>
-              <strong>قیمت</strong>
-              <p>{{ formatMoney(previewModalItem.base_price || 0, 'TOMAN') }}</p>
-            </article>
-          </section>
-          <section class="menu-preview-customer-view">
-            <header class="menu-preview-customer-head">
-              <strong>نمای واقعی صفحه مشتری</strong>
-            </header>
-            <iframe
-              v-if="customerPreviewUrl && !isCompactViewport"
-              :src="customerPreviewUrl"
-              class="menu-preview-customer-iframe"
-              title="Customer Product Preview"
-              loading="lazy"
-            ></iframe>
-            <a
-              v-else-if="customerPreviewUrl"
-              class="secondary-btn menu-preview-customer-link"
-              :href="customerPreviewUrl"
-              target="_blank"
-              rel="noreferrer"
-            >
-              باز کردن پیش‌نمایش صفحه مشتری
-            </a>
-            <p class="muted" v-else>برای نمایش دقیق صفحه مشتری، ابتدا اسلاگ محصول را تنظیم کنید.</p>
-          </section>
-        </section>
-        <template #footer="{ close }">
-          <button class="secondary-btn" type="button" @click="close">بستن</button>
-        </template>
-      </ManagementPopup>
-      <div v-if="hasUnsavedChanges" class="sticky-save-bar" role="status" aria-live="polite">
-        <div>
+      <div v-if="detail" class="sticky-save-bar" :class="{ 'is-dirty': hasUnsavedChanges }" role="status" aria-live="polite">
+        <div v-if="hasUnsavedChanges">
           <strong>تغییرات ذخیره نشده دارید</strong>
           <small>با Ctrl/⌘ + S هم می‌توانید ذخیره کنید.</small>
         </div>
         <button class="primary-btn save-spark-btn" type="button" @click="saveSettings" :disabled="!canSaveSettings">
-          {{ savingSettings ? 'در حال ذخیره...' : 'ذخیره تغییرات' }}
+          {{ savingSettings ? 'در حال ذخیره...' : 'ذخیره' }}
         </button>
       </div>
     </template>
   </ManagementPageScaffold>
+
+  <ManagementPopup
+    v-model:open="mediaDialogOpen"
+    title="تصاویر محصول"
+    subtitle="انتخاب عکس اصلی، حذف یا افزودن تصویر"
+    :close-on-backdrop="!mediaSaving && !mediaUploading"
+  >
+    <div class="media-dialog-body">
+      <div class="media-preview-box">
+        <div class="media-preview-head">
+          <strong>پیش‌نمایش کارت محصول</strong>
+          <small>نمایش کارت منو با تصویر اصلی فعلی</small>
+        </div>
+        <div class="media-preview-card-wrap">
+          <MenuProductCard
+            :item="mediaPreviewItem"
+            currency="TOMAN"
+            :cart-qty="0"
+            class="preview-static-card"
+          />
+        </div>
+      </div>
+
+      <div class="media-divider"></div>
+
+      <ManagementImageUploaderView
+        :items="mediaItems"
+        :uploading="mediaUploading"
+        :busy="mediaSaving"
+        @select="selectImage"
+        @upload="uploadImages"
+        @set-cover="setCoverImage"
+        @set-secondary="setSecondaryImage"
+        @remove="removeImage"
+      />
+      <p class="error" v-if="mediaError">{{ mediaError }}</p>
+      <p class="success" v-if="mediaSuccess">{{ mediaSuccess }}</p>
+    </div>
+  </ManagementPopup>
 
   <ManagementPopup
     v-model:open="attributeValuesDialogOpen"
@@ -1300,7 +1287,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import PersianNumberInput from '@/components/PersianNumberInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
-import MenuProductCard from '@/components/MenuProductCard.vue'
 import BuilderStepCard from '@/components/management/builder/BuilderStepCard.vue'
 import ManagementBomItemsTable from '@/components/management/ManagementBomItemsTable.vue'
 import ManagementBomModifiersTable from '@/components/management/ManagementBomModifiersTable.vue'
@@ -1308,9 +1294,13 @@ import ManagementCheckboxField from '@/components/management/ManagementCheckboxF
 import ManagementImageUploaderView from '@/components/management/ManagementImageUploaderView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs.vue'
+import { clearNavbarTitle, setNavbarTitle } from '@/utils/navbarTitle'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
+import { Camera } from 'lucide-vue-next'
+import MenuProductCard from '@/components/MenuProductCard.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import ReportInsightCards from '@/components/management/bi/ReportInsightCards.vue'
 import ReportKpiGrid from '@/components/management/bi/ReportKpiGrid.vue'
@@ -1323,6 +1313,8 @@ import {
   getManagementBomDoc,
   getManagementProductVariantBuilder,
   getManagementProductDetail,
+  getManagementProductActivity,
+  addManagementProductComment,
   listManagementModifierGroups,
   listManagementBomItems,
   listManagementBoms,
@@ -1332,7 +1324,7 @@ import {
   setManagementProductPrice,
   updateManagementBom,
   uploadManagementItemImage,
-  updateManagementProductSettings,
+  updateManagementProductSettings
 } from '@/utils/api'
 import { formatMoney, parseQuery } from '@/utils/format'
 import {
@@ -1349,14 +1341,14 @@ import {
   normalizeVariantAttributesDraft,
   resolveTemplateAttributeSelection,
   serializeProductSettingsState,
-  STOCK_CONSUMPTION_MODE_OPTIONS,
+  STOCK_CONSUMPTION_MODE_OPTIONS
 } from '@/utils/managementProductDetail'
 
 const props = defineProps({
   boot: {
     type: Object,
-    default: () => ({}),
-  },
+    default: () => ({})
+}
 })
 
 const query = parseQuery()
@@ -1368,7 +1360,7 @@ start.setDate(today.getDate() - 29)
 
 const filters = reactive({
   date_from: start.toISOString().slice(0, 10),
-  date_to: today.toISOString().slice(0, 10),
+  date_to: today.toISOString().slice(0, 10)
 })
 
 const loading = ref(false)
@@ -1380,6 +1372,7 @@ const activeTab = ref(readStoredDetailTab())
 const savingSettings = ref(false)
 const savingDefaultPriceList = ref(false)
 const savingPrice = ref(false)
+const mediaDialogOpen = ref(false)
 const mediaUploading = ref(false)
 const mediaSaving = ref(false)
 const mediaError = ref('')
@@ -1406,8 +1399,6 @@ const selectedTemplateAttributes = ref([])
 const selectedValuesByAttribute = ref({})
 const activeVariantAttributeName = ref('')
 const variantBuilderLoadedKey = ref('')
-const previewModalOpen = ref(false)
-const previewModalItem = ref(null)
 const isCompactViewport = ref(false)
 let compactPreviewMedia = null
 let compactPreviewMediaListener = null
@@ -1415,7 +1406,7 @@ const attributeValuesDialogOpen = ref(false)
 const variantCreationDialogOpen = ref(false)
 const variantCreationForm = ref({
   attributes: {},
-  create_multiple: false,
+  create_multiple: false
 })
 const showAddAttributeDialog = ref(false)
 const selectedNewAttribute = ref('')
@@ -1425,7 +1416,7 @@ const settingsForm = reactive(createInitialProductSettingsForm())
 const priceForm = reactive({
   price_list: '',
   price_list_rate: 0,
-  valid_from: '',
+  valid_from: ''
 })
 
 const bomForm = reactive({
@@ -1437,7 +1428,7 @@ const bomForm = reactive({
   is_default: true,
   restaurant_recipe_instruction: '',
   items: [],
-  restaurant_modifier_rows: [],
+  restaurant_modifier_rows: []
 })
 
 const tabOptions = PRODUCT_DETAIL_TABS
@@ -1456,6 +1447,15 @@ const bomItemCatalog = ref([])
 
 
 const pageTitle = computed(() => detail.value?.item?.item_name || 'جزئیات محصول')
+const breadcrumbItems = computed(() => [
+  { label: 'مدیریت', href: '/management' },
+  { label: 'محصولات', href: '/management/products' },
+  { label: pageTitle.value, href: '' },
+])
+
+watch(pageTitle, (title) => {
+  setNavbarTitle(title)
+})
 const pageSubtitle = computed(() => {
   const item = detail.value?.item || {}
   const parts = [item.item_code || item.name, selectedCategoryLabel.value, settingsForm.restaurant_enabled ? 'فعال در منو' : 'غیرفعال در منو']
@@ -1506,8 +1506,8 @@ const bomModifierRowsSummary = computed(() =>
 const bomReferenceOptions = computed(() =>
   (productBoms.value || []).map((row) => ({
     value: String(row?.name || '').trim(),
-    label: String(row?.name || '').trim(),
-  })).filter((row) => row.value),
+    label: String(row?.name || '').trim()
+})).filter((row) => row.value),
 )
 const activeBomModifierGroupsCount = computed(() => {
   const keys = new Set(
@@ -1522,8 +1522,8 @@ const activeCurrency = computed(() => detail.value?.report?.currency || 'IRR')
 const priceListOptions = computed(() =>
   priceLists.value.map((row) => ({
     value: row.name,
-    label: `${row.title} (${row.currency || activeCurrency.value})`,
-  })),
+    label: `${row.title} (${row.currency || activeCurrency.value})`
+})),
 )
 const currentPriceRate = computed(() => Number(detail.value?.pricing?.current_price?.price_list_rate || 0))
 const latestPriceRate = computed(() => Number(detail.value?.pricing?.latest_price?.price_list_rate || 0))
@@ -1549,32 +1549,32 @@ const productSummaryChips = computed(() => [
     key: 'visibility',
     label: 'وضعیت منو',
     value: settingsForm.restaurant_enabled ? 'فعال' : 'غیرفعال',
-    tone: settingsForm.restaurant_enabled ? 'success' : 'danger',
-  },
+    tone: settingsForm.restaurant_enabled ? 'success' : 'danger'
+},
   {
     key: 'price',
     label: 'قیمت فعلی',
     value: formatMoney(currentPriceRate.value, activeCurrency.value),
-    tone: currentPriceRate.value > 0 ? 'success' : 'warn',
-  },
+    tone: currentPriceRate.value > 0 ? 'success' : 'warn'
+},
   {
     key: 'bom',
     label: 'BOM',
     value: defaultBomName.value || activeBomName.value ? 'متصل' : 'ندارد',
-    tone: defaultBomName.value || activeBomName.value ? 'info' : settingsForm.restaurant_requires_bom ? 'warn' : 'neutral',
-  },
+    tone: defaultBomName.value || activeBomName.value ? 'info' : settingsForm.restaurant_requires_bom ? 'warn' : 'neutral'
+},
   {
     key: 'builder',
     label: 'سفارشی‌سازی',
     value: settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'فعال' : 'خاموش',
-    tone: settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'info' : 'neutral',
-  },
+    tone: settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'info' : 'neutral'
+},
   {
     key: 'slug',
     label: 'اسلاگ',
     value: settingsForm.restaurant_slug ? settingsForm.restaurant_slug : 'تنظیم نشده',
-    tone: settingsForm.restaurant_slug ? 'success' : 'warn',
-  },
+    tone: settingsForm.restaurant_slug ? 'success' : 'warn'
+},
 ])
 const customerProductUrl = computed(() => {
   const slug = String(settingsForm.restaurant_slug || detail.value?.item?.restaurant_slug || '').trim()
@@ -1596,7 +1596,7 @@ const activeTabHint = computed(() => {
   }
   return 'جزئیات کارت محصول، توضیحات و تصاویر قابل نمایش برای مشتری در این تب قرار دارد.'
 })
-const canSaveSettings = computed(() => !savingSettings.value && !loading.value && hasUnsavedChanges.value && !!detail.value?.item?.name)
+const canSaveSettings = computed(() => !savingSettings.value && !loading.value && !!detail.value?.item?.name)
 const builderTemplateOptions = computed(() => {
   const templates = detail.value?.builder_templates || []
   return templates.map((t) => ({ value: t.name, label: t.title || t.name }))
@@ -1617,8 +1617,8 @@ const localizedReport = computed(() => {
     kpis: (report.kpis || []).map((kpi) => ({
       ...kpi,
       label: localizeText(kpi.label || kpi.key),
-      change_label: localizeText(kpi.change_label),
-    })),
+      change_label: localizeText(kpi.change_label)
+})),
     charts: (report.charts || []).map((chart) => ({
       ...chart,
       title: localizeText(chart.title || chart.key || 'نمودار'),
@@ -1627,24 +1627,24 @@ const localizedReport = computed(() => {
       series: Array.isArray(chart.series)
         ? chart.series.map((row) => ({
             ...row,
-            label: localizeText(row.label || row.key),
-          }))
-        : [],
-    })),
+            label: localizeText(row.label || row.key)
+}))
+        : []
+})),
     tables: (report.tables || []).map((table) => ({
       ...table,
       title: localizeText(table.title || table.key || 'جدول'),
       subtitle: localizeText(table.subtitle),
       columns: (table.columns || []).map((column) => ({
         ...column,
-        label: localizeText(column.label || column.key),
-      })),
-    })),
+        label: localizeText(column.label || column.key)
+}))
+})),
     insights: (report.insights || []).map((item) => ({
       ...item,
-      text: localizeText(item.text),
-    })),
-  }
+      text: localizeText(item.text)
+}))
+}
 })
 const galleryImages = computed(() => detail.value?.media?.gallery || [])
 const mainImage = computed(() => selectedImage.value || detail.value?.media?.main_image || '')
@@ -1676,8 +1676,8 @@ const mediaItems = computed(() => {
   return deduplicated.map((url) => ({
     url,
     isCover: url === String(settingsForm.image || '').trim(),
-    isSecondary: url === String(settingsForm.website_image || '').trim(),
-  }))
+    isSecondary: url === String(settingsForm.website_image || '').trim()
+}))
 })
 const fieldOptions = computed(() => {
   const payload = detail.value?.field_options || {}
@@ -1689,8 +1689,8 @@ const fieldOptions = computed(() => {
     branches: payload.branches || [],
     kitchen_print_modes: payload.kitchen_print_modes || KITCHEN_PRINT_MODE_OPTIONS,
     stock_consumption_modes:
-      payload.stock_consumption_modes || STOCK_CONSUMPTION_MODE_OPTIONS,
-  }
+      payload.stock_consumption_modes || STOCK_CONSUMPTION_MODE_OPTIONS
+}
 })
 const filteredSubcategoryOptions = computed(() => {
   const rows = fieldOptions.value?.subcategories || []
@@ -1726,8 +1726,8 @@ function createEmptyBomItemRow() {
     restaurant_nutrition_sugar_g: 0,
     restaurant_nutrition_fat_g: 0,
     alternatives_count: 0,
-    alternatives: [],
-  }
+    alternatives: []
+}
 }
 
 function resetBomForm() {
@@ -1759,8 +1759,8 @@ function hydrateBomForm(doc = null) {
     ...row,
     item_code: String(row?.item_code || '').trim(),
     qty: Number(row?.qty || 0) || 1,
-    uom: String(row?.uom || row?.stock_uom || '').trim(),
-  })).filter((row) => row.item_code)
+    uom: String(row?.uom || row?.stock_uom || '').trim()
+})).filter((row) => row.item_code)
   bomForm.restaurant_modifier_rows = Array.isArray(doc.restaurant_modifier_rows)
     ? doc.restaurant_modifier_rows.map((row) => ({ ...row }))
     : []
@@ -1817,8 +1817,8 @@ const currentVariantAttributeRows = computed(() => {
   return rows.map((row, index) => ({
     index: index + 1,
     attribute: String(row?.attribute || '').trim(),
-    value: String(row?.value || '').trim(),
-  }))
+    value: String(row?.value || '').trim()
+}))
 })
 const activeVariantAttributeRow = computed(() => {
   const activeName = String(activeVariantAttributeName.value || '').trim()
@@ -1835,108 +1835,39 @@ const activeAttributeSelectedValues = computed(() => {
   return Array.isArray(selectedValuesByAttribute.value[activeName]) ? selectedValuesByAttribute.value[activeName] : []
 })
 const activeAttributeDocUrl = computed(() => itemAttributeDocUrl(activeVariantAttributeName.value))
-const menuDisplayRows = computed(() => {
-  const rows = Array.isArray(variantBuilder.value?.menu_display) ? variantBuilder.value.menu_display : []
-  if (rows.length) {
-    return rows
-  }
-  if (!detail.value?.item?.name) {
-    return []
-  }
-  return [
-    {
-      name: detail.value.item.name,
-      title: detail.value.item.item_name || detail.value.item.name,
-      slug: detail.value.item.restaurant_slug || '',
-      fixed_attributes: {},
-    },
-  ]
-})
 const productReadinessChecks = computed(() => [
   {
     key: 'image',
     label: 'تصویر اصلی',
     detail: mainImage.value ? 'تصویر محصول آماده نمایش است.' : 'برای کارت منو تصویر اضافه کنید.',
-    ok: Boolean(mainImage.value),
-  },
+    ok: Boolean(mainImage.value)
+},
   {
     key: 'slug',
     label: 'اسلاگ محصول',
     detail: settingsForm.restaurant_slug ? settingsForm.restaurant_slug : 'برای لینک صفحه مشتری اسلاگ لازم است.',
-    ok: Boolean(String(settingsForm.restaurant_slug || '').trim()),
-  },
+    ok: Boolean(String(settingsForm.restaurant_slug || '').trim())
+},
   {
     key: 'description',
     label: 'توضیح کوتاه',
     detail: settingsForm.restaurant_short_desc ? 'متن کارت محصول تکمیل است.' : 'کارت منو بدون توضیح کوتاه ضعیف‌تر دیده می‌شود.',
-    ok: Boolean(String(settingsForm.restaurant_short_desc || '').trim()),
-  },
+    ok: Boolean(String(settingsForm.restaurant_short_desc || '').trim())
+},
   {
     key: 'price',
     label: 'قیمت معتبر',
     detail: Number(priceForm.price_list_rate || currentPriceRate.value || 0) > 0 ? formatMoney(Number(priceForm.price_list_rate || currentPriceRate.value || 0), activeCurrency.value) : 'قیمت محصول صفر یا نامشخص است.',
-    ok: Number(priceForm.price_list_rate || currentPriceRate.value || 0) > 0,
-  },
+    ok: Number(priceForm.price_list_rate || currentPriceRate.value || 0) > 0
+},
   {
     key: 'category',
     label: 'دسته‌بندی',
     detail: selectedCategoryLabel.value || 'برای پیدا شدن راحت‌تر محصول، دسته انتخاب کنید.',
-    ok: Boolean(selectedCategoryLabel.value),
-  },
+    ok: Boolean(selectedCategoryLabel.value)
+},
 ])
 const readinessScore = computed(() => productReadinessChecks.value.filter((check) => check.ok).length)
-
-const previewMenuCardRows = computed(() => {
-  const item = detail.value?.item || {}
-  const categoryLabel =
-    (fieldOptions.value?.categories || []).find((row) => String(row?.value || '').trim() === String(settingsForm.restaurant_category || '').trim())?.label ||
-    settingsForm.restaurant_category ||
-    'منو'
-  const shortDesc = String(settingsForm.restaurant_short_desc || item.restaurant_short_desc || '').trim()
-  const image = String(settingsForm.website_image || settingsForm.image || item.website_image || item.image || '').trim()
-  const basePrice = Number(item.restaurant_base_price || item.standard_rate || 0)
-
-  return menuDisplayRows.value.map((row, index) => ({
-    ...row,
-    name: String(row?.name || item.name || `preview-${index + 1}`).trim(),
-    title: String(row?.title || item.item_name || item.name || '-').trim(),
-    slug: String(row?.slug || settingsForm.restaurant_slug || item.restaurant_slug || '').trim(),
-    short_desc: shortDesc,
-    long_desc: String(settingsForm.restaurant_long_desc || settingsForm.description || item.restaurant_long_desc || '').trim(),
-    image,
-    base_price: basePrice,
-    category_title: String(categoryLabel || 'منو').trim(),
-    subcategory_title:
-      (fieldOptions.value?.subcategories || []).find((sub) => String(sub?.value || '').trim() === String(settingsForm.restaurant_subcategory || '').trim())?.label ||
-      settingsForm.restaurant_subcategory ||
-      '',
-    prep_time_mins: Number(settingsForm.restaurant_prep_time_mins || item.restaurant_prep_time_mins || 0),
-    coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0,
-    restaurant_coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0,
-    nutrition_kcal: Number(settingsForm.restaurant_nutrition_kcal || item.restaurant_nutrition_kcal || 0),
-    nutrition_protein_g: Number(settingsForm.restaurant_nutrition_protein_g || item.restaurant_nutrition_protein_g || 0),
-    nutrition_carb_g: Number(settingsForm.restaurant_nutrition_carb_g || item.restaurant_nutrition_carb_g || 0),
-    nutrition_sugar_g: Number(settingsForm.restaurant_nutrition_sugar_g || item.restaurant_nutrition_sugar_g || 0),
-  }))
-})
-const customerPreviewUrl = computed(() => {
-  const slug = String(previewModalItem.value?.slug || '').trim()
-  if (!slug) {
-    return ''
-  }
-  const params = new URLSearchParams()
-  const branch = String(settingsForm.restaurant_branch || '').trim()
-  if (branch) {
-    params.set('branch', branch)
-  }
-  const query = params.toString()
-  return `/item/${encodeURIComponent(slug)}${query ? `?${query}` : ''}`
-})
-
-function openPreviewCard(row) {
-  previewModalItem.value = row ? { ...row } : null
-  previewModalOpen.value = Boolean(previewModalItem.value)
-}
 
 function getTabBadge(tabValue) {
   if (tabValue === 'overview') {
@@ -2008,6 +1939,9 @@ watch(
     if (nextTab === 'variants') {
       await loadVariantBuilder()
     }
+    if (nextTab === 'changes' && !activityLoaded) {
+      await loadProductActivity()
+    }
   },
 )
 
@@ -2050,13 +1984,120 @@ watch(
     }
     variantCreationForm.value = {
       ...variantCreationForm.value,
-      attributes: nextAttributes,
-    }
+      attributes: nextAttributes
+}
   },
 )
 
 function cloneBuilderConfig(config = null) {
   return clonePlainObject(config)
+}
+
+// ── تب «تغییرات»: تاریخچه و نظرات ─────────────────────────────────────────
+const activityLoading = ref(false)
+const activityVersions = ref([])
+const activityComments = ref([])
+const commentDraft = ref('')
+const commentSaving = ref(false)
+let activityLoaded = false
+
+const ACTIVITY_FIELD_LABELS = {
+  item_name: 'نام کالا',
+  item_code: 'کد کالا',
+  item_group: 'گروه کالا',
+  stock_uom: 'واحد',
+  restaurant_enabled: 'وضعیت نمایش',
+  restaurant_coming_soon: 'به‌زودی',
+  restaurant_out_of_stock: 'ناموجود',
+  restaurant_category: 'دسته',
+  restaurant_subcategory: 'زیردسته',
+  restaurant_short_desc: 'توضیح کوتاه',
+  restaurant_long_desc: 'توضیح کامل',
+  restaurant_sort_order: 'ترتیب نمایش',
+  restaurant_prep_time_mins: 'زمان آماده‌سازی',
+  restaurant_is_featured: 'محصول ویژه',
+  restaurant_is_best_seller: 'پرفروش',
+  restaurant_requires_bom: 'نیازمند BOM',
+  restaurant_auto_add_to_order: 'افزودن خودکار',
+  restaurant_branch: 'شعبه',
+  restaurant_slug: 'اسلاگ',
+  image: 'تصویر',
+  disabled: 'غیرفعال در ERPNext',
+  restaurant_packaging_price: 'هزینه بسته‌بندی',
+  restaurant_show_in_website: 'نمایش در وب',
+  restaurant_item_tags: 'تگ‌ها'
+}
+
+function fieldLabel(field) {
+  return ACTIVITY_FIELD_LABELS[field] || field
+}
+
+function formatChangeValue(value) {
+  if (value === 1 || value === true) return 'بله'
+  if (value === 0 || value === false) return 'خیر'
+  if (value === null || value === undefined || value === '') return '—'
+  const text = String(value)
+  return text.length > 60 ? `${text.slice(0, 60)}…` : text
+}
+
+function parseVersionChanges(ver) {
+  try {
+    const parsed = JSON.parse(ver?.data || '{}')
+    const items = []
+    for (const entry of parsed.changed || []) {
+      if (!Array.isArray(entry) || entry.length < 3) continue
+      const fieldName = String(entry[0] || '').trim()
+      if (fieldName === 'modified' || fieldName === 'modified_by') continue
+      items.push({
+        field: String(entry[0] || '').trim(),
+        old: formatChangeValue(entry[1]),
+        new: formatChangeValue(entry[2])
+})
+    }
+    return items
+  } catch (_) {
+    return []
+  }
+}
+
+async function loadProductActivity() {
+  const itemName = String(detail.value?.item?.name || detail.value?.item?.item_code || '').trim()
+  if (!itemName || activityLoading.value) return
+  activityLoading.value = true
+  try {
+    const payload = await getManagementProductActivity({ item_name: itemName })
+    activityVersions.value = Array.isArray(payload?.versions) ? payload.versions : []
+    activityComments.value = Array.isArray(payload?.comments) ? payload.comments : []
+    activityLoaded = true
+  } catch (errObj) {
+    error.value = errObj?.message || 'بارگذاری تاریخچه محصول ناموفق بود.'
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+async function submitComment() {
+  const itemName = String(detail.value?.item?.name || detail.value?.item?.item_code || '').trim()
+  const text = String(commentDraft.value || '').trim()
+  if (!itemName || !text || commentSaving.value) return
+  commentSaving.value = true
+  try {
+    const payload = await addManagementProductComment({ item_name: itemName, content: text })
+    activityComments.value = [
+      {
+        name: payload?.name || `c-${Date.now()}`,
+        creation: payload?.creation || '',
+        owner: 'شما',
+        content: text
+},
+      ...activityComments.value,
+    ]
+    commentDraft.value = ''
+  } catch (errObj) {
+    error.value = errObj?.message || 'ثبت نظر ناموفق بود.'
+  } finally {
+    commentSaving.value = false
+  }
 }
 
 function syncForms(payload) {
@@ -2130,12 +2171,12 @@ const tagList = computed({
         const opt = allTagOptions.value.find(o => o.label === t)
         current.push({
           tag: opt ? opt.value : t,
-          _tag_title: t,
-        })
+          _tag_title: t
+})
       }
     }
     settingsForm[TAG_FIELD] = [...current]
-  },
+  }
 })
 
 function handleCreateTagOption(rawValue) {
@@ -2204,8 +2245,8 @@ async function loadDetail() {
     const payload = await getManagementProductDetail({
       item_name: itemName.value,
       date_from: filters.date_from,
-      date_to: filters.date_to,
-    })
+      date_to: filters.date_to
+})
     detail.value = payload
     variantBuilderLoadedKey.value = ''
     syncForms(payload)
@@ -2269,8 +2310,8 @@ async function searchBomItems(query = '') {
       return {
         value,
         label: value && title !== value ? `${title} (${value})` : title,
-        stock_uom: String(row?.stock_uom || '').trim(),
-      }
+        stock_uom: String(row?.stock_uom || '').trim()
+}
     }).filter((row) => row.value)
   } catch {
     bomItemCatalog.value = []
@@ -2324,8 +2365,8 @@ async function saveBomFromProduct() {
       ...row,
       item_code: String(row?.item_code || '').trim(),
       qty: Number(row?.qty || 0),
-      uom: String(row?.uom || '').trim(),
-    }))
+      uom: String(row?.uom || '').trim()
+}))
     .filter((row) => row.item_code && row.qty > 0 && row.uom)
 
   if (!normalizedItems.length) {
@@ -2349,8 +2390,8 @@ async function saveBomFromProduct() {
       items: normalizedItems,
       restaurant_modifier_rows: Array.isArray(bomForm.restaurant_modifier_rows)
         ? bomForm.restaurant_modifier_rows
-        : [],
-    }
+        : []
+}
 
     if (payload.name) {
       await updateManagementBom(payload)
@@ -2424,8 +2465,8 @@ async function savePrice() {
       item_name: detail.value.item.name,
       price_list: resolvedPriceList,
       price_list_rate: Number(priceForm.price_list_rate || 0),
-      valid_from: priceForm.valid_from || '',
-    })
+      valid_from: priceForm.valid_from || ''
+})
     await loadDetail()
   } catch (errObj) {
     error.value = errObj.message || 'ثبت قیمت محصول ناموفق بود.'
@@ -2474,9 +2515,9 @@ function updateAttributeDefault(attributeName, valueName) {
       ...row,
       values: (row.values || []).map((valueRow) => ({
         ...valueRow,
-        is_default: valueRow.value === normalizedValue ? 1 : 0,
-      })),
-    }
+        is_default: valueRow.value === normalizedValue ? 1 : 0
+}))
+}
   })
 }
 
@@ -2497,14 +2538,14 @@ function toggleGeneratedValue(attributeName, valueName) {
   if (current.includes(normalizedValue)) {
     selectedValuesByAttribute.value = {
       ...selectedValuesByAttribute.value,
-      [attrName]: current.filter((value) => value !== normalizedValue),
-    }
+      [attrName]: current.filter((value) => value !== normalizedValue)
+}
     return
   }
   selectedValuesByAttribute.value = {
     ...selectedValuesByAttribute.value,
-    [attrName]: [...current, normalizedValue],
-  }
+    [attrName]: [...current, normalizedValue]
+}
 }
 
 function buildVariantBuilderSavePayload() {
@@ -2518,15 +2559,15 @@ function buildVariantBuilderSavePayload() {
       values: (row.values || []).map((valueRow) => ({
         value: String(valueRow.value || '').trim(),
         abbr: String(valueRow.abbr || '').trim(),
-        is_default: Number(valueRow.is_default || 0) ? 1 : 0,
-      })),
-    }))
+        is_default: Number(valueRow.is_default || 0) ? 1 : 0
+}))
+}))
 
   return {
     item_name: String(detail.value?.item?.name || itemName.value || '').trim(),
     selected_attributes: Array.from(selectedSet),
-    attribute_settings: attributeSettings,
-  }
+    attribute_settings: attributeSettings
+}
 }
 
 async function saveVariantBuilder() {
@@ -2547,8 +2588,8 @@ async function saveVariantBuilder() {
 function openVariantCreationDialog() {
   variantCreationForm.value = {
     attributes: {},
-    create_multiple: false,
-  }
+    create_multiple: false
+}
 
   for (const attr of variantCreationAttributes.value) {
     variantCreationForm.value.attributes[attr.name] = ''
@@ -2595,8 +2636,8 @@ function addAttributeToTemplate() {
     if (attr) {
       selectedValuesByAttribute.value = {
         ...selectedValuesByAttribute.value,
-        [normalized]: (attr.values || []).map((row) => row.value),
-      }
+        [normalized]: (attr.values || []).map((row) => row.value)
+}
       activeVariantAttributeName.value = normalized
     }
   }
@@ -2642,10 +2683,10 @@ function addVariantCreationOption(attributeName, createdValue) {
           value: normalizedValue,
           abbr: normalizedValue,
           sort_order: Number((row.values || []).length + 1),
-          is_default: 0,
-        },
-      ],
-    }
+          is_default: 0
+},
+      ]
+}
   })
 
   const currentRaw = variantCreationForm.value.attributes?.[normalizedAttribute]
@@ -2659,9 +2700,9 @@ function addVariantCreationOption(attributeName, createdValue) {
       ...variantCreationForm.value,
       attributes: {
         ...(variantCreationForm.value.attributes || {}),
-        [normalizedAttribute]: nextRows,
-      },
-    }
+        [normalizedAttribute]: nextRows
+}
+}
     return
   }
 
@@ -2669,9 +2710,9 @@ function addVariantCreationOption(attributeName, createdValue) {
     ...variantCreationForm.value,
     attributes: {
       ...(variantCreationForm.value.attributes || {}),
-      [normalizedAttribute]: normalizedValue,
-    },
-  }
+      [normalizedAttribute]: normalizedValue
+}
+}
 }
 
 async function createVariantsFromDialog() {
@@ -2717,8 +2758,8 @@ async function createVariantsFromDialog() {
     const payload = await generateManagementProductVariants({
       item_name: String(detail.value?.item?.name || itemName.value || '').trim(),
       selected_attributes: selectedAttrs,
-      selected_values_by_attribute: selectedVals,
-    })
+      selected_values_by_attribute: selectedVals
+})
 
     if (payload?.builder) {
       resetVariantBuilderState(payload.builder)
@@ -2760,6 +2801,29 @@ function formatVariantAttributes(row = {}) {
     .join(' | ')
 }
 
+const mediaPreviewItem = computed(() => {
+  const item = detail.value?.item || {}
+  const price = Number(priceForm.price_list_rate || item.restaurant_base_price || item.standard_rate || 0)
+  return {
+    name: item.name,
+    title: String(settingsForm.item_name || item.item_name || item.name || '-').trim(),
+    slug: String(settingsForm.restaurant_slug || item.restaurant_slug || '').trim(),
+    short_desc: String(settingsForm.restaurant_short_desc || item.restaurant_short_desc || '').trim(),
+    image: mainImage.value,
+    base_price: price,
+    category_title: selectedCategoryLabel.value || '',
+    tags: Array.isArray(settingsForm.restaurant_item_tag_table)
+      ? settingsForm.restaurant_item_tag_table.map((t) => t._tag_title || t.tag).filter(Boolean)
+      : [],
+    coming_soon: settingsForm.restaurant_coming_soon ? 1 : 0
+}
+})
+
+function openMediaDialog() {
+  clearMediaMessages()
+  mediaDialogOpen.value = true
+}
+
 function selectImage(url) {
   selectedImage.value = String(url || '')
 }
@@ -2789,8 +2853,8 @@ async function uploadImages(files = []) {
       await uploadManagementItemImage({
         item_name: itemDocName,
         file,
-        is_private: 0,
-      })
+        is_private: 0
+})
     }
     await loadDetail()
     mediaSuccess.value = `${imageFiles.length.toLocaleString('fa-IR')} تصویر با موفقیت آپلود شد.`
@@ -2811,8 +2875,8 @@ async function setCoverImage(url) {
   try {
     await updateManagementProductSettings({
       name: itemDocName,
-      image: String(url || '').trim(),
-    })
+      image: String(url || '').trim()
+})
     await loadDetail()
     selectedImage.value = String(url || '').trim()
     mediaSuccess.value = 'تصویر کاور بروزرسانی شد.'
@@ -2833,8 +2897,8 @@ async function setSecondaryImage(url) {
   try {
     await updateManagementProductSettings({
       name: itemDocName,
-      website_image: String(url || '').trim(),
-    })
+      website_image: String(url || '').trim()
+})
     await loadDetail()
     mediaSuccess.value = 'تصویر دوم بروزرسانی شد.'
   } catch (saveErr) {
@@ -2872,8 +2936,8 @@ async function removeImage(url) {
 
     const removed = await deleteManagementItemImageByUrl({
       item_name: itemDocName,
-      file_url: normalizedUrl,
-    })
+      file_url: normalizedUrl
+})
 
     if (!removed?.deleted && !shouldUpdateItem) {
       throw new Error('این تصویر قابل حذف نیست یا به محصول متصل نشده است.')
@@ -2929,8 +2993,8 @@ function loadBuilderItemOptions() {
         price_status: r.price_status || '',
         is_selectable: Number(r.is_selectable ?? 1) === 1,
         unavailable_reason: r.unavailable_reason || '',
-        item_group: r.item_group || '',
-      }))
+        item_group: r.item_group || ''
+}))
     })
     .catch(() => {
       builderItemOptions.value = []
@@ -2961,14 +3025,14 @@ function addBuilderStep() {
       layout_mode: 'vertical_steps',
       show_summary_panel: true,
       show_price_live: true,
-      primary_color: '#1a73e8',
+      primary_color: 'var(--mg-primary)',
       background_image: '',
       allow_skip_steps: false,
       allow_go_back: true,
       require_all_required: true,
       max_total_selections: 0,
-      steps: [],
-    }
+      steps: []
+}
   }
   builderConfig.value.steps.push(createEmptyBuilderStep(builderConfig.value.steps.length))
 }
@@ -3010,8 +3074,8 @@ function buildSettingsPayload() {
   return buildProductSettingsPayload({
     itemName: detail.value?.item?.name,
     form: settingsForm,
-    builderConfig: builderConfig.value,
-  })
+    builderConfig: builderConfig.value
+})
 }
 
 function handleBeforeUnload(event) {
@@ -3135,12 +3199,40 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('keydown', onWindowKeydown)
   cleanupPreviewViewportListener()
+  clearNavbarTitle()
 })
 
 Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 </script>
 
 <style scoped>
+.page-breadcrumbs {
+  margin-bottom: 0.35rem;
+  padding-inline: 0.15rem;
+}
+
+@media (max-width: 640px) {
+  .pg-image-edit-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .pg-image-edit-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .page-breadcrumbs {
+    margin-bottom: 0.55rem;
+    padding-inline: 0;
+  }
+}
+
+/* فضای خالی پایین صفحه تا نوار ثابت ذخیره روی محتوا نیفتد */
+.management-page {
+  padding-bottom: 104px;
+}
+
 .page-sticky-actions {
   position: sticky;
   top: 0.85rem;
@@ -3168,6 +3260,248 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   align-items: start;
 }
 
+/* کارت فشرده «اطلاعات کلی» */
+.product-general-card--compact .product-general-layout {
+  grid-template-columns: minmax(108px, 0.5fr) minmax(360px, 1.5fr);
+  align-items: center;
+}
+
+.product-general-card--compact .general-image-shell {
+  height: clamp(96px, 10vw, 132px);
+  min-height: 96px;
+}
+
+/* دکمه شناور کوچک مدیریت تصاویر روی عکس */
+.general-image-shell.is-clickable {
+  cursor: pointer;
+}
+
+.pg-image-edit-btn {
+  position: absolute;
+  bottom: 0.4rem;
+  inset-inline-end: 0.4rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.7);
+  background: rgb(30 22 17 / 0.62);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.28);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.pg-image-edit-btn:hover {
+  background: var(--mg-primary);
+  transform: scale(1.06);
+}
+
+.pg-image-edit-btn:active {
+  transform: scale(0.94);
+}
+
+/* مودال تصاویر */
+.media-dialog-body {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* پیش‌نمایش کارت محصول داخل مودال تصاویر */
+.media-preview-box {
+  border: 1px solid var(--mg-border-light);
+  border-radius: 14px;
+  background: var(--mg-bg-page);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.media-preview-head {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.media-preview-head strong {
+  font-size: 0.8rem;
+  color: var(--mg-text-main);
+}
+
+.media-preview-head small {
+  font-size: 0.68rem;
+  color: var(--mg-text-muted);
+}
+
+.media-preview-card-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.media-preview-card-wrap :deep(.product-card) {
+  max-width: 260px;
+  width: 100%;
+}
+
+.media-preview-card-wrap :deep(a),
+.media-preview-card-wrap :deep(button) {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+.media-divider {
+  height: 1px;
+  background: var(--mg-border-light);
+  margin: 0.2rem 0;
+}
+
+.product-general-card--compact .product-general-fields {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pg-name-field input {
+  min-height: 2.3rem;
+}
+
+.pg-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.pg-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pg-status-pill.is-on {
+  color: var(--mg-success);
+  background: var(--mg-success-bg);
+}
+
+.pg-status-pill.is-off {
+  color: var(--mg-text-muted);
+  background: color-mix(in srgb, var(--mg-text-muted) 10%, transparent);
+}
+
+.pg-status-pill.is-soon {
+  color: var(--mg-primary);
+  background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
+}
+
+.pg-status-pill.is-warn {
+  color: #92400e;
+  background: rgb(254 243 199 / 0.95);
+}
+
+.pg-status-pill.is-code {
+  direction: ltr;
+  color: var(--mg-text-muted);
+  background: var(--mg-bg-soft);
+  font-weight: 600;
+}
+
+.pg-status-pill--btn {
+  border: 1px solid var(--mg-border-light);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.pg-status-pill--btn:hover {
+  border-color: color-mix(in srgb, var(--mg-primary) 45%, var(--mg-border-light));
+}
+
+.pg-status-pill.is-kitchen-on {
+  color: var(--mg-success);
+  background: var(--mg-success-bg);
+  border-color: color-mix(in srgb, var(--mg-success) 30%, var(--mg-border-light));
+}
+
+.pg-status-pill.is-kitchen-off {
+  color: var(--mg-text-muted);
+  background: color-mix(in srgb, var(--mg-text-muted) 10%, transparent);
+}
+
+.pg-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pg-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+  font-size: 0.66rem;
+  color: var(--mg-text-muted);
+  background: var(--mg-bg-soft);
+  border: 1px solid var(--mg-border-light);
+}
+
+.pg-meta-chip strong {
+  color: var(--mg-text-main);
+}
+
+.pg-readiness {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--mg-primary);
+  background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
+}
+
+.pg-readiness.is-ready {
+  color: var(--mg-success);
+  background: var(--mg-success-bg);
+}
+
+.pg-quick-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.pg-quick-toggles .toggle-switch {
+  min-height: 2.6rem;
+  padding: 0.35rem 0.55rem;
+}
+
+.pg-quick-toggles .switch-copy strong {
+  font-size: 0.78rem;
+}
+
+.pg-quick-toggles .switch-track {
+  width: 2.35rem;
+  height: 1.35rem;
+}
+
+.pg-quick-toggles .switch-thumb {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.pg-quick-toggles .toggle-switch.checked .switch-thumb {
+  transform: translateX(-1rem);
+}
+
 .product-general-main,
 .product-general-side {
   min-width: 0;
@@ -3186,7 +3520,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .product-general-fields label {
   display: grid;
   gap: 0.24rem;
-  color: var(--text-secondary);
+  color: var(--mg-text-muted);
   font-size: 0.8rem;
   font-weight: 800;
   min-width: 0;
@@ -3194,6 +3528,12 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .price-inline-field {
   grid-column: span 1;
+  display: grid;
+  gap: 0.24rem;
+  color: var(--mg-text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  min-width: 0;
 }
 
 .price-inline-control {
@@ -3306,7 +3646,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   gap: 0.35rem;
   padding: 0.38rem 0.65rem;
   border-radius: 999px;
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
   border: 1px solid var(--mg-border);
   color: var(--mg-text-main);
   font-size: 0.75rem;
@@ -3352,22 +3692,22 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   padding: 0.18rem 0.5rem;
   border-radius: 999px;
   border: 1px solid var(--mg-border);
-  background: var(--bg-card);
+  background: var(--mg-bg-surface);
   font-size: 0.68rem;
   font-weight: 800;
   white-space: nowrap;
 }
 
 .mini-readiness-pill.is-ok {
-  border-color: rgb(var(--success-rgb) / 0.25);
-  background: rgb(var(--success-rgb) / 0.1);
-  color: var(--success);
+  border-color: color-mix(in srgb, var(--mg-success) 25%, transparent);
+  background: color-mix(in srgb, var(--mg-success) 10%, transparent);
+  color: var(--mg-success);
 }
 
 .mini-readiness-pill.is-missing {
-  border-color: rgb(var(--danger-rgb) / 0.2);
-  background: rgb(var(--danger-rgb) / 0.08);
-  color: var(--danger);
+  border-color: color-mix(in srgb, var(--mg-danger) 20%, transparent);
+  background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
+  color: var(--mg-danger);
 }
 
 .quick-price-save {
@@ -3398,13 +3738,13 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .formula-block__head strong {
   display: block;
   font-size: 0.95rem;
-  color: var(--text-primary);
+  color: var(--mg-text-main);
 }
 
 .formula-block__head small {
   display: block;
   margin-top: 0.18rem;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
 }
 
 .formula-block__meta {
@@ -3414,9 +3754,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   min-height: 2rem;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.18);
-  background: rgb(var(--palette-eggshell-rgb, 251 248 244) / 0.92);
-  color: var(--text-secondary);
+  border: 1px solid color-mix(in srgb, var(--mg-olive) 18%, transparent);
+  background: color-mix(in srgb, var(--mg-bg-surface) 92%, transparent);
+  color: var(--mg-text-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -3435,21 +3775,21 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   padding: 0.65rem;
   border: 1px solid var(--mg-border);
   border-radius: 14px;
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
 }
 
 .bom-inline-card label {
   display: grid;
   gap: 0.22rem;
-  color: var(--text-secondary);
+  color: var(--mg-text-muted);
   font-size: 0.78rem;
   font-weight: 800;
   min-width: 0;
 }
 
 .danger-btn {
-  color: var(--danger) !important;
-  border-color: rgb(var(--danger-rgb) / 0.28) !important;
+  color: var(--mg-danger) !important;
+  border-color: color-mix(in srgb, var(--mg-danger) 28%, transparent) !important;
 }
 
 .section-picker {
@@ -3477,7 +3817,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   padding: 0.34rem 0.68rem;
   font-size: 0.78rem;
   font-weight: 850;
@@ -3507,21 +3847,21 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .simple-tab:hover {
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
   border-color: var(--mg-border);
-  color: var(--text-primary);
+  color: var(--mg-text-main);
 }
 
 .simple-tab.active {
-  background: var(--bg-card);
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.28);
-  color: var(--text-primary);
-  box-shadow: inset 0 -2px 0 var(--module-500);
+  background: var(--mg-bg-surface);
+  border-color: color-mix(in srgb, var(--mg-primary) 28%, transparent);
+  color: var(--mg-text-main);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--mg-primary) 55%, transparent);
 }
 
 .tab-hint {
   margin: 0.42rem 0 0;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.78rem;
   line-height: 1.65;
 }
@@ -3529,14 +3869,14 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .unsaved-note {
   margin: 0.35rem 0 0;
   font-size: 0.78rem;
-  color: var(--danger);
+  color: var(--mg-danger);
 }
 
 .unsaved-chip {
   border-radius: 999px;
-  border: 1px solid rgb(var(--danger-rgb) / 0.3);
-  background: rgb(var(--danger-rgb) / 0.1);
-  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--mg-danger) 30%, transparent);
+  background: color-mix(in srgb, var(--mg-danger) 10%, transparent);
+  color: var(--mg-danger);
   padding: 0.28rem 0.6rem;
   font-size: 0.72rem;
 }
@@ -3565,6 +3905,150 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   min-width: 0;
 }
 
+.product-changes-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.changes-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.change-item {
+  border: 1px solid var(--mg-border-light);
+  border-radius: 12px;
+  background: var(--mg-bg-surface);
+  padding: 0.6rem 0.7rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.change-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.change-item-head strong {
+  font-size: 0.78rem;
+  color: var(--mg-primary);
+}
+
+.change-item-date,
+.comment-item-date {
+  font-size: 0.66rem;
+  color: var(--mg-text-muted);
+}
+
+.change-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.change-fields li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  padding: 0.18rem 0.4rem;
+  border-radius: 8px;
+  background: var(--mg-bg-page);
+}
+
+.change-field {
+  font-weight: 800;
+  color: var(--mg-text-main);
+  min-width: 90px;
+}
+
+.change-old {
+  color: var(--mg-text-muted);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
+.change-arrow {
+  color: var(--mg-primary);
+}
+
+.change-new {
+  color: var(--mg-success);
+  font-weight: 700;
+}
+
+.change-more {
+  font-size: 0.68rem;
+  color: var(--mg-text-muted);
+}
+
+.change-empty {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.comments-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.7rem;
+}
+
+.comment-item {
+  border: 1px solid var(--mg-border-light);
+  border-radius: 12px;
+  background: var(--mg-bg-surface);
+  padding: 0.55rem 0.65rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.comment-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.comment-item-head strong {
+  font-size: 0.76rem;
+  color: var(--mg-text-main);
+}
+
+.comment-content {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.8;
+  color: var(--mg-text-main);
+  white-space: pre-wrap;
+}
+
+.comment-form {
+  display: grid;
+  gap: 0.5rem;
+  border-top: 1px dashed var(--mg-border-light);
+  padding-top: 0.65rem;
+}
+
+.comment-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.comment-form .textarea {
+  min-height: 64px;
+  background: var(--mg-bg-page);
+}
+
 .product-top-grid,
 .product-settings-grid,
 .charts-grid,
@@ -3590,7 +4074,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .identity-grid label {
   display: grid;
   gap: 0.22rem;
-  color: var(--text-secondary);
+  color: var(--mg-text-muted);
   font-size: 0.78rem;
   font-weight: 700;
   min-width: 0;
@@ -3599,13 +4083,13 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .field-label {
   font-size: 0.8rem;
   font-weight: 800;
-  color: var(--text-secondary);
+  color: var(--mg-text-muted);
 }
 
 .field-help {
   font-size: 0.72rem;
   line-height: 1.65;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
 }
 
 .checks-grid {
@@ -3618,7 +4102,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .nutrition-box {
   border: 1px solid var(--mg-border);
   border-radius: 12px;
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
   padding: 0.5rem;
   margin-bottom: 0.58rem;
 }
@@ -3632,12 +4116,12 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .nutrition-head strong {
-  color: var(--text-primary);
+  color: var(--mg-text-main);
   font-size: 0.84rem;
 }
 
 .nutrition-head small {
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.7rem;
   line-height: 1.55;
 }
@@ -3651,7 +4135,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .nutrition-grid label {
   display: grid;
   gap: 0.22rem;
-  color: var(--text-secondary);
+  color: var(--mg-text-muted);
   font-size: 0.76rem;
   font-weight: 800;
   min-width: 0;
@@ -3669,7 +4153,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   background: var(--module-50);
   border-radius: 8px;
   padding: 0.45rem 0.65rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 14%, transparent);
 }
 
 .status-dot {
@@ -3682,24 +4166,34 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .status-dot.on {
-  background: var(--success);
-  box-shadow: 0 0 0 3px rgb(var(--success-rgb) / 0.2);
+  background: var(--mg-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg-success) 20%, transparent);
 }
 
 .status-dot.off {
-  background: var(--danger);
-  box-shadow: 0 0 0 3px rgb(var(--danger-rgb) / 0.2);
+  background: var(--mg-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg-danger) 20%, transparent);
 }
 
 .image-shell {
   border: 1px solid var(--mg-border);
   border-radius: 8px;
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
   min-height: 200px;
   display: grid;
   place-items: center;
   margin-bottom: 0.75rem;
   overflow: hidden;
+}
+
+.image-shell--simple {
+  margin-bottom: 0.6rem;
+}
+
+.media-manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .main-image {
@@ -3708,7 +4202,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   max-height: 360px;
   object-fit: contain;
   object-position: center;
-  background: var(--bg-card);
+  background: var(--mg-bg-surface);
   border-radius: 8px;
 }
 
@@ -3720,9 +4214,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .gallery-item {
   padding: 0;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 20%, transparent);
   border-radius: 10px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.5);
+  background: color-mix(in srgb, var(--mg-bg-surface) 50%, transparent);
   overflow: hidden;
   min-width: 70px;
   width: 70px;
@@ -3752,7 +4246,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .variant-config-shell {
   border: 1px solid var(--mg-border);
   border-radius: 8px;
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
   padding: 0.75rem;
   display: grid;
   gap: 0.6rem;
@@ -3772,7 +4266,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .variant-editor-table-wrap {
   border: 1px solid var(--mg-border);
   border-radius: 8px;
-  background: var(--bg-card);
+  background: var(--mg-bg-surface);
   overflow-x: auto;
 }
 
@@ -3796,8 +4290,8 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .variant-editor-table th,
 .variant-values-table th {
-  background: var(--bg-soft);
-  color: var(--text-muted);
+  background: var(--mg-bg-soft);
+  color: var(--mg-text-muted);
   font-size: 0.74rem;
 }
 
@@ -3810,7 +4304,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .variant-clickable-row:hover {
-  background: var(--bg-soft);
+  background: var(--mg-bg-soft);
 }
 
 .variant-attr-meta {
@@ -3824,13 +4318,13 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .variant-attr-meta small {
   font-size: 0.7rem;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
 }
 
 .variant-values-shell {
   border: 1px solid var(--mg-border);
   border-radius: 8px;
-  background: var(--bg-card);
+  background: var(--mg-bg-surface);
   padding: 0.55rem;
   display: grid;
   gap: 0.5rem;
@@ -3886,7 +4380,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .bom-status-section__head small {
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.74rem;
   line-height: 1.6;
 }
@@ -3896,15 +4390,15 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 .variant-mobile-card {
   border: 1px solid var(--mg-border);
   border-radius: 8px;
-  background: var(--bg-card);
+  background: var(--mg-bg-surface);
   padding: 0.55rem;
   display: grid;
   gap: 0.45rem;
 }
 
 .variant-attribute-mobile-card.active {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.26);
-  box-shadow: 0 14px 28px rgb(15 23 42 / 0.08);
+  border-color: color-mix(in srgb, var(--mg-primary) 26%, transparent);
+  box-shadow: 0 14px 28px rgb(0 0 0 / 0.08);
 }
 
 .variant-attribute-mobile-card header,
@@ -3921,7 +4415,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   justify-content: space-between;
   gap: 0.35rem;
   font-size: 0.74rem;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
 }
 
 .variant-desktop-table {
@@ -3929,21 +4423,34 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .sticky-save-bar {
-  position: sticky;
-  bottom: 0.75rem;
-  z-index: 12;
-  margin: 1rem auto 0;
-  width: min(620px, calc(100% - 1rem));
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.22);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 13000;
+  margin: 0;
+  width: 100%;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--mg-primary) 24%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--mg-bg-surface) 94%, transparent);
   backdrop-filter: blur(18px);
-  box-shadow: 0 24px 70px rgb(15 23 42 / 0.16);
-  padding: 0.65rem;
+  box-shadow: 0 -12px 40px rgb(0 0 0 / 0.14);
+  padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.65rem;
+}
+
+.sticky-save-bar:not(.is-dirty) {
+  border-color: var(--mg-border-light);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.12);
+  justify-content: flex-end;
+}
+
+.sticky-save-bar:not(.is-dirty) .save-spark-btn {
+  opacity: 0.75;
 }
 
 .sticky-save-bar > div {
@@ -3952,12 +4459,12 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .sticky-save-bar strong {
-  color: var(--text-primary);
+  color: var(--mg-text-main);
   font-size: 0.84rem;
 }
 
 .sticky-save-bar small {
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.72rem;
 }
 
@@ -4034,6 +4541,21 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* کارت فشرده اطلاعات کلی: یکردیفه می‌ماند (عکس + قیمت + سوییچ‌ها) */
+  .product-general-card--compact .product-general-layout {
+    grid-template-columns: minmax(80px, 0.36fr) minmax(0, 1.64fr);
+    gap: 0.5rem;
+  }
+
+  .product-general-card--compact .general-image-shell {
+    height: clamp(80px, 20vw, 112px);
+    min-height: 80px;
+  }
+
+  .product-general-card--compact .pg-quick-toggles {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .product-general-media {
     order: -1;
   }
@@ -4059,12 +4581,24 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
     flex: 1 1 100%;
   }
 
+  .price-inline-field {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
   .price-inline-control {
-    grid-template-columns: minmax(0, 1fr);
+    flex: 1;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .quick-price-save {
-    width: 100%;
+    width: auto;
+    white-space: nowrap;
+    padding-inline: 0.65rem;
+    min-height: 38px;
   }
 
   .section-picker {
@@ -4170,141 +4704,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
     animation: none;
   }
 
-  .simple-tab,
-  .menu-preview-row {
+  .simple-tab {
     transition: none;
   }
-}
-
-.menu-preview-inline {
-  margin-top: 0.8rem;
-  border: 1px solid var(--border, var(--mg-border-light));
-  border-radius: 12px;
-  background: var(--bg-soft, var(--mg-bg-page));
-  padding: 0.7rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.menu-preview-inline-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.55rem;
-}
-
-.menu-preview-inline-meta {
-  display: grid;
-  gap: 0.12rem;
-}
-
-.menu-preview-inline-meta strong {
-  font-size: 0.84rem;
-  color: var(--text, var(--mg-text-main));
-}
-
-.menu-preview-inline-meta small {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-}
-
-.menu-preview-inline-note {
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
-.menu-preview-list {
-  display: grid;
-  gap: 0.4rem;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
-
-.menu-preview-list--inline {
-  gap: 0.5rem;
-}
-
-.menu-preview-row {
-  border: 1px dashed rgb(148 163 184 / 0.55);
-  border-radius: 8px;
-  padding: 0.6rem;
-  display: grid;
-  gap: 0.35rem;
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.menu-preview-row:hover,
-.menu-preview-row:focus-visible {
-  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.42);
-  box-shadow: 0 16px 34px rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.13);
-  transform: translateY(-2px);
-  outline: none;
-}
-
-.menu-preview-modal-body {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(240px, 1fr) minmax(340px, 1.2fr);
-  gap: 0.75rem;
-  align-items: start;
-}
-
-.menu-preview-modal-details {
-  border: 1px solid var(--border, var(--mg-border-light));
-  border-radius: 12px;
-  padding: 0.6rem;
-  background: var(--bg-soft, var(--mg-bg-page));
-  display: grid;
-  gap: 0.45rem;
-}
-
-.menu-preview-modal-details article {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.menu-preview-modal-details strong {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-.menu-preview-modal-details p {
-  margin: 0;
-  font-size: 0.86rem;
-  line-height: 1.7;
-  color: var(--text-primary);
-}
-
-.menu-preview-customer-view {
-  border: 1px solid var(--border, var(--mg-border-light));
-  border-radius: 12px;
-  background: var(--bg-soft, var(--mg-bg-page));
-  padding: 0.6rem;
-  display: grid;
-  gap: 0.45rem;
-}
-
-.menu-preview-customer-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.4rem;
-}
-
-.menu-preview-customer-head strong {
-  font-size: 0.8rem;
-}
-
-.menu-preview-customer-iframe {
-  width: 100%;
-  min-height: 520px;
-  border: 1px solid rgb(226 232 240 / 1);
-  border-radius: 8px;
-  background: #fff;
-}
-
-.menu-preview-customer-link {
-  width: 100%;
-  text-align: center;
 }
 
 .preview-static-card :deep(a),
@@ -4362,7 +4764,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .hint-line {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.76rem;
 }
 
@@ -4381,7 +4783,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .pill.active {
-  background: rgb(220 252 231 / 0.9);
+  background: var(--mg-success-bg);
   color: var(--mg-success);
 }
 
@@ -4391,17 +4793,17 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .pill.default {
-  background: #f2eee9;
-  color: #5f402d;
+  background: var(--mg-bg-soft);
+  color: var(--mg-text-main);
 }
 
 .pill.docstatus {
   background: var(--mg-bg-page);
-  color: #6f6258;
+  color: var(--mg-text-muted);
 }
 
 .pill.docstatus.submitted {
-  background: #dcfce7;
+  background: var(--mg-success-bg);
   color: var(--mg-success);
 }
 
@@ -4423,7 +4825,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .error {
   margin: 0;
-  color: var(--danger);
+  color: var(--mg-danger);
 }
 
 .success {
@@ -4432,6 +4834,60 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 @media (max-width: 980px) {
+  /* همه‌چیز در یک ردیف: عکس + (قیمت + سوییچ‌ها) */
+  .product-general-card--compact .product-general-layout {
+    grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1.6fr);
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .product-general-card--compact .general-image-shell {
+    width: 100%;
+    height: clamp(96px, 22vw, 130px);
+    min-height: 96px;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--mg-radius-md);
+  }
+
+  .product-general-card--compact .general-product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .product-general-card--compact .product-general-main {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .product-general-card--compact .price-inline-field {
+    gap: 0.3rem;
+    font-size: 0.72rem;
+  }
+
+  .product-general-card--compact .price-inline-control {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .product-general-card--compact .quick-price-save {
+    width: auto;
+    white-space: nowrap;
+    padding-inline: 0.55rem;
+    min-height: 36px;
+    font-size: 0.72rem;
+  }
+
+  /* نام، وضعیت و چیپ‌ها در موبایل حذف می‌شوند */
+  .product-general-card--compact .pg-name-field,
+  .product-general-card--compact .pg-status-row,
+  .product-general-card--compact .pg-meta-row {
+    display: none;
+  }
+
+  .pg-quick-toggles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .sticky-save-bar {
     align-items: stretch;
     flex-direction: column;
@@ -4504,37 +4960,8 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
     text-align: center;
   }
 
-  .menu-preview-inline-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .menu-preview-inline-note {
-    white-space: normal;
-  }
-
-  .menu-preview-list {
-    grid-template-columns: 1fr;
-  }
-
-  .menu-preview-row {
-    padding: 0.42rem;
-  }
-
-  .menu-preview-modal-body {
-    grid-template-columns: 1fr;
-  }
-
-  .menu-preview-modal-body > :deep(.product-card) {
-    max-width: 100%;
-  }
-
-  .menu-preview-customer-iframe {
-    min-height: 420px;
-  }
-
   .check {
-    border: 1px solid rgb(226 232 240 / 1);
+    border: 1px solid var(--mg-border-light);
     border-radius: 8px;
     padding: 0.45rem 0.55rem;
     background: #fff;
@@ -4547,15 +4974,9 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 @media (max-width: 640px) {
   .section-picker-shell,
-  .menu-preview-inline,
-  .variant-config-shell,
   .variant-values-shell,
   .image-shell,
-  .menu-preview-customer-view {
-    padding: 0.6rem;
-    border-radius: 8px;
-  }
-
+  .product-changes-grid,
   .product-top-grid,
   .product-settings-grid,
   .charts-grid,
@@ -4595,21 +5016,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
     line-height: 1.7;
   }
 
-  .menu-preview-inline-head,
-  .variant-config-head,
   .variant-values-head,
-  .menu-preview-customer-head {
-    gap: 0.35rem;
-  }
-
-  .menu-preview-row {
-    padding: 0.42rem;
-  }
-
-  .menu-preview-customer-iframe {
-    min-height: 360px;
-  }
-
   .row-actions {
     width: 100%;
   }
@@ -4626,14 +5033,6 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .menu-preview-row,
-  .menu-preview-row:hover,
-  .menu-preview-row:focus-visible {
-    transform: none;
-    transition-duration: 0.01ms;
-  }
-}
 </style>
 
 <style scoped>
@@ -4666,7 +5065,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   display: block;
   margin-top: 0.35rem;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   line-height: 1.4;
 }
 
@@ -4698,12 +5097,12 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .delete-mini-btn {
-  border-color: rgb(220, 38, 38) !important;
-  color: rgb(220, 38, 38) !important;
+  border-color: var(--mg-danger) !important;
+  color: var(--mg-danger) !important;
 }
 
 .delete-mini-btn:hover:not(:disabled) {
-  background: rgb(220, 38, 38, 0.1) !important;
+  background: color-mix(in srgb, var(--mg-danger) 10%, transparent) !important;
 }
 
 /* ─── Tag input ─── */
@@ -4717,10 +5116,10 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: center;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 18%, transparent);
   border-radius: 12px;
   padding: 0.45rem 0.55rem;
-  background: #fff;
+  background: var(--mg-bg-surface);
   min-height: 42px;
 }
 
@@ -4730,8 +5129,8 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   gap: 0.25rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  color: var(--text-primary);
+  background: color-mix(in srgb, var(--mg-primary) 8%, transparent);
+  color: var(--mg-text-main);
   font-size: 0.78rem;
   font-weight: 500;
   white-space: nowrap;
@@ -4745,8 +5144,8 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   height: 18px;
   border-radius: 50%;
   border: none;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--mg-primary) 12%, transparent);
+  color: var(--mg-text-muted);
   font-size: 0.75rem;
   line-height: 1;
   cursor: pointer;
@@ -4756,8 +5155,8 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .tag-remove:hover {
-  background: rgb(220, 38, 38, 0.15);
-  color: rgb(220, 38, 38);
+  background: color-mix(in srgb, var(--mg-danger) 15%, transparent);
+  color: var(--mg-danger);
 }
 
 .tag-input {
@@ -4768,12 +5167,12 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   min-width: 120px;
   flex: 1;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--mg-text-main);
   padding: 0.15rem 0;
 }
 
 .tag-input::placeholder {
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.78rem;
 }
 </style>

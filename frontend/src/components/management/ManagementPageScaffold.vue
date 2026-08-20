@@ -1,6 +1,6 @@
 <template>
   <section class="management-page">
-    <header class="glass-card hero-card">
+    <header v-if="title || subtitle || $slots.actions" class="glass-card hero-card">
       <div>
         <h2>{{ title }}</h2>
         <p class="muted" v-if="subtitle">{{ subtitle }}</p>

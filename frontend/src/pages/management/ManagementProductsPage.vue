@@ -1,68 +1,62 @@
 <template>
-  <ManagementPageScaffold title="مدیریت محصولات" subtitle="کنترل وضعیت فعال/غیرفعال و قیمت‌گذاری سریع">
+  <div class="products-page">
     <ManagementSurfaceCard tone="accent" class="products-filter-card">
-      <div class="toolbar">
-        <input class="input" v-model="search" placeholder="جستجو محصول..." @keydown.enter.prevent="loadProducts" />
-        <ManagementToggleSwitch
-          v-model="activeOnly"
-          class="toolbar-toggle"
-          label="فقط فعال"
+      <!-- تولبار تمیز: سرچ + کالای جدید -->
+      <div class="toolbar toolbar--clean">
+        <div class="toolbar-search">
+          <Search :size="15" class="toolbar-search-icon" />
+          <input
+            class="input toolbar-search-input"
+            v-model="search"
+            placeholder="جستجو محصول..."
+            @keydown.enter.prevent="loadProducts"
+          />
+          <button v-if="search" type="button" class="toolbar-search-clear" @click="search = ''; loadProducts()">
+            <X :size="13" />
+          </button>
+        </div>
+        <button class="primary-btn toolbar-new-btn" type="button" @click="openCreatePopup">
+          <Plus :size="15" /> کالای جدید
+        </button>
+      </div>
+
+      <div class="notion-view-bar">
+        <NotionViewTabs
+          :views="viewSys.views.value"
+          :current-view-id="viewSys.currentViewId.value"
+          :is-dirty="viewSys.isViewDirty"
+          @select="viewSys.selectView"
+          @add="viewSys.addView"
+          @rename="viewSys.renameView"
+          @duplicate="viewSys.duplicateView"
+          @delete="viewSys.deleteView"
+          @reset="viewSys.resetView"
+          @copy-link="viewCopyLink"
         />
-        <div class="filter-field">
-          <SearchableDropdown
-            v-model="selectedTag"
-            :options="availableTagOptions"
-            placeholder="فیلتر تگ..."
-            search-placeholder="جستجوی تگ..."
-            include-empty-option
-            empty-label="همه"
+        <div class="notion-view-tools">
+          <NotionViewControls
+            v-if="viewSys.currentView.value"
+            :view="viewSys.currentView.value"
+            :properties="PRODUCT_PROPERTIES"
+          />
+          <NotionViewSettings
+            v-if="viewSys.currentView.value"
+            :view="viewSys.currentView.value"
+            :properties="PRODUCT_PROPERTIES"
+            @reset="viewSys.resetView"
+            @search="search = $event"
           />
         </div>
-        <button class="primary-btn" type="button" @click="loadProducts">جستجو</button>
-        <button class="secondary-btn" type="button" @click="openCreatePopup">کالای جدید</button>
-        <button class="secondary-btn" type="button" @click="exportProductsExcel" :disabled="excelBusy">
-          {{ excelBusy && excelMode === 'export' ? 'در حال خروجی...' : 'خروجی اکسل' }}
-        </button>
-        <button class="secondary-btn" type="button" @click="triggerExcelImport" :disabled="excelBusy">
-          {{ excelBusy && excelMode === 'import' ? 'در حال ورود...' : 'ورود از اکسل' }}
-        </button>
-        <button class="tertiary-btn" type="button" @click="openBulkPopup">عملیات گروهی</button>
-        <button class="tertiary-btn" type="button" @click="toggleAdvancedMode">
-          {{ showAdvanced ? 'کمتر' : 'فیلتر بیشتر' }}
-        </button>
-        <input
-          ref="excelFileInput"
-          type="file"
-          accept=".xlsx,.csv"
-          class="hidden-file-input"
-          @change="handleExcelFile"
+        <NotionSaveBar
+          v-if="viewSys.isCurrentViewDirty.value"
+          :visible="viewSys.isCurrentViewDirty.value"
+          :view-name="viewSys.currentView.value?.name"
+          @save-self="viewSys.saveForSelf()"
+          @save-all="viewSys.saveForEveryone()"
+          @discard="viewSys.resetView(viewSys.currentViewId.value)"
         />
-      </div>
-      <div v-if="showAdvanced" class="toolbar advanced-toolbar">
-        <ManagementFilterControl
-          v-model="selectedCategorySlugs"
-          :options="groupOptions"
-          label="فیلتر گروه"
-          placeholder="انتخاب گروه‌ها"
-          search-placeholder="جستجوی گروه..."
-          :include-empty-option="false"
-          :multiple="true"
-        />
-        <ManagementSortControl
-          v-model="sortBy"
-          :options="sortOptions"
-          label="مرتب سازی"
-          placeholder="انتخاب نوع مرتب سازی"
-        />
-        <ManagementViewSwitcher v-model="viewMode" :modes="viewModes" class="view-switcher" />
       </div>
     </ManagementSurfaceCard>
-
-    <ManagementProductGrouping
-      v-if="showAdvanced"
-      v-model="groupBy"
-      v-model:collapsed="collapseGroupsByDefault"
-    />
 
     <p class="muted" v-if="loading">در حال بارگذاری محصولات...</p>
     <p class="error" v-if="error">{{ error }}</p>
@@ -70,234 +64,161 @@
 
     <ManagementSurfaceCard :title="activeViewTitle" :subtitle="activeViewSubtitle">
       <template v-if="viewMode === 'tree'">
+        <div class="tree-group-bar">
+          <span class="tree-group-label">درخت بر اساس</span>
+          <SearchableDropdown
+            :model-value="treeGroupBy"
+            :options="treeGroupOptions"
+            placeholder="انتخاب فیلد..."
+            search-placeholder="جستجو..."
+            @update:model-value="treeGroupBy = $event || 'category_title'; writeStoredTreeGroupBy(treeGroupBy)"
+          />
+        </div>
         <ManagementTreeView
           :nodes="productTreeNodes"
           empty-text="محصولی برای نمایش وجود ندارد."
           :node-clickable="canOpenProductTreeNode"
           @node-click="handleProductTreeNodeClick"
         >
-          <template #actions="{ node }">
-            <div v-if="canOpenProductTreeNode(node)" class="actions">
-              <button :class="toggleButtonClass(node)" type="button" @click.stop="toggleActive(node)">
-                {{ visibilityButtonLabel(node) }}
-              </button>
-              <button
-                class="secondary-btn delete-btn"
-                type="button"
-                :disabled="isDeletingProduct(node)"
-                @click.stop="removeProduct(node)"
-              >
-                {{ isDeletingProduct(node) ? 'در حال حذف...' : 'حذف' }}
-              </button>
-            </div>
+          <template #icon="{ node }">
+            <Folder v-if="node.badge === 'دسته'" :size="15" :stroke-width="2" />
+            <Package v-else :size="14" :stroke-width="2" />
           </template>
         </ManagementTreeView>
       </template>
 
+      <template v-else-if="viewMode === 'kanban'">
+        <div class="kanban-group-bar">
+          <span class="kanban-group-label">کانبان بر اساس</span>
+          <SearchableDropdown
+            :model-value="kanbanGroupBy"
+            :options="kanbanGroupOptions"
+            placeholder="انتخاب فیلد..."
+            search-placeholder="جستجو..."
+            @update:model-value="kanbanGroupBy = $event || 'category_title'; writeStoredKanbanGroupBy(kanbanGroupBy)"
+          />
+        </div>
+        <ManagementKanbanView
+          :rows="visibleProducts"
+          :group-by="kanbanGroupBy"
+          :group-options="kanbanGroupOptions"
+          row-key="name"
+          :clickable="true"
+          image-field="image"
+          secondary-image-field="website_image"
+          :price-formatter="(value) => formatMoney(value, currency.value)"
+          :row-class="rowClassOf"
+          empty-text="محصولی برای نمایش وجود ندارد."
+          @row-click="openProductDetail"
+          @move-row="handleKanbanMove"
+        />
+      </template>
+
       <template v-else-if="viewMode === 'list'">
-        <div v-if="hasGroupedRows && !isMobileView" class="grouped-list desktop-table">
+        <!-- گروه‌بندی Notion (دسکتاپ) -->
+        <div v-if="viewGroupedRows" class="grouped-list desktop-table">
           <ManagementSurfaceCard
-            v-for="group in groupedProducts"
-            :key="`desktop-group-${group.key}`"
+            v-for="group in viewGroupedRows"
+            :key="`vg-${group.key}`"
             class="group-block"
             tone="soft"
           >
-            <button type="button" class="group-header-btn" @click="toggleGroupCollapse(group.key)">
-              <strong>{{ group.label }}</strong>
-              <span>{{ formatNumber(group.rows.length) }} کالا</span>
-              <span class="group-chevron">{{ isGroupCollapsed(group.key) ? '▸' : '▾' }}</span>
+            <button type="button" class="group-header-btn" @click="toggleGroupCollapse(`vg-${group.key}`)">
+              <strong>{{ viewGroupLabel(group.label, viewSys.currentView.value?.groupBy) }}</strong>
+              <span>{{ formatNumber(totalRowsInGroup(group)) }} کالا</span>
+              <span class="group-chevron">{{ isGroupCollapsed(`vg-${group.key}`) ? '▸' : '▾' }}</span>
             </button>
-            <ManagementListView
-              v-if="!isGroupCollapsed(group.key)"
-              :columns="columns"
-              :rows="group.rows"
-              row-key="name"
-              :row-clickable="true"
-              @row-click="openProductDetail"
-            >
-              <template #cell-item_code="{ row }">{{ displayProductCode(row) }}</template>
-              <template #cell-tags="{ row }">
-                <span class="tag-pill" v-for="t in (row.tags || []).slice(0, 3)" :key="t">{{ t }}</span>
-                <span class="tag-pill more" v-if="(row.tags || []).length > 3">+{{ (row.tags || []).length - 3 }}</span>
-              </template>
-              <template #cell-base_price="{ value }">{{ formatMoney(value, currency) }}</template>
-              <template #cell-stock_qty="{ value }">{{ formatStock(value) }}</template>
-              <template #cell-is_active="{ value }">
-                <span :class="['state-pill', isActiveValue(value) ? 'on' : 'off']">
-                  {{ visibilityStateLabel(value) }}
-                </span>
-              </template>
-              <template #cell-actions="{ row }">
-                <div class="actions">
-                  <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                    {{ visibilityButtonLabel(row) }}
-                  </button>
-                  <button
-                    class="secondary-btn delete-btn"
-                    type="button"
-                    :disabled="isDeletingProduct(row)"
-                    @click.stop="removeProduct(row)"
+            <template v-if="!isGroupCollapsed(`vg-${group.key}`)">
+              <template v-if="group.subgroups">
+                <div v-for="sub in group.subgroups" :key="sub.key" class="subgroup-block">
+                  <div class="subgroup-header">
+                    <strong>{{ viewGroupLabel(sub.label, viewSys.currentView.value?.subGroupBy) }}</strong>
+                    <span>{{ formatNumber(sub.rows.length) }} کالا</span>
+                  </div>
+                  <ManagementNotionListView
+                    :rows="sub.rows"
+                    row-key="name"
+                    :row-clickable="true"
+                    :show-code="isPropVisible('item_code')"
+                    :show-tags="isPropVisible('tags')"
+                    :properties="viewSys.currentView.value?.properties"
+                    :property-order="currentViewPropertyOrder"
+                    :chip-renderers="chipRenderers"
+                    :row-class="rowClassOf"
+                    @row-click="openProductDetail"
                   >
-                    {{ isDeletingProduct(row) ? 'در حال حذف...' : 'حذف' }}
-                  </button>
+                  </ManagementNotionListView>
                 </div>
               </template>
-            </ManagementListView>
+              <ManagementNotionListView
+                v-else
+                :rows="group.rows"
+                row-key="name"
+                :row-clickable="true"
+                :show-code="isPropVisible('item_code')"
+                :show-tags="isPropVisible('tags')"
+                :properties="viewSys.currentView.value?.properties"
+                :property-order="currentViewPropertyOrder"
+                :chip-renderers="chipRenderers"
+                :row-class="rowClassOf"
+                @row-click="openProductDetail"
+              >
+              </ManagementNotionListView>
+            </template>
           </ManagementSurfaceCard>
         </div>
 
-        <ManagementListView
-          v-else-if="!isMobileView"
-          class="desktop-table"
-          :columns="columns"
+        <!-- لیست تخت Notion (دسکتاپ) -->
+        <ManagementNotionListView
+          v-else
+          class="desktop-list"
           :rows="visibleProducts"
           row-key="name"
           :row-clickable="true"
+          :show-code="isPropVisible('item_code')"
+          :show-tags="isPropVisible('tags')"
+          :properties="viewSys.currentView.value?.properties"
+          :property-order="currentViewPropertyOrder"
+          :chip-renderers="chipRenderers"
+          :row-class="rowClassOf"
           @row-click="openProductDetail"
         >
-          <template #cell-item_code="{ row }">{{ displayProductCode(row) }}</template>
-              <template #cell-tags="{ row }">
-                <span class="tag-pill" v-for="t in (row.tags || []).slice(0, 3)" :key="t">{{ t }}</span>
-                <span class="tag-pill more" v-if="(row.tags || []).length > 3">+{{ (row.tags || []).length - 3 }}</span>
-              </template>
-              <template #cell-base_price="{ value }">{{ formatMoney(value, currency) }}</template>
-          <template #cell-stock_qty="{ value }">{{ formatStock(value) }}</template>
-          <template #cell-is_active="{ value }">
-            <span :class="['state-pill', isActiveValue(value) ? 'on' : 'off']">
-              {{ visibilityStateLabel(value) }}
-            </span>
-          </template>
-          <template #cell-actions="{ row }">
-            <div class="actions">
-              <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                {{ visibilityButtonLabel(row) }}
-              </button>
-              <button
-                class="secondary-btn delete-btn"
-                type="button"
-                :disabled="isDeletingProduct(row)"
-                @click.stop="removeProduct(row)"
-              >
-                {{ isDeletingProduct(row) ? 'در حال حذف...' : 'حذف' }}
-              </button>
-            </div>
-          </template>
-        </ManagementListView>
+        </ManagementNotionListView>
 
-        <div v-if="hasGroupedRows && isMobileView" class="grouped-mobile mobile-cards">
-          <ManagementSurfaceCard
-            v-for="group in groupedProducts"
-            :key="`mobile-group-${group.key}`"
-            class="group-block"
-            tone="soft"
-          >
-            <button type="button" class="group-header-btn" @click="toggleGroupCollapse(group.key)">
-              <strong>{{ group.label }}</strong>
-              <span>{{ formatNumber(group.rows.length) }} کالا</span>
-              <span class="group-chevron">{{ isGroupCollapsed(group.key) ? '▸' : '▾' }}</span>
-            </button>
 
-            <ManagementMobileCardList
-              v-if="!isGroupCollapsed(group.key)"
-              :rows="group.rows"
-              row-key="name"
-              card-class="product-card"
-              empty-text="محصولی با این فیلتر پیدا نشد."
-              :card-clickable="true"
-              @card-click="openProductDetail"
-            >
-              <template #card="{ row }">
-                <div class="product-card__head">
-                  <div class="product-card__media">
-                    <img v-if="resolveImage(row)" :src="resolveImage(row)" :alt="row.title || 'image'" />
-                    <span v-else class="product-card__fallback">{{ initials(row.title || row.item_code || 'محصول') }}</span>
-                  </div>
-                  <div class="product-card__meta">
-                    <p class="product-card__title">{{ row.title || '-' }}</p>
-                    <p class="product-card__sub">{{ row.category_title || 'بدون دسته' }} • {{ displayProductCode(row) }}</p>
-                    <div class="product-card__tags" v-if="row.tags && row.tags.length">
-                      <span class="tag-pill" v-for="t in row.tags.slice(0, 4)" :key="t">{{ t }}</span>
-                      <span class="tag-pill more" v-if="row.tags.length > 4">+{{ row.tags.length - 4 }}</span>
-                    </div>
-                  </div>
-                  <span :class="['state-pill', isProductActive(row) ? 'on' : 'off']">
-                    {{ visibilityStateLabel(row) }}
-                  </span>
-                </div>
-
-                <div class="product-card__totals">
-                  <p>قیمت: {{ formatMoney(row.base_price, currency) }}</p>
-                  <p>موجودی: {{ formatStock(row.stock_qty) }}</p>
-                </div>
-
-                <div class="row-actions">
-                  <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                    {{ visibilityButtonLabel(row) }}
-                  </button>
-                  <button
-                    class="secondary-btn delete-btn"
-                    type="button"
-                    :disabled="isDeletingProduct(row)"
-                    @click.stop="removeProduct(row)"
-                  >
-                    {{ isDeletingProduct(row) ? 'در حال حذف...' : 'حذف' }}
-                  </button>
-                </div>
-              </template>
-            </ManagementMobileCardList>
-          </ManagementSurfaceCard>
-        </div>
-
-        <ManagementMobileCardList
-          v-else-if="isMobileView"
-          class="mobile-cards"
-          :rows="visibleProducts"
-          row-key="name"
-          card-class="product-card"
-          empty-text="محصولی با این فیلتر پیدا نشد."
-          :card-clickable="true"
-          @card-click="openProductDetail"
-        >
-          <template #card="{ row }">
-            <div class="product-card__head">
-              <div class="product-card__media">
-                <img v-if="resolveImage(row)" :src="resolveImage(row)" :alt="row.title || 'image'" />
-                <span v-else class="product-card__fallback">{{ initials(row.title || row.item_code || 'محصول') }}</span>
-              </div>
-              <div class="product-card__meta">
-                <p class="product-card__title">{{ row.title || '-' }}</p>
-                <p class="product-card__sub">{{ row.category_title || 'بدون دسته' }} • {{ displayProductCode(row) }}</p>
-                <div class="product-card__tags" v-if="row.tags && row.tags.length">
-                  <span class="tag-pill" v-for="t in row.tags.slice(0, 4)" :key="t">{{ t }}</span>
-                  <span class="tag-pill more" v-if="row.tags.length > 4">+{{ row.tags.length - 4 }}</span>
-                </div>
-              </div>
-              <span :class="['state-pill', isProductActive(row) ? 'on' : 'off']">
-                {{ visibilityStateLabel(row) }}
-              </span>
-            </div>
-
-            <div class="product-card__totals">
-              <p>قیمت: {{ formatMoney(row.base_price, currency) }}</p>
-              <p>موجودی: {{ formatStock(row.stock_qty) }}</p>
-            </div>
-
-            <div class="row-actions">
-              <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-                {{ visibilityButtonLabel(row) }}
-              </button>
-              <button
-                class="secondary-btn delete-btn"
-                type="button"
-                :disabled="isDeletingProduct(row)"
-                @click.stop="removeProduct(row)"
-              >
-                {{ isDeletingProduct(row) ? 'در حال حذف...' : 'حذف' }}
-              </button>
-            </div>
-          </template>
-        </ManagementMobileCardList>
       </template>
+
+      <ManagementSheetView
+        v-else-if="viewMode === 'sheet'"
+        :rows="visibleProducts"
+        :columns="sheetColumns"
+        :select-options="viewSelectOptions"
+        row-key="name"
+        :frozen-columns="['item_code', 'title']"
+        :cell-formatters="{
+          base_price: (row) => formatMoney(row.base_price, currency.value),
+          stock_qty: (row) => formatStock(row.stock_qty),
+          is_active: (row) => (isProductActive(row) ? 'بله' : 'خیر'),
+        }"
+        @cell-change="handleSheetCellChange"
+        @add-row="openCreatePopup"
+        @row-open="openProductDetail"
+        @bulk-action="handleSheetBulkAction"
+        @export-excel="handleSheetExportExcel"
+        @bulk-edit="handleSheetBulkEdit"
+      />
+
+      <ManagementCalendarView
+        v-else-if="viewMode === 'calendar'"
+        :rows="visibleProducts"
+        :chip-renderers="chipRenderers"
+        :properties="viewSys.currentView.value?.properties"
+        :property-order="currentViewPropertyOrder"
+        :row-class="rowClassOf"
+        @open-item="openProductDetail"
+        @assign-date="handleCalendarAssign"
+        @clear-date="handleCalendarClear"
+      />
 
       <ManagementGalleryView
         v-else
@@ -308,30 +229,16 @@
         title-field="title"
         subtitle-field="category_title"
         :clickable="true"
+        :properties="viewSys.currentView.value?.properties"
+        :property-order="currentViewPropertyOrder"
+        :chip-renderers="chipRenderers"
+        :row-class="rowClassOf"
         @click-item="openProductDetail"
       >
-        <template #caption="{ row }">
-          {{ formatMoney(row.base_price, currency) }} | موجودی {{ formatStock(row.stock_qty) }}
-        </template>
         <template #overlay="{ row }">
           <span class="gallery-status" :class="isProductActive(row) ? 'on' : 'off'">
             {{ visibilityStateLabel(row) }}
           </span>
-        </template>
-        <template #actions="{ row }">
-          <div class="actions" @click.stop>
-            <button :class="toggleButtonClass(row)" type="button" @click.stop="toggleActive(row)">
-              {{ visibilityButtonLabel(row) }}
-            </button>
-            <button
-              class="secondary-btn delete-btn"
-              type="button"
-              :disabled="isDeletingProduct(row)"
-              @click.stop="removeProduct(row)"
-            >
-              {{ isDeletingProduct(row) ? 'در حال حذف...' : 'حذف' }}
-            </button>
-          </div>
         </template>
       </ManagementGalleryView>
     </ManagementSurfaceCard>
@@ -363,6 +270,7 @@
             search-placeholder="جستجوی گروه..."
             include-empty-option
             empty-label="همه گروه‌ها"
+            fixed-panel
           />
           <small class="hint">دسته‌بندی محصول برای مدیریت بهتر</small>
         </label>
@@ -373,6 +281,7 @@
             :options="uomOptions"
             placeholder="انتخاب واحد"
             search-placeholder="جستجوی واحد..."
+            fixed-panel
           />
           <small class="hint">واحد اندازه‌گیری (مثلا: عدد، لیتر، کیلوگرم)</small>
         </label>
@@ -385,6 +294,7 @@
             search-placeholder="جستجوی دسته..."
             include-empty-option
             empty-label="بدون دسته"
+            fixed-panel
           />
         </label>
         <label>
@@ -396,6 +306,7 @@
             search-placeholder="جستجوی زیردسته..."
             include-empty-option
             empty-label="بدون زیردسته"
+            fixed-panel
           />
         </label>
         <label class="full">
@@ -454,6 +365,7 @@
               :options="uomOptions"
               placeholder="انتخاب واحد"
               search-placeholder="جستجوی واحد..."
+              fixed-panel
             />
             <small class="hint">واحد اندازه‌گیری (مثلا: عدد، لیتر، کیلوگرم)</small>
           </label>
@@ -464,6 +376,7 @@
               :options="itemGroupOptions"
               placeholder="انتخاب گروه"
               search-placeholder="جستجوی گروه..."
+              fixed-panel
             />
             <small class="hint">دسته‌بندی محصول برای مدیریت بهتر</small>
           </label>
@@ -578,21 +491,32 @@
         </div>
       </template>
     </ManagementPopup>
-  </ManagementPageScaffold>
+  </div>
 </template>
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
-import ManagementViewSwitcher from '@/components/management/ManagementViewSwitcher.vue'
-import ManagementFilterControl from '@/components/management/ManagementFilterControl.vue'
-import ManagementSortControl from '@/components/management/ManagementSortControl.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
+import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
+import NotionViewTabs from '@/components/management/notion/NotionViewTabs.vue'
+import NotionSaveBar from '@/components/management/notion/NotionSaveBar.vue'
+import NotionViewControls from '@/components/management/notion/NotionViewControls.vue'
+import NotionViewSettings from '@/components/management/notion/NotionViewSettings.vue'
+import {
+  useViewSystem,
+  applyViewFilters,
+  applyViewSorts,
+  groupRows,
+  colorForRow,
+  buildSelectOptions,
+  PRODUCT_PROPERTIES,
+} from '@/utils/viewSystem'
 import ManagementGalleryView from '@/components/management/ManagementGalleryView.vue'
-import ManagementMobileCardList from '@/components/management/ManagementMobileCardList.vue'
+import ManagementCalendarView from '@/components/management/ManagementCalendarView.vue'
+import ManagementSheetView from '@/components/management/ManagementSheetView.vue'
+import ManagementKanbanView from '@/components/management/ManagementKanbanView.vue'
 import ManagementTreeView from '@/components/management/ManagementTreeView.vue'
-import ManagementProductGrouping from '@/components/management/ManagementProductGrouping.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
@@ -607,9 +531,13 @@ import {
   importManagementProductsExcel,
   listManagementProducts,
   setManagementProductActive,
+  setManagementProductCalendarDate,
+  setManagementProductKanbanField,
   uploadFileToFrappe,
 } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
+import { jalaliToGregorian } from '@/utils/jalali'
+import { Folder, Package, Plus, Search, X } from 'lucide-vue-next'
 
 const loading = ref(false)
 const error = ref('')
@@ -638,6 +566,130 @@ const viewMode = ref(readStoredViewMode())
 const groupBy = ref(readStoredGroupMode())
 const collapseGroupsByDefault = ref(readStoredGroupCollapseMode())
 const collapsedGroupKeys = ref([])
+const treeGroupBy = ref(readStoredTreeGroupBy())
+const kanbanGroupBy = ref(readStoredKanbanGroupBy())
+
+// ── سیستم View به سبک Notion ────────────────────────────────────────────────
+const viewSys = useViewSystem({ storageKey: 'mg-products-notion-views-v1' })
+viewSys.load()
+// layout ذخیره‌شده در view را به viewMode منتقل کن (برای بار اول)
+if (viewSys.currentView.value?.layout && viewMode.value !== viewSys.currentView.value.layout) {
+  viewMode.value = viewSys.currentView.value.layout
+}
+
+// گزینه‌های قابل انتخاب برای فیلدهای select — از دیتای محصولات استخراج می‌شود
+const viewSelectOptions = computed(() => {
+  const map = {}
+  const selectProps = PRODUCT_PROPERTIES.filter((p) => p.type === 'select' || p.type === 'tags')
+  for (const prop of selectProps) {
+    map[prop.key] = buildSelectOptions(products.value, prop.key)
+  }
+  return map
+})
+
+const VIEW_PROPERTY_ORDER = ['category_title', 'base_price', 'stock_qty', 'is_active', 'tags', 'item_code']
+const currentViewPropertyOrder = computed(() => {
+  const order = viewSys.currentView.value?.propertyOrder
+  return order && order.length ? order : VIEW_PROPERTY_ORDER
+})
+
+function isPropVisible(key) {
+  return viewSys.currentView.value?.properties?.[key] !== false
+}
+
+const chipRenderers = {
+  // فیلدهای متنی
+  name: (row) => (row.name ? { text: row.name, cls: 'notion-chip--code' } : null),
+  item_code: (row) => (row.item_code ? { text: row.item_code, cls: 'notion-chip--code' } : null),
+  title: (row) => (row.title ? { text: row.title } : null),
+  short_desc: (row) => (row.short_desc ? { text: row.short_desc } : null),
+  custom_snapp_code: (row) => (row.custom_snapp_code ? { text: `اسنپ: ${row.custom_snapp_code}`, cls: 'notion-chip--code' } : null),
+  restaurant_builder_template: (row) => (row.restaurant_builder_template ? { text: row.restaurant_builder_template, cls: 'notion-chip--soft' } : null),
+  restaurant_customize_button_label: (row) => (row.restaurant_customize_button_label ? { text: row.restaurant_customize_button_label } : null),
+  // فیلدهای گزینه‌ای
+  category_title: (row) => (row.category_title ? { text: row.category_title, cls: 'notion-chip--soft' } : null),
+  subcategory_title: (row) => (row.subcategory_title ? { text: row.subcategory_title, cls: 'notion-chip--soft' } : null),
+  // فیلدهای عددی
+  base_price: (row) => ({ text: formatMoney(row.base_price, currency.value) }),
+  stock_qty: (row) => ({ text: `موجودی: ${formatStock(row.stock_qty)}` }),
+  nutrition_kcal: (row) => (row.nutrition_kcal != null ? { text: `${formatNumber(row.nutrition_kcal)} کالری` } : null),
+  nutrition_protein_g: (row) => (row.nutrition_protein_g != null ? { text: `پروتئین: ${formatNumber(row.nutrition_protein_g)}g` } : null),
+  nutrition_carb_g: (row) => (row.nutrition_carb_g != null ? { text: `کربوهیدرات: ${formatNumber(row.nutrition_carb_g)}g` } : null),
+  nutrition_fat_g: (row) => (row.nutrition_fat_g != null ? { text: `چربی: ${formatNumber(row.nutrition_fat_g)}g` } : null),
+  sort_order: (row) => (row.sort_order != null ? { text: `ترتیب: ${formatNumber(row.sort_order)}` } : null),
+  packaging_price: (row) => (row.packaging_price ? { text: `بسته‌بندی: ${formatMoney(row.packaging_price, currency.value)}` } : null),
+  // فیلدهای وضعیت/بولی
+  is_active: (row) => ({
+    text: isProductActive(row) ? 'فعال' : 'غیرفعال',
+    cls: isProductActive(row) ? 'notion-chip--on' : 'notion-chip--off',
+  }),
+  coming_soon: (row) => (Number(row.coming_soon) === 1 ? { text: 'به‌زودی', cls: 'notion-chip--warn' } : null),
+  out_of_stock: (row) => (Number(row.out_of_stock) === 1 ? { text: 'ناموجود', cls: 'notion-chip--off' } : null),
+  has_customization: (row) => (Number(row.has_customization) === 1 ? { text: 'قابل شخصی‌سازی', cls: 'notion-chip--on' } : null),
+  has_bom: (row) => (Number(row.has_bom) === 1 ? { text: 'دارای BOM', cls: 'notion-chip--soft' } : null),
+  // تگ‌ها جداگانه مدیریت می‌شوند (showTags)
+}
+
+function rowClassOf(row) {
+  const color = colorForRow(row, viewSys.currentView.value?.colors)
+  return color ? `nrow-${color}` : ''
+}
+
+const viewGroupedRows = computed(() => {
+  const view = viewSys.currentView.value
+  if (!view?.groupBy) return null
+  return groupRows(visibleProducts.value, view.groupBy, view.subGroupBy || '')
+})
+
+function totalRowsInGroup(group) {
+  if (group?.subgroups) return group.subgroups.reduce((sum, sub) => sum + sub.rows.length, 0)
+  return group?.rows?.length || 0
+}
+
+function viewGroupLabel(value, propertyKey) {
+  const prop = PRODUCT_PROPERTIES.find((p) => p.key === propertyKey)
+  if (prop?.type === 'boolean' || prop?.type === 'select' && (value === 1 || value === 0 || value === true || value === false)) {
+    return Number(value) === 1 || value === true ? 'بله' : 'خیر'
+  }
+  return String(value ?? '').trim() || 'بدون دسته'
+}
+
+function viewCopyLink(viewId) {
+  const url = `${window.location.origin}${window.location.pathname}?view=${encodeURIComponent(viewId)}`
+  try {
+    navigator.clipboard?.writeText(url)
+    successMessage.value = 'لینک نما کپی شد.'
+  } catch (_) {
+    window.prompt('لینک نما:', url)
+  }
+}
+
+watch(
+  () => viewSys.currentView.value?.id,
+  () => {
+    const layout = viewSys.currentView.value?.layout
+    if (layout && viewMode.value !== layout) viewMode.value = layout
+  },
+)
+
+watch(viewMode, (mode) => {
+  if (viewSys.currentView.value) viewSys.updateCurrentView({ layout: mode })
+})
+
+watch(
+  () => viewSys.currentView.value?.layout,
+  (layout) => {
+    if (layout && viewMode.value !== layout) viewMode.value = layout
+  },
+)
+
+watch(
+  () => viewSys.currentView.value?.groupBy,
+  (group) => {
+    if (group) groupBy.value = 'none'
+  },
+)
+// ────────────────────────────────────────────────────────────────────────────
 const createPopupOpen = ref(false)
 const creatingItem = ref(false)
 const createError = ref('')
@@ -689,10 +741,39 @@ const sortOptions = [
   { value: 'stock_desc', label: 'موجودی (بیشترین)' },
   { value: 'stock_asc', label: 'موجودی (کمترین)' },
 ]
+const treeGroupOptions = [
+  { value: 'category_title', label: 'دسته' },
+  { value: 'subcategory_title', label: 'زیردسته' },
+  { value: 'is_active', label: 'وضعیت' },
+  { value: 'tags', label: 'تگ' },
+  { value: 'coming_soon', label: 'به‌زودی' },
+  { value: 'has_customization', label: 'قابل شخصی‌سازی' },
+]
+
+const kanbanGroupOptions = [
+  { value: 'category_title', label: 'دسته' },
+  { value: 'subcategory_title', label: 'زیردسته' },
+  { value: 'is_active', label: 'وضعیت نمایش' },
+  { value: 'coming_soon', label: 'به‌زودی' },
+  { value: 'out_of_stock', label: 'ناموجود' },
+]
+
+const sheetColumns = computed(() => {
+  const visible = PRODUCT_PROPERTIES.filter((p) => {
+    const key = p.key
+    if (key === 'name' || key === 'slug') return false
+    return viewSys.currentView.value?.properties?.[key] !== false
+  })
+  return visible.map((p) => ({ ...p }))
+})
+
 const viewModes = [
   { value: 'list', label: 'لیست', icon: '≡' },
   { value: 'gallery', label: 'گالری', icon: '▦' },
   { value: 'tree', label: 'درخت', icon: '⋰' },
+  { value: 'calendar', label: 'تقویم', icon: '◫' },
+  { value: 'sheet', label: 'جدول', icon: '▦' },
+  { value: 'kanban', label: 'کانبان', icon: '▤' },
 ]
 
 const groupOptions = computed(() => {
@@ -772,6 +853,12 @@ const visibleProducts = computed(() => {
     })
   }
 
+  // Notion view filters (AND / OR)
+  const viewFilters = viewSys.currentView.value?.filters
+  if (viewFilters && viewFilters.length) {
+    rows = applyViewFilters(rows, viewFilters)
+  }
+
   if (sortBy.value === 'title_asc') {
     rows.sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), 'fa'))
   } else if (sortBy.value === 'title_desc') {
@@ -784,6 +871,12 @@ const visibleProducts = computed(() => {
     rows.sort((a, b) => Number(a?.stock_qty || 0) - Number(b?.stock_qty || 0))
   } else if (sortBy.value === 'stock_desc') {
     rows.sort((a, b) => Number(b?.stock_qty || 0) - Number(a?.stock_qty || 0))
+  }
+
+  // Notion view multi-sort (اولویت بالاتر از مرتب‌سازی ساده)
+  const viewSorts = viewSys.currentView.value?.sorts
+  if (viewSorts && viewSorts.length) {
+    rows = applyViewSorts(rows, viewSorts)
   }
 
   return rows
@@ -831,14 +924,30 @@ const activeViewSubtitle = computed(() => {
 })
 
 const productTreeNodes = computed(() => {
+  const groupKey = treeGroupBy.value
   const categories = new Map()
+
+  function groupValueOf(row) {
+    if (groupKey === 'is_active') {
+      return isProductActive(row) ? 'فعال' : 'غیرفعال'
+    }
+    if (groupKey === 'coming_soon' || groupKey === 'has_customization') {
+      return Number(row?.[groupKey]) === 1 ? 'بله' : 'خیر'
+    }
+    if (groupKey === 'tags') {
+      const tags = Array.isArray(row?.tags) ? row.tags : []
+      return tags.length ? tags.join('، ') : 'بدون تگ'
+    }
+    return String(row?.[groupKey] || '').trim() || 'بدون دسته'
+  }
+
   for (const row of visibleProducts.value || []) {
-    const categoryLabel = String(row?.category_title || '').trim() || 'بدون دسته'
-    const categoryKey = `category:${categoryLabel}`
-    if (!categories.has(categoryKey)) {
-      categories.set(categoryKey, {
-        key: categoryKey,
-        label: categoryLabel,
+    const groupLabel = groupValueOf(row)
+    const groupKeyName = `${groupKey}:${groupLabel}`
+    if (!categories.has(groupKeyName)) {
+      categories.set(groupKeyName, {
+        key: groupKeyName,
+        label: groupLabel,
         caption: `${formatNumber(0)} کالا`,
         badge: 'دسته',
         status: null,
@@ -846,11 +955,11 @@ const productTreeNodes = computed(() => {
       })
     }
 
-    const bucket = categories.get(categoryKey)
+    const bucket = categories.get(groupKeyName)
     const itemName = String(row?.title || row?.item_code || row?.name || '').trim() || '-'
     bucket.children.push({
       ...row,
-      key: String(row?.name || `${categoryKey}-${bucket.children.length}`),
+      key: String(row?.name || `${groupKeyName}-${bucket.children.length}`),
       label: itemName,
       caption: `${formatMoney(row?.base_price || 0, currency.value)} • موجودی ${formatStock(row?.stock_qty || 0)}`,
       badge: 'محصول',
@@ -867,6 +976,220 @@ const productTreeNodes = computed(() => {
     String(left?.label || '').localeCompare(String(right?.label || ''), 'fa'),
   )
 })
+
+// تقویم با کلید شمسی (1405-05-19) کار می‌کند؛ سرور تاریخ میلادی می‌گیرد
+function jalaliKeyToIso(key) {
+  const [y, m, d] = String(key || '').split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const g = jalaliToGregorian(y, m, d)
+  return `${g.year}-${String(g.month).padStart(2, '0')}-${String(g.day).padStart(2, '0')}`
+}
+
+async function handleCalendarAssign({ name, date }) {
+  const itemName = String(name || '').trim()
+  if (!itemName) return
+  const iso = jalaliKeyToIso(date)
+  if (!iso) return
+  const row = products.value.find((p) => String(p?.name || '').trim() === itemName)
+  const prev = row ? row.calendar_date : undefined
+  if (row) row.calendar_date = iso
+  try {
+    await setManagementProductCalendarDate({ item_name: itemName, date: iso })
+  } catch (errObj) {
+    if (row) row.calendar_date = prev
+    error.value = errObj?.message || 'خطا در ذخیره تاریخ'
+  }
+}
+
+async function handleCalendarClear({ name }) {
+  const itemName = String(name || '').trim()
+  if (!itemName) return
+  const row = products.value.find((p) => String(p?.name || '').trim() === itemName)
+  const prev = row ? row.calendar_date : undefined
+  if (row) row.calendar_date = ''
+  try {
+    await setManagementProductCalendarDate({ item_name: itemName, date: '' })
+  } catch (errObj) {
+    if (row) row.calendar_date = prev
+    error.value = errObj?.message || 'خطا در پاک کردن تاریخ'
+  }
+}
+
+async function handleKanbanMove({ row, field, value }) {
+  const itemName = String(row?.name || '').trim()
+  if (!itemName) return
+
+  const numeric = field === 'coming_soon' || field === 'out_of_stock'
+  const fieldMap = {
+    is_active: 'restaurant_enabled',
+    category_title: 'restaurant_category',
+    subcategory_title: 'restaurant_subcategory',
+    coming_soon: 'restaurant_coming_soon',
+    out_of_stock: 'restaurant_out_of_stock',
+  }
+  const backendField = fieldMap[field]
+  if (!backendField) return
+
+  // snapshot برای برگرداندن در صورت خطا
+  const snapshot = {
+    is_active: row.is_active,
+    category_title: row.category_title,
+    category: row.category,
+    subcategory_title: row.subcategory_title,
+    subcategory: row.subcategory,
+    coming_soon: row.coming_soon,
+    out_of_stock: row.out_of_stock,
+  }
+
+  // اعمال لحظه‌ای (optimistic) تا کارت فوراً جابه‌جا شود
+  if (field === 'is_active') {
+    row.is_active = value === 'بله' ? 1 : 0
+  } else if (numeric) {
+    row[field] = value === 'بله' ? 1 : 0
+  } else if (field === 'category_title') {
+    row.category_title = value
+    row.category = value
+  } else if (field === 'subcategory_title') {
+    row.subcategory_title = value
+    row.subcategory = value
+  }
+
+  try {
+    if (field === 'is_active') {
+      await setManagementProductActive(itemName, row.is_active)
+      // override محلی وضعیت را حذف کن تا بعد از رفرش برنگردد
+      clearVisibilityOverride(itemName)
+    } else {
+      await setManagementProductKanbanField({
+        item_name: itemName,
+        field: backendField,
+        value: numeric ? row[field] : String(value ?? ''),
+      })
+    }
+    successMessage.value = `«${row.title || itemName}» منتقل شد.`
+    setTimeout(() => { successMessage.value = '' }, 2500)
+    loadProducts()
+  } catch (errObj) {
+    Object.assign(row, snapshot)
+    error.value = errObj?.message || 'خطا در انتقال کارت'
+  }
+}
+
+async function handleSheetCellChange({ row, column, value, prev }) {
+  const itemName = String(row?.name || '').trim()
+  if (!itemName) return
+  try {
+    if (column === 'is_active') {
+      const active = value === 'بله' || Number(value) ? 1 : 0
+      await setManagementProductActive(itemName, active)
+      row.is_active = active
+      clearVisibilityOverride(itemName)
+      return
+    }
+    if (column === 'base_price') {
+      const num = Number(value || 0)
+      await setManagementProductPrice({
+        item_name: itemName,
+        price_list_rate: num,
+      })
+      row.base_price = num
+      return
+    }
+    row[column] = value
+  } catch (errObj) {
+    error.value = errObj.message || 'خطا در ذخیره تغییر'
+    row[column] = prev
+  }
+}
+
+async function handleSheetExportExcel({ rows }) {
+  const names = (rows || []).map((row) => String(row?.name || '').trim()).filter(Boolean)
+  if (!names.length || excelBusy.value) return
+  excelBusy.value = true
+  error.value = ''
+  try {
+    const payload = await exportManagementProductsExcel({ include_disabled: 1, item_names: names })
+    if (payload?.file_url) {
+      const link = document.createElement('a')
+      link.href = payload.file_url
+      link.download = payload.file_name || 'restaurant-products.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      successMessage.value = `خروجی اکسل ${formatNumber(payload.rows || 0)} کالا آماده شد.`
+      setTimeout(() => { successMessage.value = '' }, 4000)
+    }
+  } catch (errObj) {
+    error.value = errObj?.message || '❌ دریافت خروجی اکسل ناموفق بود.'
+  } finally {
+    excelBusy.value = false
+  }
+}
+
+async function handleSheetBulkEdit({ rows, field, value }) {
+  const names = (rows || []).map((row) => String(row?.name || '').trim()).filter(Boolean)
+  if (!names.length || bulkBusy.value) return
+  bulkBusy.value = true
+  bulkError.value = ''
+  try {
+    if (field === 'is_active') {
+      const active = value === 'بله' ? 1 : 0
+      await Promise.all(names.map((name) => setManagementProductActive(name, active)))
+      names.forEach((name) => clearVisibilityOverride(name))
+    } else if (field === 'base_price') {
+      const num = Number(value || 0)
+      await Promise.all(names.map((name) => setManagementProductPrice({ item_name: name, price_list_rate: num })))
+    } else {
+      const fieldMap = {
+        coming_soon: 'restaurant_coming_soon',
+        out_of_stock: 'restaurant_out_of_stock',
+        category_title: 'restaurant_category',
+        subcategory_title: 'restaurant_subcategory',
+      }
+      const backendField = fieldMap[field]
+      if (!backendField) return
+      const numeric = field === 'coming_soon' || field === 'out_of_stock'
+      await Promise.all(
+        names.map((name) =>
+          setManagementProductKanbanField({
+            item_name: name,
+            field: backendField,
+            value: numeric ? (value === 'بله' ? 1 : 0) : String(value ?? ''),
+          }),
+        ),
+      )
+    }
+    successMessage.value = `${formatNumber(names.length)} کالا به‌روزرسانی شد.`
+    setTimeout(() => { successMessage.value = '' }, 4000)
+    await loadProducts()
+  } catch (errObj) {
+    error.value = errObj?.message || 'خطا در ویرایش گروهی'
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function handleSheetBulkAction({ rows, action }) {
+  const names = (rows || []).map((row) => String(row?.name || '').trim()).filter(Boolean)
+  if (!names.length || bulkBusy.value) return
+  bulkBusy.value = true
+  bulkError.value = ''
+  try {
+    const payload = await bulkUpdateManagementProducts(names, action)
+    // برای activate/deactivate، override محلی وضعیت را حذف کن
+    if (action === 'activate' || action === 'deactivate') {
+      names.forEach((name) => clearVisibilityOverride(name))
+    }
+    const msg = `${formatNumber(payload?.updated ?? 0)} کالا به‌روزرسانی شد`
+    successMessage.value = payload?.failed ? `${msg} (${formatNumber(payload.failed)} خطا)` : msg
+    setTimeout(() => { successMessage.value = '' }, 4000)
+    await loadProducts()
+  } catch (errObj) {
+    error.value = errObj?.message || 'خطا در عملیات گروهی ردیف‌های انتخاب‌شده'
+  } finally {
+    bulkBusy.value = false
+  }
+}
 
 async function loadProducts() {
   loading.value = true
@@ -1161,6 +1484,20 @@ function rememberVisibilityOverride(itemName, active) {
   const overrides = readVisibilityOverrides()
   overrides[name] = Number(active || 0) ? 1 : 0
   writeVisibilityOverrides(overrides)
+}
+
+// وقتی وضعیت واقعاً روی سرور ست می‌شود، override محلی را حذف کن تا
+// بعد از رفرش، مقدار سرور برگردد و کارت در کانبان برنگردد.
+function clearVisibilityOverride(itemName) {
+  const name = String(itemName || '').trim()
+  if (!name) {
+    return
+  }
+  const overrides = readVisibilityOverrides()
+  if (Object.prototype.hasOwnProperty.call(overrides, name)) {
+    delete overrides[name]
+    writeVisibilityOverrides(overrides)
+  }
 }
 
 function applyVisibilityOverrides(rows = []) {
@@ -1494,13 +1831,45 @@ function toggleGroupCollapse(groupKey) {
   collapsedGroupKeys.value = [...collapsedGroupKeys.value, normalized]
 }
 
+function readStoredTreeGroupBy() {
+  try {
+    const raw = localStorage.getItem('management-products-tree-group-by')
+    if (['category_title', 'subcategory_title', 'is_active', 'tags', 'coming_soon', 'has_customization'].includes(raw)) {
+      return raw
+    }
+  } catch (_) { /* ignore */ }
+  return 'category_title'
+}
+
+function writeStoredTreeGroupBy(value) {
+  try {
+    localStorage.setItem('management-products-tree-group-by', String(value || 'category_title'))
+  } catch (_) { /* ignore */ }
+}
+
+function readStoredKanbanGroupBy() {
+  try {
+    const raw = localStorage.getItem('management-products-kanban-group-by')
+    if (['category_title', 'subcategory_title', 'is_active', 'coming_soon', 'out_of_stock'].includes(raw)) {
+      return raw
+    }
+  } catch (_) { /* ignore */ }
+  return 'category_title'
+}
+
+function writeStoredKanbanGroupBy(value) {
+  try {
+    localStorage.setItem('management-products-kanban-group-by', String(value || 'category_title'))
+  } catch (_) { /* ignore */ }
+}
+
 function readStoredViewMode() {
   try {
     const raw = localStorage.getItem('management-products-view-mode')
     if (raw === 'grid') {
       return 'gallery'
     }
-    if (['list', 'gallery', 'tree'].includes(raw)) {
+    if (['list', 'gallery', 'tree', 'calendar', 'sheet', 'kanban'].includes(raw)) {
       return raw
     }
   } catch (storageError) {
@@ -1661,6 +2030,9 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   syncViewportMode()
   window.addEventListener('resize', syncViewportMode)
+  const params = new URLSearchParams(window.location.search)
+  const viewId = params.get('view')
+  if (viewId) viewSys.selectView(viewId)
 })
 
 onBeforeUnmount(() => {
@@ -1674,6 +2046,62 @@ loadProducts()
 
 <style scoped>
 /* Theme-enhanced product page styles — matching Tables / POS theme */
+.tree-group-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 10px;
+  background: var(--mg-bg-surface);
+}
+
+.tree-group-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--mg-text-main);
+  white-space: nowrap;
+}
+
+.tree-group-bar .searchable-dropdown {
+  max-width: 220px;
+}
+
+.kanban-group-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 10px;
+  background: var(--mg-bg-surface);
+}
+
+.kanban-group-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--mg-text-main);
+  white-space: nowrap;
+}
+
+.kanban-group-bar .searchable-dropdown {
+  max-width: 220px;
+}
+.products-page {
+  display: grid;
+  gap: 1rem;
+  /* جلوگیری از پهن‌شدن صفحه توسط جدول عریض: ستون‌های grid اجازه
+     کوچک‌شدن تا صفر را دارند و کارت‌ها هرگز از عرض صفحه بیرون نمی‌زنند */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.products-page > * {
+  min-width: 0;
+}
+
 .toolbar {
   display: flex;
   gap: 0.6rem;
@@ -1689,14 +2117,95 @@ loadProducts()
   box-shadow: var(--mg-shadow-sm, 0 8px 24px rgba(52, 38, 31, 0.06));
 }
 
+/* تولبار تمیز: سرچ + کالای جدید */
+.toolbar--clean {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.toolbar-search {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-search-icon {
+  position: absolute;
+  right: 0.75rem;
+  color: var(--mg-text-muted);
+  pointer-events: none;
+}
+
+.toolbar-search-input {
+  width: 100%;
+  min-height: 2.5rem;
+  border-radius: 10px;
+  padding-right: 2.4rem;
+  padding-left: 2.2rem;
+  font-size: 0.82rem;
+}
+
+.toolbar-search-clear {
+  position: absolute;
+  left: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mg-bg-soft);
+  color: var(--mg-text-muted);
+  cursor: pointer;
+}
+
+.toolbar-search-clear:hover {
+  background: var(--mg-bg-soft);
+  color: var(--mg-danger);
+}
+
+.toolbar-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 1.1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: linear-gradient(135deg, var(--mg-primary) 0%, var(--mg-primary-hover) 100%);
+  border: 1px solid var(--mg-primary);
+  color: #fff;
+  box-shadow: 0 4px 14px rgb(var(--mg-primary-rgb) / 0.3);
+  transition: all 0.15s ease;
+}
+
+.toolbar-new-btn:hover {
+  background: linear-gradient(135deg, var(--mg-primary-hover) 0%, var(--mg-primary) 100%);
+  box-shadow: 0 6px 18px rgb(var(--mg-primary-rgb) / 0.4);
+  transform: translateY(-1px);
+}
+
 .products-filter-card {
   position: relative;
   z-index: 35;
   overflow: visible !important;
   border-radius: var(--mg-radius-md);
   border-color: var(--mg-border-light);
-  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, var(--mg-bg-soft) 100%);
-  box-shadow: var(--mg-shadow-md);
+  background: var(--mg-bg-surface);
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .toolbar .input {
@@ -1723,6 +2232,42 @@ loadProducts()
   display: none;
 }
 
+.notion-view-bar {
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--mg-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.notion-view-tools {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.subgroup-block {
+  padding: 0.2rem 0.4rem;
+}
+
+.subgroup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--mg-text-muted);
+  border-bottom: 1px dashed var(--mg-border-light);
+  margin-bottom: 0.2rem;
+}
+
+.subgroup-header strong {
+  color: var(--mg-success);
+}
+
 .grouped-list,
 .grouped-mobile {
   display: grid;
@@ -1736,8 +2281,8 @@ loadProducts()
 .group-header-btn {
   width: 100%;
   min-height: 2.85rem;
-  border: 1px solid var(--border, var(--mg-border-light));
-  background: var(--bg-soft, var(--mg-bg-page));
+  border: 1px solid color-mix(in srgb, var(--mg-success) 30%, var(--mg-border-light));
+  background: var(--mg-success-bg);
   color: var(--text, var(--mg-text-main));
   border-radius: 12px;
   padding: 0.58rem 0.7rem;
@@ -1751,11 +2296,12 @@ loadProducts()
 
 .group-header-btn strong {
   font-size: 0.82rem;
+  color: var(--mg-success);
 }
 
 .group-header-btn span {
   font-size: 0.74rem;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
 }
 
 .group-chevron {
@@ -1787,6 +2333,19 @@ loadProducts()
   color: #92400e;
 }
 
+.notion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.66rem;
+  color: var(--mg-text-muted);
+  background: color-mix(in srgb, var(--mg-bg-soft) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mg-border-light) 70%, transparent);
+  border-radius: 999px;
+  padding: 0.08rem 0.45rem;
+  white-space: nowrap;
+}
+
 .error {
   margin: 0;
   color: var(--danger);
@@ -1802,13 +2361,27 @@ loadProducts()
 .create-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+  gap: 0.7rem;
+  align-items: start;
 }
 
 .create-form label {
   display: grid;
-  gap: 0.24rem;
+  gap: 0.3rem;
   font-size: 0.82rem;
+  color: var(--mg-text-main);
+  min-width: 0;
+}
+
+.create-form .input,
+.create-form .textarea,
+.create-form :deep(.searchable-dropdown) {
+  width: 100%;
+  min-width: 0;
+}
+
+.create-form :deep(.toggle-switch) {
+  width: 100%;
 }
 
 .create-form .full {
@@ -1818,8 +2391,29 @@ loadProducts()
 .popup-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.4rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.popup-actions .primary-btn,
+.popup-actions .secondary-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  min-height: 2.3rem;
+}
+
+@media (max-width: 560px) {
+  .popup-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .popup-actions .primary-btn,
+  .popup-actions .secondary-btn {
+    width: 100%;
+  }
 }
 
 .actions {
@@ -1943,24 +2537,23 @@ loadProducts()
 }
 
 .gallery-status {
-  position: absolute;
-  top: 0.5rem;
-  inset-inline-start: 0.5rem;
   border-radius: 999px;
   padding: 0.16rem 0.5rem;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 700;
+  color: #fff;
+  background: rgb(52 38 31 / 0.6);
+  backdrop-filter: blur(3px);
 }
 
 .gallery-status.on {
-  background: rgb(220 252 231 / 0.95);
-  color: var(--mg-success);
+  background: color-mix(in srgb, var(--mg-success) 85%, #000);
 }
 
 .gallery-status.off {
-  background: rgb(254 243 199 / 0.95);
-  color: #92400e;
+  background: rgb(146 64 14 / 0.85);
 }
+
 
 @media (max-width: 760px) {
   .toolbar {

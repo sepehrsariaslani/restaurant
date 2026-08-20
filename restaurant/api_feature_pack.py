@@ -102,6 +102,10 @@ __all__ = [
 	"fp_build_report_bi",
 	# product ops
 	"bulk_update_management_products",
+	"set_management_product_kanban_field",
+	"set_management_product_calendar_date",
+	"get_management_product_activity",
+	"add_management_product_comment",
 	"get_management_product_by_barcode",
 	"export_management_products_excel",
 	"import_management_products_excel",
@@ -212,6 +216,13 @@ def _fp_ensure_custom_fields(doctype_name, field_defs, anchor_candidates=None):
 
 def _fp_ensure_item_ops_fields():
 	"""Custom fields on Item: out-of-stock flag + per-item packaging price."""
+	# ثبت تاریخچه تغییرات (Version) هنگام save محصول
+	try:
+		if frappe.db.exists("DocType", "Item") and not frappe.db.get_value("DocType", "Item", "track_changes"):
+			frappe.db.set_value("DocType", "Item", "track_changes", 1)
+			frappe.clear_cache(doctype="Item")
+	except Exception:
+		pass
 	_fp_ensure_custom_fields(
 		"Item",
 		[
@@ -227,6 +238,17 @@ def _fp_ensure_item_ops_fields():
 				"label": "هزینه بسته بندی",
 				"fieldtype": "Currency",
 				"default": "0",
+			},
+			{
+				"fieldname": "restaurant_calendar_date",
+				"label": "تاریخ اختصاصی تقویم",
+				"fieldtype": "Date",
+			},
+			{
+				"fieldname": "restaurant_kitchen_ticket",
+				"label": "فیش آشپزخانه",
+				"fieldtype": "Check",
+				"default": "1",
 			},
 		],
 		anchor_candidates=("restaurant_enabled", "disabled"),
@@ -379,7 +401,14 @@ def bulk_update_management_products(item_names=None, action=None):
 			if not applied:
 				frappe.throw(_("Required custom fields are missing on Item."))
 
+			previous_values = {
+				key: frappe.db.get_value("Item", target, key) for key in applied
+			}
 			frappe.db.set_value("Item", target, applied, update_modified=True)
+			_fp_log_item_version(
+				target,
+				[[key, previous_values.get(key), applied[key]] for key in applied],
+			)
 			updated += 1
 			results.append({"item_name": target, "status": "ok", **applied})
 		except Exception as error:
@@ -392,6 +421,210 @@ def bulk_update_management_products(item_names=None, action=None):
 		"updated": updated,
 		"failed": len(results) - updated,
 		"results": results,
+	}
+
+
+def _fp_resolve_category_group(title, is_subcategory=0):
+	"""Find the Item Group name for a category/subcategory title."""
+	title = (title or "").strip()
+	if not title:
+		return ""
+	filters = {"item_group_name": title}
+	if _has_column("Item Group", "restaurant_is_menu_category"):
+		filters["restaurant_is_menu_category"] = 1
+	if _has_column("Item Group", "restaurant_is_subcategory"):
+		filters["restaurant_is_subcategory"] = cint(is_subcategory)
+	if _has_column("Item Group", "restaurant_active"):
+		filters["restaurant_active"] = 1
+	name = frappe.db.get_value("Item Group", filters, "name", order_by="name asc")
+	return (name or "").strip()
+
+
+@frappe.whitelist()
+def set_management_product_kanban_field(item_name=None, field=None, value=None):
+	"""Set a single product field when a kanban card is dragged to another column."""
+	_ensure_management_access()
+	_fp_ensure_item_ops_fields()
+	field = (field or "").strip()
+	if not field:
+		frappe.throw(_("Field is required for kanban move."))
+	target = _management_resolve_item_name(item_name)
+	if not target or not frappe.db.exists("Item", target):
+		frappe.throw(_("Item not found."), frappe.DoesNotExistError)
+
+	updates = {}
+	if field == "restaurant_category":
+		group = _fp_resolve_category_group(value, is_subcategory=0)
+		updates["restaurant_category"] = group or (value or "").strip()
+	elif field == "restaurant_subcategory":
+		group = _fp_resolve_category_group(value, is_subcategory=1)
+		updates["restaurant_subcategory"] = group or (value or "").strip()
+	elif field in ("restaurant_enabled", "restaurant_out_of_stock", "restaurant_coming_soon"):
+		updates[field] = cint(value)
+	else:
+		frappe.throw(_("Invalid field for kanban move: {0}").format(field))
+
+	applied = {key: val for key, val in updates.items() if _has_column("Item", key)}
+	if not applied:
+		frappe.throw(_("Required custom fields are missing on Item."))
+
+	previous_values = {}
+	for key in applied:
+		previous_values[key] = frappe.db.get_value("Item", target, key)
+	frappe.db.set_value("Item", target, applied, update_modified=True)
+	frappe.db.commit()
+	_fp_log_item_version(
+		target,
+		[[key, previous_values.get(key), applied[key]] for key in applied],
+	)
+	return {
+		"status": "success",
+		"item_name": target,
+		"field": field,
+		"value": (value or ""),
+		"updates": applied,
+	}
+
+
+
+
+def _fp_log_item_version(item_name, changes):
+	"""یک رکورد Version برای تغییر فیلدهای Item ثبت کن."""
+	try:
+		if not frappe.db.exists("DocType", "Version"):
+			return
+		normalized = []
+		for entry in changes or []:
+			if not entry or len(entry) < 3 or not entry[0]:
+				continue
+			normalized.append([str(entry[0]), entry[1], entry[2]])
+		if not normalized:
+			return
+		frappe.get_doc({
+			"doctype": "Version",
+			"ref_doctype": "Item",
+			"docname": item_name,
+			"data": frappe.as_json({
+				"changed": normalized,
+				"added": [],
+				"removed": [],
+				"row_changed": [],
+			}),
+		}).insert(ignore_permissions=True)
+	except Exception:
+		pass
+
+
+@frappe.whitelist()
+def set_management_product_calendar_date(item_name=None, date=None):
+	"""Set (or clear) the custom calendar date of a product (calendar drag & drop)."""
+	_ensure_management_access()
+	_fp_ensure_item_ops_fields()
+	target = _management_resolve_item_name(item_name)
+	if not target or not frappe.db.exists("Item", target):
+		frappe.throw(_("Item not found."), frappe.DoesNotExistError)
+
+	value = (date or "").strip()
+	if value:
+		try:
+			value = getdate(value).strftime("%Y-%m-%d")
+		except Exception:
+			frappe.throw(_("Invalid date: {0}").format(value))
+
+	if not _has_column("Item", "restaurant_calendar_date"):
+		frappe.throw(_("Calendar date field is missing on Item."))
+
+	previous = frappe.db.get_value("Item", target, "restaurant_calendar_date")
+	frappe.db.set_value(
+		"Item", target, "restaurant_calendar_date", value or None, update_modified=True
+	)
+	frappe.db.commit()
+	_fp_log_item_version(target, [["restaurant_calendar_date", previous, value]])
+	return {
+		"status": "success",
+		"item_name": target,
+		"calendar_date": value,
+	}
+
+
+@frappe.whitelist()
+def get_management_product_activity(item_name=None):
+	"""تاریخچه تغییرات (Version) و نظرات (Comment) یک محصول."""
+	_ensure_management_access()
+	target = _management_resolve_item_name(item_name)
+	if not target or not frappe.db.exists("Item", target):
+		frappe.throw(_("Item not found."), frappe.DoesNotExistError)
+
+	versions = []
+	if frappe.db.exists("DocType", "Version"):
+		rows = frappe.get_all(
+			"Version",
+			filters={"ref_doctype": "Item", "docname": target},
+			fields=["name", "creation", "owner", "data"],
+			order_by="creation desc",
+			limit=80,
+			ignore_permissions=True,
+		)
+		for row in rows:
+			versions.append({
+				"name": row.get("name"),
+				"creation": str(row.get("creation") or "")[:16],
+				"owner": (row.get("owner") or "").replace("@gmail.com", ""),
+				"data": row.get("data") or "",
+			})
+
+	comments = []
+	if frappe.db.exists("DocType", "Comment"):
+		rows = frappe.get_all(
+			"Comment",
+			filters={
+				"reference_doctype": "Item",
+				"reference_name": target,
+				"comment_type": "Comment",
+			},
+			fields=["name", "creation", "owner", "content"],
+			order_by="creation desc",
+			limit=100,
+			ignore_permissions=True,
+		)
+		for row in rows:
+			comments.append({
+				"name": row.get("name"),
+				"creation": str(row.get("creation") or "")[:16],
+				"owner": (row.get("owner") or "").replace("@gmail.com", ""),
+				"content": row.get("content") or "",
+			})
+
+	return {
+		"status": "success",
+		"item_name": target,
+		"versions": versions,
+		"comments": comments,
+	}
+
+
+@frappe.whitelist()
+def add_management_product_comment(item_name=None, content=None):
+	"""ثبت نظر روی یک محصول."""
+	_ensure_management_access()
+	target = _management_resolve_item_name(item_name)
+	if not target or not frappe.db.exists("Item", target):
+		frappe.throw(_("Item not found."), frappe.DoesNotExistError)
+	text = (content or "").strip()
+	if not text:
+		frappe.throw(_("Comment text is required."))
+	doc = frappe.get_doc({
+		"doctype": "Comment",
+		"comment_type": "Comment",
+		"reference_doctype": "Item",
+		"reference_name": target,
+		"content": text,
+	}).insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"name": doc.name,
+		"creation": str(doc.creation or "")[:16],
 	}
 
 
@@ -474,7 +707,7 @@ def get_management_product_by_barcode(barcode=None):
 # ---------------------------------------------------------------------------
 
 
-def _fp_product_export_rows(category=None, include_disabled=0):
+def _fp_product_export_rows(category=None, include_disabled=0, item_names=None):
 	include_disabled = cint(include_disabled)
 	filters = {}
 	if _has_column("Item", "variant_of"):
@@ -483,6 +716,10 @@ def _fp_product_export_rows(category=None, include_disabled=0):
 		filters["disabled"] = 0
 	if category:
 		filters["restaurant_category" if _has_column("Item", "restaurant_category") else "item_group"] = category
+	if item_names:
+		names = _fp_normalize_item_names(item_names)
+		if names:
+			filters["name"] = ["in", names]
 
 	fields = ["name", "item_code", "item_name", "item_group", "stock_uom", "disabled", "description"]
 	for optional in (
@@ -544,12 +781,12 @@ def _fp_product_export_rows(category=None, include_disabled=0):
 
 
 @frappe.whitelist()
-def export_management_products_excel(category=None, include_disabled=0):
-	"""Export the product catalog as an .xlsx file and return its URL."""
+def export_management_products_excel(category=None, include_disabled=0, item_names=None):
+	"""Export the product catalog (or the given item names) as an .xlsx file and return its URL."""
 	_ensure_management_access()
 	_fp_ensure_item_ops_fields()
 
-	data = _fp_product_export_rows(category=category, include_disabled=include_disabled)
+	data = _fp_product_export_rows(category=category, include_disabled=include_disabled, item_names=item_names)
 
 	try:
 		from frappe.utils.xlsxutils import make_xlsx

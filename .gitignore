@@ -5,3 +5,12 @@
 tags
 node_modules
 __pycache__node_modules/
+
+# تستهای موقت توسعه
+frontend/*-test-dist/
+frontend/pos-logic-test.mjs
+frontend/run-*-test.mjs
+frontend/run-*.mjs
+frontend/test-*.js
+frontend/vite.*-test.config.mjs
+frontend/*-test-dist

@@ -63,12 +63,12 @@ defineEmits(['update:modelValue'])
 .apt {
   display: inline-flex;
   align-items: stretch;
-  padding: 2px;
-  border-radius: 9px;
+  padding: 1px;
+  border-radius: 7px;
   background: var(--mg-bg-surface);
   border: 1px solid var(--mg-border-light);
-  gap: 2px;
-  height: 30px;
+  gap: 1px;
+  height: 22px;
   flex-shrink: 0;
 }
 
@@ -78,9 +78,9 @@ defineEmits(['update:modelValue'])
   color: var(--mg-text-muted);
   font-family: inherit;
   line-height: 1;
-  padding: 0 0.45rem;
-  min-width: 28px;
-  border-radius: 7px;
+  padding: 0 0.3rem;
+  min-width: 20px;
+  border-radius: 6px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;

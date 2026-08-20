@@ -5,6 +5,7 @@ export const PRODUCT_DETAIL_TABS = [
 	{ value: "variants", label: "مدل‌ها" },
 	{ value: "builder", label: "سفارشی‌سازی" },
 	{ value: "reports", label: "گزارش فروش" },
+	{ value: "changes", label: "تغییرات" },
 ];
 
 export const KITCHEN_PRINT_MODE_OPTIONS = [
@@ -110,6 +111,7 @@ export function createInitialProductSettingsForm() {
 		restaurant_show_allergen_warnings: false,
 		restaurant_kitchen_print_mode: "",
 		restaurant_stock_consumption_mode: "",
+		restaurant_kitchen_ticket: true,
 	};
 }
 
@@ -184,6 +186,7 @@ export function hydrateProductSettingsForm(form, payload = {}, tagOptions = []) 
 	form.restaurant_stock_consumption_mode = normalizeStockConsumptionMode(
 		item.restaurant_stock_consumption_mode,
 	);
+	form.restaurant_kitchen_ticket = Number(item.kitchen_ticket ?? 1) === 1;
 }
 
 export function serializeProductSettingsState(form, builderConfig = null) {
@@ -237,6 +240,8 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 		restaurant_stock_consumption_mode: normalizeStockConsumptionMode(
 			form.restaurant_stock_consumption_mode,
 		),
+		restaurant_kitchen_ticket: form.restaurant_kitchen_ticket ? 1 : 0,
+		restaurant_kitchen_ticket: form.restaurant_kitchen_ticket ? 1 : 0,
 		product_builder_config: clonePlainObject(builderConfig),
 	});
 }

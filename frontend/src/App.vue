@@ -2,6 +2,7 @@
   <div class="management-root" v-if="isManagement">
     <ManagementLayout :page="page" :brand-name="branding.name">
       <ManagementDashboardPage v-if="page === 'management-dashboard'" />
+      <ManagementSalesDashboardPage v-else-if="page === 'management-sales-dashboard'" />
       <ManagementPosPage v-else-if="page === 'management-pos'" />
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementPosDefaultsPage v-else-if="page === 'management-pos-defaults'" />
@@ -180,6 +181,7 @@ import NotFoundPage from './pages/NotFoundPage.vue'
 import KitchenDisplayPage from './pages/KitchenDisplayPage.vue'
 import ManagementLayout from './components/management/ManagementLayout.vue'
 import ManagementDashboardPage from './pages/management/ManagementDashboardPage.vue'
+import ManagementSalesDashboardPage from './pages/management/ManagementSalesDashboardPage.vue'
 import ManagementPosPage from './pages/management/ManagementPosPage.vue'
 import ManagementPosProfilePage from './pages/management/ManagementPosProfilePage.vue'
 import ManagementPosDefaultsPage from './pages/management/ManagementPosDefaultsPage.vue'
@@ -244,6 +246,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/login')) return 'management-login'
     if (pathname === '/management' || pathname === '/management/') return 'management-dashboard'
     if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
+    if (pathname.startsWith('/management/sales')) return 'management-sales-dashboard'
     if (pathname.startsWith('/management/couriers')) return 'management-couriers'
     if (pathname.startsWith('/management/users') || pathname.startsWith('/management/user-access')) return 'management-users'
     if (pathname.startsWith('/management/pos-defaults') || pathname.startsWith('/management/pos_defaults')) return 'management-pos-defaults'

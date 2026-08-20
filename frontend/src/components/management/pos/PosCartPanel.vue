@@ -132,10 +132,20 @@
 
 		<!-- Financial -->
 		<div class="fin-section">
+			<!-- Note (بالای تخفیف و مالیات) -->
+			<div class="fin-note-row">
+				<textarea
+					class="fin-note-input"
+					:value="note"
+					@input="$emit('update:note', $event.target.value)"
+					placeholder="یادداشت سفارش..."
+					rows="2"
+				></textarea>
+			</div>
+
 			<!-- Discount group: amount + coupon code -->
 			<div class="fin-group">
 				<div class="fin-row">
-					<span class="fin-label">تخفیف</span>
 					<div class="fin-control">
 						<AmountPercentToggle
 							:model-value="financial.discountType === 'percent' ? 'percent' : 'fixed'"
@@ -145,7 +155,7 @@
 						<PersianNumberInput
 							:model-value="financial.targetAmount != null ? totals.discountAmount : financial.discountValue"
 							input-class="fin-input"
-							placeholder="0"
+							:placeholder="discountPlaceholder"
 							:min="0"
 							:disabled="financial.targetAmount != null"
 							@update:model-value="patchFinancial({ discountValue: $event })"
@@ -163,13 +173,12 @@
 					</div>
 				</div>
 				<div class="fin-row">
-					<span class="fin-label">کد تخفیف</span>
 					<div class="fin-control">
 						<input
 							class="fin-input"
 							:value="financial.couponCode"
 							@input="patchFinancial({ couponCode: $event.target.value })"
-							placeholder="کد / معرف"
+							placeholder="کد تخفیف / معرف"
 						/>
 						<button type="button" class="fin-action-btn" @click="$emit('verify-coupon')">بررسی</button>
 					</div>
@@ -179,7 +188,6 @@
 			<!-- Service + Tax group -->
 			<div class="fin-group">
 				<div class="fin-row">
-					<span class="fin-label">حق سرویس</span>
 					<div class="fin-control">
 						<AmountPercentToggle
 							:model-value="financial.serviceType === 'percent' ? 'percent' : 'fixed'"
@@ -189,7 +197,7 @@
 						<PersianNumberInput
 							:model-value="financial.serviceValue"
 							input-class="fin-input"
-							placeholder="0"
+							:placeholder="servicePlaceholder"
 							:min="0"
 							@update:model-value="patchFinancial({ serviceValue: $event })"
 						/>
@@ -215,7 +223,7 @@
 						<PersianNumberInput
 							:model-value="financial.taxValue"
 							input-class="fin-input"
-							placeholder="ارزش افزوده"
+							:placeholder="taxPlaceholder"
 							:min="0"
 							:disabled="Boolean(financial.taxExempt)"
 							@update:model-value="patchFinancial({ taxValue: $event })"
@@ -224,15 +232,6 @@
 				</div>
 			</div>
 
-			<!-- Note -->
-			<div class="fin-note-row">
-				<input
-					class="fin-note-input"
-					:value="note"
-					@input="$emit('update:note', $event.target.value)"
-					placeholder="یادداشت سفارش..."
-				/>
-			</div>
 		</div>
 
 		<!-- Summary -->
@@ -613,6 +612,17 @@ const finalAmountModalOpen = ref(false);
 const paymentPopupIntent = ref("pay");
 const paymentSplits = ref([]);
 const discountInputRef = ref(null);
+
+// لیبل‌های مالی داخل خود input (placeholder) تا فضای ورودی بزرگ‌تر شود
+const discountPlaceholder = computed(() =>
+	String(props.financial?.discountType || 'percent') === 'percent' ? 'تخفیف (٪)' : 'تخفیف (مبلغ)'
+);
+const servicePlaceholder = computed(() =>
+	String(props.financial?.serviceType || 'percent') === 'percent' ? 'حق سرویس (٪)' : 'حق سرویس (مبلغ)'
+);
+const taxPlaceholder = computed(() =>
+	String(props.financial?.taxType || 'percent') === 'percent' ? 'مالیات (٪)' : 'مالیات (مبلغ)'
+);
 
 const splitTotal = computed(() =>
 	paymentSplits.value.reduce((sum, s) => sum + normalizeMoneyNumber(s.amount), 0),
@@ -1328,10 +1338,9 @@ defineExpose({
 .fin-row {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: 0.42rem;
-	padding: 0.3rem 0.5rem;
-	min-height: 32px;
+	padding: 0.22rem 0.5rem;
+	min-height: 30px;
 }
 
 .fin-label {
@@ -1360,20 +1369,43 @@ defineExpose({
 .fin-control {
 	display: flex;
 	align-items: center;
-	gap: 0.25rem;
-	flex-shrink: 0;
-	max-width: 205px;
+	gap: 0.28rem;
+	flex: 1;
+	min-width: 0;
+	max-width: none;
+}
+
+/* PersianNumberInput یک wrapper دارد؛ باید تمام عرض ردیف را بگیرد */
+.fin-control :deep(.persian-number-input) {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+}
+
+.fin-control :deep(.persian-number-input .input-wrap) {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+}
+
+.fin-control :deep(.persian-number-input .number-input),
+.fin-control :deep(.persian-number-input .fin-input) {
+	flex: 1;
+	min-width: 0;
+	width: 100%;
 }
 
 .final-amount-trigger {
-	width: 28px;
-	height: 28px;
-	flex: 0 0 28px;
+	width: 22px;
+	height: 22px;
+	flex: 0 0 22px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	border: 1px solid color-mix(in srgb, var(--mg-primary) 30%, var(--mg-border-light) 70%);
-	border-radius: 8px;
+	border-radius: 7px;
 	background: color-mix(in srgb, var(--mg-primary) 7%, var(--mg-bg-page) 93%);
 	color: var(--mg-primary);
 	cursor: pointer;
@@ -1389,16 +1421,17 @@ defineExpose({
 }
 
 .fin-input {
+	flex: 1;
+	min-width: 0;
+	width: 100%;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
-	border-radius: 8px;
-	padding: 0.25rem 0.45rem;
+	border-radius: 7px;
+	padding: 0.1rem 0.45rem;
 	font-size: 0.74rem;
 	font-family: inherit;
-	width: 100%;
-	min-width: 0;
-	height: 28px;
+	height: 22px;
 	outline: none;
 	transition: all 0.15s ease;
 }
@@ -1418,16 +1451,18 @@ defineExpose({
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	background: var(--mg-bg-page);
 	color: var(--mg-primary);
-	font-size: 0.7rem;
+	font-size: 0.68rem;
 	font-weight: 600;
 	cursor: pointer;
 	flex-shrink: 0;
 	transition: all 0.15s ease;
 	font-family: inherit;
 	white-space: nowrap;
-	border-radius: 8px;
-	padding: 0.25rem 0.5rem;
-	height: 28px;
+	border-radius: 7px;
+	padding: 0.1rem 0.4rem;
+	height: 22px;
+	display: inline-flex;
+	align-items: center;
 }
 
 .fin-action-btn:hover {
@@ -1435,7 +1470,7 @@ defineExpose({
 }
 
 .fin-note-row {
-	margin-top: 0.1rem;
+	margin: 0;
 }
 
 .fin-note-input {
@@ -1444,16 +1479,19 @@ defineExpose({
 	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 8px;
-	padding: 0.28rem 0.5rem;
-	font-size: 0.72rem;
+	padding: 0.4rem 0.5rem;
+	font-size: 0.74rem;
 	font-family: inherit;
-	height: 28px;
+	min-height: 44px;
+	line-height: 1.5;
+	resize: vertical;
 	outline: none;
 	transition: all 0.15s ease;
 }
 
 .fin-note-input::placeholder {
-	color: color-mix(in srgb, var(--mg-primary) 30%, transparent);
+	color: var(--mg-text-muted);
+	opacity: 0.85;
 }
 
 .fin-note-input:focus {

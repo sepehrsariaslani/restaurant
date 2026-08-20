@@ -35,7 +35,13 @@
       </span>
     </button>
 
-    <div v-if="isOpen" class="dropdown-panel" role="listbox">
+    <div
+      v-if="isOpen"
+      class="dropdown-panel"
+      :class="{ 'dropdown-panel--fixed': fixedPanel }"
+      :style="fixedPanel ? panelStyle : {}"
+      role="listbox"
+    >
       <div class="search-row">
         <input
           ref="searchInputRef"
@@ -212,6 +218,10 @@ const props = defineProps({
     type: String,
     default: 'افزودن مقدار جدید',
   },
+  fixedPanel: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'create-option', 'item-created'])
@@ -219,6 +229,7 @@ const emit = defineEmits(['update:modelValue', 'create-option', 'item-created'])
 const rootRef = ref(null)
 const searchInputRef = ref(null)
 const isOpen = ref(false)
+const panelStyle = ref({})
 const searchQuery = ref('')
 const highlightedIndex = ref(-1)
 const itemCreatorOpen = ref(false)
@@ -393,17 +404,38 @@ function clearValue() {
   }
 }
 
+function updatePanelPosition() {
+  if (!props.fixedPanel || !rootRef.value) return
+  const rect = rootRef.value.getBoundingClientRect()
+  const panelWidth = Math.max(rect.width, 220)
+  const spaceBelow = window.innerHeight - rect.bottom
+  const panelHeight = 320
+  const openUp = spaceBelow < panelHeight && rect.top > spaceBelow
+  panelStyle.value = {
+    position: 'fixed',
+    top: openUp ? `${Math.max(8, rect.top - panelHeight)}px` : `${rect.bottom + 6}px`,
+    insetInlineStart: `${Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8))}px`,
+    width: `${panelWidth}px`,
+    maxHeight: `${Math.min(panelHeight, window.innerHeight - 16)}px`,
+    zIndex: 13000,
+  }
+}
+
 function toggleOpen() {
   if (props.disabled) {
     return
   }
   isOpen.value = !isOpen.value
+  if (isOpen.value) {
+    updatePanelPosition()
+  }
 }
 
 function openAndFocus() {
   if (props.disabled) {
     return
   }
+  updatePanelPosition()
   isOpen.value = true
 }
 
@@ -559,7 +591,7 @@ onBeforeUnmount(() => {
 }
 
 .selected-label.placeholder {
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
 }
 
 .trigger-actions {
@@ -570,17 +602,17 @@ onBeforeUnmount(() => {
 }
 
 .chevron {
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   font-size: 0.74rem;
 }
 
 .clear-btn {
   width: 1.35rem;
   height: 1.35rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.22);
+  border: 1px solid var(--mg-border-light);
   border-radius: 999px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.85);
-  color: var(--text-muted);
+  background: var(--mg-bg-soft);
+  color: var(--mg-text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -590,7 +622,7 @@ onBeforeUnmount(() => {
 }
 
 .clear-btn:hover {
-  color: var(--text-primary);
+  color: var(--mg-text-main);
 }
 
 .dropdown-panel {
@@ -598,17 +630,23 @@ onBeforeUnmount(() => {
   top: calc(100% + 0.35rem);
   inset-inline-start: 0;
   width: 100%;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  border: 1px solid var(--mg-border-light);
   border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 18px 30px rgb(15 23 42 / 0.14);
+  background: var(--mg-bg-surface);
+  color: var(--mg-text-main);
+  box-shadow: var(--mg-shadow-md);
   overflow: hidden;
   z-index: 1201;
 }
 
+.dropdown-panel--fixed {
+  position: fixed;
+  overflow-y: auto;
+}
+
 .search-row {
   padding: 0.5rem;
-  border-bottom: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  border-bottom: 1px solid var(--mg-border-light);
 }
 
 .search-input {
@@ -628,7 +666,7 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   padding: 0.48rem 0.56rem;
   font-size: 0.8rem;
-  color: var(--text-primary);
+  color: var(--mg-text-main);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -639,15 +677,15 @@ onBeforeUnmount(() => {
 
 .option-btn:hover,
 .option-btn.highlighted {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.09);
+  background: color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
 .option-btn.selected {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  background: color-mix(in srgb, var(--mg-primary) 16%, transparent);
 }
 
 .create-option-btn {
-  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.28);
+  border: 1px dashed color-mix(in srgb, var(--mg-primary) 35%, var(--mg-border-light));
   margin-top: 0.24rem;
 }
 
@@ -774,7 +812,7 @@ onBeforeUnmount(() => {
 }
 
 .option-check {
-  color: var(--accent-green);
+  color: var(--mg-success);
   font-size: 0.8rem;
 }
 
@@ -782,7 +820,7 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0.75rem 0.65rem;
   font-size: 0.76rem;
-  color: var(--text-muted);
+  color: var(--mg-text-muted);
   text-align: center;
 }
 
@@ -809,9 +847,9 @@ onBeforeUnmount(() => {
 }
 
 .tone-dark .dropdown-panel {
-  border-color: rgb(255 255 255 / 0.26);
-  background: #0f172a;
-  box-shadow: 0 20px 34px rgb(2 6 23 / 0.62);
+  border-color: var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  box-shadow: var(--mg-shadow-md);
 }
 
 .tone-dark .search-row {

@@ -17,6 +17,55 @@ function storeCsrfToken(token) {
 	window.frappe.csrf_token = t;
 }
 
+// ── sandbox session fallback ────────────────────────────────────────────────
+// When the app runs inside a cross-site iframe the browser may refuse the
+// session cookie, so we keep the sid in localStorage and send it as a request
+// parameter (frappe accepts `sid` via form_dict) as a robust fallback.
+const SID_STORAGE_KEY = "frappe_sandbox_sid";
+
+function getStoredSid() {
+	try {
+		return String(window.localStorage?.getItem(SID_STORAGE_KEY) || "").trim();
+	} catch (_) {
+		return "";
+	}
+}
+
+function storeSid(sid) {
+	const t = String(sid || "").trim();
+	try {
+		if (t) window.localStorage?.setItem(SID_STORAGE_KEY, t);
+		else window.localStorage?.removeItem(SID_STORAGE_KEY);
+	} catch (_) {}
+}
+
+function clearStoredSid() {
+	try {
+		window.localStorage?.removeItem(SID_STORAGE_KEY);
+	} catch (_) {}
+}
+
+function tryCaptureSidFromCookie() {
+	try {
+		const match = document.cookie.match(/(?:^|;\s*)sid=([^;]+)/);
+		if (match && match[1]) storeSid(decodeURIComponent(match[1]));
+	} catch (_) {}
+}
+
+function sidParamFor(args = {}) {
+	const sid = getStoredSid();
+	if (!sid) return args;
+	const out = { ...args };
+	if (!out.sid) out.sid = sid;
+	return out;
+}
+
+function sidQuerySuffix() {
+	const sid = getStoredSid();
+	return sid ? `&sid=${encodeURIComponent(sid)}` : "";
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 export async function uploadFileToFrappe(file, options = {}) {
 	if (!file) {
 		throw new Error("فایلی برای آپلود انتخاب نشده است.");
@@ -30,6 +79,8 @@ export async function uploadFileToFrappe(file, options = {}) {
 		if (options.docname) formData.append("docname", String(options.docname));
 		if (options.fieldname) formData.append("fieldname", String(options.fieldname));
 		if (options.folder) formData.append("folder", String(options.folder));
+		const sid = getStoredSid();
+		if (sid) formData.append("sid", sid);
 		return formData;
 	};
 
@@ -71,10 +122,14 @@ export async function uploadFileToFrappe(file, options = {}) {
 
 async function refreshCsrfToken() {
 	try {
-		const res = await fetch("/api/method/restaurant.api.get_management_csrf_token", {
-			method: "GET",
-			credentials: "include",
-		});
+		const suffix = sidQuerySuffix();
+		const res = await fetch(
+			`/api/method/restaurant.api.get_management_csrf_token?${suffix.replace(/^&/, "")}`,
+			{
+				method: "GET",
+				credentials: "include",
+			},
+		);
 		if (res.ok) {
 			const data = await res.json().catch(() => ({}));
 			const token = String(data?.message || "").trim();
@@ -120,7 +175,7 @@ export async function callMethodByPath(methodPath, args = {}) {
 			method: "POST",
 			headers,
 			credentials: "include",
-			body: JSON.stringify(args),
+			body: JSON.stringify(sidParamFor(args)),
 		});
 	};
 
@@ -162,7 +217,10 @@ export async function callMethodByPathGET(methodPath, args = {}, opts = {}) {
 	}
 
 	const query = params.toString();
-	const url = query ? `/api/method/${methodPath}?${query}` : `/api/method/${methodPath}`;
+	const suffix = sidQuerySuffix();
+	const url = query
+		? `/api/method/${methodPath}?${query}${suffix}`
+		: `/api/method/${methodPath}?${suffix.replace(/^&/, "")}`;
 	const response = await fetch(url, {
 		method: "GET",
 		credentials: "include",
@@ -246,6 +304,7 @@ const STATIC_DOCTYPE_COLUMNS = {
 		"standard_rate",
 		"disabled",
 		"custom_snapp_code",
+		"restaurant_calendar_date",
 	]),
 	"Item Group": new Set([
 		"name",
@@ -481,6 +540,7 @@ async function listManagementProductsFallback({
 	const itemHasImage = await hasDoctypeField("Item", "image");
 	const itemHasItemImage = await hasDoctypeField("Item", "item_image");
 	const itemHasRestaurantItemTags = await hasDoctypeField("Item", "restaurant_item_tags");
+	const itemHasRestaurantCalendarDate = await hasDoctypeField("Item", "restaurant_calendar_date");
 	const itemGroupHasSlug = await hasDoctypeField("Item Group", "restaurant_slug");
 
 	const fields = ["name", "item_code", "item_name", "item_group", "standard_rate", "disabled"];
@@ -513,6 +573,9 @@ async function listManagementProductsFallback({
 	}
 	if (itemHasRestaurantItemTags) {
 		fields.push("restaurant_item_tags");
+	}
+	if (itemHasRestaurantCalendarDate) {
+		fields.push("restaurant_calendar_date");
 	}
 
 	const query = String(search || "").trim();
@@ -610,12 +673,33 @@ async function listManagementProductsFallback({
 			limit_page_length: 500,
 		});
 	} catch (error) {
-		return {
-			products: [],
-			stock: {
-				low_threshold: 5,
-			},
-		};
+		// اگر فیلد جدید هنوز روی سرور ساخته نشده بود، بدون آن دوباره تلاش کن
+		if (fields.includes("restaurant_calendar_date")) {
+			try {
+				rows = await callMethodByPath("frappe.client.get_list", {
+					doctype: "Item",
+					fields: fields.filter((f) => f !== "restaurant_calendar_date"),
+					filters: filters.length ? filters : undefined,
+					or_filters: orFilters.length ? orFilters : undefined,
+					order_by: "modified desc",
+					limit_page_length: 500,
+				});
+			} catch (retryError) {
+				return {
+					products: [],
+					stock: {
+						low_threshold: 5,
+					},
+				};
+			}
+		} else {
+			return {
+				products: [],
+				stock: {
+					low_threshold: 5,
+				},
+			};
+		}
 	}
 
 	const groupNames = new Set();
@@ -712,6 +796,7 @@ async function listManagementProductsFallback({
 			is_active: isActive ? 1 : 0,
 			is_disabled: Number(row?.disabled || 0) ? 1 : 0,
 			stock_qty: Number(stockMap.get(itemCode) || 0),
+			calendar_date: String(row?.restaurant_calendar_date || "").slice(0, 10),
 			tags: itemHasRestaurantItemTags
 				? String(row?.restaurant_item_tags || "")
 						.split(",")
@@ -984,6 +1069,11 @@ export async function loginManagementUser({ usr = "", pwd = "" } = {}) {
 
 	const msg = payload.message || payload;
 	if (msg?.csrf_token) storeCsrfToken(msg.csrf_token);
+	if (msg?.sid) {
+		storeSid(msg.sid);
+	} else {
+		tryCaptureSidFromCookie();
+	}
 	await refreshCsrfToken();
 
 	return msg;
@@ -991,11 +1081,18 @@ export async function loginManagementUser({ usr = "", pwd = "" } = {}) {
 
 export async function logoutManagementUser() {
 	try {
-		return await callMethodByPath("logout", {});
+		const result = await callMethodByPath("logout", {});
+		return result;
 	} catch (error) {
 		return { status: "ok" };
+	} finally {
+		clearStoredSid();
 	}
 }
+
+// On app load, if the browser did store the session cookie (non-iframe mode),
+// mirror it into localStorage so the sid fallback keeps working seamlessly.
+tryCaptureSidFromCookie();
 
 export async function getMenuBoot(branch = "") {
 	const args = { branch };
@@ -1630,12 +1727,14 @@ export function updateManagementOrder({
 	note,
 	customer_name,
 	mobile,
+	secondary_customer,
 } = {}) {
 	const args = { order_name };
 	if (payment_method !== undefined) args.payment_method = payment_method;
 	if (note !== undefined) args.note = note;
 	if (customer_name !== undefined) args.customer_name = customer_name;
 	if (mobile !== undefined) args.mobile = mobile;
+	if (secondary_customer !== undefined) args.secondary_customer = secondary_customer;
 	return callRestaurantAPI("update_management_order", args);
 }
 
@@ -2770,6 +2869,10 @@ export function listManagementCustomers({ search = "", date_from = "", date_to =
 	return callRestaurantAPI("list_management_customers", { search, date_from, date_to });
 }
 
+export function addManagementCustomer({ customer_name = "", mobile = "" } = {}) {
+	return callRestaurantAPI("add_management_customer", { customer_name, mobile });
+}
+
 export function listManagementUsers({ search = "" } = {}) {
 	return callRestaurantAPI("list_management_users", { search });
 }
@@ -3162,8 +3265,38 @@ export function bulkUpdateManagementProducts(itemNames, action) {
 	});
 }
 
-export function exportManagementProductsExcel({ category = "", include_disabled = 0 } = {}) {
-	return callRestaurantAPI("export_management_products_excel", { category, include_disabled });
+export function setManagementProductKanbanField({ item_name, field, value } = {}) {
+	return callRestaurantAPI("set_management_product_kanban_field", {
+		item_name,
+		field,
+		value,
+	});
+}
+
+export function setManagementProductCalendarDate({ item_name, date } = {}) {
+	return callRestaurantAPI("set_management_product_calendar_date", {
+		item_name,
+		date: date || "",
+	});
+}
+
+export function getManagementProductActivity({ item_name } = {}) {
+	return callRestaurantAPI("get_management_product_activity", { item_name });
+}
+
+export function addManagementProductComment({ item_name, content } = {}) {
+	return callRestaurantAPI("add_management_product_comment", {
+		item_name,
+		content: content || "",
+	});
+}
+
+export function exportManagementProductsExcel({ category = "", include_disabled = 0, item_names = null } = {}) {
+	return callRestaurantAPI("export_management_products_excel", {
+		category,
+		include_disabled,
+		item_names: Array.isArray(item_names) ? item_names : [],
+	});
 }
 
 export function importManagementProductsExcel({
