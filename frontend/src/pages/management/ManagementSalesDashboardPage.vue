@@ -280,10 +280,10 @@ function trendClass(trend) {
   return ''
 }
 
-const trendCharts = computed(() => applySystemChartColors((trendReport.value?.charts || []).slice(0, 2)))
-const hourlyCharts = computed(() => applySystemChartColors((hourlyReport.value?.charts || []).slice(0, 2)))
-const topProductsCharts = computed(() => applySystemChartColors((topProductsReport.value?.charts || []).slice(0, 2)))
-const channelCharts = computed(() => applySystemChartColors((channelReport.value?.charts || []).slice(0, 2)))
+const trendCharts = computed(() => localizeCharts(applySystemChartColors((trendReport.value?.charts || []).slice(0, 2))))
+const hourlyCharts = computed(() => localizeCharts(applySystemChartColors((hourlyReport.value?.charts || []).slice(0, 2))))
+const topProductsCharts = computed(() => localizeCharts(applySystemChartColors((topProductsReport.value?.charts || []).slice(0, 2))))
+const channelCharts = computed(() => localizeCharts(applySystemChartColors((channelReport.value?.charts || []).slice(0, 2))))
 
 // پالت رنگ‌های سیستم: سبز موفقیت، نارنجی اصلی، زیتونی
 const SYSTEM_PALETTE = ['#6F7B56', '#C97852', '#8A8B63']
@@ -296,6 +296,51 @@ function applySystemChartColors(charts = []) {
       color: SYSTEM_PALETTE[idx % SYSTEM_PALETTE.length] || series.color,
     })),
   }))
+}
+
+// ترجمه عنوان چارت‌ها و لیبل سری‌ها به فارسی
+const CHART_TITLE_FA = {
+  'Sales vs Expected': 'فروش در برابر پیش‌بینی',
+  'Cumulative Sales': 'فروش تجمعی',
+  'Hourly Sales': 'فروش ساعتی',
+  'Hourly Orders': 'سفارش‌های ساعتی',
+  'Top Products by Sales': 'پرفروش‌ترین محصولات (بر اساس مبلغ)',
+  'Top Products by Quantity': 'پرفروش‌ترین محصولات (بر اساس تعداد)',
+  'Sales by Channel': 'فروش بر اساس کانال',
+  'Orders by Channel': 'سفارش بر اساس کانال',
+  'Sales Trend': 'روند فروش',
+  'Top Products': 'پرفروش‌ترین محصولات',
+  'Channel Split': 'تفکیک کانال‌ها',
+  'Hourly Sales Trend': 'روند فروش ساعتی',
+}
+
+const SERIES_LABEL_FA = {
+  'Sales': 'فروش',
+  'Expected': 'پیش‌بینی',
+  'Cumulative': 'تجمعی',
+  'Orders': 'سفارش‌ها',
+  'Quantity': 'تعداد',
+  'Amount': 'مبلغ',
+  'Qty': 'تعداد',
+  'Count': 'تعداد',
+}
+
+function localizeCharts(charts = []) {
+  return charts.map((chart) => {
+    const title = String(chart.title || '')
+    const localizedTitle = CHART_TITLE_FA[title] || title
+    const subtitle = String(chart.subtitle || '')
+    const localizedSubtitle = CHART_TITLE_FA[subtitle] || SERIES_LABEL_FA[subtitle] || subtitle
+    return {
+      ...chart,
+      title: localizedTitle,
+      subtitle: localizedSubtitle || undefined,
+      series: (chart.series || []).map((series) => ({
+        ...series,
+        label: SERIES_LABEL_FA[String(series.label || '')] || series.label,
+      })),
+    }
+  })
 }
 
 const statusRows = computed(() => {
