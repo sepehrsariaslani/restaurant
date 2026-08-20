@@ -379,6 +379,11 @@ if [ -f "$REPO/dev_bootstrap.py" ]; then
   cd /home/user/bench/sites
   /home/user/bench/env/bin/python "$REPO/dev_bootstrap.py"
 fi
+# داده‌های تستی داشبورد فروش (سفارش‌های نمونه ۳۰ روزه)
+if [ -f "$REPO/dev_sales_seed.py" ]; then
+  cd /home/user/bench/sites
+  /home/user/bench/env/bin/python "$REPO/dev_sales_seed.py" || true
+fi
 # مشتری‌های ثانویه قدیمی (اسنپ) هم به‌عنوان مشتری واقعی ساخته می‌شوند
 cd /home/user/bench/sites
 /home/user/bench/env/bin/python - <<'PYEOF'
