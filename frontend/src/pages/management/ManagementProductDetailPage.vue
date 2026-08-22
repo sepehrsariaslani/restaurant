@@ -237,30 +237,27 @@
               hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
             />
             <div class="restock-field">
-              <span class="field-label">تکمیل موجودی</span>
-              <PersianDateInput
-                v-model="settingsForm.restaurant_restock_date"
-                placeholder="انتخاب تاریخ تکمیل"
-              />
-              <small class="field-help">
-                وقتی تاریخی انتخاب شود، در سایت به‌جای قیمت «اتمام» نمایش داده می‌شود تا تاریخ تکمیل.
-              </small>
-            </div>
-            <div class="restock-field">
+              <span class="field-label">موجودی</span>
               <div class="oos-toggle-row">
-                <ManagementToggleSwitch
-                  v-model="settingsForm.restaurant_out_of_stock"
-                  label="ناموجود"
-                  hint="با روشن شدن، محصول در سایت «ناموجود» نمایش داده می‌شود."
-                />
+                <button
+                  type="button"
+                  class="stock-toggle-btn"
+                  :class="{ active: settingsForm.restaurant_out_of_stock }"
+                  @click="settingsForm.restaurant_out_of_stock = !settingsForm.restaurant_out_of_stock"
+                >
+                  {{ settingsForm.restaurant_out_of_stock ? 'ناموجود' : 'موجود' }}
+                </button>
+                <small class="field-help" v-if="!settingsForm.restaurant_out_of_stock">
+                  محصول در سایت قابل سفارش است.
+                </small>
               </div>
               <PersianDateInput
                 v-if="settingsForm.restaurant_out_of_stock"
                 v-model="settingsForm.out_of_stock_until"
-                placeholder="ناموجود تا تاریخ (اختیاری)"
+                placeholder="کی دوباره موجود می‌شود؟"
               />
-              <small class="field-help">
-                اگر تاریخ بدهید، «ناموجود» تا آن تاریخ نمایش داده می‌شود.
+              <small class="field-help" v-if="settingsForm.restaurant_out_of_stock">
+                تا این تاریخ در سایت «ناموجود» نمایش داده می‌شود.
               </small>
             </div>
             <ManagementToggleSwitch
@@ -3393,6 +3390,25 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .pg-name-field input {
   min-height: 2.3rem;
+}
+
+.stock-toggle-btn {
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  color: var(--mg-success, #6f7b56);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 0.42rem 1.1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stock-toggle-btn.active {
+  border-color: var(--mg-danger, #a6543f);
+  background: color-mix(in srgb, var(--mg-danger, #a6543f) 12%, transparent);
+  color: var(--mg-danger, #a6543f);
 }
 
 .oos-toggle-row {

@@ -938,14 +938,27 @@
                 />
               </label>
 
-              <label class="qe-field">
-                <span>تکمیل موجودی</span>
-                <PersianDateInput
-                  v-model="quickEditForm.restaurant_restock_date"
-                  placeholder="انتخاب تاریخ تکمیل"
-                />
-                <small class="qe-help">با انتخاب تاریخ، در سایت «اتمام» نمایش داده می‌شود تا تاریخ تکمیل.</small>
-              </label>
+              <div class="qe-field">
+                <span>موجودی</span>
+                <div class="stock-toggle-row">
+                  <button
+                    type="button"
+                    class="stock-toggle-btn"
+                    :class="{ active: quickEditForm.out_of_stock }"
+                    @click="quickEditForm.out_of_stock = !quickEditForm.out_of_stock"
+                  >
+                    {{ quickEditForm.out_of_stock ? 'ناموجود' : 'موجود' }}
+                  </button>
+                  <small class="qe-help" v-if="!quickEditForm.out_of_stock">محصول در سایت قابل سفارش است.</small>
+                </div>
+                <template v-if="quickEditForm.out_of_stock">
+                  <PersianDateInput
+                    v-model="quickEditForm.out_of_stock_until"
+                    placeholder="کی دوباره موجود می‌شود؟"
+                  />
+                  <small class="qe-help">تا این تاریخ در سایت «ناموجود» نمایش داده می‌شود.</small>
+                </template>
+              </div>
 
               <p v-if="quickEditError" class="error">{{ quickEditError }}</p>
               <p v-if="quickEditSuccess" class="quick-edit-success">{{ quickEditSuccess }}</p>
@@ -1124,7 +1137,8 @@ const quickEditForm = reactive({
   restaurant_short_desc: '',
   restaurant_long_desc: '',
   item_group: '',
-  restaurant_restock_date: '',
+  out_of_stock: false,
+  out_of_stock_until: '',
 })
 const quickEditItemGroupOptions = ref([])
 
@@ -1137,17 +1151,24 @@ async function openQuickEdit(item) {
   quickEditForm.restaurant_short_desc = String(item?.short_desc || item?.restaurant_short_desc || '').trim()
   quickEditForm.restaurant_long_desc = String(item?.long_desc || item?.restaurant_long_desc || '').trim()
   quickEditForm.item_group = String(item?.item_group || '').trim()
-  quickEditForm.restaurant_restock_date = String(item?.restock_date || '').trim()
+  quickEditForm.out_of_stock = Number(item?.out_of_stock ?? item?.restaurant_out_of_stock ?? 0) === 1
+  quickEditForm.out_of_stock_until = String(item?.out_of_stock_until || '').trim()
   quickEditOpen.value = true
   try {
     const payload = await getManagementProductDetail({ item_name: quickEditForm.name })
     const detailItem = payload?.item || {}
+    // قیمت از pricing.current_price می‌آید (نه از item)
+    const currentPrice = payload?.pricing?.current_price
+    const resolvedPrice = Number(currentPrice?.price_list_rate ?? detailItem.base_price ?? detailItem.standard_rate ?? 0)
+    if (resolvedPrice > 0) {
+      quickEditForm.price = resolvedPrice
+    }
     quickEditForm.item_name = String(detailItem.item_name || quickEditForm.item_name || '').trim()
-    quickEditForm.price = Number(detailItem.base_price ?? detailItem.standard_rate ?? quickEditForm.price)
     quickEditForm.restaurant_short_desc = String(detailItem.short_description || detailItem.restaurant_short_desc || quickEditForm.restaurant_short_desc).trim()
     quickEditForm.restaurant_long_desc = String(detailItem.long_description || detailItem.restaurant_long_desc || quickEditForm.restaurant_long_desc).trim()
     quickEditForm.item_group = String(detailItem.item_group || quickEditForm.item_group).trim()
-    quickEditForm.restaurant_restock_date = String(detailItem.restock_date || detailItem.restaurant_restock_date || '').trim()
+    quickEditForm.out_of_stock = Number(detailItem.restaurant_out_of_stock ?? detailItem.out_of_stock ?? quickEditForm.out_of_stock) === 1
+    quickEditForm.out_of_stock_until = String(detailItem.out_of_stock_until || detailItem.restaurant_out_of_stock_until || '').trim()
     const fieldOptions = payload?.field_options || {}
     const itemGroups = Array.isArray(fieldOptions?.item_groups) ? fieldOptions.item_groups : []
     quickEditItemGroupOptions.value = itemGroups.map((row) => ({
@@ -1183,7 +1204,8 @@ async function saveQuickEdit() {
         restaurant_short_desc: quickEditForm.restaurant_short_desc,
         restaurant_long_desc: quickEditForm.restaurant_long_desc,
         item_group: quickEditForm.item_group,
-        restaurant_restock_date: quickEditForm.restaurant_restock_date,
+        restaurant_out_of_stock: quickEditForm.out_of_stock ? 1 : 0,
+        restaurant_out_of_stock_until: quickEditForm.out_of_stock ? quickEditForm.out_of_stock_until : '',
       }),
     ])
     quickEditSuccess.value = 'تغییرات ذخیره شد و محصولات به‌روز شد.'
@@ -8289,6 +8311,32 @@ kbd {
 .qe-textarea {
   resize: vertical;
   font-weight: 400;
+}
+
+.stock-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stock-toggle-btn {
+  border: 1px solid var(--mg-border-light);
+  background: var(--mg-bg-surface);
+  color: var(--mg-success, #6f7b56);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stock-toggle-btn.active {
+  border-color: var(--mg-danger, #a6543f);
+  background: color-mix(in srgb, var(--mg-danger, #a6543f) 12%, transparent);
+  color: var(--mg-danger, #a6543f);
 }
 
 .qe-help {
