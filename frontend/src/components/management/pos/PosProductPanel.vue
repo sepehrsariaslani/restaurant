@@ -270,6 +270,15 @@
 											<SlidersHorizontal :size="14" :stroke-width="2.3" />
 											<span class="compact-bom-label">BOM</span>
 										</button>
+										<button
+											type="button"
+											class="compact-action-btn compact-action-btn--edit"
+											title="ویرایش سریع محصول"
+											aria-label="ویرایش سریع محصول"
+											@click.stop="$emit('quick-edit', item)"
+										>
+											<AlertCircle :size="14" :stroke-width="2.4" />
+										</button>
 									</div>
 								</article>
 							</template>
@@ -329,6 +338,15 @@
 											<SlidersHorizontal :size="13" :stroke-width="2.3" aria-hidden="true" />
 											<span>BOM</span>
 										</button>
+										<button
+											type="button"
+											class="bom-btn quick-edit-btn"
+											title="ویرایش سریع محصول"
+											aria-label="ویرایش سریع محصول"
+											@click.stop="$emit('quick-edit', item)"
+										>
+											<AlertCircle :size="13" :stroke-width="2.4" aria-hidden="true" />
+										</button>
 									</div>
 								</article>
 							</template>
@@ -342,7 +360,7 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import { Grid2x2, List, Plus, Rows3, Search, SlidersHorizontal, UserRound } from "lucide-vue-next";
+import { AlertCircle, Grid2x2, List, Plus, Rows3, Search, SlidersHorizontal, UserRound } from "lucide-vue-next";
 import { formatMoney } from "@/utils/format";
 
 const props = defineProps({
@@ -371,6 +389,7 @@ const emit = defineEmits([
 	"increment-product",
 	"decrement-product",
 	"open-bom",
+	"quick-edit",
 	"update:scannerInput",
 	"scan-scale",
 	"update:customerQuery",
@@ -896,6 +915,17 @@ function quantityValue(slug) {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+}
+
+.compact-action-btn--edit,
+.quick-edit-btn {
+  color: var(--mg-primary, #c97852);
+  border-color: color-mix(in srgb, var(--mg-primary, #c97852) 45%, var(--mg-border-light));
+}
+
+.compact-action-btn--edit:hover,
+.quick-edit-btn:hover {
+  background: color-mix(in srgb, var(--mg-primary, #c97852) 12%, transparent);
 }
 
 .cust-add-btn {

@@ -240,17 +240,6 @@
             {{ visibilityStateLabel(row) }}
           </span>
         </template>
-        <template #quickAction="{ row }">
-          <button
-            type="button"
-            class="quick-edit-btn"
-            title="ویرایش سریع اطلاعات محصول"
-            aria-label="ویرایش سریع"
-            @click.stop="openQuickEdit(row)"
-          >
-            <AlertCircle :size="15" :stroke-width="2.4" />
-          </button>
-        </template>
       </ManagementGalleryView>
     </ManagementSurfaceCard>
 
@@ -503,87 +492,6 @@
       </template>
     </ManagementPopup>
 
-    <!-- ─── ساید پنل ویرایش سریع ─── -->
-    <Teleport to="body">
-      <Transition name="quick-edit-fade">
-        <div v-if="quickEditOpen" class="quick-edit-backdrop" @click.self="closeQuickEdit">
-          <aside class="quick-edit-panel" dir="rtl" role="dialog" aria-label="ویرایش سریع محصول">
-            <header class="quick-edit-head">
-              <div>
-                <span class="quick-edit-kicker">ویرایش سریع</span>
-                <h3>{{ quickEditForm.item_name || 'محصول' }}</h3>
-              </div>
-              <button type="button" class="quick-edit-close" @click="closeQuickEdit" aria-label="بستن">×</button>
-            </header>
-
-            <div class="quick-edit-body">
-              <p class="muted quick-edit-name">{{ quickEditForm.name }}</p>
-
-              <label class="qe-field">
-                <span>قیمت (ریال)</span>
-                <PersianNumberInput
-                  v-model="quickEditForm.price"
-                  :min="0"
-                  input-class="input"
-                  placeholder="قیمت فروش"
-                />
-              </label>
-
-              <label class="qe-field">
-                <span>توضیح کوتاه</span>
-                <textarea
-                  class="input qe-textarea"
-                  v-model.trim="quickEditForm.restaurant_short_desc"
-                  rows="2"
-                  placeholder="توضیح کوتاه محصول"
-                ></textarea>
-              </label>
-
-              <label class="qe-field">
-                <span>توضیح کامل</span>
-                <textarea
-                  class="input qe-textarea"
-                  v-model.trim="quickEditForm.restaurant_long_desc"
-                  rows="3"
-                  placeholder="توضیح کامل محصول"
-                ></textarea>
-              </label>
-
-              <label class="qe-field">
-                <span>دسته‌بندی</span>
-                <SearchableDropdown
-                  v-model="quickEditForm.item_group"
-                  :options="itemGroupOptions"
-                  placeholder="انتخاب گروه کالا"
-                  search-placeholder="جستجوی گروه کالا..."
-                  include-empty-option
-                  empty-label="بدون گروه"
-                />
-              </label>
-
-              <label class="qe-field">
-                <span>تکمیل موجودی</span>
-                <PersianDateInput
-                  v-model="quickEditForm.restaurant_restock_date"
-                  placeholder="انتخاب تاریخ تکمیل"
-                />
-                <small class="field-help">با انتخاب تاریخ، در سایت «اتمام» نمایش داده می‌شود تا تاریخ تکمیل.</small>
-              </label>
-
-              <p v-if="quickEditError" class="error">{{ quickEditError }}</p>
-              <p v-if="quickEditSuccess" class="quick-edit-success">{{ quickEditSuccess }}</p>
-            </div>
-
-            <footer class="quick-edit-foot">
-              <button type="button" class="secondary-btn" @click="closeQuickEdit">انصراف</button>
-              <button type="button" class="primary-btn" :disabled="quickEditSaving" @click="saveQuickEdit">
-                {{ quickEditSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات' }}
-              </button>
-            </footer>
-          </aside>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
@@ -627,14 +535,11 @@ import {
   setManagementProductCalendarDate,
   setManagementProductKanbanField,
   setManagementProductPrice,
-  updateManagementProductSettings,
   uploadFileToFrappe,
 } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { jalaliToGregorian } from '@/utils/jalali'
-import { AlertCircle, Folder, Package, Plus, Search, X } from 'lucide-vue-next'
-import PersianNumberInput from '@/components/PersianNumberInput.vue'
-import PersianDateInput from '@/components/PersianDateInput.vue'
+import { Folder, Package, Plus, Search, X } from 'lucide-vue-next'
 
 const loading = ref(false)
 const error = ref('')
@@ -799,572 +704,6 @@ const bootFieldOptions = ref({
 })
 const createForm = ref(createDefaultForm())
 const bulkPopupOpen = ref(false)
-
-// ─── ویرایش سریع (ساید پنل) ───
-const quickEditOpen = ref(false)
-const quickEditSaving = ref(false)
-const quickEditError = ref('')
-const quickEditSuccess = ref('')
-const quickEditForm = reactive({
-  name: '',
-  item_name: '',
-  price: 0,
-  restaurant_short_desc: '',
-  restaurant_long_desc: '',
-  item_group: '',
-  restaurant_restock_date: '',
-})
-
-async function openQuickEdit(row) {
-  quickEditError.value = ''
-  quickEditSuccess.value = ''
-  quickEditForm.name = String(row?.name || '').trim()
-  quickEditForm.item_name = String(row?.title || row?.item_name || row?.name || '').trim()
-  quickEditForm.price = Number(row?.base_price || row?.standard_rate || 0)
-  quickEditForm.restaurant_short_desc = String(row?.short_desc || row?.restaurant_short_desc || '').trim()
-  quickEditForm.restaurant_long_desc = String(row?.long_desc || row?.restaurant_long_desc || '').trim()
-  quickEditForm.item_group = String(row?.item_group || '').trim()
-  quickEditForm.restaurant_restock_date = String(row?.restock_date || '').trim()
-  quickEditOpen.value = true
-  try {
-    const payload = await getManagementProductDetail({ item_name: quickEditForm.name })
-    const detailItem = payload?.item || {}
-    quickEditForm.item_name = String(detailItem.item_name || quickEditForm.item_name || '').trim()
-    quickEditForm.price = Number(detailItem.base_price ?? detailItem.standard_rate ?? quickEditForm.price)
-    quickEditForm.restaurant_short_desc = String(detailItem.short_description || detailItem.restaurant_short_desc || quickEditForm.restaurant_short_desc).trim()
-    quickEditForm.restaurant_long_desc = String(detailItem.long_description || detailItem.restaurant_long_desc || quickEditForm.restaurant_long_desc).trim()
-    quickEditForm.item_group = String(detailItem.item_group || quickEditForm.item_group).trim()
-    quickEditForm.restaurant_restock_date = String(detailItem.restock_date || detailItem.restaurant_restock_date || '').trim()
-  } catch (err) {
-    // با داده ردیف کارت ادامه بده
-    console.error('quick edit detail failed:', err)
-  }
-}
-
-function closeQuickEdit() {
-  quickEditOpen.value = false
-  quickEditError.value = ''
-  quickEditSuccess.value = ''
-}
-
-async function saveQuickEdit() {
-  if (!quickEditForm.name) {
-    return
-  }
-  quickEditSaving.value = true
-  quickEditError.value = ''
-  quickEditSuccess.value = ''
-  try {
-    await Promise.all([
-      setManagementProductPrice({
-        item_name: quickEditForm.name,
-        price_list_rate: Number(quickEditForm.price || 0),
-      }),
-      updateManagementProductSettings({
-        item_name: quickEditForm.name,
-        restaurant_short_desc: quickEditForm.restaurant_short_desc,
-        restaurant_long_desc: quickEditForm.restaurant_long_desc,
-        item_group: quickEditForm.item_group,
-        restaurant_restock_date: quickEditForm.restaurant_restock_date,
-      }),
-    ])
-    quickEditSuccess.value = 'تغییرات با موفقیت ذخیره شد.'
-    await loadProducts()
-  } catch (errObj) {
-    quickEditError.value = errObj.message || 'ذخیره تغییرات ناموفق بود.'
-  } finally {
-    quickEditSaving.value = false
-  }
-}
-const bulkAction = ref('mark_out_of_stock')
-const bulkBusy = ref(false)
-const bulkError = ref('')
-const bulkResult = ref(null)
-const excelBusy = ref(false)
-const excelMode = ref('')
-const excelFileInput = ref(null)
-const excelSummary = ref(null)
-const excelSummaryOpen = ref(false)
-const bulkActionOptions = [
-  { value: 'mark_out_of_stock', title: 'ناموجود کردن', desc: 'اتمام موقت موجودی کالاها (بدون حذف)' },
-  { value: 'mark_in_stock', title: 'موجود کردن', desc: 'برگرداندن کالاها به حالت موجود' },
-  { value: 'deactivate', title: 'غیرفعال کردن', desc: 'پنهان شدن موقت یا دائم از منو و فروش' },
-  { value: 'activate', title: 'فعال کردن', desc: 'نمایش دوباره کالاها در منو و فروش' },
-]
-const MOBILE_BREAKPOINT = 760
-const isMobileView = ref(getInitialMobileView())
-const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'restaurant.management.productVisibilityOverrides'
-
-const columns = [
-  { key: 'item_code', label: 'کد/نام' },
-  { key: 'title', label: 'نام' },
-  { key: 'category_title', label: 'دسته' },
-  { key: 'tags', label: 'تگ‌ها' },
-  { key: 'base_price', label: 'قیمت' },
-  { key: 'stock_qty', label: 'موجودی' },
-  { key: 'is_active', label: 'وضعیت' },
-  { key: 'actions', label: 'عملیات' },
-]
-
-const sortOptions = [
-  { value: 'latest', label: 'جدیدترین' },
-  { value: 'title_asc', label: 'نام (الف به ی)' },
-  { value: 'title_desc', label: 'نام (ی به الف)' },
-  { value: 'price_desc', label: 'قیمت (بیشترین)' },
-  { value: 'price_asc', label: 'قیمت (کمترین)' },
-  { value: 'stock_desc', label: 'موجودی (بیشترین)' },
-  { value: 'stock_asc', label: 'موجودی (کمترین)' },
-]
-const treeGroupOptions = [
-  { value: 'category_title', label: 'دسته' },
-  { value: 'subcategory_title', label: 'زیردسته' },
-  { value: 'is_active', label: 'وضعیت' },
-  { value: 'tags', label: 'تگ' },
-  { value: 'coming_soon', label: 'به‌زودی' },
-  { value: 'has_customization', label: 'قابل شخصی‌سازی' },
-]
-
-const kanbanGroupOptions = [
-  { value: 'category_title', label: 'دسته' },
-  { value: 'subcategory_title', label: 'زیردسته' },
-  { value: 'is_active', label: 'وضعیت نمایش' },
-  { value: 'coming_soon', label: 'به‌زودی' },
-  { value: 'out_of_stock', label: 'ناموجود' },
-]
-
-const sheetColumns = computed(() => {
-  const visible = PRODUCT_PROPERTIES.filter((p) => {
-    const key = p.key
-    if (key === 'name' || key === 'slug') return false
-    return viewSys.currentView.value?.properties?.[key] !== false
-  })
-  return visible.map((p) => ({ ...p }))
-})
-
-const viewModes = [
-  { value: 'list', label: 'لیست', icon: '≡' },
-  { value: 'gallery', label: 'گالری', icon: '▦' },
-  { value: 'tree', label: 'درخت', icon: '⋰' },
-  { value: 'calendar', label: 'تقویم', icon: '◫' },
-  { value: 'sheet', label: 'جدول', icon: '▦' },
-  { value: 'kanban', label: 'کانبان', icon: '▤' },
-]
-
-const groupOptions = computed(() => {
-  const map = new Map()
-
-  for (const row of menuCategories.value || []) {
-    const slug = String(row?.slug || '').trim()
-    const title = String(row?.title || '').trim()
-    if (slug && title) {
-      map.set(slug, title)
-    }
-  }
-
-  for (const row of products.value || []) {
-    const slug = String(row?.category_slug || '').trim()
-    const title = String(row?.category_title || '').trim()
-    if (slug && title && !map.has(slug)) {
-      map.set(slug, title)
-    }
-  }
-
-  return Array.from(map.entries())
-    .map(([value, label]) => ({ value, label }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'fa'))
-})
-
-const itemGroupOptions = computed(() => normalizeOptionRows(bootFieldOptions.value?.item_groups || []))
-const uomOptions = computed(() => normalizeOptionRows(bootFieldOptions.value?.uoms || []))
-const categoryOptions = computed(() => normalizeOptionRows(bootFieldOptions.value?.categories || []))
-const createSubcategoryOptions = computed(() => {
-  const normalizedRows = bootFieldOptions.value?.subcategories || []
-  const parent = String(createForm.value.restaurant_category || '').trim()
-  const next = []
-  for (const row of normalizedRows) {
-    const value = String(row?.value || row?.name || '').trim()
-    if (!value) {
-      continue
-    }
-    const ownerCategory = String(row?.category || row?.parent_item_group || '').trim()
-    if (parent && ownerCategory && ownerCategory !== parent) {
-      continue
-    }
-    next.push({
-      value,
-      label: String(row?.label || row?.item_group_name || value).trim(),
-    })
-  }
-  return next
-})
-
-const visibleProducts = computed(() => {
-  let rows = [...products.value]
-
-  if (activeOnly.value) {
-    rows = rows.filter((row) => isProductActive(row))
-  }
-
-  const query = normalizeSearchText(search.value)
-  if (query) {
-    rows = rows.filter((row) => productMatchesSearch(row, query))
-  }
-
-  const selectedGroups = Array.isArray(selectedCategorySlugs.value)
-    ? selectedCategorySlugs.value.map((value) => String(value || '').trim()).filter(Boolean)
-    : []
-  if (selectedGroups.length) {
-    const selectedSet = new Set(selectedGroups)
-    rows = rows.filter((row) => selectedSet.has(String(row?.category_slug || '').trim()))
-  }
-
-  // Tag filter
-  const tag = String(selectedTag.value || '').trim()
-  if (tag) {
-    rows = rows.filter((row) => {
-      const tags = Array.isArray(row?.tags) ? row?.tags : []
-      return tags.some((t) => String(t).trim() === tag)
-    })
-  }
-
-  // Notion view filters (AND / OR)
-  const viewFilters = viewSys.currentView.value?.filters
-  if (viewFilters && viewFilters.length) {
-    rows = applyViewFilters(rows, viewFilters)
-  }
-
-  if (sortBy.value === 'title_asc') {
-    rows.sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), 'fa'))
-  } else if (sortBy.value === 'title_desc') {
-    rows.sort((a, b) => String(b?.title || '').localeCompare(String(a?.title || ''), 'fa'))
-  } else if (sortBy.value === 'price_asc') {
-    rows.sort((a, b) => Number(a?.base_price || 0) - Number(b?.base_price || 0))
-  } else if (sortBy.value === 'price_desc') {
-    rows.sort((a, b) => Number(b?.base_price || 0) - Number(a?.base_price || 0))
-  } else if (sortBy.value === 'stock_asc') {
-    rows.sort((a, b) => Number(a?.stock_qty || 0) - Number(b?.stock_qty || 0))
-  } else if (sortBy.value === 'stock_desc') {
-    rows.sort((a, b) => Number(b?.stock_qty || 0) - Number(a?.stock_qty || 0))
-  }
-
-  // Notion view multi-sort (اولویت بالاتر از مرتب‌سازی ساده)
-  const viewSorts = viewSys.currentView.value?.sorts
-  if (viewSorts && viewSorts.length) {
-    rows = applyViewSorts(rows, viewSorts)
-  }
-
-  return rows
-})
-
-const groupedProducts = computed(() => {
-  if (groupBy.value === 'none') {
-    return []
-  }
-  const bucket = new Map()
-  for (const row of visibleProducts.value) {
-    const key = resolveGroupKey(row)
-    if (!bucket.has(key.key)) {
-      bucket.set(key.key, {
-        key: key.key,
-        label: key.label,
-        rows: [],
-      })
-    }
-    bucket.get(key.key).rows.push(row)
-  }
-  return Array.from(bucket.values()).sort((left, right) => String(left.label || '').localeCompare(String(right.label || ''), 'fa'))
-})
-
-const hasGroupedRows = computed(() => groupBy.value !== 'none' && groupedProducts.value.length > 0)
-
-const activeViewTitle = computed(() => {
-  if (viewMode.value === 'tree') {
-    return 'درخت محصولات'
-  }
-  if (viewMode.value === 'gallery') {
-    return 'گالری محصولات'
-  }
-  return 'لیست محصولات'
-})
-
-const activeViewSubtitle = computed(() => {
-  if (viewMode.value === 'tree') {
-    return 'دسته‌بندی محصولات به‌صورت ساختار درختی'
-  }
-  if (viewMode.value === 'gallery') {
-    return 'نمای تصویری محصولات برای مدیریت بصری'
-  }
-  return ''
-})
-
-const productTreeNodes = computed(() => {
-  const groupKey = treeGroupBy.value
-  const categories = new Map()
-
-  function groupValueOf(row) {
-    if (groupKey === 'is_active') {
-      return isProductActive(row) ? 'فعال' : 'غیرفعال'
-    }
-    if (groupKey === 'coming_soon' || groupKey === 'has_customization') {
-      return Number(row?.[groupKey]) === 1 ? 'بله' : 'خیر'
-    }
-    if (groupKey === 'tags') {
-      const tags = Array.isArray(row?.tags) ? row.tags : []
-      return tags.length ? tags.join('، ') : 'بدون تگ'
-    }
-    return String(row?.[groupKey] || '').trim() || 'بدون دسته'
-  }
-
-  for (const row of visibleProducts.value || []) {
-    const groupLabel = groupValueOf(row)
-    const groupKeyName = `${groupKey}:${groupLabel}`
-    if (!categories.has(groupKeyName)) {
-      categories.set(groupKeyName, {
-        key: groupKeyName,
-        label: groupLabel,
-        caption: `${formatNumber(0)} کالا`,
-        badge: 'دسته',
-        status: null,
-        children: [],
-      })
-    }
-
-    const bucket = categories.get(groupKeyName)
-    const itemName = String(row?.title || row?.item_code || row?.name || '').trim() || '-'
-    bucket.children.push({
-      ...row,
-      key: String(row?.name || `${groupKeyName}-${bucket.children.length}`),
-      label: itemName,
-      caption: `${formatMoney(row?.base_price || 0, currency.value)} • موجودی ${formatStock(row?.stock_qty || 0)}`,
-      badge: 'محصول',
-      status: {
-        label: visibilityStateLabel(row),
-        tone: isProductActive(row) ? 'success' : 'warning',
-      },
-      children: [],
-    })
-    bucket.caption = `${formatNumber(bucket.children.length)} کالا`
-  }
-
-  return Array.from(categories.values()).sort((left, right) =>
-    String(left?.label || '').localeCompare(String(right?.label || ''), 'fa'),
-  )
-})
-
-// تقویم با کلید شمسی (1405-05-19) کار می‌کند؛ سرور تاریخ میلادی می‌گیرد
-function jalaliKeyToIso(key) {
-  const [y, m, d] = String(key || '').split('-').map(Number)
-  if (!y || !m || !d) return ''
-  const g = jalaliToGregorian(y, m, d)
-  return `${g.year}-${String(g.month).padStart(2, '0')}-${String(g.day).padStart(2, '0')}`
-}
-
-async function handleCalendarAssign({ name, date }) {
-  const itemName = String(name || '').trim()
-  if (!itemName) return
-  const iso = jalaliKeyToIso(date)
-  if (!iso) return
-  const row = products.value.find((p) => String(p?.name || '').trim() === itemName)
-  const prev = row ? row.calendar_date : undefined
-  if (row) row.calendar_date = iso
-  try {
-    await setManagementProductCalendarDate({ item_name: itemName, date: iso })
-  } catch (errObj) {
-    if (row) row.calendar_date = prev
-    error.value = errObj?.message || 'خطا در ذخیره تاریخ'
-  }
-}
-
-async function handleCalendarClear({ name }) {
-  const itemName = String(name || '').trim()
-  if (!itemName) return
-  const row = products.value.find((p) => String(p?.name || '').trim() === itemName)
-  const prev = row ? row.calendar_date : undefined
-  if (row) row.calendar_date = ''
-  try {
-    await setManagementProductCalendarDate({ item_name: itemName, date: '' })
-  } catch (errObj) {
-    if (row) row.calendar_date = prev
-    error.value = errObj?.message || 'خطا در پاک کردن تاریخ'
-  }
-}
-
-async function handleKanbanMove({ row, field, value }) {
-  const itemName = String(row?.name || '').trim()
-  if (!itemName) return
-
-  const numeric = field === 'coming_soon' || field === 'out_of_stock'
-  const fieldMap = {
-    is_active: 'restaurant_enabled',
-    category_title: 'restaurant_category',
-    subcategory_title: 'restaurant_subcategory',
-    coming_soon: 'restaurant_coming_soon',
-    out_of_stock: 'restaurant_out_of_stock',
-  }
-  const backendField = fieldMap[field]
-  if (!backendField) return
-
-  // snapshot برای برگرداندن در صورت خطا
-  const snapshot = {
-    is_active: row.is_active,
-    category_title: row.category_title,
-    category: row.category,
-    subcategory_title: row.subcategory_title,
-    subcategory: row.subcategory,
-    coming_soon: row.coming_soon,
-    out_of_stock: row.out_of_stock,
-  }
-
-  // اعمال لحظه‌ای (optimistic) تا کارت فوراً جابه‌جا شود
-  if (field === 'is_active') {
-    row.is_active = value === 'بله' ? 1 : 0
-  } else if (numeric) {
-    row[field] = value === 'بله' ? 1 : 0
-  } else if (field === 'category_title') {
-    row.category_title = value
-    row.category = value
-  } else if (field === 'subcategory_title') {
-    row.subcategory_title = value
-    row.subcategory = value
-  }
-
-  try {
-    if (field === 'is_active') {
-      await setManagementProductActive(itemName, row.is_active)
-      // override محلی وضعیت را حذف کن تا بعد از رفرش برنگردد
-      clearVisibilityOverride(itemName)
-    } else {
-      await setManagementProductKanbanField({
-        item_name: itemName,
-        field: backendField,
-        value: numeric ? row[field] : String(value ?? ''),
-      })
-    }
-    successMessage.value = `«${row.title || itemName}» منتقل شد.`
-    setTimeout(() => { successMessage.value = '' }, 2500)
-    loadProducts()
-  } catch (errObj) {
-    Object.assign(row, snapshot)
-    error.value = errObj?.message || 'خطا در انتقال کارت'
-  }
-}
-
-async function handleSheetCellChange({ row, column, value, prev }) {
-  const itemName = String(row?.name || '').trim()
-  if (!itemName) return
-  try {
-    if (column === 'is_active') {
-      const active = value === 'بله' || Number(value) ? 1 : 0
-      await setManagementProductActive(itemName, active)
-      row.is_active = active
-      clearVisibilityOverride(itemName)
-      return
-    }
-    if (column === 'base_price') {
-      const num = Number(value || 0)
-      await setManagementProductPrice({
-        item_name: itemName,
-        price_list_rate: num,
-      })
-      row.base_price = num
-      return
-    }
-    row[column] = value
-  } catch (errObj) {
-    error.value = errObj.message || 'خطا در ذخیره تغییر'
-    row[column] = prev
-  }
-}
-
-async function handleSheetExportExcel({ rows }) {
-  const names = (rows || []).map((row) => String(row?.name || '').trim()).filter(Boolean)
-  if (!names.length || excelBusy.value) return
-  excelBusy.value = true
-  error.value = ''
-  try {
-    const payload = await exportManagementProductsExcel({ include_disabled: 1, item_names: names })
-    if (payload?.file_url) {
-      const link = document.createElement('a')
-      link.href = payload.file_url
-      link.download = payload.file_name || 'restaurant-products.xlsx'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      successMessage.value = `خروجی اکسل ${formatNumber(payload.rows || 0)} کالا آماده شد.`
-      setTimeout(() => { successMessage.value = '' }, 4000)
-    }
-  } catch (errObj) {
-    error.value = errObj?.message || '❌ دریافت خروجی اکسل ناموفق بود.'
-  } finally {
-    excelBusy.value = false
-  }
-}
-
-async function handleSheetBulkEdit({ rows, field, value }) {
-  const names = (rows || []).map((row) => String(row?.name || '').trim()).filter(Boolean)
-  if (!names.length || bulkBusy.value) return
-  bulkBusy.value = true
-  bulkError.value = ''
-  try {
-    if (field === 'is_active') {
-      const active = value === 'بله' ? 1 : 0
-      await Promise.all(names.map((name) => setManagementProductActive(name, active)))
-      names.forEach((name) => clearVisibilityOverride(name))
-    } else if (field === 'base_price') {
-      const num = Number(value || 0)
-      await Promise.all(names.map((name) => setManagementProductPrice({ item_name: name, price_list_rate: num })))
-    } else {
-      const fieldMap = {
-        coming_soon: 'restaurant_coming_soon',
-        out_of_stock: 'restaurant_out_of_stock',
-        category_title: 'restaurant_category',
-        subcategory_title: 'restaurant_subcategory',
-      }
-      const backendField = fieldMap[field]
-      if (!backendField) return
-      const numeric = field === 'coming_soon' || field === 'out_of_stock'
-      await Promise.all(
-        names.map((name) =>
-          setManagementProductKanbanField({
-            item_name: name,
-            field: backendField,
-            value: numeric ? (value === 'بله' ? 1 : 0) : String(value ?? ''),
-          }),
-        ),
-      )
-    }
-    successMessage.value = `${formatNumber(names.length)} کالا به‌روزرسانی شد.`
-    setTimeout(() => { successMessage.value = '' }, 4000)
-    await loadProducts()
-  } catch (errObj) {
-    error.value = errObj?.message || 'خطا در ویرایش گروهی'
-  } finally {
-    bulkBusy.value = false
-  }
-}
-
-async function handleSheetBulkAction({ rows, action }) {
-  const names = (rows || []).map((row) => String(row?.name || '').trim()).filter(Boolean)
-  if (!names.length || bulkBusy.value) return
-  bulkBusy.value = true
-  bulkError.value = ''
-  try {
-    const payload = await bulkUpdateManagementProducts(names, action)
-    // برای activate/deactivate، override محلی وضعیت را حذف کن
-    if (action === 'activate' || action === 'deactivate') {
-      names.forEach((name) => clearVisibilityOverride(name))
-    }
-    const msg = `${formatNumber(payload?.updated ?? 0)} کالا به‌روزرسانی شد`
-    successMessage.value = payload?.failed ? `${msg} (${formatNumber(payload.failed)} خطا)` : msg
-    setTimeout(() => { successMessage.value = '' }, 4000)
-    await loadProducts()
-  } catch (errObj) {
-    error.value = errObj?.message || 'خطا در عملیات گروهی ردیف‌های انتخاب‌شده'
-  } finally {
-    bulkBusy.value = false
-  }
-}
-
 async function loadProducts() {
   loading.value = true
   error.value = ''
@@ -2838,6 +2177,193 @@ loadProducts()
     padding-inline: 0.5rem;
   }
 }
+</style>
+
+<style scoped>
+.advanced-toolbar {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(226 232 240 / 1);
+}
+
+.wizard-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.wizard-step {
+  display: grid;
+  gap: 1rem;
+}
+
+.wizard-step h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.info-box {
+  padding: 0.75rem 1rem;
+  background: var(--module-50, rgb(139 94 52 / 0.075));
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.14);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.tertiary-btn {
+  background: transparent;
+  border: 1px solid rgb(226 232 240 / 1);
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.tertiary-btn:hover {
+  background: var(--module-50, rgb(139 94 52 / 0.075));
+  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.22);
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0.18rem 0.52rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  margin-inline-end: 0.25rem;
+  margin-bottom: 0.15rem;
+}
+
+.tag-pill.more {
+  background: var(--bg-soft, var(--mg-bg-page));
+  color: var(--text, var(--mg-text-main));
+  font-weight: 600;
+}
+
+.product-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 180px;
+  position: relative;
+  z-index: 25;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card.clickable,
+  .product-card.clickable:hover {
+    transform: none;
+  }
+}
+
+.filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.bulk-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.bulk-form .hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.bulk-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.55rem;
+}
+
+.bulk-action-card {
+  border: 1px dashed var(--border-color, #d8d2c4);
+  border-radius: 12px;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+}
+
+.bulk-action-card.active {
+  border-style: solid;
+  border-color: var(--accent-green, #2f6f5c);
+  background: rgba(47, 111, 92, 0.08);
+}
+
+.bulk-action-card small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.bulk-result {
+  border-top: 1px dashed var(--border-color, #d8d2c4);
+  padding-top: 0.7rem;
+}
+
+.bulk-error-list {
+  margin: 0.4rem 0 0;
+  padding-inline-start: 1.1rem;
+  color: #b84f4f;
+  font-size: 0.78rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.excel-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.55rem;
+}
+
+.excel-summary-grid > div {
+  border: 1px dashed var(--border-color, #d8d2c4);
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.excel-summary-grid small {
+  color: var(--text-muted);
+}
+
 </style>
 
 <style scoped>

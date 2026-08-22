@@ -69,6 +69,7 @@
           @increment-product="incrementProduct"
           @decrement-product="decrementProduct"
           @open-bom="openCustomizationSheet"
+          @quick-edit="openQuickEdit"
         />
 
         <aside v-if="isDesktopViewport" class="cart-desktop-col">
@@ -879,6 +880,76 @@
       </div>
     </div>
 
+    <!-- ─── ساید پنل ویرایش سریع محصول (داخل POS) ─── -->
+    <Teleport to="body">
+      <Transition name="quick-edit-fade">
+        <div v-if="quickEditOpen" class="quick-edit-backdrop" @click.self="closeQuickEdit">
+          <aside class="quick-edit-panel" dir="rtl" role="dialog" aria-label="ویرایش سریع محصول">
+            <header class="quick-edit-head">
+              <div>
+                <span class="quick-edit-kicker">ویرایش سریع</span>
+                <h3>{{ quickEditForm.item_name || 'محصول' }}</h3>
+              </div>
+              <button type="button" class="quick-edit-close" @click="closeQuickEdit" aria-label="بستن">×</button>
+            </header>
+
+            <div class="quick-edit-body">
+              <p class="muted quick-edit-name">{{ quickEditForm.name }}</p>
+
+              <label class="qe-field">
+                <span>قیمت (ریال)</span>
+                <PersianNumberInput
+                  v-model="quickEditForm.price"
+                  :min="0"
+                  input-class="input"
+                  placeholder="قیمت فروش"
+                />
+              </label>
+
+              <label class="qe-field">
+                <span>توضیح کوتاه</span>
+                <textarea
+                  class="input qe-textarea"
+                  v-model.trim="quickEditForm.restaurant_short_desc"
+                  rows="2"
+                  placeholder="توضیح کوتاه محصول"
+                ></textarea>
+              </label>
+
+              <label class="qe-field">
+                <span>توضیح کامل</span>
+                <textarea
+                  class="input qe-textarea"
+                  v-model.trim="quickEditForm.restaurant_long_desc"
+                  rows="3"
+                  placeholder="توضیح کامل محصول"
+                ></textarea>
+              </label>
+
+              <label class="qe-field">
+                <span>تکمیل موجودی</span>
+                <PersianDateInput
+                  v-model="quickEditForm.restaurant_restock_date"
+                  placeholder="انتخاب تاریخ تکمیل"
+                />
+                <small class="qe-help">با انتخاب تاریخ، در سایت «اتمام» نمایش داده می‌شود تا تاریخ تکمیل.</small>
+              </label>
+
+              <p v-if="quickEditError" class="error">{{ quickEditError }}</p>
+              <p v-if="quickEditSuccess" class="quick-edit-success">{{ quickEditSuccess }}</p>
+            </div>
+
+            <footer class="quick-edit-foot">
+              <button type="button" class="secondary-btn" @click="closeQuickEdit">انصراف</button>
+              <button type="button" class="primary-btn" :disabled="quickEditSaving" @click="saveQuickEdit">
+                {{ quickEditSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات' }}
+              </button>
+            </footer>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
+
   </section>
 </template>
 
@@ -922,7 +993,10 @@ import {
   getManagementPOSHardwareStatus,
   getManagementPosKitchenNotifications,
   getManagementProductByBarcode,
+  getManagementProductDetail,
   reportManagementPOSHardwareEvent,
+  setManagementProductPrice,
+  updateManagementProductSettings,
   listManagementUsers,
   updateTableOrderItem,
   updateManagementOrder,
@@ -1025,6 +1099,78 @@ const scannerInput = ref('')
 const selectedCartLineId = ref('')
 const customerOptions = ref([])
 const printEditorOpen = ref(false)
+
+// ─── ویرایش سریع محصول (ساید پنل داخل POS) ───
+const quickEditOpen = ref(false)
+const quickEditSaving = ref(false)
+const quickEditError = ref('')
+const quickEditSuccess = ref('')
+const quickEditForm = reactive({
+  name: '',
+  item_name: '',
+  price: 0,
+  restaurant_short_desc: '',
+  restaurant_long_desc: '',
+  restaurant_restock_date: '',
+})
+
+async function openQuickEdit(item) {
+  quickEditError.value = ''
+  quickEditSuccess.value = ''
+  quickEditForm.name = String(item?.name || item?.item_code || '').trim()
+  quickEditForm.item_name = String(item?.title || item?.item_name || item?.name || '').trim()
+  quickEditForm.price = Number(item?.base_price || item?.standard_rate || 0)
+  quickEditForm.restaurant_short_desc = String(item?.short_desc || item?.restaurant_short_desc || '').trim()
+  quickEditForm.restaurant_long_desc = String(item?.long_desc || item?.restaurant_long_desc || '').trim()
+  quickEditForm.restaurant_restock_date = String(item?.restock_date || '').trim()
+  quickEditOpen.value = true
+  try {
+    const payload = await getManagementProductDetail({ item_name: quickEditForm.name })
+    const detailItem = payload?.item || {}
+    quickEditForm.item_name = String(detailItem.item_name || quickEditForm.item_name || '').trim()
+    quickEditForm.price = Number(detailItem.base_price ?? detailItem.standard_rate ?? quickEditForm.price)
+    quickEditForm.restaurant_short_desc = String(detailItem.short_description || detailItem.restaurant_short_desc || quickEditForm.restaurant_short_desc).trim()
+    quickEditForm.restaurant_long_desc = String(detailItem.long_description || detailItem.restaurant_long_desc || quickEditForm.restaurant_long_desc).trim()
+    quickEditForm.restaurant_restock_date = String(detailItem.restock_date || detailItem.restaurant_restock_date || '').trim()
+  } catch (err) {
+    console.error('quick edit detail failed:', err)
+  }
+}
+
+function closeQuickEdit() {
+  quickEditOpen.value = false
+  quickEditError.value = ''
+  quickEditSuccess.value = ''
+}
+
+async function saveQuickEdit() {
+  if (!quickEditForm.name) {
+    return
+  }
+  quickEditSaving.value = true
+  quickEditError.value = ''
+  quickEditSuccess.value = ''
+  try {
+    await Promise.all([
+      setManagementProductPrice({
+        item_name: quickEditForm.name,
+        price_list_rate: Number(quickEditForm.price || 0),
+      }),
+      updateManagementProductSettings({
+        item_name: quickEditForm.name,
+        restaurant_short_desc: quickEditForm.restaurant_short_desc,
+        restaurant_long_desc: quickEditForm.restaurant_long_desc,
+        restaurant_restock_date: quickEditForm.restaurant_restock_date,
+      }),
+    ])
+    quickEditSuccess.value = 'تغییرات ذخیره شد و محصولات به‌روز شد.'
+    await loadPOSBoot()
+  } catch (errObj) {
+    quickEditError.value = errObj.message || 'ذخیره تغییرات ناموفق بود.'
+  } finally {
+    quickEditSaving.value = false
+  }
+}
 const receiptSettings = reactive({
   store_name: 'وی درخت',
   store_phone: '',
@@ -8028,6 +8174,138 @@ kbd {
 }
 .cart-drawer {
   z-index: 10003 !important;
+}
+
+
+/* ─── ساید پنل ویرایش سریع ─── */
+.quick-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 14000;
+  background: rgb(10 12 10 / 0.4);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.quick-edit-panel {
+  width: min(400px, 100%);
+  height: 100%;
+  background: var(--mg-bg-surface);
+  border-inline-start: 1px solid var(--mg-border);
+  box-shadow: -18px 0 50px rgb(0 0 0 / 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quick-edit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--mg-border-light);
+  background: linear-gradient(135deg, var(--mg-primary), color-mix(in srgb, var(--mg-primary) 70%, var(--mg-text-main) 30%));
+  color: #fff;
+}
+
+.quick-edit-kicker {
+  font-size: 0.66rem;
+  color: rgb(255 255 255 / 0.75);
+  font-weight: 700;
+}
+
+.quick-edit-head h3 {
+  margin: 0.1rem 0 0;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.quick-edit-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.quick-edit-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.quick-edit-name {
+  margin: 0;
+  font-size: 0.7rem;
+  direction: ltr;
+  text-align: right;
+}
+
+.qe-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--mg-text-muted);
+}
+
+.qe-field .input {
+  width: 100%;
+}
+
+.qe-textarea {
+  resize: vertical;
+  font-weight: 400;
+}
+
+.qe-help {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--mg-text-muted);
+  opacity: 0.9;
+}
+
+.quick-edit-success {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--mg-success, #6f7b56);
+  font-weight: 700;
+}
+
+.quick-edit-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--mg-border-light);
+}
+
+.quick-edit-fade-enter-active,
+.quick-edit-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.quick-edit-fade-enter-from,
+.quick-edit-fade-leave-to {
+  opacity: 0;
+}
+
+.quick-edit-fade-enter-active .quick-edit-panel,
+.quick-edit-fade-leave-active .quick-edit-panel {
+  transition: transform 0.22s ease;
+}
+
+.quick-edit-fade-enter-from .quick-edit-panel,
+.quick-edit-fade-leave-to .quick-edit-panel {
+  transform: translateX(24px);
 }
 
 </style>
