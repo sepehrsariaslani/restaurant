@@ -418,11 +418,11 @@
                   placeholder="جستجو... (کد سفارش، نام مشتری)"
                   type="search"
                 />
-                <input
-                  class="input dark-input recent-date-input"
-                  type="date"
+                <PersianDateInput
                   v-model="recentOrdersDateFrom"
-                  @change="loadRecentOrders(true)"
+                  input-class="input dark-input recent-date-input"
+                  placeholder="انتخاب تاریخ"
+                  @update:model-value="loadRecentOrders(true)"
                 />
               </div>
               <p class="muted" v-if="recentOrdersبارگذاری">در حال دریافت...</p>
@@ -579,7 +579,7 @@
           </div>
           <div class="print-editor-actions">
             <button type="button" class="secondary-btn" @click="closePrintEditor"><X :size="14" /> بستن</button>
-            <button type="button" class="primary-btn" :disabled="!cart.length" @click="printCurrentTicket">چاپ نهایی</button>
+            <button type="button" class="primary-btn" :disabled="!cart.length" @click="printCurrentTicket('', true)">چاپ نهایی</button>
           </div>
         </header>
 
@@ -976,12 +976,84 @@
       </Transition>
     </Teleport>
 
+    <!-- انتخابگر مقصد چاپ: مشتری / آشپزخانه / بار / پروفایل‌های تعریف‌شده -->
+    <Teleport to="body">
+      <Transition name="quick-edit-fade">
+        <div v-if="printTargetOpen" class="print-target-backdrop" @click.self="closePrintTargetPicker">
+          <section class="print-target-modal" dir="rtl" role="dialog" aria-modal="true" aria-label="انتخاب مقصد چاپ">
+            <header class="print-target-head">
+              <div>
+                <span class="print-target-kicker">چاپ فاکتور</span>
+                <h3>چاپ برای کجا؟</h3>
+              </div>
+              <button type="button" class="print-target-close" @click="closePrintTargetPicker" aria-label="بستن">×</button>
+            </header>
+
+            <div class="print-target-body">
+              <button
+                type="button"
+                class="print-target-option"
+                @click="runPrintTarget('all')"
+              >
+                <span class="pto-icon pto-icon--all"><Printer :size="18" /></span>
+                <span class="pto-copy">
+                  <strong>همه (مشتری + آشپزخانه/بار)</strong>
+                  <small>فیش مشتری و همه پروفایل‌های فعال</small>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="print-target-option"
+                @click="runPrintTarget('customer')"
+              >
+                <span class="pto-icon pto-icon--customer"><UserRound :size="18" /></span>
+                <span class="pto-copy">
+                  <strong>مشتری</strong>
+                  <small>فیش عادی با قیمت</small>
+                </span>
+              </button>
+
+              <template v-for="profile in activePrintProfiles()" :key="profile.profile_id || profile.label">
+                <button
+                  type="button"
+                  class="print-target-option"
+                  @click="runPrintTarget(`profile:${profile.profile_id || profile.label}`)"
+                >
+                  <span class="pto-icon" :class="profile.kind === 'bar' ? 'pto-icon--bar' : 'pto-icon--kitchen'">
+                    <Printer :size="18" />
+                  </span>
+                  <span class="pto-copy">
+                    <strong>{{ profile.label || printKindLabel(profile.kind) }}</strong>
+                    <small>
+                      {{ printKindLabel(profile.kind) }}
+                      <template v-if="(profile.item_groups || []).length">
+                        — {{ profile.item_groups.slice(0, 3).join('، ') }}{{ (profile.item_groups || []).length > 3 ? '...' : '' }}
+                      </template>
+                    </small>
+                  </span>
+                </button>
+              </template>
+
+              <p v-if="!activePrintProfiles().length" class="print-target-empty">
+                پروفایل چاپی تعریف نشده — برای تنظیم پروفایل‌ها به «پیش‌فرض‌های POS» بروید.
+              </p>
+            </div>
+
+            <footer class="print-target-foot">
+              <button type="button" class="secondary-btn" @click="closePrintTargetPicker">انصراف</button>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
+
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2, UserRound } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import PersianNumberInput from '@/components/PersianNumberInput.vue'
@@ -1126,6 +1198,9 @@ const scannerInput = ref('')
 const selectedCartLineId = ref('')
 const customerOptions = ref([])
 const printEditorOpen = ref(false)
+// انتخابگر مقصد چاپ: مشتری / آشپزخانه / بار / هر پروفایل تعریف‌شده
+const printTargetOpen = ref(false)
+const printTargetPending = ref(null) // { methodOverride } وقتی از autoPrint نیامده
 
 // ─── ویرایش سریع محصول (ساید پنل داخل POS) ───
 const quickEditOpen = ref(false)
@@ -5069,11 +5144,39 @@ function buildKitchenBarReceiptMarkup(profile, lines = []) {
   `
 }
 
-// چاپ پروفایل‌های آشپزخانه/بار: هر پروفایل فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
-function printKitchenBarProfiles() {
-  const profiles = (bootPosConfig?.print_profiles || []).filter(
+// پروفایل‌های چاپ غیرمشتری (آشپزخانه/بار/...) که در تنظیمات تعریف شده‌اند
+function activePrintProfiles() {
+  return (bootPosConfig?.print_profiles || []).filter(
     (p) => p && String(p.kind || '').toLowerCase() !== 'customer' && p.enabled
   )
+}
+
+function printKindLabel(kind) {
+  if (kind === 'bar') return 'بار'
+  if (kind === 'kitchen') return 'آشپزخانه'
+  return 'چاپ'
+}
+
+// چاپ یک پروفایل خاص: فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
+function printSingleProfile(profile) {
+  const groups = (profile.item_groups || []).map((g) => String(g).trim()).filter(Boolean)
+  const lines = cart.filter((line) => {
+    if (!groups.length) {
+      return false
+    }
+    const lineGroup = String(line.category_title || line.category || '').trim()
+    return groups.includes(lineGroup)
+  })
+  if (!lines.length) {
+    return false
+  }
+  const content = buildKitchenBarReceiptMarkup(profile, lines)
+  return printReceiptDocument(content)
+}
+
+// چاپ پروفایل‌های آشپزخانه/بار: هر پروفایل فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
+function printKitchenBarProfiles() {
+  const profiles = activePrintProfiles()
   if (!profiles.length) {
     return
   }
@@ -5098,13 +5201,47 @@ function printKitchenBarProfiles() {
   }
 }
 
-function printCurrentTicket(methodOverride = '') {
-  if (!cart.length) {
-    error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
+// باز کردن انتخابگر مقصد چاپ (مشتری / آشپزخانه / بار / پروفایل‌های تعریف‌شده)
+function openPrintTargetPicker(methodOverride = '') {
+  printTargetPending.value = { methodOverride: methodOverride || '' }
+  printTargetOpen.value = true
+}
+
+function closePrintTargetPicker() {
+  printTargetOpen.value = false
+  printTargetPending.value = null
+}
+
+// اجرای چاپ بر اساس انتخاب کاربر در انتخابگر
+function runPrintTarget(targetKey) {
+  const method = printTargetPending.value?.methodOverride || ''
+  printTargetOpen.value = false
+  printTargetPending.value = null
+
+  if (targetKey === 'all') {
+    // مشتری + همه پروفایل‌های آشپزخانه/بار
+    printCustomerReceipt(method)
+    printKitchenBarProfiles()
     return
   }
-  if (normalizePaymentMethodKind(methodOverride || payment.method) === 'credit') {
-    error.value = 'برای پرداخت اعتباری، فیش پرداخت POS چاپ نمی‌شود چون مبلغ هنوز دریافت نشده است.'
+  if (targetKey === 'customer') {
+    printCustomerReceipt(method)
+    return
+  }
+  if (String(targetKey || '').startsWith('profile:')) {
+    const profileId = String(targetKey).slice('profile:'.length)
+    const profile = activePrintProfiles().find((p) => String(p.profile_id || p.label || '') === profileId)
+    if (profile) {
+      printSingleProfile(profile)
+    }
+    return
+  }
+}
+
+// چاپ فیش مشتری (فیش عادی با قیمت)
+function printCustomerReceipt(methodOverride = '') {
+  if (!cart.length) {
+    error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
     return
   }
   const content = `
@@ -5124,6 +5261,23 @@ function printCurrentTicket(methodOverride = '') {
   if (!printReceiptDocument(content)) {
     error.value = 'ارسال دستور چاپ ممکن نشد.'
   }
+}
+
+function printCurrentTicket(methodOverride = '', showPicker = false) {
+  if (!cart.length) {
+    error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
+    return
+  }
+  if (normalizePaymentMethodKind(methodOverride || payment.method) === 'credit') {
+    error.value = 'برای پرداخت اعتباری، فیش پرداخت POS چاپ نمی‌شود چون مبلغ هنوز دریافت نشده است.'
+    return
+  }
+  // اگر درخواست دستی باشد و پروفایل چاپی تعریف شده باشد، انتخابگر مقصد باز می‌شود
+  if (showPicker) {
+    openPrintTargetPicker(methodOverride)
+    return
+  }
+  printCustomerReceipt(methodOverride)
   // چاپ پروفایل‌های آشپزخانه/بار (بدون قیمت، فقط گروه‌های انتخابی)
   printKitchenBarProfiles()
 }
@@ -7980,7 +8134,7 @@ kbd {
 
 /* ─── Redesigned Order Detail Modal ─── */
 .od-modal-overlay {
-  position: fixed; inset: 0; z-index: 12000;
+  position: fixed; inset: 0; z-index: 14500;
   background: rgb(25 20 14 / 0.42); display: flex;
   align-items: center; justify-content: center;
   padding: 1rem;
@@ -8381,6 +8535,154 @@ kbd {
 .quick-edit-fade-enter-from .quick-edit-panel,
 .quick-edit-fade-leave-to .quick-edit-panel {
   transform: translateX(24px);
+}
+
+/* ─── انتخابگر مقصد چاپ ─── */
+.print-target-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 14600;
+  background: rgb(10 12 10 / 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.print-target-modal {
+  width: min(420px, 100%);
+  background: var(--mg-bg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.print-target-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(135deg, var(--mg-primary), color-mix(in srgb, var(--mg-primary) 70%, var(--mg-text-main) 30%));
+  color: #fff;
+}
+
+.print-target-kicker {
+  font-size: 0.66rem;
+  color: rgb(255 255 255 / 0.75);
+  font-weight: 700;
+}
+
+.print-target-head h3 {
+  margin: 0.1rem 0 0;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.print-target-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.print-target-body {
+  padding: 0.85rem 1rem;
+  display: grid;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.print-target-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 13px;
+  background: var(--mg-bg-surface);
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+  text-align: right;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.print-target-option:hover {
+  border-color: color-mix(in srgb, var(--mg-primary) 45%, var(--mg-border-light));
+  background: color-mix(in srgb, var(--mg-primary) 6%, var(--mg-bg-surface) 94%);
+  transform: translateY(-1px);
+}
+
+.pto-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pto-icon--all {
+  color: var(--mg-primary);
+  background: color-mix(in srgb, var(--mg-primary) 13%, transparent);
+}
+
+.pto-icon--customer {
+  color: var(--mg-olive, #8a8b63);
+  background: color-mix(in srgb, var(--mg-olive, #8a8b63) 14%, transparent);
+}
+
+.pto-icon--kitchen {
+  color: var(--mg-success, #6f7b56);
+  background: color-mix(in srgb, var(--mg-success, #6f7b56) 14%, transparent);
+}
+
+.pto-icon--bar {
+  color: #b7791f;
+  background: color-mix(in srgb, #b7791f 13%, transparent);
+}
+
+.pto-copy {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.pto-copy strong {
+  font-size: 0.82rem;
+  color: var(--mg-text-main);
+}
+
+.pto-copy small {
+  font-size: 0.7rem;
+  color: var(--mg-text-muted);
+}
+
+.print-target-empty {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--mg-text-muted);
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.print-target-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--mg-border-light);
 }
 
 </style>
