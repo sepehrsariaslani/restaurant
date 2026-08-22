@@ -362,7 +362,7 @@
                   >
                     <div class="accordion-header" @click="toggleInvoiceAccordion(invoice)">
                       <strong>{{ invoice.name }}</strong>
-                      <button type="button" class="print-icon-btn" @click.stop="printOrderReceipt(invoice)" title="پرینت"><Printer :size="14" /></button>
+                      <button type="button" class="print-icon-btn" @click.stop="openOrderPrintPicker(invoice)" title="پرینت"><Printer :size="14" /></button>
                       <small class="accordion-customer">{{ invoice.customer_name || 'مشتری POS' }}</small>
                       <small v-if="invoice.secondary_customer" class="accordion-secondary" :title="'سفارش‌دهنده: ' + invoice.secondary_customer">
                         ← {{ invoice.secondary_customer }}
@@ -441,7 +441,7 @@
                     <button
                       type="button"
                       class="print-icon-btn"
-                      @click.stop="printOrderReceipt(order)"
+                      @click.stop="openOrderPrintPicker(order)"
                       title="پرینت فاکتور"
                     ><Printer :size="14" /></button>
                   </div>
@@ -983,7 +983,9 @@
           <section class="print-target-modal" dir="rtl" role="dialog" aria-modal="true" aria-label="انتخاب مقصد چاپ">
             <header class="print-target-head">
               <div>
-                <span class="print-target-kicker">چاپ فاکتور</span>
+                <span class="print-target-kicker">
+                  {{ printTargetPending?.orderName ? `چاپ فاکتور ${printTargetPending.orderName}` : 'چاپ فاکتور' }}
+                </span>
                 <h3>چاپ برای کجا؟</h3>
               </div>
               <button type="button" class="print-target-close" @click="closePrintTargetPicker" aria-label="بستن">×</button>
@@ -1840,6 +1842,21 @@ async function printOrderReceipt(order) {
     }
   } catch(err) {
     error.value = 'خطا در پرینت: ' + (err.message || '')
+  }
+}
+
+// چاپ فیش مشتری از روی context آماده (برای فاکتور مشخص در عملیات POS)
+function printOrderReceiptFromContext(context) {
+  if (!context) {
+    return
+  }
+  const html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>' +
+    '<style>' + receiptStylesCss() + '</style></head><body>' +
+    buildReceiptMarkup(context) +
+    '</body></html>'
+
+  if (!printReceiptDocument(html)) {
+    error.value = 'ارسال دستور چاپ ممکن نشد.'
   }
 }
 
@@ -5193,8 +5210,9 @@ function profileMatchingLines(profile, lines = []) {
 }
 
 // چاپ یک پروفایل خاص: فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
-function printSingleProfile(profile) {
-  const lines = profileMatchingLines(profile, currentProfileLines())
+// sourceLines برای چاپ یک فاکتور مشخص (از عملیات POS) ارسال می‌شود
+function printSingleProfile(profile, sourceLines = null) {
+  const lines = profileMatchingLines(profile, sourceLines || currentProfileLines())
   if (!lines.length) {
     return false
   }
@@ -5203,15 +5221,16 @@ function printSingleProfile(profile) {
 }
 
 // چاپ پروفایل‌های آشپزخانه/بار: هر پروفایل فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
-function printKitchenBarProfiles() {
+// sourceLines برای چاپ یک فاکتور مشخص (از عملیات POS) ارسال می‌شود
+function printKitchenBarProfiles(sourceLines = null) {
   const profiles = activePrintProfiles()
   if (!profiles.length) {
     return
   }
-  const sourceLines = currentProfileLines()
+  const linesSource = sourceLines || currentProfileLines()
   let delay = 0
   for (const profile of profiles) {
-    const lines = profileMatchingLines(profile, sourceLines)
+    const lines = profileMatchingLines(profile, linesSource)
     if (!lines.length) {
       continue
     }
@@ -5232,6 +5251,79 @@ function openPrintTargetPicker(methodOverride = '') {
 function closePrintTargetPicker() {
   printTargetOpen.value = false
   printTargetPending.value = null
+}
+
+// چاپ یک فاکتور مشخص از عملیات POS (فاکتورهای باز / سفارش‌های اخیر): انتخابگر مقصد باز می‌شود
+function openOrderPrintPicker(order) {
+  if (!order?.name) {
+    return
+  }
+  printTargetPending.value = { orderName: String(order.name || '').trim() }
+  printTargetOpen.value = true
+}
+
+// دریافت اطلاعات چاپ برای یک فاکتور مشخص (فیش مشتری + خطوط پروفایل‌های آشپزخانه/بار)
+async function loadOrderPrintData(order) {
+  const detail = await getManagementOrderDetail(order.name)
+  const orderData = detail?.order || detail
+  const items = orderData?.items || []
+  const customer = orderData.customer_name || order.customer_name || 'مشتری POS'
+  const orderCode = orderData.order_code || order.order_code || order.name
+  const total = orderData.grand_total || order.grand_total || 0
+
+  const printableItems = buildReceiptPrintableItemsFromLines(
+    items.map((item) => ({
+      title: item.title || item.item_name || '',
+      qty: item.qty || 1,
+      price: item.unit_price || item.price || 0,
+      note: item.note || '',
+      customization_ingredients: [],
+      customization: {},
+    })),
+  )
+
+  const totalsRows = buildReceiptTotalsRowsHtml({
+    itemsTotal: Number(total || 0),
+    discountAmount: 0,
+    walletApplied: 0,
+    taxAmount: 0,
+    tipAmount: 0,
+    serviceAmount: 0,
+    payableAmount: Number(total || 0),
+  })
+
+  const resolvedPaymentMethod = orderData.payment_method || order.payment_method || ''
+  const paymentLabel = resolvedPaymentMethod
+    ? (paymentMethodDisplayLabel(resolvedPaymentMethod) || resolvedPaymentMethod)
+    : '-'
+
+  const context = {
+    printableItems,
+    totalsRows,
+    paymentLabel,
+    customerName: customer,
+    mobile: orderData.mobile || order.mobile || '',
+    orderMode: orderData.channel || order.channel || 'takeaway',
+    place: orderData.place || order.place || orderData.order_context?.place || '-',
+    note: cleanReceiptNote(orderData.note || order.note || ''),
+    invoiceNo: orderCode,
+  }
+
+  const lines = items.map((item) => {
+    const itemCode = String(item.item_code || item.name || '').trim()
+    const product = products.value.find(
+      (p) => String(p.name || '').trim() === itemCode || getItemSlug(p) === itemCode,
+    )
+    return {
+      qty: Number(item.qty || 1),
+      price: Number(item.unit_price || item.price || 0),
+      title: item.title || item.item_name || '-',
+      category_title: String(product?.category_title || product?.category || '').trim(),
+      note: item.note || '',
+    }
+  })
+
+  return { context, lines }
 }
 
 // چاپ سریع از عملیات POS: مستقیم انتخابگر مقصد باز می‌شود تا کاربر نوع چاپ را انتخاب کند
@@ -5262,25 +5354,45 @@ function openPrintEditorFromPicker() {
 }
 
 // اجرای چاپ بر اساس انتخاب کاربر در انتخابگر
-function runPrintTarget(targetKey) {
+async function runPrintTarget(targetKey) {
   const method = printTargetPending.value?.methodOverride || ''
+  const orderName = printTargetPending.value?.orderName || ''
   printTargetOpen.value = false
   printTargetPending.value = null
 
-  const dineInTablePrint = form.order_mode === 'dine_in' && confirmedDineInOrders.value.length
+  const dineInTablePrint = !orderName && form.order_mode === 'dine_in' && confirmedDineInOrders.value.length
+
+  // اگر از عملیات POS (فاکتور باز / سفارش اخیر) چاپ شده، اطلاعات همان فاکتور را بگیر
+  let orderPrint = null
+  if (orderName) {
+    try {
+      orderPrint = await loadOrderPrintData({ name: orderName })
+    } catch (err) {
+      error.value = 'خطا در دریافت فاکتور برای چاپ: ' + (err.message || '')
+      return
+    }
+  }
 
   if (targetKey === 'all') {
     // مشتری + همه پروفایل‌های آشپزخانه/بار
-    if (dineInTablePrint) {
+    if (orderPrint) {
+      printOrderReceiptFromContext(orderPrint.context)
+    } else if (dineInTablePrint) {
       printConfirmedTableOrders()
     } else {
       printCustomerReceipt(method)
     }
-    printKitchenBarProfiles()
+    if (orderPrint) {
+      printKitchenBarProfiles(orderPrint.lines)
+    } else {
+      printKitchenBarProfiles()
+    }
     return
   }
   if (targetKey === 'customer') {
-    if (dineInTablePrint) {
+    if (orderPrint) {
+      printOrderReceiptFromContext(orderPrint.context)
+    } else if (dineInTablePrint) {
       printConfirmedTableOrders()
     } else {
       printCustomerReceipt(method)
@@ -5291,7 +5403,7 @@ function runPrintTarget(targetKey) {
     const profileId = String(targetKey).slice('profile:'.length)
     const profile = activePrintProfiles().find((p) => String(p.profile_id || p.label || '') === profileId)
     if (profile) {
-      printSingleProfile(profile)
+      printSingleProfile(profile, orderPrint ? orderPrint.lines : null)
     }
     return
   }
@@ -5950,7 +6062,7 @@ async function onWindowKeydown(event) {
     }
     if (key === 'F9') {
       event.preventDefault()
-      printCurrentTicket()
+      printCurrentTicket('', true)
       return
     }
     return
