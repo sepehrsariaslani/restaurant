@@ -34,7 +34,7 @@
           v-if="isOpen"
           ref="popupRef"
           class="calendar-popover"
-          :style="popoverStyle"
+          :style="{ ...popoverStyle, zIndex: props.zIndex }"
           dir="rtl"
           role="dialog"
           aria-label="انتخاب تاریخ شمسی"
@@ -128,6 +128,7 @@ const props = defineProps({
   min: { type: String, default: '' },
   max: { type: String, default: '' },
   inputClass: { type: [String, Array, Object], default: '' },
+  zIndex: { type: Number, default: 13000 },
 })
 
 const emit = defineEmits(['update:modelValue'])

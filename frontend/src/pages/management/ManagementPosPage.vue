@@ -955,6 +955,7 @@
                   <PersianDateInput
                     v-model="quickEditForm.out_of_stock_until"
                     placeholder="کی دوباره موجود می‌شود؟"
+                    :z-index="15000"
                   />
                   <small class="qe-help">تا این تاریخ در سایت «ناموجود» نمایش داده می‌شود.</small>
                 </template>
@@ -983,6 +984,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
+import PersianNumberInput from '@/components/PersianNumberInput.vue'
 import PosProductPanel from '@/components/management/pos/PosProductPanel.vue'
 import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
 import PosBomSheet from '@/components/management/pos/PosBomSheet.vue'

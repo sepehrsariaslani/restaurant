@@ -36,7 +36,7 @@
 
           <div
             class="calendar-popover"
-            :style="popoverStyle"
+            :style="{ ...popoverStyle, zIndex: props.zIndex }"
             role="dialog"
             aria-label="انتخاب بازه تاریخ شمسی"
             @click.stop
@@ -125,6 +125,7 @@ const props = defineProps({
   placeholder: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   inputClass: { type: [String, Array, Object], default: '' },
+  zIndex: { type: Number, default: 13000 },
 })
 
 const emit = defineEmits(['update:modelValue'])
