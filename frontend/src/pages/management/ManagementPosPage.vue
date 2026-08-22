@@ -118,7 +118,7 @@
             @submit-order="submitPOSOrder(false)"
             @submit-and-settle="submitPOSOrder(true, $event, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
-            @print-ticket="openPrintEditor"
+            @print-ticket="openQuickPrintTargetPicker"
           />
         </aside>
       </div>
@@ -544,7 +544,7 @@
             @submit-order="submitPOSOrder(false)"
             @submit-and-settle="submitPOSOrder(true, $event, true)"
             @submit-and-pay="submitPOSOrder(true, $event)"
-            @print-ticket="openPrintEditor"
+            @print-ticket="openQuickPrintTargetPicker"
           />
         </aside>
       </div>
@@ -1042,6 +1042,7 @@
 
             <footer class="print-target-foot">
               <button type="button" class="secondary-btn" @click="closePrintTargetPicker">انصراف</button>
+              <button type="button" class="tertiary-btn" @click="openPrintEditorFromPicker">پیش‌نمایش فیش</button>
             </footer>
           </section>
         </div>
@@ -5152,16 +5153,48 @@ function printKindLabel(kind) {
   return 'چاپ'
 }
 
-// چاپ یک پروفایل خاص: فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
-function printSingleProfile(profile) {
-  const groups = (profile.item_groups || []).map((g) => String(g).trim()).filter(Boolean)
-  const lines = cart.filter((line) => {
-    if (!groups.length) {
-      return false
+// خطوط قابل چاپ برای پروفایل‌های آشپزخانه/بار: از سبد (خارج از سالن) یا سفارش‌های تأییدشده میز
+function currentProfileLines() {
+  if (form.order_mode === 'dine_in' && confirmedDineInOrders.value.length) {
+    const lines = []
+    for (const order of confirmedDineInOrders.value) {
+      const orderCode = String(order.name || '').trim()
+      for (const item of order.items || []) {
+        const itemCode = String(item.menu_item || '').trim()
+        const product = products.value.find(
+          (p) => String(p.name || '').trim() === itemCode || getItemSlug(p) === itemCode,
+        )
+        lines.push({
+          qty: Number(item.quantity || 0),
+          price: Number(item.price_at_time || 0),
+          title: item.menu_item_title || item.menu_item || '-',
+          category_title: String(product?.category_title || product?.category || '').trim(),
+          note: orderCode ? `کد سفارش: ${orderCode}` : '',
+        })
+      }
     }
+    return lines
+  }
+  return cart
+}
+
+// فقط خطوطی که گروه‌شان در گروه‌های پروفایل انتخاب شده است؛
+// اگر گروهی انتخاب نشده باشد، همه آیتم‌های فاکتور چاپ می‌شوند
+function profileMatchingLines(profile, lines = []) {
+  const groups = (profile.item_groups || []).map((g) => String(g).trim()).filter(Boolean)
+  const source = lines || []
+  if (!groups.length) {
+    return source
+  }
+  return source.filter((line) => {
     const lineGroup = String(line.category_title || line.category || '').trim()
     return groups.includes(lineGroup)
   })
+}
+
+// چاپ یک پروفایل خاص: فقط آیتم‌های گروه‌های انتخاب‌شده‌اش را چاپ می‌کند
+function printSingleProfile(profile) {
+  const lines = profileMatchingLines(profile, currentProfileLines())
   if (!lines.length) {
     return false
   }
@@ -5175,16 +5208,10 @@ function printKitchenBarProfiles() {
   if (!profiles.length) {
     return
   }
+  const sourceLines = currentProfileLines()
   let delay = 0
   for (const profile of profiles) {
-    const groups = (profile.item_groups || []).map((g) => String(g).trim()).filter(Boolean)
-    const lines = cart.filter((line) => {
-      if (!groups.length) {
-        return false
-      }
-      const lineGroup = String(line.category_title || line.category || '').trim()
-      return groups.includes(lineGroup)
-    })
+    const lines = profileMatchingLines(profile, sourceLines)
     if (!lines.length) {
       continue
     }
@@ -5207,20 +5234,57 @@ function closePrintTargetPicker() {
   printTargetPending.value = null
 }
 
+// چاپ سریع از عملیات POS: مستقیم انتخابگر مقصد باز می‌شود تا کاربر نوع چاپ را انتخاب کند
+function openQuickPrintTargetPicker() {
+  if (form.order_mode === 'dine_in') {
+    if (!confirmedDineInOrders.value.length) {
+      error.value = 'سفارش تأییدشده برای چاپ وجود ندارد.'
+      return
+    }
+    openPrintTargetPicker()
+    return
+  }
+  if (!cart.length) {
+    error.value = 'برای چاپ، باید حداقل یک آیتم در فاکتور باشد.'
+    return
+  }
+  if (normalizePaymentMethodKind(payment.method) === 'credit') {
+    error.value = 'برای پرداخت اعتباری، فیش پرداخت POS چاپ نمی‌شود چون مبلغ هنوز دریافت نشده است.'
+    return
+  }
+  openPrintTargetPicker()
+}
+
+// رفتن از انتخابگر به پیش‌نمایش/ویرایش فیش
+function openPrintEditorFromPicker() {
+  closePrintTargetPicker()
+  openPrintEditor()
+}
+
 // اجرای چاپ بر اساس انتخاب کاربر در انتخابگر
 function runPrintTarget(targetKey) {
   const method = printTargetPending.value?.methodOverride || ''
   printTargetOpen.value = false
   printTargetPending.value = null
 
+  const dineInTablePrint = form.order_mode === 'dine_in' && confirmedDineInOrders.value.length
+
   if (targetKey === 'all') {
     // مشتری + همه پروفایل‌های آشپزخانه/بار
-    printCustomerReceipt(method)
+    if (dineInTablePrint) {
+      printConfirmedTableOrders()
+    } else {
+      printCustomerReceipt(method)
+    }
     printKitchenBarProfiles()
     return
   }
   if (targetKey === 'customer') {
-    printCustomerReceipt(method)
+    if (dineInTablePrint) {
+      printConfirmedTableOrders()
+    } else {
+      printCustomerReceipt(method)
+    }
     return
   }
   if (String(targetKey || '').startsWith('profile:')) {
