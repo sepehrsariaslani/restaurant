@@ -4177,7 +4177,9 @@ function confirmCustomizationAdd() {
     
     if (matchedVariant) {
       const nextQty = Number(Number(customizationSheet.qty || 1).toFixed(3));
-      const nextPrice = Number(customizationSheet.item?.base_price || matchedVariant.base_price || 0);
+      // قیمت از پیش‌نمایش واقعی محاسبه می‌شود تا جایگزین مواد (مثل ربوستا→عربیکا)،
+      // تغییرات مواد و افزودنی‌ها در قیمت نهایی لحاظ شوند — نه فقط قیمت پایه واریانت.
+      const nextPrice = Number(sheetPreview.value.unitPrice || customizationSheet.item?.base_price || matchedVariant.base_price || 0);
       const nextSlug = matchedVariant.slug || matchedVariant.name;
       
       if (customizationSheet.editing_line_id) {
