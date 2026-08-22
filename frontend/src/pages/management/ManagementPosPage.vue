@@ -4838,11 +4838,13 @@ function receiptStylesCss() {
     @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Black.ttf') format('truetype'); font-weight: 900; font-style: normal; font-display: swap; }
     @page { size: 80mm auto; margin: 3mm; }
     html, body { width: 100%; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
     body {
       direction: rtl;
       font-family: ${receiptFontFamilyCss()};
       color: #34261F;
       background: #FFFFFF;
+      font-size: 11px;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -4853,26 +4855,28 @@ function receiptStylesCss() {
     .muted { color: var(--mg-text-muted); font-size: 10px; }
     .sep { border-top: 1px dashed #D8C8B4; margin: 6px 0; }
     .meta-row { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
+    .meta-row span { min-width: 0; overflow-wrap: anywhere; }
     .meta-block { margin-top: 4px; border: 1px dashed #D8C8B4; border-radius: 7px; padding: 4px 5px; }
     .meta-block strong { display: block; font-size: 10px; color: var(--mg-text-muted); margin-bottom: 2px; }
     .meta-block p { margin: 0; white-space: pre-wrap; font-size: 10px; }
     .item-row { padding: 4px 0; border-bottom: 1px dashed #D8C8B4; }
-    .item-head { display: grid; grid-template-columns: auto 1fr auto; gap: 4px; align-items: start; }
+    .item-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; align-items: start; }
     .item-index { font-weight: 600; }
-    .item-title { font-weight: 600; }
-    .item-total { font-weight: 800; }
+    .item-title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+    .item-total { font-weight: 800; white-space: nowrap; }
     .item-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 10px; color: var(--mg-text-muted); }
-    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: var(--mg-text-muted); }
+    .item-custom { margin: 3px 0 0; padding-right: 12px; font-size: 10px; color: var(--mg-text-muted); overflow-wrap: anywhere; }
     .item-custom li { margin: 1px 0; }
-    .item-note { margin-top: 3px; font-size: 10px; color: var(--mg-text-muted); }
+    .item-note { margin-top: 3px; font-size: 10px; color: var(--mg-text-muted); overflow-wrap: anywhere; }
     .receipt-title { font-size: 15px; font-weight: 800; text-align: center; margin: 0 0 4px; }
     .receipt-meta { margin: 1px 0; font-size: 10px; color: var(--mg-text-muted); }
     .receipt-printer { font-size: 10px; color: var(--mg-text-muted); margin: 1px 0; }
     .receipt-footer { text-align: center; font-size: 10px; color: var(--mg-text-muted); border-top: 1px dashed #D8C8B4; margin-top: 6px; padding-top: 4px; }
-    .item-qty { font-weight: 800; font-size: 12px; }
+    .item-qty { font-weight: 800; font-size: 12px; white-space: nowrap; }
     .item-qty-line { margin-top: 2px; font-size: 10px; color: var(--mg-text-muted); }
     .totals { margin-top: 6px; display: grid; gap: 3px; }
     .total-row { display: flex; justify-content: space-between; gap: 6px; }
+    .total-row span { min-width: 0; overflow-wrap: anywhere; }
     .payable { border-top: 1px dashed #D8C8B4; margin-top: 2px; padding-top: 4px; font-size: 12px; font-weight: 800; }
     .note { margin-top: 6px; font-size: 10px; color: var(--mg-text-muted); white-space: pre-wrap; }
   `
@@ -5143,15 +5147,17 @@ function buildKitchenBarReceiptMarkup(profile, lines = []) {
         <style>${receiptStylesCss()}</style>
       </head>
       <body>
-        <header class="receipt-header">
-          <h1 class="receipt-title">چاپ ${kind}</h1>
-          ${printerName ? `<p class="receipt-meta">پرینتر: ${escapeHtml(printerName)}</p>` : ''}
-          <p class="receipt-meta">${dateLabel} — ${timeLabel}</p>
-          <p class="receipt-meta">فیش: ${escapeHtml(receiptInvoiceNumber.value || '-')}</p>
-          <p class="receipt-meta">مشتری: ${escapeHtml(form.customer_name || 'مشتری POS')}</p>
-        </header>
-        <div class="receipt-items">${itemsHtml}</div>
-        <footer class="receipt-footer">${escapeHtml(kind)}</footer>
+        <div class="receipt">
+          <header class="receipt-header">
+            <h1 class="receipt-title">چاپ ${kind}</h1>
+            ${printerName ? `<p class="receipt-meta">پرینتر: ${escapeHtml(printerName)}</p>` : ''}
+            <p class="receipt-meta">${dateLabel} — ${timeLabel}</p>
+            <p class="receipt-meta">فیش: ${escapeHtml(receiptInvoiceNumber.value || '-')}</p>
+            <p class="receipt-meta">مشتری: ${escapeHtml(form.customer_name || 'مشتری POS')}</p>
+          </header>
+          <div class="receipt-items">${itemsHtml}</div>
+          <footer class="receipt-footer">${escapeHtml(kind)}</footer>
+        </div>
       </body>
     </html>
   `
