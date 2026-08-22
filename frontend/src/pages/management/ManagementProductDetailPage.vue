@@ -246,6 +246,23 @@
                 وقتی تاریخی انتخاب شود، در سایت به‌جای قیمت «اتمام» نمایش داده می‌شود تا تاریخ تکمیل.
               </small>
             </div>
+            <div class="restock-field">
+              <div class="oos-toggle-row">
+                <ManagementToggleSwitch
+                  v-model="settingsForm.restaurant_out_of_stock"
+                  label="ناموجود"
+                  hint="با روشن شدن، محصول در سایت «ناموجود» نمایش داده می‌شود."
+                />
+              </div>
+              <PersianDateInput
+                v-if="settingsForm.restaurant_out_of_stock"
+                v-model="settingsForm.out_of_stock_until"
+                placeholder="ناموجود تا تاریخ (اختیاری)"
+              />
+              <small class="field-help">
+                اگر تاریخ بدهید، «ناموجود» تا آن تاریخ نمایش داده می‌شود.
+              </small>
+            </div>
             <ManagementToggleSwitch
               v-model="settingsForm.restaurant_auto_add_to_order"
               label="افزودن خودکار"
@@ -3376,6 +3393,12 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .pg-name-field input {
   min-height: 2.3rem;
+}
+
+.oos-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .restock-field {

@@ -2753,6 +2753,28 @@ def _ensure_coming_soon_field():
 	return _has_column("Item", "restaurant_coming_soon")
 
 
+def _ensure_out_of_stock_until_field():
+	"""فیلد «تا تاریخ ناموجودی» روی Item — وقتی ست شود، محصول در سایت «ناموجود» است."""
+	if _has_column("Item", "restaurant_out_of_stock_until"):
+		return True
+	try:
+		if not frappe.db.exists("Custom Field", {"dt": "Item", "fieldname": "restaurant_out_of_stock_until"}):
+			frappe.get_doc(
+				{
+					"doctype": "Custom Field",
+					"dt": "Item",
+					"fieldname": "restaurant_out_of_stock_until",
+					"label": "ناموجود تا تاریخ",
+					"fieldtype": "Date",
+					"insert_after": "restaurant_out_of_stock",
+				}
+			).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype="Item")
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "restaurant.api.ensure_out_of_stock_until_field")
+	return _has_column("Item", "restaurant_out_of_stock_until")
+
+
 def _ensure_restock_field():
 	"""فیلد «تاریخ تکمیل موجودی» روی Item — وقتی ست شود، در سایت «اتمام» نمایش داده می‌شود."""
 	if _has_column("Item", "restaurant_restock_date"):
@@ -3541,6 +3563,8 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"kitchen_ticket": cint(getattr(row, "restaurant_kitchen_ticket", 1)),
 		"restock_date": _date_value_to_iso(getattr(row, "restaurant_restock_date", None)),
 		"stock_out": cint(bool(getattr(row, "restaurant_restock_date", None))),
+		"out_of_stock": cint(getattr(row, "restaurant_out_of_stock", 0)),
+		"out_of_stock_until": _date_value_to_iso(getattr(row, "restaurant_out_of_stock_until", None)),
 	}
 
 
@@ -4320,6 +4344,10 @@ def _get_core_menu_items(
 		item_fields.append("restaurant_coming_soon")
 	if _has_column("Item", "restaurant_restock_date"):
 		item_fields.append("restaurant_restock_date")
+	if _has_column("Item", "restaurant_out_of_stock"):
+		item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_out_of_stock_until"):
+		item_fields.append("restaurant_out_of_stock_until")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -4913,6 +4941,7 @@ def _get_core_item_detail(item_slug, branch=None, bom_name=None):
 		"calendar_date": _date_value_to_iso(getattr(doc, "restaurant_calendar_date", None)),
 		"restock_date": _date_value_to_iso(getattr(doc, "restaurant_restock_date", None)),
 		"stock_out": cint(bool(getattr(doc, "restaurant_restock_date", None))),
+		"out_of_stock_until": _date_value_to_iso(getattr(doc, "restaurant_out_of_stock_until", None)),
 	}
 
 	
@@ -7000,6 +7029,10 @@ def get_related_items(item_slug, limit=6, branch=None):
 		item_fields.append("restaurant_coming_soon")
 	if _has_column("Item", "restaurant_restock_date"):
 		item_fields.append("restaurant_restock_date")
+	if _has_column("Item", "restaurant_out_of_stock"):
+		item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_out_of_stock_until"):
+		item_fields.append("restaurant_out_of_stock_until")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -8282,7 +8315,7 @@ def _variant_item_sort_key(item_name):
 		order_chunks.append((default_flag, sort_key))
 
 	if not order_chunks:
-		return (0, item_name)
+		return (0, (), item_name)
 
 	default_rank = 0 if all(cint(flag) == 1 for flag, _key in order_chunks) else 1
 	values_rank = tuple(key for _flag, key in order_chunks)
@@ -8692,6 +8725,22 @@ def _template_display_variants(template_doc, branch=None):
 		order_by="restaurant_sort_order asc, item_name asc",
 		limit_page_length=1000,
 	)
+	# فیلدهای وضعیتی را به هر واریانت اضافه کن (کوئری دوم سبک)
+	extra_fields = []
+	for fieldname in ("restaurant_coming_soon", "restaurant_restock_date", "restaurant_out_of_stock", "restaurant_out_of_stock_until"):
+		if _has_column("Item", fieldname):
+			extra_fields.append(fieldname)
+	if extra_fields and variants:
+		extra_rows = frappe.get_all(
+			"Item",
+			filters={"name": ["in", [row.name for row in variants]]},
+			fields=["name", *extra_fields],
+			ignore_permissions=True,
+		)
+		extra_map = {row.name: row for row in extra_rows}
+		for row in variants:
+			for fieldname in extra_fields:
+				row[fieldname] = extra_map.get(row.name, {}).get(fieldname)
 
 	grouped = {}
 	for variant in variants:
@@ -18411,6 +18460,7 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_out_of_stock": cint(item_doc.get("restaurant_out_of_stock") or 0)
 			if _has_column("Item", "restaurant_out_of_stock")
 			else 0,
+			"out_of_stock_until": _date_value_to_iso(item_doc.get("restaurant_out_of_stock_until")),
 			"restaurant_packaging_price": flt(item_doc.get("restaurant_packaging_price") or 0)
 			if _has_column("Item", "restaurant_packaging_price")
 			else 0,
@@ -18512,6 +18562,9 @@ def update_management_product_settings(payload=None):
 	if "restaurant_restock_date" in parsed_payload:
 		_ensure_restock_field()
 		item_doc = frappe.get_doc("Item", item_doc.name)
+	if "restaurant_out_of_stock_until" in parsed_payload:
+		_ensure_out_of_stock_until_field()
+		item_doc = frappe.get_doc("Item", item_doc.name)
 
 	data_fields = {
 		"item_name",
@@ -18534,6 +18587,7 @@ def update_management_product_settings(payload=None):
 		"restaurant_kitchen_print_mode",
 		"restaurant_stock_consumption_mode",
 		"restaurant_restock_date",
+		"restaurant_out_of_stock_until",
 	}
 	int_fields = {
 		"disabled",
@@ -18618,6 +18672,23 @@ def update_management_product_settings(payload=None):
 		if flt(item_doc.get(fieldname) or 0) != next_value:
 			item_doc.set(fieldname, next_value)
 			changed = True
+
+	# «ناموجود تا تاریخ»: وقتی تاریخی ست شود، restaurant_out_of_stock هم فعال می‌شود.
+	# وقتی تاریخ پاک شود، اگر صریحاً restaurant_out_of_stock نیامده، خودکار خاموش نمی‌شود
+	# (مدیر می‌تواند خودش خاموش کند) — اما اگر تاریخ گذشته باشد، محصول عادی نمایش داده می‌شود.
+	if "restaurant_out_of_stock_until" in parsed_payload and _has_column(
+		"Item", "restaurant_out_of_stock_until"
+	):
+		until_value = parsed_payload.get("restaurant_out_of_stock_until") or ""
+		if until_value:
+			item_doc.set("restaurant_out_of_stock_until", getdate(until_value) if str(until_value).strip() else None)
+			if _has_column("Item", "restaurant_out_of_stock"):
+				item_doc.set("restaurant_out_of_stock", 1)
+			changed = True
+		else:
+			if item_doc.get("restaurant_out_of_stock_until"):
+				item_doc.set("restaurant_out_of_stock_until", None)
+				changed = True
 
 	for fieldname in nutrition_fields:
 		if fieldname not in parsed_payload:
@@ -19215,6 +19286,10 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		item_fields.append("restaurant_coming_soon")
 	if _has_column("Item", "restaurant_restock_date"):
 		item_fields.append("restaurant_restock_date")
+	if _has_column("Item", "restaurant_out_of_stock"):
+		item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_out_of_stock_until"):
+		item_fields.append("restaurant_out_of_stock_until")
 	if _has_column("Item", "restaurant_out_of_stock"):
 		item_fields.append("restaurant_out_of_stock")
 	if _has_column("Item", "restaurant_packaging_price"):

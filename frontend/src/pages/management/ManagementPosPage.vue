@@ -927,6 +927,18 @@
               </label>
 
               <label class="qe-field">
+                <span>دسته‌بندی</span>
+                <SearchableDropdown
+                  v-model="quickEditForm.item_group"
+                  :options="quickEditItemGroupOptions"
+                  placeholder="انتخاب گروه کالا"
+                  search-placeholder="جستجوی گروه کالا..."
+                  include-empty-option
+                  empty-label="بدون گروه"
+                />
+              </label>
+
+              <label class="qe-field">
                 <span>تکمیل موجودی</span>
                 <PersianDateInput
                   v-model="quickEditForm.restaurant_restock_date"
@@ -1111,8 +1123,10 @@ const quickEditForm = reactive({
   price: 0,
   restaurant_short_desc: '',
   restaurant_long_desc: '',
+  item_group: '',
   restaurant_restock_date: '',
 })
+const quickEditItemGroupOptions = ref([])
 
 async function openQuickEdit(item) {
   quickEditError.value = ''
@@ -1122,6 +1136,7 @@ async function openQuickEdit(item) {
   quickEditForm.price = Number(item?.base_price || item?.standard_rate || 0)
   quickEditForm.restaurant_short_desc = String(item?.short_desc || item?.restaurant_short_desc || '').trim()
   quickEditForm.restaurant_long_desc = String(item?.long_desc || item?.restaurant_long_desc || '').trim()
+  quickEditForm.item_group = String(item?.item_group || '').trim()
   quickEditForm.restaurant_restock_date = String(item?.restock_date || '').trim()
   quickEditOpen.value = true
   try {
@@ -1131,7 +1146,14 @@ async function openQuickEdit(item) {
     quickEditForm.price = Number(detailItem.base_price ?? detailItem.standard_rate ?? quickEditForm.price)
     quickEditForm.restaurant_short_desc = String(detailItem.short_description || detailItem.restaurant_short_desc || quickEditForm.restaurant_short_desc).trim()
     quickEditForm.restaurant_long_desc = String(detailItem.long_description || detailItem.restaurant_long_desc || quickEditForm.restaurant_long_desc).trim()
+    quickEditForm.item_group = String(detailItem.item_group || quickEditForm.item_group).trim()
     quickEditForm.restaurant_restock_date = String(detailItem.restock_date || detailItem.restaurant_restock_date || '').trim()
+    const fieldOptions = payload?.field_options || {}
+    const itemGroups = Array.isArray(fieldOptions?.item_groups) ? fieldOptions.item_groups : []
+    quickEditItemGroupOptions.value = itemGroups.map((row) => ({
+      value: String(row?.name || row?.value || '').trim(),
+      label: String(row?.label || row?.title || row?.item_group_name || row?.name || '').trim(),
+    })).filter((row) => row.value)
   } catch (err) {
     console.error('quick edit detail failed:', err)
   }
@@ -1160,6 +1182,7 @@ async function saveQuickEdit() {
         item_name: quickEditForm.name,
         restaurant_short_desc: quickEditForm.restaurant_short_desc,
         restaurant_long_desc: quickEditForm.restaurant_long_desc,
+        item_group: quickEditForm.item_group,
         restaurant_restock_date: quickEditForm.restaurant_restock_date,
       }),
     ])

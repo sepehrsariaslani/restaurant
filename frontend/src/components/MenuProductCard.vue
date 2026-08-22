@@ -16,7 +16,7 @@
           loading="lazy"
           :class="{ 'img-dimmed': isTemporarilyUnavailable }"
         />
-        <span v-if="isStockOut" class="unavailable-badge stock-out-badge">اتمام</span>
+        <span v-if="unavailableReason" class="unavailable-badge stock-out-badge">{{ unavailableReason }}</span>
         <span v-else-if="isComingSoon" class="unavailable-badge">به‌زودی</span>
         <span v-if="isTemporarilyUnavailable && !isComingSoon" class="unavailable-badge">ناموجود</span>
       </a>
@@ -32,7 +32,7 @@
         <p v-if="item.short_desc || item.description" class="card-description">{{ item.short_desc || item.description }}</p>
         <span v-if="nutritionText" class="card-nutrition">{{ nutritionText }}</span>
         <div class="card-price-row">
-          <span v-if="isStockOut" class="card-price stock-out-label">اتمام</span>
+          <span v-if="unavailableReason" class="card-price stock-out-label">{{ unavailableReason }}</span>
           <span v-else-if="isComingSoon" class="card-price soon-label">به‌زودی</span>
           <span v-else class="card-price">{{ displayBasePriceText }}</span>
         </div>
@@ -81,7 +81,7 @@
         <div class="featured-foot">
           <div>
             <small class="muted" v-if="!isComingSoon">قیمت</small>
-            <strong class="price stock-out-label" v-if="isStockOut">اتمام</strong>
+            <strong class="price stock-out-label" v-if="unavailableReason">{{ unavailableReason }}</strong>
             <strong class="price soon-label" v-else-if="isComingSoon">به‌زودی</strong>
             <strong class="price" v-else :class="{ 'price-strikethrough': isTemporarilyUnavailable }">{{ displayBasePriceText }}</strong>
             <small class="in-cart-badge" v-if="cartQty > 0">در سبد: {{ cartQty }}</small>
@@ -129,7 +129,7 @@
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
         <div class="list-foot">
           <div v-if="isComingSoon">
-            <strong class="price stock-out-label" v-if="isStockOut">اتمام</strong>
+            <strong class="price stock-out-label" v-if="unavailableReason">{{ unavailableReason }}</strong>
             <strong class="price soon-label" v-else>به‌زودی</strong>
           </div>
           <div v-else>
@@ -159,7 +159,7 @@
     <template v-else>
       <a class="grid-cover" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
         <img :src="resolvedImage" :alt="item.title" class="grid-img" loading="lazy" :class="{ 'img-dimmed': isTemporarilyUnavailable }" />
-        <span class="coming-soon-ribbon stock-out-ribbon" v-if="isStockOut">اتمام</span>
+        <span class="coming-soon-ribbon stock-out-ribbon" v-if="unavailableReason">{{ unavailableReason }}</span>
         <span class="coming-soon-ribbon" v-else-if="isComingSoon">به‌زودی</span>
         <span class="prep-badge grid-prep-badge" v-if="item.prep_time_mins">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -179,7 +179,7 @@
         <p class="nutrition-line" v-if="nutritionText">{{ nutritionText }}</p>
         <div class="grid-foot">
           <div v-if="isComingSoon">
-            <strong class="price stock-out-label" v-if="isStockOut">اتمام</strong>
+            <strong class="price stock-out-label" v-if="unavailableReason">{{ unavailableReason }}</strong>
             <strong class="price soon-label" v-else>به‌زودی</strong>
           </div>
           <div v-else>
@@ -321,6 +321,12 @@ const nutritionText = computed(() => {
 const hasCustomization = computed(() => Number(props.item?.has_customization || 0) === 1)
 const isComingSoon = computed(() => Number(props.item?.coming_soon ?? props.item?.restaurant_coming_soon ?? 0) === 1)
 const isStockOut = computed(() => Number(props.item?.stock_out || 0) === 1)
+const isOutOfStock = computed(() => Number(props.item?.out_of_stock ?? props.item?.restaurant_out_of_stock ?? 0) === 1)
+const unavailableReason = computed(() => {
+  if (isOutOfStock.value) return 'ناموجود'
+  if (isStockOut.value) return 'اتمام'
+  return ''
+})
 const isTemporarilyUnavailable = computed(() => {
   if (Number(props.item?.is_temporarily_unavailable || 0) !== 1) return false
   const until = props.item?.unavailable_until || ''

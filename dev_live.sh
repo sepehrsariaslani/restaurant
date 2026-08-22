@@ -384,6 +384,24 @@ if [ -f "$REPO/dev_sales_seed.py" ]; then
   cd /home/user/bench/sites
   /home/user/bench/env/bin/python "$REPO/dev_sales_seed.py" || true
 fi
+# ستون‌های سفارشی Item که بعد از ریست ممکن است در DB نباشند
+cd /home/user/bench/sites
+/home/user/bench/env/bin/python - <<'PYEOF'
+import frappe
+frappe.init(site="site1.local")
+frappe.connect()
+for col, ctype in [
+    ("restaurant_out_of_stock", "integer DEFAULT 0"),
+    ("restaurant_out_of_stock_until", "date"),
+]:
+    try:
+        frappe.db.sql('ALTER TABLE "tabItem" ADD COLUMN IF NOT EXISTS "' + col + '" ' + ctype)
+    except Exception:
+        pass
+frappe.db.commit()
+frappe.destroy()
+print("  item custom columns ensured")
+PYEOF
 # مشتری‌های ثانویه قدیمی (اسنپ) هم به‌عنوان مشتری واقعی ساخته می‌شوند
 cd /home/user/bench/sites
 /home/user/bench/env/bin/python - <<'PYEOF'

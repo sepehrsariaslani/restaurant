@@ -532,7 +532,7 @@
                 <small>قیمت کل</small>
                 <strong>{{ unavailableReason || formatMoney(linePreview.lineTotal, currency) }}</strong>
               </div>
-              <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isComingSoon" @click="primaryAddAction">
+              <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isComingSoon || isOutOfStock" @click="primaryAddAction">
                 {{ unavailableReason || isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
                 <span class="cart-plus" v-if="!isComingSoon">+</span>
               </button>
@@ -575,7 +575,7 @@
           <small>قیمت کل</small>
           <strong>{{ unavailableReason || formatMoney(linePreview.lineTotal, currency) }}</strong>
         </div>
-        <button class="add-to-cart-btn" type="button" :disabled="isComingSoon" @click="primaryAddAction">
+        <button class="add-to-cart-btn" type="button" :disabled="isComingSoon || isOutOfStock" @click="primaryAddAction">
           {{ unavailableReason || isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
           <span class="cart-plus" v-if="!isComingSoon">+</span>
         </button>
@@ -942,7 +942,8 @@ const builderInitialSelections = computed(() => {
 })
 const isComingSoon = computed(() => Number(item.value?.coming_soon ?? item.value?.restaurant_coming_soon ?? 0) === 1)
 const isStockOut = computed(() => Number(item.value?.stock_out || 0) === 1)
-const unavailableReason = computed(() => (isStockOut.value ? 'اتمام' : isComingSoon.value ? 'به‌زودی' : ''))
+const isOutOfStock = computed(() => Number(item.value?.out_of_stock ?? item.value?.restaurant_out_of_stock ?? 0) === 1)
+const unavailableReason = computed(() => (isOutOfStock.value ? 'ناموجود' : isStockOut.value ? 'اتمام' : isComingSoon.value ? 'به‌زودی' : ''))
 const activeBranch = ref(
   String(props.boot.active_branch || props.boot?.table_context?.table?.branch || query.branch || '').trim(),
 )

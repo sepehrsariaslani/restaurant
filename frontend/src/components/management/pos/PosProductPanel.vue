@@ -306,6 +306,17 @@
 										/>
 									</button>
 
+									<!-- دکمه ویرایش سریع — روی عکس، بالا سمت چپ، fixed -->
+									<button
+										type="button"
+										class="pos-quick-edit-btn"
+										title="ویرایش سریع محصول"
+										aria-label="ویرایش سریع محصول"
+										@click.stop="$emit('quick-edit', item)"
+									>
+										<AlertCircle :size="15" :stroke-width="2.4" />
+									</button>
+
 									<div class="product-body">
 										<h4>{{ item.title || item.name }}</h4>
 										<strong>{{
@@ -337,15 +348,6 @@
 										>
 											<SlidersHorizontal :size="13" :stroke-width="2.3" aria-hidden="true" />
 											<span>BOM</span>
-										</button>
-										<button
-											type="button"
-											class="bom-btn quick-edit-btn"
-											title="ویرایش سریع محصول"
-											aria-label="ویرایش سریع محصول"
-											@click.stop="$emit('quick-edit', item)"
-										>
-											<AlertCircle :size="13" :stroke-width="2.4" aria-hidden="true" />
 										</button>
 									</div>
 								</article>
@@ -1197,7 +1199,32 @@ function quantityValue(slug) {
 	gap: 0.45rem;
 }
 
+.pos-quick-edit-btn {
+  position: absolute;
+  top: 0.45rem;
+  inset-inline-start: 0.45rem;
+  z-index: 6;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 40%, var(--mg-border-light));
+  background: var(--mg-bg-surface);
+  color: var(--mg-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgb(52 38 31 / 0.18);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.pos-quick-edit-btn:hover {
+  transform: scale(1.1);
+  background: color-mix(in srgb, var(--mg-primary) 12%, var(--mg-bg-surface) 88%);
+}
+
 .product-card {
+	position: relative;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
 	border-radius: 16px;
 	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
