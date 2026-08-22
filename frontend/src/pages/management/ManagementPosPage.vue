@@ -1831,7 +1831,6 @@ async function printOrderReceipt(order) {
         place: orderData.place || order.place || orderData.order_context?.place || '-',
         note: orderNote,
         invoiceNo: orderCode,
-        heading: 'فیش فروش POS',
       }) +
       '</body></html>'
 
@@ -4832,7 +4831,7 @@ function receiptStylesCss() {
     .receipt { width: 74mm; margin: 0 auto; font-size: ${receiptFontSizePx()}px; line-height: 1.45; }
     .center { text-align: center; }
     .brand-name { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
-    .title { font-size: 14px; font-weight: 800; margin-bottom: 2px; }
+    .invoice-no { font-size: 13px; font-weight: 900; letter-spacing: 0.4px; margin-bottom: 2px; }
     .muted { color: var(--mg-text-muted); font-size: 10px; }
     .sep { border-top: 1px dashed #D8C8B4; margin: 6px 0; }
     .meta-row { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; }
@@ -4938,7 +4937,6 @@ function buildReceiptMarkup({
   place,
   note,
   invoiceNo = receiptInvoiceNumber.value,
-  heading = 'فیش فروش POS',
 }) {
   const printDate = new Date().toLocaleString('fa-IR')
   const storeName = String(receiptSettings.store_name || '').trim() || 'وی درخت'
@@ -4946,16 +4944,15 @@ function buildReceiptMarkup({
   const customerDescription = String(note || '').trim() || '-'
   const placeLabel = String(place || '').trim() || '-'
   const mobileLabel = String(mobile || '').trim() || '-'
+  const invoiceLabel = String(invoiceNo || '').trim() || '-'
 
   return `
     <div class="receipt">
       <div class="center brand-name">${escapeHtml(storeName)}</div>
-      <div class="center title">${escapeHtml(heading)}</div>
-      <div class="center muted">POS</div>
+      <div class="center invoice-no" dir="ltr">${escapeHtml(invoiceLabel)}</div>
       <div class="sep"></div>
 
       <div class="meta-row"><span>تاریخ</span><span>${escapeHtml(printDate)}</span></div>
-      <div class="meta-row"><span>شماره فاکتور</span><span>${escapeHtml(invoiceNo)}</span></div>
       <div class="meta-row"><span>مشتری</span><span>${escapeHtml(customerName || 'مشتری POS')}</span></div>
       <div class="meta-row"><span>موبایل مشتری</span><span>${escapeHtml(mobileLabel)}</span></div>
       <div class="meta-row"><span>نوع سفارش</span><span>${escapeHtml(orderMode)}</span></div>
@@ -4988,7 +4985,6 @@ function buildCurrentTicketReceiptMarkup(paymentMethodOverride = '') {
     place: form.place,
     note: form.note,
     invoiceNo: receiptInvoiceNumber.value,
-    heading: 'فیش فروش POS',
   })
 }
 
@@ -5041,7 +5037,6 @@ function buildConfirmedTableReceiptContext() {
     place: selectedDineInTable.value?.label || '-',
     note: noteParts.join('\n'),
     invoiceNo,
-    heading: 'فیش سفارش میز',
   }
 }
 
