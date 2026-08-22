@@ -104,7 +104,7 @@
 
         <!-- Base price -->
         <div class="price-block">
-          <span class="base-price">{{ isComingSoon ? 'به‌زودی' : displayBasePriceText }}</span>
+          <span class="base-price">{{ unavailableReason || displayBasePriceText }}</span>
         </div>
 
         <!-- Description -->
@@ -346,7 +346,7 @@
             <div class="desktop-meta-row">
               <div class="desktop-price-row">
                 <span class="desktop-price-label">قیمت:</span>
-                <span class="desktop-price">{{ isComingSoon ? 'به‌زودی' : displayBasePriceText }}</span>
+                <span class="desktop-price">{{ unavailableReason || displayBasePriceText }}</span>
               </div>
               <div class="prep-badge" v-if="prepTimeText">
                 <span class="prep-icon">⏱</span>
@@ -530,10 +530,10 @@
               </div>
               <div class="desktop-price-display">
                 <small>قیمت کل</small>
-                <strong>{{ isComingSoon ? 'به‌زودی' : formatMoney(linePreview.lineTotal, currency) }}</strong>
+                <strong>{{ unavailableReason || formatMoney(linePreview.lineTotal, currency) }}</strong>
               </div>
               <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isComingSoon" @click="primaryAddAction">
-                {{ isComingSoon ? 'به‌زودی' : isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+                {{ unavailableReason || isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
                 <span class="cart-plus" v-if="!isComingSoon">+</span>
               </button>
             </div>
@@ -573,10 +573,10 @@
       <div class="price-and-add">
         <div class="bottom-price">
           <small>قیمت کل</small>
-          <strong>{{ isComingSoon ? 'به‌زودی' : formatMoney(linePreview.lineTotal, currency) }}</strong>
+          <strong>{{ unavailableReason || formatMoney(linePreview.lineTotal, currency) }}</strong>
         </div>
         <button class="add-to-cart-btn" type="button" :disabled="isComingSoon" @click="primaryAddAction">
-          {{ isComingSoon ? 'به‌زودی' : isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+          {{ unavailableReason || isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
           <span class="cart-plus" v-if="!isComingSoon">+</span>
         </button>
       </div>
@@ -941,6 +941,8 @@ const builderInitialSelections = computed(() => {
   })).filter((row) => row.step_key && row.option_key && row.qty > 0)
 })
 const isComingSoon = computed(() => Number(item.value?.coming_soon ?? item.value?.restaurant_coming_soon ?? 0) === 1)
+const isStockOut = computed(() => Number(item.value?.stock_out || 0) === 1)
+const unavailableReason = computed(() => (isStockOut.value ? 'اتمام' : isComingSoon.value ? 'به‌زودی' : ''))
 const activeBranch = ref(
   String(props.boot.active_branch || props.boot?.table_context?.table?.branch || query.branch || '').trim(),
 )

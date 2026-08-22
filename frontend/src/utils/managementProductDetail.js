@@ -100,6 +100,7 @@ export function createInitialProductSettingsForm() {
 		restaurant_requires_bom: false,
 		restaurant_auto_add_to_order: false,
 		restaurant_coming_soon: false,
+		restaurant_restock_date: "",
 		disabled: false,
 		restaurant_is_customizable: false,
 		restaurant_customize_button_label: "سفارشی‌سازی",
@@ -168,6 +169,7 @@ export function hydrateProductSettingsForm(form, payload = {}, tagOptions = []) 
 	form.restaurant_requires_bom = Number(item.restaurant_requires_bom || 0) === 1;
 	form.restaurant_auto_add_to_order = Number(item.restaurant_auto_add_to_order || 0) === 1;
 	form.restaurant_coming_soon = Number(item.restaurant_coming_soon || 0) === 1;
+	form.restaurant_restock_date = item.restock_date || item.restaurant_restock_date || "";
 	form.disabled = Number(item.disabled || 0) === 1;
 	form.restaurant_is_customizable = Number(item.restaurant_is_customizable || 0) === 1;
 	form.restaurant_customize_button_label =
@@ -223,6 +225,7 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 		restaurant_requires_bom: form.restaurant_requires_bom ? 1 : 0,
 		restaurant_auto_add_to_order: form.restaurant_auto_add_to_order ? 1 : 0,
 		restaurant_coming_soon: form.restaurant_coming_soon ? 1 : 0,
+		restaurant_restock_date: String(form.restaurant_restock_date || "").trim(),
 		disabled: form.disabled ? 1 : 0,
 		restaurant_is_customizable: form.restaurant_is_customizable ? 1 : 0,
 		restaurant_customize_button_label: String(

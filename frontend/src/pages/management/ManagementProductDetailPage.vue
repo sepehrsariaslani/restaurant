@@ -236,6 +236,16 @@
               label="به‌زودی"
               hint="محصول دیده می‌شود ولی برای فروش آماده نیست."
             />
+            <div class="restock-field">
+              <span class="field-label">تکمیل موجودی</span>
+              <PersianDateInput
+                v-model="settingsForm.restaurant_restock_date"
+                placeholder="انتخاب تاریخ تکمیل"
+              />
+              <small class="field-help">
+                وقتی تاریخی انتخاب شود، در سایت به‌جای قیمت «اتمام» نمایش داده می‌شود تا تاریخ تکمیل.
+              </small>
+            </div>
             <ManagementToggleSwitch
               v-model="settingsForm.restaurant_auto_add_to_order"
               label="افزودن خودکار"
@@ -3366,6 +3376,13 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .pg-name-field input {
   min-height: 2.3rem;
+}
+
+.restock-field {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--mg-border-light);
 }
 
 .pg-status-row {

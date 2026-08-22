@@ -22,6 +22,11 @@
           <slot name="overlay" :row="row" :index="index" />
         </div>
 
+        <!-- دکمه سریع (fixed روی کارت) -->
+        <div class="ng-quick-action" v-if="$slots.quickAction">
+          <slot name="quickAction" :row="row" :index="index" />
+        </div>
+
         <!-- دسته روی تصویر -->
         <span v-if="categoryOf(row)" class="ng-cat-badge">{{ categoryOf(row) }}</span>
       </div>
@@ -494,4 +499,11 @@ function onCardKeydown(row) {
     font-size: 0.68rem;
   }
 }
+.ng-quick-action {
+  position: absolute;
+  top: 0.5rem;
+  inset-inline-start: 0.5rem;
+  z-index: 5;
+}
+
 </style>

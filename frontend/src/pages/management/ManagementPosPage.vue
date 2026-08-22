@@ -3790,6 +3790,9 @@ async function setSheetModifiers(next) {
     try {
       const itemSlug = getItemSlug(customizationSheet.item) || customizationSheet.item?.name
       const cacheKey = bomChanged ? `${itemSlug}::bom::${targetBom}` : (selectedVariant.slug || selectedVariant.name)
+      // کش کهنه (با قیمت قبلی) می‌تواند بعد از تغییر قیمت در جزئیات محصول،
+      // قیمت قدیمی را برگرداند — پس همیشه fetch تازه انجام می‌شود.
+      detailCache.delete(cacheKey)
       const payload = detailCache.get(cacheKey) || (
         bomChanged
           ? await getItemDetail(itemSlug, '', targetBom)

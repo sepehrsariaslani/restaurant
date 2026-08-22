@@ -1243,9 +1243,13 @@ function isComingSoonItem(item = {}) {
   return Number(item?.coming_soon ?? item?.restaurant_coming_soon ?? 0) === 1
 }
 
+function isStockOutItem(item = {}) {
+  return Number(item?.stock_out || 0) === 1
+}
+
 // ─── افزودن سریع به سبد ────────────────────────────────────────────
 function quickAdd(item) {
-  if (isComingSoonItem(item)) {
+  if (isComingSoonItem(item) || isStockOutItem(item)) {
     return
   }
   if (itemHasBuilder(item)) {
@@ -1261,7 +1265,7 @@ function quickAdd(item) {
 }
 
 function quickIncrease(item) {
-  if (isComingSoonItem(item)) {
+  if (isComingSoonItem(item) || isStockOutItem(item)) {
     return
   }
   if (itemHasBuilder(item) || itemHasCustomization(item)) {

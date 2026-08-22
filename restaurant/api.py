@@ -2753,6 +2753,28 @@ def _ensure_coming_soon_field():
 	return _has_column("Item", "restaurant_coming_soon")
 
 
+def _ensure_restock_field():
+	"""فیلد «تاریخ تکمیل موجودی» روی Item — وقتی ست شود، در سایت «اتمام» نمایش داده می‌شود."""
+	if _has_column("Item", "restaurant_restock_date"):
+		return True
+	try:
+		if not frappe.db.exists("Custom Field", {"dt": "Item", "fieldname": "restaurant_restock_date"}):
+			frappe.get_doc(
+				{
+					"doctype": "Custom Field",
+					"dt": "Item",
+					"fieldname": "restaurant_restock_date",
+					"label": "تاریخ تکمیل موجودی",
+					"fieldtype": "Date",
+					"insert_after": "restaurant_calendar_date",
+				}
+			).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype="Item")
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "restaurant.api.ensure_restock_field")
+	return _has_column("Item", "restaurant_restock_date")
+
+
 def _has_core_menu_support():
 	return all(
 		[
@@ -3062,6 +3084,50 @@ def _get_default_item_price_rate(row, price_list=None):
 		)
 		if rate not in (None, ""):
 			return flt(rate)
+
+	# اگر خود آیتم قیمت نداشت (مثلاً والدِ دارای واریانت)، از نماینده واریانت بخوان
+	# تا کارت POS و قیمت‌گذاری با قیمت واقعی هماهنگ باشد.
+	try:
+		row_doc = None
+		if hasattr(row, "get"):
+			row_doc = row
+		item_name = (row_doc.get("name") if row_doc else None) or (candidates[0] if candidates else "")
+		if item_name:
+			item_meta = frappe.db.get_value(
+				"Item",
+				item_name,
+				["has_variants", "variant_of"],
+				as_dict=True,
+			)
+			if item_meta:
+				is_variant_parent = cint(item_meta.get("has_variants") or 0)
+				parent_of = (item_meta.get("variant_of") or "").strip()
+				fallback_codes = []
+				if is_variant_parent:
+					variants = frappe.get_all(
+						"Item",
+						filters={"variant_of": item_name, "disabled": 0},
+						fields=["name"],
+						ignore_permissions=True,
+						limit_page_length=500,
+					)
+					fallback_codes = [row.name for row in variants]
+				elif parent_of:
+					fallback_codes = [parent_of]
+				for fallback_code in fallback_codes:
+					rate = frappe.db.get_value(
+						"Item Price",
+						{
+							"item_code": fallback_code,
+							"price_list": price_list,
+							"selling": 1,
+						},
+						"price_list_rate",
+					)
+					if rate not in (None, ""):
+						return flt(rate)
+	except Exception:
+		pass
 	return None
 
 
@@ -3473,6 +3539,8 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"coming_soon": cint(getattr(row, "restaurant_coming_soon", 0)),
 		"calendar_date": _date_value_to_iso(getattr(row, "restaurant_calendar_date", None)),
 		"kitchen_ticket": cint(getattr(row, "restaurant_kitchen_ticket", 1)),
+		"restock_date": _date_value_to_iso(getattr(row, "restaurant_restock_date", None)),
+		"stock_out": cint(bool(getattr(row, "restaurant_restock_date", None))),
 	}
 
 
@@ -4250,6 +4318,8 @@ def _get_core_menu_items(
 			item_fields.append(fieldname)
 	if _has_column("Item", "restaurant_coming_soon"):
 		item_fields.append("restaurant_coming_soon")
+	if _has_column("Item", "restaurant_restock_date"):
+		item_fields.append("restaurant_restock_date")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -4838,6 +4908,11 @@ def _get_core_item_detail(item_slug, branch=None, bom_name=None):
 			or 0
 		),
 		"tags": _split_tags(getattr(doc, "restaurant_item_tags", None)),
+		"coming_soon": cint(getattr(doc, "restaurant_coming_soon", 0)),
+		"out_of_stock": cint(getattr(doc, "restaurant_out_of_stock", 0)),
+		"calendar_date": _date_value_to_iso(getattr(doc, "restaurant_calendar_date", None)),
+		"restock_date": _date_value_to_iso(getattr(doc, "restaurant_restock_date", None)),
+		"stock_out": cint(bool(getattr(doc, "restaurant_restock_date", None))),
 	}
 
 	
@@ -6923,6 +6998,8 @@ def get_related_items(item_slug, limit=6, branch=None):
 			item_fields.append(fieldname)
 	if _has_column("Item", "restaurant_coming_soon"):
 		item_fields.append("restaurant_coming_soon")
+	if _has_column("Item", "restaurant_restock_date"):
+		item_fields.append("restaurant_restock_date")
 
 	template_rows = frappe.get_all(
 		"Item",
@@ -18356,6 +18433,8 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_requires_bom": cint(item_doc.get("restaurant_requires_bom") or 0),
 			"restaurant_auto_add_to_order": cint(item_doc.get("restaurant_auto_add_to_order") or 0),
 			"restaurant_coming_soon": cint(item_doc.get("restaurant_coming_soon") or 0),
+			"restock_date": _date_value_to_iso(item_doc.get("restaurant_restock_date")),
+			"stock_out": cint(bool(item_doc.get("restaurant_restock_date"))),
 			"restaurant_kitchen_ticket": cint(item_doc.get("restaurant_kitchen_ticket", 1)),
 			"restaurant_auto_add_qty": flt(item_doc.get("restaurant_auto_add_qty") or 0),
 			"restaurant_is_customizable": cint(item_doc.get("restaurant_is_customizable") or 0),
@@ -18430,6 +18509,9 @@ def update_management_product_settings(payload=None):
 	if "restaurant_coming_soon" in parsed_payload:
 		_ensure_coming_soon_field()
 		item_doc = frappe.get_doc("Item", item_doc.name)
+	if "restaurant_restock_date" in parsed_payload:
+		_ensure_restock_field()
+		item_doc = frappe.get_doc("Item", item_doc.name)
 
 	data_fields = {
 		"item_name",
@@ -18451,6 +18533,7 @@ def update_management_product_settings(payload=None):
 		"restaurant_builder_template",
 		"restaurant_kitchen_print_mode",
 		"restaurant_stock_consumption_mode",
+		"restaurant_restock_date",
 	}
 	int_fields = {
 		"disabled",
@@ -18681,6 +18764,55 @@ def set_management_product_price(payload=None):
 	frappe.db.set_value("Item", item_doc.name, "standard_rate", rate, update_modified=True)
 	if _has_column("Item", "restaurant_base_price"):
 		frappe.db.set_value("Item", item_doc.name, "restaurant_base_price", rate, update_modified=False)
+
+	# ── هماهنگ‌سازی قیمت والد و واریانت‌ها ──
+	# اگر قیمت والد تغییر کرد → همه واریانت‌های فعال هم همان قیمت را می‌گیرند
+	# (کاربر انتظار دارد «قیمت محصول» عوض شود و کارت POS از والد می‌آید).
+	# اگر قیمت یک واریانت تغییر کرد → والد هم همگام می‌شود تا کارت اصلی POS
+	# قیمت درستی نشان دهد؛ واریانت‌های دیگر دست نمی‌خورند.
+	sync_names = []
+	if cint(item_doc.get("has_variants") or 0) and _has_column("Item", "variant_of"):
+		variants = frappe.get_all(
+			"Item",
+			filters={"variant_of": item_doc.name, "disabled": 0},
+			fields=["name"],
+			ignore_permissions=True,
+			limit_page_length=500,
+		)
+		sync_names = [row.name for row in variants]
+	elif (item_doc.get("variant_of") or "").strip():
+		parent_name = frappe.db.get_value("Item", item_doc.variant_of, "name")
+		if parent_name:
+			sync_names = [parent_name]
+
+	for sync_name in sync_names:
+		if sync_name == item_doc.name:
+			continue
+		frappe.db.set_value("Item", sync_name, "standard_rate", rate, update_modified=True)
+		if _has_column("Item", "restaurant_base_price"):
+			frappe.db.set_value("Item", sync_name, "restaurant_base_price", rate, update_modified=False)
+		# Item Price فقط روی واریانت‌ها ساخته/به‌روز می‌شود؛ ERPNext اجازه
+		# Item Price برای آیتم template (والد) را نمی‌دهد و قیمت والد از
+		# نماینده واریانت‌ها خوانده می‌شود.
+		sync_is_parent = cint(frappe.db.get_value("Item", sync_name, "has_variants") or 0)
+		if sync_is_parent:
+			continue
+		sync_filters = {"item_code": sync_name, "price_list": price_list_name}
+		sync_existing = frappe.db.get_value("Item Price", sync_filters, "name")
+		if sync_existing:
+			frappe.db.set_value("Item Price", sync_existing, "price_list_rate", rate, update_modified=True)
+		else:
+			insert_payload = {
+				"doctype": "Item Price",
+				"item_code": sync_name,
+				"price_list": price_list_name,
+				"price_list_rate": rate,
+			}
+			if _has_column("Item Price", "currency"):
+				insert_payload["currency"] = currency
+			if _has_column("Item Price", "uom"):
+				insert_payload["uom"] = item_doc.stock_uom
+			frappe.get_doc(insert_payload).insert(ignore_permissions=True)
 
 	frappe.db.commit()
 	return get_management_product_detail(item_doc.name)
@@ -19081,6 +19213,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		item_fields.append("restaurant_item_tags")
 	if _has_column("Item", "restaurant_coming_soon"):
 		item_fields.append("restaurant_coming_soon")
+	if _has_column("Item", "restaurant_restock_date"):
+		item_fields.append("restaurant_restock_date")
 	if _has_column("Item", "restaurant_out_of_stock"):
 		item_fields.append("restaurant_out_of_stock")
 	if _has_column("Item", "restaurant_packaging_price"):
