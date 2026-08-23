@@ -5,7 +5,10 @@ import {
   transformManagementPosDefaultsPage,
   transformManagementPosPage,
 } from './scripts/pos-print-transform.mjs'
-import { transformPosReliabilityPage } from './scripts/pos-reliability-transform.mjs'
+import {
+  transformPosProductPanel,
+  transformPosReliabilityPage,
+} from './scripts/pos-reliability-transform.mjs'
 
 function posThermalPrintTransform() {
   return {
@@ -18,6 +21,9 @@ function posThermalPrintTransform() {
       }
       if (cleanId.endsWith('/src/pages/management/ManagementPosDefaultsPage.vue')) {
         return { code: transformManagementPosDefaultsPage(code), map: null }
+      }
+      if (cleanId.endsWith('/src/components/management/pos/PosProductPanel.vue')) {
+        return { code: transformPosProductPanel(code), map: null }
       }
       return null
     },
