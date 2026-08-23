@@ -26,6 +26,38 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(reliability._normalize_client_order_key('bad key/with spaces'), 'bad-key-with-spaces')
         self.assertEqual(reliability._normalize_client_order_key(''), '')
 
+    def test_normalizes_atomic_quick_edit_payload(self):
+        payload = reliability._normalize_atomic_quick_edit_payload(
+            {
+                'item_name': ' ITEM-1 ',
+                'price_list_rate': '125000',
+                'restaurant_short_desc': ' کوتاه ',
+                'restaurant_long_desc': ' بلند ',
+                'item_group': ' Food ',
+                'restaurant_out_of_stock': 1,
+                'restaurant_out_of_stock_until': '2026-08-30',
+                'dangerous_field': 'ignored',
+            }
+        )
+        self.assertEqual(payload['item_name'], 'ITEM-1')
+        self.assertEqual(payload['price_list_rate'], 125000.0)
+        self.assertEqual(payload['restaurant_short_desc'], 'کوتاه')
+        self.assertEqual(payload['restaurant_long_desc'], 'بلند')
+        self.assertEqual(payload['item_group'], 'Food')
+        self.assertEqual(payload['restaurant_out_of_stock'], 1)
+        self.assertEqual(payload['restaurant_out_of_stock_until'], '2026-08-30')
+        self.assertNotIn('dangerous_field', payload)
+
+        available = reliability._normalize_atomic_quick_edit_payload(
+            {
+                'item_name': 'ITEM-1',
+                'price_list_rate': 0,
+                'restaurant_out_of_stock': 0,
+                'restaurant_out_of_stock_until': '2026-08-30',
+            }
+        )
+        self.assertEqual(available['restaurant_out_of_stock_until'], '')
+
     def test_merges_unavailable_items_without_duplicates(self):
         base = [{'name': 'ITEM-A', 'title': 'A', 'out_of_stock': 0}]
         extra = [
