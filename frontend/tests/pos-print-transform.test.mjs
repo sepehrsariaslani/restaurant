@@ -12,7 +12,7 @@ function receiptStylesCss() {
   assert.match(result, /thermalPaperWidthMm/)
   assert.match(result, /@page \{ margin: 0; \}/)
   assert.doesNotMatch(result, /size:\s*80mm auto/)
-  assert.doesNotMatch(result, /page-break-(before|after):\s*(always|left|right)/)
+  assert.doesNotMatch(result, /page-break/i)
 })
 
 test('POS receipt transform adds secondary customer to current and reprinted receipts', () => {
