@@ -1,9 +1,4 @@
-"""Reliability-focused management POS endpoints.
-
-This module intentionally stays small and delegates canonical restaurant logic to
-``restaurant.api`` while adding transaction boundaries that are unsafe to bolt
-onto the legacy public endpoints from the browser.
-"""
+"""Reliability-focused management POS endpoints."""
 
 import copy
 import json
@@ -40,6 +35,23 @@ def _normalize_client_order_key(value):
         return ""
     normalized = re.sub(r"[^A-Za-z0-9._:-]+", "-", raw)
     return normalized.strip("-._:")[:140]
+
+
+def _normalize_atomic_quick_edit_payload(payload):
+    data = _parse_payload(payload)
+    item_name = str(data.get("item_name") or data.get("name") or "").strip()
+    out_of_stock = cint(data.get("restaurant_out_of_stock") or 0)
+    return {
+        "item_name": item_name,
+        "price_list_rate": flt(data.get("price_list_rate") or 0),
+        "restaurant_short_desc": str(data.get("restaurant_short_desc") or "").strip(),
+        "restaurant_long_desc": str(data.get("restaurant_long_desc") or "").strip(),
+        "item_group": str(data.get("item_group") or "").strip(),
+        "restaurant_out_of_stock": 1 if out_of_stock else 0,
+        "restaurant_out_of_stock_until": (
+            str(data.get("restaurant_out_of_stock_until") or "").strip() if out_of_stock else ""
+        ),
+    }
 
 
 def _extract_order_id(result):
@@ -214,7 +226,7 @@ def _set_item_field_if_available(legacy, item_doc, fieldname, value):
         item_doc.set(fieldname, value)
 
 
-def _upsert_default_item_price(legacy, item_doc, rate):
+def _resolve_price_context(legacy):
     price_list_name = legacy._get_default_selling_price_list_name(set_fallback_default=True) or ""
     if not price_list_name:
         frappe.throw(_("Please configure at least one selling price list."))
@@ -222,13 +234,16 @@ def _upsert_default_item_price(legacy, item_doc, rate):
         frappe.throw(_("Price List not found."))
     if not cint(frappe.db.get_value("Price List", price_list_name, "selling")):
         frappe.throw(_("Selected price list is not a selling price list."))
-
     currency = (
         frappe.db.get_value("Price List", price_list_name, "currency")
         or legacy._get_currency()
         or ""
     )
-    filters = {"item_code": item_doc.item_code, "price_list": price_list_name}
+    return price_list_name, currency
+
+
+def _upsert_item_price(legacy, item_code, stock_uom, price_list_name, currency, rate):
+    filters = {"item_code": item_code, "price_list": price_list_name}
     existing_name = frappe.db.get_value("Item Price", filters, "name")
     if existing_name:
         price_doc = frappe.get_doc("Item Price", existing_name)
@@ -236,60 +251,147 @@ def _upsert_default_item_price(legacy, item_doc, rate):
         if legacy._has_column("Item Price", "currency"):
             price_doc.currency = currency
         if legacy._has_column("Item Price", "uom") and not price_doc.get("uom"):
-            price_doc.uom = item_doc.stock_uom
+            price_doc.uom = stock_uom
         price_doc.save(ignore_permissions=True)
         return price_doc.name
 
     values = {
         "doctype": "Item Price",
-        "item_code": item_doc.item_code,
+        "item_code": item_code,
         "price_list": price_list_name,
         "price_list_rate": rate,
     }
     if legacy._has_column("Item Price", "currency"):
         values["currency"] = currency
     if legacy._has_column("Item Price", "uom"):
-        values["uom"] = item_doc.stock_uom
+        values["uom"] = stock_uom
     return frappe.get_doc(values).insert(ignore_permissions=True).name
+
+
+def _sync_item_price_state(legacy, item_doc, rate):
+    price_list_name, currency = _resolve_price_context(legacy)
+    _upsert_item_price(
+        legacy,
+        item_doc.item_code,
+        item_doc.stock_uom,
+        price_list_name,
+        currency,
+        rate,
+    )
+    frappe.db.set_value("Item", item_doc.name, "standard_rate", rate, update_modified=True)
+    if legacy._has_column("Item", "restaurant_base_price"):
+        frappe.db.set_value(
+            "Item",
+            item_doc.name,
+            "restaurant_base_price",
+            rate,
+            update_modified=False,
+        )
+
+    sync_names = []
+    if cint(item_doc.get("has_variants") or 0) and legacy._has_column("Item", "variant_of"):
+        variants = frappe.get_all(
+            "Item",
+            filters={"variant_of": item_doc.name, "disabled": 0},
+            fields=["name"],
+            ignore_permissions=True,
+            limit_page_length=500,
+        )
+        sync_names = [row.name for row in variants]
+    elif (item_doc.get("variant_of") or "").strip():
+        parent_name = frappe.db.get_value("Item", item_doc.variant_of, "name")
+        if parent_name:
+            sync_names = [parent_name]
+
+    for sync_name in sync_names:
+        if sync_name == item_doc.name:
+            continue
+        frappe.db.set_value("Item", sync_name, "standard_rate", rate, update_modified=True)
+        if legacy._has_column("Item", "restaurant_base_price"):
+            frappe.db.set_value(
+                "Item",
+                sync_name,
+                "restaurant_base_price",
+                rate,
+                update_modified=False,
+            )
+        sync_is_parent = cint(frappe.db.get_value("Item", sync_name, "has_variants") or 0)
+        if sync_is_parent:
+            continue
+        sync_uom = frappe.db.get_value("Item", sync_name, "stock_uom") or item_doc.stock_uom
+        _upsert_item_price(
+            legacy,
+            sync_name,
+            sync_uom,
+            price_list_name,
+            currency,
+            rate,
+        )
 
 
 @frappe.whitelist()
 def update_pos_product_atomic(payload=None):
     legacy = _legacy_api()
     legacy._ensure_management_access()
-    data = _parse_payload(payload)
-    if not data:
+    raw_data = _parse_payload(payload)
+    data = _normalize_atomic_quick_edit_payload(raw_data)
+    if not data.get("item_name"):
         frappe.throw(_("Invalid payload format."))
-
-    item_name = legacy._management_resolve_item_name(data.get("item_name") or data.get("name"))
-    item_doc = frappe.get_doc("Item", item_name)
-    rate = flt(data.get("price_list_rate"))
-    if rate < 0:
+    if data["price_list_rate"] < 0:
         frappe.throw(_("Price cannot be negative."))
 
-    item_group = str(data.get("item_group") or item_doc.item_group or "").strip()
+    if "restaurant_out_of_stock_until" in raw_data:
+        try:
+            legacy._ensure_out_of_stock_until_field()
+        except Exception:
+            pass
+
+    item_name = legacy._management_resolve_item_name(data["item_name"])
+    item_doc = frappe.get_doc("Item", item_name)
+    item_group = data["item_group"] or str(item_doc.item_group or "").strip()
     if item_group and not frappe.db.exists("Item Group", item_group):
         frappe.throw(_("Item Group not found."))
 
-    out_of_stock = cint(data.get("restaurant_out_of_stock") or 0)
-    out_until_raw = str(data.get("restaurant_out_of_stock_until") or "").strip()
+    out_of_stock = data["restaurant_out_of_stock"]
+    out_until_raw = data["restaurant_out_of_stock_until"]
     out_until = getdate(out_until_raw) if out_of_stock and out_until_raw else None
 
     try:
         if item_group:
             item_doc.item_group = item_group
         _set_item_field_if_available(
-            legacy, item_doc, "restaurant_short_desc", str(data.get("restaurant_short_desc") or "").strip()
+            legacy,
+            item_doc,
+            "restaurant_short_desc",
+            data["restaurant_short_desc"],
         )
         _set_item_field_if_available(
-            legacy, item_doc, "restaurant_long_desc", str(data.get("restaurant_long_desc") or "").strip()
+            legacy,
+            item_doc,
+            "restaurant_long_desc",
+            data["restaurant_long_desc"],
         )
-        _set_item_field_if_available(legacy, item_doc, "restaurant_out_of_stock", out_of_stock)
-        _set_item_field_if_available(legacy, item_doc, "restaurant_out_of_stock_until", out_until)
+        _set_item_field_if_available(
+            legacy,
+            item_doc,
+            "restaurant_out_of_stock",
+            out_of_stock,
+        )
+        _set_item_field_if_available(
+            legacy,
+            item_doc,
+            "restaurant_out_of_stock_until",
+            out_until,
+        )
         item_doc.save(ignore_permissions=True)
-        _upsert_default_item_price(legacy, item_doc, rate)
+        _sync_item_price_state(legacy, item_doc, data["price_list_rate"])
         detail = legacy.get_management_product_detail(item_doc.name)
         frappe.db.commit()
+        try:
+            frappe.clear_cache(doctype="Item")
+            frappe.clear_website_cache()
+        except Exception:
+            pass
         return {
             "status": "success",
             "item": item_doc.name,
