@@ -52,14 +52,6 @@ function thermalPaperWidthMm(profile = null) {
     '.receipt { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0; padding: 2mm ${horizontalPaddingMm}mm 3mm; font-size: ${receiptFontSizePx()}px; line-height: 1.45; overflow: visible; }',
   )
   code = code.replaceAll('var(--mg-text-muted)', '#6f625a')
-  code = code.replaceAll(
-    '.item-row { padding: 4px 0; border-bottom: 1px dashed #D8C8B4; }',
-    '.item-row { padding: 4px 0; border-bottom: 1px dashed #D8C8B4; break-inside: auto; page-break-inside: auto; }',
-  )
-  code = code.replaceAll(
-    '.totals { margin-top: 6px; display: grid; gap: 3px; }',
-    '.totals { margin-top: 6px; display: grid; gap: 3px; break-inside: auto; page-break-inside: auto; }',
-  )
 
   // Secondary customer: function input, markup, current cart and reprints.
   code = code.replace(
@@ -168,7 +160,7 @@ function thermalPaperWidthMm(profile = null) {
     )
   }
 
-  // Wait for document/font readiness. Do not force pagination; thermal driver owns roll length.
+  // Wait for document/font readiness. Thermal driver owns continuous roll length.
   const printStart = `function printReceiptDocument(html) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return false
