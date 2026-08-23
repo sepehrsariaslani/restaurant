@@ -1,18 +1,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { transformManagementPosPage, transformManagementPosDefaultsPage } from '../scripts/pos-print-transform.mjs'
+import { transformPosReliabilityPage } from '../scripts/pos-reliability-transform.mjs'
 
 test('POS receipt transform makes thermal output continuous and width-aware', () => {
   const source = `
 function receiptStylesCss() {
-  return \`@page { size: 80mm auto; margin: 3mm; }\n.receipt { width: 74mm; margin: 0 auto; }\`
+  return \`@page { size: 80mm auto; margin: 3mm; }\nhtml, body { width: 100%; margin: 0; padding: 0; }\n.receipt { width: 74mm; margin: 0 auto; font-size: \${receiptFontSizePx()}px; line-height: 1.45; }\`
 }
 `
-  const result = transformManagementPosPage(source)
+  const result = transformPosReliabilityPage(transformManagementPosPage(source))
   assert.match(result, /thermalPaperWidthMm/)
   assert.match(result, /@page \{ margin: 0; \}/)
+  assert.match(result, /\*, \*::before, \*::after \{ box-sizing: border-box; \}/)
+  assert.match(result, /\.receipt \{[^}]*width: \$\{paperWidthMm\}mm[^}]*max-width: 100%/s)
+  assert.match(result, /overflow-wrap: anywhere/)
+  assert.match(result, /\.receipt table[^}]*max-width: 100%/s)
   assert.doesNotMatch(result, /size:\s*80mm auto/)
-  assert.doesNotMatch(result, /page-break/i)
+  assert.doesNotMatch(result, /page-break|break-before|break-after|break-inside/i)
 })
 
 test('POS receipt transform adds secondary customer to current and reprinted receipts', () => {
