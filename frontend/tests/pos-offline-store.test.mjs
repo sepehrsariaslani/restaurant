@@ -46,6 +46,7 @@ test('degrades safely when IndexedDB is unavailable', async () => {
   assert.equal(await store.pendingOrderCount(), 0)
   const queued = await store.enqueueOfflineOrder({ items: [{ item_name: 'A', qty: 1 }] }, 'pos-safe')
   assert.equal(queued.id, 'pos-safe')
+  assert.equal(queued.persisted, false)
   assert.equal(queued.payload.client_order_key, 'pos-safe')
   assert.equal(await store.savePosBootSnapshot('main', { items: [] }), false)
 })
