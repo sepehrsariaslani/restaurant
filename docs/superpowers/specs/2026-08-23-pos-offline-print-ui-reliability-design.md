@@ -45,7 +45,7 @@ Quick edit writes `restaurant_out_of_stock`, but POS boot uses core item filters
 
 ### 1. POS Offline Store
 
-Create a small browser-native module, for example:
+Create a browser-native module at:
 
 `frontend/src/utils/posOfflineStore.js`
 
@@ -71,13 +71,14 @@ The module exposes narrow functions rather than leaking IndexedDB details into t
 
 - `savePosBootSnapshot(branch, payload)`
 - `loadPosBootSnapshot(branch)`
-- `replaceCustomerCache(customers)` / `mergeCustomerCache(customers)`
+- `replaceCustomerCache(customers)`
+- `mergeCustomerCache(customers)`
 - `searchCachedCustomers(query, limit)`
 - `enqueueOfflineOrder(record)`
 - `listPendingOfflineOrders()`
 - `markOfflineOrderSynced(id)`
-- `markOfflineOrderFailed(id, error)`
-- optional cache version/clear helpers
+- `markOfflineOrderFailed(id, error, status)`
+- cache version/clear helpers
 
 All APIs must safely no-op/fallback if IndexedDB is unavailable.
 
@@ -110,35 +111,34 @@ Customer search becomes local-first with online refresh:
 - A successful broad/default customer fetch replaces or refreshes the local customer cache.
 - Newly created customers are added to the cache after a successful online create.
 
-Normalization must handle Persian/Arabic character variants where practical and strip whitespace from mobile searches. The existing `PosProductPanel` filtering behavior remains compatible.
+Normalization must handle Persian/Arabic character variants (`ي/ی`, `ك/ک`) and remove whitespace/separators from mobile searches. The existing `PosProductPanel` filtering behavior remains compatible.
 
 ### 4. Offline Order Queue
 
-Offline order submission is allowed only for order creation paths that can be safely replayed.
+Offline queueing is limited to the normal non-settled order-creation path (`createPOSOrder` / its backend order-creation endpoint). `createAndSettlePOSOrder`, submit-and-pay, submit-and-settle, card verification, credit settlement, and other payment-authorizing flows are never queued offline.
 
-Each queued order gets a client-generated idempotency key. The backend order creation API must accept/store/check this key before creating a new Sales Order so retrying the same queued record cannot duplicate an order.
+Each queued order gets a client-generated idempotency key. The backend normal order-creation API must accept/store/check this key before creating a new Sales Order so retrying the same queued record cannot duplicate an order.
 
-When offline:
+When offline and the cashier chooses normal order submission:
 
 - Validate the cart and required local fields using the same client validation as online.
-- Save the full request payload to `order_queue` with the idempotency key.
+- Save the complete non-settlement order payload to `order_queue` with the idempotency key.
 - Mark the ticket as locally queued and present a clear success state such as “ذخیره آفلاین شد”.
 - Do not claim server-side payment/settlement succeeded while offline.
-- Card verification, credit validation, server settlement, stock mutation, and other server-dependent operations remain unavailable offline unless their current logic explicitly supports deferred processing.
+- If the cashier uses submit-and-pay/settle while offline, block the action and explain that payment/settlement requires connection.
 
 When connectivity returns:
 
 - A sync action processes pending records sequentially.
 - Each successful API response marks/removes the queued record.
-- Transient failures remain pending with retry metadata.
-- Validation/business-rule failures become “needs attention” and are not retried in a tight loop.
-- The existing reconnect reminder can be upgraded to expose pending queue count and a Sync action.
-
-Automatic sync may run on reconnect, but the UI must still expose status and a manual retry entry point.
+- Transient connectivity/server failures remain pending with retry metadata.
+- Validation/business-rule failures become `needs_attention` and are not retried automatically in a tight loop.
+- The existing reconnect reminder is upgraded to expose pending queue count and a Sync action.
+- Automatic sync runs once on reconnect, while manual retry remains available for pending records.
 
 ### 5. Service Worker / App Shell
 
-Upgrade the service worker cache version and include the management POS shell route(s) and built frontend assets needed to reopen POS offline after at least one successful online visit.
+Upgrade the service worker cache version and include the management POS navigation shell and built frontend assets needed to reopen POS offline after at least one successful online visit.
 
 Rules:
 
@@ -167,32 +167,24 @@ Tests must explicitly assert that padding does not increase the total physical w
 
 ### 7. Overlay and z-index System
 
-Define semantic POS overlay levels instead of unrelated magic numbers. Example scale:
+Define semantic POS overlay levels instead of unrelated magic numbers and centralize them as CSS custom properties on the POS/root theme:
 
-- base POS content: normal document flow
-- floating controls/toasts: 10xxx
-- operations overlay: 12000
-- standard dialogs/drawers: 13000
-- nested/action dialogs such as settlement/quick edit/BOM: 14000
-- order detail / confirmation surfaces: 15000
-- print target/editor or emergency top-level dialog: 16000
+- `--pos-z-floating: 10000`
+- `--pos-z-operations: 12000`
+- `--pos-z-dialog: 13000`
+- `--pos-z-action-dialog: 14000`
+- `--pos-z-order-detail: 15000`
+- `--pos-z-print: 16000`
 
-Exact numbers may differ, but they must be centralized as CSS custom properties or a clearly documented scale.
+All full-screen POS dialogs that can be opened while another POS overlay is active use `<Teleport to="body">`, including order detail. Backdrops cover the full viewport and dialog click handling stops propagation correctly.
 
-All full-screen POS dialogs that can be opened while another POS overlay is active should use `<Teleport to="body">`, including the order-detail modal. Backdrops must cover the full viewport and dialog click handling must stop propagation correctly.
-
-Opening order detail from “عملیات POS” should either:
-
-- close the operations sheet first and open order detail, or
-- intentionally keep operations open underneath while order detail is above it.
-
-Preferred behavior: keep underlying POS state intact but ensure the detail modal is always visually above the operations overlay. Escape/backdrop closes only the topmost relevant surface.
+Opening order detail from “عملیات POS” intentionally keeps the operations sheet state underneath, but order detail is always rendered above it. Escape/backdrop closes only the topmost relevant surface.
 
 ### 8. Product Quick Edit / Out-of-Stock
 
 Backend POS boot must return items relevant to POS management even when marked `restaurant_out_of_stock = 1`.
 
-Do not globally remove the existing public-menu out-of-stock filtering. Instead, adjust the management POS boot query specifically so unavailable items are included with their state flags.
+Do not globally remove the existing public-menu out-of-stock filtering. Adjust the management POS boot query specifically so unavailable items are included with their state flags.
 
 Frontend behavior:
 
@@ -200,30 +192,31 @@ Frontend behavior:
 - Their cards have an obvious unavailable state.
 - Increment/add-to-cart controls are disabled/guarded for unavailable items.
 - Quick-edit remains available.
-- Saving quick edit updates price/settings online, reloads/reconciles the POS boot data, and preserves the card in the list.
+- Saving quick edit updates price/settings online, reconciles the canonical server response into POS state, and keeps the card in the list.
 - Clearing out-of-stock makes the item immediately sellable again after successful server response.
-- If `out_of_stock_until` is used, UI and backend state remain consistent; expired dates must not create a permanent unavailable state accidentally.
+- If `out_of_stock_until` is set to a past date, the atomic backend quick-edit endpoint clears/normalizes the expired unavailability state so it cannot remain permanently blocked accidentally.
 
 Offline behavior for quick edit:
 
-- Opening cached detail may be allowed only if sufficient local data exists.
+- Cached product data can be displayed.
 - Save is disabled while offline with a clear message: management changes require connection.
-- No offline queue for price/availability/admin settings.
+- No offline queue exists for price/availability/admin settings.
 
-### 9. Existing Edit Logic Validation
+### 9. Atomic Quick Edit
 
-Audit quick-edit fields end-to-end:
+Implement a dedicated management POS quick-edit backend endpoint. It updates the permitted product fields and selling price in one server transaction, then returns the canonical updated item state.
+
+Fields covered end-to-end:
 
 - item identifier
-- current price source
-- short/long description
+- current/selling price
+- short description
+- long description
 - item group
 - out-of-stock toggle
 - out-of-stock-until date
 
-Verify request field names match backend expectations and that partial failure is not hidden. Because the current save uses `Promise.all` for price and product settings, a failure can produce partial server mutation. Replace with a safer backend transaction endpoint if practical, or at minimum execute with clear reconciliation/error handling so UI never reports full success after only one mutation succeeded.
-
-Preferred implementation: add a dedicated atomic management POS quick-edit backend method that updates permitted fields and price in one server transaction, then returns the canonical updated item state.
+The frontend stops using independent `Promise.all` mutations for price and settings in this quick-edit flow. A failed transaction reports failure and does not display a full-success state. A successful response is used to update/reload POS product state.
 
 ## Error Handling
 
@@ -233,11 +226,11 @@ If cache exists, render cached data and show an offline freshness indicator. If 
 
 ### Offline writes
 
-Queued order creation shows local queue status. Administrative edits and settlement-dependent operations show a connection-required error instead of pretending to succeed.
+Queued non-settled order creation shows local queue status. Administrative edits and settlement/payment-dependent operations show a connection-required error instead of pretending to succeed.
 
 ### Sync conflicts
 
-A queued order rejected by current server business rules is marked “needs attention” with the server message and remains inspectable. It is not silently discarded.
+A queued order rejected by current server business rules is marked `needs_attention` with the server message and remains inspectable. It is not silently discarded.
 
 ### Storage failure
 
@@ -285,6 +278,8 @@ Cover source/component behavior for:
 - POS boot falls back to cache when network fails
 - unavailable products remain visible but cannot be added
 - quick edit is blocked offline
+- submit-and-pay/settle is blocked offline
+- normal submit can enter the offline queue
 - order detail is teleported and assigned the top overlay level
 
 ### Backend tests
@@ -292,25 +287,25 @@ Cover source/component behavior for:
 Where the repository has Frappe test infrastructure, cover:
 
 - management POS boot includes out-of-stock items while public menu behavior remains unchanged
-- atomic quick-edit updates permitted fields correctly
+- atomic quick-edit updates permitted fields and price transactionally
 - idempotency key prevents duplicate offline-order replay
-- replay of the same client order key returns/resolves the existing order rather than creating a second one
+- replay of the same client order key resolves the existing order rather than creating a second one
 
-### Build verification
+### Build Verification
 
 Before completion:
 
 - run Node test suite
 - run syntax checks for transform/config files
 - run frontend production build if repository/dependencies are available in the execution environment
-- if possible, run relevant backend/Frappe tests
+- run relevant backend/Frappe tests when the repository test environment is available
 - verify PR remains mergeable
 
 ## Rollout and Migration
 
 - IndexedDB schema starts at version 1 and can be upgraded without deleting valid queues.
 - Service-worker cache version is bumped so old cached shell files are cleaned up.
-- No database migration is required unless a new backend custom field is needed for the POS client idempotency key. Prefer an explicit custom field on Sales Order, created through the project’s normal schema/patch mechanism, rather than runtime schema mutation on every request.
+- Add a persistent Sales Order field for the POS client idempotency key through the project’s normal schema/patch mechanism, with uniqueness enforced by application logic and an indexed lookup where supported by the project migration pattern.
 - Existing per-device print-width localStorage remains compatible.
 
 ## Acceptance Criteria
@@ -319,14 +314,15 @@ Before completion:
 2. No page-break/pagination behavior is added to thermal receipt CSS.
 3. After at least one successful online POS load, reopening/using POS offline can display the cached product/category data required for order entry.
 4. Customer name/mobile search works from the local cache while offline and does not clear previous results when the network fails.
-5. Offline-created orders are queued with unique idempotency keys and can be synchronized without duplicate server orders.
-6. Server-dependent settlement and administrative changes never falsely report success offline.
-7. Clicking an invoice/order from POS operations always opens its detail modal visibly above the operations overlay.
-8. POS overlays use a consistent documented z-index scale and full-screen dialogs use body teleport when necessary.
-9. Marking an item out of stock keeps it visible in management POS, prevents selling it, and still allows quick edit so it can be restored to available.
-10. Quick-edit saves are either atomic or have explicit reconciliation that prevents partial-success UI states.
-11. Existing receipt features from the current branch, including 58/80mm selection and secondary customer printing, remain covered by tests.
-12. Targeted tests pass before the branch is presented as complete.
+5. Only normal non-settled order submission can be queued offline; payment/settlement actions are blocked until online.
+6. Offline-created orders use unique idempotency keys and can synchronize without duplicate server orders.
+7. Server-dependent settlement and administrative changes never falsely report success offline.
+8. Clicking an invoice/order from POS operations always opens its detail modal visibly above the operations overlay.
+9. POS overlays use the documented z-index scale and full-screen dialogs use body teleport when necessary.
+10. Marking an item out of stock keeps it visible in management POS, prevents selling it, and still allows quick edit so it can be restored to available.
+11. POS quick edit updates price and product settings atomically and never reports success after a partial mutation.
+12. Existing receipt features from the current branch, including 58/80mm selection and secondary customer printing, remain covered by tests.
+13. Targeted tests pass before the branch is presented as complete.
 
 ## Non-Goals
 
