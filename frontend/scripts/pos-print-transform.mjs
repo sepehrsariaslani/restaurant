@@ -53,11 +53,7 @@ function thermalPaperWidthMm(profile = null) {
   )
   code = code.replaceAll('var(--mg-text-muted)', '#6f625a')
 
-  // Secondary customer: function input, markup, current cart and reprints.
-  code = code.replace(
-    /customerName,\s*mobile,/,
-    'customerName,\n  secondaryCustomer,\n  mobile,',
-  )
+  code = code.replace(/customerName,\s*mobile,/, 'customerName,\n  secondaryCustomer,\n  mobile,')
   code = code.replaceAll(
     "  const mobileLabel = String(mobile || '').trim() || '-'",
     "  const secondaryCustomerLabel = String(secondaryCustomer || '').trim()\n  const mobileLabel = String(mobile || '').trim() || '-'",
@@ -87,19 +83,48 @@ function thermalPaperWidthMm(profile = null) {
     /customerName: customer,\s*mobile: orderData\.mobile \|\| order\.mobile \|\| '',/,
     "customerName: customer, secondaryCustomer: orderData.secondary_customer || order.secondary_customer || '', mobile: orderData.mobile || order.mobile || '',",
   )
+
+  code = code.replace(
+    "function buildConfirmedTableReceiptContext() {\n  const flatLines = []\n  const noteParts = []",
+    "function buildConfirmedTableReceiptContext() {\n  const flatLines = []\n  const noteParts = []\n  const secondaryCustomers = []",
+  )
+  code = code.replace(
+    "    const orderCode = String(order.name || '').trim()\n    const cleanTableNote = cleanReceiptNote(order.note)",
+    "    const orderCode = String(order.name || '').trim()\n    const secondaryCustomer = String(order.secondary_customer || '').trim()\n    if (secondaryCustomer && !secondaryCustomers.includes(secondaryCustomer)) secondaryCustomers.push(secondaryCustomer)\n    const cleanTableNote = cleanReceiptNote(order.note)",
+  )
+  code = code.replace(
+    "    customerName: selectedDineInTable.value?.label || 'میز سالن',\n    mobile: '-',",
+    "    customerName: selectedDineInTable.value?.label || 'میز سالن',\n    secondaryCustomer: secondaryCustomers.join('، ') || form.secondary_customer || '',\n    mobile: '-',",
+  )
+
   const productionCustomerLine = '<p class="receipt-meta">مشتری: ${escapeHtml(form.customer_name || \'مشتری POS\')}</p>'
   const productionSecondaryLine = '${String(form.secondary_customer || \'\').trim() ? `<p class="receipt-meta">مشتری ثانویه: ${escapeHtml(form.secondary_customer)}</p>` : \'\'}'
   if (code.includes(productionCustomerLine) && !code.includes('مشتری ثانویه: ${escapeHtml(form.secondary_customer)')) {
     code = code.replace(productionCustomerLine, `${productionCustomerLine}\n            ${productionSecondaryLine}`)
   }
 
-  // Kitchen/bar profile width.
+  code = code.replaceAll(
+    "          category_title: String(product?.category_title || product?.category || '').trim(),\n          note: orderCode ? `کد سفارش: ${orderCode}` : '',",
+    "          category_title: String(product?.category_title || product?.category || '').trim(),\n          secondary_customer: order.secondary_customer || '',\n          note: orderCode ? `کد سفارش: ${orderCode}` : '',",
+  )
+  code = code.replaceAll(
+    "      category_title: String(product?.category_title || product?.category || '').trim(),\n      note: item.note || '',",
+    "      category_title: String(product?.category_title || product?.category || '').trim(),\n      secondary_customer: orderData.secondary_customer || order.secondary_customer || '',\n      note: item.note || '',",
+  )
+
+  code = code.replace(
+    "  const printerName = String(profile?.printer_name || '').trim()",
+    "  const printerName = String(profile?.printer_name || '').trim()\n  const secondaryCustomerLabel = String((lines || []).find((line) => String(line?.secondary_customer || '').trim())?.secondary_customer || form.secondary_customer || '').trim()",
+  )
+  code = code.replaceAll(
+    "${String(form.secondary_customer || '').trim() ? `<p class=\"receipt-meta\">مشتری ثانویه: ${escapeHtml(form.secondary_customer)}</p>` : ''}",
+    "${secondaryCustomerLabel ? `<p class=\"receipt-meta\">مشتری ثانویه: ${escapeHtml(secondaryCustomerLabel)}</p>` : ''}",
+  )
   code = code.replace(
     '<style>${receiptStylesCss()}</style>\n      </head>\n      <body>\n        <div class="receipt">\n          <header class="receipt-header">',
     '<style>${receiptStylesCss(profile)}</style>\n      </head>\n      <body>\n        <div class="receipt">\n          <header class="receipt-header">',
   )
 
-  // Add accurate reusable totals resolver for reprint paths.
   const totalsHelper = `function resolveOrderReceiptTotals(orderData = {}, items = []) {
   const totalsData = orderData?.totals && typeof orderData.totals === 'object' ? orderData.totals : {}
   const modifiers = orderData?.financial_modifiers && typeof orderData.financial_modifiers === 'object' ? orderData.financial_modifiers : {}
@@ -160,7 +185,6 @@ function thermalPaperWidthMm(profile = null) {
     )
   }
 
-  // Wait for document/font readiness. Thermal driver owns continuous roll length.
   const printStart = `function printReceiptDocument(html) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return false
