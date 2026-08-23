@@ -14,7 +14,7 @@ sys.modules.setdefault('frappe', frappe)
 utils = types.ModuleType('frappe.utils')
 utils.cint = lambda value: int(value or 0)
 utils.flt = lambda value: float(value or 0)
-utils.getdate = lambda value: value
+utils.getdate = lambda value=None: value
 sys.modules.setdefault('frappe.utils', utils)
 
 from restaurant import api_pos_reliability as reliability
@@ -73,6 +73,12 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(reliability._extract_order_id({'order_id': 'SO-1'}), 'SO-1')
         self.assertEqual(reliability._extract_order_id({'name': 'SO-2'}), 'SO-2')
         self.assertEqual(reliability._extract_order_id(None), '')
+
+    def test_detects_expired_out_of_stock_window(self):
+        self.assertTrue(reliability._should_clear_expired_out_of_stock(1, '2026-08-22', '2026-08-23'))
+        self.assertFalse(reliability._should_clear_expired_out_of_stock(1, '2026-08-23', '2026-08-23'))
+        self.assertFalse(reliability._should_clear_expired_out_of_stock(1, '', '2026-08-23'))
+        self.assertFalse(reliability._should_clear_expired_out_of_stock(0, '2026-08-22', '2026-08-23'))
 
 
 if __name__ == '__main__':
