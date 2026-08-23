@@ -44,3 +44,41 @@ function addPrintProfile() { printProfiles.value.push({ profile_id: 'x', kind: '
   assert.match(result, /paper_width_mm/)
   assert.match(result, /localStorage/)
 })
+
+test('secondary customer survives dine-in and kitchen/bar reprint paths', () => {
+  const source = `
+function buildConfirmedTableReceiptContext() {
+  const flatLines = []
+  const noteParts = []
+  for (const order of confirmedDineInOrders.value) {
+    const orderCode = String(order.name || '').trim()
+    const cleanTableNote = cleanReceiptNote(order.note)
+  }
+  return {
+    customerName: selectedDineInTable.value?.label || 'میز سالن',
+    mobile: '-',
+  }
+}
+function buildKitchenBarReceiptMarkup(profile, lines = []) {
+  const printerName = String(profile?.printer_name || '').trim()
+  return \`<p class="receipt-meta">مشتری: \${escapeHtml(form.customer_name || 'مشتری POS')}</p>\`
+}
+function currentProfileLines() {
+  for (const order of confirmedDineInOrders.value) {
+    lines.push({
+          category_title: String(product?.category_title || product?.category || '').trim(),
+          note: orderCode ? \`کد سفارش: \${orderCode}\` : '',
+    })
+  }
+}
+const lines = items.map((item) => ({
+      category_title: String(product?.category_title || product?.category || '').trim(),
+      note: item.note || '',
+}))
+`
+  const result = transformManagementPosPage(source)
+  assert.match(result, /secondaryCustomers/)
+  assert.match(result, /order\.secondary_customer/)
+  assert.match(result, /secondary_customer: orderData\.secondary_customer/)
+  assert.match(result, /secondaryCustomerLabel/)
+})
