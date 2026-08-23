@@ -25,15 +25,7 @@ function compactSearchText(value) {
 }
 
 function customerSearchHaystack(row) {
-  const values = [
-    row?.key,
-    row?.name,
-    row?.customer,
-    row?.customer_name,
-    row?.label,
-    row?.mobile,
-    row?.phone,
-  ]
+  const values = [row?.key, row?.name, row?.customer, row?.customer_name, row?.label, row?.mobile, row?.phone]
   return values.filter(Boolean).map(normalizePosSearchText).join(' ')
 }
 
@@ -101,9 +93,7 @@ export function mergeQueueRecords(current, incoming) {
     const id = String(row?.id || '').trim()
     if (!id) continue
     const previous = byId.get(id)
-    if (!previous || Number(row?.updated_at || 0) >= Number(previous?.updated_at || 0)) {
-      byId.set(id, { ...row, id })
-    }
+    if (!previous || Number(row?.updated_at || 0) >= Number(previous?.updated_at || 0)) byId.set(id, { ...row, id })
   }
   return [...byId.values()].sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
 }
@@ -211,11 +201,11 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
 
   async function enqueueOfflineOrder(payload, id = '') {
     const record = createOfflineOrderRecord(payload, id, now)
-    await withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
+    const persisted = await withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
       store.put(record)
       return true
     }, false)
-    return record
+    return { ...record, persisted: Boolean(persisted) }
   }
 
   async function listPendingOfflineOrders() {
