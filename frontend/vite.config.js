@@ -5,6 +5,7 @@ import {
   transformManagementPosDefaultsPage,
   transformManagementPosPage,
 } from './scripts/pos-print-transform.mjs'
+import { transformPosReliabilityPage } from './scripts/pos-reliability-transform.mjs'
 
 function posThermalPrintTransform() {
   return {
@@ -13,7 +14,7 @@ function posThermalPrintTransform() {
     transform(code, id) {
       const cleanId = String(id || '').split('?')[0].replace(/\\/g, '/')
       if (cleanId.endsWith('/src/pages/management/ManagementPosPage.vue')) {
-        return { code: transformManagementPosPage(code), map: null }
+        return { code: transformPosReliabilityPage(transformManagementPosPage(code)), map: null }
       }
       if (cleanId.endsWith('/src/pages/management/ManagementPosDefaultsPage.vue')) {
         return { code: transformManagementPosDefaultsPage(code), map: null }
