@@ -81,6 +81,50 @@ def _merge_pos_items(base_items, extra_items):
     return merged
 
 
+def _should_clear_expired_out_of_stock(flag, until_value, today_value):
+    if not cint(flag or 0) or not until_value or not today_value:
+        return False
+    try:
+        return getdate(until_value) < getdate(today_value)
+    except Exception:
+        return False
+
+
+def _clear_expired_out_of_stock():
+    legacy = _legacy_api()
+    if not legacy._has_column("Item", "restaurant_out_of_stock"):
+        return 0
+    if not legacy._has_column("Item", "restaurant_out_of_stock_until"):
+        return 0
+
+    today_value = getdate()
+    rows = frappe.get_all(
+        "Item",
+        filters={
+            "restaurant_out_of_stock": 1,
+            "restaurant_out_of_stock_until": ["is", "set"],
+        },
+        fields=["name", "restaurant_out_of_stock", "restaurant_out_of_stock_until"],
+        ignore_permissions=True,
+        limit=1000,
+    )
+    cleared = 0
+    for row in rows:
+        if _should_clear_expired_out_of_stock(
+            row.get("restaurant_out_of_stock"),
+            row.get("restaurant_out_of_stock_until"),
+            today_value,
+        ):
+            frappe.db.set_value(
+                "Item",
+                row.get("name"),
+                {"restaurant_out_of_stock": 0, "restaurant_out_of_stock_until": None},
+                update_modified=False,
+            )
+            cleared += 1
+    return cleared
+
+
 def _client_key_field_ready():
     legacy = _legacy_api()
     return bool(legacy._has_column("Sales Order", CLIENT_ORDER_KEY_FIELD))
@@ -159,6 +203,7 @@ def get_management_pos_boot_reliable(branch=None):
     legacy = _legacy_api()
     legacy._ensure_management_access()
     normalized_branch = (branch or "").strip()
+    _clear_expired_out_of_stock()
     payload = legacy.get_management_pos_boot(normalized_branch)
     if not isinstance(payload, dict):
         payload = {}
