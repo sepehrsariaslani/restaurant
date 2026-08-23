@@ -163,7 +163,7 @@ async function syncPendingOfflineOrders() {
   if (!flag) return false
   const until = String(item?.out_of_stock_until || item?.restaurant_out_of_stock_until || '').trim()
   if (!until) return true
-  const end = new Date(\`${until}T23:59:59\`)
+  const end = new Date(\`\${until}T23:59:59\`)
   if (!Number.isFinite(end.getTime())) return true
   return end.getTime() >= Date.now()
 }
