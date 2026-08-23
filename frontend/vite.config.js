@@ -15,7 +15,14 @@ function posThermalPrintTransform() {
     name: 'restaurant-pos-thermal-print-transform',
     enforce: 'pre',
     transform(code, id) {
-      const cleanId = String(id || '').split('?')[0].replace(/\\/g, '/')
+      const rawId = String(id || '')
+
+      // Vue invokes Vite transforms again for virtual submodules such as
+      // `Component.vue?vue&type=style...`. These transforms operate on the
+      // whole SFC source and must never run against extracted CSS/JS blocks.
+      if (rawId.includes('?')) return null
+
+      const cleanId = rawId.replace(/\\/g, '/')
       if (cleanId.endsWith('/src/pages/management/ManagementPosPage.vue')) {
         return { code: transformPosReliabilityPage(transformManagementPosPage(code)), map: null }
       }
