@@ -1,4 +1,4 @@
-const CACHE_VERSION = "veederakht-pwa-v3";
+const CACHE_VERSION = "veederakht-pwa-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -44,6 +44,21 @@ function isApiRequest(url) {
 	return url.pathname.startsWith("/api/") || url.pathname.startsWith("/socket.io/");
 }
 
+function isManagementPOSNavigation(url) {
+	return url.pathname === "/management/pos" || url.pathname.startsWith("/management/pos/");
+}
+
+function navigationCacheRequest(request) {
+	const url = new URL(request.url);
+	url.search = "";
+	url.hash = "";
+	return new Request(url.toString(), {
+		method: "GET",
+		credentials: "same-origin",
+		headers: { Accept: "text/html" },
+	});
+}
+
 function isStaticAsset(url) {
 	return (
 		url.pathname.startsWith("/assets/restaurant/frontend/") ||
@@ -60,17 +75,24 @@ function isStaticAsset(url) {
 	);
 }
 
-async function networkFirst(request) {
+async function networkFirst(request, { navigationAlias = false } = {}) {
 	const cache = await caches.open(RUNTIME_CACHE);
 	try {
 		const fresh = await fetch(request);
 		if (fresh && fresh.ok && request.method === "GET") {
-			cache.put(request, fresh.clone());
+			await cache.put(request, fresh.clone());
+			if (navigationAlias) {
+				await cache.put(navigationCacheRequest(request), fresh.clone());
+			}
 		}
 		return fresh;
 	} catch (error) {
 		const cached = await cache.match(request);
 		if (cached) return cached;
+		if (navigationAlias) {
+			const aliased = await cache.match(navigationCacheRequest(request));
+			if (aliased) return aliased;
+		}
 		throw error;
 	}
 }
@@ -124,7 +146,9 @@ self.addEventListener("fetch", (event) => {
 	}
 
 	if (request.mode === "navigate") {
-		event.respondWith(networkFirst(request).catch(() => offlinePage()));
+		event.respondWith(
+			networkFirst(request, { navigationAlias: isManagementPOSNavigation(url) }).catch(() => offlinePage()),
+		);
 		return;
 	}
 
