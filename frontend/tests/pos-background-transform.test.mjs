@@ -23,6 +23,13 @@ import { formatMoney } from '@/utils/format'
 const offlineSyncing = ref(false)
 async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {
   if (!cart.length) return
+  const paymentPayload = { method: 'cash' }
+  if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {
+    submitting.value = true
+    const code = editingOriginalOrder.name
+    const payResult = await settlePOSOrder(code, paymentPayload)
+    return
+  }
   const payload = { items: [], payment: paymentPayload }
   if (isOffline.value) return
   submitting.value = true
@@ -93,4 +100,16 @@ function quantityValue(slug) { return 0 }
   assert.match(out, /function isProductUnavailableForDisplay/)
   assert.doesNotMatch(out, /Number\(item\.out_of_stock\) === 1/)
   assert.match(out, /out_of_stock_until/)
+})
+
+test('never references checkout payload before it is declared in edit-pay path', () => {
+  const out = transformPosBackgroundPage(fixture)
+  const specialStart = out.indexOf('if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name)')
+  const payloadIndex = out.indexOf('const payload =')
+  const checkoutCall = out.indexOf('queued = await enqueuePOSBackgroundCheckout')
+  assert.ok(specialStart >= 0)
+  assert.ok(payloadIndex > specialStart)
+  assert.ok(checkoutCall > payloadIndex)
+  assert.doesNotMatch(out.slice(specialStart, payloadIndex), /payload\.payment/)
+  assert.match(out.slice(specialStart, payloadIndex), /enqueuePOSBackgroundSettlement/)
 })
