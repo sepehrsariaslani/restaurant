@@ -192,6 +192,34 @@ def enqueue_pos_checkout(payload=None, deliver_after=0):
     return state
 
 
+def _delivery_completed(legacy, order_name):
+    """Return whether the legacy delivery helper really finished.
+
+    The legacy background delivery helper logs and swallows its own exceptions,
+    so its return value alone cannot distinguish success from failure. Prefer
+    the restaurant status field and fall back to an ERPNext Delivery Note link.
+    """
+    try:
+        has_column = getattr(legacy, "_has_column", None)
+        if callable(has_column) and has_column("Sales Order", "restaurant_status"):
+            status = str(
+                frappe.db.get_value("Sales Order", order_name, "restaurant_status") or ""
+            ).strip().lower()
+            return status == "delivered"
+    except Exception:
+        pass
+
+    try:
+        return bool(
+            frappe.db.exists(
+                "Delivery Note Item",
+                {"against_sales_order": order_name, "docstatus": 1},
+            )
+        )
+    except Exception:
+        return False
+
+
 def run_pos_background_settlement(job_key, order_name, payment=None, deliver_after=0):
     legacy = _legacy_api()
     deliver = _as_bool(deliver_after)
@@ -214,6 +242,10 @@ def run_pos_background_settlement(job_key, order_name, payment=None, deliver_aft
                 background_deliver(order_name)
             else:
                 legacy.deliver_pos_order(order_name)
+            if not _delivery_completed(legacy, order_name):
+                raise RuntimeError(
+                    _("Delivery/production did not complete. Check background logs and retry delivery.")
+                )
 
         state = _build_job_state(job_key, "done", order_name, action, result=result)
         _set_job_state(state)

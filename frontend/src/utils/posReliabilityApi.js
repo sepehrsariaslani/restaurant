@@ -4,6 +4,22 @@ export function getReliablePOSBoot({ branch = '' } = {}) {
   return callMethodByPath('restaurant.api_pos_background.get_management_pos_boot_safe', { branch })
 }
 
+export function listManagementProductsSafe({
+  search = '',
+  category = '',
+  active_only = 0,
+  branch = '',
+  tag = '',
+} = {}) {
+  return callMethodByPath('restaurant.api_management_products_safe.list_management_products_safe', {
+    search,
+    category,
+    active_only,
+    branch,
+    tag,
+  })
+}
+
 export function replayOfflinePOSOrder(payload = {}) {
   return callMethodByPath('restaurant.api_pos_reliability.replay_offline_pos_order', { payload })
 }

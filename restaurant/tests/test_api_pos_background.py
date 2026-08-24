@@ -83,5 +83,45 @@ class BackgroundHelpersTests(unittest.TestCase):
         self.assertEqual(payload["categories"], [{"name": "Food"}])
 
 
+class BackgroundWorkerOutcomeTests(unittest.TestCase):
+    def test_settle_and_deliver_is_failed_when_delivery_helper_swallows_failure(self):
+        states = []
+
+        class Legacy:
+            def settle_pos_order(self, order_name, payment=None, commit=True):
+                return {"sales_invoice": "SINV-1"}
+
+            def _background_deliver_pos_order(self, order_name):
+                return None
+
+            def _has_column(self, doctype, fieldname):
+                return doctype == "Sales Order" and fieldname == "restaurant_status"
+
+        old_legacy = bg._legacy_api
+        old_set_state = bg._set_job_state
+        old_get_value = getattr(frappe.db, "get_value", None)
+        old_rollback = getattr(frappe.db, "rollback", None)
+        try:
+            bg._legacy_api = lambda: Legacy()
+            bg._set_job_state = lambda state: states.append(dict(state)) or state
+            frappe.db.get_value = lambda *args, **kwargs: "preparing"
+            frappe.db.rollback = lambda: None
+            state = bg.run_pos_background_settlement("job-1", "SO-1", {}, 1)
+        finally:
+            bg._legacy_api = old_legacy
+            bg._set_job_state = old_set_state
+            if old_get_value is None:
+                delattr(frappe.db, "get_value")
+            else:
+                frappe.db.get_value = old_get_value
+            if old_rollback is None:
+                delattr(frappe.db, "rollback")
+            else:
+                frappe.db.rollback = old_rollback
+
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(states[-1]["status"], "failed")
+
+
 if __name__ == "__main__":
     unittest.main()

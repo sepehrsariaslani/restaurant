@@ -13,6 +13,7 @@ import {
   transformPosBackgroundPage,
   transformPosProductPanelAvailability,
 } from './scripts/pos-background-transform.mjs'
+import { transformManagementProductsPage } from './scripts/management-products-reliability-transform.mjs'
 
 function posThermalPrintTransform() {
   return {
@@ -37,6 +38,9 @@ function posThermalPrintTransform() {
       }
       if (cleanId.endsWith('/src/pages/management/ManagementPosDefaultsPage.vue')) {
         return { code: transformManagementPosDefaultsPage(code), map: null }
+      }
+      if (cleanId.endsWith('/src/pages/management/ManagementProductsPage.vue')) {
+        return { code: transformManagementProductsPage(code), map: null }
       }
       if (cleanId.endsWith('/src/components/management/pos/PosProductPanel.vue')) {
         return {
