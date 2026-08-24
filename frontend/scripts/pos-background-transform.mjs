@@ -101,19 +101,10 @@ async function watchPOSBackgroundJob(job) {
     error.value = ''
     successMessage.value = ''
     try {
-      let queued
-      if (editingOriginalOrder.isEditing && editingOriginalOrder.name) {
-        queued = await enqueuePOSBackgroundSettlement(
-          editingOriginalOrder.name,
-          payload.payment || paymentMeta || {},
-          withProduction,
-        )
-      } else {
-        if (!payload.client_order_key) {
-          payload.client_order_key = createOfflineOrderRecord(payload).id
-        }
-        queued = await enqueuePOSBackgroundCheckout(payload, withProduction)
+      if (!payload.client_order_key) {
+        payload.client_order_key = createOfflineOrderRecord(payload).id
       }
+      const queued = await enqueuePOSBackgroundCheckout(payload, withProduction)
       trackPOSBackgroundJob(
         queued,
         withProduction ? 'تسویه و تحویل' : 'تسویه',
@@ -133,9 +124,39 @@ async function watchPOSBackgroundJob(job) {
 `
   code = injectWithin(
     code,
-    'async function submitPOSOrder(',
+    '  const payload = {',
     '  submitting.value = true',
     bgSubmit,
+  )
+
+  const editPayBlock = `    submitting.value = true
+    error.value = ''
+    successMessage.value = ''
+    try {
+      const queued = await enqueuePOSBackgroundSettlement(
+        editingOriginalOrder.name,
+        paymentPayload || paymentMeta || {},
+        withProduction,
+      )
+      trackPOSBackgroundJob(
+        queued,
+        withProduction ? 'تسویه و تحویل' : 'تسویه',
+      )
+      successMessage.value = \`فاکتور \${editingOriginalOrder.order_code || editingOriginalOrder.name} در صف پردازش پس‌زمینه قرار گرفت؛ می‌توانید فاکتور بعدی را ثبت کنید.\`
+      resetCurrentInvoiceState({ preserveFeedback: true })
+      saveActiveTicketSnapshot()
+    } catch (errorObj) {
+      error.value = errorObj?.message || 'قرار دادن تسویه در صف پس‌زمینه ناموفق بود.'
+    } finally {
+      submitting.value = false
+    }
+    return
+`
+  code = injectWithin(
+    code,
+    '  if (payNow && editingOriginalOrder.isEditing && editingOriginalOrder.name) {',
+    '    submitting.value = true',
+    editPayBlock,
   )
 
   const settleInvoiceBlock = `  try {
