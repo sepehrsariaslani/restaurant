@@ -6,7 +6,6 @@ from frappe.model.document import Document
 class RestaurantModifierGroup(Document):
     def validate(self):
         if self.selection_mode == "single":
-            self.min_select = 1 if self.required else 0
             self.max_select = 1
 
         self.min_select = max(int(self.min_select or 0), 0)
