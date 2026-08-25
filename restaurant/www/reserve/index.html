@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>رزرو میز</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: Tahoma, "Vazirmatn", sans-serif; background: #20302b; color: #eef2f0; padding: 16px;
+  }
+  .card {
+    width: 100%; max-width: 540px; background: #fff; color: #33423c; border-radius: 22px; padding: 26px 24px;
+    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.35);
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { font-size: 0.85rem; color: #7d8a83; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 0.82rem; margin-bottom: 6px; color: #5d6a63; }
+  input, select, textarea {
+    width: 100%; padding: 12px 14px; border: 1.5px solid #dfe4e1; border-radius: 12px; font-size: 0.95rem;
+    font-family: inherit; background: #fbfdfc; color: #33423c; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #2f6f5c; }
+  textarea { min-height: 70px; resize: vertical; }
+  button.primary {
+    width: 100%; margin-top: 18px; padding: 14px; border: 0; border-radius: 14px; cursor: pointer;
+    background: #2f6f5c; color: #fff; font-size: 1rem; font-family: inherit; font-weight: 700;
+  }
+  button.primary:disabled { opacity: 0.55; }
+  .msg { margin-top: 12px; font-size: 0.88rem; text-align: center; }
+  .msg.err { color: #a44437; }
+  .hidden { display: none; }
+  .thanks { text-align: center; padding: 26px 0 8px; }
+  .thanks .big { font-size: 3rem; }
+  .code { display: inline-block; background: #eef5f1; color: #2f6f5c; border-radius: 10px; padding: 8px 16px; font-weight: 700; margin-top: 10px; direction: ltr; }
+  .party-row { display: flex; align-items: center; gap: 10px; }
+  .party-row button { width: 46px; height: 46px; border-radius: 12px; border: 1.5px solid #dfe4e1; background: #fbfdfc; font-size: 1.3rem; cursor: pointer; }
+  .party-row .n { flex: 1; text-align: center; font-size: 1.2rem; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="card" id="app">
+  <h1 id="brand-title">رزرو میز</h1>
+  <div class="sub" id="brand-sub">تاریخ و ساعت دلخواه را انتخاب کنید؛ پیش از رزرو پیامک یادآوری دریافت می‌کنید.</div>
+
+  <div id="form-view">
+    <div class="grid">
+      <div class="full"><label>نام و نام خانوادگی *</label><input id="f-name" placeholder="مثلاً علی رضایی" /></div>
+      <div class="full"><label>موبایل *</label><input id="f-mobile" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" /></div>
+      <div><label>تاریخ رزرو *</label><input id="f-date" type="date" dir="ltr" /></div>
+      <div><label>ساعت رزرو *</label><input id="f-time" type="time" dir="ltr" value="19:00" /></div>
+      <div class="full">
+        <label>تعداد نفرات</label>
+        <div class="party-row">
+          <button type="button" onclick="bumpParty(1)">+</button>
+          <span class="n" id="party-n">۲</span>
+          <button type="button" onclick="bumpParty(-1)">−</button>
+        </div>
+      </div>
+      <div class="full" id="table-row">
+        <label>جایگاه (اختیاری)</label>
+        <select id="f-table"><option value="">بدون انتخاب — سیستم تخصیص می‌دهد</option></select>
+      </div>
+      <div class="full"><label>توضیحات (اختیاری)</label><textarea id="f-note" placeholder="جای مناسب، مناسبت، آلرژی غذایی..."></textarea></div>
+    </div>
+    <button class="primary" id="btn-submit" onclick="submitReservation()">ثبت رزرو</button>
+    <div class="msg err hidden" id="form-err"></div>
+  </div>
+
+  <div id="done-view" class="hidden thanks">
+    <div class="big">🎉</div>
+    <h1>رزرو شما ثبت شد</h1>
+    <div class="sub">پس از بررسی، تاییدیه برایتان پیامک می‌شود. کد پیگیری:</div>
+    <div class="code" id="done-code"></div>
+  </div>
+</div>
+
+<script>
+let ctx = { min_party: 1, max_party: 20, tables: [] };
+let party = 2;
+const faNum = (n) => Number(n).toLocaleString("fa-IR");
+
+function api(method, args) {
+  const body = new URLSearchParams();
+  Object.keys(args || {}).forEach((k) => {
+    const v = args[k];
+    body.append(k, typeof v === "object" ? JSON.stringify(v) : v);
+  });
+  return fetch("/api/method/restaurant.api." + method, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+    body: body.toString(),
+  }).then(async (r) => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      let msg = "خطا در ارتباط با سرور";
+      try {
+        const sm = JSON.parse(data._server_messages || "[]");
+        if (sm.length) msg = JSON.parse(sm[0]).message || msg;
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    return data.message;
+  });
+}
+
+function bumpParty(delta) {
+  party = Math.max(ctx.min_party || 1, Math.min(ctx.max_party || 20, party + delta));
+  document.getElementById("party-n").textContent = faNum(party);
+}
+
+function showErr(t) {
+  const el = document.getElementById("form-err");
+  el.textContent = t || "";
+  el.classList.toggle("hidden", !t);
+}
+
+async function loadContext() {
+  try {
+    const res = await api("get_public_reservation_context", {});
+    ctx = res || ctx;
+    if (res && res.enabled === 0) {
+      document.getElementById("form-view").innerHTML = "<p style='text-align:center'>رزرو آنلاین در حال حاضر غیرفعال است.</p>";
+      return;
+    }
+    const brand = (res.brand && (res.brand.restaurant_name || res.brand.name)) || "";
+    if (brand) document.getElementById("brand-title").textContent = "رزرو میز — " + brand;
+    const sel = document.getElementById("f-table");
+    (res.tables || []).forEach((t) => {
+      const opt = document.createElement("option");
+      opt.value = t.name;
+      opt.textContent = t.table_name + (t.location ? " (" + t.location + ")" : "");
+      sel.appendChild(opt);
+    });
+  } catch (e) {}
+}
+
+async function submitReservation() {
+  showErr("");
+  const customer_name = document.getElementById("f-name").value.trim();
+  const mobile = document.getElementById("f-mobile").value.trim();
+  const reservation_date = document.getElementById("f-date").value;
+  const reservation_time = document.getElementById("f-time").value;
+  if (!customer_name || !mobile || !reservation_date || !reservation_time) {
+    return showErr("نام، موبایل، تاریخ و ساعت الزامی است.");
+  }
+  const btn = document.getElementById("btn-submit");
+  btn.disabled = true;
+  try {
+    const res = await api("submit_public_reservation", {
+      payload: {
+        customer_name, mobile, reservation_date, reservation_time,
+        party_size: party,
+        restaurant_table: document.getElementById("f-table").value,
+        note: document.getElementById("f-note").value.trim(),
+      },
+    });
+    document.getElementById("form-view").classList.add("hidden");
+    document.getElementById("done-view").classList.remove("hidden");
+    document.getElementById("done-code").textContent = res.reservation_code || "-";
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("party-n").textContent = faNum(party);
+loadContext();
+</script>
+</body>
+</html>

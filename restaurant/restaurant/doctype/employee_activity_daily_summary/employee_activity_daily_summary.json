@@ -1,0 +1,155 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "hash",
+  "creation": "2026-04-09 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "summary_date",
+    "user",
+    "online_seconds",
+    "active_seconds",
+    "idle_seconds",
+    "active_ratio",
+    "outputs_count",
+    "outputs_per_active_hour",
+    "sales_invoice_count",
+    "purchase_invoice_count",
+    "payment_entry_count",
+    "journal_entry_count",
+    "top_routes_json",
+    "top_doctypes_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "summary_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Summary Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "User",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "online_seconds",
+      "fieldtype": "Int",
+      "label": "Online Seconds",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "active_seconds",
+      "fieldtype": "Int",
+      "label": "Active Seconds",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "idle_seconds",
+      "fieldtype": "Int",
+      "label": "Idle Seconds",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "active_ratio",
+      "fieldtype": "Percent",
+      "label": "Active Ratio",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "outputs_count",
+      "fieldtype": "Int",
+      "label": "Outputs Count",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "outputs_per_active_hour",
+      "fieldtype": "Float",
+      "label": "Outputs Per Active Hour",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "sales_invoice_count",
+      "fieldtype": "Int",
+      "label": "Sales Invoice Count",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "purchase_invoice_count",
+      "fieldtype": "Int",
+      "label": "Purchase Invoice Count",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "payment_entry_count",
+      "fieldtype": "Int",
+      "label": "Payment Entry Count",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "journal_entry_count",
+      "fieldtype": "Int",
+      "label": "Journal Entry Count",
+      "read_only": 1
+    },
+    {
+      "fieldname": "top_routes_json",
+      "fieldtype": "Long Text",
+      "label": "Top Routes JSON",
+      "read_only": 1
+    },
+    {
+      "fieldname": "top_doctypes_json",
+      "fieldtype": "Long Text",
+      "label": "Top DocTypes JSON",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-04-09 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Employee Activity Daily Summary",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "HR Manager"
+    }
+  ],
+  "search_fields": "summary_date,user",
+  "sort_field": "summary_date",
+  "sort_order": "DESC",
+  "states": []
+}

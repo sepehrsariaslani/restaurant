@@ -1,0 +1,86 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "creation": "2026-02-21 23:00:00.000000",
+  "doctype": "DocType",
+  "document_type": "System",
+  "engine": "InnoDB",
+  "field_order": [
+    "brand_name",
+    "brand_tagline",
+    "default_currency",
+    "section_break_1",
+    "hero_title",
+    "hero_subtitle",
+    "hero_image",
+    "primary_cta_label"
+  ],
+  "fields": [
+    {
+      "default": "Veederakht Restaurant",
+      "fieldname": "brand_name",
+      "fieldtype": "Data",
+      "label": "Brand Name",
+      "reqd": 1
+    },
+    {
+      "default": "منوی آنلاین تازه، سریع و شفاف",
+      "fieldname": "brand_tagline",
+      "fieldtype": "Data",
+      "label": "Brand Tagline"
+    },
+    {
+      "default": "IRR",
+      "fieldname": "default_currency",
+      "fieldtype": "Link",
+      "label": "Default Currency",
+      "options": "Currency"
+    },
+    {
+      "fieldname": "section_break_1",
+      "fieldtype": "Section Break"
+    },
+    {
+      "default": "سالادهای تازه و غذای سالم روز",
+      "fieldname": "hero_title",
+      "fieldtype": "Data",
+      "label": "Hero Title"
+    },
+    {
+      "default": "با انتخاب کامل مواد داخل هر غذا، سفارش مهمان را سریع ثبت کنید.",
+      "fieldname": "hero_subtitle",
+      "fieldtype": "Small Text",
+      "label": "Hero Subtitle"
+    },
+    {
+      "fieldname": "hero_image",
+      "fieldtype": "Attach Image",
+      "label": "Hero Image"
+    },
+    {
+      "default": "ورود به منو",
+      "fieldname": "primary_cta_label",
+      "fieldtype": "Data",
+      "label": "Primary CTA Label"
+    }
+  ],
+  "issingle": 1,
+  "links": [],
+  "modified": "2026-02-21 23:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Web Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

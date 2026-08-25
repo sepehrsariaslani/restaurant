@@ -1,0 +1,128 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "hash",
+  "creation": "2026-04-09 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "user",
+    "activity_session",
+    "slice_date",
+    "from_time",
+    "to_time",
+    "duration_seconds",
+    "status",
+    "route",
+    "ref_doctype",
+    "ref_docname",
+    "is_pos"
+  ],
+  "fields": [
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "User",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "activity_session",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Activity Session",
+      "options": "Employee Activity Session",
+      "reqd": 1
+    },
+    {
+      "fieldname": "slice_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Slice Date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "from_time",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "From",
+      "reqd": 1
+    },
+    {
+      "fieldname": "to_time",
+      "fieldtype": "Datetime",
+      "label": "To"
+    },
+    {
+      "default": "0",
+      "fieldname": "duration_seconds",
+      "fieldtype": "Int",
+      "label": "Duration (Seconds)",
+      "read_only": 1
+    },
+    {
+      "default": "active",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "active\nidle",
+      "reqd": 1
+    },
+    {
+      "fieldname": "route",
+      "fieldtype": "Data",
+      "label": "Route"
+    },
+    {
+      "fieldname": "ref_doctype",
+      "fieldtype": "Link",
+      "label": "DocType",
+      "options": "DocType"
+    },
+    {
+      "fieldname": "ref_docname",
+      "fieldtype": "Data",
+      "label": "DocName"
+    },
+    {
+      "default": "0",
+      "fieldname": "is_pos",
+      "fieldtype": "Check",
+      "label": "Is POS"
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-04-09 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Employee Activity Slice",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "HR Manager"
+    }
+  ],
+  "search_fields": "user,status,route,ref_doctype,ref_docname",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

@@ -1,0 +1,144 @@
+[
+  {
+    "doctype": "Custom Field",
+    "name": "BOM-restaurant_modifier_rows",
+    "module": "Restaurant",
+    "dt": "BOM",
+    "fieldname": "restaurant_modifier_rows",
+    "fieldtype": "Table",
+    "insert_after": "description",
+    "label": "گروه های انتخاب مشتری",
+    "options": "Restaurant BOM Modifier"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_customer_label",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_customer_label",
+    "fieldtype": "Data",
+    "insert_after": "description",
+    "label": "نام نمایشی برای مشتری"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_is_included_by_default",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_is_included_by_default",
+    "fieldtype": "Check",
+    "insert_after": "restaurant_customer_label",
+    "label": "پیش فرض در فرمول",
+    "default": "1"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_can_remove",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_can_remove",
+    "fieldtype": "Check",
+    "insert_after": "restaurant_is_included_by_default",
+    "label": "قابل حذف توسط مشتری",
+    "default": "0"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_is_required",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_is_required",
+    "fieldtype": "Check",
+    "insert_after": "restaurant_can_remove",
+    "label": "اجباری",
+    "default": "0"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_is_editable_qty",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_is_editable_qty",
+    "fieldtype": "Check",
+    "insert_after": "restaurant_is_required",
+    "label": "قابل تغییر مقدار",
+    "default": "0"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_min_multiplier",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_min_multiplier",
+    "fieldtype": "Float",
+    "insert_after": "restaurant_is_editable_qty",
+    "label": "حداقل ضریب",
+    "default": "0"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_max_multiplier",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_max_multiplier",
+    "fieldtype": "Float",
+    "insert_after": "restaurant_min_multiplier",
+    "label": "حداکثر ضریب",
+    "default": "3"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_step_multiplier",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_step_multiplier",
+    "fieldtype": "Float",
+    "insert_after": "restaurant_max_multiplier",
+    "label": "گام تغییر ضریب",
+    "default": "0.5"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_multiplier_qty",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_multiplier_qty",
+    "fieldtype": "Float",
+    "insert_after": "restaurant_step_multiplier",
+    "label": "مقدار ضریب",
+    "default": "0"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-restaurant_extra_when_added",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "restaurant_extra_when_added",
+    "fieldtype": "Currency",
+    "insert_after": "restaurant_multiplier_qty",
+    "label": "هزینه اضافه",
+    "default": "0"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-show_in_website",
+    "module": "Restaurant",
+    "dt": "BOM Item",
+    "fieldname": "show_in_website",
+    "fieldtype": "Check",
+    "insert_after": "restaurant_customer_label",
+    "label": "نمایش در سایت",
+    "default": "1"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-custom_snapp_code",
+    "module": "Restaurant",
+    "dt": "Item",
+    "fieldname": "custom_snapp_code",
+    "fieldtype": "Data",
+    "insert_after": "restaurant_external_menu_item_id",
+    "label": "Custom Snapp Code",
+    "search_index": 1
+  }
+]

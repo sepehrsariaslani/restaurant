@@ -1,0 +1,115 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RPO-{YYYY}-{#####}",
+  "creation": "2026-07-28 21:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "supplier",
+    "supplier_name",
+    "posting_date",
+    "expected_date",
+    "status",
+    "target_warehouse",
+    "items",
+    "total_qty",
+    "grand_total",
+    "received_entries_json",
+    "note"
+  ],
+  "fields": [
+    {
+      "fieldname": "supplier",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Supplier",
+      "options": "Supplier"
+    },
+    {
+      "fetch_from": "supplier.supplier_name",
+      "fieldname": "supplier_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Supplier Name"
+    },
+    {
+      "fieldname": "posting_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Posting Date"
+    },
+    {
+      "fieldname": "expected_date",
+      "fieldtype": "Date",
+      "label": "Expected Date"
+    },
+    {
+      "default": "پیش‌نویس",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "پیش‌نویس\nارسال‌شده\nدریافت جزئی\nدریافت کامل\nلغوشده"
+    },
+    {
+      "fieldname": "target_warehouse",
+      "fieldtype": "Link",
+      "label": "Target Warehouse",
+      "options": "Warehouse"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Items",
+      "options": "Restaurant Inventory Purchase Order Item"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_qty",
+      "fieldtype": "Float",
+      "label": "Total Qty"
+    },
+    {
+      "default": "0",
+      "fieldname": "grand_total",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Grand Total"
+    },
+    {
+      "fieldname": "received_entries_json",
+      "fieldtype": "Long Text",
+      "label": "Received Entries JSON"
+    },
+    {
+      "fieldname": "note",
+      "fieldtype": "Small Text",
+      "label": "Note"
+    }
+  ],
+  "links": [],
+  "modified": "2026-07-28 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Inventory Purchase Order",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

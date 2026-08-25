@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:{branch}-{day_of_week}",
+ "creation": "2026-06-27 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "branch",
+  "day_of_week",
+  "is_open",
+  "opening_time",
+  "closing_time",
+  "prep_time_mins",
+  "pickup_available",
+  "delivery_available",
+  "delivery_eta_min",
+  "delivery_eta_max",
+  "delivery_fee",
+  "delivery_radius_km",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Branch / Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "day_of_week",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Day of Week",
+   "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_open",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Open"
+  },
+  {
+   "fieldname": "opening_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Opening Time"
+  },
+  {
+   "fieldname": "closing_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Closing Time"
+  },
+  {
+   "default": "20",
+   "fieldname": "prep_time_mins",
+   "fieldtype": "Int",
+   "label": "Preparation Time (mins)"
+  },
+  {
+   "default": "1",
+   "fieldname": "pickup_available",
+   "fieldtype": "Check",
+   "label": "Pickup Available"
+  },
+  {
+   "default": "1",
+   "fieldname": "delivery_available",
+   "fieldtype": "Check",
+   "label": "Delivery Available"
+  },
+  {
+   "default": "35",
+   "fieldname": "delivery_eta_min",
+   "fieldtype": "Int",
+   "label": "Delivery ETA Min"
+  },
+  {
+   "default": "45",
+   "fieldname": "delivery_eta_max",
+   "fieldtype": "Int",
+   "label": "Delivery ETA Max"
+  },
+  {
+   "default": "0",
+   "fieldname": "delivery_fee",
+   "fieldtype": "Currency",
+   "label": "Delivery Fee"
+  },
+  {
+   "default": "0",
+   "fieldname": "delivery_radius_km",
+   "fieldtype": "Float",
+   "label": "Delivery Radius (km)"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Branch Schedule",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

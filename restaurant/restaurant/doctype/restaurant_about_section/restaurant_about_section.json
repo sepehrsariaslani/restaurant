@@ -1,0 +1,130 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RAS-{#####}",
+  "creation": "2026-04-04 20:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "section_type",
+    "title",
+    "subtitle",
+    "badge",
+    "founded_year",
+    "icon",
+    "year_label",
+    "highlight",
+    "body_text",
+    "image",
+    "stat_label",
+    "stat_value",
+    "sort_order",
+    "is_active"
+  ],
+  "fields": [
+    {
+      "default": "story",
+      "fieldname": "section_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Section Type",
+      "options": "hero\nmission\nvision\nvalue\nhistory\ntimeline\nstory"
+    },
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "subtitle",
+      "fieldtype": "Small Text",
+      "label": "Subtitle"
+    },
+    {
+      "fieldname": "badge",
+      "fieldtype": "Data",
+      "label": "Badge"
+    },
+    {
+      "fieldname": "founded_year",
+      "fieldtype": "Data",
+      "label": "Founded Year"
+    },
+    {
+      "fieldname": "icon",
+      "fieldtype": "Data",
+      "label": "Icon"
+    },
+    {
+      "fieldname": "year_label",
+      "fieldtype": "Data",
+      "label": "Year Label"
+    },
+    {
+      "default": "0",
+      "fieldname": "highlight",
+      "fieldtype": "Check",
+      "label": "Highlight"
+    },
+    {
+      "fieldname": "body_text",
+      "fieldtype": "Text",
+      "label": "Body Text",
+      "reqd": 1
+    },
+    {
+      "fieldname": "image",
+      "fieldtype": "Attach Image",
+      "label": "Image"
+    },
+    {
+      "fieldname": "stat_label",
+      "fieldtype": "Data",
+      "label": "Stat Label"
+    },
+    {
+      "fieldname": "stat_value",
+      "fieldtype": "Data",
+      "label": "Stat Value"
+    },
+    {
+      "default": "0",
+      "fieldname": "sort_order",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Sort Order"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Active"
+    }
+  ],
+  "links": [],
+  "modified": "2026-04-04 20:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant About Section",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "sort_order",
+  "sort_order": "ASC",
+  "states": []
+}

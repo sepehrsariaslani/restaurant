@@ -1,0 +1,53 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "field:coupon_code",
+  "creation": "2026-06-26 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "coupon_code",
+    "title",
+    "is_active",
+    "discount_type",
+    "discount_value",
+    "min_order_amount",
+    "max_discount_amount",
+    "valid_from",
+    "valid_to",
+    "usage_limit",
+    "used_count",
+    "customer_mobile",
+    "branch",
+    "description"
+  ],
+  "fields": [
+    {"fieldname": "coupon_code", "fieldtype": "Data", "in_list_view": 1, "label": "Coupon Code", "reqd": 1, "unique": 1},
+    {"fieldname": "title", "fieldtype": "Data", "in_list_view": 1, "label": "Title"},
+    {"default": "1", "fieldname": "is_active", "fieldtype": "Check", "in_list_view": 1, "label": "Is Active"},
+    {"default": "Percent", "fieldname": "discount_type", "fieldtype": "Select", "in_list_view": 1, "label": "Discount Type", "options": "Percent\nFixed", "reqd": 1},
+    {"fieldname": "discount_value", "fieldtype": "Currency", "in_list_view": 1, "label": "Discount Value", "reqd": 1},
+    {"default": "0", "fieldname": "min_order_amount", "fieldtype": "Currency", "label": "Minimum Order Amount"},
+    {"default": "0", "fieldname": "max_discount_amount", "fieldtype": "Currency", "label": "Maximum Discount Amount"},
+    {"fieldname": "valid_from", "fieldtype": "Date", "label": "Valid From"},
+    {"fieldname": "valid_to", "fieldtype": "Date", "label": "Valid To"},
+    {"default": "0", "fieldname": "usage_limit", "fieldtype": "Int", "label": "Usage Limit"},
+    {"default": "0", "fieldname": "used_count", "fieldtype": "Int", "label": "Used Count", "read_only": 1},
+    {"fieldname": "customer_mobile", "fieldtype": "Data", "label": "Customer Mobile"},
+    {"fieldname": "branch", "fieldtype": "Data", "label": "Branch"},
+    {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"}
+  ],
+  "links": [],
+  "modified": "2026-06-26 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Coupon",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+    {"read": 1, "role": "Desk User"}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

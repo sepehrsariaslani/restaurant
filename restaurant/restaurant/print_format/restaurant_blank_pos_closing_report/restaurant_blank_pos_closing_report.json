@@ -1,0 +1,23 @@
+{
+    "align_labels_right": 0,
+    "css": "",
+    "custom_format": 1,
+    "default_print_language": "fa",
+    "disabled": 0,
+    "doctype": "Print Format",
+    "doc_type": "Restaurant POS Payment Log",
+    "font": "Default",
+    "html": "",
+    "line_breaks": 0,
+    "margin_bottom": 10.0,
+    "margin_left": 10.0,
+    "margin_right": 10.0,
+    "margin_top": 10.0,
+    "module": "Restaurant",
+    "name": "Restaurant Blank POS Closing Report",
+    "print_format_builder": 0,
+    "print_format_type": "Jinja",
+    "raw_printing": 0,
+    "show_section_headings": 0,
+    "standard": "Yes"
+}

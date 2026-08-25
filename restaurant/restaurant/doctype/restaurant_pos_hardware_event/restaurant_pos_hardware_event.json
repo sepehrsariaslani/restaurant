@@ -1,0 +1,85 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "hash",
+  "creation": "2026-04-07 21:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "event_type",
+    "severity",
+    "source",
+    "message",
+    "related_order",
+    "event_at",
+    "payload_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "event_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Event Type",
+      "options": "card_pos\nscale\nsync\nnetwork\nsystem"
+    },
+    {
+      "fieldname": "severity",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Severity",
+      "options": "info\nwarn\nerror",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source",
+      "fieldtype": "Data",
+      "label": "Source"
+    },
+    {
+      "fieldname": "message",
+      "fieldtype": "Small Text",
+      "in_list_view": 1,
+      "label": "Message",
+      "reqd": 1
+    },
+    {
+      "fieldname": "related_order",
+      "fieldtype": "Link",
+      "label": "Related Order",
+      "options": "Sales Order"
+    },
+    {
+      "fieldname": "event_at",
+      "fieldtype": "Datetime",
+      "label": "Event At"
+    },
+    {
+      "fieldname": "payload_json",
+      "fieldtype": "Long Text",
+      "label": "Payload JSON"
+    }
+  ],
+  "links": [],
+  "modified": "2026-04-07 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant POS Hardware Event",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "states": []
+}

@@ -1,0 +1,113 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:OGM-{YYYY}-{#####}",
+ "creation": "2026-07-28 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "organization",
+  "member_customer",
+  "full_name",
+  "mobile",
+  "username",
+  "access_code",
+  "role_title",
+  "daily_cap",
+  "monthly_cap",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "OGM-{YYYY}-{#####}"
+  },
+  {
+   "fieldname": "organization",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "سازمان",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "member_customer",
+   "fieldtype": "Link",
+   "label": "مشتری (اتصال به باشگاه)",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "full_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "نام و نام خانوادگی",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "label": "موبایل"
+  },
+  {
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "نام کاربری معین",
+   "unique": 1
+  },
+  {
+   "fieldname": "access_code",
+   "fieldtype": "Data",
+   "label": "رمز عبور معین"
+  },
+  {
+   "fieldname": "role_title",
+   "fieldtype": "Data",
+   "label": "سمت / عنوان معین"
+  },
+  {
+   "fieldname": "daily_cap",
+   "fieldtype": "Currency",
+   "label": "سقف روزانه معین (۰ = ارث از قرارداد)"
+  },
+  {
+   "fieldname": "monthly_cap",
+   "fieldtype": "Currency",
+   "label": "سقف ماهانه معین (۰ = ارث از قرارداد)"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "فعال"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Organization Member",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

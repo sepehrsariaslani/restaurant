@@ -1,0 +1,286 @@
+{% set brand_settings = frappe.get_cached_doc("Restaurant Print Brand Settings") if frappe.db.exists("DocType", "Restaurant Print Brand Settings") else none %}
+{% set brand_name = brand_settings.brand_name if brand_settings and brand_settings.brand_name else "رستوران نمونه دن فلو" %}
+{% set brand_subtitle = brand_settings.brand_subtitle if brand_settings and brand_settings.brand_subtitle else "سامانه مدیریت رستوران" %}
+{% set show_subtitle = brand_settings.show_brand_subtitle if brand_settings else 1 %}
+{% set brand_logo = brand_settings.logo if brand_settings and brand_settings.logo else "" %}
+{% set header_bg = brand_settings.header_background_color if brand_settings and brand_settings.header_background_color else "#4A2522" %}
+{% set header_text = brand_settings.header_text_color if brand_settings and brand_settings.header_text_color else "#FFFFFF" %}
+{% set accent_color = brand_settings.accent_color if brand_settings and brand_settings.accent_color else "#C08A2A" %}
+{% set table_header_bg = brand_settings.table_header_background_color if brand_settings and brand_settings.table_header_background_color else "#F7F2E3" %}
+{% set border_color = brand_settings.border_color if brand_settings and brand_settings.border_color else "#D8C8B3" %}
+{% set footer_text = brand_settings.footer_text if brand_settings and brand_settings.footer_text else "این نسخه برای چاپ داخلی مجموعه است." %}
+
+<style>
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @media print {
+    html,
+    body {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      margin: 0;
+    }
+  }
+
+  body {
+    margin: 0;
+    direction: rtl;
+    color: #2f3c36;
+    font-family: "Peyda", "Tahoma", sans-serif;
+  }
+
+  .sheet {
+    border: 1px solid {{ border_color }};
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .header {
+    background: {{ header_bg }};
+    color: {{ header_text }};
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #fff;
+    border: 1px solid {{ border_color }};
+  }
+
+  .brand h1 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.5;
+  }
+
+  .brand p {
+    margin: 2px 0 0;
+    font-size: 11px;
+    opacity: 0.95;
+  }
+
+  .title-box {
+    text-align: left;
+  }
+
+  .title-box strong {
+    display: block;
+    font-size: 16px;
+  }
+
+  .title-box small {
+    font-size: 11px;
+    opacity: 0.92;
+  }
+
+  .meta-grid {
+    padding: 10px 12px 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .meta-cell {
+    border: 1px dashed {{ border_color }};
+    border-radius: 10px;
+    min-height: 52px;
+    padding: 7px;
+    font-size: 11px;
+  }
+
+  .meta-cell strong {
+    color: {{ accent_color }};
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  .section {
+    padding: 8px 12px 0;
+  }
+
+  .section-title {
+    margin: 0 0 6px;
+    border-right: 4px solid {{ accent_color }};
+    padding: 4px 8px;
+    background: #fbf8f1;
+    font-size: 13px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  th,
+  td {
+    border: 1px solid {{ border_color }};
+    text-align: center;
+    padding: 6px 4px;
+    min-height: 24px;
+  }
+
+  th {
+    background: {{ table_header_bg }};
+    color: #2b332f;
+  }
+
+  .sign-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 14px 12px;
+  }
+
+  .sign-cell {
+    border-top: 1px solid {{ border_color }};
+    text-align: center;
+    min-height: 48px;
+    padding-top: 8px;
+    font-size: 11px;
+  }
+
+  .footer {
+    border-top: 1px dashed {{ border_color }};
+    padding: 8px 12px 10px;
+    font-size: 10px;
+    color: #5b6b63;
+    text-align: center;
+  }
+</style>
+
+<section class="sheet">
+  <header class="header">
+    <div class="brand">
+      <h1>{{ brand_name }}</h1>
+      {% if show_subtitle %}
+      <p>{{ brand_subtitle }}</p>
+      {% endif %}
+    </div>
+
+    <div class="title-box">
+      <strong>فرم فرمول ساخت رستوران</strong>
+      <small>ثبت مواد اولیه، دستور تهیه، زمان آماده سازی و کنترل کیفیت</small>
+    </div>
+
+    {% if brand_logo %}
+    <img class="logo" src="{{ brand_logo }}" alt="لوگو" />
+    {% else %}
+    <div class="logo"></div>
+    {% endif %}
+  </header>
+
+  <section class="meta-grid">
+    <div class="meta-cell"><strong>نام محصول</strong></div>
+    <div class="meta-cell"><strong>کد محصول</strong></div>
+    <div class="meta-cell"><strong>تاریخ ثبت</strong></div>
+    <div class="meta-cell"><strong>نسخه فرمول</strong></div>
+    <div class="meta-cell"><strong>تعداد مبنا</strong></div>
+    <div class="meta-cell"><strong>واحد تولید</strong></div>
+    <div class="meta-cell"><strong>ایستگاه تولید</strong></div>
+    <div class="meta-cell"><strong>مسئول شیفت</strong></div>
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">۱) مواد اولیه و اقلام مصرفی</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 44px;">ردیف</th>
+          <th>نام ماده اولیه</th>
+          <th>کد ماده</th>
+          <th>مقدار استاندارد</th>
+          <th>واحد</th>
+          <th>درصد ضایعات</th>
+          <th>توضیحات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in range(12) %}
+        <tr>
+          <td>{{ i + 1 }}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">۲) مراحل آماده سازی و پخت</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 44px;">مرحله</th>
+          <th>شرح عملیات</th>
+          <th>ایستگاه کاری</th>
+          <th>زمان (دقیقه)</th>
+          <th>مسئول</th>
+          <th>کنترل کیفیت</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in range(8) %}
+        <tr>
+          <td>{{ i + 1 }}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">۳) بسته بندی و تحویل</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 44px;">ردیف</th>
+          <th>نوع بسته بندی</th>
+          <th>تعداد</th>
+          <th>واحد</th>
+          <th>توضیحات تحویل</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in range(4) %}
+        <tr>
+          <td>{{ i + 1 }}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="sign-grid">
+    <div class="sign-cell">تدوین کننده فرمول</div>
+    <div class="sign-cell">سرآشپز / مسئول تولید</div>
+    <div class="sign-cell">کنترل کیفیت</div>
+    <div class="sign-cell">تایید نهایی مدیریت</div>
+  </section>
+
+  <footer class="footer">{{ footer_text }}</footer>
+</section>

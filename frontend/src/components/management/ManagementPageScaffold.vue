@@ -1,0 +1,89 @@
+<template>
+  <section class="management-page">
+    <header v-if="title || subtitle || $slots.actions" class="glass-card hero-card">
+      <div>
+        <h2>{{ title }}</h2>
+        <p class="muted" v-if="subtitle">{{ subtitle }}</p>
+      </div>
+      <div class="hero-actions" v-if="$slots.actions">
+        <slot name="actions" />
+      </div>
+    </header>
+    <slot />
+  </section>
+</template>
+
+<script setup>
+defineProps({
+  title: {
+    type: String,
+    default: '',
+  },
+  subtitle: {
+    type: String,
+    default: '',
+  },
+})
+</script>
+
+<style scoped>
+.management-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero-card {
+  border-radius: 16px;
+  border: 1px solid var(--mg-border-light);
+  background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-page) 8%) 100%);
+  box-shadow: var(--mg-shadow-sm, 0 14px 34px rgb(52 38 31 / 0.06));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: clamp(0.9rem, 2vw, 1.25rem);
+}
+
+.hero-card h2 {
+  margin: 0;
+  color: var(--mg-text-main);
+  font-size: clamp(1.02rem, 1vw + 0.8rem, 1.35rem);
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.hero-card p {
+  margin: 0.24rem 0 0;
+  color: var(--mg-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 860px) {
+  .hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .hero-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    flex-wrap: nowrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .hero-card h2 {
+    font-size: 0.95rem;
+  }
+}
+</style>

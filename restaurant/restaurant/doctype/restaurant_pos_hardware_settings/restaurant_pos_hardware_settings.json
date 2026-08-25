@@ -1,0 +1,140 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "creation": "2026-04-07 21:00:00.000000",
+  "doctype": "DocType",
+  "document_type": "System",
+  "engine": "InnoDB",
+  "field_order": [
+    "enable_card_payment",
+    "payment_provider",
+    "default_payment_method",
+    "default_terminal_id",
+    "section_break_local_node",
+    "local_node_base_url",
+    "local_node_api_key",
+    "local_node_timeout_ms",
+    "enabled_drivers_json",
+    "section_break_scale",
+    "scale_enabled",
+    "scale_prefix",
+    "scale_item_code_digits",
+    "scale_weight_digits",
+    "scale_checksum_digits",
+    "scale_weight_divisor"
+  ],
+  "fields": [
+    {
+      "default": "1",
+      "fieldname": "enable_card_payment",
+      "fieldtype": "Check",
+      "label": "Enable Card Payment"
+    },
+    {
+      "default": "local_node",
+      "fieldname": "payment_provider",
+      "fieldtype": "Select",
+      "label": "Payment Provider",
+      "options": "manual\nlocal_node\nwebhook"
+    },
+    {
+      "default": "cash",
+      "fieldname": "default_payment_method",
+      "fieldtype": "Select",
+      "label": "Default Payment Method",
+      "options": "cash\ncard"
+    },
+    {
+      "fieldname": "default_terminal_id",
+      "fieldtype": "Data",
+      "label": "Default Terminal ID"
+    },
+    {
+      "fieldname": "section_break_local_node",
+      "fieldtype": "Section Break",
+      "label": "Local Hardware Node"
+    },
+    {
+      "default": "http://127.0.0.1:27100",
+      "fieldname": "local_node_base_url",
+      "fieldtype": "Data",
+      "label": "Local Node Base URL"
+    },
+    {
+      "fieldname": "local_node_api_key",
+      "fieldtype": "Password",
+      "label": "Local Node API Key"
+    },
+    {
+      "default": "8000",
+      "fieldname": "local_node_timeout_ms",
+      "fieldtype": "Int",
+      "label": "Local Node Timeout (ms)"
+    },
+    {
+      "fieldname": "enabled_drivers_json",
+      "fieldtype": "Long Text",
+      "label": "Enabled Drivers JSON"
+    },
+    {
+      "fieldname": "section_break_scale",
+      "fieldtype": "Section Break",
+      "label": "Scale Barcode Settings"
+    },
+    {
+      "default": "1",
+      "fieldname": "scale_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Scale Barcode Parsing"
+    },
+    {
+      "default": "20",
+      "fieldname": "scale_prefix",
+      "fieldtype": "Data",
+      "label": "Scale Prefix"
+    },
+    {
+      "default": "5",
+      "fieldname": "scale_item_code_digits",
+      "fieldtype": "Int",
+      "label": "Item Code Digits"
+    },
+    {
+      "default": "5",
+      "fieldname": "scale_weight_digits",
+      "fieldtype": "Int",
+      "label": "Weight Digits"
+    },
+    {
+      "default": "1",
+      "fieldname": "scale_checksum_digits",
+      "fieldtype": "Int",
+      "label": "Checksum Digits"
+    },
+    {
+      "default": "1000",
+      "fieldname": "scale_weight_divisor",
+      "fieldtype": "Int",
+      "label": "Weight Divisor"
+    }
+  ],
+  "issingle": 1,
+  "links": [],
+  "modified": "2026-04-07 21:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant POS Hardware Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

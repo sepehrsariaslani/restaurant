@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-28 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "caller_mobile",
+  "direction",
+  "customer",
+  "customer_name",
+  "status",
+  "agent",
+  "exten",
+  "entry_date",
+  "note"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "CALL-{YYYY}-{#####}",
+   "hidden": 1
+  },
+  {
+   "fieldname": "caller_mobile",
+   "fieldtype": "Data",
+   "label": "شماره تماس",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "direction",
+   "fieldtype": "Select",
+   "label": "جهت",
+   "options": "ورودی\nخروجی",
+   "default": "ورودی"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "options": "Customer",
+   "label": "مشتری"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "نام مشتری",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "وضعیت",
+   "options": "جدید\nدر حال پاسخ\nپاسخ‌داده‌شده",
+   "default": "جدید",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "اپراتور",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "exten",
+   "fieldtype": "Data",
+   "label": "داخلی"
+  },
+  {
+   "fieldname": "entry_date",
+   "fieldtype": "Datetime",
+   "label": "زمان تماس",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "یادداشت"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Call Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "naming_series:CALL-{YYYY}-{#####}"
+}

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Willow Tree Loader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .loader-container {
+            position: relative;
+            width: 500px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .loading-text {
+            position: absolute;
+            bottom: 30px;
+            color: #7ec882;
+            font-size: 18px;
+            letter-spacing: 3px;
+            animation: textPulse 1.5s ease-in-out infinite;
+            z-index: 10;
+            direction: rtl;
+        }
+
+        .loading-text span {
+            display: inline-block;
+            animation: dotBounce 1.4s ease-in-out infinite;
+        }
+
+        .loading-text span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-text span:nth-child(3) { animation-delay: 0.4s; }
+
+        .progress-bar {
+            position: absolute;
+            bottom: 10px;
+            width: 200px;
+            height: 3px;
+            background: rgba(126, 200, 130, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #4a9e4e, #7ec882, #a8e6a3);
+            border-radius: 2px;
+            transition: width 0.1s;
+        }
+
+        @keyframes textPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes dotBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loader-container">
+        <canvas id="treeCanvas" width="500" height="600"></canvas>
+        <div class="loading-text">
+            در حال بارگذاری
+            <span>.</span><span>.</span><span>.</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('treeCanvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+
+        const TOTAL_DURATION = 5000;
+        const LOOP = true;
+        let startTime = null;
+        let progress = 0;
+
+        const trunkBase = { x: W / 2, y: H - 100 };
+        const trunkTop  = { x: W / 2, y: H - 340 };
+
+        class WillowStrand {
+            constructor(originX, originY, length, swayOffset, curveStrength) {
+                this.originX = originX;
+                this.originY = originY;
+                this.length = length;
+                this.swayOffset = swayOffset;
+                this.curveStrength = curveStrength;
+                this.leaves = [];
+                this.baseHue = 90 + Math.random() * 40;
+
+                const leafCount = Math.floor(length / 18) + 2;
+                for (let i = 0; i < leafCount; i++) {
+                    const t = (i + 1) / (leafCount + 1);
+                    this.leaves.push({
+                        t: t,
+                        size: 3 + Math.random() * 5,
+                        angle: Math.random() * Math.PI * 2,
+                        hueShift: Math.random() * 20 - 10
+                    });
+                }
+            }
+        }
+
+        const branches = [];
+        const strands = [];
+
+        function generateTree() {
+            const mainBranches = [
+                { angle: 160, len: 80, ox: -5, oy: 0 },
+                { angle: 140, len: 100, ox: -3, oy: -20 },
+                { angle: 120, len: 110, ox: 0, oy: -40 },
+                { angle: 100, len: 100, ox: 0, oy: -50 },
+                { angle: 80, len: 110, ox: 0, oy: -40 },
+                { angle: 60, len: 100, ox: 3, oy: -20 },
+                { angle: 40, len: 100, ox: 3, oy: -20 },
+                { angle: 20, len: 80, ox: 5, oy: 0 },
+                { angle: 90, len: 70, ox: 0, oy: -60 },
+                { angle: 110, len: 90, ox: -2, oy: -30 },
+                { angle: 70, len: 90, ox: 2, oy: -30 },
+            ];
+
+            mainBranches.forEach(function(b) {
+                const bx = trunkTop.x + b.ox;
+                const by = trunkTop.y + b.oy;
+                const endX = bx + Math.cos((b.angle * Math.PI) / 180) * b.len;
+                const endY = by - Math.sin((b.angle * Math.PI) / 180) * b.len * 0.5;
+
+                branches.push({ sx: bx, sy: by, ex: endX, ey: endY, width: 4 + Math.random() * 3 });
+
+                const strandCount = 4 + Math.floor(Math.random() * 5);
+                for (let i = 0; i < strandCount; i++) {
+                    const t = (i + 0.5) / strandCount;
+                    const sx = bx + (endX - bx) * t;
+                    const sy = by + (endY - by) * t;
+                    const len = 80 + Math.random() * 160;
+                    const sway = Math.random() * Math.PI * 2;
+                    const curve = 15 + Math.random() * 30;
+                    strands.push(new WillowStrand(sx, sy, len, sway, curve));
+                }
+
+                for (let i = 0; i < 3; i++) {
+                    const len = 100 + Math.random() * 140;
+                    const sway = Math.random() * Math.PI * 2;
+                    const curve = 20 + Math.random() * 25;
+                    strands.push(new WillowStrand(
+                        endX + (Math.random() - 0.5) * 15,
+                        endY + (Math.random() - 0.5) * 10,
+                        len, sway, curve
+                    ));
+                }
+            });
+
+            for (let i = 0; i < 15; i++) {
+                const angle = Math.random() * Math.PI;
+                const r = 20 + Math.random() * 40;
+                const sx = trunkTop.x + Math.cos(angle) * r * (Math.random() > 0.5 ? 1 : -1);
+                const sy = trunkTop.y - 30 - Math.random() * 40;
+                const len = 120 + Math.random() * 150;
+                strands.push(new WillowStrand(sx, sy, len, Math.random() * Math.PI * 2, 20 + Math.random() * 35));
+            }
+        }
+
+        generateTree();
+
+        const particles = [];
+
+        function spawnParticle() {
+            if (particles.length > 30) return;
+            const strand = strands[Math.floor(Math.random() * strands.length)];
+            particles.push({
+                x: strand.originX + (Math.random() - 0.5) * 40,
+                y: strand.originY + Math.random() * strand.length * progress,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: 0.2 + Math.random() * 0.5,
+                life: 1,
+                decay: 0.005 + Math.random() * 0.01,
+                size: 1 + Math.random() * 2
+            });
+        }
+
+        function drawTrunk(p) {
+            const trunkProgress = Math.min(p * 2, 1);
+
+            ctx.save();
+            ctx.beginPath();
+
+            const baseWidth = 22;
+            const topWidth = 8;
+            const h = (trunkTop.y - trunkBase.y) * trunkProgress;
+            const currentTopY = trunkBase.y + h;
+
+            ctx.moveTo(trunkBase.x - baseWidth, trunkBase.y);
+            ctx.quadraticCurveTo(
+                trunkBase.x - baseWidth + 5, trunkBase.y + h * 0.5,
+                trunkBase.x - topWidth * trunkProgress, currentTopY
+            );
+            ctx.lineTo(trunkBase.x + topWidth * trunkProgress, currentTopY);
+            ctx.quadraticCurveTo(
+                trunkBase.x + baseWidth - 5, trunkBase.y + h * 0.5,
+                trunkBase.x + baseWidth, trunkBase.y
+            );
+            ctx.closePath();
+
+            const trunkGrad = ctx.createLinearGradient(trunkBase.x - baseWidth, trunkBase.y, trunkBase.x + baseWidth, trunkBase.y);
+            trunkGrad.addColorStop(0, '#3d2b1f');
+            trunkGrad.addColorStop(0.3, '#5c4033');
+            trunkGrad.addColorStop(0.5, '#6b4c3b');
+            trunkGrad.addColorStop(0.7, '#5c4033');
+            trunkGrad.addColorStop(1, '#3d2b1f');
+            ctx.fillStyle = trunkGrad;
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(30, 20, 10, 0.3)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const ly = trunkBase.y + (h * (i / 8));
+                if (ly < currentTopY) continue;
+                ctx.beginPath();
+                ctx.moveTo(trunkBase.x - baseWidth + 5 + Math.random() * 5, ly);
+                ctx.lineTo(trunkBase.x + baseWidth - 5 - Math.random() * 5, ly);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#4a3628';
+            ctx.lineWidth = 3;
+            const roots = [
+                { dx: -30, dy: 15, cx: -15, cy: 8 },
+                { dx: -20, dy: 20, cx: -8, cy: 12 },
+                { dx: 20, dy: 20, cx: 8, cy: 12 },
+                { dx: 30, dy: 15, cx: 15, cy: 8 },
+            ];
+            roots.forEach(function(r) {
+                const rp = Math.min(trunkProgress * 1.5, 1);
+                ctx.beginPath();
+                ctx.moveTo(trunkBase.x, trunkBase.y);
+                ctx.quadraticCurveTo(
+                    trunkBase.x + r.cx * rp, trunkBase.y + r.cy * rp,
+                    trunkBase.x + r.dx * rp, trunkBase.y + r.dy * rp
+                );
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        function drawBranches(p) {
+            const branchProgress = Math.max(0, (p - 0.15) / 0.35);
+            if (branchProgress <= 0) return;
+            const bp = Math.min(branchProgress, 1);
+
+            ctx.save();
+            ctx.lineCap = 'round';
+
+            branches.forEach(function(b, i) {
+                const delay = (i / branches.length) * 0.4;
+                const localP = Math.max(0, Math.min(1, (bp - delay) / (1 - delay)));
+                if (localP <= 0) return;
+
+                const ex = b.sx + (b.ex - b.sx) * localP;
+                const ey = b.sy + (b.ey - b.sy) * localP;
+
+                ctx.beginPath();
+                ctx.moveTo(b.sx, b.sy);
+                ctx.lineTo(ex, ey);
+                ctx.strokeStyle = '#5c4033';
+                ctx.lineWidth = b.width * (1 - localP * 0.5);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        function drawStrands(p, time) {
+            const strandProgress = Math.max(0, (p - 0.3) / 0.7);
+            if (strandProgress <= 0) return;
+            const sp = Math.min(strandProgress, 1);
+
+            ctx.save();
+
+            strands.forEach(function(strand, idx) {
+                const delay = (idx / strands.length) * 0.5;
+                const localP = Math.max(0, Math.min(1, (sp - delay) / (1 - delay)));
+                if (localP <= 0) return;
+
+                const currentLen = strand.length * localP;
+                const sway = Math.sin(time * 0.001 + strand.swayOffset) * strand.curveStrength * 0.3;
+                const sway2 = Math.sin(time * 0.0015 + strand.swayOffset * 1.5) * strand.curveStrength * 0.15;
+
+                const segments = 20;
+                ctx.beginPath();
+                ctx.moveTo(strand.originX, strand.originY);
+
+                for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+                    if (t * strand.length > currentLen) break;
+
+                    const gravity = t * t;
+                    const x = strand.originX + (sway + sway2) * t * t;
+                    const y = strand.originY + currentLen * gravity * (i / segments);
+                    ctx.lineTo(x, y);
+                }
+
+                const greenness = localP;
+                const r = Math.floor(92 - greenness * 40);
+                const g = Math.floor(64 + greenness * 100);
+                const bc = Math.floor(51 - greenness * 20);
+                ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + bc + ',' + (0.4 + localP * 0.4) + ')';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                strand.leaves.forEach(function(leaf) {
+                    if (leaf.t * strand.length > currentLen) return;
+
+                    const leafGrowth = Math.max(0, (localP - leaf.t * 0.5) / (1 - leaf.t * 0.5));
+                    if (leafGrowth <= 0) return;
+
+                    const lt = leaf.t;
+                    const gravity = lt * lt;
+                    const lx = strand.originX + (sway + sway2) * lt * lt;
+                    const ly = strand.originY + currentLen * gravity * lt;
+                    const size = leaf.size * leafGrowth;
+
+                    ctx.save();
+                    ctx.translate(lx, ly);
+                    ctx.rotate(leaf.angle + Math.sin(time * 0.002 + leaf.t * 5) * 0.2);
+
+                    const hue = strand.baseHue + leaf.hueShift;
+                    const lightness = 35 + leafGrowth * 25;
+                    ctx.fillStyle = 'hsla(' + hue + ', 70%, ' + lightness + '%, ' + (0.7 + leafGrowth * 0.3) + ')';
+
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, size * 0.4, size, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = 'hsla(' + (hue - 10) + ', 60%, ' + (lightness - 10) + '%, 0.3)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(0, size);
+                    ctx.stroke();
+
+                    ctx.restore();
+                });
+            });
+
+            ctx.restore();
+        }
+
+        function drawGlow(p, time) {
+            if (p < 0.3) return;
+            const gp = (p - 0.3) / 0.7;
+
+            const gradient = ctx.createRadialGradient(
+                trunkTop.x, trunkTop.y - 20, 10,
+                trunkTop.x, trunkTop.y + 30, 180
+            );
+            gradient.addColorStop(0, 'rgba(100, 200, 100, ' + (gp * 0.08) + ')');
+            gradient.addColorStop(0.5, 'rgba(80, 180, 80, ' + (gp * 0.04) + ')');
+            gradient.addColorStop(1, 'rgba(80, 180, 80, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, W, H);
+        }
+
+        function drawParticles(time) {
+            particles.forEach(function(p, i) {
+                p.x += p.vx + Math.sin(time * 0.003 + i) * 0.2;
+                p.y += p.vy;
+                p.life -= p.decay;
+
+                if (p.life > 0) {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(150, 230, 150, ' + (p.life * 0.5) + ')';
+                    ctx.fill();
+                }
+            });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function drawGround(p) {
+            const groundGrad = ctx.createLinearGradient(0, H - 100, 0, H);
+            groundGrad.addColorStop(0, 'rgba(40, 60, 30, 0.3)');
+            groundGrad.addColorStop(1, 'rgba(30, 45, 20, 0.1)');
+
+            ctx.fillStyle = groundGrad;
+            ctx.beginPath();
+            ctx.ellipse(W / 2, H - 85, 120, 15, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (p > 0.5) {
+                const grassP = (p - 0.5) / 0.5;
+                ctx.strokeStyle = 'rgba(80, 160, 80, ' + (grassP * 0.5) + ')';
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < 20; i++) {
+                    const gx = W / 2 - 100 + i * 10 + Math.random() * 5;
+                    const gy = H - 85;
+                    const gh = (5 + Math.random() * 10) * grassP;
+                    ctx.beginPath();
+                    ctx.moveTo(gx, gy);
+                    ctx.quadraticCurveTo(gx + (Math.random() - 0.5) * 5, gy - gh * 0.6, gx + (Math.random() - 0.5) * 3, gy - gh);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        const stars = [];
+        for (let i = 0; i < 50; i++) {
+            stars.push({
+                x: Math.random() * W,
+                y: Math.random() * H * 0.6,
+                size: 0.5 + Math.random() * 1.5,
+                twinkle: Math.random() * Math.PI * 2
+            });
+        }
+
+        function drawBackground(time) {
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+            skyGrad.addColorStop(0, '#0a0a1a');
+            skyGrad.addColorStop(0.5, '#1a1a2e');
+            skyGrad.addColorStop(1, '#16213e');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, W, H);
+
+            stars.forEach(function(s) {
+                const alpha = 0.3 + Math.sin(time * 0.002 + s.twinkle) * 0.3;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(200, 220, 255, ' + alpha + ')';
+                ctx.fill();
+            });
+
+            ctx.beginPath();
+            ctx.arc(W - 80, 70, 25, 0, Math.PI * 2);
+            const moonGrad = ctx.createRadialGradient(W - 80, 70, 5, W - 80, 70, 25);
+            moonGrad.addColorStop(0, 'rgba(255, 255, 230, 0.9)');
+            moonGrad.addColorStop(1, 'rgba(200, 200, 180, 0.3)');
+            ctx.fillStyle = moonGrad;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(W - 80, 70, 45, 0, Math.PI * 2);
+            const moonHalo = ctx.createRadialGradient(W - 80, 70, 25, W - 80, 70, 45);
+            moonHalo.addColorStop(0, 'rgba(200, 200, 180, 0.1)');
+            moonHalo.addColorStop(1, 'rgba(200, 200, 180, 0)');
+            ctx.fillStyle = moonHalo;
+            ctx.fill();
+        }
+
+        const progressFill = document.getElementById('progressFill');
+
+        function easeInOutCubic(t) {
+            return t < 0.5
+                ? 4 * t * t * t
+                : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function animate(timestamp) {
+            if (typeof timestamp === 'undefined') {
+                requestAnimationFrame(animate);
+                return;
+            }
+
+            if (!startTime) startTime = timestamp;
+
+            if (LOOP) {
+                const cycleTime = (timestamp - startTime) % (TOTAL_DURATION + 2000);
+                if (cycleTime > TOTAL_DURATION) {
+                    progress = 1;
+                    if (cycleTime > TOTAL_DURATION + 1900) {
+                        startTime = timestamp;
+                    }
+                } else {
+                    progress = cycleTime / TOTAL_DURATION;
+                }
+            } else {
+                progress = Math.min((timestamp - startTime) / TOTAL_DURATION, 1);
+            }
+
+            const easedProgress = easeInOutCubic(progress);
+
+            ctx.clearRect(0, 0, W, H);
+
+            drawBackground(timestamp);
+            drawGlow(easedProgress, timestamp);
+            drawGround(easedProgress);
+            drawTrunk(easedProgress);
+            drawBranches(easedProgress);
+            drawStrands(easedProgress, timestamp);
+
+            if (easedProgress > 0.4 && Math.random() < 0.3) {
+                spawnParticle();
+            }
+            drawParticles(timestamp);
+
+            progressFill.style.width = (easedProgress * 100) + '%';
+
+            requestAnimationFrame(animate);
+        }
+
+        // ✅ شروع امن - مشکل timestamp حل شده
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

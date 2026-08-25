@@ -1,0 +1,118 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RTBL-{#####}",
+  "creation": "2026-02-24 12:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "table_number",
+    "qr_code_token",
+    "qr_target_url",
+    "qr_live_url",
+    "qr_code_image",
+    "status",
+    "is_active",
+    "location",
+    "active_session",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "table_number",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Table Number",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "qr_code_token",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "QR Code Token",
+      "read_only": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "qr_target_url",
+      "fieldtype": "Data",
+      "label": "QR Target URL",
+      "read_only": 1
+    },
+    {
+      "fieldname": "qr_live_url",
+      "fieldtype": "Data",
+      "label": "QR Live URL",
+      "read_only": 1
+    },
+    {
+      "fieldname": "qr_code_image",
+      "fieldtype": "Attach Image",
+      "label": "QR Code Image",
+      "read_only": 1
+    },
+    {
+      "default": "empty",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "empty\noccupied\nwaiting",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Active"
+    },
+    {
+      "fieldname": "location",
+      "fieldtype": "Data",
+      "label": "Location"
+    },
+    {
+      "fieldname": "active_session",
+      "fieldtype": "Link",
+      "label": "Active Session",
+      "options": "Restaurant Table Session",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    }
+  ],
+  "links": [],
+  "modified": "2026-02-24 12:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Table",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Desk User",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

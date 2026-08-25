@@ -1,0 +1,99 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:RHS-{#####}",
+  "creation": "2026-04-04 20:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "title",
+    "subtitle",
+    "image",
+    "linked_item",
+    "cta_label",
+    "cta_url",
+    "sort_order",
+    "is_active",
+    "branch"
+  ],
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "subtitle",
+      "fieldtype": "Small Text",
+      "label": "Subtitle"
+    },
+    {
+      "fieldname": "image",
+      "fieldtype": "Attach Image",
+      "label": "Image"
+    },
+    {
+      "fieldname": "linked_item",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Linked Item",
+      "options": "Item"
+    },
+    {
+      "default": "مشاهده محصول",
+      "fieldname": "cta_label",
+      "fieldtype": "Data",
+      "label": "CTA Label"
+    },
+    {
+      "fieldname": "cta_url",
+      "fieldtype": "Data",
+      "label": "CTA URL"
+    },
+    {
+      "default": "0",
+      "fieldname": "sort_order",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Sort Order"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Active"
+    },
+    {
+      "default": "",
+      "fieldname": "branch",
+      "fieldtype": "Data",
+      "label": "Branch"
+    }
+  ],
+  "links": [],
+  "modified": "2026-04-04 20:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Restaurant",
+  "name": "Restaurant Hero Slide",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "sort_order",
+  "sort_order": "ASC",
+  "states": []
+}

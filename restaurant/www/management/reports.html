@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Management Reports</title>
+  <style>
+    @font-face {
+      font-family: 'Peyda';
+      src: url('/assets/den_theme/css/Fonts/Peyda-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    body { margin: 0; font-family: Peyda, sans-serif; }
+    #app { min-height: 100vh; }
+  </style>
+  <script type="module" crossorigin src="/assets/restaurant/frontend/assets/index.js?v={{ frontend_version }}"></script>
+  <link rel="stylesheet" href="/assets/restaurant/frontend/assets/index.css?v={{ frontend_version }}" />
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window._PAGE = 'management-reports';
+    window._BOOT = {{ (boot or {}) | tojson }};
+    window.csrf_token = "{{ csrf_token }}";
+  </script>
+</body>
+</html>

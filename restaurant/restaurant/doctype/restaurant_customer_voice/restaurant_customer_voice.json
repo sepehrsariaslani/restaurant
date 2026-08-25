@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:CV-{YYYY}-{#####}",
+ "creation": "2026-07-28 23:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "customer",
+  "customer_name",
+  "mobile",
+  "sales_order",
+  "order_code",
+  "type",
+  "subject",
+  "message",
+  "status",
+  "response",
+  "responded_by",
+  "responded_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "CV-{YYYY}-{#####}"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "مشتری",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "نام مشتری"
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "label": "موبایل"
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "label": "سفارش",
+   "options": "Sales Order"
+  },
+  {
+   "fieldname": "order_code",
+   "fieldtype": "Data",
+   "label": "کد سفارش"
+  },
+  {
+   "default": "شکایت",
+   "fieldname": "type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "نوع",
+   "options": "شکایت\nانتقاد\nپیشنهاد\nدرخواست\nتقدیر",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "موضوع",
+   "reqd": 1
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Text",
+   "label": "متن پیام"
+  },
+  {
+   "default": "جدید",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "وضعیت",
+   "options": "جدید\nدر حال رسیدگی\nپاسخ داده‌شده\nبسته"
+  },
+  {
+   "fieldname": "response",
+   "fieldtype": "Small Text",
+   "label": "پاسخ مجموعه"
+  },
+  {
+   "fieldname": "responded_by",
+   "fieldtype": "Link",
+   "label": "پاسخ‌دهنده",
+   "options": "User"
+  },
+  {
+   "fieldname": "responded_at",
+   "fieldtype": "Datetime",
+   "label": "زمان پاسخ"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-28 23:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Customer Voice",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

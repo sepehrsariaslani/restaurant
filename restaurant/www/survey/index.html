@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>نظرسنجی سفارش</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: Tahoma, "Vazirmatn", sans-serif; background: #f2ece4; color: #3b3128; padding: 16px;
+  }
+  .card {
+    width: 100%; max-width: 520px; background: #fff; border-radius: 20px; padding: 28px 24px;
+    box-shadow: 0 14px 40px rgba(59, 49, 40, 0.12);
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 6px; }
+  .sub { font-size: 0.85rem; color: #8a7f71; margin-bottom: 20px; }
+  label { display: block; font-size: 0.85rem; margin: 12px 0 6px; color: #5d5347; }
+  input, textarea {
+    width: 100%; padding: 12px 14px; border: 1.5px solid #e4dccd; border-radius: 12px; font-size: 0.95rem;
+    font-family: inherit; background: #fbf9f5; color: #3b3128; outline: none;
+  }
+  input:focus, textarea:focus { border-color: #b96a3c; }
+  textarea { min-height: 90px; resize: vertical; }
+  button.primary {
+    width: 100%; margin-top: 20px; padding: 14px; border: 0; border-radius: 14px; cursor: pointer;
+    background: #b96a3c; color: #fff; font-size: 1rem; font-family: inherit; font-weight: 700;
+  }
+  button.primary:disabled { opacity: 0.55; cursor: default; }
+  .q-block { border: 1px solid #efe8db; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .q-title { font-size: 0.9rem; margin-bottom: 10px; }
+  .stars { display: flex; flex-direction: row-reverse; justify-content: center; gap: 6px; font-size: 1.9rem; }
+  .stars span { cursor: pointer; color: #d9d0c2; transition: color 0.12s; }
+  .stars span.on { color: #e3a72f; }
+  .yesno { display: flex; gap: 10px; }
+  .yesno button {
+    flex: 1; padding: 10px; border-radius: 12px; border: 1.5px solid #e4dccd; background: #fbf9f5;
+    cursor: pointer; font-family: inherit; font-size: 0.9rem;
+  }
+  .yesno button.sel { background: #2f6f5c; border-color: #2f6f5c; color: #fff; }
+  .yesno button.sel.no { background: #a44437; border-color: #a44437; }
+  .msg { margin-top: 14px; font-size: 0.9rem; text-align: center; }
+  .msg.err { color: #a44437; }
+  .msg.ok { color: #2f6f5c; }
+  .hidden { display: none; }
+  .thanks { text-align: center; padding: 30px 0 10px; }
+  .thanks .big { font-size: 3rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>نظرسنجی رضایت</h1>
+  <div class="sub">نظر شما برای ما ارزشمند است 🌷</div>
+
+  <div id="step-auth">
+    <label>کد سفارش</label>
+    <input id="f-order" placeholder="مثلاً SO-1024 یا 1024" />
+    <label>شماره موبایل ثبت‌شده در سفارش</label>
+    <input id="f-mobile" placeholder="09xxxxxxxxx" inputmode="tel" />
+    <button class="primary" id="btn-start" onclick="startSurvey()">شروع نظرسنجی</button>
+    <div class="msg err hidden" id="auth-err"></div>
+  </div>
+
+  <div id="step-form" class="hidden">
+    <div class="sub" id="hello-line"></div>
+    <div class="q-block">
+      <div class="q-title">امتیاز کلی شما به این سفارش</div>
+      <div class="stars" id="overall-stars"></div>
+    </div>
+    <div id="questions"></div>
+    <label>توضیحات (اختیاری)</label>
+    <textarea id="f-comment" placeholder="اگر نکته‌ای هست اینجا بنویسید..."></textarea>
+    <button class="primary" id="btn-submit" onclick="submitSurvey()">ثبت نظر</button>
+    <div class="msg err hidden" id="form-err"></div>
+  </div>
+
+  <div id="step-done" class="hidden thanks">
+    <div class="big">🙏</div>
+    <h1>از وقتی که گذاشتید سپاسگزاریم!</h1>
+    <div class="sub">نظر شما با موفقیت ثبت شد.</div>
+  </div>
+</div>
+
+<script>
+let surveyCtx = null;
+const answers = {};
+let overall = 0;
+
+function api(method, args) {
+  const body = new URLSearchParams();
+  Object.keys(args || {}).forEach((k) => {
+    const v = args[k];
+    body.append(k, typeof v === "object" ? JSON.stringify(v) : v);
+  });
+  return fetch("/api/method/restaurant.api." + method, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+    body: body.toString(),
+  }).then(async (r) => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      let msg = "خطا در ارتباط با سرور";
+      try {
+        const sm = JSON.parse(data._server_messages || "[]");
+        if (sm.length) msg = JSON.parse(sm[0]).message || msg;
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    return data.message;
+  });
+}
+
+function showErr(id, text) {
+  const el = document.getElementById(id);
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
+}
+
+function buildStars(container, onPick) {
+  container.innerHTML = "";
+  for (let i = 5; i >= 1; i--) {
+    const s = document.createElement("span");
+    s.textContent = "★";
+    s.dataset.v = i;
+    s.onclick = () => {
+      onPick(i);
+      container.querySelectorAll("span").forEach((el) => {
+        el.classList.toggle("on", Number(el.dataset.v) <= i);
+      });
+    };
+    container.appendChild(s);
+  }
+}
+
+async function startSurvey() {
+  showErr("auth-err", "");
+  const order = document.getElementById("f-order").value.trim();
+  const mobile = document.getElementById("f-mobile").value.trim();
+  if (!order || !mobile) return showErr("auth-err", "کد سفارش و موبایل را وارد کنید.");
+  const btn = document.getElementById("btn-start");
+  btn.disabled = true;
+  try {
+    const ctx = await api("get_public_survey", { order_code: order, mobile: mobile });
+    if (!ctx.valid) {
+      showErr("auth-err", ctx.message || "سفارش یافت نشد.");
+      return;
+    }
+    if (ctx.answered) {
+      document.getElementById("step-auth").classList.add("hidden");
+      document.getElementById("step-done").classList.remove("hidden");
+      return;
+    }
+    surveyCtx = { ...ctx, order, mobile };
+    renderForm(ctx);
+  } catch (e) {
+    showErr("auth-err", e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderForm(ctx) {
+  document.getElementById("step-auth").classList.add("hidden");
+  document.getElementById("step-form").classList.remove("hidden");
+  document.getElementById("hello-line").textContent =
+    (ctx.customer_name ? ctx.customer_name + " عزیز، " : "") + "سفارش " + ctx.sales_order;
+  buildStars(document.getElementById("overall-stars"), (v) => (overall = v));
+  const box = document.getElementById("questions");
+  box.innerHTML = "";
+  (ctx.questions || []).forEach((q) => {
+    const div = document.createElement("div");
+    div.className = "q-block";
+    const t = document.createElement("div");
+    t.className = "q-title";
+    t.textContent = q.question;
+    div.appendChild(t);
+    if ((q.answer_type || "").indexOf("امتیاز") === 0) {
+      const st = document.createElement("div");
+      st.className = "stars";
+      buildStars(st, (v) => (answers[q.name] = { question: q.question, answer_type: q.answer_type, value: v }));
+      div.appendChild(st);
+    } else if ((q.answer_type || "").indexOf("بله") === 0) {
+      const yn = document.createElement("div");
+      yn.className = "yesno";
+      ["بله", "خیر"].forEach((opt) => {
+        const b = document.createElement("button");
+        b.textContent = opt;
+        b.onclick = () => {
+          yn.querySelectorAll("button").forEach((x) => x.classList.remove("sel", "no"));
+          b.classList.add("sel");
+          if (opt === "خیر") b.classList.add("no");
+          answers[q.name] = { question: q.question, answer_type: q.answer_type, value: opt };
+        };
+        yn.appendChild(b);
+      });
+      div.appendChild(yn);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.oninput = () => (answers[q.name] = { question: q.question, answer_type: q.answer_type, value: ta.value });
+      div.appendChild(ta);
+    }
+    box.appendChild(div);
+  });
+}
+
+async function submitSurvey() {
+  showErr("form-err", "");
+  if (!overall) return showErr("form-err", "لطفاً امتیاز کلی را انتخاب کنید.");
+  const btn = document.getElementById("btn-submit");
+  btn.disabled = true;
+  try {
+    await api("submit_public_survey", {
+      payload: {
+        order_code: surveyCtx.order,
+        mobile: surveyCtx.mobile,
+        overall_rating: overall,
+        answers: Object.keys(answers).map((k) => answers[k]),
+        comment: document.getElementById("f-comment").value.trim(),
+      },
+    });
+    document.getElementById("step-form").classList.add("hidden");
+    document.getElementById("step-done").classList.remove("hidden");
+  } catch (e) {
+    showErr("form-err", e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+(function prefill() {
+  const p = new URLSearchParams(location.search);
+  if (p.get("order")) document.getElementById("f-order").value = p.get("order");
+  if (p.get("mobile")) document.getElementById("f-mobile").value = p.get("mobile");
+  if (p.get("order") && p.get("mobile")) startSurvey();
+})();
+</script>
+</body>
+</html>
