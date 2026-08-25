@@ -243,6 +243,16 @@
       </ManagementGalleryView>
     </ManagementSurfaceCard>
 
+    <div class="products-load-more" v-if="!loading && hasMoreProducts">
+      <button type="button" class="secondary-btn" @click="loadMoreProducts">
+        بارگذاری بیشتر
+      </button>
+      <small>
+        {{ formatNumber(products.length) }} کالا بارگذاری شده
+        <template v-if="productTotalHint"> از {{ formatNumber(productTotalHint) }}</template>
+      </small>
+    </div>
+
     <ManagementPopup
       v-model:open="createPopupOpen"
       title="ایجاد کالای جدید"
@@ -544,11 +554,14 @@ import { Folder, Package, Plus, Search, X } from 'lucide-vue-next'
 
 const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'management-products-visibility-overrides'
 const MOBILE_BREAKPOINT = 820
+const PRODUCT_PAGE_SIZE = 80
 
 const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const products = ref([])
+const hasMoreProducts = ref(false)
+const productTotalHint = ref(0)
 const currency = ref('IRR')
 const search = ref('')
 const activeOnly = ref(false)
@@ -843,16 +856,21 @@ const bootFieldOptions = ref({
 })
 const createForm = ref(createDefaultForm())
 const bulkPopupOpen = ref(false)
-async function loadProducts() {
+async function loadProducts(append = false) {
   loading.value = true
   error.value = ''
   try {
     const payload = await listManagementProducts({
-      search: '',
-      active_only: 0,
-      tag: '',
+      search: search.value,
+      active_only: activeOnly.value ? 1 : 0,
+      tag: selectedTag.value,
+      limit_start: append ? products.value.length : 0,
+      limit_page_length: PRODUCT_PAGE_SIZE,
     })
-    products.value = applyVisibilityOverrides(payload.products || [])
+    const nextProducts = applyVisibilityOverrides(payload.products || [])
+    products.value = append ? [...products.value, ...nextProducts] : nextProducts
+    hasMoreProducts.value = Boolean(payload.has_more)
+    productTotalHint.value = Number(payload.total_count || 0)
 
     // Build available tag options from loaded products
     const tagSet = new Set()
@@ -874,6 +892,13 @@ async function loadProducts() {
   } finally {
     loading.value = false
   }
+}
+
+function loadMoreProducts() {
+  if (loading.value || !hasMoreProducts.value) {
+    return
+  }
+  loadProducts(true)
 }
 
 function openBulkPopup() {
@@ -1877,6 +1902,17 @@ loadProducts()
   border-color: var(--mg-border-light);
   background: var(--mg-bg-surface);
   box-shadow: var(--mg-shadow-sm);
+}
+
+.products-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin: 0.15rem 0 0.55rem;
+  color: var(--mg-text-muted);
+  font-size: 0.76rem;
 }
 
 .toolbar .input {

@@ -10,6 +10,8 @@ export function listManagementProductsSafe({
   active_only = 0,
   branch = '',
   tag = '',
+  limit_start = 0,
+  limit_page_length = 80,
 } = {}) {
   return callMethodByPath('restaurant.api_management_products_safe.list_management_products_safe', {
     search,
@@ -17,6 +19,8 @@ export function listManagementProductsSafe({
     active_only,
     branch,
     tag,
+    limit_start,
+    limit_page_length,
   })
 }
 

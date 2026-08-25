@@ -528,6 +528,8 @@ async function listManagementProductsFallback({
 	active_only = 0,
 	branch = "",
 	tag = "",
+	limit_start = 0,
+	limit_page_length = 80,
 } = {}) {
 	const itemHasRestaurantEnabled = await hasDoctypeField("Item", "restaurant_enabled");
 	const itemHasRestaurantSlug = await hasDoctypeField("Item", "restaurant_slug");
@@ -582,6 +584,8 @@ async function listManagementProductsFallback({
 	const normalizedCategory = String(category || "").trim();
 	const normalizedBranch = String(branch || "").trim();
 	const normalizedTag = String(tag || "").trim();
+	const offset = Math.max(0, Number(limit_start || 0));
+	const pageSize = Math.max(1, Math.min(Number(limit_page_length || 80), 200));
 	const filters = [];
 
 	if (Number(active_only || 0) === 1) {
@@ -670,7 +674,8 @@ async function listManagementProductsFallback({
 			filters: filters.length ? filters : undefined,
 			or_filters: orFilters.length ? orFilters : undefined,
 			order_by: "modified desc",
-			limit_page_length: 500,
+			limit_start: offset,
+			limit_page_length: pageSize + 1,
 		});
 	} catch (error) {
 		// اگر فیلد جدید هنوز روی سرور ساخته نشده بود، بدون آن دوباره تلاش کن
@@ -682,7 +687,8 @@ async function listManagementProductsFallback({
 					filters: filters.length ? filters : undefined,
 					or_filters: orFilters.length ? orFilters : undefined,
 					order_by: "modified desc",
-					limit_page_length: 500,
+					limit_start: offset,
+					limit_page_length: pageSize + 1,
 				});
 			} catch (retryError) {
 				return {
@@ -702,8 +708,9 @@ async function listManagementProductsFallback({
 		}
 	}
 
+	const pageRows = (rows || []).slice(0, pageSize);
 	const groupNames = new Set();
-	for (const row of rows || []) {
+	for (const row of pageRows || []) {
 		const categoryName = String(row?.restaurant_category || row?.item_group || "").trim();
 		const subcategoryName = String(row?.restaurant_subcategory || "").trim();
 		if (categoryName) {
@@ -737,7 +744,7 @@ async function listManagementProductsFallback({
 
 	const stockMap = new Map();
 	const itemCodes = Array.from(
-		new Set((rows || []).map((row) => String(row?.item_code || "").trim()).filter(Boolean)),
+		new Set((pageRows || []).map((row) => String(row?.item_code || "").trim()).filter(Boolean)),
 	);
 	if (itemCodes.length) {
 		try {
@@ -759,7 +766,7 @@ async function listManagementProductsFallback({
 		}
 	}
 
-	const payload = (rows || []).map((row) => {
+	const payload = (pageRows || []).map((row) => {
 		const categoryName = String(row?.restaurant_category || row?.item_group || "").trim();
 		const subcategoryName = String(row?.restaurant_subcategory || "").trim();
 		const categoryMeta = groupMap.get(categoryName) || {};
@@ -808,6 +815,9 @@ async function listManagementProductsFallback({
 
 	return {
 		products: payload,
+		limit_start: offset,
+		limit_page_length: pageSize,
+		has_more: (rows || []).length > pageSize,
 		stock: {
 			low_threshold: 5,
 		},
@@ -1719,15 +1729,17 @@ export async function listManagementProducts({
 	active_only = 0,
 	branch = "",
 	tag = "",
+	limit_start = 0,
+	limit_page_length = 80,
 } = {}) {
 	if (preferManagementProductsFallback) {
-		return listManagementProductsFallback({ search, category, active_only, branch, tag });
+		return listManagementProductsFallback({ search, category, active_only, branch, tag, limit_start, limit_page_length });
 	}
 
 	const hasCoreSupport = await hasCoreMenuSupportOnClient();
 	if (!hasCoreSupport) {
 		preferManagementProductsFallback = true;
-		return listManagementProductsFallback({ search, category, active_only, branch, tag });
+		return listManagementProductsFallback({ search, category, active_only, branch, tag, limit_start, limit_page_length });
 	}
 
 	try {
@@ -1737,10 +1749,12 @@ export async function listManagementProducts({
 			active_only,
 			branch,
 			tag,
+			limit_start,
+			limit_page_length,
 		});
 	} catch (error) {
 		preferManagementProductsFallback = true;
-		return listManagementProductsFallback({ search, category, active_only, branch, tag });
+		return listManagementProductsFallback({ search, category, active_only, branch, tag, limit_start, limit_page_length });
 	}
 }
 

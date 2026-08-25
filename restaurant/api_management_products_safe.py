@@ -106,7 +106,7 @@ def _filter_management_products(rows, search="", category="", active_only=0, tag
 
 
 @frappe.whitelist()
-def list_management_products_safe(search="", category="", active_only=0, branch="", tag=""):
+def list_management_products_safe(search="", category="", active_only=0, branch="", tag="", limit_start=0, limit_page_length=80):
     """Return products even when optional Restaurant fields are missing or stale.
 
     Prefer the rich legacy management endpoint. If schema drift makes that fail,
@@ -122,6 +122,8 @@ def list_management_products_safe(search="", category="", active_only=0, branch=
             active_only=active_only,
             branch=branch,
             tag=tag,
+            limit_start=limit_start,
+            limit_page_length=limit_page_length,
         )
         if isinstance(payload, dict) and isinstance(payload.get("products"), list):
             return payload
@@ -139,8 +141,14 @@ def list_management_products_safe(search="", category="", active_only=0, branch=
         active_only=active_only,
         tag=tag,
     )
+    offset = max(_to_int(limit_start, 0), 0)
+    page_size = min(max(_to_int(limit_page_length, 80), 1), 200)
+    page_rows = rows[offset : offset + page_size]
     return {
-        "products": rows,
+        "products": page_rows,
         "currency": str((boot or {}).get("currency") or "IRR"),
         "fallback": 1,
+        "limit_start": offset,
+        "limit_page_length": page_size,
+        "has_more": len(rows) > offset + page_size,
     }

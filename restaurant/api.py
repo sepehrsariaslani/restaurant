@@ -19190,13 +19190,15 @@ def update_management_bom_cost(payload=None):
 
 
 @frappe.whitelist()
-def list_management_products(search=None, category=None, active_only=0, branch=None, tag=None):
+def list_management_products(search=None, category=None, active_only=0, branch=None, tag=None, limit_start=0, limit_page_length=80):
 	_ensure_management_access()
 	branch = (branch or "").strip()
 	search = (search or "").strip()
 	category = (category or "").strip()
 	tag = (tag or "").strip()
 	active_only = cint(active_only)
+	offset = max(cint(limit_start), 0)
+	page_size = min(max(cint(limit_page_length) or 80, 1), 200)
 
 	image_field = _core_item_image_field()
 	category_meta_map = _get_core_category_meta_map()
@@ -19304,8 +19306,11 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		fields=item_fields,
 		order_by="modified desc",
 		ignore_permissions=True,
-		limit=500,
+		limit_start=offset,
+		limit_page_length=page_size + 1,
 	)
+	has_more = len(template_rows) > page_size
+	template_rows = template_rows[:page_size]
 
 	rows = []
 	for template_row in template_rows:
@@ -19349,6 +19354,9 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		)
 	return {
 		"products": payload,
+		"limit_start": offset,
+		"limit_page_length": page_size,
+		"has_more": has_more,
 		"stock": {
 			"low_threshold": max(
 				cint(_get_single_setting("Restaurant Web Settings", "restaurant_low_stock_threshold", 5)), 1
