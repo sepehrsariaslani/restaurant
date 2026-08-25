@@ -138,7 +138,7 @@
         <ManagementEditableTable
           v-model="groupForm.options"
           title="گزینه‌های گروه"
-          subtitle="قیمت فروش هر گزینه از Item Price آیتم لینک‌شده خوانده می‌شود."
+          subtitle="آیتم اختیاری است و برای مصرف یا تولید استفاده می‌شود."
           tone="accent"
           add-button-label="افزودن گزینه"
           popup-title-add="افزودن گزینه Modifier"
@@ -159,13 +159,6 @@
 
           <template #cell-action_type="{ value }">
             {{ value === 'bom_variant' ? 'BOM جایگزین' : 'افزودنی' }}
-          </template>
-
-          <template #cell-price_delta="{ row }">
-            <div class="price-cell">
-              <strong>{{ formatMoney(row.base_price || row.price_delta || 0) }}</strong>
-              <small>{{ priceMetaLabel(row) }}</small>
-            </div>
           </template>
 
           <template #cell-price_status="{ row }">
@@ -195,7 +188,7 @@
               </label>
 
               <label class="field" v-if="draft.action_type === 'add_on'">
-                <span>آیتم قیمت‌گذاری</span>
+                <span>آیتم مصرف/تولید</span>
                 <SearchableDropdown
                   v-model="draft.option_item"
                   :options="context.item_options || []"
@@ -204,7 +197,7 @@
                   no-results-text="آیتمی پیدا نشد"
                   clearable
                 />
-                <small class="field-note">قیمت فروش این گزینه از همین آیتم و Price List پیش‌فرض خوانده می‌شود.</small>
+                <small class="field-note">اگر خالی بماند، سیستم موقع ذخیره یک آیتم خدماتی با نام گزینه می‌سازد.</small>
               </label>
 
               <label class="field" v-else>
@@ -257,31 +250,6 @@
               </label>
             </div>
 
-            <div class="price-editor" v-if="draft.action_type === 'add_on'">
-              <div class="price-editor__meta">
-                <strong>قیمت فروش از Price List پیش‌فرض</strong>
-                <small>{{ priceEditorSummary(draft) }}</small>
-              </div>
-              <div class="price-editor__stats">
-                <article>
-                  <small>واحد انبار</small>
-                  <strong>{{ draft.stock_uom || '—' }}</strong>
-                </article>
-                <article>
-                  <small>نرخ واحد</small>
-                  <strong>{{ draft.unit_rate ? formatMoney(draft.unit_rate) : '—' }}</strong>
-                </article>
-                <article>
-                  <small>قیمت پایه</small>
-                  <strong>{{ draft.base_price ? formatMoney(draft.base_price) : '—' }}</strong>
-                </article>
-                <article>
-                  <small>قیمت در سقف</small>
-                  <strong>{{ maxPreviewPrice(draft) ? formatMoney(maxPreviewPrice(draft)) : '—' }}</strong>
-                </article>
-              </div>
-            </div>
-
             <div class="toggle-grid">
               <ManagementToggleSwitch
                 v-model="draft.is_default"
@@ -315,7 +283,6 @@ import {
   listManagementModifierGroupsOverview,
   saveManagementModifierGroup,
 } from '@/utils/api'
-import { formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -339,7 +306,6 @@ const groupForm = reactive(createEmptyGroupDraft())
 const optionColumns = [
   { key: 'option_name', label: 'گزینه' },
   { key: 'action_type', label: 'نوع' },
-  { key: 'price_delta', label: 'قیمت فروش' },
   { key: 'price_status', label: 'وضعیت قیمت' },
 ]
 
@@ -439,9 +405,6 @@ function validateOptionDraft(row = {}) {
   if (!String(row?.option_name || '').trim()) {
     return 'نام گزینه الزامی است.'
   }
-  if (String(row?.action_type || 'add_on') === 'add_on' && !String(row?.option_item || '').trim()) {
-    return 'برای گزینه افزودنی باید آیتم انتخاب شود.'
-  }
   if (String(row?.action_type || '') === 'bom_variant' && !String(row?.alternative_bom || '').trim()) {
     return 'برای BOM Variant باید BOM جایگزین انتخاب شود.'
   }
@@ -474,29 +437,6 @@ function priceStatusClass(status = '') {
   if (normalized === 'missing_price' || normalized === 'missing_item' || normalized === 'missing_conversion') return 'danger'
   if (normalized === 'inactive') return 'muted'
   return 'ok'
-}
-
-function priceMetaLabel(row = {}) {
-  const qty = Number(row?.option_qty || row?.base_qty || 0)
-  const uom = String(row?.option_uom || row?.stock_uom || '').trim()
-  const qtyText = qty > 0 ? `${qty.toLocaleString('fa-IR')} ${uom}`.trim() : 'بدون مقدار'
-  return `${qtyText} • ${row?.price_list || context.default_price_list || 'بدون price list'}`
-}
-
-function maxPreviewPrice(row = {}) {
-  const unitRate = Number(row?.unit_rate || 0)
-  const maxQty = Number(row?.max_qty || 0)
-  const conversionFactor = Number(row?.conversion_factor || 1)
-  if (!(unitRate > 0 && maxQty > 0 && conversionFactor > 0)) {
-    return 0
-  }
-  return unitRate * maxQty * conversionFactor
-}
-
-function priceEditorSummary(row = {}) {
-  const status = priceStatusLabel(row?.price_status)
-  const reason = String(row?.unavailable_reason || '').trim()
-  return reason ? `${status} - ${reason}` : status
 }
 
 async function loadContext() {

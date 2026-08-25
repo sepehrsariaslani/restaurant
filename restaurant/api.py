@@ -17499,6 +17499,49 @@ def _normalize_management_modifier_group_option(row=None, idx=0):
 	}
 
 
+def _ensure_modifier_option_item(option_name):
+	option_name = (option_name or "").strip()
+	if not option_name:
+		return ""
+	existing = frappe.db.get_value("Item", {"item_name": option_name}, "name") or (
+		option_name if frappe.db.exists("Item", option_name) else ""
+	)
+	if existing:
+		return existing
+
+	item = frappe.new_doc("Item")
+	item.item_code = option_name
+	item.item_name = option_name
+	item.item_group = (
+		"خدمات"
+		if frappe.db.exists("Item Group", "خدمات")
+		else ("Services" if frappe.db.exists("Item Group", "Services") else frappe.db.get_value("Item Group", {"is_group": 0}, "name"))
+	)
+	item.stock_uom = _default_uom()
+	item.is_stock_item = 0
+	item.include_item_in_manufacturing = 0
+	item.insert(ignore_permissions=True)
+	return item.name
+
+
+def _ensure_modifier_option_zero_price(item_code, option_uom=None, price_list=None):
+	item_code = (item_code or "").strip()
+	price_list = (price_list or _default_selling_price_list() or "").strip()
+	if not item_code or not price_list or not frappe.db.exists("DocType", "Item Price"):
+		return
+	filters = {"item_code": item_code, "price_list": price_list, "selling": 1}
+	if frappe.db.exists("Item Price", filters):
+		return
+
+	price_doc = frappe.new_doc("Item Price")
+	price_doc.item_code = item_code
+	price_doc.price_list = price_list
+	price_doc.selling = 1
+	price_doc.uom = (option_uom or frappe.db.get_value("Item", item_code, "stock_uom") or "").strip() or None
+	price_doc.price_list_rate = 0
+	price_doc.insert(ignore_permissions=True)
+
+
 def _serialize_management_modifier_group(group_doc, price_list=None):
 	if isinstance(group_doc, str):
 		group_doc = frappe.get_doc("Restaurant Modifier Group", group_doc)
@@ -18076,6 +18119,16 @@ def save_management_modifier_group(payload=None):
 	raw_options = parsed_payload.get("options") if isinstance(parsed_payload.get("options"), list) else []
 	normalized_options = []
 	for idx, row in enumerate(raw_options, start=1):
+		if (
+			(row.get("action_type") or row.get("modifier_type") or "add_on").strip() == "add_on"
+			and not (row.get("option_item") or "").strip()
+		):
+			row = dict(row)
+			option_item = _ensure_modifier_option_item(row.get("option_name") or row.get("name"))
+			row["option_item"] = option_item
+			if option_item and not (row.get("option_uom") or "").strip():
+				row["option_uom"] = frappe.db.get_value("Item", option_item, "stock_uom") or _default_uom()
+			_ensure_modifier_option_zero_price(option_item, option_uom=row.get("option_uom"))
 		normalized = _normalize_management_modifier_group_option(row, idx=idx)
 		if normalized:
 			normalized_options.append(normalized)
