@@ -597,6 +597,8 @@ const bulkBusy = ref(false)
 const bulkAction = ref('show_in_menu')
 const bulkResult = ref(null)
 const bulkError = ref('')
+let searchDebounceTimer = null
+let productsRequestSeq = 0
 
 const sortOptions = [
   { value: 'latest', label: 'جدیدترین' },
@@ -857,6 +859,7 @@ const bootFieldOptions = ref({
 const createForm = ref(createDefaultForm())
 const bulkPopupOpen = ref(false)
 async function loadProducts(append = false) {
+  const requestSeq = ++productsRequestSeq
   loading.value = true
   error.value = ''
   try {
@@ -867,6 +870,9 @@ async function loadProducts(append = false) {
       limit_start: append ? products.value.length : 0,
       limit_page_length: PRODUCT_PAGE_SIZE,
     })
+    if (requestSeq !== productsRequestSeq) {
+      return
+    }
     const nextProducts = applyVisibilityOverrides(payload.products || [])
     products.value = append ? [...products.value, ...nextProducts] : nextProducts
     hasMoreProducts.value = Boolean(payload.has_more)
@@ -888,9 +894,14 @@ async function loadProducts(append = false) {
       await loadFieldOptionsForCreate()
     }
   } catch (errObj) {
+    if (requestSeq !== productsRequestSeq) {
+      return
+    }
     error.value = errObj.message || '❌ متأسفانه بارگذاری لیست محصولات ناموفق بود. لطفاً اتصال اینترنت خود را بررسی کنید.'
   } finally {
-    loading.value = false
+    if (requestSeq === productsRequestSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -1676,6 +1687,16 @@ watch(
 )
 
 watch(
+  () => search.value,
+  () => {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer)
+    }
+    searchDebounceTimer = setTimeout(() => loadProducts(), 300)
+  },
+)
+
+watch(
   () => createForm.value.restaurant_category,
   () => {
     const current = String(createForm.value.restaurant_subcategory || '').trim()
@@ -1734,6 +1755,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', syncViewportMode)
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
 })
 
 loadMenuCategories()

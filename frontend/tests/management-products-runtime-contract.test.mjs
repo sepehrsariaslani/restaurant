@@ -27,3 +27,10 @@ test('management products page requests products in bounded pages', () => {
   assert.match(safeApiSource, /limit_page_length\s*=\s*80/, 'safe API wrapper should default to a bounded page size')
   assert.match(safeApiSource, /limit_start/, 'safe API wrapper should pass offset to the server')
 })
+
+test('management products page refreshes server search after typing', () => {
+  assert.match(source, /let\s+searchDebounceTimer\s*=\s*null/, 'search debounce timer should be tracked')
+  assert.match(source, /watch\(\s*\(\)\s*=>\s*search\.value/, 'search input should be watched')
+  assert.match(source, /setTimeout\(\s*\(\)\s*=>\s*loadProducts\(\)/, 'typing should trigger a fresh server query')
+  assert.match(source, /clearTimeout\(searchDebounceTimer\)/, 'pending search refresh should be cancelled before scheduling another one')
+})
