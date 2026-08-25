@@ -3386,6 +3386,23 @@ def _resolve_modifier_option_pricing(option_row=None, price_list=None):
 		"base_qty_in_stock_uom": base_qty,
 	}
 
+	def _apply_modifier_price_fallback():
+		payload.update(
+			{
+				"price_status": "ok",
+				"price_source": "modifier_fallback",
+				"unit_rate": flt(legacy_price_delta / base_qty) if base_qty > 1e-8 else flt(legacy_price_delta),
+				"base_price": flt(legacy_price_delta),
+				"price_delta": flt(legacy_price_delta),
+				"resolved_price_delta": flt(legacy_price_delta),
+				"is_selectable": 1,
+				"disabled": 0,
+				"availability_status": "available",
+				"unavailable_reason": "",
+			}
+		)
+		return payload
+
 	if not is_active:
 		payload.update(
 			{
@@ -3482,32 +3499,11 @@ def _resolve_modifier_option_pricing(option_row=None, price_list=None):
 		payload["base_qty_in_stock_uom"] = flt(base_qty * payload["conversion_factor"])
 
 	if not default_price_list:
-		payload.update(
-			{
-				"price_status": "missing_price",
-				"is_selectable": 0,
-				"disabled": 1,
-				"availability_status": "missing_price",
-				"unavailable_reason": _("No default selling price list is configured."),
-			}
-		)
-		return payload
+		return _apply_modifier_price_fallback()
 
 	rate = _get_default_item_price_rate({"item_code": option_item_code}, price_list=default_price_list)
 	if rate in (None, ""):
-		payload.update(
-			{
-				"price_status": "missing_price",
-				"is_selectable": 0,
-				"disabled": 1,
-				"availability_status": "missing_price",
-				"unavailable_reason": _("No Item Price found for {0} in {1}.").format(
-					option_item_code,
-					default_price_list,
-				),
-			}
-		)
-		return payload
+		return _apply_modifier_price_fallback()
 
 	payload["unit_rate"] = flt(rate)
 	payload["base_price"] = flt(payload["unit_rate"] * flt(payload.get("base_qty_in_stock_uom") or 0))

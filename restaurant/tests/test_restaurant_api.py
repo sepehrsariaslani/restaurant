@@ -1162,6 +1162,28 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertEqual(option.get("price_item_code"), self.modifier_item_code)
         self.assertEqual(option.get("price_list"), price_list.name)
 
+    def test_get_item_detail_uses_modifier_price_delta_when_option_item_has_no_item_price(self):
+        suffix = frappe.generate_hash(length=6).lower()
+        price_list = self._ensure_test_price_list(suffix)
+        original = self._update_primary_modifier_option(price_delta=500000)
+        try:
+            payload = get_item_detail(self.item_slug)
+            group = next(
+                (row for row in payload.get("modifier_groups", []) if row.get("title") == self.modifier_group_title),
+                None,
+            )
+            self.assertIsNotNone(group)
+            option = next((row for row in group.get("options", []) if row.get("name") == self.modifier_item_code), None)
+            self.assertIsNotNone(option)
+            self.assertEqual(option.get("price_delta"), 500000)
+            self.assertEqual(option.get("resolved_price_delta"), 500000)
+            self.assertEqual(option.get("price_status"), "ok")
+            self.assertEqual(option.get("price_source"), "modifier_fallback")
+            self.assertEqual(option.get("price_item_code"), self.modifier_item_code)
+            self.assertEqual(option.get("price_list"), price_list.name)
+        finally:
+            self._restore_primary_modifier_option(original)
+
     def test_get_item_detail_resolves_weighted_modifier_base_price_from_default_item_price(self):
         suffix = frappe.generate_hash(length=6).lower()
         price_list = self._ensure_test_price_list(suffix)
