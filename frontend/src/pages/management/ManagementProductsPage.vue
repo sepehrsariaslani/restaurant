@@ -530,6 +530,7 @@ import {
   getManagementProductDetail,
   getMenuBoot,
   importManagementProductsExcel,
+  listManagementPriceLists,
   listManagementProducts,
   setManagementProductActive,
   setManagementProductCalendarDate,
@@ -540,6 +541,9 @@ import {
 import { formatMoney } from '@/utils/format'
 import { jalaliToGregorian } from '@/utils/jalali'
 import { Folder, Package, Plus, Search, X } from 'lucide-vue-next'
+
+const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'management-products-visibility-overrides'
+const MOBILE_BREAKPOINT = 820
 
 const loading = ref(false)
 const error = ref('')
@@ -570,6 +574,40 @@ const collapseGroupsByDefault = ref(readStoredGroupCollapseMode())
 const collapsedGroupKeys = ref([])
 const treeGroupBy = ref(readStoredTreeGroupBy())
 const kanbanGroupBy = ref(readStoredKanbanGroupBy())
+const isMobileView = ref(getInitialMobileView())
+const excelFileInput = ref(null)
+const excelBusy = ref(false)
+const excelMode = ref('')
+const excelSummary = ref(null)
+const excelSummaryOpen = ref(false)
+const bulkBusy = ref(false)
+const bulkAction = ref('show_in_menu')
+const bulkResult = ref(null)
+const bulkError = ref('')
+
+const sortOptions = [
+  { value: 'latest', label: 'جدیدترین' },
+  { value: 'name', label: 'نام کالا' },
+  { value: 'price_desc', label: 'گران‌ترین' },
+  { value: 'price_asc', label: 'ارزان‌ترین' },
+  { value: 'stock_desc', label: 'بیشترین موجودی' },
+  { value: 'stock_asc', label: 'کمترین موجودی' },
+]
+
+const bulkActionOptions = [
+  { value: 'show_in_menu', title: 'نمایش در منو', desc: 'کالاهای انتخاب‌شده فعال می‌شوند.' },
+  { value: 'hide_from_menu', title: 'پنهان از منو', desc: 'کالاهای انتخاب‌شده از نمایش خارج می‌شوند.' },
+  { value: 'show_in_print', title: 'نمایش در چاپ', desc: 'در رسید و گزارش چاپی نمایش داده می‌شوند.' },
+  { value: 'hide_from_print', title: 'حذف از چاپ', desc: 'از چاپ‌های عملیاتی حذف می‌شوند.' },
+]
+
+const treeGroupOptions = PRODUCT_PROPERTIES
+  .filter((prop) => ['select', 'boolean', 'tags'].includes(prop.type))
+  .map((prop) => ({ value: prop.key, label: prop.label }))
+
+const kanbanGroupOptions = PRODUCT_PROPERTIES
+  .filter((prop) => ['select', 'boolean'].includes(prop.type))
+  .map((prop) => ({ value: prop.key, label: prop.label }))
 
 // ── سیستم View به سبک Notion ────────────────────────────────────────────────
 const viewSys = useViewSystem({ storageKey: 'mg-products-notion-views-v1' })
@@ -593,6 +631,107 @@ const VIEW_PROPERTY_ORDER = ['category_title', 'base_price', 'stock_qty', 'is_ac
 const currentViewPropertyOrder = computed(() => {
   const order = viewSys.currentView.value?.propertyOrder
   return order && order.length ? order : VIEW_PROPERTY_ORDER
+})
+
+const normalizedProductSearch = computed(() => normalizeSearchText(search.value))
+
+const visibleProducts = computed(() => {
+  const currentView = viewSys.currentView.value || {}
+  let rows = Array.isArray(products.value) ? [...products.value] : []
+
+  if (activeOnly.value) {
+    rows = rows.filter(isProductActive)
+  }
+  if (selectedTag.value) {
+    rows = rows.filter((row) => (Array.isArray(row?.tags) ? row.tags : []).includes(selectedTag.value))
+  }
+  if (selectedCategorySlugs.value.length) {
+    const selected = new Set(selectedCategorySlugs.value.map((value) => String(value || '').trim()).filter(Boolean))
+    rows = rows.filter((row) => {
+      const candidates = [row?.category, row?.category_slug, row?.category_title, row?.restaurant_category]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+      return candidates.some((value) => selected.has(value))
+    })
+  }
+  if (normalizedProductSearch.value) {
+    rows = rows.filter((row) => productMatchesSearch(row, normalizedProductSearch.value))
+  }
+
+  rows = applyViewFilters(rows, Array.isArray(currentView.filters) ? currentView.filters : [])
+  rows = applyViewSorts(rows, Array.isArray(currentView.sorts) ? currentView.sorts : [])
+
+  if (!currentView.sorts?.length) {
+    rows.sort((a, b) => compareProducts(a, b, sortBy.value))
+  }
+
+  return rows
+})
+
+const groupedProducts = computed(() => {
+  if (groupBy.value === 'none') {
+    return []
+  }
+  const groups = new Map()
+  for (const row of visibleProducts.value) {
+    const group = resolveGroupKey(row)
+    if (!groups.has(group.key)) {
+      groups.set(group.key, { ...group, rows: [] })
+    }
+    groups.get(group.key).rows.push(row)
+  }
+  return Array.from(groups.values())
+})
+
+const activeViewTitle = computed(() => viewSys.currentView.value?.name || 'محصولات')
+const activeViewSubtitle = computed(() => {
+  const count = formatNumber(visibleProducts.value.length)
+  const total = formatNumber(products.value.length)
+  if (viewGroupedRows.value) {
+    return `${count} کالا از ${total} کالا، گروه‌بندی‌شده بر اساس نما`
+  }
+  return `${count} کالا از ${total} کالا در نمایش فعلی`
+})
+
+const categoryOptions = computed(() => {
+  const options = buildSelectOptions(products.value, 'category_title')
+  return options.length ? options : normalizeOptionRows(bootFieldOptions.value.categories)
+})
+
+const createSubcategoryOptions = computed(() => {
+  const selectedCategory = String(createForm.value.restaurant_category || '').trim()
+  const rows = normalizeOptionRows(bootFieldOptions.value.subcategories)
+  if (!selectedCategory) {
+    return rows.length ? rows : buildSelectOptions(products.value, 'subcategory_title')
+  }
+  const filtered = rows.filter((row) => {
+    const category = String(row.category || row.parent_category || row.restaurant_category || '').trim()
+    return !category || category === selectedCategory
+  })
+  return filtered.length ? filtered : buildSelectOptions(
+    products.value.filter((row) => String(row?.category_title || row?.category || '').trim() === selectedCategory),
+    'subcategory_title',
+  )
+})
+
+const uomOptions = computed(() => normalizeOptionRows(bootFieldOptions.value.uoms))
+const itemGroupOptions = computed(() => normalizeOptionRows(bootFieldOptions.value.item_groups))
+
+const productTreeNodes = computed(() => {
+  const grouped = groupRows(visibleProducts.value, treeGroupBy.value || 'category_title', '')
+  return (grouped || []).map((group) => ({
+    key: `group-${group.key}`,
+    label: viewGroupLabel(group.label, treeGroupBy.value),
+    badge: 'دسته',
+    children: (group.rows || []).map((row) => ({
+      key: row.name,
+      name: row.name,
+      label: displayProductCode(row),
+      badge: 'محصول',
+      meta: formatMoney(row.base_price || 0, currency.value),
+      row,
+    })),
+  }))
 })
 
 function isPropVisible(key) {
@@ -1054,6 +1193,25 @@ function productMatchesSearch(row, normalizedQuery) {
     .filter(Boolean)
     .join(' ')
   return haystack.includes(normalizedQuery)
+}
+
+function compareProducts(a, b, mode = 'latest') {
+  const titleA = String(a?.title || a?.item_name || a?.item_code || a?.name || '')
+  const titleB = String(b?.title || b?.item_name || b?.item_code || b?.name || '')
+  if (mode === 'name') {
+    return titleA.localeCompare(titleB, 'fa')
+  }
+  if (mode === 'price_desc' || mode === 'price_asc') {
+    const diff = Number(a?.base_price || 0) - Number(b?.base_price || 0)
+    return mode === 'price_desc' ? -diff : diff
+  }
+  if (mode === 'stock_desc' || mode === 'stock_asc') {
+    const diff = Number(a?.stock_qty || 0) - Number(b?.stock_qty || 0)
+    return mode === 'stock_desc' ? -diff : diff
+  }
+  const modifiedA = new Date(a?.modified || a?.creation || 0).getTime() || 0
+  const modifiedB = new Date(b?.modified || b?.creation || 0).getTime() || 0
+  return modifiedB - modifiedA
 }
 
 function initials(value) {

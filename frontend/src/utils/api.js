@@ -973,9 +973,8 @@ async function getModifierGroupsContextFallback() {
 
 export async function getManagementSessionProfile() {
 	try {
-		const user =
-			String((await callMethodByPathGET("frappe.auth.get_logged_user")) || "").trim() ||
-			"Guest";
+		const roleData = await callRestaurantAPI("get_session_roles");
+		const user = String(roleData?.user || "").trim() || "Guest";
 		if (user === "Guest") {
 			return {
 				user: "Guest",
@@ -988,42 +987,14 @@ export async function getManagementSessionProfile() {
 			};
 		}
 
-		let fullName = "";
-		let userImage = "";
-		try {
-			const profile = await callMethodByPath("frappe.client.get_value", {
-				doctype: "User",
-				filters: { name: user },
-				fieldname: ["full_name", "user_image"],
-			});
-			fullName = String(profile?.full_name || "").trim();
-			userImage = String(profile?.user_image || "").trim();
-		} catch (profileError) {
-			fullName = "";
-			userImage = "";
-		}
-
-		// Fetch role/permission info from restaurant API
-		let isStaff = false;
-		let isAdmin = false;
-		let roles = [];
-		try {
-			const roleData = await callRestaurantAPI("get_session_roles");
-			isStaff = Boolean(roleData?.is_staff);
-			isAdmin = Boolean(roleData?.is_admin);
-			roles = Array.isArray(roleData?.roles) ? roleData.roles : [];
-		} catch (_) {
-			// Fallback: not staff if role check fails
-		}
-
 		return {
 			user,
-			full_name: fullName,
-			user_image: userImage,
+			full_name: String(roleData?.full_name || "").trim(),
+			user_image: String(roleData?.user_image || "").trim(),
 			is_guest: false,
-			is_staff: isStaff,
-			is_admin: isAdmin,
-			roles,
+			is_staff: Boolean(roleData?.is_staff),
+			is_admin: Boolean(roleData?.is_admin),
+			roles: Array.isArray(roleData?.roles) ? roleData.roles : [],
 		};
 	} catch (error) {
 		return {

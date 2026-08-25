@@ -24654,19 +24654,23 @@ def get_session_roles():
 	Return role information for the currently logged-in user.
 
 	Used by the frontend to gate BOM / formula visibility.
-	Response: { user, roles: [...], is_staff, is_admin }
+	Response: { user, full_name, user_image, roles: [...], is_staff, is_admin }
 	"""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Please login to access this resource."), frappe.PermissionError)
 
 	roles = sorted(_user_roles(user))
+	full_name = frappe.db.get_value("User", user, "full_name") or ""
+	user_image = frappe.db.get_value("User", user, "user_image") or ""
 
 	# Also check if user is linked to an Employee record
 	has_employee = bool(frappe.db.get_value("Employee", {"user_id": user}, "name"))
 
 	return {
 		"user": user,
+		"full_name": full_name,
+		"user_image": user_image,
 		"roles": roles,
 		"is_staff": _is_restaurant_staff(user) or has_employee,
 		"is_admin": _is_restaurant_admin(user),
