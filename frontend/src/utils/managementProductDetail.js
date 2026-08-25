@@ -138,7 +138,10 @@ export function hydrateProductSettingsForm(form, payload = {}, tagOptions = []) 
 	form.restaurant_auto_add_qty = Number(item.restaurant_auto_add_qty || 0);
 	form.restaurant_item_tag_table = Array.isArray(item.restaurant_item_tag_table)
 		? item.restaurant_item_tag_table
-		: [];
+		: splitTagTitles(item.restaurant_item_tags || item.tags).map((tag) => ({
+				tag,
+				_tag_title: tag,
+			}));
 
 	if (form.restaurant_item_tag_table.length) {
 		for (const link of form.restaurant_item_tag_table) {
@@ -217,6 +220,11 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 			tag: link.tag,
 			_tag_title: link._tag_title || "",
 		})),
+		restaurant_item_tags: (form.restaurant_item_tag_table || [])
+			.map((link) => link._tag_title || link.tag_title || link.tag || "")
+			.map((tag) => String(tag || "").trim())
+			.filter(Boolean)
+			.join(", "),
 		restaurant_nutrition_kcal: Number(form.restaurant_nutrition_kcal || 0),
 		restaurant_nutrition_protein_g: Number(form.restaurant_nutrition_protein_g || 0),
 		restaurant_nutrition_carb_g: Number(form.restaurant_nutrition_carb_g || 0),
@@ -257,10 +265,10 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 
 export function buildProductSettingsPayload({ itemName = "", form, builderConfig = null } = {}) {
 	const parsed = JSON.parse(serializeProductSettingsState(form, builderConfig));
-	const hasBuilderTemplate = Boolean(String(parsed.restaurant_builder_template || "").trim());
-	const hasProductBuilderConfig = Boolean(builderConfig);
+	const keepCustomizationEnabled = Number(parsed.restaurant_is_customizable || 0) === 1;
+	const hasProductBuilderConfig = Boolean(builderConfig && keepCustomizationEnabled);
 	const shouldKeepBuilderEnabled = Boolean(
-		parsed.restaurant_is_customizable || hasBuilderTemplate || hasProductBuilderConfig,
+		keepCustomizationEnabled || hasProductBuilderConfig,
 	);
 	const shouldForceBuilderFlow =
 		shouldKeepBuilderEnabled && Number(parsed.restaurant_builder_active || 0) === 1;
@@ -270,8 +278,8 @@ export function buildProductSettingsPayload({ itemName = "", form, builderConfig
 		...parsed,
 		restaurant_is_customizable: shouldKeepBuilderEnabled ? 1 : 0,
 		restaurant_builder_active: shouldKeepBuilderEnabled
-			? 1
-			: Number(parsed.restaurant_builder_active || 0),
+			? Number(parsed.restaurant_builder_active || 0)
+			: 0,
 		restaurant_allow_direct_add: shouldForceBuilderFlow
 			? 0
 			: Number(parsed.restaurant_allow_direct_add || 0),
@@ -290,6 +298,20 @@ export function clonePlainObject(value = null) {
 		}
 	}
 	return JSON.parse(JSON.stringify(value));
+}
+
+function splitTagTitles(rawValue) {
+	if (!rawValue) return [];
+	const rows = Array.isArray(rawValue) ? rawValue : String(rawValue).replace(/\n/g, ",").split(",");
+	return rows
+		.map((row) => {
+			if (row && typeof row === "object") {
+				return row._tag_title || row.tag_title || row.title || row.tag || "";
+			}
+			return row;
+		})
+		.map((tag) => String(tag || "").trim())
+		.filter(Boolean);
 }
 
 export function createEmptyBuilderStep(index) {

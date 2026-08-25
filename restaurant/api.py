@@ -329,6 +329,19 @@ def _get_item_tag_titles(item_name):
 	return titles
 
 
+def _serialize_item_tag_links(item_doc):
+	"""Return management tag rows from the optional child table or legacy tag text."""
+	item_name = ""
+	if hasattr(item_doc, "get"):
+		item_name = item_doc.get("name") or getattr(item_doc, "name", "") or ""
+	else:
+		item_name = getattr(item_doc, "name", "") or ""
+	titles = _get_item_tag_titles(item_name)
+	if not titles:
+		titles = _split_tags(_read_field(item_doc, "restaurant_item_tags"))
+	return [{"tag": title, "_tag_title": title} for title in titles if title]
+
+
 def _read_field(source, fieldname):
 	if not source:
 		return None
@@ -18597,6 +18610,7 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 				fallback_to_default=True,
 			),
 			"restaurant_item_tags": item_doc.get("restaurant_item_tags") or "",
+			"restaurant_item_tag_table": _serialize_item_tag_links(item_doc),
 			"restaurant_nutrition_kcal": flt(item_doc.get("restaurant_nutrition_kcal") or 0),
 			"restaurant_nutrition_protein_g": flt(item_doc.get("restaurant_nutrition_protein_g") or 0),
 			"restaurant_nutrition_carb_g": flt(item_doc.get("restaurant_nutrition_carb_g") or 0),
@@ -18681,6 +18695,7 @@ def update_management_product_settings(payload=None):
 		"restaurant_stock_consumption_mode",
 		"restaurant_restock_date",
 		"restaurant_out_of_stock_until",
+		"restaurant_item_tags",
 	}
 	int_fields = {
 		"disabled",
@@ -18795,24 +18810,32 @@ def update_management_product_settings(payload=None):
 
 	# Handle tag table (child table) only after its optional custom doctypes are installed.
 	tag_table_field = "restaurant_item_tag_table"
-	if (
-		tag_table_field in parsed_payload
-		and _item_tag_tables_ready()
-		and _has_column("Item", tag_table_field)
-	):
+	if tag_table_field in parsed_payload:
 		tag_links = parsed_payload.get(tag_table_field) or []
 		if isinstance(tag_links, list):
-			item_doc.set(tag_table_field, [])
-			for link in tag_links:
-				tag_name = link.get("tag") or link.get("_tag_title") or ""
-				if tag_name:
-					tag_docname = frappe.db.get_value("Restaurant Item Tag", {"title": tag_name}, "name")
-					if not tag_docname:
-						td = frappe.new_doc("Restaurant Item Tag")
-						td.title = tag_name
-						td.insert(ignore_permissions=True)
-						tag_docname = td.name
-					item_doc.append(tag_table_field, {"tag": tag_docname})
+			tag_titles = []
+			if _item_tag_tables_ready() and _has_column("Item", tag_table_field):
+				item_doc.set(tag_table_field, [])
+				for link in tag_links:
+					tag_name = (link.get("_tag_title") or link.get("tag_title") or link.get("tag") or "").strip()
+					if tag_name:
+						tag_docname = frappe.db.get_value("Restaurant Item Tag", {"title": tag_name}, "name")
+						if not tag_docname:
+							td = frappe.new_doc("Restaurant Item Tag")
+							td.title = tag_name
+							td.insert(ignore_permissions=True)
+							tag_docname = td.name
+						item_doc.append(tag_table_field, {"tag": tag_docname})
+						tag_titles.append(tag_name)
+			else:
+				tag_titles = [
+					(link.get("_tag_title") or link.get("tag_title") or link.get("tag") or "").strip()
+					for link in tag_links
+					if isinstance(link, dict)
+					and (link.get("_tag_title") or link.get("tag_title") or link.get("tag") or "").strip()
+				]
+			if _has_column("Item", "restaurant_item_tags"):
+				item_doc.set("restaurant_item_tags", ", ".join(tag_titles))
 			changed = True
 
 	builder_config_payload = parsed_payload.get("product_builder_config")
