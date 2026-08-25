@@ -45,3 +45,4 @@ restaurant.patches.v2_9.ensure_club_ops_custom_fields
 restaurant.patches.v2_10.ensure_commerce_custom_fields
 restaurant.patches.v2_11.ensure_loyalty_org_waiter_fields
 restaurant.patches.v2_12.ensure_pos_reliability_fields
+restaurant.patches.v2_13.link_modifier_options_to_items

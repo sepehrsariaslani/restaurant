@@ -539,10 +539,18 @@ function summarizeAlternativeAvailability(option) {
 }
 
 function increase(ingredient) {
+	if (!canEditQty(ingredient) && canQuickRemove(ingredient)) {
+		restore(ingredient);
+		return;
+	}
 	update(ingredient, getMultiplier(ingredient) + multiplierStep(ingredient));
 }
 
 function decrease(ingredient) {
+	if (!canEditQty(ingredient) && canQuickRemove(ingredient)) {
+		quickRemove(ingredient);
+		return;
+	}
 	update(ingredient, getMultiplier(ingredient) - multiplierStep(ingredient));
 }
 
@@ -709,14 +717,14 @@ function hasIngredientMeta(ingredient) {
 
 function isDecDisabled(ingredient) {
 	if (isLocked(ingredient)) {
-		return true;
+		return !canQuickRemove(ingredient) || getMultiplier(ingredient) <= 0;
 	}
 	return getMultiplier(ingredient) <= min(ingredient);
 }
 
 function isIncDisabled(ingredient) {
 	if (isLocked(ingredient)) {
-		return true;
+		return !canQuickRemove(ingredient) || getMultiplier(ingredient) >= 1;
 	}
 	return getMultiplier(ingredient) >= max(ingredient);
 }

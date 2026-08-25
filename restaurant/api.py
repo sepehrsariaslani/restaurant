@@ -4758,8 +4758,6 @@ def _get_core_item_detail(item_slug, branch=None, bom_name=None):
 		max_multiplier = flt(row.get("max_multiplier") or 3)
 		step_multiplier = flt(row.get("step_multiplier") or 0.5)
 		multiplier_qty = flt(row.get("multiplier_qty") or 0)
-		if multiplier_qty > 0 and base_qty > 0:
-			step_multiplier = multiplier_qty / base_qty
 		required = cint(row.get("is_required")) or (
 			cint(row.is_included_by_default) and not cint(row.can_remove)
 		)
@@ -5989,6 +5987,20 @@ def _build_ticket_components(menu_doc, bom_doc, line_calc, line_qty, recipe_mult
 		if source_type in ("modifier_add_on", "builder_component"):
 			modifier_bom_doc = _get_item_bom_doc(item_code)
 			if modifier_bom_doc and (modifier_bom_doc.items or []):
+				if _actual_stock_qty(item_code, source_warehouse) >= final_qty - 1e-8:
+					_append_component_row(
+						item_code,
+						final_qty,
+						source_type,
+						ingredient_data,
+						base_item_code=(ingredient_data.get("base_item_code") or "").strip(),
+						selected_alternative_item=(ingredient_data.get("selected_alternative_item") or "").strip(),
+						base_qty=base_qty,
+						selected_base_qty=base_qty,
+						selected_multiplier=selected_multiplier,
+						recipe_multiplier_value=recipe_multiplier,
+					)
+					continue
 				modifier_bom_qty = flt(modifier_bom_doc.quantity or 1)
 				if modifier_bom_qty <= 0:
 					modifier_bom_qty = 1
@@ -8880,6 +8892,39 @@ def _step_valid(value, minimum, step):
 	return abs(ratio - round(ratio)) < 1e-8
 
 
+def _effective_ingredient_step_multiplier(row, base_qty):
+	step_multiplier = flt(row.get("step_multiplier") or 0.5)
+	if step_multiplier <= 0:
+		step_multiplier = 0.5
+	multiplier_qty = flt(row.get("multiplier_qty") or 0)
+	base_qty = flt(base_qty)
+	if multiplier_qty > 0 and base_qty > 0:
+		return (multiplier_qty * step_multiplier) / base_qty
+	return step_multiplier
+
+
+def _actual_stock_qty(item_code, warehouse=None):
+	item_code = (item_code or "").strip()
+	if not item_code or not _item_consumes_stock(item_code) or not frappe.db.exists("DocType", "Bin"):
+		return 0.0
+
+	filters = {"item_code": item_code}
+	warehouse = (warehouse or "").strip()
+	if warehouse:
+		filters["warehouse"] = warehouse
+	return flt(
+		sum(
+			flt(row.get("actual_qty") or 0)
+			for row in frappe.get_all(
+				"Bin",
+				filters=filters,
+				fields=["actual_qty"],
+				ignore_permissions=True,
+			)
+		)
+	)
+
+
 def _valuation_rate_for_item(item_code):
 	if not item_code:
 		return 0.0
@@ -9437,10 +9482,8 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 
 		min_multiplier = flt(row.get("min_multiplier"))
 		max_multiplier = flt(row.get("max_multiplier") or 3)
-		step_multiplier = flt(row.get("step_multiplier") or 0.5)
+		step_multiplier = _effective_ingredient_step_multiplier(row, base_qty)
 		multiplier_qty = flt(row.get("multiplier_qty") or 0)
-		if multiplier_qty > 0 and base_qty > 0:
-			step_multiplier = multiplier_qty / base_qty
 		is_required = _ingredient_required(row)
 		can_remove = cint(row.get("can_remove"))
 		is_editable = cint(row.get("is_editable_qty"))
@@ -9453,10 +9496,12 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 			min_multiplier = 0
 		if max_multiplier < min_multiplier:
 			max_multiplier = min_multiplier
-		if step_multiplier <= 0:
-			step_multiplier = 0.5
-
-		if not is_editable and abs(selected_multiplier - base_multiplier) > 1e-8:
+		removal_selected = (
+			can_remove
+			and base_multiplier > 0
+			and selected_multiplier <= 1e-8
+		)
+		if not is_editable and abs(selected_multiplier - base_multiplier) > 1e-8 and not removal_selected:
 			frappe.throw(_("Ingredient quantity is locked and cannot be changed: {0}").format(label))
 
 		if selected_multiplier < min_multiplier - 1e-8 or selected_multiplier > max_multiplier + 1e-8:
@@ -9857,7 +9902,6 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 					for option in group.get("options", [])
 					if cint(option.get("is_default"))
 					and cint(option.get("is_selectable") if option.get("is_selectable") not in (None, "") else 1) == 1
-					and not (option.get("option_item") or "").strip()
 					and flt(option.get("unit_rate") or option.get("price_delta") or option.get("base_price") or 0) == 0
 				),
 				None,

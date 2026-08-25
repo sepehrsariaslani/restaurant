@@ -103,8 +103,14 @@ function ingredientMaxMultiplier(ingredient = {}) {
 }
 
 function ingredientStep(ingredient = {}) {
-  const step = Number(ingredient.step_multiplier ?? 0.5)
-  return step > 0 ? step : 0.5
+  const rawStep = Number(ingredient.step_multiplier ?? 0.5)
+  const step = rawStep > 0 ? rawStep : 0.5
+  const multiplierQty = Number(ingredient?.multiplier_qty ?? 0)
+  const baseQty = Number(ingredient?.base_qty || 0)
+  if (Number.isFinite(multiplierQty) && multiplierQty > 0 && Number.isFinite(baseQty) && baseQty > 0) {
+    return (multiplierQty * step) / baseQty
+  }
+  return step
 }
 
 function normalizeIngredientAdjustments(rawAdjustments, ingredients = []) {
@@ -254,10 +260,6 @@ export function getIngredientMultiplier(customization = {}, ingredient = {}) {
 
 export function ingredientQtyStep(ingredient = {}) {
   const multiplierStep = ingredientStep(ingredient)
-  const multiplierQty = Number(ingredient?.multiplier_qty ?? ingredient?.qty_step ?? 0)
-  if (Number.isFinite(multiplierQty) && multiplierQty > 0) {
-    return multiplierQty
-  }
   const baseQty = Number(ingredient?.base_qty || 0)
   if (Number.isFinite(baseQty) && baseQty > 0) {
     return baseQty * multiplierStep
