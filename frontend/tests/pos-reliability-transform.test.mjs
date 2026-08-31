@@ -93,6 +93,34 @@ test('keeps a visible manual sync action when queued orders exist', () => {
   assert.match(out, /همگام/)
 })
 
+test('uses cached POS context for invoices, history, recent orders, tables and waiters while offline', () => {
+  const contextFixture = `
+<script setup>
+const isOffline = ref(false)
+async function loadPOSBoot() {}
+async function loadOpenInvoices() {
+  const payload = await listManagementOrders({ source: 'web' })
+  openInvoices.value = payload?.orders || []
+}
+async function loadTodayTransactions() {
+  const payload = await listManagementOrders({ source: 'web' })
+  todayTransactions.value = payload?.orders || []
+}
+async function loadRecentOrders() {
+  const payload = await listManagementOrders({ source: 'web' })
+  recentOrders.value = payload?.orders || []
+}
+async function loadWaitersOnce() {
+  if (waiterOptions.value.length || waiterبارگذاری.value) return
+  const payload = await listManagementUsers({ search: '' })
+  waiterOptions.value = payload?.users || []
+}
+</script>`
+  const out = transformPosReliabilityPage(contextFixture)
+  assert.match(out, /isOffline\.value \? \{ orders: await getCachedPOSOrders\(\) \} : await listManagementOrders/g)
+  assert.match(out, /if \(isOffline\.value\) \{\s*waiterOptions\.value = await getCachedPOSWaiters\(\)/s)
+})
+
 const uiFixture = `
 <template>
 <section class="pos-theme">

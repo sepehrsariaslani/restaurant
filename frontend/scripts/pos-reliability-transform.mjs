@@ -149,6 +149,10 @@ async function syncPendingOfflineOrders() {
     'const orderPayload = await listManagementOrders({',
     'const orderPayload = isOffline.value ? { orders: await getCachedPOSOrders() } : await listManagementOrders({',
   )
+  code = code.replaceAll(
+    'const payload = await listManagementOrders({',
+    'const payload = isOffline.value ? { orders: await getCachedPOSOrders() } : await listManagementOrders({',
+  )
   code = code.replace(
     'const allOrders = orderPayload?.orders || []\n      setOpenInvoices(allOrders, true)',
     'const allOrders = orderPayload?.orders || []\n      if (!isOffline.value) void savePOSOfflineContext({ orders: allOrders })\n      setOpenInvoices(allOrders, true)',
