@@ -25,19 +25,20 @@ export function transformPosReliabilityPage(input) {
   if (!isManagementPos) return code
 
   const imports = `import { createOfflineOrderRecord, createPosOfflineStore } from '@/utils/posOfflineStore'
+import { createOfflineSyncEngine } from '@/utils/offlineSyncEngine'
 import { getReliablePOSBoot, replayOfflinePOSOrder, updatePOSProductAtomic } from '@/utils/posReliabilityApi'`
   code = injectBefore(code, "import { formatMoney", imports)
 
   const offlineState = "const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)"
   code = code.replace(
     offlineState,
-    `${offlineState}\nconst posOfflineStore = createPosOfflineStore()\nconst pendingOfflineOrderCount = ref(0)\nconst offlineSyncing = ref(false)`,
+    `${offlineState}\nconst posOfflineStore = createPosOfflineStore()\nconst pendingOfflineOrderCount = ref(0)\nconst needsAttentionOfflineOrderCount = ref(0)\nconst offlineSyncing = ref(false)`,
   )
 
   const offlineBanner = '<p class="offline-banner" v-if="isOffline">اینترنت قطع است.</p>'
   const syncPanel = `<div class="offline-banner" v-if="isOffline">اینترنت قطع است؛ اطلاعات ذخیره‌شده محلی در دسترس است.</div>
-    <div v-if="pendingOfflineOrderCount || syncReminder" class="sync-banner pos-sync-banner">
-      <span>{{ syncReminder || (pendingOfflineOrderCount + ' سفارش آفلاین در صف همگام‌سازی است.') }}</span>
+    <div v-if="pendingOfflineOrderCount || needsAttentionOfflineOrderCount || syncReminder" class="sync-banner pos-sync-banner" role="status" aria-live="polite">
+      <span>{{ syncReminder || (pendingOfflineOrderCount + ' سفارش آفلاین در صف همگام‌سازی است.' + (needsAttentionOfflineOrderCount ? (' ' + needsAttentionOfflineOrderCount + ' سفارش نیازمند بررسی است.') : '')) }}</span>
       <button
         v-if="pendingOfflineOrderCount"
         type="button"
@@ -55,8 +56,16 @@ import { getReliablePOSBoot, replayOfflinePOSOrder, updatePOSProductAtomic } fro
 
 async function refreshPendingOfflineOrderCount() {
   pendingOfflineOrderCount.value = await posOfflineStore.pendingOrderCount()
+  needsAttentionOfflineOrderCount.value = await posOfflineStore.needsAttentionOrderCount()
   return pendingOfflineOrderCount.value
 }
+
+const syncEngine = createOfflineSyncEngine({
+  store: posOfflineStore,
+  replayOrder: replayOfflinePOSOrder,
+  isOnline: () => !isOffline.value,
+  isBusinessError: (errorObj) => !isPOSNetworkError(errorObj),
+})
 
 async function loadReliablePOSBootPayload() {
   let networkError = null
@@ -82,29 +91,17 @@ async function loadReliablePOSBootPayload() {
 async function syncPendingOfflineOrders() {
   if (offlineSyncing.value || isOffline.value) return
   offlineSyncing.value = true
-  let syncedCount = 0
   try {
-    const pending = await posOfflineStore.listPendingOfflineOrders()
-    for (const record of pending) {
-      try {
-        await replayOfflinePOSOrder(record.payload)
-        await posOfflineStore.markOfflineOrderSynced(record.id)
-        syncedCount += 1
-      } catch (errorObj) {
-        if (isPOSNetworkError(errorObj)) {
-          syncReminder.value = 'ارتباط با سرور قطع شد؛ سفارش‌های باقی‌مانده در صف می‌مانند.'
-          break
-        }
-        await posOfflineStore.markOfflineOrderNeedsAttention(record.id, errorObj?.message || String(errorObj || ''))
-      }
-    }
+    const result = await syncEngine.syncPendingOrders()
     await refreshPendingOfflineOrderCount()
-    if (syncedCount) {
-      successMessage.value = \`\${syncedCount} سفارش آفلاین با سرور همگام شد.\`
+    if (result.synced) {
+      successMessage.value = \`\${result.synced} سفارش آفلاین با سرور همگام شد.\`
       if (!pendingOfflineOrderCount.value) syncReminder.value = ''
       void loadPOSBoot()
       void loadCustomers('')
     }
+    if (result.pending) syncReminder.value = 'ارتباط با سرور قطع شد؛ سفارش‌های باقی‌مانده در صف می‌مانند.'
+    if (result.needsAttention) syncReminder.value = \`\${result.needsAttention} سفارش نیازمند بررسی است.\`
   } finally {
     offlineSyncing.value = false
   }

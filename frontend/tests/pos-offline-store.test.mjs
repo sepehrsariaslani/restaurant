@@ -50,3 +50,10 @@ test('degrades safely when IndexedDB is unavailable', async () => {
   assert.equal(queued.payload.client_order_key, 'pos-safe')
   assert.equal(await store.savePosBootSnapshot('main', { items: [] }), false)
 })
+
+test('exposes non-destructive queue retry and review counters when storage is unavailable', async () => {
+  const store = createPosOfflineStore({ indexedDB: null, now: () => 123 })
+  assert.equal(await store.markOfflineOrderPending('pos-safe', 'network failed'), false)
+  assert.deepEqual(await store.listOfflineOrders(), [])
+  assert.equal(await store.needsAttentionOrderCount(), 0)
+})

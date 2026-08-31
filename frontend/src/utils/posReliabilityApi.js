@@ -1,7 +1,7 @@
 import { callMethodByPath } from './api'
 
 export function getReliablePOSBoot({ branch = '' } = {}) {
-  return callMethodByPath('restaurant.api_pos_background.get_management_pos_boot_safe', { branch })
+  return callMethodByPath('restaurant.api_pos_reliability.get_management_pos_boot_reliable', { branch })
 }
 
 export function listManagementProductsSafe({

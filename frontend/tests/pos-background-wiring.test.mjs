@@ -10,9 +10,9 @@ test('vite wires background POS and expiry-aware product transforms after reliab
   assert.match(vite, /transformPosProductPanelAvailability\(transformPosProductPanel\(code\)\)/)
 })
 
-test('reliable boot client uses fail-safe boot endpoint and exposes background job APIs', () => {
+test('reliable boot client uses the POS reliability endpoint and exposes background job APIs', () => {
   const api = fs.readFileSync(new URL('../src/utils/posReliabilityApi.js', import.meta.url), 'utf8')
-  assert.match(api, /api_pos_background\.get_management_pos_boot_safe/)
+  assert.match(api, /api_pos_reliability\.get_management_pos_boot_reliable/)
   assert.match(api, /enqueuePOSBackgroundCheckout/)
   assert.match(api, /enqueuePOSBackgroundSettlement/)
   assert.match(api, /getPOSBackgroundOperation/)

@@ -217,8 +217,41 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
     }, [])
   }
 
+  async function listOfflineOrders() {
+    return withStore(ORDER_QUEUE_STORE, 'readonly', async (store) => {
+      const rows = await requestResult(store.getAll())
+      return (Array.isArray(rows) ? rows : [])
+        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+    }, [])
+  }
+
   async function pendingOrderCount() {
     return (await listPendingOfflineOrders()).length
+  }
+
+  async function needsAttentionOrderCount() {
+    return (await listOfflineOrders()).filter((row) => row?.status === 'needs_attention').length
+  }
+
+  async function updateQueueRecord(id, update) {
+    const key = String(id || '').trim()
+    if (!key) return false
+    return withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
+      const row = await requestResult(store.get(key))
+      if (!row) return false
+      store.put(update(row))
+      return true
+    }, false)
+  }
+
+  async function markOfflineOrderPending(id, error = '') {
+    return updateQueueRecord(id, (row) => ({
+      ...row,
+      status: 'pending',
+      retry_count: Number(row.retry_count || 0) + 1,
+      last_error: String(error || '').trim(),
+      updated_at: Number(now()) || Date.now(),
+    }))
   }
 
   async function markOfflineOrderSynced(id) {
@@ -231,20 +264,13 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function markOfflineOrderNeedsAttention(id, error = '') {
-    const key = String(id || '').trim()
-    if (!key) return false
-    return withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
-      const row = await requestResult(store.get(key))
-      if (!row) return false
-      store.put({
+    return updateQueueRecord(id, (row) => ({
         ...row,
         status: 'needs_attention',
         retry_count: Number(row.retry_count || 0) + 1,
         last_error: String(error || '').trim(),
         updated_at: Number(now()) || Date.now(),
-      })
-      return true
-    }, false)
+      }))
   }
 
   return {
@@ -254,9 +280,12 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
     mergeCustomerCache,
     searchCachedCustomers,
     enqueueOfflineOrder,
+    listOfflineOrders,
     listPendingOfflineOrders,
     markOfflineOrderSynced,
+    markOfflineOrderPending,
     markOfflineOrderNeedsAttention,
     pendingOrderCount,
+    needsAttentionOrderCount,
   }
 }
