@@ -67,6 +67,36 @@ const syncEngine = createOfflineSyncEngine({
   isBusinessError: (errorObj) => !isPOSNetworkError(errorObj),
 })
 
+async function readPOSOfflineContext() {
+  const snapshot = await posOfflineStore.loadPosBootSnapshot('pos_context')
+  return snapshot?.payload && typeof snapshot.payload === 'object' ? snapshot.payload : {}
+}
+
+async function savePOSOfflineContext(patch = {}) {
+  const current = await readPOSOfflineContext()
+  return posOfflineStore.savePosBootSnapshot('pos_context', { ...current, ...patch })
+}
+
+async function getCachedPOSOrders() {
+  const context = await readPOSOfflineContext()
+  return Array.isArray(context.orders) ? context.orders : []
+}
+
+async function getCachedPOSTables() {
+  const context = await readPOSOfflineContext()
+  return Array.isArray(context.tables) ? context.tables : []
+}
+
+async function getCachedPOSWaiters() {
+  const context = await readPOSOfflineContext()
+  return Array.isArray(context.waiters) ? context.waiters : []
+}
+
+async function getCachedPOSHardware() {
+  const context = await readPOSOfflineContext()
+  return context.hardware && typeof context.hardware === 'object' ? context.hardware : null
+}
+
 async function loadReliablePOSBootPayload() {
   let networkError = null
   if (!isOffline.value) {
@@ -113,6 +143,39 @@ async function syncPendingOfflineOrders() {
   code = code.replace(
     "async function loadCustomers(search = '') {\n  try {",
     "async function loadCustomers(search = '') {\n  const cachedCustomers = await posOfflineStore.searchCachedCustomers(search, 50)\n  if (cachedCustomers.length || isOffline.value) customerOptions.value = cachedCustomers\n  if (isOffline.value) return\n  try {",
+  )
+
+  code = code.replace(
+    'const orderPayload = await listManagementOrders({',
+    'const orderPayload = isOffline.value ? { orders: await getCachedPOSOrders() } : await listManagementOrders({',
+  )
+  code = code.replace(
+    'const allOrders = orderPayload?.orders || []\n      setOpenInvoices(allOrders, true)',
+    'const allOrders = orderPayload?.orders || []\n      if (!isOffline.value) void savePOSOfflineContext({ orders: allOrders })\n      setOpenInvoices(allOrders, true)',
+  )
+  code = code.replace(
+    'const tablePayload = await getTableOverview()',
+    'const tablePayload = isOffline.value ? { tables: await getCachedPOSTables() } : await getTableOverview()',
+  )
+  code = code.replace(
+    'tableOptions.value = buildDineInTableOptions(tablePayload?.tables || [])',
+    'tableOptions.value = buildDineInTableOptions(tablePayload?.tables || [])\n      if (!isOffline.value) void savePOSOfflineContext({ tables: tablePayload?.tables || [] })',
+  )
+  code = code.replace(
+    'async function loadWaitersOnce() {\n  if (waiterOptions.value.length || waiterبارگذاری.value) return',
+    "async function loadWaitersOnce() {\n  if (waiterOptions.value.length || waiterبارگذاری.value) return\n  if (isOffline.value) {\n    waiterOptions.value = await getCachedPOSWaiters()\n    return\n  }",
+  )
+  code = code.replace(
+    "      }))\n  } catch (errObj) {\n    waiterOptions.value = []",
+    "      }))\n    void savePOSOfflineContext({ waiters: waiterOptions.value })\n  } catch (errObj) {\n    waiterOptions.value = []",
+  )
+  code = code.replace(
+    'async function refreshHardwareStatus() {\n  hardwareبارگذاری.value = true',
+    "async function refreshHardwareStatus() {\n  if (isOffline.value) {\n    const cached = await getCachedPOSHardware()\n    if (cached) Object.assign(hardwareStatus, cached)\n    return\n  }\n  hardwareبارگذاری.value = true",
+  )
+  code = code.replace(
+    "    hardwareStatus.latency_ms = Number(payload.latency_ms || 0)",
+    "    hardwareStatus.latency_ms = Number(payload.latency_ms || 0)\n    void savePOSOfflineContext({ hardware: { ...hardwareStatus } })",
   )
   code = code.replace(
     '    if (search) {\n      // Merge results preserving existing',

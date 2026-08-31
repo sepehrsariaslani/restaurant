@@ -79,6 +79,10 @@ test('injects offline boot/customer cache and idempotent order queue integration
   assert.match(out, /پرداخت یا تسویه نیاز به اتصال اینترنت دارد/)
   assert.match(out, /queued\.persisted/)
   assert.match(out, /syncEngine\.syncPendingOrders\(\)/)
+  assert.match(out, /savePOSOfflineContext/)
+  assert.match(out, /getCachedPOSOrders/)
+  assert.match(out, /getCachedPOSTables/)
+  assert.match(out, /getCachedPOSWaiters/)
 })
 
 test('keeps a visible manual sync action when queued orders exist', () => {

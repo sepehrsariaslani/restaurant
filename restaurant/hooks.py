@@ -118,6 +118,7 @@ website_route_rules = [
 	{"from_route": "/management", "to_route": "management"},
 	{"from_route": "/management/login", "to_route": "management/login"},
 	{"from_route": "/management/dashboard", "to_route": "management"},
+	{"from_route": "/management/sales", "to_route": "management/sales"},
 	{"from_route": "/management/pos", "to_route": "management/pos"},
 	{"from_route": "/management/pos-profile", "to_route": "management/pos_profile"},
 	{"from_route": "/management/pos_profile", "to_route": "management/pos_profile"},
