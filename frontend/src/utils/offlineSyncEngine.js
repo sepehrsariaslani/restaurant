@@ -11,6 +11,7 @@ function defaultBusinessError(error) {
 export function createOfflineSyncEngine({
   store,
   replayOrder,
+  replayMutation,
   isOnline = () => true,
   isBusinessError = defaultBusinessError,
 } = {}) {
@@ -56,6 +57,54 @@ export function createOfflineSyncEngine({
     return result
   }
 
+  async function runMutationsSequentially() {
+    const result = { synced: 0, pending: 0, needsAttention: 0, skipped: false }
+    if (!isOnline() || !store || typeof replayMutation !== 'function') {
+      result.skipped = true
+      return result
+    }
+
+    const records = await store.listPendingOfflineMutations()
+    const ordered = [...(Array.isArray(records) ? records : [])]
+      .sort((left, right) => Number(left?.created_at || 0) - Number(right?.created_at || 0))
+
+    for (const record of ordered) {
+      if (!isOnline()) {
+        result.skipped = true
+        break
+      }
+      const id = String(record?.id || '').trim()
+      if (!id) continue
+      try {
+        const response = await replayMutation({
+          ...(record.payload || {}),
+          client_mutation_key: id,
+          type: record.type,
+        })
+        const status = String(response?.status || '').toLowerCase()
+        if (status === 'created' || status === 'existing') {
+          await store.markOfflineMutationSynced(id)
+          result.synced += 1
+        } else if (status === 'needs_attention') {
+          await store.markOfflineMutationNeedsAttention(id, response?.message || 'نیازمند بررسی')
+          result.needsAttention += 1
+        } else {
+          throw { status: 422, message: response?.message || 'پاسخ نامعتبر از سرور' }
+        }
+      } catch (error) {
+        const message = errorMessage(error)
+        if (isBusinessError(error)) {
+          await store.markOfflineMutationNeedsAttention(id, message)
+          result.needsAttention += 1
+        } else {
+          await store.markOfflineMutationPending(id, message)
+          result.pending += 1
+        }
+      }
+    }
+    return result
+  }
+
   function syncPendingOrders() {
     if (!inFlight) {
       inFlight = runSequentially().finally(() => { inFlight = null })
@@ -63,5 +112,15 @@ export function createOfflineSyncEngine({
     return inFlight
   }
 
-  return { syncPendingOrders, isSyncing: () => Boolean(inFlight) }
+  function syncPendingMutations() {
+    if (!inFlight) {
+      inFlight = (async () => {
+        await runSequentially()
+        return runMutationsSequentially()
+      })().finally(() => { inFlight = null })
+    }
+    return inFlight
+  }
+
+  return { syncPendingOrders, syncPendingMutations, isSyncing: () => Boolean(inFlight) }
 }

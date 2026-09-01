@@ -93,3 +93,62 @@ test('shares one in-flight run so reconnect events cannot replay a queue twice',
   await Promise.all([first, second])
   assert.equal(calls, 1)
 })
+
+test('replays mutations in FIFO order only after offline orders are accepted', async () => {
+  const store = createStore([{ id: 'order-1', created_at: 1 }])
+  const mutationRows = [
+    { id: 'mutation-later', type: 'table_move', payload: {}, created_at: 3, status: 'pending' },
+    { id: 'mutation-first', type: 'table_add_items', payload: {}, created_at: 2, status: 'pending' },
+  ]
+  const mutationSynced = []
+  store.listPendingOfflineMutations = async () => mutationRows.filter((row) => row.status === 'pending')
+  store.markOfflineMutationSynced = async (id) => {
+    mutationSynced.push(id)
+    mutationRows.find((row) => row.id === id).status = 'synced'
+  }
+  store.markOfflineMutationPending = async () => {}
+  store.markOfflineMutationNeedsAttention = async () => {}
+  const calls = []
+  const engine = createOfflineSyncEngine({
+    store,
+    replayOrder: async () => {
+      calls.push('order')
+      return { status: 'created' }
+    },
+    replayMutation: async (payload) => {
+      calls.push(payload.client_mutation_key)
+      return { status: 'created' }
+    },
+  })
+
+  assert.deepEqual(await engine.syncPendingMutations(), {
+    synced: 2,
+    pending: 0,
+    needsAttention: 0,
+    skipped: false,
+  })
+  assert.deepEqual(calls, ['order', 'mutation-first', 'mutation-later'])
+  assert.deepEqual(mutationSynced, ['mutation-first', 'mutation-later'])
+})
+
+test('sends a conflicting mutation to review without dropping it', async () => {
+  const store = createStore([])
+  const reviewed = []
+  store.listPendingOfflineMutations = async () => [{ id: 'mutation-conflict', type: 'table_move', payload: {}, created_at: 1 }]
+  store.markOfflineMutationSynced = async () => {}
+  store.markOfflineMutationPending = async () => {}
+  store.markOfflineMutationNeedsAttention = async (id, error) => reviewed.push({ id, error })
+  const engine = createOfflineSyncEngine({
+    store,
+    replayOrder: async () => ({ status: 'created' }),
+    replayMutation: async () => ({ status: 'needs_attention', message: 'payment requires review' }),
+  })
+
+  assert.deepEqual(await engine.syncPendingMutations(), {
+    synced: 0,
+    pending: 0,
+    needsAttention: 1,
+    skipped: false,
+  })
+  assert.deepEqual(reviewed, [{ id: 'mutation-conflict', error: 'payment requires review' }])
+})

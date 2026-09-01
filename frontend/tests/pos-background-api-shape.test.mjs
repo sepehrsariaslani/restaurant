@@ -13,3 +13,9 @@ test('POS boot uses the reliability endpoint that includes offline replay suppor
   const api = fs.readFileSync(new URL('../src/utils/posReliabilityApi.js', import.meta.url), 'utf8')
   assert.match(api, /getReliablePOSBoot[\s\S]*restaurant\.api_pos_reliability\.get_management_pos_boot_reliable/)
 })
+
+test('offline POS mutation API uses the idempotent replay endpoint', () => {
+  const api = fs.readFileSync(new URL('../src/utils/posReliabilityApi.js', import.meta.url), 'utf8')
+  assert.match(api, /export function replayOfflinePOSMutation\(payload = \{\}\)/)
+  assert.match(api, /restaurant\.api_pos_reliability\.replay_offline_pos_mutation/)
+})

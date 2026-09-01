@@ -28,6 +28,10 @@ export function replayOfflinePOSOrder(payload = {}) {
   return callMethodByPath('restaurant.api_pos_reliability.replay_offline_pos_order', { payload })
 }
 
+export function replayOfflinePOSMutation(payload = {}) {
+  return callMethodByPath('restaurant.api_pos_reliability.replay_offline_pos_mutation', { payload })
+}
+
 export function updatePOSProductAtomic(payload = {}) {
   return callMethodByPath('restaurant.api_pos_reliability.update_pos_product_atomic', { payload })
 }
