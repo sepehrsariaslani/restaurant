@@ -73,6 +73,22 @@ async function enqueuePOSOfflineMutation(type, payload, message = 'عملیات 
   return true
 }
 
+async function queueProvisionalInvoiceSettlement(invoice, paymentData = {}, message = 'تسویه فاکتور به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.') {
+  const orderName = String(invoice?.name || invoice?.order_name || '').trim()
+  if (!orderName) {
+    error.value = 'شناسه فاکتور برای تسویه موقت معتبر نیست.'
+    return false
+  }
+  return enqueuePOSOfflineMutation('invoice_settlement_claim', {
+    order_name: orderName,
+    payment_method: paymentData.method || payment.method || 'cash',
+    mode_of_payment: paymentData.mode_of_payment || '',
+    reference_no: paymentData.reference_no || payment.reference_no || '',
+    rrn: paymentData.rrn || payment.rrn || '',
+    deliver_after: paymentData.deliver_after ? 1 : 0,
+  }, message)
+}
+
 const syncEngine = createOfflineSyncEngine({
   store: posOfflineStore,
   replayOrder: replayOfflinePOSOrder,
@@ -168,6 +184,33 @@ async function syncPendingOfflineOrders() {
   code = code.replace(
     "async function loadCustomers(search = '') {\n  try {",
     "async function loadCustomers(search = '') {\n  const cachedCustomers = await posOfflineStore.searchCachedCustomers(search, 50)\n  if (cachedCustomers.length || isOffline.value) customerOptions.value = cachedCustomers\n  if (isOffline.value) return\n  try {",
+  )
+  code = code.replace(
+    'async function settleSelectedOpenInvoice() {\n',
+    `async function settleSelectedOpenInvoice() {
+  if (isOffline.value) {
+    await queueProvisionalInvoiceSettlement(selectedOpenInvoice.value, { method: payment.method, reference_no: payment.reference_no, rrn: payment.rrn })
+    return
+  }
+`,
+  )
+  code = code.replace(
+    'async function settleSelectedInvoice(invoice, paymentSelection = {}) {\n',
+    `async function settleSelectedInvoice(invoice, paymentSelection = {}) {
+  if (isOffline.value) {
+    await queueProvisionalInvoiceSettlement(invoice, paymentSelection)
+    return
+  }
+`,
+  )
+  code = code.replace(
+    'async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {\n',
+    `async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {
+  if (isOffline.value) {
+    await queueProvisionalInvoiceSettlement(invoice, { ...paymentSelection, deliver_after: true }, 'تسویه و تحویل به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.')
+    return
+  }
+`,
   )
   code = code.replace(
     'const payload = await getManagementOrderDetail(orderName)',

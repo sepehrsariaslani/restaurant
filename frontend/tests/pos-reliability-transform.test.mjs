@@ -212,6 +212,27 @@ async function confirmSettleOrder() {
   assert.match(out, /'invoice_settlement_claim'/)
 })
 
+test('queues every open-invoice settlement path as a provisional claim offline', () => {
+  const settlementFixture = `
+<script setup>
+import { formatMoney } from '@/utils/format'
+const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
+async function loadPOSBoot() {}
+async function settleSelectedOpenInvoice() {
+  try { await markManagementOrderPaid({ order_name: selectedOpenInvoice.value.name }) } catch (err) {}
+}
+async function settleSelectedInvoice(invoice, paymentSelection = {}) {
+  try { const result = await markManagementOrderPaid({ order_name: invoice.name }) } catch (err) {}
+}
+async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {
+  try { const payResult = await markManagementOrderPaid({ order_name: invoice.name }) } catch (err) {}
+}
+</script>`
+  const out = transformPosReliabilityPage(settlementFixture)
+  assert.match(out, /queueProvisionalInvoiceSettlement/)
+  assert.match(out, /'invoice_settlement_claim'/)
+})
+
 const uiFixture = `
 <template>
 <section class="pos-theme">
