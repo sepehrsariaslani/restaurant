@@ -26,21 +26,21 @@ export function transformPosReliabilityPage(input) {
 
   const imports = `import { createOfflineOrderRecord, createPosOfflineStore } from '@/utils/posOfflineStore'
 import { createOfflineSyncEngine } from '@/utils/offlineSyncEngine'
-import { getReliablePOSBoot, replayOfflinePOSOrder, updatePOSProductAtomic } from '@/utils/posReliabilityApi'`
+import { getReliablePOSBoot, replayOfflinePOSOrder, replayOfflinePOSMutation, updatePOSProductAtomic } from '@/utils/posReliabilityApi'`
   code = injectBefore(code, "import { formatMoney", imports)
 
   const offlineState = "const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)"
   code = code.replace(
     offlineState,
-    `${offlineState}\nconst posOfflineStore = createPosOfflineStore()\nconst pendingOfflineOrderCount = ref(0)\nconst needsAttentionOfflineOrderCount = ref(0)\nconst offlineSyncing = ref(false)`,
+    `${offlineState}\nconst posOfflineStore = createPosOfflineStore()\nconst pendingOfflineOrderCount = ref(0)\nconst needsAttentionOfflineOrderCount = ref(0)\nconst offlineSyncing = ref(false)\nconst pendingOfflineMutationCount = ref(0)\nconst needsAttentionOfflineMutationCount = ref(0)`,
   )
 
   const offlineBanner = '<p class="offline-banner" v-if="isOffline">اینترنت قطع است.</p>'
   const syncPanel = `<div class="offline-banner" v-if="isOffline">اینترنت قطع است؛ اطلاعات ذخیره‌شده محلی در دسترس است.</div>
-    <div v-if="pendingOfflineOrderCount || needsAttentionOfflineOrderCount || syncReminder" class="sync-banner pos-sync-banner" role="status" aria-live="polite">
-      <span>{{ syncReminder || (pendingOfflineOrderCount + ' سفارش آفلاین در صف همگام‌سازی است.' + (needsAttentionOfflineOrderCount ? (' ' + needsAttentionOfflineOrderCount + ' سفارش نیازمند بررسی است.') : '')) }}</span>
+    <div v-if="pendingOfflineOrderCount || needsAttentionOfflineOrderCount || pendingOfflineMutationCount || needsAttentionOfflineMutationCount || syncReminder" class="sync-banner pos-sync-banner" role="status" aria-live="polite">
+      <span>{{ syncReminder || ((pendingOfflineOrderCount + pendingOfflineMutationCount) + ' عملیات آفلاین در صف همگام‌سازی است.' + ((needsAttentionOfflineOrderCount + needsAttentionOfflineMutationCount) ? (' ' + (needsAttentionOfflineOrderCount + needsAttentionOfflineMutationCount) + ' عملیات نیازمند بررسی است.') : '')) }}</span>
       <button
-        v-if="pendingOfflineOrderCount"
+        v-if="pendingOfflineOrderCount || pendingOfflineMutationCount"
         type="button"
         class="secondary-btn pos-sync-btn"
         :disabled="isOffline || offlineSyncing"
@@ -57,12 +57,26 @@ import { getReliablePOSBoot, replayOfflinePOSOrder, updatePOSProductAtomic } fro
 async function refreshPendingOfflineOrderCount() {
   pendingOfflineOrderCount.value = await posOfflineStore.pendingOrderCount()
   needsAttentionOfflineOrderCount.value = await posOfflineStore.needsAttentionOrderCount()
+  pendingOfflineMutationCount.value = await posOfflineStore.pendingMutationCount()
+  needsAttentionOfflineMutationCount.value = await posOfflineStore.needsAttentionMutationCount()
   return pendingOfflineOrderCount.value
+}
+
+async function enqueuePOSOfflineMutation(type, payload, message = 'عملیات آفلاین ذخیره شد و پس از اتصال همگام می‌شود.') {
+  const queued = await posOfflineStore.enqueueOfflineMutation(type, payload)
+  if (!queued.persisted) {
+    error.value = 'ذخیره آفلاین روی این دستگاه ممکن نیست؛ فضای ذخیره‌سازی مرورگر را بررسی کنید.'
+    return false
+  }
+  await refreshPendingOfflineOrderCount()
+  successMessage.value = message
+  return true
 }
 
 const syncEngine = createOfflineSyncEngine({
   store: posOfflineStore,
   replayOrder: replayOfflinePOSOrder,
+  replayMutation: replayOfflinePOSMutation,
   isOnline: () => !isOffline.value,
   isBusinessError: (errorObj) => !isPOSNetworkError(errorObj),
 })
@@ -122,7 +136,7 @@ async function syncPendingOfflineOrders() {
   if (offlineSyncing.value || isOffline.value) return
   offlineSyncing.value = true
   try {
-    const result = await syncEngine.syncPendingOrders()
+    const result = await syncEngine.syncPendingMutations()
     await refreshPendingOfflineOrderCount()
     if (result.synced) {
       successMessage.value = \`\${result.synced} سفارش آفلاین با سرور همگام شد.\`
@@ -200,9 +214,102 @@ async function syncPendingOfflineOrders() {
     "    syncReminder.value = 'اینترنت وصل شد؛ سفارش‌های آفلاین در حال بررسی برای همگام‌سازی هستند.'\n    void syncPendingOfflineOrders()",
   )
 
+  code = code.replaceAll('syncEngine.syncPendingOrders()', 'syncEngine.syncPendingMutations()')
+  code = code.replaceAll('سفارش آفلاین با سرور همگام شد.', 'عملیات آفلاین با سرور همگام شد.')
+  code = code.replaceAll('سفارش‌های باقی‌مانده در صف می‌مانند.', 'عملیات باقی‌مانده در صف می‌مانند.')
+  code = code.replaceAll('سفارش نیازمند بررسی است.', 'عملیات نیازمند بررسی است.')
+  code = code.replaceAll('if (!pendingOfflineOrderCount.value) syncReminder.value = \'\'', 'if (!pendingOfflineOrderCount.value && !pendingOfflineMutationCount.value) syncReminder.value = \'\'')
+
+  code = code.replace(
+    '  try {\n    await updateTableOrderItem({',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('table_update_item', {
+      order_name: order.name,
+      row_name: item.row_name,
+      quantity_delta: qtyDelta,
+    }, 'ویرایش آیتم میز آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+    return
+  }
+  try {
+    await updateTableOrderItem({`,
+  )
+  code = code.replace(
+    '  try {\n    await assignTableSessionCustomer({',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('table_assign_customer', {
+      table_name: selectedTable.name,
+      customer_name: form.customer_name || '',
+      mobile: form.mobile || '',
+      customer_type: form.customer_type || '',
+      guest_count: form.guest_count || 1,
+    }, 'ثبت مشتری روی میز آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+    return
+  }
+  try {
+    await assignTableSessionCustomer({`,
+  )
+  code = code.replace(
+    '  try {\n    await closeTableSession(activeSession)',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('table_close', { session_name: activeSession }, 'بستن میز آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+    return
+  }
+  try {
+    await closeTableSession(activeSession)`,
+  )
+  code = code.replace(
+    '  try {\n    await moveTableSession({',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('table_move', {
+      session_name: selectedTablePreview.value.session.name,
+      target_table: moveTableTarget.value,
+    }, 'انتقال میز آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+    return
+  }
+  try {
+    await moveTableSession({`,
+  )
+  code = code.replace(
+    '  try {\n    await mergeTableSessions({',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('table_merge', {
+      source_session: selectedTablePreview.value.session.name,
+      target_table: mergeTableTarget.value,
+    }, 'ترکیب میز آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+    return
+  }
+  try {
+    await mergeTableSessions({`,
+  )
+
   code = code.replace(
     "async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {\n  if (!cart.length) {",
-    "async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {\n  if (isOffline.value && payNow) {\n    error.value = 'پرداخت یا تسویه نیاز به اتصال اینترنت دارد.'\n    return\n  }\n  if (isOffline.value && editingOriginalOrder.isEditing) {\n    error.value = 'ویرایش یا جایگزینی فاکتور باز نیاز به اتصال اینترنت دارد.'\n    return\n  }\n  if (isOffline.value && form.order_mode === 'dine_in') {\n    error.value = 'ثبت آفلاین سفارش میز به دلیل احتمال تغییر وضعیت میز غیرفعال است؛ سفارش بیرون‌بر یا ارسال را می‌توانید آفلاین ذخیره کنید.'\n    return\n  }\n  if (!cart.length) {",
+    "async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {\n  if (isOffline.value && editingOriginalOrder.isEditing) {\n    error.value = 'ویرایش یا جایگزینی فاکتور باز نیاز به اتصال اینترنت دارد.'\n    return\n  }\n  if (!cart.length) {",
+  )
+
+  code = code.replace(
+    "    submitting.value = true\n    error.value = ''\n    successMessage.value = ''\n    try {\n      await createManagementTableOrderFromPOS({",
+    `    if (isOffline.value) {
+      const queued = await enqueuePOSOfflineMutation('table_add_items', {
+        table_name: selectedTable.name,
+        note: buildOrderNote(),
+        items: cart.map((line) => ({
+          item_code: line.item_code || '', title: line.title || '', qty: line.qty, unit_price: line.price, note: line.note || '',
+        })),
+      }, 'افزودن به میز آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+      if (queued) {
+        resetCurrentInvoiceState({ preserveFeedback: true })
+        form.order_mode = 'dine_in'
+        form.place = selectedTable.label
+        saveActiveTicketSnapshot()
+      }
+      return
+    }
+    submitting.value = true
+    error.value = ''
+    successMessage.value = ''
+    try {
+      await createManagementTableOrderFromPOS({`,
   )
 
   code = code.replace(
@@ -216,8 +323,16 @@ async function syncPendingOfflineOrders() {
       error.value = 'ذخیره آفلاین روی این دستگاه ممکن نیست؛ فضای ذخیره‌سازی مرورگر را بررسی کنید.'
       return
     }
-    await refreshPendingOfflineOrderCount()
-    successMessage.value = 'سفارش ذخیره آفلاین شد و پس از اتصال همگام می‌شود.'
+    if (payNow) {
+      const paymentQueued = await enqueuePOSOfflineMutation('manual_payment_claim', {
+        client_order_key: queued.id,
+        payment: paymentPayload,
+      }, 'پرداخت دستی به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.')
+      if (!paymentQueued) return
+    } else {
+      await refreshPendingOfflineOrderCount()
+      successMessage.value = 'سفارش ذخیره آفلاین شد و پس از اتصال همگام می‌شود.'
+    }
     resetCurrentInvoiceState({ preserveFeedback: true })
     saveActiveTicketSnapshot()
     return

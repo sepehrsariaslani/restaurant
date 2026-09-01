@@ -76,9 +76,9 @@ test('injects offline boot/customer cache and idempotent order queue integration
   assert.match(out, /syncPendingOfflineOrders/)
   assert.match(out, /replayOfflinePOSOrder/)
   assert.match(out, /ذخیره آفلاین شد/)
-  assert.match(out, /پرداخت یا تسویه نیاز به اتصال اینترنت دارد/)
+  assert.match(out, /پرداخت دستی به‌صورت موقت ذخیره شد/)
   assert.match(out, /queued\.persisted/)
-  assert.match(out, /syncEngine\.syncPendingOrders\(\)/)
+  assert.match(out, /syncEngine\.syncPendingMutations\(\)/)
   assert.match(out, /savePOSOfflineContext/)
   assert.match(out, /getCachedPOSOrders/)
   assert.match(out, /getCachedPOSTables/)
@@ -133,6 +133,55 @@ async function loadCustomers(search = '') {
 </script>`
   const out = transformPosReliabilityPage(customerFixture)
   assert.match(out, /if \(!isPOSNetworkError\(err\)\) console\.error\('Failed to load customers:'/)
+})
+
+test('queues table actions instead of losing them offline', () => {
+  const tableFixture = `
+<script setup>
+import { formatMoney } from '@/utils/format'
+const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
+async function loadPOSBoot() {}
+async function changeTableOrderItemQty(order, item, delta) {
+  try {
+    await updateTableOrderItem({ order_name: order.name, row_name: item.row_name, quantity_delta: delta })
+  } catch (updateErr) {}
+}
+async function assignCustomerToSelectedTable() {
+  try {
+    await assignTableSessionCustomer({ table_name: selectedTable.name, customer_name: form.customer_name || '' })
+  } catch (assignErr) {}
+}
+async function clearTableSession(table) {
+  const activeSession = table.active_session
+  try {
+    await closeTableSession(activeSession)
+  } catch (closeErr) {}
+}
+async function moveSelectedTableSession() {
+  try {
+    await moveTableSession({ session_name: selectedTablePreview.value.session.name, target_table: moveTableTarget.value })
+  } catch (moveErr) {}
+}
+async function mergeSelectedTableSession() {
+  try {
+    await mergeTableSessions({ source_session: selectedTablePreview.value.session.name, target_table: mergeTableTarget.value })
+  } catch (mergeErr) {}
+}
+async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = false) {
+  if (!cart.length) return
+  const payload = { items: [], payment: paymentPayload }
+  submitting.value = true
+}
+</script>`
+  const out = transformPosReliabilityPage(tableFixture)
+  assert.match(out, /replayOfflinePOSMutation/)
+  assert.match(out, /enqueuePOSOfflineMutation/)
+  assert.match(out, /'table_update_item'/)
+  assert.match(out, /'table_assign_customer'/)
+  assert.match(out, /'table_close'/)
+  assert.match(out, /'table_move'/)
+  assert.match(out, /'table_merge'/)
+  assert.match(out, /syncEngine\.syncPendingMutations\(\)/)
 })
 
 const uiFixture = `
