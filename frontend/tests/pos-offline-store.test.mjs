@@ -5,6 +5,7 @@ import {
   searchCustomersInRows,
   createOfflineOrderRecord,
   createOfflineMutationRecord,
+  trimDailyInvoiceSnapshots,
   mergeQueueRecords,
   createPosOfflineStore,
 } from '../src/utils/posOfflineStore.js'
@@ -82,4 +83,23 @@ test('exposes mutation retry and review state without silently discarding it', a
   assert.equal(await store.needsAttentionMutationCount(), 0)
   assert.equal(await store.markOfflineMutationPending('mutation-safe', 'network failed'), false)
   assert.equal(await store.markOfflineMutationNeedsAttention('mutation-safe', 'price changed'), false)
+})
+
+test('keeps only the newest 200 invoice snapshots for a single day', () => {
+  const rows = Array.from({ length: 205 }, (_, index) => ({
+    name: `SO-${index + 1}`,
+    modified: `2026-09-01T10:${String(index % 60).padStart(2, '0')}:00`,
+    cached_at: index,
+  }))
+  rows.push({ name: 'OLD', modified: '2026-08-31T23:59:00', cached_at: 999 })
+  const trimmed = trimDailyInvoiceSnapshots(rows, '2026-09-01', 200)
+  assert.equal(trimmed.length, 200)
+  assert.equal(trimmed.some((row) => row.name === 'OLD'), false)
+  assert.equal(trimmed.some((row) => row.name === 'SO-1'), false)
+})
+
+test('offers safe empty daily invoice snapshots when browser storage is unavailable', async () => {
+  const store = createPosOfflineStore({ indexedDB: null })
+  assert.deepEqual(await store.loadDailyInvoiceSnapshots('2026-09-01'), [])
+  assert.equal(await store.saveDailyInvoiceSnapshots('2026-09-01', [{ name: 'SO-1' }]), false)
 })

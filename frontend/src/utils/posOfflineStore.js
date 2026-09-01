@@ -117,6 +117,20 @@ export function mergeQueueRecords(current, incoming) {
   return [...byId.values()].sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
 }
 
+function invoiceSnapshotDate(row) {
+  const value = row?.invoice_date || row?.posting_date || row?.modified || row?.created_at || ''
+  return String(value).slice(0, 10)
+}
+
+export function trimDailyInvoiceSnapshots(rows, date, limit = 200) {
+  const day = String(date || '').slice(0, 10)
+  const max = Math.max(1, Number(limit) || 200)
+  return (Array.isArray(rows) ? rows : [])
+    .filter((row) => row && invoiceSnapshotDate(row) === day)
+    .sort((left, right) => Number(right?.cached_at || 0) - Number(left?.cached_at || 0))
+    .slice(0, max)
+}
+
 function requestResult(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result)
@@ -178,6 +192,7 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   const snapshotKey = (branch) => `pos_boot:${String(branch || 'default').trim() || 'default'}`
+  const dailyInvoiceSnapshotKey = (date) => `pos_invoices:${String(date || '').slice(0, 10)}`
 
   async function savePosBootSnapshot(branch, payload) {
     const record = { key: snapshotKey(branch), payload, updated_at: Number(now()) || Date.now() }
@@ -189,6 +204,28 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
 
   async function loadPosBootSnapshot(branch) {
     return withStore(SNAPSHOT_STORE, 'readonly', (store) => requestResult(store.get(snapshotKey(branch))), null)
+  }
+
+  async function saveDailyInvoiceSnapshots(date, rows) {
+    const day = String(date || '').slice(0, 10)
+    if (!day) return false
+    const timestamp = Number(now()) || Date.now()
+    const snapshots = trimDailyInvoiceSnapshots(
+      (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, cached_at: Number(row?.cached_at || timestamp) })),
+      day,
+      200,
+    )
+    return withStore(SNAPSHOT_STORE, 'readwrite', async (store) => {
+      store.put({ key: dailyInvoiceSnapshotKey(day), payload: snapshots, updated_at: timestamp })
+      return true
+    }, false)
+  }
+
+  async function loadDailyInvoiceSnapshots(date) {
+    const day = String(date || '').slice(0, 10)
+    if (!day) return []
+    const record = await withStore(SNAPSHOT_STORE, 'readonly', (store) => requestResult(store.get(dailyInvoiceSnapshotKey(day))), null)
+    return trimDailyInvoiceSnapshots(record?.payload, day, 200)
   }
 
   async function readAllCustomers() {
@@ -370,6 +407,8 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   return {
     savePosBootSnapshot,
     loadPosBootSnapshot,
+    saveDailyInvoiceSnapshots,
+    loadDailyInvoiceSnapshots,
     replaceCustomerCache,
     mergeCustomerCache,
     searchCachedCustomers,
