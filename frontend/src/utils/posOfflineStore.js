@@ -1,8 +1,9 @@
 const DB_NAME = 'restaurant-pos-offline-v1'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const SNAPSHOT_STORE = 'snapshots'
 const CUSTOMER_STORE = 'customers'
 const ORDER_QUEUE_STORE = 'order_queue'
+const MUTATION_QUEUE_STORE = 'mutation_queue'
 
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
 const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩'
@@ -87,6 +88,24 @@ export function createOfflineOrderRecord(payload, id = '', nowFn = () => Date.no
   }
 }
 
+export function createOfflineMutationRecord(type, payload, id = '', nowFn = () => Date.now()) {
+  const timestamp = Number(nowFn()) || Date.now()
+  const mutationType = String(type || '').trim()
+  const key = String(id || generateClientOrderKey(timestamp)).trim()
+  const safePayload = payload && typeof payload === 'object' ? { ...payload } : {}
+  safePayload.client_mutation_key = key
+  return {
+    id: key,
+    type: mutationType,
+    payload: safePayload,
+    status: 'pending',
+    created_at: timestamp,
+    updated_at: timestamp,
+    retry_count: 0,
+    last_error: '',
+  }
+}
+
 export function mergeQueueRecords(current, incoming) {
   const byId = new Map()
   for (const row of [...(Array.isArray(current) ? current : []), ...(Array.isArray(incoming) ? incoming : [])]) {
@@ -135,6 +154,7 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
         if (!db.objectStoreNames.contains(SNAPSHOT_STORE)) db.createObjectStore(SNAPSHOT_STORE, { keyPath: 'key' })
         if (!db.objectStoreNames.contains(CUSTOMER_STORE)) db.createObjectStore(CUSTOMER_STORE, { keyPath: 'key' })
         if (!db.objectStoreNames.contains(ORDER_QUEUE_STORE)) db.createObjectStore(ORDER_QUEUE_STORE, { keyPath: 'id' })
+        if (!db.objectStoreNames.contains(MUTATION_QUEUE_STORE)) db.createObjectStore(MUTATION_QUEUE_STORE, { keyPath: 'id' })
       }
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error || new Error('Unable to open POS offline database'))
@@ -273,6 +293,33 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
       }))
   }
 
+  async function enqueueOfflineMutation(type, payload, id = '') {
+    const record = createOfflineMutationRecord(type, payload, id, now)
+    const persisted = await withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
+      store.put(record)
+      return true
+    }, false)
+    return { ...record, persisted: Boolean(persisted) }
+  }
+
+  async function listPendingOfflineMutations() {
+    return withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
+      const rows = await requestResult(store.getAll())
+      return (Array.isArray(rows) ? rows : [])
+        .filter((row) => row?.status === 'pending')
+        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+    }, [])
+  }
+
+  async function markOfflineMutationSynced(id) {
+    const key = String(id || '').trim()
+    if (!key) return false
+    return withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
+      store.delete(key)
+      return true
+    }, false)
+  }
+
   return {
     savePosBootSnapshot,
     loadPosBootSnapshot,
@@ -287,5 +334,8 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
     markOfflineOrderNeedsAttention,
     pendingOrderCount,
     needsAttentionOrderCount,
+    enqueueOfflineMutation,
+    listPendingOfflineMutations,
+    markOfflineMutationSynced,
   }
 }

@@ -4,6 +4,7 @@ import {
   normalizePosSearchText,
   searchCustomersInRows,
   createOfflineOrderRecord,
+  createOfflineMutationRecord,
   mergeQueueRecords,
   createPosOfflineStore,
 } from '../src/utils/posOfflineStore.js'
@@ -56,4 +57,17 @@ test('exposes non-destructive queue retry and review counters when storage is un
   assert.equal(await store.markOfflineOrderPending('pos-safe', 'network failed'), false)
   assert.deepEqual(await store.listOfflineOrders(), [])
   assert.equal(await store.needsAttentionOrderCount(), 0)
+})
+
+test('creates stable FIFO mutations for offline table and provisional-payment work', () => {
+  const mutation = createOfflineMutationRecord(
+    'table_add_items',
+    { table_name: 'TABLE-1', items: [{ item_code: 'TEA', qty: 1 }] },
+    'mutation-table-1',
+    () => 100,
+  )
+  assert.equal(mutation.id, 'mutation-table-1')
+  assert.equal(mutation.type, 'table_add_items')
+  assert.equal(mutation.status, 'pending')
+  assert.equal(mutation.payload.client_mutation_key, 'mutation-table-1')
 })

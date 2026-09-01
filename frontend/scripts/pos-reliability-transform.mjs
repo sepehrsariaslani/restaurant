@@ -185,6 +185,10 @@ async function syncPendingOfflineOrders() {
     '    if (search) {\n      // Merge results preserving existing',
     "    if (search) await posOfflineStore.mergeCustomerCache(mapped)\n    else await posOfflineStore.replaceCustomerCache(mapped)\n\n    if (search) {\n      // Merge results preserving existing",
   )
+  code = code.replaceAll(
+    "console.error('Failed to load customers:', err)",
+    "if (!isPOSNetworkError(err)) console.error('Failed to load customers:', err)",
+  )
 
   code = code.replace(
     '  hydrateReceiptSettings()\n  await loadPOSBoot()',

@@ -121,6 +121,20 @@ async function loadWaitersOnce() {
   assert.match(out, /if \(isOffline\.value\) \{\s*waiterOptions\.value = await getCachedPOSWaiters\(\)/s)
 })
 
+test('does not log expected customer fetch failures during a network transition', () => {
+  const customerFixture = `
+<script setup>
+const isOffline = ref(false)
+async function loadPOSBoot() {}
+async function loadCustomers(search = '') {
+  try { await listManagementCustomers({ search }) }
+  catch (err) { console.error('Failed to load customers:', err) }
+}
+</script>`
+  const out = transformPosReliabilityPage(customerFixture)
+  assert.match(out, /if \(!isPOSNetworkError\(err\)\) console\.error\('Failed to load customers:'/)
+})
+
 const uiFixture = `
 <template>
 <section class="pos-theme">
