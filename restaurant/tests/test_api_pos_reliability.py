@@ -26,6 +26,49 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(reliability._normalize_client_order_key('bad key/with spaces'), 'bad-key-with-spaces')
         self.assertEqual(reliability._normalize_client_order_key(''), '')
 
+    def test_normalizes_client_mutation_payload(self):
+        payload = reliability._normalize_offline_pos_mutation(
+            {
+                'client_mutation_key': ' mutation/table 1 ',
+                'type': 'table_add_items',
+                'payload': {'table_name': 'TABLE-1', 'items': [{'item_code': 'TEA', 'qty': 1}]},
+            }
+        )
+        self.assertEqual(payload['client_mutation_key'], 'mutation-table-1')
+        self.assertEqual(payload['type'], 'table_add_items')
+        self.assertEqual(payload['payload']['table_name'], 'TABLE-1')
+
+    def test_replays_each_supported_table_mutation_through_legacy_api(self):
+        calls = []
+
+        class Legacy:
+            def create_management_table_order_from_pos(self, **kwargs):
+                calls.append(('add', kwargs))
+                return {'status': 'success'}
+
+            def assign_table_session_customer(self, **kwargs):
+                calls.append(('customer', kwargs))
+                return {'status': 'success'}
+
+        original = reliability._legacy_api
+        reliability._legacy_api = lambda: Legacy()
+        try:
+            added = reliability._dispatch_offline_pos_mutation(
+                'table_add_items', {'table_name': 'TABLE-1', 'items': [{'item_code': 'TEA'}], 'note': 'بدون قند'}
+            )
+            customer = reliability._dispatch_offline_pos_mutation(
+                'table_assign_customer', {'table_name': 'TABLE-1', 'customer_name': 'علی', 'guest_count': 2}
+            )
+        finally:
+            reliability._legacy_api = original
+
+        self.assertEqual(added['status'], 'success')
+        self.assertEqual(customer['status'], 'success')
+        self.assertEqual(calls[0][0], 'add')
+        self.assertEqual(calls[0][1]['table_name'], 'TABLE-1')
+        self.assertEqual(calls[1][0], 'customer')
+        self.assertEqual(calls[1][1]['customer_name'], 'علی')
+
     def test_normalizes_atomic_quick_edit_payload(self):
         payload = reliability._normalize_atomic_quick_edit_payload(
             {

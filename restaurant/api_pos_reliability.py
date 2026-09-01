@@ -9,6 +9,20 @@ from frappe import _
 from frappe.utils import cint, flt, getdate
 
 CLIENT_ORDER_KEY_FIELD = "restaurant_pos_client_order_key"
+OFFLINE_MUTATION_DOCTYPE = "Restaurant POS Offline Mutation"
+OFFLINE_MUTATION_TYPES = {
+    "table_add_items",
+    "table_update_item",
+    "table_assign_customer",
+    "table_move",
+    "table_merge",
+    "table_close",
+    "table_confirm_order",
+    "table_serve_order",
+    "table_pay_order",
+    "table_resolve_request",
+    "manual_payment_claim",
+}
 
 
 def _legacy_api():
@@ -35,6 +49,132 @@ def _normalize_client_order_key(value):
         return ""
     normalized = re.sub(r"[^A-Za-z0-9._:-]+", "-", raw)
     return normalized.strip("-._:")[:140]
+
+
+def _normalize_offline_pos_mutation(payload):
+    data = _parse_payload(payload)
+    mutation_payload = data.get("payload")
+    return {
+        "client_mutation_key": _normalize_client_order_key(data.get("client_mutation_key")),
+        "type": str(data.get("type") or data.get("mutation_type") or "").strip().lower(),
+        "payload": dict(mutation_payload) if isinstance(mutation_payload, dict) else {},
+    }
+
+
+def _dispatch_offline_pos_mutation(mutation_type, payload):
+    legacy = _legacy_api()
+    data = dict(payload or {})
+    if mutation_type == "table_add_items":
+        return legacy.create_management_table_order_from_pos(
+            table_name=data.get("table_name"),
+            items=json.dumps(data.get("items") or []),
+            note=data.get("note"),
+        )
+    if mutation_type == "table_update_item":
+        return legacy.update_table_order_item(
+            order_name=data.get("order_name"),
+            row_name=data.get("row_name"),
+            menu_item=data.get("menu_item"),
+            quantity=data.get("quantity"),
+            quantity_delta=data.get("quantity_delta"),
+            note=data.get("note"),
+        )
+    if mutation_type == "table_assign_customer":
+        return legacy.assign_table_session_customer(
+            table_name=data.get("table_name"),
+            customer_name=data.get("customer_name"),
+            mobile=data.get("mobile"),
+            customer_type=data.get("customer_type"),
+            guest_count=data.get("guest_count"),
+        )
+    if mutation_type == "table_move":
+        return legacy.move_table_session(data.get("session_name"), data.get("target_table"))
+    if mutation_type == "table_merge":
+        return legacy.merge_table_sessions(data.get("source_session"), data.get("target_table"))
+    if mutation_type == "table_close":
+        return legacy.close_table_session(data.get("session_name"))
+    if mutation_type == "table_confirm_order":
+        return legacy.confirm_table_order(data.get("order_name"))
+    if mutation_type == "table_serve_order":
+        return legacy.serve_table_order(data.get("order_name"))
+    if mutation_type == "table_pay_order":
+        return legacy.pay_table_order(data.get("order_name"))
+    if mutation_type == "table_resolve_request":
+        return legacy.resolve_table_request(data.get("request_name"))
+    if mutation_type == "manual_payment_claim":
+        return {
+            "status": "needs_attention",
+            "message": _("Offline manual payments require confirmation after synchronization."),
+        }
+    frappe.throw(_("Unsupported offline POS mutation."))
+
+
+def _offline_mutation_log_ready():
+    return bool(frappe.db.exists("DocType", OFFLINE_MUTATION_DOCTYPE))
+
+
+def _find_offline_mutation(client_mutation_key):
+    if not client_mutation_key or not _offline_mutation_log_ready():
+        return None
+    return frappe.db.get_value(
+        OFFLINE_MUTATION_DOCTYPE,
+        {"client_mutation_key": client_mutation_key},
+        ["name", "status", "result_json"],
+        as_dict=True,
+    )
+
+
+@frappe.whitelist()
+def replay_offline_pos_mutation(payload=None):
+    legacy = _legacy_api()
+    legacy._ensure_management_access()
+    mutation = _normalize_offline_pos_mutation(payload)
+    client_mutation_key = mutation["client_mutation_key"]
+    mutation_type = mutation["type"]
+    if not client_mutation_key:
+        frappe.throw(_("Client mutation key is required for offline POS replay."))
+    if mutation_type not in OFFLINE_MUTATION_TYPES:
+        frappe.throw(_("Unsupported offline POS mutation."))
+    if not _offline_mutation_log_ready():
+        frappe.throw(_("POS offline mutation fields are not installed. Run bench migrate first."))
+
+    existing = _find_offline_mutation(client_mutation_key)
+    if existing:
+        return {
+            "status": existing.status or "existing",
+            "client_mutation_key": client_mutation_key,
+            "result": _parse_payload(existing.result_json),
+        }
+
+    try:
+        result = _dispatch_offline_pos_mutation(mutation_type, mutation["payload"])
+        result = result if isinstance(result, dict) else {"result": result}
+        status = "needs_attention" if result.get("status") == "needs_attention" else "created"
+        frappe.get_doc(
+            {
+                "doctype": OFFLINE_MUTATION_DOCTYPE,
+                "client_mutation_key": client_mutation_key,
+                "mutation_type": mutation_type,
+                "status": status,
+                "result_json": json.dumps(result, ensure_ascii=False, default=str),
+            }
+        ).insert(ignore_permissions=True)
+        frappe.db.commit()
+        return {
+            "status": status,
+            "client_mutation_key": client_mutation_key,
+            "result": result,
+        }
+    except Exception:
+        frappe.db.rollback()
+        existing = _find_offline_mutation(client_mutation_key)
+        if existing:
+            return {
+                "status": existing.status or "existing",
+                "client_mutation_key": client_mutation_key,
+                "result": _parse_payload(existing.result_json),
+            }
+        raise
 
 
 def _normalize_atomic_quick_edit_payload(payload):
