@@ -311,6 +311,43 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
     }, [])
   }
 
+  async function listOfflineMutations() {
+    return withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
+      const rows = await requestResult(store.getAll())
+      return (Array.isArray(rows) ? rows : [])
+        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+    }, [])
+  }
+
+  async function pendingMutationCount() {
+    return (await listPendingOfflineMutations()).length
+  }
+
+  async function needsAttentionMutationCount() {
+    return (await listOfflineMutations()).filter((row) => row?.status === 'needs_attention').length
+  }
+
+  async function updateMutationRecord(id, update) {
+    const key = String(id || '').trim()
+    if (!key) return false
+    return withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
+      const row = await requestResult(store.get(key))
+      if (!row) return false
+      store.put(update(row))
+      return true
+    }, false)
+  }
+
+  async function markOfflineMutationPending(id, error = '') {
+    return updateMutationRecord(id, (row) => ({
+      ...row,
+      status: 'pending',
+      retry_count: Number(row.retry_count || 0) + 1,
+      last_error: String(error || '').trim(),
+      updated_at: Number(now()) || Date.now(),
+    }))
+  }
+
   async function markOfflineMutationSynced(id) {
     const key = String(id || '').trim()
     if (!key) return false
@@ -318,6 +355,16 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
       store.delete(key)
       return true
     }, false)
+  }
+
+  async function markOfflineMutationNeedsAttention(id, error = '') {
+    return updateMutationRecord(id, (row) => ({
+      ...row,
+      status: 'needs_attention',
+      retry_count: Number(row.retry_count || 0) + 1,
+      last_error: String(error || '').trim(),
+      updated_at: Number(now()) || Date.now(),
+    }))
   }
 
   return {
@@ -335,7 +382,12 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
     pendingOrderCount,
     needsAttentionOrderCount,
     enqueueOfflineMutation,
+    listOfflineMutations,
     listPendingOfflineMutations,
     markOfflineMutationSynced,
+    markOfflineMutationPending,
+    markOfflineMutationNeedsAttention,
+    pendingMutationCount,
+    needsAttentionMutationCount,
   }
 }

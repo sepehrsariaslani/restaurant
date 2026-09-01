@@ -71,3 +71,15 @@ test('creates stable FIFO mutations for offline table and provisional-payment wo
   assert.equal(mutation.status, 'pending')
   assert.equal(mutation.payload.client_mutation_key, 'mutation-table-1')
 })
+
+test('exposes mutation retry and review state without silently discarding it', async () => {
+  const store = createPosOfflineStore({ indexedDB: null, now: () => 123 })
+  const queued = await store.enqueueOfflineMutation('table_add_items', { table_name: 'TABLE-1' }, 'mutation-safe')
+
+  assert.equal(queued.persisted, false)
+  assert.deepEqual(await store.listOfflineMutations(), [])
+  assert.equal(await store.pendingMutationCount(), 0)
+  assert.equal(await store.needsAttentionMutationCount(), 0)
+  assert.equal(await store.markOfflineMutationPending('mutation-safe', 'network failed'), false)
+  assert.equal(await store.markOfflineMutationNeedsAttention('mutation-safe', 'price changed'), false)
+})
