@@ -184,6 +184,34 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
   assert.match(out, /syncEngine\.syncPendingMutations\(\)/)
 })
 
+test('uses cached invoice details and queues invoice edit and provisional settlement offline', () => {
+  const invoiceFixture = `
+<script setup>
+import { formatMoney } from '@/utils/format'
+const isOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
+async function loadPOSBoot() {}
+async function openOrderDetailModal(tx) {
+  const orderName = String(tx.name || '').trim()
+  const payload = await getManagementOrderDetail(orderName)
+  orderDetailModal.order = payload?.order || null
+}
+async function saveOrderDetailEdit() {
+  try {
+    await updateManagementOrder({ order_name: orderDetailModal.order.name, note: orderDetailModal.editForm.note })
+  } catch (err) {}
+}
+async function confirmSettleOrder() {
+  try {
+    const result = await settlePOSOrder(orderDetailModal.order.name, { method: 'cash' })
+  } catch (err) {}
+}
+</script>`
+  const out = transformPosReliabilityPage(invoiceFixture)
+  assert.match(out, /invoice_detail:/)
+  assert.match(out, /'invoice_edit'/)
+  assert.match(out, /'invoice_settlement_claim'/)
+})
+
 const uiFixture = `
 <template>
 <section class="pos-theme">

@@ -111,6 +111,17 @@ async function getCachedPOSHardware() {
   return context.hardware && typeof context.hardware === 'object' ? context.hardware : null
 }
 
+async function getCachedInvoiceDetail(orderName) {
+  const snapshot = await posOfflineStore.loadPosBootSnapshot(\`invoice_detail:\${String(orderName || '').trim()}\`)
+  return snapshot?.payload || null
+}
+
+async function cacheInvoiceDetail(orderName, payload) {
+  const key = String(orderName || payload?.order?.name || '').trim()
+  if (key && payload) await posOfflineStore.savePosBootSnapshot(\`invoice_detail:\${key}\`, payload)
+  return payload
+}
+
 async function loadReliablePOSBootPayload() {
   let networkError = null
   if (!isOffline.value) {
@@ -158,6 +169,39 @@ async function syncPendingOfflineOrders() {
     "async function loadCustomers(search = '') {\n  try {",
     "async function loadCustomers(search = '') {\n  const cachedCustomers = await posOfflineStore.searchCachedCustomers(search, 50)\n  if (cachedCustomers.length || isOffline.value) customerOptions.value = cachedCustomers\n  if (isOffline.value) return\n  try {",
   )
+  code = code.replace(
+    'const payload = await getManagementOrderDetail(orderName)',
+    "const payload = isOffline.value ? await getCachedInvoiceDetail(orderName) : await cacheInvoiceDetail(orderName, await getManagementOrderDetail(orderName))",
+  )
+  code = code.replace(
+    '  try {\n    await updateManagementOrder({',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('invoice_edit', {
+      order_name: orderDetailModal.order.name,
+      payment_method: orderDetailModal.editForm.payment_method || '',
+      note: orderDetailModal.editForm.note || '',
+      customer_name: orderDetailModal.editForm.customer_name || '',
+      secondary_customer: orderDetailModal.editForm.secondary_customer || '',
+    }, 'ویرایش فاکتور آفلاین ذخیره شد و پس از اتصال بررسی می‌شود.')
+    return
+  }
+  try {
+    await updateManagementOrder({`,
+  )
+  code = code.replace(
+    '  try {\n    const result = await settlePOSOrder(orderDetailModal.order.name, {',
+    `  if (isOffline.value) {
+    await enqueuePOSOfflineMutation('invoice_settlement_claim', {
+      order_name: orderDetailModal.order.name,
+      payment_method: selectedMethod,
+      reference_no: orderDetailModal.settleReference || payment.reference_no || '',
+      rrn: payment.rrn || '',
+    }, 'تسویه فاکتور به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.')
+    return
+  }
+  try {
+    const result = await settlePOSOrder(orderDetailModal.order.name, {`,
+  )
 
   code = code.replace(
     'const orderPayload = await listManagementOrders({',
@@ -166,6 +210,14 @@ async function syncPendingOfflineOrders() {
   code = code.replaceAll(
     'const payload = await listManagementOrders({',
     'const payload = isOffline.value ? { orders: await getCachedPOSOrders() } : await listManagementOrders({',
+  )
+  code = code.replace(
+    'const orderPayload = isOffline.value ? { orders: await getCachedPOSOrders() } : await listManagementOrders({',
+    "const orderPayload = isOffline.value ? { orders: await posOfflineStore.loadDailyInvoiceSnapshots(String(openInvoicesDate.value || '').trim()) } : await listManagementOrders({",
+  )
+  code = code.replace(
+    'const allOrders = orderPayload?.orders || []\n    setOpenInvoices(allOrders, preserveSelection)',
+    "const allOrders = orderPayload?.orders || []\n    if (!isOffline.value) await posOfflineStore.saveDailyInvoiceSnapshots(String(openInvoicesDate.value || '').trim(), allOrders)\n    setOpenInvoices(allOrders, preserveSelection)",
   )
   code = code.replace(
     'const allOrders = orderPayload?.orders || []\n      setOpenInvoices(allOrders, true)',
