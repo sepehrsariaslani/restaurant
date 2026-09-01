@@ -69,6 +69,31 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(calls[1][0], 'customer')
         self.assertEqual(calls[1][1]['customer_name'], 'علی')
 
+    def test_replays_invoice_edit_and_keeps_settlement_claim_for_review(self):
+        calls = []
+
+        class Legacy:
+            def update_management_order(self, **kwargs):
+                calls.append(kwargs)
+                return {'status': 'success', 'order_name': kwargs['order_name']}
+
+        original = reliability._legacy_api
+        reliability._legacy_api = lambda: Legacy()
+        try:
+            edited = reliability._dispatch_offline_pos_mutation(
+                'invoice_edit', {'order_name': 'SO-1', 'note': 'ویرایش آفلاین', 'customer_name': 'علی'}
+            )
+            settlement = reliability._dispatch_offline_pos_mutation(
+                'invoice_settlement_claim', {'order_name': 'SO-1', 'payment_method': 'cash'}
+            )
+        finally:
+            reliability._legacy_api = original
+
+        self.assertEqual(edited['status'], 'success')
+        self.assertEqual(calls[0]['order_name'], 'SO-1')
+        self.assertEqual(calls[0]['note'], 'ویرایش آفلاین')
+        self.assertEqual(settlement['status'], 'needs_attention')
+
     def test_normalizes_atomic_quick_edit_payload(self):
         payload = reliability._normalize_atomic_quick_edit_payload(
             {

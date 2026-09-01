@@ -22,6 +22,8 @@ OFFLINE_MUTATION_TYPES = {
     "table_pay_order",
     "table_resolve_request",
     "manual_payment_claim",
+    "invoice_edit",
+    "invoice_settlement_claim",
 }
 
 
@@ -101,7 +103,16 @@ def _dispatch_offline_pos_mutation(mutation_type, payload):
         return legacy.pay_table_order(data.get("order_name"))
     if mutation_type == "table_resolve_request":
         return legacy.resolve_table_request(data.get("request_name"))
-    if mutation_type == "manual_payment_claim":
+    if mutation_type == "invoice_edit":
+        return legacy.update_management_order(
+            order_name=data.get("order_name"),
+            payment_method=data.get("payment_method"),
+            note=data.get("note"),
+            customer_name=data.get("customer_name"),
+            mobile=data.get("mobile"),
+            secondary_customer=data.get("secondary_customer"),
+        )
+    if mutation_type in {"manual_payment_claim", "invoice_settlement_claim"}:
         return {
             "status": "needs_attention",
             "message": _("Offline manual payments require confirmation after synchronization."),
