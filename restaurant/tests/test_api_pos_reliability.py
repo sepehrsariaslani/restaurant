@@ -38,6 +38,12 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(payload['type'], 'table_add_items')
         self.assertEqual(payload['payload']['table_name'], 'TABLE-1')
 
+    def test_retries_only_previous_payment_claims_marked_for_review(self):
+        self.assertTrue(reliability._should_retry_offline_mutation('manual_payment_claim', 'needs_attention'))
+        self.assertTrue(reliability._should_retry_offline_mutation('invoice_settlement_claim', 'needs_attention'))
+        self.assertFalse(reliability._should_retry_offline_mutation('table_move', 'needs_attention'))
+        self.assertFalse(reliability._should_retry_offline_mutation('manual_payment_claim', 'created'))
+
     def test_replays_each_supported_table_mutation_through_legacy_api(self):
         calls = []
 
@@ -69,13 +75,17 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(calls[1][0], 'customer')
         self.assertEqual(calls[1][1]['customer_name'], 'علی')
 
-    def test_replays_invoice_edit_and_keeps_settlement_claim_for_review(self):
+    def test_replays_invoice_edit_and_settles_an_offline_manual_payment(self):
         calls = []
 
         class Legacy:
             def update_management_order(self, **kwargs):
                 calls.append(kwargs)
                 return {'status': 'success', 'order_name': kwargs['order_name']}
+
+            def mark_management_order_paid(self, **kwargs):
+                calls.append(kwargs)
+                return {'status': 'success', 'order_name': kwargs['order_name'], 'sales_invoice': 'SI-1'}
 
         original = reliability._legacy_api
         reliability._legacy_api = lambda: Legacy()
@@ -92,7 +102,10 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(edited['status'], 'success')
         self.assertEqual(calls[0]['order_name'], 'SO-1')
         self.assertEqual(calls[0]['note'], 'ویرایش آفلاین')
-        self.assertEqual(settlement['status'], 'needs_attention')
+        self.assertEqual(settlement['status'], 'success')
+        self.assertEqual(settlement['sales_invoice'], 'SI-1')
+        self.assertEqual(calls[1]['order_name'], 'SO-1')
+        self.assertEqual(calls[1]['payment_method'], 'cash')
 
     def test_normalizes_atomic_quick_edit_payload(self):
         payload = reliability._normalize_atomic_quick_edit_payload(

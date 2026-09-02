@@ -4,6 +4,7 @@ const SNAPSHOT_STORE = 'snapshots'
 const CUSTOMER_STORE = 'customers'
 const ORDER_QUEUE_STORE = 'order_queue'
 const MUTATION_QUEUE_STORE = 'mutation_queue'
+const AUTO_RETRY_MUTATION_TYPES = new Set(['manual_payment_claim', 'invoice_settlement_claim'])
 
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
 const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩'
@@ -389,7 +390,10 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
   }
 
   async function listPendingOfflineMutations() {
-    return (await listOfflineMutations()).filter((row) => row?.status === 'pending')
+    return (await listOfflineMutations()).filter((row) => (
+      row?.status === 'pending'
+      || (row?.status === 'needs_attention' && AUTO_RETRY_MUTATION_TYPES.has(String(row?.type || '').trim()))
+    ))
   }
 
   async function listOfflineMutations() {

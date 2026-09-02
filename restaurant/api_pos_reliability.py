@@ -25,6 +25,10 @@ OFFLINE_MUTATION_TYPES = {
     "invoice_edit",
     "invoice_settlement_claim",
 }
+AUTO_RETRY_OFFLINE_MUTATION_TYPES = {
+    "manual_payment_claim",
+    "invoice_settlement_claim",
+}
 
 
 def _legacy_api():
@@ -61,6 +65,45 @@ def _normalize_offline_pos_mutation(payload):
         "type": str(data.get("type") or data.get("mutation_type") or "").strip().lower(),
         "payload": dict(mutation_payload) if isinstance(mutation_payload, dict) else {},
     }
+
+
+def _should_retry_offline_mutation(mutation_type, status):
+    return (
+        str(status or "").strip().lower() == "needs_attention"
+        and str(mutation_type or "").strip().lower() in AUTO_RETRY_OFFLINE_MUTATION_TYPES
+    )
+
+
+def _replay_offline_payment_claim(payload):
+    legacy = _legacy_api()
+    data = dict(payload or {})
+    payment = data.get("payment")
+    payment = dict(payment) if isinstance(payment, dict) else {}
+    order_name = str(data.get("order_name") or "").strip()
+    if not order_name:
+        order_name = _find_order_by_client_key(
+            _normalize_client_order_key(data.get("client_order_key"))
+        ) or ""
+    if not order_name:
+        frappe.throw(_("The offline payment's order was not found."))
+
+    payment_method = payment.get("method") or data.get("payment_method") or "cash"
+    mode_of_payment = payment.get("mode_of_payment") or data.get("mode_of_payment") or ""
+    reference_no = payment.get("reference_no") or data.get("reference_no") or ""
+    rrn = payment.get("rrn") or data.get("rrn") or ""
+    result = legacy.mark_management_order_paid(
+        order_name=order_name,
+        payment_method=payment_method,
+        mode_of_payment=mode_of_payment,
+        reference_no=reference_no,
+        rrn=rrn,
+    )
+    result = result if isinstance(result, dict) else {"result": result}
+    if cint(data.get("deliver_after")):
+        delivery = legacy.deliver_pos_order(order_name)
+        if isinstance(delivery, dict):
+            result["delivery"] = delivery
+    return result
 
 
 def _dispatch_offline_pos_mutation(mutation_type, payload):
@@ -113,10 +156,7 @@ def _dispatch_offline_pos_mutation(mutation_type, payload):
             secondary_customer=data.get("secondary_customer"),
         )
     if mutation_type in {"manual_payment_claim", "invoice_settlement_claim"}:
-        return {
-            "status": "needs_attention",
-            "message": _("Offline manual payments require confirmation after synchronization."),
-        }
+        return _replay_offline_payment_claim(data)
     frappe.throw(_("Unsupported offline POS mutation."))
 
 
@@ -151,6 +191,22 @@ def replay_offline_pos_mutation(payload=None):
 
     existing = _find_offline_mutation(client_mutation_key)
     if existing:
+        if _should_retry_offline_mutation(mutation_type, existing.status):
+            result = _dispatch_offline_pos_mutation(mutation_type, mutation["payload"])
+            result = result if isinstance(result, dict) else {"result": result}
+            status = "needs_attention" if result.get("status") == "needs_attention" else "created"
+            frappe.db.set_value(
+                OFFLINE_MUTATION_DOCTYPE,
+                existing.name,
+                {"status": status, "result_json": json.dumps(result, ensure_ascii=False, default=str)},
+                update_modified=False,
+            )
+            frappe.db.commit()
+            return {
+                "status": status,
+                "client_mutation_key": client_mutation_key,
+                "result": result,
+            }
         return {
             "status": existing.status or "existing",
             "client_mutation_key": client_mutation_key,

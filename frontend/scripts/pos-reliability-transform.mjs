@@ -40,7 +40,7 @@ import { getReliablePOSBoot, replayOfflinePOSOrder, replayOfflinePOSMutation, up
     <div v-if="pendingOfflineOrderCount || needsAttentionOfflineOrderCount || pendingOfflineMutationCount || needsAttentionOfflineMutationCount || syncReminder" class="sync-banner pos-sync-banner" role="status" aria-live="polite">
       <span>{{ syncReminder || ((pendingOfflineOrderCount + pendingOfflineMutationCount) + ' عملیات آفلاین در صف همگام‌سازی است.' + ((needsAttentionOfflineOrderCount + needsAttentionOfflineMutationCount) ? (' ' + (needsAttentionOfflineOrderCount + needsAttentionOfflineMutationCount) + ' عملیات نیازمند بررسی است.') : '')) }}</span>
       <button
-        v-if="pendingOfflineOrderCount || pendingOfflineMutationCount"
+        v-if="pendingOfflineOrderCount || pendingOfflineMutationCount || needsAttentionOfflineOrderCount || needsAttentionOfflineMutationCount"
         type="button"
         class="secondary-btn pos-sync-btn"
         :disabled="isOffline || offlineSyncing"
@@ -73,7 +73,7 @@ async function enqueuePOSOfflineMutation(type, payload, message = 'عملیات 
   return true
 }
 
-async function queueProvisionalInvoiceSettlement(invoice, paymentData = {}, message = 'تسویه فاکتور به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.') {
+async function queueProvisionalInvoiceSettlement(invoice, paymentData = {}, message = 'تسویه فاکتور به‌صورت موقت ذخیره شد و پس از اتصال خودکار نهایی می‌شود.') {
   const orderName = String(invoice?.name || invoice?.order_name || '').trim()
   if (!orderName) {
     error.value = 'شناسه فاکتور برای تسویه موقت معتبر نیست.'
@@ -225,7 +225,7 @@ async function syncPendingOfflineOrders() {
     'async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {\n',
     `async function settleAndDeliverFromInvoice(invoice, paymentSelection = {}) {
   if (isOffline.value) {
-    await queueProvisionalInvoiceSettlement(invoice, { ...paymentSelection, deliver_after: true }, 'تسویه و تحویل به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.')
+    await queueProvisionalInvoiceSettlement(invoice, { ...paymentSelection, deliver_after: true }, 'تسویه و تحویل به‌صورت موقت ذخیره شد و پس از اتصال خودکار نهایی می‌شود.')
     return
   }
 `,
@@ -257,7 +257,7 @@ async function syncPendingOfflineOrders() {
       payment_method: selectedMethod,
       reference_no: orderDetailModal.settleReference || payment.reference_no || '',
       rrn: payment.rrn || '',
-    }, 'تسویه فاکتور به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.')
+    }, 'تسویه فاکتور به‌صورت موقت ذخیره شد و پس از اتصال خودکار نهایی می‌شود.')
     return
   }
   try {
@@ -444,7 +444,7 @@ async function syncPendingOfflineOrders() {
       const paymentQueued = await enqueuePOSOfflineMutation('manual_payment_claim', {
         client_order_key: queued.id,
         payment: paymentPayload,
-      }, 'پرداخت دستی به‌صورت موقت ذخیره شد و پس از اتصال نیازمند بررسی خواهد بود.')
+      }, 'پرداخت دستی به‌صورت موقت ذخیره شد و پس از اتصال خودکار نهایی می‌شود.')
       if (!paymentQueued) return
     } else {
       await refreshPendingOfflineOrderCount()

@@ -154,3 +154,22 @@ test('falls back to durable localStorage when an IndexedDB queue transaction fai
   assert.equal(await store.markOfflineMutationSynced('fallback-mutation'), true)
   assert.deepEqual(await store.listPendingOfflineMutations(), [])
 })
+
+test('retries an offline payment claim that was previously marked for review', async () => {
+  const values = new Map()
+  values.set('restaurant-pos-offline-fallback:mutation_queue', JSON.stringify([{
+    id: 'payment-review',
+    type: 'invoice_settlement_claim',
+    status: 'needs_attention',
+    created_at: 1,
+    updated_at: 1,
+    payload: { order_name: 'SO-1' },
+  }]))
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+  }
+  const store = createPosOfflineStore({ indexedDB: null, storage })
+
+  assert.deepEqual((await store.listPendingOfflineMutations()).map((row) => row.id), ['payment-review'])
+})
