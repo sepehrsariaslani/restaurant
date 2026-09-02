@@ -116,3 +116,41 @@ test('falls back to durable localStorage queue when IndexedDB cannot open', asyn
   assert.equal(queued.persisted, true)
   assert.deepEqual((await store.listPendingOfflineOrders()).map((row) => row.id), ['fallback-order'])
 })
+
+test('falls back to durable localStorage when an IndexedDB queue transaction fails', async () => {
+  const values = new Map()
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+  }
+  const brokenDatabase = {
+    transaction: () => ({
+      objectStore: () => ({
+        put: () => { throw new Error('DataCloneError') },
+      }),
+    }),
+  }
+  const indexedDB = {
+    open: () => {
+      const request = { result: brokenDatabase }
+      queueMicrotask(() => request.onsuccess?.())
+      return request
+    },
+  }
+
+  const store = createPosOfflineStore({ indexedDB, storage, now: () => 456 })
+  const queued = await store.enqueueOfflineMutation(
+    'manual_payment_claim',
+    { client_order_key: 'offline-1' },
+    'fallback-mutation',
+  )
+
+  assert.equal(queued.persisted, true)
+  assert.equal(
+    JSON.parse(values.get('restaurant-pos-offline-fallback:mutation_queue'))[0].id,
+    'fallback-mutation',
+  )
+  assert.deepEqual((await store.listPendingOfflineMutations()).map((row) => row.id), ['fallback-mutation'])
+  assert.equal(await store.markOfflineMutationSynced('fallback-mutation'), true)
+  assert.deepEqual(await store.listPendingOfflineMutations(), [])
+})

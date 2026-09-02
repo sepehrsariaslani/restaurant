@@ -175,10 +175,6 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
     }
   }
 
-  async function fallbackOnly() {
-    return !(await openDatabase())
-  }
-
   function updateFallbackQueueRecord(storeName, id, update) {
     const key = String(id || '').trim()
     const rows = readFallbackQueue(storeName)
@@ -191,7 +187,9 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
   function deleteFallbackQueueRecord(storeName, id) {
     const key = String(id || '').trim()
     const rows = readFallbackQueue(storeName)
-    return writeFallbackQueue(storeName, rows.filter((row) => row?.id !== key))
+    const remaining = rows.filter((row) => row?.id !== key)
+    if (remaining.length === rows.length) return false
+    return writeFallbackQueue(storeName, remaining)
   }
 
   function openDatabase() {
@@ -309,30 +307,21 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
       store.put(record)
       return true
     }, false)
-    return { ...record, persisted: Boolean(persisted) }
+    if (persisted) return { ...record, persisted: true }
+    const rows = readFallbackQueue(ORDER_QUEUE_STORE)
+    return { ...record, persisted: writeFallbackQueue(ORDER_QUEUE_STORE, mergeQueueRecords(rows, [record])) }
   }
 
   async function listPendingOfflineOrders() {
-    if (!await openDatabase()) {
-      return readFallbackQueue(ORDER_QUEUE_STORE).filter((row) => row?.status === 'pending')
-        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    }
-    return withStore(ORDER_QUEUE_STORE, 'readonly', async (store) => {
-      const rows = await requestResult(store.getAll())
-      return (Array.isArray(rows) ? rows : [])
-        .filter((row) => row?.status === 'pending')
-        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    }, [])
+    return (await listOfflineOrders()).filter((row) => row?.status === 'pending')
   }
 
   async function listOfflineOrders() {
-    if (!await openDatabase()) return readFallbackQueue(ORDER_QUEUE_STORE)
-      .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    return withStore(ORDER_QUEUE_STORE, 'readonly', async (store) => {
+    const stored = await withStore(ORDER_QUEUE_STORE, 'readonly', async (store) => {
       const rows = await requestResult(store.getAll())
-      return (Array.isArray(rows) ? rows : [])
-        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+      return Array.isArray(rows) ? rows : []
     }, [])
+    return mergeQueueRecords(stored, readFallbackQueue(ORDER_QUEUE_STORE))
   }
 
   async function pendingOrderCount() {
@@ -355,39 +344,32 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
   }
 
   async function markOfflineOrderPending(id, error = '') {
-    if (await fallbackOnly()) return updateFallbackQueueRecord(ORDER_QUEUE_STORE, id, (row) => ({
+    const update = (row) => ({
       ...row, status: 'pending', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
-    }))
-    return updateQueueRecord(id, (row) => ({
-      ...row,
-      status: 'pending',
-      retry_count: Number(row.retry_count || 0) + 1,
-      last_error: String(error || '').trim(),
-      updated_at: Number(now()) || Date.now(),
-    }))
+    })
+    const stored = await updateQueueRecord(id, update)
+    const fallback = updateFallbackQueueRecord(ORDER_QUEUE_STORE, id, update)
+    return stored || fallback
   }
 
   async function markOfflineOrderSynced(id) {
     const key = String(id || '').trim()
     if (!key) return false
-    if (await fallbackOnly()) return deleteFallbackQueueRecord(ORDER_QUEUE_STORE, key)
-    return withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
+    const stored = await withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
       store.delete(key)
       return true
     }, false)
+    const fallback = deleteFallbackQueueRecord(ORDER_QUEUE_STORE, key)
+    return stored || fallback
   }
 
   async function markOfflineOrderNeedsAttention(id, error = '') {
-    if (await fallbackOnly()) return updateFallbackQueueRecord(ORDER_QUEUE_STORE, id, (row) => ({
+    const update = (row) => ({
       ...row, status: 'needs_attention', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
-    }))
-    return updateQueueRecord(id, (row) => ({
-        ...row,
-        status: 'needs_attention',
-        retry_count: Number(row.retry_count || 0) + 1,
-        last_error: String(error || '').trim(),
-        updated_at: Number(now()) || Date.now(),
-      }))
+    })
+    const stored = await updateQueueRecord(id, update)
+    const fallback = updateFallbackQueueRecord(ORDER_QUEUE_STORE, id, update)
+    return stored || fallback
   }
 
   async function enqueueOfflineMutation(type, payload, id = '') {
@@ -401,30 +383,21 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
       store.put(record)
       return true
     }, false)
-    return { ...record, persisted: Boolean(persisted) }
+    if (persisted) return { ...record, persisted: true }
+    const rows = readFallbackQueue(MUTATION_QUEUE_STORE)
+    return { ...record, persisted: writeFallbackQueue(MUTATION_QUEUE_STORE, mergeQueueRecords(rows, [record])) }
   }
 
   async function listPendingOfflineMutations() {
-    if (!await openDatabase()) {
-      return readFallbackQueue(MUTATION_QUEUE_STORE).filter((row) => row?.status === 'pending')
-        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    }
-    return withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
-      const rows = await requestResult(store.getAll())
-      return (Array.isArray(rows) ? rows : [])
-        .filter((row) => row?.status === 'pending')
-        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    }, [])
+    return (await listOfflineMutations()).filter((row) => row?.status === 'pending')
   }
 
   async function listOfflineMutations() {
-    if (!await openDatabase()) return readFallbackQueue(MUTATION_QUEUE_STORE)
-      .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    return withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
+    const stored = await withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
       const rows = await requestResult(store.getAll())
-      return (Array.isArray(rows) ? rows : [])
-        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+      return Array.isArray(rows) ? rows : []
     }, [])
+    return mergeQueueRecords(stored, readFallbackQueue(MUTATION_QUEUE_STORE))
   }
 
   async function pendingMutationCount() {
@@ -447,39 +420,32 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: sto
   }
 
   async function markOfflineMutationPending(id, error = '') {
-    if (await fallbackOnly()) return updateFallbackQueueRecord(MUTATION_QUEUE_STORE, id, (row) => ({
+    const update = (row) => ({
       ...row, status: 'pending', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
-    }))
-    return updateMutationRecord(id, (row) => ({
-      ...row,
-      status: 'pending',
-      retry_count: Number(row.retry_count || 0) + 1,
-      last_error: String(error || '').trim(),
-      updated_at: Number(now()) || Date.now(),
-    }))
+    })
+    const stored = await updateMutationRecord(id, update)
+    const fallback = updateFallbackQueueRecord(MUTATION_QUEUE_STORE, id, update)
+    return stored || fallback
   }
 
   async function markOfflineMutationSynced(id) {
     const key = String(id || '').trim()
     if (!key) return false
-    if (await fallbackOnly()) return deleteFallbackQueueRecord(MUTATION_QUEUE_STORE, key)
-    return withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
+    const stored = await withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
       store.delete(key)
       return true
     }, false)
+    const fallback = deleteFallbackQueueRecord(MUTATION_QUEUE_STORE, key)
+    return stored || fallback
   }
 
   async function markOfflineMutationNeedsAttention(id, error = '') {
-    if (await fallbackOnly()) return updateFallbackQueueRecord(MUTATION_QUEUE_STORE, id, (row) => ({
+    const update = (row) => ({
       ...row, status: 'needs_attention', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
-    }))
-    return updateMutationRecord(id, (row) => ({
-      ...row,
-      status: 'needs_attention',
-      retry_count: Number(row.retry_count || 0) + 1,
-      last_error: String(error || '').trim(),
-      updated_at: Number(now()) || Date.now(),
-    }))
+    })
+    const stored = await updateMutationRecord(id, update)
+    const fallback = updateFallbackQueueRecord(MUTATION_QUEUE_STORE, id, update)
+    return stored || fallback
   }
 
   return {
