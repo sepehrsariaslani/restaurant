@@ -79,6 +79,7 @@ async function watchPOSBackgroundJob(job) {
         successMessage.value = job.order_id
           ? \`عملیات فاکتور \${job.order_id} در پس‌زمینه تکمیل شد.\`
           : 'عملیات POS در پس‌زمینه تکمیل شد.'
+        posBackgroundOperations.value = posBackgroundOperations.value.filter((row) => row.job_key !== job.job_key)
         void loadPOSBoot()
         void loadRecentOrders(true)
         void loadOpenInvoices(true)

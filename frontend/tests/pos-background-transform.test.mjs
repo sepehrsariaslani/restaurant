@@ -87,6 +87,11 @@ test('adds compact background job status UI', () => {
   assert.match(out, /انجام شد/)
 })
 
+test('removes a completed background job from the visible status list', () => {
+  const out = transformPosBackgroundPage(fixture)
+  assert.match(out, /posBackgroundOperations\.value = posBackgroundOperations\.value\.filter\(\(row\) => row\.job_key !== job\.job_key\)/)
+})
+
 test('product availability uses expiry-aware helper instead of raw flag', () => {
   const productFixture = `
 <template>
