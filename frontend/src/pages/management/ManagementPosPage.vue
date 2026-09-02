@@ -1106,7 +1106,7 @@ import {
 } from '@/utils/api'
 import { formatMoney, formatStatus, toPersianNumber } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
-import { calculatePosTotals } from '@/utils/posPricingEngine'
+import { calculatePosTotals, normalizePosPercentageModifier } from '@/utils/posPricingEngine'
 
 let bootWalletBalance = 0
 let bootDefaultPaymentMethod = 'cash'
@@ -2263,13 +2263,25 @@ function patchFinancial(partial) {
   // ── دروازه تخفیف: درصد هرگز بیشتر از ۱۰۰ نمی‌شود ──
   // اگر کاربر در حالت «درصدی» عددی بیشتر از ۱۰۰ وارد کند، خودکار به
   // «مبلغی» سوییچ می‌شود و مقدار به مبلغ معادل همان درصد تبدیل می‌گردد.
-  const nextType = next.discountType !== undefined ? next.discountType : financial.discountType
-  const nextValue = next.discountValue !== undefined ? Number(next.discountValue || 0) : Number(financial.discountValue || 0)
-  if (nextType === 'percent' && nextValue > 100) {
-    const itemsTotal = Number(totals.value?.itemsTotal || 0)
-    const equivalentAmount = Math.round((itemsTotal * nextValue) / 100)
-    next.discountType = 'fixed'
-    next.discountValue = Math.max(equivalentAmount, 0)
+  const itemsTotal = Number(totals.value?.itemsTotal || 0)
+  const discount = normalizePosPercentageModifier(
+    next.discountType !== undefined ? next.discountType : financial.discountType,
+    next.discountValue !== undefined ? next.discountValue : financial.discountValue,
+    itemsTotal,
+  )
+  if (discount.type !== (next.discountType !== undefined ? next.discountType : financial.discountType)) {
+    next.discountType = discount.type
+    next.discountValue = discount.value
+  }
+
+  const service = normalizePosPercentageModifier(
+    next.serviceType !== undefined ? next.serviceType : financial.serviceType,
+    next.serviceValue !== undefined ? next.serviceValue : financial.serviceValue,
+    itemsTotal,
+  )
+  if (service.type !== (next.serviceType !== undefined ? next.serviceType : financial.serviceType)) {
+    next.serviceType = service.type
+    next.serviceValue = service.value
   }
 
   Object.assign(financial, next)

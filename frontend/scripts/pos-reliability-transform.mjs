@@ -36,17 +36,7 @@ import { getReliablePOSBoot, replayOfflinePOSOrder, replayOfflinePOSMutation, up
   )
 
   const offlineBanner = '<p class="offline-banner" v-if="isOffline">اینترنت قطع است.</p>'
-  const syncPanel = `<div class="offline-banner" v-if="isOffline">اینترنت قطع است؛ اطلاعات ذخیره‌شده محلی در دسترس است.</div>
-    <div v-if="pendingOfflineOrderCount || needsAttentionOfflineOrderCount || pendingOfflineMutationCount || needsAttentionOfflineMutationCount || syncReminder" class="sync-banner pos-sync-banner" role="status" aria-live="polite">
-      <span>{{ syncReminder || ((pendingOfflineOrderCount + pendingOfflineMutationCount) + ' عملیات آفلاین در صف همگام‌سازی است.' + ((needsAttentionOfflineOrderCount + needsAttentionOfflineMutationCount) ? (' ' + (needsAttentionOfflineOrderCount + needsAttentionOfflineMutationCount) + ' عملیات نیازمند بررسی است.') : '')) }}</span>
-      <button
-        v-if="pendingOfflineOrderCount || pendingOfflineMutationCount || needsAttentionOfflineOrderCount || needsAttentionOfflineMutationCount"
-        type="button"
-        class="secondary-btn pos-sync-btn"
-        :disabled="isOffline || offlineSyncing"
-        @click="syncPendingOfflineOrders"
-      >{{ offlineSyncing ? 'در حال همگام‌سازی...' : 'همگام‌سازی' }}</button>
-    </div>`
+  const syncPanel = `<div class="offline-banner" v-if="isOffline">اینترنت قطع است؛ اطلاعات ذخیره‌شده محلی در دسترس است.</div>`
   if (code.includes(offlineBanner)) code = code.replace(offlineBanner, syncPanel)
 
   const reliabilityHelpers = `function isPOSNetworkError(error) {
@@ -189,8 +179,6 @@ async function syncPendingOfflineOrders() {
       void loadPOSBoot()
       void loadCustomers('')
     }
-    if (result.pending) syncReminder.value = 'ارتباط با سرور قطع شد؛ سفارش‌های باقی‌مانده در صف می‌مانند.'
-    if (result.needsAttention) syncReminder.value = \`\${result.needsAttention} سفارش نیازمند بررسی است.\`
   } finally {
     offlineSyncing.value = false
   }
@@ -323,12 +311,12 @@ async function syncPendingOfflineOrders() {
 
   code = code.replace(
     '  hydrateReceiptSettings()\n  await loadPOSBoot()',
-    "  hydrateReceiptSettings()\n  customerOptions.value = await posOfflineStore.searchCachedCustomers('', 50)\n  await refreshPendingOfflineOrderCount()\n  await loadPOSBoot()\n  if (!isOffline.value) void loadCustomers('')",
+    "  hydrateReceiptSettings()\n  customerOptions.value = await posOfflineStore.searchCachedCustomers('', 50)\n  await refreshPendingOfflineOrderCount()\n  await loadPOSBoot()\n  if (!isOffline.value) {\n    void loadCustomers('')\n    void syncPendingOfflineOrders()\n  }",
   )
 
   code = code.replace(
     "    syncReminder.value = 'اینترنت وصل شد. لطفا اگر سفارشی آفلاین مانده، دکمه Sync را بزنید.'",
-    "    syncReminder.value = 'اینترنت وصل شد؛ سفارش‌های آفلاین در حال بررسی برای همگام‌سازی هستند.'\n    void syncPendingOfflineOrders()",
+    "    void syncPendingOfflineOrders()",
   )
 
   code = code.replaceAll('syncEngine.syncPendingOrders()', 'syncEngine.syncPendingMutations()')

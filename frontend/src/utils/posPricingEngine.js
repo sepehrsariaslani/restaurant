@@ -7,6 +7,18 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
+export function normalizePosPercentageModifier(type, value, itemsTotal) {
+  const normalizedType = String(type || 'fixed')
+  const normalizedValue = Math.max(toNumber(value, 0), 0)
+  if (normalizedType !== 'percent' || normalizedValue <= 100) {
+    return { type: normalizedType, value: normalizedValue }
+  }
+  return {
+    type: 'fixed',
+    value: Math.max(Math.round(toNumber(itemsTotal, 0) * normalizedValue / 100), 0),
+  }
+}
+
 function calculateTotalsWithoutTarget({
   cartLines = [],
   discountType = 'fixed',

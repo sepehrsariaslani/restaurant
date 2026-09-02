@@ -85,12 +85,17 @@ test('injects offline boot/customer cache and idempotent order queue integration
   assert.match(out, /getCachedPOSWaiters/)
 })
 
-test('keeps a visible manual sync action when queued orders exist', () => {
+test('uses automatic synchronization instead of a manual queue action', () => {
   const out = transformPosReliabilityPage(fixture)
   assert.match(out, /pendingOfflineOrderCount/)
   assert.match(out, /needsAttentionOfflineOrderCount/)
-  assert.match(out, /@click="syncPendingOfflineOrders"/)
-  assert.match(out, /همگام/)
+  assert.doesNotMatch(out, /@click="syncPendingOfflineOrders"/)
+})
+
+test('syncs queued work silently when POS opens instead of showing a permanent queue banner', () => {
+  const out = transformPosReliabilityPage(fixture)
+  assert.doesNotMatch(out, /عملیات آفلاین در صف همگام‌سازی است/)
+  assert.match(out, /if \(!isOffline\.value\) \{\s*void loadCustomers\(''\)\s*void syncPendingOfflineOrders\(\)/s)
 })
 
 test('uses cached POS context for invoices, history, recent orders, tables and waiters while offline', () => {
