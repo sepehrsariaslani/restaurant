@@ -212,6 +212,23 @@ async function confirmSettleOrder() {
   assert.match(out, /'invoice_settlement_claim'/)
 })
 
+test('preloads today invoice details for offline access', () => {
+  const fixture = `
+<script setup>
+const isOffline = ref(false)
+async function loadPOSBoot() {}
+async function loadOpenInvoices() {
+  const selectedDate = String(openInvoicesDate.value || '').trim()
+  const orderPayload = await listManagementOrders({ date_from: selectedDate, date_to: selectedDate })
+  const allOrders = orderPayload?.orders || []
+  setOpenInvoices(allOrders, true)
+}
+</script>`
+  const out = transformPosReliabilityPage(fixture)
+  assert.match(out, /cacheTodayInvoiceDetails/)
+  assert.match(out, /slice\(0, 200\)/)
+})
+
 test('queues every open-invoice settlement path as a provisional claim offline', () => {
   const settlementFixture = `
 <script setup>

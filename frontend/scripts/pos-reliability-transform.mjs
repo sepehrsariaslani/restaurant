@@ -138,6 +138,24 @@ async function cacheInvoiceDetail(orderName, payload) {
   return payload
 }
 
+async function cacheTodayInvoiceDetails(rows) {
+  if (isOffline.value) return
+  const invoices = Array.isArray(rows) ? rows.slice(0, 200) : []
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < invoices.length && !isOffline.value) {
+      const invoice = invoices[cursor++]
+      const orderName = String(invoice?.name || '').trim()
+      if (!orderName) continue
+      try {
+        const cached = await getCachedInvoiceDetail(orderName)
+        if (!cached) await cacheInvoiceDetail(orderName, await getManagementOrderDetail(orderName, invoice.source || 'web'))
+      } catch (_) {}
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, invoices.length) }, worker))
+}
+
 async function loadReliablePOSBootPayload() {
   let networkError = null
   if (!isOffline.value) {
@@ -260,7 +278,11 @@ async function syncPendingOfflineOrders() {
   )
   code = code.replace(
     'const allOrders = orderPayload?.orders || []\n    setOpenInvoices(allOrders, preserveSelection)',
-    "const allOrders = orderPayload?.orders || []\n    if (!isOffline.value) await posOfflineStore.saveDailyInvoiceSnapshots(String(openInvoicesDate.value || '').trim(), allOrders)\n    setOpenInvoices(allOrders, preserveSelection)",
+    "const allOrders = orderPayload?.orders || []\n    if (!isOffline.value) {\n      await posOfflineStore.saveDailyInvoiceSnapshots(String(openInvoicesDate.value || '').trim(), allOrders)\n      void cacheTodayInvoiceDetails(allOrders)\n    }\n    setOpenInvoices(allOrders, preserveSelection)",
+  )
+  code = code.replace(
+    'const allOrders = orderPayload?.orders || []\n  setOpenInvoices(allOrders, true)',
+    "const allOrders = orderPayload?.orders || []\n  if (!isOffline.value) {\n    await posOfflineStore.saveDailyInvoiceSnapshots(selectedDate, allOrders)\n    void cacheTodayInvoiceDetails(allOrders)\n  }\n  setOpenInvoices(allOrders, true)",
   )
   code = code.replace(
     'const allOrders = orderPayload?.orders || []\n      setOpenInvoices(allOrders, true)',

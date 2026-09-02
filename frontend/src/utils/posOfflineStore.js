@@ -146,11 +146,53 @@ function transactionDone(transaction) {
   })
 }
 
-export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => Date.now() } = {}) {
+export function createPosOfflineStore({ indexedDB: indexedDBOption, storage: storageOption, now = () => Date.now() } = {}) {
   const factory = indexedDBOption === null
     ? null
     : (indexedDBOption || (typeof globalThis !== 'undefined' ? globalThis.indexedDB : null))
   let dbPromise = null
+  const fallbackStorage = storageOption === null
+    ? null
+    : (storageOption || (typeof globalThis !== 'undefined' ? globalThis.localStorage : null))
+  const fallbackQueueKey = (storeName) => `restaurant-pos-offline-fallback:${storeName}`
+
+  function readFallbackQueue(storeName) {
+    try {
+      const parsed = JSON.parse(fallbackStorage?.getItem(fallbackQueueKey(storeName)) || '[]')
+      return Array.isArray(parsed) ? parsed : []
+    } catch (_) {
+      return []
+    }
+  }
+
+  function writeFallbackQueue(storeName, rows) {
+    try {
+      if (!fallbackStorage) return false
+      fallbackStorage.setItem(fallbackQueueKey(storeName), JSON.stringify(rows))
+      return true
+    } catch (_) {
+      return false
+    }
+  }
+
+  async function fallbackOnly() {
+    return !(await openDatabase())
+  }
+
+  function updateFallbackQueueRecord(storeName, id, update) {
+    const key = String(id || '').trim()
+    const rows = readFallbackQueue(storeName)
+    const index = rows.findIndex((row) => row?.id === key)
+    if (index < 0) return false
+    rows[index] = update(rows[index])
+    return writeFallbackQueue(storeName, rows)
+  }
+
+  function deleteFallbackQueueRecord(storeName, id) {
+    const key = String(id || '').trim()
+    const rows = readFallbackQueue(storeName)
+    return writeFallbackQueue(storeName, rows.filter((row) => row?.id !== key))
+  }
 
   function openDatabase() {
     if (!factory) return Promise.resolve(null)
@@ -258,6 +300,11 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
 
   async function enqueueOfflineOrder(payload, id = '') {
     const record = createOfflineOrderRecord(payload, id, now)
+    if (!await openDatabase()) {
+      const rows = readFallbackQueue(ORDER_QUEUE_STORE)
+      const persisted = writeFallbackQueue(ORDER_QUEUE_STORE, mergeQueueRecords(rows, [record]))
+      return { ...record, persisted }
+    }
     const persisted = await withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
       store.put(record)
       return true
@@ -266,6 +313,10 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function listPendingOfflineOrders() {
+    if (!await openDatabase()) {
+      return readFallbackQueue(ORDER_QUEUE_STORE).filter((row) => row?.status === 'pending')
+        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+    }
     return withStore(ORDER_QUEUE_STORE, 'readonly', async (store) => {
       const rows = await requestResult(store.getAll())
       return (Array.isArray(rows) ? rows : [])
@@ -275,6 +326,8 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function listOfflineOrders() {
+    if (!await openDatabase()) return readFallbackQueue(ORDER_QUEUE_STORE)
+      .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
     return withStore(ORDER_QUEUE_STORE, 'readonly', async (store) => {
       const rows = await requestResult(store.getAll())
       return (Array.isArray(rows) ? rows : [])
@@ -302,6 +355,9 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function markOfflineOrderPending(id, error = '') {
+    if (await fallbackOnly()) return updateFallbackQueueRecord(ORDER_QUEUE_STORE, id, (row) => ({
+      ...row, status: 'pending', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
+    }))
     return updateQueueRecord(id, (row) => ({
       ...row,
       status: 'pending',
@@ -314,6 +370,7 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   async function markOfflineOrderSynced(id) {
     const key = String(id || '').trim()
     if (!key) return false
+    if (await fallbackOnly()) return deleteFallbackQueueRecord(ORDER_QUEUE_STORE, key)
     return withStore(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
       store.delete(key)
       return true
@@ -321,6 +378,9 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function markOfflineOrderNeedsAttention(id, error = '') {
+    if (await fallbackOnly()) return updateFallbackQueueRecord(ORDER_QUEUE_STORE, id, (row) => ({
+      ...row, status: 'needs_attention', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
+    }))
     return updateQueueRecord(id, (row) => ({
         ...row,
         status: 'needs_attention',
@@ -332,6 +392,11 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
 
   async function enqueueOfflineMutation(type, payload, id = '') {
     const record = createOfflineMutationRecord(type, payload, id, now)
+    if (!await openDatabase()) {
+      const rows = readFallbackQueue(MUTATION_QUEUE_STORE)
+      const persisted = writeFallbackQueue(MUTATION_QUEUE_STORE, mergeQueueRecords(rows, [record]))
+      return { ...record, persisted }
+    }
     const persisted = await withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
       store.put(record)
       return true
@@ -340,6 +405,10 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function listPendingOfflineMutations() {
+    if (!await openDatabase()) {
+      return readFallbackQueue(MUTATION_QUEUE_STORE).filter((row) => row?.status === 'pending')
+        .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+    }
     return withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
       const rows = await requestResult(store.getAll())
       return (Array.isArray(rows) ? rows : [])
@@ -349,6 +418,8 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function listOfflineMutations() {
+    if (!await openDatabase()) return readFallbackQueue(MUTATION_QUEUE_STORE)
+      .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
     return withStore(MUTATION_QUEUE_STORE, 'readonly', async (store) => {
       const rows = await requestResult(store.getAll())
       return (Array.isArray(rows) ? rows : [])
@@ -376,6 +447,9 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function markOfflineMutationPending(id, error = '') {
+    if (await fallbackOnly()) return updateFallbackQueueRecord(MUTATION_QUEUE_STORE, id, (row) => ({
+      ...row, status: 'pending', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
+    }))
     return updateMutationRecord(id, (row) => ({
       ...row,
       status: 'pending',
@@ -388,6 +462,7 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   async function markOfflineMutationSynced(id) {
     const key = String(id || '').trim()
     if (!key) return false
+    if (await fallbackOnly()) return deleteFallbackQueueRecord(MUTATION_QUEUE_STORE, key)
     return withStore(MUTATION_QUEUE_STORE, 'readwrite', async (store) => {
       store.delete(key)
       return true
@@ -395,6 +470,9 @@ export function createPosOfflineStore({ indexedDB: indexedDBOption, now = () => 
   }
 
   async function markOfflineMutationNeedsAttention(id, error = '') {
+    if (await fallbackOnly()) return updateFallbackQueueRecord(MUTATION_QUEUE_STORE, id, (row) => ({
+      ...row, status: 'needs_attention', retry_count: Number(row.retry_count || 0) + 1, last_error: String(error || '').trim(), updated_at: Number(now()) || Date.now(),
+    }))
     return updateMutationRecord(id, (row) => ({
       ...row,
       status: 'needs_attention',

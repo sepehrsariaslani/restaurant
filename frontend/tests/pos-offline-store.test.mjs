@@ -103,3 +103,16 @@ test('offers safe empty daily invoice snapshots when browser storage is unavaila
   assert.deepEqual(await store.loadDailyInvoiceSnapshots('2026-09-01'), [])
   assert.equal(await store.saveDailyInvoiceSnapshots('2026-09-01', [{ name: 'SO-1' }]), false)
 })
+
+test('falls back to durable localStorage queue when IndexedDB cannot open', async () => {
+  const values = new Map()
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }
+  const store = createPosOfflineStore({ indexedDB: null, storage, now: () => 123 })
+  const queued = await store.enqueueOfflineOrder({ items: [{ item_name: 'A', qty: 1 }] }, 'fallback-order')
+  assert.equal(queued.persisted, true)
+  assert.deepEqual((await store.listPendingOfflineOrders()).map((row) => row.id), ['fallback-order'])
+})
