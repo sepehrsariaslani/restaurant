@@ -4,7 +4,7 @@
       <div>
         <p class="order-flow-eyebrow">ارسال با پیک</p>
         <h1 class="order-flow-title">آدرس تحویل را انتخاب کنید</h1>
-        <p class="order-flow-subtitle">با انتخاب آدرس، شعبه پیشنهادی، هزینه ارسال و زمان تقریبی تحویل مشخص می‌شود.</p>
+        <p class="order-flow-subtitle">آدرس و شرکتِ آماده‌سازی را انتخاب کنید تا هزینه ارسال و زمان تقریبی تحویل مشخص شود.</p>
       </div>
       <a class="order-flow-secondary" href="/order/type">تغییر نوع سفارش</a>
     </header>
@@ -69,14 +69,36 @@
         </section>
 
         <section class="order-flow-card">
-          <h2>شعبه ارسال و یادداشت پیک</h2>
-          <p v-if="branchSuggestion">شعبه پیشنهادی: <strong>{{ branchSuggestion.title || branchSuggestion.name }}</strong></p>
-          <p v-else>پس از انتخاب آدرس، نزدیک‌ترین یا اولین شعبه فعال برای ارسال پیشنهاد می‌شود.</p>
+          <h2>انتخاب شرکت برای آماده‌سازی</h2>
+          <p>از میان شرکت‌های فعالِ قابل‌ارسال، محل آماده‌سازی سفارشتان را انتخاب کنید.</p>
+          <div class="order-flow-list company-choice-list">
+            <button
+              v-for="company in deliveryCompanies"
+              :key="branchKey(company)"
+              type="button"
+              class="order-flow-branch-card"
+              :class="{ active: selectedCompanyId === branchKey(company) }"
+              @click="selectedCompanyId = branchKey(company)"
+            >
+              <div class="order-flow-card-head">
+                <div><h3>{{ company.title || company.name }}</h3><p>{{ company.address || 'آدرس شرکت ثبت نشده است.' }}</p></div>
+                <span class="order-flow-pill">ارسال فعال</span>
+              </div>
+              <div class="order-flow-branch-meta"><span class="order-flow-pill">{{ deliveryTimeFor(company) }}</span><span class="order-flow-pill">{{ deliveryFeeFor(company) }}</span></div>
+            </button>
+          </div>
+          <p v-if="!deliveryCompanies.length" class="order-flow-alert danger">فعلاً شرکت فعالی برای ارسال وجود ندارد.</p>
+        </section>
+
+        <section class="order-flow-card">
+          <h2>جزئیات ارسال و یادداشت پیک</h2>
+          <p v-if="selectedCompany">شرکت انتخاب‌شده: <strong>{{ selectedCompany.title || selectedCompany.name }}</strong></p>
+          <p v-else>برای ادامه، شرکتِ آماده‌سازی را انتخاب کنید.</p>
           <div class="order-flow-branch-meta" style="margin:.75rem 0">
             <span class="order-flow-pill">زمان پیشنهادی: {{ etaText }}</span>
             <span class="order-flow-pill">هزینه ارسال: {{ deliveryFeeText }}</span>
           </div>
-          <p class="order-flow-alert">هزینه و زمان نهایی ارسال پس از تایید شعبه قطعی می‌شود.</p>
+          <p class="order-flow-alert">هزینه و زمان نهایی ارسال پس از تایید شرکت قطعی می‌شود.</p>
           <p v-if="outOfRange" class="order-flow-alert danger">این آدرس خارج از محدوده ارسال است.</p>
           <label class="order-flow-field">
             <span>یادداشت پیک</span>
@@ -85,8 +107,8 @@
         </section>
       </main>
 
-      <OrderContextSummary next-step="مشاهده منو و انتخاب غذا" :currency="currency">
-        <button class="order-flow-primary" type="button" :disabled="!canContinue || outOfRange" @click="continueToMenu">مشاهده منو</button>
+      <OrderContextSummary :next-step="nextStep" :currency="currency">
+        <button class="order-flow-primary" type="button" :disabled="!canContinue || outOfRange" @click="continueToMenu">{{ continueLabel }}</button>
         <button v-if="outOfRange" class="order-flow-secondary" type="button" @click="resetAddress">انتخاب آدرس دیگر</button>
       </OrderContextSummary>
     </div>
@@ -109,6 +131,7 @@ const useNewAddress = ref(cartState.checkoutDraft.use_new_address !== false)
 const profileLoading = ref(false)
 const profileError = ref('')
 const branches = ref([])
+const selectedCompanyId = ref(cartState.orderContext.branch || '')
 const currency = ref('IRR')
 const courierNote = ref(cartState.orderContext.courier_note || '')
 const address = reactive({
@@ -123,7 +146,9 @@ const address = reactive({
 })
 
 const normalizedMobile = computed(() => normalizeMobileUtil(mobile.value || ''))
-const branchSuggestion = computed(() => branches.value.find((row) => row.delivery_available !== false && row.isOpen !== false) || branches.value[0] || null)
+function branchKey(branch = {}) { return branch.id || branch.name || '' }
+const deliveryCompanies = computed(() => branches.value.filter((row) => row.delivery_available !== false && row.isOpen !== false))
+const selectedCompany = computed(() => deliveryCompanies.value.find((row) => branchKey(row) === selectedCompanyId.value) || null)
 const outOfRange = computed(() => {
   const lat = Number(address.lat)
   const lng = Number(address.lng)
@@ -131,14 +156,19 @@ const outOfRange = computed(() => {
   if ((address.lat || address.lng) && (!Number.isFinite(lat) || !Number.isFinite(lng))) return true
   return false
 })
-const etaMin = computed(() => Number(branchSuggestion.value?.delivery_eta_min || 35))
-const etaMax = computed(() => Number(branchSuggestion.value?.delivery_eta_max || 45))
-const deliveryFee = computed(() => Number(branchSuggestion.value?.delivery_fee || 0))
+const etaMin = computed(() => Number(selectedCompany.value?.delivery_eta_min || 35))
+const etaMax = computed(() => Number(selectedCompany.value?.delivery_eta_max || 45))
+const deliveryFee = computed(() => Number(selectedCompany.value?.delivery_fee || 0))
 const etaText = computed(() => `${etaMin.value} تا ${etaMax.value} دقیقه`)
-const deliveryFeeText = computed(() => deliveryFee.value ? formatMoney(deliveryFee.value, currency.value) : 'پس از تایید شعبه')
-const canContinue = computed(() => Boolean(customerName.value.trim() && normalizedMobile.value.length >= 10 && address.address_line.trim()))
+const deliveryFeeText = computed(() => deliveryFee.value ? formatMoney(deliveryFee.value, currency.value) : 'پس از تایید شرکت')
+const canContinue = computed(() => Boolean(customerName.value.trim() && normalizedMobile.value.length >= 10 && address.address_line.trim() && selectedCompany.value))
+const hasCartLines = computed(() => cartState.lines.length > 0)
+const continueLabel = computed(() => hasCartLines.value ? 'ادامه به تکمیل سفارش' : 'مشاهده منو')
+const nextStep = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'مشاهده منو و انتخاب غذا')
+const deliveryTimeFor = (company) => `${Number(company?.delivery_eta_min || 35)} تا ${Number(company?.delivery_eta_max || 45)} دقیقه`
+const deliveryFeeFor = (company) => Number(company?.delivery_fee || 0) ? formatMoney(company.delivery_fee, currency.value) : 'هزینه پس از تأیید'
 
-watch([customerName, mobile, selectedAddressId, useNewAddress, address, courierNote, branchSuggestion], persistContext, { deep: true })
+watch([customerName, mobile, selectedAddressId, useNewAddress, address, courierNote, selectedCompany], persistContext, { deep: true })
 
 function selectedAddressPayload() {
   return {
@@ -155,7 +185,7 @@ function selectedAddressPayload() {
 }
 
 function persistContext() {
-  const selectedBranch = branchSuggestion.value
+  const selectedBranch = selectedCompany.value
   saveCheckoutDraft({
     customer_name: customerName.value,
     mobile: normalizedMobile.value,
@@ -175,7 +205,7 @@ function persistContext() {
   })
   saveOrderContext({
     order_type: 'delivery',
-    branch: selectedBranch?.id || selectedBranch?.name || '',
+    branch: selectedCompany.value?.id || selectedCompany.value?.name || '',
     branch_title: selectedBranch?.title || selectedBranch?.name || '',
     address: selectedAddressPayload(),
     eta_min: etaMin.value,
@@ -236,7 +266,11 @@ async function loadBoot() {
 
 function continueToMenu() {
   if (!canContinue.value || outOfRange.value) return
-  const branch = branchSuggestion.value?.id || branchSuggestion.value?.name || ''
+  if (hasCartLines.value) {
+    window.location.href = '/checkout'
+    return
+  }
+  const branch = selectedCompany.value?.id || selectedCompany.value?.name || ''
   window.location.href = branch ? `/menu?branch=${encodeURIComponent(branch)}` : '/menu'
 }
 

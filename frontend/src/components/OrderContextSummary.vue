@@ -42,10 +42,10 @@ const context = computed(() => cartState.orderContext || {})
 const destinationText = computed(() => {
   const ctx = context.value
   if (ctx.order_type === 'dine_in') {
-    return [ctx.branch_title || ctx.branch || 'شعبه نامشخص', ctx.table ? `میز ${ctx.table}` : 'بدون میز'].join(' · ')
+    return [ctx.branch_title || ctx.branch || 'شرکت نامشخص', ctx.table ? `میز ${ctx.table}` : 'بدون میز'].join(' · ')
   }
   if (ctx.order_type === 'pickup') {
-    return ctx.branch_title || ctx.branch ? `تحویل از ${ctx.branch_title || ctx.branch}` : 'شعبه انتخاب نشده'
+    return ctx.branch_title || ctx.branch ? `تحویل از ${ctx.branch_title || ctx.branch}` : 'شرکت انتخاب نشده'
   }
   if (ctx.order_type === 'delivery') {
     const address = ctx.address || {}

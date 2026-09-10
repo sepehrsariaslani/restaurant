@@ -3,20 +3,22 @@
     <button class="remove-btn" type="button" @click="$emit('remove')">×</button>
 
     <div class="line-main">
-      <img :src="lineItemImage" :alt="line.item_title" class="thumb" />
+      <a class="product-visual" :href="`/item/${line.item_slug}?edit=${line.id}`" :aria-label="`مشاهده ${line.item_title}`">
+        <img :src="lineItemImage" :alt="line.item_title" class="thumb" width="144" height="144" loading="lazy" />
+      </a>
 
       <div class="body">
         <h3>{{ line.item_title }}</h3>
         <p class="muted" v-if="isBuilderItem">{{ builderSummaryText }}</p>
         <p class="muted" v-else-if="summary.length">{{ summary[0] }}</p>
         <p class="muted" v-else>سفارشی سازی نشده</p>
-        <strong>{{ formatMoney(line.unit_price_preview, currency) }}</strong>
+        <strong class="unit-price">{{ formatMoney(line.unit_price_preview, currency) }}</strong>
       </div>
 
-      <div class="qty-side">
-        <button class="qty-btn" type="button" @click="$emit('qty-change', Number(line.qty) - 1)">−</button>
+      <div class="qty-side" aria-label="تعداد محصول">
+        <button class="qty-btn" type="button" :aria-label="`کم کردن ${line.item_title}`" @click="$emit('qty-change', Number(line.qty) - 1)">−</button>
         <strong>{{ line.qty }}</strong>
-        <button class="qty-btn" type="button" @click="$emit('qty-change', Number(line.qty) + 1)">+</button>
+        <button class="qty-btn qty-btn--add" type="button" :aria-label="`افزودن ${line.item_title}`" @click="$emit('qty-change', Number(line.qty) + 1)">+</button>
       </div>
     </div>
 
@@ -114,17 +116,18 @@ const builderEditUrl = computed(() => {
 .line-card {
   position: relative;
   display: grid;
-  gap: 0.6rem;
-  border-radius: 26px;
-  padding: 0.78rem;
+  gap: 0.9rem;
+  border-radius: 28px;
+  padding: 1rem;
+  background: rgb(var(--palette-eggshell-rgb) / 0.98);
 }
 
 .remove-btn {
   position: absolute;
   top: 0.46rem;
   inset-inline-start: 0.46rem;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -132,25 +135,33 @@ const builderEditUrl = computed(() => {
   border: 1px solid rgba(206, 94, 94, 0.35);
   background: rgba(255, 246, 246, 0.8);
   color: #b84f4f;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
   line-height: 1;
 }
 
 .line-main {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) auto;
-  gap: 0.58rem;
+  grid-template-columns: clamp(112px, 20vw, 144px) minmax(0, 1fr) auto;
+  gap: 1rem;
   align-items: center;
-  padding-top: 0.22rem;
+  padding-inline-start: 1.6rem;
+}
+
+.product-visual {
+  width: clamp(112px, 20vw, 144px);
+  aspect-ratio: 1;
+  overflow: hidden;
+  display: block;
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgb(var(--palette-june-bud-rgb) / 0.76), rgb(var(--palette-eggshell-rgb) / 0.96));
 }
 
 .thumb {
-  width: 72px;
-  height: 72px;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   object-position: center;
-  background: transparent;
-  border-radius: 20px;
+  display: block;
 }
 
 .body {
@@ -159,35 +170,39 @@ const builderEditUrl = computed(() => {
 
 .body h3 {
   margin: 0;
-  font-size: 1.03rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.55;
 }
 
 .body p {
   margin: 0.2rem 0;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
+  line-height: 1.7;
 }
 
-.body strong {
-  font-size: 0.95rem;
+.unit-price {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.98rem;
 }
 
 .qty-side {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0;
+  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
 }
 
 .qty-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.38);
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.14);
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
   color: var(--accent-gold);
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   line-height: 1;
 }
 
@@ -195,7 +210,9 @@ const builderEditUrl = computed(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.42rem;
+  gap: 0.65rem;
+  padding-top: 0.8rem;
+  border-top: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.16);
 }
 
 .line-actions {
@@ -208,8 +225,9 @@ const builderEditUrl = computed(() => {
 .mini-btn {
   border-radius: 999px;
   border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.32);
-  padding: 0.34rem 0.68rem;
-  background: rgb(var(--palette-eggshell-rgb) / 0.72);
+  min-height: 36px;
+  padding: 0.34rem 0.76rem;
+  background: rgb(var(--palette-june-bud-rgb) / 0.38);
   color: var(--text-primary);
   font-size: 0.74rem;
   white-space: nowrap;
@@ -217,14 +235,35 @@ const builderEditUrl = computed(() => {
 
 .line-total {
   white-space: nowrap;
+  font-size: 1.04rem;
 }
 
 .extra-list {
   margin: 0;
   padding-inline-start: 1rem;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   display: grid;
   gap: 0.18rem;
+}
+
+.qty-btn--add {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.qty-side > strong {
+  min-width: 30px;
+  text-align: center;
+}
+
+@media (max-width: 620px) {
+  .line-card { padding: 0.8rem; gap: 0.72rem; }
+  .line-main { grid-template-columns: 104px minmax(0, 1fr); gap: 0.75rem; padding-inline-start: 1.8rem; }
+  .product-visual { width: 104px; }
+  .qty-side { grid-column: 2; justify-self: start; }
+  .foot-row { grid-template-columns: 1fr; }
+  .line-total { order: -1; }
+  .remove-btn { top: 0.4rem; inset-inline-start: 0.4rem; }
 }
 </style>

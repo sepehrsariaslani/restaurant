@@ -4,7 +4,7 @@
       <div>
         <p class="order-flow-eyebrow">انتخاب نوع سفارش</p>
         <h1 class="order-flow-title">سفارش را چطور دریافت می‌کنید؟</h1>
-        <p class="order-flow-subtitle">انتخاب این مرحله روی شعبه، آدرس، هزینه ارسال و روند پیگیری سفارش اثر می‌گذارد.</p>
+        <p class="order-flow-subtitle">انتخاب این مرحله روی شرکت، آدرس، هزینه ارسال و روند پیگیری سفارش اثر می‌گذارد.</p>
       </div>
       <a class="order-flow-secondary" href="/order/start">بازگشت</a>
     </header>
@@ -25,11 +25,11 @@
         <div class="order-flow-card-head">
           <div>
             <h2>بیرون‌بر</h2>
-            <p>سفارش بدهید و خودتان از شعبه تحویل بگیرید. هزینه ارسال ندارد.</p>
+            <p>سفارش بدهید و خودتان از شرکت تحویل بگیرید. هزینه ارسال ندارد.</p>
           </div>
           <span class="order-flow-icon"><PackageCheck :size="24" /></span>
         </div>
-        <button class="order-flow-primary" type="button" @click="choose('pickup')">انتخاب شعبه برای تحویل</button>
+        <button class="order-flow-primary" type="button" @click="choose('pickup')">انتخاب شرکت برای تحویل</button>
       </article>
 
       <article class="order-flow-card order-flow-card--selectable">

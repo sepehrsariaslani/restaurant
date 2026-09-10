@@ -1,10 +1,10 @@
 <template>
   <section class="order-flow-page checkout-context-page">
-    <header class="order-flow-hero">
+    <header class="order-flow-hero checkout-hero">
       <div>
         <p class="order-flow-eyebrow">تکمیل سفارش</p>
         <h1 class="order-flow-title">قبل از ثبت سفارش همه چیز را بررسی کنید</h1>
-        <p class="order-flow-subtitle">پرداخت آنلاین هنوز فعال نیست؛ سفارش ثبت می‌شود و پرداخت طبق روش انتخاب‌شده هنگام تحویل/در شعبه/سر میز انجام خواهد شد.</p>
+        <p class="order-flow-subtitle">جزئیات سفارش را تأیید کنید؛ روش پرداخت با توجه به شیوهٔ دریافت شما نمایش داده می‌شود.</p>
       </div>
       <button class="order-flow-secondary" type="button" @click="goBack">بازگشت</button>
     </header>
@@ -17,49 +17,50 @@
 
     <section v-else-if="!hasContext" class="order-flow-card">
       <h2>نوع سفارش مشخص نیست</h2>
-      <p>برای جلوگیری از اشتباه در شعبه، آدرس یا هزینه ارسال، ابتدا نوع سفارش را انتخاب کنید.</p>
+          <p>برای جلوگیری از اشتباه در شرکت، آدرس یا هزینه ارسال، ابتدا نوع سفارش را انتخاب کنید.</p>
       <a class="order-flow-primary" href="/order/type">انتخاب نوع سفارش</a>
     </section>
 
     <div v-else class="order-flow-layout">
-      <main class="order-flow-list">
+          <main class="order-flow-list checkout-list">
         <OrderContextStrip :currency="currency" />
-        <section class="order-flow-card">
-          <h2>اطلاعات مشتری</h2>
+            <section class="order-flow-card checkout-confirmation-card">
+              <div class="checkout-card-heading"><div><p class="checkout-card-kicker">۱. اطلاعات تماس</p><h2>اطلاعات مشتری</h2></div></div>
           <div class="order-flow-form">
-            <label class="order-flow-field"><span>نام و نام خانوادگی</span><input class="order-flow-input" v-model="form.customer_name" /></label>
-            <label class="order-flow-field"><span>شماره موبایل</span><input class="order-flow-input" dir="ltr" inputmode="numeric" v-model="form.mobile" /></label>
+                <label class="order-flow-field"><span>نام و نام خانوادگی</span><input class="order-flow-input" autocomplete="name" v-model="form.customer_name" /></label>
+                <label class="order-flow-field"><span>شماره موبایل</span><input class="order-flow-input" dir="ltr" inputmode="numeric" autocomplete="tel" v-model="form.mobile" /></label>
           </div>
         </section>
 
-        <section class="order-flow-card">
-          <div class="order-flow-card-head">
-            <div>
-              <h2>{{ orderTypeLabel }}</h2>
-              <p>{{ orderTypeDescription }}</p>
-            </div>
-            <a class="order-flow-secondary" href="/order/type">تغییر</a>
-          </div>
-          <div class="order-flow-facts">
+            <section class="order-flow-card checkout-confirmation-card">
+              <div class="checkout-card-heading">
+                <div>
+                  <p class="checkout-card-kicker">۲. شیوه دریافت</p>
+                  <h2>{{ orderTypeLabel }}</h2>
+                  <p>{{ orderTypeDescription }}</p>
+                </div>
+                <a class="order-flow-secondary" href="/order/type">ویرایش نوع سفارش</a>
+              </div>
+              <div class="order-flow-facts checkout-facts">
             <div class="order-flow-fact"><small>سفارش برای کجاست؟</small><strong>{{ destinationText }}</strong></div>
             <div class="order-flow-fact"><small>چه زمانی؟</small><strong>{{ timeText }}</strong></div>
-            <div class="order-flow-fact"><small>شعبه</small><strong>{{ context.branch_title || context.branch || '-' }}</strong></div>
+                <div class="order-flow-fact"><small>شرکت</small><strong>{{ context.branch_title || context.branch || '-' }}</strong></div>
             <div class="order-flow-fact"><small>هزینه ارسال</small><strong>{{ context.order_type === 'delivery' ? deliveryFeeText : 'بدون هزینه ارسال' }}</strong></div>
           </div>
         </section>
 
-        <section class="order-flow-card" v-if="context.order_type === 'delivery'">
+            <section class="order-flow-card checkout-confirmation-card" v-if="context.order_type === 'delivery'">
           <h2>یادداشت پیک</h2>
           <textarea class="order-flow-textarea" rows="3" v-model="contextDraft.courier_note" placeholder="توضیح برای پیک" />
         </section>
 
-        <section class="order-flow-card" v-else>
+            <section class="order-flow-card checkout-confirmation-card" v-else>
           <h2>یادداشت سفارش</h2>
-          <textarea class="order-flow-textarea" rows="3" v-model="form.note" placeholder="توضیح برای آشپزخانه یا شعبه" />
+          <textarea class="order-flow-textarea" rows="3" v-model="form.note" placeholder="توضیح برای آشپزخانه یا شرکت" />
         </section>
 
-        <section class="order-flow-card">
-          <h2>روش پرداخت</h2>
+            <section class="order-flow-card checkout-confirmation-card">
+              <div class="checkout-card-heading"><div><p class="checkout-card-kicker">۳. پرداخت</p><h2>روش پرداخت</h2></div></div>
           <div class="payment-method-list">
             <label v-for="method in paymentMethods" :key="method.value" class="payment-method-card">
               <input type="radio" name="payment-method" :value="method.value" v-model="paymentMethod" />
@@ -71,7 +72,7 @@
           </div>
         </section>
 
-        <section class="order-flow-card">
+            <section class="order-flow-card checkout-confirmation-card">
           <h2>کد تخفیف</h2>
           <div class="order-flow-inline-actions">
             <input class="order-flow-input" style="flex:1" v-model="couponCode" dir="ltr" placeholder="کد تخفیف" @keydown.enter="applyCoupon" />
@@ -81,13 +82,14 @@
           <p v-if="couponError" class="order-flow-alert danger">{{ couponError }}</p>
         </section>
 
-        <section class="order-flow-card">
-          <h2>آیتم‌های سفارش</h2>
-          <div class="summary-lines">
-            <div v-for="line in cartLines" :key="line.id" class="order-flow-summary-line">
-              <span>{{ line.qty }}× {{ line.item_title || line.title }}</span>
+        <section class="order-flow-card checkout-confirmation-card">
+          <div class="checkout-card-heading"><div><p class="checkout-card-kicker">۴. مرور سفارش</p><h2>آیتم‌های سفارش</h2></div><a class="order-flow-secondary" href="/cart">ویرایش سبد</a></div>
+          <div class="checkout-product-summary">
+            <article v-for="line in cartLines" :key="line.id" class="checkout-product-row">
+              <img :src="productImage(line)" :alt="line.item_title || line.title" width="68" height="68" loading="lazy" />
+              <div><strong>{{ line.item_title || line.title }}</strong><small>{{ line.qty }} عدد · {{ formatMoney(line.unit_price_preview ?? line.base_price, currency) }}</small></div>
               <strong>{{ formatMoney(line.line_total_preview ?? (line.base_price * line.qty), currency) }}</strong>
-            </div>
+            </article>
           </div>
         </section>
 
@@ -95,10 +97,10 @@
       </main>
 
       <OrderContextSummary next-step="ثبت سفارش" :currency="currency">
-        <div class="order-flow-summary-line"><span>جمع اقلام</span><strong>{{ formatMoney(totals.subtotal, currency) }}</strong></div>
-        <div class="order-flow-summary-line" v-if="totals.discount"><span>تخفیف</span><strong>-{{ formatMoney(totals.discount, currency) }}</strong></div>
-        <div class="order-flow-summary-line" v-if="totals.delivery_fee"><span>ارسال</span><strong>{{ formatMoney(totals.delivery_fee, currency) }}</strong></div>
-        <div class="order-flow-summary-line"><span>مبلغ سفارش</span><strong>{{ formatMoney(totals.grand_total, currency) }}</strong></div>
+        <div class="checkout-total-row"><span>جمع اقلام</span><strong>{{ formatMoney(totals.subtotal, currency) }}</strong></div>
+        <div class="checkout-total-row" v-if="totals.discount"><span>تخفیف</span><strong>-{{ formatMoney(totals.discount, currency) }}</strong></div>
+        <div class="checkout-total-row" v-if="totals.delivery_fee"><span>ارسال</span><strong>{{ formatMoney(totals.delivery_fee, currency) }}</strong></div>
+        <div class="checkout-total-row checkout-total-row--grand"><span>مبلغ سفارش</span><strong>{{ formatMoney(totals.grand_total, currency) }}</strong></div>
         <p class="payment-note">{{ paymentNote }}</p>
         <button class="order-flow-primary" type="button" :disabled="submitting" @click="submitOrder">{{ submitting ? 'در حال ثبت...' : 'ثبت سفارش' }}</button>
       </OrderContextSummary>
@@ -142,7 +144,8 @@ const hasContext = computed(() => Boolean(context.value.order_type))
 const cartLines = computed(() => cartState.lines)
 const discountAmount = computed(() => Number(couponResult.value?.discount_amount || 0))
 const totals = computed(() => calculateOrderTotals({ lines: cartLines.value, context: context.value, discount: discountAmount.value }))
-const deliveryFeeText = computed(() => totals.value.delivery_fee ? formatMoney(totals.value.delivery_fee, currency.value) : 'هزینه نهایی پس از تایید شعبه')
+const deliveryFeeText = computed(() => totals.value.delivery_fee ? formatMoney(totals.value.delivery_fee, currency.value) : 'هزینه نهایی پس از تایید شرکت')
+const productImage = (line = {}) => String(line.item_image || line.image || line.item?.image || '').trim() || 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=240&auto=format&fit=crop&q=60'
 
 const orderTypeLabel = computed(() => ({ dine_in: 'حضوری داخل سالن', pickup: 'بیرون‌بر', delivery: 'ارسال با پیک' }[context.value.order_type] || 'سفارش'))
 const paymentMethods = computed(() => {
@@ -150,26 +153,26 @@ const paymentMethods = computed(() => {
     return [{ value: 'pay_on_delivery', label: 'پرداخت هنگام تحویل', description: 'مبلغ سفارش را هنگام تحویل به پیک پرداخت می‌کنید.' }]
   }
   if (context.value.order_type === 'pickup') {
-    return [{ value: 'pay_at_branch', label: 'پرداخت در شعبه هنگام تحویل', description: 'وقتی برای دریافت سفارش مراجعه می‌کنید پرداخت انجام می‌شود.' }]
+    return [{ value: 'pay_at_branch', label: 'پرداخت در شرکت هنگام تحویل', description: 'وقتی برای دریافت سفارش مراجعه می‌کنید پرداخت انجام می‌شود.' }]
   }
   return [{ value: 'pay_at_table', label: 'پرداخت سر میز یا صندوق', description: 'پس از سرو یا هنگام خروج پرداخت انجام می‌شود.' }]
 })
 const paymentNote = computed(() => paymentMethods.value.find((row) => row.value === paymentMethod.value)?.description || '')
 const orderTypeDescription = computed(() => {
-  if (context.value.order_type === 'pickup') return 'خودتان سفارش را از شعبه تحویل می‌گیرید؛ آدرس و پیک لازم نیست.'
+  if (context.value.order_type === 'pickup') return 'خودتان سفارش را از شرکت تحویل می‌گیرید؛ آدرس و پیک لازم نیست.'
   if (context.value.order_type === 'delivery') return 'سفارش با پیک به آدرس انتخاب‌شده ارسال می‌شود.'
   if (context.value.order_type === 'dine_in') return 'سفارش به میز داخل سالن متصل است؛ هزینه ارسال ندارد.'
   return ''
 })
 const destinationText = computed(() => {
-  if (context.value.order_type === 'dine_in') return `${context.value.branch_title || context.value.branch || 'شعبه'} · میز ${context.value.table || '-'}`
-  if (context.value.order_type === 'pickup') return `تحویل از ${context.value.branch_title || context.value.branch || 'شعبه انتخاب نشده'}`
+  if (context.value.order_type === 'dine_in') return `${context.value.branch_title || context.value.branch || 'شرکت'} · میز ${context.value.table || '-'}`
+  if (context.value.order_type === 'pickup') return `تحویل از ${context.value.branch_title || context.value.branch || 'شرکت انتخاب نشده'}`
   const address = context.value.address || {}
   return address.title || address.address_line || 'آدرس انتخاب نشده'
 })
 const timeText = computed(() => {
   if (context.value.order_type === 'pickup') return context.value.pickup_time_type === 'scheduled' && context.value.pickup_time ? `تحویل در ${context.value.pickup_time}` : `آماده‌سازی حدود ${context.value.prep_time_mins || 20} دقیقه`
-  if (context.value.order_type === 'delivery') return context.value.eta_min && context.value.eta_max ? `${context.value.eta_min} تا ${context.value.eta_max} دقیقه` : 'پس از تایید شعبه'
+  if (context.value.order_type === 'delivery') return context.value.eta_min && context.value.eta_max ? `${context.value.eta_min} تا ${context.value.eta_max} دقیقه` : 'پس از تایید شرکت'
   return context.value.prep_time_mins ? `آماده سرو حدود ${context.value.prep_time_mins} دقیقه` : 'پس از تایید آشپزخانه'
 })
 
@@ -200,11 +203,12 @@ function validate() {
   if (!form.customer_name.trim()) return 'نام گیرنده الزامی است.'
   if (normalizeMobile(form.mobile).length < 10) return 'شماره موبایل معتبر وارد کنید.'
   if (!hasContext.value) return 'نوع سفارش مشخص نیست.'
-  if (context.value.order_type === 'pickup' && !context.value.branch) return 'برای بیرون‌بر انتخاب شعبه الزامی است.'
-  if (context.value.order_type === 'dine_in' && (!context.value.branch || !context.value.table)) return 'برای سفارش حضوری شعبه و میز الزامی است.'
+  if (context.value.order_type === 'pickup' && !context.value.branch) return 'برای بیرون‌بر انتخاب شرکت الزامی است.'
+  if (context.value.order_type === 'dine_in' && (!context.value.branch || !context.value.table)) return 'برای سفارش حضوری شرکت و میز الزامی است.'
   if (context.value.order_type === 'delivery') {
     const address = context.value.address || {}
     if (!address.address_line) return 'برای ارسال، آدرس تحویل الزامی است.'
+    if (!context.value.branch) return 'برای ارسال، انتخاب شرکت الزامی است.'
     if (context.value.out_of_range) return 'این آدرس خارج از محدوده ارسال است.'
   }
   if (!cartLines.value.length) return 'سبد خرید خالی است.'
@@ -281,6 +285,21 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.checkout-hero { background: linear-gradient(145deg, rgb(var(--palette-eggshell-rgb) / 0.98), rgb(var(--palette-june-bud-rgb) / 0.52)); }
+.checkout-list { gap: 1rem; }
+.checkout-confirmation-card { padding: clamp(1rem, 2.4vw, 1.3rem); border-radius: 26px; }
+.checkout-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.checkout-card-kicker { margin: 0 0 0.22rem; color: var(--accent-gold); font-weight: 850; font-size: 0.78rem; }
+.checkout-facts { margin-top: 0; }
+.checkout-product-summary { display: grid; gap: 0.7rem; }
+.checkout-product-row { display: grid; grid-template-columns: 68px minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.16); }
+.checkout-product-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.checkout-product-row img { width: 68px; height: 68px; object-fit: cover; border-radius: 18px; background: rgb(var(--palette-june-bud-rgb) / 0.55); }
+.checkout-product-row > div { min-width: 0; display: grid; gap: 0.25rem; }
+.checkout-product-row small { color: var(--text-muted); font-size: 0.8rem; }
+.checkout-product-row > strong { white-space: nowrap; font-size: 0.9rem; }
+.checkout-total-row { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; padding: 0.65rem 0; border-bottom: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1); }
+.checkout-total-row--grand { padding-top: 0.95rem; border-bottom: 0; font-size: 1.1rem; }
 .checkout-context-page .summary-lines {
   display: grid;
   gap: 0.1rem;
@@ -330,5 +349,13 @@ onMounted(async () => {
   padding: 0.7rem;
   border-radius: 16px;
   background: rgb(var(--palette-june-bud-rgb) / 0.45);
+}
+
+@media (max-width: 560px) {
+  .checkout-card-heading { gap: 0.6rem; }
+  .checkout-card-heading .order-flow-secondary { min-height: 38px; padding-inline: 0.72rem; font-size: 0.76rem; }
+  .checkout-product-row { grid-template-columns: 60px minmax(0, 1fr); }
+  .checkout-product-row img { width: 60px; height: 60px; }
+  .checkout-product-row > strong { grid-column: 2; }
 }
 </style>

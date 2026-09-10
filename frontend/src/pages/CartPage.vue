@@ -8,30 +8,35 @@
           <span class="top-spacer" aria-hidden="true"></span>
         </header>
 
-        <h1>آیتم‌ها <span>{{ totalQty }}</span></h1>
+        <div class="cart-heading">
+          <div>
+            <p class="cart-eyebrow">سفارش شما</p>
+            <h1>سبد خرید <span>{{ totalQty }}</span></h1>
+          </div>
+          <span class="cart-count-label">{{ totalQty }} آیتم</span>
+        </div>
 
         <OrderContextStrip :currency="currency" />
 
-        <section class="line-list">
-          <CartLineEditor
-            v-for="line in cartState.lines"
-            :key="line.id"
-            :line="line"
-            :currency="currency"
-            @qty-change="setQty(line.id, $event)"
-            @remove="remove(line.id)"
-            @edit-customization="openCustomization(line)"
-          />
+        <div class="cart-content" :class="{ 'cart-content--empty': !cartState.lines.length }">
+          <section class="line-list">
+            <CartLineEditor
+              v-for="line in cartState.lines"
+              :key="line.id"
+              :line="line"
+              :currency="currency"
+              @qty-change="setQty(line.id, $event)"
+              @remove="remove(line.id)"
+              @edit-customization="openCustomization(line)"
+            />
 
-          <div class="empty-box" v-if="!cartState.lines.length">
-            <p class="muted">سبد سفارش خالی است.</p>
-            <a href="/menu" class="go-menu">ورود به منو</a>
-          </div>
-        </section>
+            <div class="empty-box" v-if="!cartState.lines.length">
+              <p class="muted">سبد سفارش خالی است.</p>
+              <a href="/menu" class="go-menu">مشاهده منو</a>
+            </div>
+          </section>
 
-        <div class="grabber"></div>
-
-        <section class="summary-panel">
+          <section class="summary-panel">
           <div class="sum-row">
             <span>جمع اقلام</span>
             <strong>{{ formatMoney(totals.subtotal, currency) }}</strong>
@@ -42,7 +47,7 @@
           </div>
           <div class="sum-row muted-fee" v-else>
             <span>ارسال</span>
-            <strong>{{ cartState.orderContext.order_type === 'delivery' ? 'پس از تایید شعبه' : 'بدون هزینه ارسال' }}</strong>
+            <strong>{{ cartState.orderContext.order_type === 'delivery' ? 'پس از تایید شرکت' : 'بدون هزینه ارسال' }}</strong>
           </div>
           <div class="sum-row total">
             <span>مبلغ قابل پرداخت</span>
@@ -53,7 +58,8 @@
             {{ hasContext ? 'ادامه به تکمیل سفارش →' : 'انتخاب نوع سفارش →' }}
           </a>
           <p class="error" v-if="error">{{ error }}</p>
-        </section>
+          </section>
+        </div>
       </section>
     </section>
 
@@ -201,6 +207,7 @@ onMounted(async () => {
 .cart-frame {
   display: grid;
   gap: 1rem;
+  padding-bottom: 1rem;
 }
 
 .top-row {
@@ -232,10 +239,42 @@ onMounted(async () => {
   font-weight: 800;
 }
 
+.cart-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cart-eyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
 .cart-frame h1 {
   margin: 0;
   font-size: clamp(1.5rem, 5vw, 2.35rem);
 }
+
+.cart-count-label {
+  min-height: 34px;
+  padding: 0.42rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(var(--palette-deep-saffron-rgb) / 0.13);
+  color: var(--accent-green);
+  font-weight: 800;
+  font-size: 0.83rem;
+}
+
+.cart-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: start;
+  gap: 1rem;
+}
+
+.cart-content--empty { grid-template-columns: 1fr; }
 
 .cart-frame h1 span {
   color: var(--accent-gold);
@@ -275,17 +314,12 @@ onMounted(async () => {
   font-weight: 850;
 }
 
-.grabber {
-  width: 48px;
-  height: 5px;
-  border-radius: 999px;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  margin: 0 auto;
-}
-
 .summary-panel {
+  position: sticky;
+  top: 5rem;
   display: grid;
-  gap: 0.15rem;
+  gap: 0.3rem;
+  border-radius: 28px;
 }
 
 .sum-row {
@@ -322,7 +356,7 @@ onMounted(async () => {
   color: var(--danger);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .cart-shell {
     width: min(100% - 1rem, 100%);
     margin-top: 0.6rem;
@@ -332,5 +366,15 @@ onMounted(async () => {
   .summary-panel {
     border-radius: 22px;
   }
+
+  .cart-content { grid-template-columns: 1fr; }
+  .summary-panel {
+    position: sticky;
+    top: auto;
+    bottom: 0.6rem;
+    z-index: 4;
+    box-shadow: 0 16px 36px rgb(15 23 42 / 0.14);
+  }
+  .cart-heading { align-items: center; }
 }
 </style>
