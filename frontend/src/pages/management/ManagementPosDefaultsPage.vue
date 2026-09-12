@@ -408,6 +408,12 @@ function printKindLabel(kind) {
   return 'آشپزخانه'
 }
 
+function printFontAssetUrl(fileName) {
+  const basePath = String(import.meta.env.BASE_URL || '/')
+  if (typeof window === 'undefined') return `${basePath}fonts/${fileName}`
+  return new URL(`fonts/${fileName}`, new URL(basePath, window.location.origin)).href
+}
+
 function defaultPrintProfiles() {
   return [
     {
@@ -460,6 +466,12 @@ function testPrintProfile(profile) {
         <meta charset="utf-8" />
         <title>${(printerName || `چاپ ${kindLabel}`).replace(/[<>&"]/g, '')}</title>
         <style>
+          @font-face { font-family: "Peyda"; src: url('${printFontAssetUrl('Peyda-Thin.ttf')}') format('truetype'); font-weight: 100; font-display: block; }
+          @font-face { font-family: "Peyda"; src: url('${printFontAssetUrl('Pevda-Reqular.ttf')}') format('truetype'); font-weight: 400; font-display: block; }
+          @font-face { font-family: "Peyda"; src: url('${printFontAssetUrl('Peyda-Medium.ttf')}') format('truetype'); font-weight: 500; font-display: block; }
+          @font-face { font-family: "Peyda"; src: url('${printFontAssetUrl('Peyda-SemiBold.ttf')}') format('truetype'); font-weight: 600; font-display: block; }
+          @font-face { font-family: "Peyda"; src: url('${printFontAssetUrl('Peyda-Bold.ttf')}') format('truetype'); font-weight: 700; font-display: block; }
+          @font-face { font-family: "Peyda"; src: url('${printFontAssetUrl('Peyda-ExtraBold.ttf')}') format('truetype'); font-weight: 800; font-display: block; }
           @page { size: 80mm auto; margin: 3mm; }
           html, body { margin: 0; padding: 0; direction: rtl; font-family: Tahoma, Arial, sans-serif; color: #222; }
           .sheet { width: 74mm; margin: 0 auto; padding: 4mm 0; font-size: 12px; line-height: 1.6; }
@@ -506,7 +518,11 @@ function testPrintProfile(profile) {
     frameDoc.open()
     frameDoc.write(html)
     frameDoc.close()
-    window.setTimeout(() => {
+    const printReady = frameDoc.fonts?.ready || Promise.resolve()
+    Promise.race([
+      printReady,
+      new Promise((resolve) => window.setTimeout(resolve, 1800)),
+    ]).then(() => {
       try {
         frame.contentWindow?.focus?.()
         frame.contentWindow?.print()
@@ -514,7 +530,7 @@ function testPrintProfile(profile) {
         console.error(printError)
       }
       window.setTimeout(() => frame.remove(), 1200)
-    }, 400)
+    })
   } catch (err) {
     error.value = 'ارسال دستور چاپ ممکن نشد.'
   }

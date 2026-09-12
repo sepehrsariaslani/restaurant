@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { transformManagementPosPage, transformManagementPosDefaultsPage } from '../scripts/pos-print-transform.mjs'
 import { transformPosReliabilityPage } from '../scripts/pos-reliability-transform.mjs'
 
@@ -11,7 +12,7 @@ function receiptStylesCss() {
 `
   const result = transformPosReliabilityPage(transformManagementPosPage(source))
   assert.match(result, /thermalPaperWidthMm/)
-  assert.match(result, /@page \{ margin: 0; \}/)
+  assert.match(result, /@page \{ size: \$\{paperWidthMm\}mm auto; margin: 0 !important; \}/)
   assert.match(result, /\*, \*::before, \*::after \{ box-sizing: border-box; \}/)
   assert.match(result, /\.receipt \{[^}]*width: \$\{paperWidthMm\}mm[^}]*max-width: 100%/s)
   assert.match(result, /overflow-wrap: anywhere/)
@@ -48,6 +49,43 @@ function addPrintProfile() { printProfiles.value.push({ profile_id: 'x', kind: '
   assert.match(result, />80 میلی‌متر</)
   assert.match(result, /paper_width_mm/)
   assert.match(result, /localStorage/)
+})
+
+test('receipt printing always uses the bundled Peyda font and waits for print assets', () => {
+  const source = fs.readFileSync(new URL('../src/pages/management/ManagementPosPage.vue', import.meta.url), 'utf8')
+  assert.match(source, /function receiptFontAssetUrl\(fileName\)/)
+  assert.match(source, /import\.meta\.env\.BASE_URL/)
+  assert.match(source, /font-display: block/)
+  assert.match(source, /return '\"Peyda\", Tahoma, Arial, sans-serif'/)
+
+  const printSource = `
+function receiptStylesCss() { return \`@page { size: 80mm auto; margin: 3mm; }\nhtml, body { width: 100%; margin: 0; padding: 0; }\n.receipt { width: 74mm; margin: 0 auto; font-size: \${receiptFontSizePx()}px; line-height: 1.45; }\` }
+function printReceiptDocument(html) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return false
+  }
+  const triggerPrint = (target, cleanup = () => {}) => {
+    target.focus?.()
+    target.print()
+    window.setTimeout(cleanup, 1200)
+  }
+}
+`
+  const transformed = transformPosReliabilityPage(transformManagementPosPage(printSource))
+  assert.match(transformed, /targetDocument\.fonts\.load/)
+  assert.match(transformed, /targetDocument\.images/)
+  assert.match(transformed, /async function waitForPOSPrintReady/)
+  assert.match(transformed, /target\.print\(\)/)
+  assert.match(transformed, /size: \$\{paperWidthMm\}mm auto; margin: 0 !important/)
+})
+
+test('main POS print action sends the receipt directly without reopening the target picker', () => {
+  const source = fs.readFileSync(new URL('../src/pages/management/ManagementPosPage.vue', import.meta.url), 'utf8')
+  const start = source.indexOf('function openQuickPrintTargetPicker()')
+  const end = source.indexOf('\n}\n\n// رفتن از انتخابگر', start)
+  const quickPrint = source.slice(start, end > start ? end : undefined)
+  assert.match(quickPrint, /printCurrentTicket\('', false\)/)
+  assert.doesNotMatch(quickPrint, /openPrintTargetPicker\(\)/)
 })
 
 test('secondary customer survives dine-in and kitchen/bar reprint paths', () => {

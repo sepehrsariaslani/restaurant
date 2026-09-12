@@ -579,7 +579,7 @@
           </div>
           <div class="print-editor-actions">
             <button type="button" class="secondary-btn" @click="closePrintEditor"><X :size="14" /> بستن</button>
-            <button type="button" class="primary-btn" :disabled="!cart.length" @click="printCurrentTicket('', true)">چاپ نهایی</button>
+            <button type="button" class="primary-btn" :disabled="!cart.length" @click="printCurrentTicket('', false)">چاپ نهایی</button>
           </div>
         </header>
 
@@ -1695,14 +1695,65 @@ async function deliverOrder(order) {
   }
 }
 
+async function waitForPOSPrintReady(targetWindow) {
+  const targetDocument = targetWindow?.document
+  if (!targetDocument) return
+  try {
+    if (targetDocument.readyState !== 'complete') {
+      await new Promise((resolve) => {
+        let settled = false
+        const done = () => {
+          if (!settled) {
+            settled = true
+            resolve()
+          }
+        }
+        targetWindow.addEventListener?.('load', done, { once: true })
+        window.setTimeout(done, 1200)
+      })
+    }
+    if (targetDocument.fonts) {
+      const fontLoads = ['400', '500', '600', '700', '800', '900'].map((weight) => (
+        targetDocument.fonts.load(`${weight} 12px Peyda`)
+      ))
+      await Promise.race([
+        Promise.allSettled(fontLoads),
+        new Promise((resolve) => window.setTimeout(resolve, 2500)),
+      ])
+      if (targetDocument.fonts.ready) {
+        await Promise.race([
+          targetDocument.fonts.ready,
+          new Promise((resolve) => window.setTimeout(resolve, 1200)),
+        ])
+      }
+    }
+    const images = Array.from(targetDocument.images || [])
+    if (images.length) {
+      await Promise.race([
+        Promise.all(images.map((image) => image.complete
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              image.addEventListener('load', resolve, { once: true })
+              image.addEventListener('error', resolve, { once: true })
+            }))),
+        new Promise((resolve) => window.setTimeout(resolve, 1200)),
+      ])
+    }
+  } catch (_) {
+    // Printing must continue even when a browser does not expose Font Loading API.
+  }
+}
+
 function printReceiptDocument(html) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return false
   }
 
-  const triggerPrint = (target, cleanup = () => {}) => {
+  const triggerPrint = async (target, cleanup = () => {}) => {
+    await waitForPOSPrintReady(target)
     try {
       target.focus?.()
+      if (typeof target.print !== 'function') throw new Error('مرورگر دستور چاپ را پشتیبانی نمی‌کند.')
       target.print()
     } catch (printError) {
       console.error(printError)
@@ -1717,7 +1768,7 @@ function printReceiptDocument(html) {
       printWindow.document.write(html)
       printWindow.document.close()
       window.setTimeout(() => {
-        triggerPrint(printWindow, () => {
+        void triggerPrint(printWindow, () => {
           try {
             printWindow.close()
           } catch (_) {
@@ -1751,7 +1802,7 @@ function printReceiptDocument(html) {
     frame.contentDocument?.close()
     window.setTimeout(() => {
       if (frame.contentWindow) {
-        triggerPrint(frame.contentWindow, () => frame.remove())
+        void triggerPrint(frame.contentWindow, () => frame.remove())
       } else {
         frame.remove()
       }
@@ -4826,28 +4877,27 @@ function receiptFontSizePx() {
   return base
 }
 
+function receiptFontAssetUrl(fileName) {
+  const basePath = String(import.meta.env.BASE_URL || '/')
+  if (typeof window === 'undefined') return `${basePath}fonts/${fileName}`
+  return new URL(`fonts/${fileName}`, new URL(basePath, window.location.origin)).href
+}
+
 function receiptFontFamilyCss() {
-  // Use the same setting selected in the management dashboard.  Peyda is
-  // bundled with the app; the remaining supported dashboard choices fall
-  // back to the installed system font with the same name.
-  const configured = String(printFontSettings.font_family || 'Peyda')
-    .replace(/["'\\;]/g, '')
-    .trim()
-  const family = configured || 'Peyda'
-  return `"${family}", "Peyda", Tahoma, Arial, sans-serif`
+  return '"Peyda", Tahoma, Arial, sans-serif'
 }
 
 function receiptStylesCss() {
   return `
-    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Thin.ttf') format('truetype'); font-weight: 100; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/peyda-extralight.ttf') format('truetype'); font-weight: 200; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/peyda-light.ttf') format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/Pevda-Reqular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-ExtraBold.ttf') format('truetype'); font-weight: 800; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Peyda"; src: url('/fonts/Peyda-Black.ttf') format('truetype'); font-weight: 900; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Peyda-Thin.ttf')}') format('truetype'); font-weight: 100; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('peyda-extralight.ttf')}') format('truetype'); font-weight: 200; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('peyda-light.ttf')}') format('truetype'); font-weight: 300; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Pevda-Reqular.ttf')}') format('truetype'); font-weight: 400; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Peyda-Medium.ttf')}') format('truetype'); font-weight: 500; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Peyda-SemiBold.ttf')}') format('truetype'); font-weight: 600; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Peyda-Bold.ttf')}') format('truetype'); font-weight: 700; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Peyda-ExtraBold.ttf')}') format('truetype'); font-weight: 800; font-style: normal; font-display: block; }
+    @font-face { font-family: "Peyda"; src: url('${receiptFontAssetUrl('Peyda-Black.ttf')}') format('truetype'); font-weight: 900; font-style: normal; font-display: block; }
     @page { size: 80mm auto; margin: 3mm; }
     html, body { width: 100%; margin: 0; padding: 0; }
     * { box-sizing: border-box; }
@@ -5351,7 +5401,8 @@ function openQuickPrintTargetPicker() {
       error.value = 'سفارش تأییدشده برای چاپ وجود ندارد.'
       return
     }
-    openPrintTargetPicker()
+    printConfirmedTableOrders()
+    printKitchenBarProfiles()
     return
   }
   if (!cart.length) {
@@ -5362,7 +5413,8 @@ function openQuickPrintTargetPicker() {
     error.value = 'برای پرداخت اعتباری، فیش پرداخت POS چاپ نمی‌شود چون مبلغ هنوز دریافت نشده است.'
     return
   }
-  openPrintTargetPicker()
+  // چاپ دکمهٔ اصلی باید مستقیم اجرا شود؛ انتخاب مقصد همچنان از عملیات فاکتور در دسترس است.
+  printCurrentTicket('', false)
 }
 
 // رفتن از انتخابگر به پیش‌نمایش/ویرایش فیش
@@ -6080,7 +6132,7 @@ async function onWindowKeydown(event) {
     }
     if (key === 'F9') {
       event.preventDefault()
-      printCurrentTicket('', true)
+      printCurrentTicket('', false)
       return
     }
     return

@@ -42,14 +42,17 @@ function thermalPaperWidthMm(profile = null) {
     'function receiptStylesCss() {\n  return `',
     'function receiptStylesCss(profile = null) {\n  const paperWidthMm = thermalPaperWidthMm(profile)\n  const horizontalPaddingMm = paperWidthMm === 58 ? 2 : 2.5\n  return `',
   )
-  code = code.replaceAll('@page { size: 80mm auto; margin: 3mm; }', '@page { margin: 0; }')
+  code = code.replaceAll(
+    '@page { size: 80mm auto; margin: 3mm; }',
+    '@page { size: ${paperWidthMm}mm auto; margin: 0 !important; }',
+  )
   code = code.replaceAll(
     'html, body { width: 100%; margin: 0; padding: 0; }',
-    'html, body { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0; padding: 0; overflow: visible; }',
+    'html, body { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0 !important; padding: 0 !important; overflow: visible; }',
   )
   code = code.replaceAll(
     '.receipt { width: 74mm; margin: 0 auto; font-size: ${receiptFontSizePx()}px; line-height: 1.45; }',
-    '.receipt { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0; padding: 2mm ${horizontalPaddingMm}mm 3mm; font-size: ${receiptFontSizePx()}px; line-height: 1.45; overflow: visible; }',
+    '.receipt { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0 !important; padding: 2mm ${horizontalPaddingMm}mm 3mm; font-size: ${receiptFontSizePx()}px; line-height: 1.45; overflow: visible; }',
   )
   code = code.replaceAll('var(--mg-text-muted)', '#6f625a')
 
@@ -198,13 +201,34 @@ function thermalPaperWidthMm(profile = null) {
         let settled = false
         const done = () => { if (!settled) { settled = true; resolve() } }
         targetWindow.addEventListener?.('load', done, { once: true })
-        window.setTimeout(done, 900)
+        window.setTimeout(done, 1200)
       })
+    }
+    if (targetDocument.fonts) {
+      const fontLoads = ['400', '500', '600', '700', '800', '900'].map((weight) => (
+        targetDocument.fonts.load(String(weight) + ' 12px Peyda')
+      ))
+      await Promise.race([
+        Promise.allSettled(fontLoads),
+        new Promise((resolve) => window.setTimeout(resolve, 2500)),
+      ])
     }
     if (targetDocument.fonts?.ready) {
       await Promise.race([
         targetDocument.fonts.ready,
-        new Promise((resolve) => window.setTimeout(resolve, 1500)),
+        new Promise((resolve) => window.setTimeout(resolve, 1200)),
+      ])
+    }
+    const images = Array.from(targetDocument.images || [])
+    if (images.length) {
+      await Promise.race([
+        Promise.all(images.map((image) => image.complete
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              image.addEventListener('load', resolve, { once: true })
+              image.addEventListener('error', resolve, { once: true })
+            }))),
+        new Promise((resolve) => window.setTimeout(resolve, 1200)),
       ])
     }
   } catch (_) {}
@@ -215,7 +239,7 @@ function thermalPaperWidthMm(profile = null) {
   }
   code = code.replace(
     '  const triggerPrint = (target, cleanup = () => {}) => {\n    try {\n      target.focus?.()\n      target.print()',
-    '  const triggerPrint = async (target, cleanup = () => {}) => {\n    await waitForPOSPrintReady(target)\n    try {\n      target.focus?.()\n      target.print()',
+    '  const triggerPrint = async (target, cleanup = () => {}) => {\n    await waitForPOSPrintReady(target)\n    try {\n      target.focus?.()\n      if (typeof target.print !== \'function\') throw new Error(\'مرورگر دستور چاپ را پشتیبانی نمی‌کند.\')\n      target.print()',
   )
   code = code.replaceAll('        triggerPrint(printWindow,', '        void triggerPrint(printWindow,')
   code = code.replaceAll('        triggerPrint(frame.contentWindow,', '        void triggerPrint(frame.contentWindow,')
@@ -294,14 +318,17 @@ function persistDevicePaperWidths() {
     "  const groupNames = (profile?.item_groups || []).join('، ') || 'همه'",
     "  const groupNames = (profile?.item_groups || []).join('، ') || 'همه'\n  const paperWidthMm = normalizePaperWidth(profile?.paper_width_mm || 80)\n  const horizontalPaddingMm = paperWidthMm === 58 ? 2 : 2.5",
   )
-  code = code.replaceAll('@page { size: 80mm auto; margin: 3mm; }', '@page { margin: 0; }')
+  code = code.replaceAll(
+    '@page { size: 80mm auto; margin: 3mm; }',
+    '@page { size: ${paperWidthMm}mm auto; margin: 0 !important; }',
+  )
   code = code.replaceAll(
     'html, body { margin: 0; padding: 0; direction: rtl; font-family: Tahoma, Arial, sans-serif; color: #222; }',
-    'html, body { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0; padding: 0; overflow: visible; direction: rtl; font-family: Tahoma, Arial, sans-serif; color: #222; }',
+    'html, body { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0 !important; padding: 0 !important; overflow: visible; direction: rtl; font-family: "Peyda", Tahoma, Arial, sans-serif; color: #222; }',
   )
   code = code.replaceAll(
     '.sheet { width: 74mm; margin: 0 auto; padding: 4mm 0; font-size: 12px; line-height: 1.6; }',
-    '.sheet { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0; padding: 2mm ${horizontalPaddingMm}mm 3mm; font-size: 12px; line-height: 1.6; overflow: visible; }',
+    '.sheet { width: ${paperWidthMm}mm; max-width: ${paperWidthMm}mm; min-height: 0; margin: 0 !important; padding: 2mm ${horizontalPaddingMm}mm 3mm; font-size: 12px; line-height: 1.6; overflow: visible; }',
   )
 
   return code
