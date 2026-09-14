@@ -19,7 +19,7 @@
 | جزئیات محصول | `/management/product` | ERPNext Item و داده‌های Restaurant | مرجع detail، رسانه، قیمت، BOM، modifier، variant و activity | مرجع تثبیت‌شده |
 | کارت محصول مشتری | `/menu` | API منوی رستوران | تصویرمحور، قیمت، وضعیت و اقدام | مرجع تثبیت‌شده |
 | جزئیات محصول مشتری | `/item` | API منوی رستوران | gallery، nutrition، customization و cart | مرجع تثبیت‌شده |
-| دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | route و Navbar در source؛ نیازمند reload اجرا |
+| دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ نیازمند build/restart برای bundle فعال |
 | سفارش‌ها | `/management/orders` | ERPNext Sales Order/Invoice + فیلدهای Restaurant | `ManagementListView` → جزئیات انتخاب‌شده → پرداخت/تکمیل/پیک | تراز شده در این مرحله؛ تست source موفق |
 | پیک‌ها | `/management/couriers` | Restaurant courier/vehicle | فهرست پیک → فرم جزئیات چسبان → fleet/rules | تراز شده در این مرحله؛ تست source موفق |
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |

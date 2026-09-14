@@ -9,6 +9,8 @@ const appSource = fs.readFileSync(new URL('App.vue', sourceRoot), 'utf8')
 const themeSource = fs.readFileSync(new URL('theme.css', sourceRoot), 'utf8')
 const layoutSource = fs.readFileSync(new URL('components/management/ManagementLayout.vue', sourceRoot), 'utf8')
 const hooksSource = fs.readFileSync(new URL('../../restaurant/hooks.py', import.meta.url), 'utf8')
+const designSystemHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.html', import.meta.url), 'utf8')
+const designSystemPySource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.py', import.meta.url), 'utf8')
 const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
 const ordersSource = fs.readFileSync(new URL('../src/pages/management/ManagementOrdersPage.vue', import.meta.url), 'utf8')
 const couriersSource = fs.readFileSync(new URL('../src/pages/management/ManagementCouriersPage.vue', import.meta.url), 'utf8')
@@ -70,6 +72,9 @@ test('design system route is registered in the management shell', () => {
   assert.match(appSource, /pathname\.startsWith\('\/management\/design-system'\)/)
   assert.match(layoutSource, /management-design-system/)
   assert.match(hooksSource, /from_route":\s*"\/management\/design-system"/)
+  assert.match(designSystemHtmlSource, /window\._PAGE\s*=\s*'management-design-system'/)
+  assert.match(designSystemHtmlSource, /assets\/restaurant\/frontend\/assets\/index\.js/)
+  assert.match(designSystemPySource, /build_context\(context, "management-design-system"\)/)
 })
 
 test('semantic design tokens are published as CSS variables while legacy aliases remain available', () => {
