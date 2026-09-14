@@ -17,6 +17,8 @@ const callCenterSource = fs.readFileSync(new URL('../src/pages/management/Manage
 const reportSource = fs.readFileSync(new URL('../src/pages/management/ManagementReportPage.vue', import.meta.url), 'utf8')
 const reservationsSource = fs.readFileSync(new URL('../src/pages/management/ManagementReservationsPage.vue', import.meta.url), 'utf8')
 const surveysSource = fs.readFileSync(new URL('../src/pages/management/ManagementSurveysPage.vue', import.meta.url), 'utf8')
+const branchesSource = fs.readFileSync(new URL('../src/pages/management/ManagementBranchesPage.vue', import.meta.url), 'utf8')
+const costControlSource = fs.readFileSync(new URL('../src/pages/management/ManagementCostControlPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -47,12 +49,16 @@ test('design system catalog contains the requested reference tabs and product su
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'reservation-workbench'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'survey-feedback'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'crm-engagement'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'branch-workbench'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'cost-control'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'products-list'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-orders'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-couriers'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-reservations'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-surveys'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-club'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-branches'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-cost-control'))
 })
 
 test('design system route is registered in the management shell', () => {
@@ -181,4 +187,21 @@ test('survey questions and responses use shared list patterns', () => {
   assert.match(surveysSource, /:rows="filteredResponses"/)
   assert.match(surveysSource, /openQuestionForm\(row\)/)
   assert.match(surveysSource, /starString\(row\.overall_rating\)/)
+})
+
+test('branch management uses the shared responsive list pattern and keeps native actions', () => {
+  assert.match(branchesSource, /ManagementListView/)
+  assert.match(branchesSource, /:rows="branches"/)
+  assert.match(branchesSource, /branchColumns/)
+  assert.match(branchesSource, /openForm\(row\)/)
+  assert.match(branchesSource, /toggleBranch\(row\)/)
+})
+
+test('cost control uses shared lists for profit-loss and budgets', () => {
+  assert.match(costControlSource, /ManagementListView/)
+  assert.match(costControlSource, /:rows="boot\.pl_rows \|\| \[\]"/)
+  assert.match(costControlSource, /:rows="budgets"/)
+  assert.match(costControlSource, /plColumns/)
+  assert.match(costControlSource, /budgetColumns/)
+  assert.match(costControlSource, /openBudgetForm\(row\)/)
 })

@@ -37,38 +37,32 @@
     <section v-if="activeTab === 'pl'" class="tab-body">
       <ManagementSurfaceCard :title="`سود و زیان ماهانه سال ${formatQty(fiscalYear)}`" subtitle="بهای تمام‌شده از بهای دستور پخت (BOM) و ضایعات از گردش‌های انبار محاسبه می‌شود">
         <p class="muted" v-if="!boot">در حال محاسبه...</p>
-        <div v-else class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>ماه</th><th>سفارش‌ها</th><th>فروش</th><th>بهای تمام‌شده</th><th>سود ناخالص</th><th>هزینه‌های ثابت</th><th>ضایعات/خسارت</th><th>سود خالص</th><th>حاشیه</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in boot.pl_rows" :key="row.month" :class="{ 'current-month': row.month === currentMonthHighlight }">
-                <td><strong>{{ monthName(row.month) }}</strong></td>
-                <td>{{ formatQty(row.orders) }}</td>
-                <td>{{ formatMoneyValue(row.revenue) }}</td>
-                <td>{{ formatMoneyValue(row.cogs) }}</td>
-                <td>{{ formatMoneyValue(row.gross_profit) }}</td>
-                <td>{{ formatMoneyValue(row.fixed_costs) }}</td>
-                <td>{{ formatMoneyValue(row.waste) }}</td>
-                <td :class="row.net_profit >= 0 ? 'ok-text' : 'warn-text'"><strong>{{ formatMoneyValue(row.net_profit) }}</strong></td>
-                <td>{{ formatQty(row.margin_pct) }}٪</td>
-              </tr>
-            </tbody>
-            <tfoot v-if="boot">
-              <tr>
-                <td><strong>جمع سال</strong></td>
-                <td>{{ formatQty(totalOrders) }}</td>
-                <td><strong>{{ formatMoneyValue(totals.revenue) }}</strong></td>
-                <td>{{ formatMoneyValue(totals.cogs) }}</td>
-                <td>{{ formatMoneyValue(totals.gross) }}</td>
-                <td>{{ formatMoneyValue(totals.fixed) }}</td>
-                <td>{{ formatMoneyValue(totals.waste) }}</td>
-                <td :class="totals.net >= 0 ? 'ok-text' : 'warn-text'"><strong>{{ formatMoneyValue(totals.net) }}</strong></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+        <ManagementListView
+          v-else
+          :columns="plColumns"
+          :rows="boot.pl_rows || []"
+          row-key="month"
+        >
+          <template #cell-month="{ row }"><strong>{{ monthName(row.month) }}</strong><span v-if="row.month === currentMonthHighlight" class="pill ok current-month-label">ماه جاری</span></template>
+          <template #cell-orders="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-revenue="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-cogs="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-gross_profit="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-fixed_costs="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-waste="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-net_profit="{ row }"><strong :class="row.net_profit >= 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.net_profit) }}</strong></template>
+          <template #cell-margin_pct="{ value }">{{ formatQty(value) }}٪</template>
+          <template #empty>برای این سال داده‌ی سود و زیان ثبت نشده است.</template>
+        </ManagementListView>
+        <div v-if="boot" class="year-summary">
+          <strong>جمع سال</strong>
+          <span>سفارش‌ها: {{ formatQty(totalOrders) }}</span>
+          <span>فروش: {{ formatMoneyValue(totals.revenue) }}</span>
+          <span>بهای تمام‌شده: {{ formatMoneyValue(totals.cogs) }}</span>
+          <span>سود ناخالص: {{ formatMoneyValue(totals.gross) }}</span>
+          <span>هزینه ثابت: {{ formatMoneyValue(totals.fixed) }}</span>
+          <span>ضایعات: {{ formatMoneyValue(totals.waste) }}</span>
+          <strong :class="totals.net >= 0 ? 'ok-text' : 'warn-text'">سود خالص: {{ formatMoneyValue(totals.net) }}</strong>
         </div>
         <p class="muted hint-line">ضایعات و خروج/خسارت ثبت‌شده در انبارداری هوشمند به ارزش ریالی در این جدول لحاظ می‌شود.</p>
       </ManagementSurfaceCard>
@@ -79,27 +73,29 @@
       <ManagementSurfaceCard title="بودجه‌بندی" subtitle="بودجه ماهانه و سالانه برای دسته‌های هزینه‌ای؛ درصد مصرف بودجه ماه جاری بالای صفحه نمایش داده می‌شود">
         <div class="btn-row"><button type="button" class="primary-btn" @click="openBudgetForm()">بودجه جدید</button></div>
         <p class="muted" v-if="budgetsLoading">در حال دریافت بودجه‌ها...</p>
-        <div v-else-if="budgets.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>عنوان</th><th>دسته</th><th>دوره</th><th>سال</th><th>ماه</th><th>مبلغ</th><th>وضعیت</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="b in budgets" :key="b.name" :class="{ inactive: !b.is_active }">
-                <td><strong>{{ b.title }}</strong><br><small class="muted">{{ b.name }}</small></td>
-                <td>{{ b.category || '—' }}</td>
-                <td><span class="pill">{{ b.period }}</span></td>
-                <td>{{ formatQty(b.fiscal_year) }}</td>
-                <td>{{ b.period === 'ماهانه' ? monthName(b.month) : '—' }}</td>
-                <td>{{ formatMoneyValue(b.planned_amount) }}</td>
-                <td><span class="pill" :class="{ ok: b.is_active, warn: !b.is_active }">{{ b.is_active ? 'فعال' : 'غیرفعال' }}</span></td>
-                <td class="row-actions">
-                  <button type="button" class="tertiary-btn" @click="openBudgetForm(b)">ویرایش</button>
-                  <button type="button" class="tertiary-btn danger" @click="removeBudget(b)">حذف</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!budgetsLoading">بودجه‌ای برای این سال ثبت نشده است.</p>
+        <ManagementListView
+          v-else
+          :columns="budgetColumns"
+          :rows="budgets"
+          row-key="name"
+          :row-clickable="true"
+          @row-click="openBudgetForm"
+        >
+          <template #cell-title="{ row }"><strong>{{ row.title }}</strong><br><small class="muted">{{ row.name }}</small></template>
+          <template #cell-category="{ value }">{{ value || '—' }}</template>
+          <template #cell-period="{ value }"><span class="pill">{{ value }}</span></template>
+          <template #cell-fiscal_year="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-month="{ row }">{{ row.period === 'ماهانه' ? monthName(row.month) : '—' }}</template>
+          <template #cell-planned_amount="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-is_active="{ row }"><span class="pill" :class="{ ok: row.is_active, warn: !row.is_active }">{{ row.is_active ? 'فعال' : 'غیرفعال' }}</span></template>
+          <template #cell-actions="{ row }">
+            <span class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openBudgetForm(row)">ویرایش</button>
+              <button type="button" class="tertiary-btn danger" @click="removeBudget(row)">حذف</button>
+            </span>
+          </template>
+          <template #empty>بودجه‌ای برای این سال ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <div v-if="budgetForm" class="popup-backdrop" @click.self="budgetForm = null">
@@ -169,6 +165,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
@@ -203,6 +200,27 @@ const roiForm = ref({ investment: null, fiscal_year: currentYear })
 const roiBusy = ref(false)
 const roiError = ref('')
 const roiResult = ref(null)
+const plColumns = [
+  { key: 'month', label: 'ماه' },
+  { key: 'orders', label: 'سفارش‌ها' },
+  { key: 'revenue', label: 'فروش' },
+  { key: 'cogs', label: 'بهای تمام‌شده' },
+  { key: 'gross_profit', label: 'سود ناخالص' },
+  { key: 'fixed_costs', label: 'هزینه‌های ثابت' },
+  { key: 'waste', label: 'ضایعات/خسارت' },
+  { key: 'net_profit', label: 'سود خالص' },
+  { key: 'margin_pct', label: 'حاشیه' },
+]
+const budgetColumns = [
+  { key: 'title', label: 'عنوان' },
+  { key: 'category', label: 'دسته' },
+  { key: 'period', label: 'دوره' },
+  { key: 'fiscal_year', label: 'سال' },
+  { key: 'month', label: 'ماه' },
+  { key: 'planned_amount', label: 'مبلغ' },
+  { key: 'is_active', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 const loadingAny = computed(() => bootLoading.value || budgetsLoading.value)
 const monthNames = ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر']
@@ -343,6 +361,24 @@ onMounted(() => {
 .table-wrap {
   overflow-x: auto;
   margin-top: 0.7rem;
+}
+.year-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  align-items: center;
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-muted);
+  font-size: 0.8rem;
+}
+.year-summary strong:first-child {
+  color: var(--ds-color-text-primary);
+}
+.current-month-label {
+  margin-inline-start: 0.35rem;
 }
 .data-table {
   width: 100%;

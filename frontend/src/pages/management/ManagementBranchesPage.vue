@@ -19,26 +19,28 @@
       <p class="muted" v-if="loading">در حال دریافت...</p>
       <p class="error" v-if="error">{{ error }}</p>
       <p class="success-msg" v-if="message">{{ message }}</p>
-      <div v-if="!loading && branches.length" class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>شعبه</th><th>سفارش‌های امروز</th><th>فروش امروز</th><th>مشتریان متصل</th><th>آدرس/تلفن</th><th>وضعیت</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="b in branches" :key="b.name">
-              <td><strong>{{ b.label || b.company_name }}</strong><br><small class="muted">{{ b.name }} · {{ b.abbr }}</small></td>
-              <td>{{ formatQty(b.today_orders) }}</td>
-              <td>{{ formatMoneyValue(b.today_sales) }}</td>
-              <td>{{ formatQty(b.customers) }}</td>
-              <td><small class="muted">{{ b.address || '—' }}<template v-if="b.phone"> · {{ b.phone }}</template></small></td>
-              <td><span class="pill" :class="{ ok: b.is_active, warn: !b.is_active }">{{ b.is_active ? 'فعال' : 'غیرفعال' }}</span></td>
-              <td class="row-actions">
-                <button type="button" class="tertiary-btn" @click="openForm(b)">ویرایش</button>
-                <button type="button" class="tertiary-btn" @click="toggleBranch(b)">{{ b.is_active ? 'غیرفعال‌سازی' : 'فعال‌سازی' }}</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" v-else-if="!loading">شعبه‌ای تعریف نشده است.</p>
+      <ManagementListView
+        v-if="!loading"
+        :columns="branchColumns"
+        :rows="branches"
+        row-key="name"
+        :row-clickable="true"
+        @row-click="openForm"
+      >
+        <template #cell-branch="{ row }"><strong>{{ row.label || row.company_name }}</strong><br><small class="muted">{{ row.name }} · {{ row.abbr }}</small></template>
+        <template #cell-today_orders="{ value }">{{ formatQty(value) }}</template>
+        <template #cell-today_sales="{ value }">{{ formatMoneyValue(value) }}</template>
+        <template #cell-customers="{ value }">{{ formatQty(value) }}</template>
+        <template #cell-address="{ row }"><small class="muted">{{ row.address || '—' }}<template v-if="row.phone"> · {{ row.phone }}</template></small></template>
+        <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.is_active, warn: !row.is_active }">{{ row.is_active ? 'فعال' : 'غیرفعال' }}</span></template>
+        <template #cell-actions="{ row }">
+          <span class="row-actions">
+            <button type="button" class="tertiary-btn" @click="openForm(row)">ویرایش</button>
+            <button type="button" class="tertiary-btn" @click="toggleBranch(row)">{{ row.is_active ? 'غیرفعال‌سازی' : 'فعال‌سازی' }}</button>
+          </span>
+        </template>
+        <template #empty>شعبه‌ای تعریف نشده است.</template>
+      </ManagementListView>
     </ManagementSurfaceCard>
 
     <ManagementSurfaceCard title="انتقال مشتری بین شعب" subtitle="اتصال یک مشتری (باشگاه) به شعبه دیگر — کیف پول و کمپین‌ها به‌صورت مشترک بین همه شعب باقی می‌مانند">
@@ -92,6 +94,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
@@ -115,6 +118,15 @@ const saving = ref(false)
 const transferForm = reactive({ customer: '', target_branch: '' })
 const transferBusy = ref(false)
 const transferError = ref('')
+const branchColumns = [
+  { key: 'branch', label: 'شعبه' },
+  { key: 'today_orders', label: 'سفارش‌های امروز' },
+  { key: 'today_sales', label: 'فروش امروز' },
+  { key: 'customers', label: 'مشتریان متصل' },
+  { key: 'address', label: 'آدرس/تلفن' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 const activeBranches = computed(() => branches.value.filter((b) => b.is_active))
 
