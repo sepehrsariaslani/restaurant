@@ -52,29 +52,30 @@
         <p class="muted" v-if="customersLoading">در حال دریافت مشتریان...</p>
         <p class="error" v-if="customersError">{{ customersError }}</p>
         <p class="success-msg" v-if="customersMessage">{{ customersMessage }}</p>
-        <div v-if="!customersLoading && customers.length" class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>مشتری</th><th>نوع</th><th>کد اشتراک</th><th>سطح</th><th>سگمنت</th><th>امتیاز</th><th>سفارش‌ها</th><th>مجموع خرید</th><th>کیف پول</th><th>کد معرف</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in customers" :key="c.name">
-                <td><strong>{{ c.customer_name }}</strong><br><small class="muted">{{ c.mobile || '—' }}</small><small v-if="c.organization" class="muted d-block">سازمان: {{ c.organization }}</small></td>
-                <td><span class="pill" :class="{ ok: c.kind === 'سازمانی' }">{{ c.kind || 'حقیقی' }}</span></td>
-                <td><span class="pill">{{ c.membership_code || '—' }}</span></td>
-                <td><span class="pill" :class="{ ok: c.tier === 'VIP' }">{{ c.tier }}</span><br><small v-if="c.loyalty_tier" class="muted">{{ c.loyalty_tier }}</small></td>
-                <td>{{ c.segment || '—' }}</td>
-                <td :class="c.points_balance > 0 ? 'ok-text' : ''">{{ formatQty(c.points_balance) }}</td>
-                <td>{{ formatQty(c.orders) }}</td>
-                <td>{{ formatMoneyValue(c.total_spent) }}</td>
-                <td>{{ formatMoneyValue(c.wallet_balance) }}</td>
-                <td><small class="muted">{{ c.referral_code || '—' }}</small><br><small v-if="c.referred_by" class="muted">معرف: {{ c.referred_by }}</small></td>
-                <td class="row-actions"><button type="button" class="tertiary-btn" @click="openCustomerForm(c)">ویرایش</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!customersLoading">مشتری‌ای یافت نشد.</p>
+        <ManagementListView
+          v-if="!customersLoading"
+          :columns="clubCustomerColumns"
+          :rows="customers"
+          row-key="name"
+          :row-clickable="false"
+        >
+          <template #cell-customer_name="{ row }">
+            <strong>{{ row.customer_name || 'بدون نام' }}</strong>
+            <small class="muted d-block">{{ row.mobile || '—' }}<template v-if="row.organization"> · سازمان: {{ row.organization }}</template></small>
+          </template>
+          <template #cell-kind="{ row }"><span class="pill" :class="{ ok: row.kind === 'سازمانی' }">{{ row.kind || 'حقیقی' }}</span></template>
+          <template #cell-membership_code="{ value }"><span class="pill">{{ value || '—' }}</span></template>
+          <template #cell-tier="{ row }"><span class="pill" :class="{ ok: row.tier === 'VIP' }">{{ row.tier || '—' }}</span><small v-if="row.loyalty_tier" class="muted d-block">{{ row.loyalty_tier }}</small></template>
+          <template #cell-segment="{ value }">{{ value || '—' }}</template>
+          <template #cell-points_balance="{ value }"><span :class="{ 'ok-text': Number(value || 0) > 0 }">{{ formatQty(value) }}</span></template>
+          <template #cell-orders="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-total_spent="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-wallet_balance="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-referral_code="{ row }"><small class="muted">{{ row.referral_code || '—' }}</small><small v-if="row.referred_by" class="muted d-block">معرف: {{ row.referred_by }}</small></template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="openCustomerForm(row)">ویرایش</button></template>
+          <template #empty>مشتری‌ای یافت نشد.</template>
+        </ManagementListView>
+        <p v-else class="muted">در حال دریافت مشتریان...</p>
       </ManagementSurfaceCard>
 
       <div v-if="customerForm" class="popup-backdrop" @click.self="customerForm = null">
@@ -860,6 +861,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -1003,6 +1005,19 @@ const excelMode = ref('')
 const codesBusy = ref(false)
 const segmentsBusy = ref(false)
 const customerExcelInput = ref(null)
+const clubCustomerColumns = [
+  { key: 'customer_name', label: 'مشتری' },
+  { key: 'kind', label: 'نوع' },
+  { key: 'membership_code', label: 'کد اشتراک' },
+  { key: 'tier', label: 'سطح' },
+  { key: 'segment', label: 'سگمنت' },
+  { key: 'points_balance', label: 'امتیاز' },
+  { key: 'orders', label: 'سفارش‌ها' },
+  { key: 'total_spent', label: 'مجموع خرید' },
+  { key: 'wallet_balance', label: 'کیف پول' },
+  { key: 'referral_code', label: 'کد معرف' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 async function loadCustomers() {
   customersLoading.value = true

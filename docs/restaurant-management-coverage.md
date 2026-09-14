@@ -24,6 +24,9 @@
 | پیک‌ها | `/management/couriers` | Restaurant courier/vehicle | فهرست پیک → فرم جزئیات چسبان → fleet/rules | تراز شده در این مرحله؛ تست source موفق |
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |
 | کاربران و دسترسی | `/management/users` | ERPNext User/Role | native access surface با shell مشترک | مالکیت حفظ شده؛ بررسی دیداری بعدی |
+| باشگاه مشتریان | `/management/club` | Restaurant CRM روی Customer و اسناد فروش ERPNext | تب‌های مشتری، سازمان، کیف پول، صدای مشتری و کمپین با فهرست مشترک برای مشتریان | مشتریان باشگاه تراز شده؛ تب‌های تخصصی در audit مرحله‌ای |
+| مرکز تماس | `/management/call-center` | Restaurant call log و Customer context | تماس‌های اخیر با فهرست مشترک، وضعیت فارسی و عملیات پاسخ/پایان | تراز شده در این مرحله؛ تست source موفق |
+| گزارش‌های مدیریتی | `/management/reports` و `/management/reports/:key` | API گزارش Restaurant/ERPNext | فهرست گزارش، فیلتر بازه، KPI، نمودار و جدول با عنوان فارسی | گارسون و عنوان‌های تکمیلی اصلاح شد؛ browser smoke باقی است |
 
 ## صفحات Restaurant-specific
 

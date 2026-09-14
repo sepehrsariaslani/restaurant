@@ -12,6 +12,9 @@ const hooksSource = fs.readFileSync(new URL('../../restaurant/hooks.py', import.
 const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
 const ordersSource = fs.readFileSync(new URL('../src/pages/management/ManagementOrdersPage.vue', import.meta.url), 'utf8')
 const couriersSource = fs.readFileSync(new URL('../src/pages/management/ManagementCouriersPage.vue', import.meta.url), 'utf8')
+const clubSource = fs.readFileSync(new URL('../src/pages/management/ManagementClubPage.vue', import.meta.url), 'utf8')
+const callCenterSource = fs.readFileSync(new URL('../src/pages/management/ManagementCallCenterPage.vue', import.meta.url), 'utf8')
+const reportSource = fs.readFileSync(new URL('../src/pages/management/ManagementReportPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -111,4 +114,29 @@ test('courier management uses the shared list and product-like detail workflow',
   assert.match(couriersSource, /@row-click="editCourier"/)
   assert.match(couriersSource, /courier-workbench/)
   assert.match(couriersSource, /جزئیات پیک/)
+})
+
+test('club customer management uses the shared list pattern', () => {
+  assert.match(clubSource, /ManagementListView/)
+  assert.match(clubSource, /:rows="customers"/)
+  assert.match(clubSource, /clubCustomerColumns/)
+  assert.match(clubSource, /cell-customer_name/)
+  assert.match(clubSource, /ویرایش/)
+})
+
+test('call center uses the shared list pattern for recent calls', () => {
+  assert.match(callCenterSource, /ManagementListView/)
+  assert.match(callCenterSource, /:rows="calls"/)
+  assert.match(callCenterSource, /callColumns/)
+  assert.match(callCenterSource, /cell-caller_mobile/)
+  assert.match(callCenterSource, /پاسخ/)
+})
+
+test('management reports keep operational titles and waiter performance connected', () => {
+  assert.match(reportSource, /getManagementReportWaiterPerformance/)
+  assert.match(reportSource, /'waiter-performance'/)
+  assert.match(reportSource, /'menu-engineering'/)
+  assert.match(reportSource, /'tax-reconciliation'/)
+  assert.match(reportSource, /reportSubtitle/)
+  assert.doesNotMatch(reportSource, /:subtitle="reportKey"/)
 })

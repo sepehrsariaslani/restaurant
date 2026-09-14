@@ -26,26 +26,26 @@
       <p class="muted" v-if="loadingCalls">در حال دریافت تماس‌ها...</p>
       <p class="error" v-if="error">{{ error }}</p>
       <p class="success-msg" v-if="message">{{ message }}</p>
-      <div v-if="!loadingCalls && calls.length" class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>شماره</th><th>مشتری</th><th>داخلی</th><th>زمان</th><th>وضعیت</th><th>اپراتور</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="c in calls" :key="c.name" :class="{ 'row-new': c.status === 'جدید' }">
-              <td><strong>{{ c.caller_mobile }}</strong></td>
-              <td>{{ c.customer_name || 'مهمان جدید' }}</td>
-              <td>{{ c.exten || '—' }}</td>
-              <td><small class="muted">{{ c.entry_date }}</small></td>
-              <td><span class="pill" :class="{ warn: c.status === 'جدید', ok: c.status === 'پاسخ‌داده‌شده' }">{{ c.status }}</span></td>
-              <td><small class="muted">{{ c.agent || '—' }}</small></td>
-              <td class="row-actions">
-                <button type="button" class="secondary-btn" @click="answerCall(c)">پاسخ</button>
-                <button type="button" class="tertiary-btn" @click="closeCall(c)">پایان</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" v-else-if="!loadingCalls">تماسی ثبت نشده است.</p>
+      <ManagementListView
+        v-if="!loadingCalls"
+        :columns="callColumns"
+        :rows="calls"
+        row-key="name"
+        :row-clickable="false"
+      >
+        <template #cell-caller_mobile="{ value }"><strong dir="ltr">{{ value || '—' }}</strong></template>
+        <template #cell-customer_name="{ value }">{{ value || 'مهمان جدید' }}</template>
+        <template #cell-exten="{ value }">{{ value || '—' }}</template>
+        <template #cell-entry_date="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+        <template #cell-status="{ row }"><span class="pill" :class="{ warn: row.status === 'جدید', ok: row.status === 'پاسخ‌داده‌شده' }">{{ row.status || '—' }}</span></template>
+        <template #cell-agent="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+        <template #cell-actions="{ row }">
+          <button type="button" class="secondary-btn" @click="answerCall(row)">پاسخ</button>
+          <button type="button" class="tertiary-btn" @click="closeCall(row)">پایان</button>
+        </template>
+        <template #empty>تماسی ثبت نشده است.</template>
+      </ManagementListView>
+      <p v-else class="muted">در حال دریافت تماس‌ها...</p>
     </ManagementSurfaceCard>
 
     <ManagementSurfaceCard title="جستجوی دستی مشتری" subtitle="ثبت سفارش در مرکز تماس — پروفایل کامل باشگاه مشتریان با موبایل">
@@ -127,6 +127,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -153,6 +154,16 @@ const noteForm = ref(null)
 const noteError = ref('')
 const noteBusy = ref(false)
 let pollTimer = null
+
+const callColumns = [
+  { key: 'caller_mobile', label: 'شماره' },
+  { key: 'customer_name', label: 'مشتری' },
+  { key: 'exten', label: 'داخلی' },
+  { key: 'entry_date', label: 'زمان' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'agent', label: 'اپراتور' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 function formatQty(v) { return Number(v || 0).toLocaleString('fa-IR') }
 function formatMoneyValue(v) { return formatMoneyUtil(Number(v || 0)) }

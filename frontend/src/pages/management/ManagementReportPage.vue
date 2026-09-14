@@ -1,5 +1,5 @@
 <template>
-  <ManagementPageScaffold :title="reportTitle" :subtitle="reportKey">
+  <ManagementPageScaffold :title="reportTitle" :subtitle="reportSubtitle">
     <template #actions>
       <a class="secondary-btn" href="/management/reports">بازگشت به گزارش‌ها</a>
       <button class="secondary-btn" type="button" @click="loadReport" :disabled="loading">
@@ -94,6 +94,7 @@ import {
   getManagementReportCareFeedback,
   getManagementReportSurveyAnalytics,
   getManagementReportCourierPerformance,
+  getManagementReportWaiterPerformance,
   getManagementReportKitchenPerformance,
   getManagementReportProfitLoss,
   getManagementReportBreakeven,
@@ -122,6 +123,7 @@ const props = defineProps({
 
 const reportKey = computed(() => String(props.boot.report_key || '').trim())
 const reportTitle = computed(() => titleMap[reportKey.value] || 'گزارش')
+const reportSubtitle = computed(() => subtitleMap[reportKey.value] || 'نمایش داده‌های عملیاتی در بازهٔ زمانی انتخاب‌شده')
 
 const today = new Date()
 const start = new Date(today)
@@ -162,9 +164,28 @@ const titleMap = {
   'care-feedback': 'نظرات سایت',
   'survey-analytics': 'تحلیل نظرسنجی',
   'courier-performance': 'عملکرد پیک‌ها',
+  'waiter-performance': 'عملکرد گارسون‌ها',
   'kitchen-performance': 'عملکرد آشپزخانه',
   'profit-loss': 'سود و زیان',
   'breakeven': 'نقطه سربه‌سر',
+  'menu-engineering': 'مهندسی منو',
+  'tax-reconciliation': 'تطبیق مالیات',
+  'branch-performance': 'عملکرد شعب',
+  'vendor-sales': 'فروش غرفه‌ها',
+  'receipt-payment-balance': 'تراز دریافت و پرداخت',
+}
+
+const subtitleMap = {
+  'sales-summary': 'فروش، سفارش و میانگین سبد در بازهٔ انتخاب‌شده',
+  'courier-performance': 'تحویل، زمان ارسال و درآمد پیک‌ها',
+  'waiter-performance': 'سفارش و فروش ثبت‌شده به تفکیک گارسون',
+  'kitchen-performance': 'مدت آماده‌سازی و وضعیت تولید سفارش‌ها',
+  'inventory-valuation': 'ارزش ریالی و مقداری موجودی انبارها',
+  'menu-engineering': 'محبوبیت و حاشیهٔ سود آیتم‌های منو',
+  'tax-reconciliation': 'وضعیت صورتحساب‌ها و تطبیق با مالیات',
+  'branch-performance': 'مقایسهٔ فروش و رشد شعب در بازهٔ انتخاب‌شده',
+  'vendor-sales': 'فروش و کمیسیون غرفه‌داران و همکاران',
+  'receipt-payment-balance': 'جریان نقد، بانک و آمار دریافتی‌ها',
 }
 
 const apiMap = {
@@ -193,6 +214,7 @@ const apiMap = {
   'care-feedback': getManagementReportCareFeedback,
   'survey-analytics': getManagementReportSurveyAnalytics,
   'courier-performance': getManagementReportCourierPerformance,
+  'waiter-performance': getManagementReportWaiterPerformance,
   'kitchen-performance': getManagementReportKitchenPerformance,
   'profit-loss': getManagementReportProfitLoss,
   'breakeven': getManagementReportBreakeven,
