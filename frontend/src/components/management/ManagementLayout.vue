@@ -319,6 +319,7 @@ import {
 	PanelRightClose as PanelRightCloseIcon,
 	PanelRightOpen as PanelRightOpenIcon,
 	SlidersHorizontal as SlidersIcon,
+	Palette as DesignSystemIcon,
 	Store as StoreIcon,
 	Boxes as InventoryIcon,
 	UtensilsCrossed as KitchenIcon,
@@ -805,6 +806,15 @@ const navLinks = computed(() => {
 			caption: "تم، رنگ و ظاهر",
 			iconComponent: SlidersIcon,
 			url: "/management/site-settings?stage=theme",
+			group: "settings",
+		},
+		{
+			key: "management-design-system",
+			label: "دیزاین سیستم",
+			shortLabel: "دیزاین",
+			caption: "توکن‌ها، کامپوننت‌ها و پترن‌ها",
+			iconComponent: DesignSystemIcon,
+			url: "/management/design-system",
 			group: "settings",
 		},
 	];

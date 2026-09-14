@@ -37,9 +37,9 @@ defineProps({
 <style scoped>
 .readiness-panel {
   margin: 0.82rem 0;
-  border: 1px solid var(--border, var(--mg-border-light));
+  border: 1px solid var(--ds-color-border, var(--border, var(--mg-border-light)));
   border-radius: 12px;
-  background: linear-gradient(145deg, var(--bg-card, #fff), var(--bg-subtle, var(--mg-bg-page)));
+  background: linear-gradient(145deg, var(--ds-color-surface-raised, var(--bg-card, #fff)), var(--ds-color-surface-muted, var(--bg-subtle, var(--mg-bg-page))));
   padding: 0.7rem;
   display: grid;
   gap: 0.58rem;
@@ -58,12 +58,12 @@ defineProps({
 }
 
 .readiness-panel strong {
-  color: var(--text-primary, var(--mg-text-main));
+  color: var(--ds-color-text-primary, var(--text-primary, var(--mg-text-main)));
   font-size: 0.82rem;
 }
 
 .readiness-panel small {
-  color: var(--text-muted);
+  color: var(--ds-color-text-muted, var(--text-muted));
   font-size: 0.72rem;
   line-height: 1.55;
 }
@@ -79,8 +79,8 @@ defineProps({
 }
 
 .readiness-score.complete {
-  background: rgb(var(--success-rgb) / 0.12);
-  color: var(--success);
+  background: var(--ds-color-status-success-soft, rgb(var(--success-rgb) / 0.12));
+  color: var(--ds-color-status-success, var(--success));
 }
 
 .readiness-list {
@@ -93,9 +93,9 @@ defineProps({
   display: flex;
   align-items: flex-start;
   gap: 0.42rem;
-  border: 1px dashed color-mix(in srgb, var(--border, var(--mg-border-light)) 70%, var(--text-muted, var(--mg-text-muted)));
+  border: 1px dashed color-mix(in srgb, var(--ds-color-border, var(--border, var(--mg-border-light))) 70%, var(--ds-color-text-muted, var(--text-muted, var(--mg-text-muted))));
   border-radius: 10px;
-  background: var(--bg-card, #fff);
+  background: var(--ds-color-surface-raised, var(--bg-card, #fff));
   padding: 0.52rem;
 }
 
@@ -111,11 +111,11 @@ defineProps({
 
 .readiness-item.ok {
   border-style: solid;
-  border-color: rgb(var(--success-rgb) / 0.24);
+  border-color: color-mix(in srgb, var(--ds-color-status-success, var(--success)) 24%, transparent);
 }
 
 .readiness-item.ok .readiness-dot {
-  background: var(--success);
-  box-shadow: 0 0 0 4px rgb(var(--success-rgb) / 0.12);
+  background: var(--ds-color-status-success, var(--success));
+  box-shadow: 0 0 0 4px var(--ds-color-status-success-soft, rgb(var(--success-rgb) / 0.12));
 }
 </style>

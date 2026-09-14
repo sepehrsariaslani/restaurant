@@ -282,18 +282,18 @@ function handleAdd() {
 const cardStyle = computed(() => {
   const t = props.theme || {}
   return {
-    '--color-primary': t.primary_color || t.primary || 'var(--accent-gold)',
-    '--color-primary-dark': t.primary_color_dark || t.primary_dark || 'var(--accent-gold80)',
-    '--color-accent': t.accent_color || t.accent || 'var(--accent-green)',
-    '--color-text-primary': t.text_primary || 'var(--text-primary)',
-    '--color-text-secondary': t.text_secondary || 'var(--text-secondary)',
-    '--color-text-muted': t.text_muted || 'var(--text-muted)',
-    '--color-surface': t.surface || '#ffffff',
-    '--color-surface-alt': t.surface_alt || 'var(--theme-surface-alt)',
-    '--color-border': t.border || 'var(--glass-border)',
-    '--color-success': t.success || 'var(--success, var(--accent-green))',
-    '--color-success-bg': t.success_bg || 'var(--accent-green20)',
-    '--add-btn-bg': t.add_btn_bg || t.primary_color || 'var(--accent-gold)',
+    '--color-primary': t.primary_color || t.primary || 'var(--ds-color-action-accent)',
+    '--color-primary-dark': t.primary_color_dark || t.primary_dark || 'var(--ds-color-action-accent)',
+    '--color-accent': t.accent_color || t.accent || 'var(--ds-color-action-primary)',
+    '--color-text-primary': t.text_primary || 'var(--ds-color-text-primary)',
+    '--color-text-secondary': t.text_secondary || 'var(--ds-color-text-secondary)',
+    '--color-text-muted': t.text_muted || 'var(--ds-color-text-muted)',
+    '--color-surface': t.surface || 'var(--ds-color-surface-raised)',
+    '--color-surface-alt': t.surface_alt || 'var(--ds-color-surface-muted)',
+    '--color-border': t.border || 'var(--ds-color-border)',
+    '--color-success': t.success || 'var(--ds-color-status-success)',
+    '--color-success-bg': t.success_bg || 'var(--ds-color-status-success-soft)',
+    '--add-btn-bg': t.add_btn_bg || t.primary_color || 'var(--ds-color-action-accent)',
   }
 })
 

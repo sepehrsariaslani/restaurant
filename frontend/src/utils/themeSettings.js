@@ -1,22 +1,24 @@
 import { getManagementThemeSettings, setManagementThemeSettings } from './api'
+import { designTokens } from '../design-system/tokens'
 
 const THEME_STORAGE_KEY = 'restaurant.theme.settings.v1'
+const palette = designTokens.color.primitive
 
 export const defaultThemeSettings = {
-  primary: '#6F4A31',
-  accent: '#C98D42',
-  success: '#2F8F5B',
-  danger: '#B84F4F',
-  warning: '#C67B2A',
-  surface: '#FBF8F4',
-  surfaceAlt: '#F1E7DB',
-  background: '#F6F1EA',
-  border: '#D5C3AF',
-  text: '#3F2A1D',
-  textSecondary: '#654A38',
-  muted: '#846B58',
-  posPrimary: '#6F4A31',
-  posAccent: '#C98D42',
+  primary: palette.primary,
+  accent: palette.accent,
+  success: palette.success,
+  danger: palette.danger,
+  warning: palette.warning,
+  surface: palette.surface,
+  surfaceAlt: palette.surfaceAlt,
+  background: palette.background,
+  border: palette.border,
+  text: palette.text,
+  textSecondary: palette.textSecondary,
+  muted: palette.muted,
+  posPrimary: palette.primary,
+  posAccent: palette.accent,
   posSuccess: '#0B7D4A',
   posDanger: '#AB3535',
   posWarning: '#F59E0B',
@@ -229,6 +231,28 @@ export function applyThemeSettings(settings = {}) {
   const softPrimary = normalizeHex(normalized.surfaceAlt, tintHex(normalized.primary, 0.84))
   const bgSoft = normalizeHex(normalized.background, tintHex(normalized.surface, 0.35))
   const borderColor = normalizeHex(normalized.border, tintHex(normalized.primary, 0.62))
+
+  // Publish the semantic token layer first; legacy aliases below keep older
+  // public and management components working during the incremental rollout.
+  setCssVar('--ds-color-bg-page', bgSoft)
+  setCssVar('--ds-color-surface', normalized.surface)
+  setCssVar('--ds-color-surface-raised', normalized.surface)
+  setCssVar('--ds-color-surface-muted', softPrimary)
+  setCssVar('--ds-color-border', borderColor)
+  setCssVar('--ds-color-text-primary', normalized.text)
+  setCssVar('--ds-color-text-secondary', normalized.textSecondary)
+  setCssVar('--ds-color-text-muted', normalized.muted)
+  setCssVar('--ds-color-action-primary', normalized.primary)
+  setCssVar('--ds-color-action-primary-soft', alphaColorFromHex(normalized.primary, 0.1))
+  setCssVar('--ds-color-action-accent', normalized.accent)
+  setCssVar('--ds-color-action-accent-soft', alphaColorFromHex(normalized.accent, 0.12))
+  setCssVar('--ds-color-focus-ring', normalized.accent)
+  setCssVar('--ds-color-status-success', normalized.success)
+  setCssVar('--ds-color-status-success-soft', alphaColorFromHex(normalized.success, 0.12))
+  setCssVar('--ds-color-status-warning', normalized.warning)
+  setCssVar('--ds-color-status-warning-soft', alphaColorFromHex(normalized.warning, 0.14))
+  setCssVar('--ds-color-status-danger', normalized.danger)
+  setCssVar('--ds-color-status-danger-soft', alphaColorFromHex(normalized.danger, 0.12))
 
   setCssVar('--palette-deep-sapphire', normalized.primary)
   setCssVar('--palette-deep-sapphire-rgb', rgbStringFromHex(normalized.primary))

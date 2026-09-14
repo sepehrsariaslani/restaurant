@@ -10,6 +10,7 @@
       <ManagementUsersPage v-else-if="page === 'management-users'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
+      <ManagementDesignSystemPage v-else-if="page === 'management-design-system'" />
       <ManagementModifierGroupsPage v-else-if="page === 'management-modifier-groups'" />
       <ManagementMenuDesignerPage v-else-if="page === 'management-menu-design'" />
       <ManagementMenuGroupsPage v-else-if="page === 'management-menu-groups'" />
@@ -189,6 +190,7 @@ import ManagementCouriersPage from './pages/management/ManagementCouriersPage.vu
 import ManagementUsersPage from './pages/management/ManagementUsersPage.vue'
 import ManagementOrdersPage from './pages/management/ManagementOrdersPage.vue'
 import ManagementProductsPage from './pages/management/ManagementProductsPage.vue'
+import ManagementDesignSystemPage from './pages/management/ManagementDesignSystemPage.vue'
 import ManagementModifierGroupsPage from './pages/management/ManagementModifierGroupsPage.vue'
 import ManagementMenuDesignerPage from './pages/management/ManagementMenuDesignerPage.vue'
 import ManagementMenuGroupsPage from './pages/management/ManagementMenuGroupsPage.vue'
@@ -253,6 +255,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/pos-profile') || pathname.startsWith('/management/pos_profile')) return 'management-pos-profile'
     if (pathname.startsWith('/management/pos')) return 'management-pos'
     if (pathname.startsWith('/management/orders')) return 'management-orders'
+    if (pathname.startsWith('/management/design-system') || pathname.startsWith('/management/design_system')) return 'management-design-system'
     if (pathname.startsWith('/management/products/detail') && variantStudioMode) return 'management-variant-builder'
     if (pathname.startsWith('/management/product') && variantStudioMode) return 'management-variant-builder'
     if (pathname.startsWith('/management/modifier-groups') || pathname.startsWith('/management/modifier_groups')) return 'management-modifier-groups'

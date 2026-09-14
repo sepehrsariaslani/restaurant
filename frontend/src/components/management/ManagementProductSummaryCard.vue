@@ -54,7 +54,7 @@ defineProps({
   width: 180px;
   height: 180px;
   pointer-events: none;
-  background: radial-gradient(circle, rgb(var(--palette-deep-sapphire-rgb) / 0.12), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--ds-color-action-primary) 12%, transparent), transparent 68%);
   transform: translate(-38%, -42%);
 }
 
@@ -74,12 +74,12 @@ defineProps({
 }
 
 .product-summary-head strong {
-  color: var(--text-primary, var(--mg-text-main));
+  color: var(--ds-color-text-primary, var(--text-primary, var(--mg-text-main)));
   font-size: 1rem;
 }
 
 .product-summary-head small {
-  color: var(--text-muted, var(--mg-text-muted));
+  color: var(--ds-color-text-muted, var(--text-muted, var(--mg-text-muted)));
   line-height: 1.55;
 }
 
@@ -93,9 +93,9 @@ defineProps({
 
 .summary-chip {
   min-height: 4.6rem;
-  border: 1px solid var(--border, var(--mg-border-light));
+  border: 1px solid var(--ds-color-border, var(--border, var(--mg-border-light)));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-card, #fff) 88%, transparent);
+  background: color-mix(in srgb, var(--ds-color-surface-raised, var(--bg-card, #fff)) 88%, transparent);
   padding: 0.62rem;
   display: grid;
   align-content: space-between;
@@ -104,13 +104,13 @@ defineProps({
 }
 
 .summary-chip span {
-  color: var(--text-muted, var(--mg-text-muted));
+  color: var(--ds-color-text-muted, var(--text-muted, var(--mg-text-muted)));
   font-size: 0.72rem;
   font-weight: 800;
 }
 
 .summary-chip strong {
-  color: var(--text-primary, var(--mg-text-main));
+  color: var(--ds-color-text-primary, var(--text-primary, var(--mg-text-main)));
   font-size: 0.86rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
