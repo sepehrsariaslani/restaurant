@@ -702,7 +702,7 @@ onUnmounted(() => {
 </style>
 """
 
-with open("frontend/src/pages/management/ManagementKitchenPage.vue", "w") as f:
+with open("frontend/src/pages/management/operations/ManagementKitchenPage.vue", "w") as f:
     f.write(template)
 
 print("ManagementKitchenPage generated")

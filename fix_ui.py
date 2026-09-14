@@ -1,7 +1,7 @@
 import re
 
 # 1. ManagementKitchenPage.vue (remove scaffold, use div.kds-workspace)
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'r') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'r') as f:
     kitchen_page = f.read()
 
 kitchen_page = kitchen_page.replace(
@@ -39,7 +39,7 @@ kitchen_page = kitchen_page.replace(
     '.kds-board {\n  flex: 1;\n  overflow: hidden;\n'
 )
 
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'w') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'w') as f:
     f.write(kitchen_page)
 
 # 2. ManagementLayout.vue (Rail sidebar for kitchen, and remove desktop header for kitchen)
@@ -100,4 +100,3 @@ if "isKitchenPage = computed" not in layout:
 
 with open('frontend/src/components/management/ManagementLayout.vue', 'w') as f:
     f.write(layout)
-

@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "r") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "r") as f:
     content = f.read()
 
 new_script = """<script setup>
@@ -232,7 +232,7 @@ if (isOrderDetailView.value) {
 
 content = re.sub(r'<script setup>.*?</script>', new_script, content, flags=re.DOTALL)
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "w") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "w") as f:
     f.write(content)
 
 print("Updated ManagementOrdersPage script")

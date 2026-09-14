@@ -28,7 +28,7 @@ function posThermalPrintTransform() {
       if (rawId.includes('?')) return null
 
       const cleanId = rawId.replace(/\\/g, '/')
-      if (cleanId.endsWith('/src/pages/management/ManagementPosPage.vue')) {
+      if (cleanId.endsWith('/src/pages/management/sales/ManagementPosPage.vue')) {
         return {
           code: transformPosBackgroundPage(
             transformPosReliabilityPage(transformManagementPosPage(code)),
@@ -36,10 +36,10 @@ function posThermalPrintTransform() {
           map: null,
         }
       }
-      if (cleanId.endsWith('/src/pages/management/ManagementPosDefaultsPage.vue')) {
+      if (cleanId.endsWith('/src/pages/management/sales/ManagementPosDefaultsPage.vue')) {
         return { code: transformManagementPosDefaultsPage(code), map: null }
       }
-      if (cleanId.endsWith('/src/pages/management/ManagementProductsPage.vue')) {
+      if (cleanId.endsWith('/src/pages/management/catalog/ManagementProductsPage.vue')) {
         return { code: transformManagementProductsPage(code), map: null }
       }
       if (cleanId.endsWith('/src/components/management/pos/PosProductPanel.vue')) {

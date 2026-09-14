@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 const builderPage = readFileSync(
-  new URL('../src/pages/management/ManagementHomeBuilderPage.vue', import.meta.url),
+  new URL('../src/pages/management/builder/ManagementHomeBuilderPage.vue', import.meta.url),
   'utf8',
 )
 const landingPage = readFileSync(

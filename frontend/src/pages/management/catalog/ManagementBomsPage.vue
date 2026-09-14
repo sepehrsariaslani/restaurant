@@ -19,7 +19,7 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import ManagementBomManager from '@/components/management/ManagementBomManager.vue'
+import ManagementBomManager from '@/components/management/catalog/ManagementBomManager.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import { parseQuery } from '@/utils/format'

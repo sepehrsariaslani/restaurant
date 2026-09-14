@@ -1,7 +1,6 @@
 import fs from 'fs'
 
-const appPath = '/home/sepehr/den-v16-docker/apps/restaurant/frontend/src/App.vue'
-const source = fs.readFileSync(appPath, 'utf8')
+const source = fs.readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
 
 const checks = [
   {
@@ -14,7 +13,7 @@ const checks = [
   },
   {
     name: 'ManagementKitchenPage import exists',
-    ok: source.includes("import ManagementKitchenPage from './pages/management/ManagementKitchenPage.vue'"),
+    ok: source.includes("import ManagementKitchenPage from './pages/management/operations/ManagementKitchenPage.vue'"),
   },
 ]
 

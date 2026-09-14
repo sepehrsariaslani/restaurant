@@ -100,33 +100,21 @@
           <button type="button" class="tertiary-btn" @click="materialExcelSummary = null">بستن</button>
         </div>
         <p class="muted" v-if="materialsLoading">در حال دریافت...</p>
-        <div v-else class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>ماده اولیه</th><th>گروه</th><th>موجودی</th><th>ارزش</th><th>نقطه سفارش</th><th>تأمین‌کننده</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in materials" :key="row.name" :class="{ inactive: row.disabled }">
-                <td>
-                  <strong>{{ row.item_name }}</strong> <span v-if="row.below_reorder" class="badge warn">کمبود</span><br>
-                  <small class="muted">{{ row.name }}</small>
-                </td>
-                <td>{{ row.item_group }}</td>
-                <td>{{ formatQty(row.qty) }} {{ row.stock_uom }}</td>
-                <td>{{ formatMoneyValue(row.value) }}</td>
-                <td>
-                  <template v-if="row.reorder_levels.length">
-                    <span v-for="rl in row.reorder_levels.slice(0, 2)" :key="row.name + rl.warehouse" class="pill">{{ rl.warehouse }}: {{ formatQty(rl.level) }}</span>
-                  </template>
-                  <span v-else class="muted">—</span>
-                </td>
-                <td>{{ row.default_supplier || '—' }}</td>
-                <td><button type="button" class="tertiary-btn" @click="openMaterialForm(row)">ویرایش</button></td>
-              </tr>
-              <tr v-if="!materials.length"><td colspan="7" class="muted">ماده اولیه‌ای ثبت نشده است.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-else
+          :columns="materialColumns"
+          :rows="materials"
+          row-key="name"
+        >
+          <template #cell-item="{ row }"><strong>{{ row.item_name }}</strong><span v-if="row.below_reorder" class="badge warn">کمبود</span><small class="muted d-block">{{ row.name }}</small></template>
+          <template #cell-item_group="{ value }">{{ value || '—' }}</template>
+          <template #cell-stock="{ row }">{{ formatQty(row.qty) }} {{ row.stock_uom }}</template>
+          <template #cell-value="{ row }">{{ formatMoneyValue(row.value) }}</template>
+          <template #cell-reorder="{ row }"><template v-if="row.reorder_levels.length"><span v-for="rl in row.reorder_levels.slice(0, 2)" :key="row.name + rl.warehouse" class="pill">{{ rl.warehouse }}: {{ formatQty(rl.level) }}</span></template><span v-else class="muted">—</span></template>
+          <template #cell-default_supplier="{ value }">{{ value || '—' }}</template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="openMaterialForm(row)">ویرایش</button></template>
+          <template #empty>ماده اولیه‌ای ثبت نشده است.</template>
+        </ManagementListView>
         <div class="btn-row" v-if="materialsHasMore">
           <button type="button" class="secondary-btn" @click="loadMoreMaterials">بارگذاری بیشتر</button>
         </div>
@@ -209,32 +197,20 @@
           <button type="button" class="primary-btn" @click="openWarehouseForm()">+ انبار جدید</button>
           <button type="button" class="secondary-btn" @click="loadWarehouses" :disabled="warehousesLoading">{{ warehousesLoading ? '...' : 'بروزرسانی' }}</button>
         </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>انبار</th><th>والد</th><th>شرکت</th><th>موجودی (مقدار)</th><th>ارزش</th><th>وضعیت</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in warehouses" :key="row.name" :class="{ inactive: row.disabled, group: row.is_group }">
-                <td><strong>{{ row.warehouse_name }}</strong><br><small class="muted">{{ row.name }}</small></td>
-                <td>{{ row.parent_warehouse || '—' }}</td>
-                <td>{{ row.company }}</td>
-                <td>{{ row.is_group ? '—' : formatQty(row.qty) }}</td>
-                <td>{{ row.is_group ? '—' : formatMoneyValue(row.value) }}</td>
-                <td>
-                  <span v-if="row.is_group" class="pill">گروه</span>
-                  <span v-if="row.disabled" class="pill warn">غیرفعال</span>
-                  <span v-if="!row.is_group && !row.disabled" class="pill ok">فعال</span>
-                </td>
-                <td class="row-actions">
-                  <button type="button" class="tertiary-btn" @click="openWarehouseForm(row)">ویرایش</button>
-                  <button type="button" class="tertiary-btn danger" @click="removeWarehouse(row)">حذف</button>
-                </td>
-              </tr>
-              <tr v-if="!warehouses.length"><td colspan="7" class="muted">انباری تعریف نشده است.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          :columns="warehouseColumns"
+          :rows="warehouses"
+          row-key="name"
+        >
+          <template #cell-warehouse="{ row }"><strong>{{ row.warehouse_name }}</strong><small class="muted d-block">{{ row.name }}</small></template>
+          <template #cell-parent_warehouse="{ value }">{{ value || '—' }}</template>
+          <template #cell-company="{ value }">{{ value || '—' }}</template>
+          <template #cell-qty="{ row }">{{ row.is_group ? '—' : formatQty(row.qty) }}</template>
+          <template #cell-value="{ row }">{{ row.is_group ? '—' : formatMoneyValue(row.value) }}</template>
+          <template #cell-status="{ row }"><span v-if="row.is_group" class="pill">گروه</span><span v-if="row.disabled" class="pill warn">غیرفعال</span><span v-if="!row.is_group && !row.disabled" class="pill ok">فعال</span></template>
+          <template #cell-actions="{ row }"><div class="row-actions"><button type="button" class="tertiary-btn" @click="openWarehouseForm(row)">ویرایش</button><button type="button" class="tertiary-btn danger" @click="removeWarehouse(row)">حذف</button></div></template>
+          <template #empty>انباری تعریف نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <div v-if="warehouseForm" class="inventory-inline-detail warehouse-form-inline" @click.self="warehouseForm = null">
@@ -329,28 +305,21 @@
           <button type="button" class="secondary-btn" @click="loadMovements" :disabled="movementsLoading">{{ movementsLoading ? '...' : 'جستجو' }}</button>
         </div>
         <p class="muted" v-if="movementsLoading">در حال دریافت...</p>
-        <div v-else class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>تاریخ</th><th>کالا</th><th>انبار</th><th>تغییر مقدار</th><th>تغییر ارزش</th><th>نوع</th><th>سند</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, i) in movements" :key="i">
-                <td>{{ formatPersianDate(row.posting_date) }}<br><small class="muted">{{ row.posting_time }}</small></td>
-                <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                <td>{{ row.warehouse }}</td>
-                <td :class="row.qty_change >= 0 ? 'ok-text' : 'warn-text'">{{ row.qty_change >= 0 ? '+' : '' }}{{ formatQty(row.qty_change) }} {{ row.stock_uom }}</td>
-                <td>{{ formatMoneyValue(row.value_change) }}</td>
-                <td><span class="pill">{{ row.kind }}</span></td>
-                <td>
-                  {{ row.voucher }}
-                  <br><small class="muted" v-if="row.note">{{ row.note }}</small>
-                </td>
-              </tr>
-              <tr v-if="!movements.length"><td colspan="7" class="muted">گردشی ثبت نشده است.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-else
+          :columns="movementColumns"
+          :rows="movements"
+          :row-key="movementRowKey"
+        >
+          <template #cell-posting_date="{ row }">{{ formatPersianDate(row.posting_date) }}<small class="muted d-block">{{ row.posting_time }}</small></template>
+          <template #cell-item="{ row }">{{ row.item_name }}<small class="muted d-block">{{ row.item_code }}</small></template>
+          <template #cell-warehouse="{ value }">{{ value || '—' }}</template>
+          <template #cell-qty_change="{ row }"><span :class="row.qty_change >= 0 ? 'ok-text' : 'warn-text'">{{ row.qty_change >= 0 ? '+' : '' }}{{ formatQty(row.qty_change) }} {{ row.stock_uom }}</span></template>
+          <template #cell-value_change="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-kind="{ value }"><span class="pill">{{ value }}</span></template>
+          <template #cell-voucher="{ row }">{{ row.voucher }}<small class="muted d-block" v-if="row.note">{{ row.note }}</small></template>
+          <template #empty>گردشی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
 
@@ -370,30 +339,21 @@
           </button>
         </div>
         <p class="muted" v-if="reorderLoading">در حال بررسی موجودی...</p>
-        <template v-else-if="reorderAlerts.length">
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" :checked="selectedAlerts.length === reorderAlerts.length" @change="toggleAllAlerts" /></th>
-                  <th>کالا</th><th>انبار</th><th>موجودی</th><th>نقطه سفارش</th><th>پیشنهاد خرید</th><th>تأمین‌کننده</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in reorderAlerts" :key="row.item_code + row.warehouse" class="alert-row">
-                  <td><input type="checkbox" :value="row" v-model="selectedAlerts" /></td>
-                  <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                  <td>{{ row.warehouse }}</td>
-                  <td class="warn-text">{{ formatQty(row.available) }} {{ row.stock_uom }}</td>
-                  <td>{{ formatQty(row.level) }}</td>
-                  <td>{{ formatQty(row.suggested_qty) }}</td>
-                  <td>{{ row.default_supplier || '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
-        <p class="ok-text" v-else>همه مواد بالاتر از نقطه سفارش هستند. ✅</p>
+        <ManagementListView
+          v-else
+          :columns="reorderColumns"
+          :rows="reorderAlerts"
+          :row-key="reorderRowKey"
+        >
+          <template #cell-select="{ row }"><input type="checkbox" :value="row" v-model="selectedAlerts" /></template>
+          <template #cell-item="{ row }">{{ row.item_name }}<small class="muted d-block">{{ row.item_code }}</small></template>
+          <template #cell-warehouse="{ value }">{{ value }}</template>
+          <template #cell-available="{ row }"><span class="warn-text">{{ formatQty(row.available) }} {{ row.stock_uom }}</span></template>
+          <template #cell-level="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-suggested_qty="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-default_supplier="{ value }">{{ value || '—' }}</template>
+          <template #empty><span class="ok-text">همه مواد بالاتر از نقطه سفارش هستند. ✅</span></template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
 
@@ -612,25 +572,21 @@
         </div>
 
         <p class="muted" v-if="purchaseLoading">در حال دریافت...</p>
-        <div v-else class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>شماره</th><th>تأمین‌کننده</th><th>تاریخ</th><th>وضعیت</th><th>تعداد</th><th>مبلغ</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in purchases" :key="row.name">
-                <td><strong>{{ row.name }}</strong></td>
-                <td>{{ row.supplier_name || '—' }}</td>
-                <td>{{ formatPersianDate(row.posting_date) }}</td>
-                <td><span :class="['pill', purchaseStatusClass(row.status)]">{{ row.status }}</span></td>
-                <td>{{ formatQty(row.total_qty) }}</td>
-                <td>{{ formatMoneyValue(row.grand_total) }}</td>
-                <td><button type="button" class="tertiary-btn" @click="openPurchaseDetail(row.name)">مشاهده</button></td>
-              </tr>
-              <tr v-if="!purchases.length"><td colspan="7" class="muted">سفارش خریدی ثبت نشده است.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-else
+          :columns="purchaseColumns"
+          :rows="purchases"
+          row-key="name"
+        >
+          <template #cell-name="{ row }"><strong>{{ row.name }}</strong></template>
+          <template #cell-supplier_name="{ value }">{{ value || '—' }}</template>
+          <template #cell-posting_date="{ value }">{{ formatPersianDate(value) }}</template>
+          <template #cell-status="{ row }"><span :class="['pill', purchaseStatusClass(row.status)]">{{ row.status }}</span></template>
+          <template #cell-total_qty="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-grand_total="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="openPurchaseDetail(row.name)">مشاهده</button></template>
+          <template #empty>سفارش خریدی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <div v-if="purchaseDetail" class="inventory-inline-detail purchase-detail-inline" @click.self="purchaseDetail = null">
@@ -722,35 +678,29 @@
           </div>
 
           <h4>مواد اولیه مورد نیاز</h4>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>ماده</th><th>نیاز</th><th>موجودی</th><th>کمبود</th></tr></thead>
-              <tbody>
-                <tr v-for="row in plan.materials" :key="row.item_code">
-                  <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                  <td>{{ formatQty(row.required) }} {{ row.stock_uom }}</td>
-                  <td>{{ formatQty(row.available) }}</td>
-                  <td :class="row.shortage > 0 ? 'warn-text' : 'ok-text'">{{ row.shortage > 0 ? formatQty(row.shortage) : 'کافی' }}</td>
-                </tr>
-                <tr v-if="!plan.materials.length"><td colspan="4" class="muted">حواله تولید بازی در این بازه نیست.</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            :columns="productionMaterialColumns"
+            :rows="plan.materials"
+            row-key="item_code"
+          >
+            <template #cell-item="{ row }">{{ row.item_name }}<small class="muted d-block">{{ row.item_code }}</small></template>
+            <template #cell-required="{ row }">{{ formatQty(row.required) }} {{ row.stock_uom }}</template>
+            <template #cell-available="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-shortage="{ row }"><span :class="row.shortage > 0 ? 'warn-text' : 'ok-text'">{{ row.shortage > 0 ? formatQty(row.shortage) : 'کافی' }}</span></template>
+            <template #empty>حواله تولید بازی در این بازه نیست.</template>
+          </ManagementListView>
 
           <h4>محصولات در صف تولید</h4>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>محصول</th><th>تعداد</th><th>تعداد حواله</th></tr></thead>
-              <tbody>
-                <tr v-for="row in plan.products" :key="row.menu_item">
-                  <td>{{ row.item_name }}<br><small class="muted">{{ row.menu_item }}</small></td>
-                  <td>{{ formatQty(row.qty) }}</td>
-                  <td>{{ formatQty(row.tickets) }}</td>
-                </tr>
-                <tr v-if="!plan.products.length"><td colspan="3" class="muted">—</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            :columns="productionProductColumns"
+            :rows="plan.products"
+            row-key="menu_item"
+          >
+            <template #cell-product="{ row }">{{ row.item_name }}<small class="muted d-block">{{ row.menu_item }}</small></template>
+            <template #cell-qty="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-tickets="{ value }">{{ formatQty(value) }}</template>
+            <template #empty>—</template>
+          </ManagementListView>
         </template>
       </ManagementSurfaceCard>
 
@@ -810,20 +760,18 @@
               <strong>{{ formatQty(row.count) }} مورد • {{ formatMoneyValue(row.amount) }}</strong>
             </div>
           </div>
-          <div class="table-wrap" v-if="wasteReport.by_item.length">
-            <table class="data-table">
-              <thead><tr><th>کالا</th><th>نوع</th><th>مقدار</th><th>ارزش</th><th>اسناد</th></tr></thead>
-              <tbody>
-                <tr v-for="(row, i) in wasteReport.by_item" :key="i">
-                  <td>{{ row.item_name }}</td>
-                  <td><span class="pill warn">{{ row.kind }}</span></td>
-                  <td>{{ formatQty(row.qty) }}</td>
-                  <td>{{ formatMoneyValue(row.value) }}</td>
-                  <td>{{ formatQty(row.vouchers) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            v-if="wasteReport.by_item.length"
+            :columns="wasteItemColumns"
+            :rows="wasteReport.by_item"
+            :row-key="wasteItemRowKey"
+          >
+            <template #cell-item_name="{ value }">{{ value }}</template>
+            <template #cell-kind="{ value }"><span class="pill warn">{{ value }}</span></template>
+            <template #cell-qty="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-value="{ value }">{{ formatMoneyValue(value) }}</template>
+            <template #cell-vouchers="{ value }">{{ formatQty(value) }}</template>
+          </ManagementListView>
         </template>
       </ManagementSurfaceCard>
 
@@ -873,24 +821,21 @@
           </select>
           <button type="button" class="secondary-btn" @click="loadOrderLosses">بروزرسانی</button>
         </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>تاریخ</th><th>نوع</th><th>کالا</th><th>مقدار</th><th>منشأ</th><th>علت</th><th>مبلغ</th><th>سند انبار</th></tr></thead>
-            <tbody>
-              <tr v-for="row in orderLosses" :key="row.name">
-                <td>{{ row.entry_date }}</td>
-                <td><span :class="['pill', row.loss_kind === 'مرجوعی به انبار' ? 'ok' : 'warn']">{{ row.loss_kind }}</span></td>
-                <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                <td>{{ formatQty(row.qty) }} {{ row.uom }}</td>
-                <td>{{ row.source_type }}<br><small class="muted">{{ row.source_reference }}</small></td>
-                <td><small>{{ row.reason }}</small></td>
-                <td>{{ formatMoneyValue(row.amount) }}</td>
-                <td><small class="muted">{{ row.stock_entry || '—' }}</small></td>
-              </tr>
-              <tr v-if="!orderLosses.length"><td colspan="8" class="muted">موردی ثبت نشده است.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          :columns="orderLossColumns"
+          :rows="orderLosses"
+          row-key="name"
+        >
+          <template #cell-entry_date="{ value }">{{ value || '—' }}</template>
+          <template #cell-loss_kind="{ row }"><span :class="['pill', row.loss_kind === 'مرجوعی به انبار' ? 'ok' : 'warn']">{{ row.loss_kind }}</span></template>
+          <template #cell-item="{ row }">{{ row.item_name }}<small class="muted d-block">{{ row.item_code }}</small></template>
+          <template #cell-qty="{ row }">{{ formatQty(row.qty) }} {{ row.uom }}</template>
+          <template #cell-source="{ row }">{{ row.source_type }}<small class="muted d-block">{{ row.source_reference }}</small></template>
+          <template #cell-reason="{ value }"><small>{{ value }}</small></template>
+          <template #cell-amount="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-stock_entry="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+          <template #empty>موردی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
 
@@ -937,20 +882,18 @@
         <div v-if="countResult" class="inline-form result-block">
           <h4>نتیجه مغایرت‌گیری — سند {{ countResult.name }}</h4>
           <p>مغایرت کل ارزشی: <strong :class="countResult.difference_amount === 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(countResult.difference_amount) }}</strong></p>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>کالا</th><th>سیستمی</th><th>شمارش</th><th>تفاوت</th><th>ارزش تفاوت</th></tr></thead>
-              <tbody>
-                <tr v-for="row in countResult.rows" :key="row.item_code">
-                  <td>{{ row.item_code }}</td>
-                  <td>{{ formatQty(row.prev_qty) }}</td>
-                  <td>{{ formatQty(row.new_qty) }}</td>
-                  <td :class="row.diff_qty === 0 ? 'ok-text' : 'warn-text'">{{ row.diff_qty > 0 ? '+' : '' }}{{ formatQty(row.diff_qty) }}</td>
-                  <td>{{ formatMoneyValue(row.diff_value) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            :columns="countResultColumns"
+            :rows="countResult.rows"
+            row-key="item_code"
+          >
+            <template #cell-item_code="{ value }">{{ value }}</template>
+            <template #cell-prev_qty="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-new_qty="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-diff_qty="{ row }"><span :class="row.diff_qty === 0 ? 'ok-text' : 'warn-text'">{{ row.diff_qty > 0 ? '+' : '' }}{{ formatQty(row.diff_qty) }}</span></template>
+            <template #cell-diff_value="{ value }">{{ formatMoneyValue(value) }}</template>
+            <template #empty>جزئیاتی برای این سند ثبت نشده است.</template>
+          </ManagementListView>
         </div>
       </ManagementSurfaceCard>
 
@@ -958,36 +901,30 @@
         <div class="toolbar">
           <button type="button" class="secondary-btn" @click="loadReconciliations">بروزرسانی</button>
         </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>سند</th><th>تاریخ</th><th>شرکت</th><th>مغایرت ارزشی</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="row in reconciliations" :key="row.name">
-                <td><strong>{{ row.name }}</strong></td>
-                <td>{{ formatPersianDate(row.posting_date) }}</td>
-                <td>{{ row.company }}</td>
-                <td :class="row.difference_amount === 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.difference_amount) }}</td>
-                <td><button type="button" class="tertiary-btn" @click="viewReconciliation(row.name)">جزئیات</button></td>
-              </tr>
-              <tr v-if="!reconciliations.length"><td colspan="5" class="muted">انبارگردانی‌ای ثبت نشده است.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          :columns="reconciliationColumns"
+          :rows="reconciliations"
+          row-key="name"
+        >
+          <template #cell-name="{ row }"><strong>{{ row.name }}</strong></template>
+          <template #cell-posting_date="{ value }">{{ formatPersianDate(value) }}</template>
+          <template #cell-company="{ value }">{{ value || '—' }}</template>
+          <template #cell-difference_amount="{ row }"><span :class="row.difference_amount === 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.difference_amount) }}</span></template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="viewReconciliation(row.name)">جزئیات</button></template>
+          <template #empty>انبارگردانی‌ای ثبت نشده است.</template>
+        </ManagementListView>
         <div v-if="reconciliationDetail" class="inline-form result-block">
           <h4>جزئیات {{ reconciliationDetail.name }}</h4>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>کالا</th><th>انبار</th><th>تغییر مقدار</th><th>تغییر ارزش</th></tr></thead>
-              <tbody>
-                <tr v-for="(row, i) in reconciliationDetail.rows" :key="i">
-                  <td>{{ row.item_code }}</td>
-                  <td>{{ row.warehouse }}</td>
-                  <td :class="row.diff_qty >= 0 ? 'ok-text' : 'warn-text'">{{ row.diff_qty > 0 ? '+' : '' }}{{ formatQty(row.diff_qty) }}</td>
-                  <td>{{ formatMoneyValue(row.diff_value) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            :columns="reconciliationDetailColumns"
+            :rows="reconciliationDetail.rows"
+            :row-key="reconciliationDetailRowKey"
+          >
+            <template #cell-item_code="{ value }">{{ value }}</template>
+            <template #cell-warehouse="{ value }">{{ value || '—' }}</template>
+            <template #cell-diff_qty="{ row }"><span :class="row.diff_qty >= 0 ? 'ok-text' : 'warn-text'">{{ row.diff_qty > 0 ? '+' : '' }}{{ formatQty(row.diff_qty) }}</span></template>
+            <template #cell-diff_value="{ value }">{{ formatMoneyValue(value) }}</template>
+          </ManagementListView>
         </div>
       </ManagementSurfaceCard>
     </section>
@@ -1052,6 +989,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
@@ -1164,6 +1102,112 @@ function formatQty(value) {
 function warehouseKeys(row) {
   return Object.keys(row.warehouses || {})
 }
+function movementRowKey(row, index) {
+  return row.name || `${row.voucher || 'movement'}-${row.item_code || index}-${row.warehouse || ''}-${row.posting_date || ''}`
+}
+function reorderRowKey(row, index) {
+  return `${row.item_code || 'alert'}-${row.warehouse || index}`
+}
+function wasteItemRowKey(row, index) {
+  return `${row.item_code || row.item_name || 'loss'}-${row.kind || index}`
+}
+function reconciliationDetailRowKey(row, index) {
+  return `${row.item_code || 'reconciliation'}-${row.warehouse || index}`
+}
+
+const materialColumns = [
+  { key: 'item', label: 'ماده اولیه' },
+  { key: 'item_group', label: 'گروه' },
+  { key: 'stock', label: 'موجودی' },
+  { key: 'value', label: 'ارزش' },
+  { key: 'reorder', label: 'نقطه سفارش' },
+  { key: 'default_supplier', label: 'تأمین‌کننده' },
+  { key: 'actions', label: 'عملیات' },
+]
+const warehouseColumns = [
+  { key: 'warehouse', label: 'انبار' },
+  { key: 'parent_warehouse', label: 'والد' },
+  { key: 'company', label: 'شرکت' },
+  { key: 'qty', label: 'موجودی' },
+  { key: 'value', label: 'ارزش' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
+const movementColumns = [
+  { key: 'posting_date', label: 'تاریخ' },
+  { key: 'item', label: 'کالا' },
+  { key: 'warehouse', label: 'انبار' },
+  { key: 'qty_change', label: 'تغییر مقدار' },
+  { key: 'value_change', label: 'تغییر ارزش' },
+  { key: 'kind', label: 'نوع' },
+  { key: 'voucher', label: 'سند' },
+]
+const reorderColumns = [
+  { key: 'select', label: '' },
+  { key: 'item', label: 'کالا' },
+  { key: 'warehouse', label: 'انبار' },
+  { key: 'available', label: 'موجودی' },
+  { key: 'level', label: 'نقطه سفارش' },
+  { key: 'suggested_qty', label: 'پیشنهاد خرید' },
+  { key: 'default_supplier', label: 'تأمین‌کننده' },
+]
+const purchaseColumns = [
+  { key: 'name', label: 'شماره' },
+  { key: 'supplier_name', label: 'تأمین‌کننده' },
+  { key: 'posting_date', label: 'تاریخ' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'total_qty', label: 'تعداد' },
+  { key: 'grand_total', label: 'مبلغ' },
+  { key: 'actions', label: 'عملیات' },
+]
+const productionMaterialColumns = [
+  { key: 'item', label: 'ماده' },
+  { key: 'required', label: 'نیاز' },
+  { key: 'available', label: 'موجودی' },
+  { key: 'shortage', label: 'کمبود' },
+]
+const productionProductColumns = [
+  { key: 'product', label: 'محصول' },
+  { key: 'qty', label: 'تعداد' },
+  { key: 'tickets', label: 'تعداد حواله' },
+]
+const wasteItemColumns = [
+  { key: 'item_name', label: 'کالا' },
+  { key: 'kind', label: 'نوع' },
+  { key: 'qty', label: 'مقدار' },
+  { key: 'value', label: 'ارزش' },
+  { key: 'vouchers', label: 'اسناد' },
+]
+const orderLossColumns = [
+  { key: 'entry_date', label: 'تاریخ' },
+  { key: 'loss_kind', label: 'نوع' },
+  { key: 'item', label: 'کالا' },
+  { key: 'qty', label: 'مقدار' },
+  { key: 'source', label: 'منشأ' },
+  { key: 'reason', label: 'علت' },
+  { key: 'amount', label: 'مبلغ' },
+  { key: 'stock_entry', label: 'سند انبار' },
+]
+const countResultColumns = [
+  { key: 'item_code', label: 'کالا' },
+  { key: 'prev_qty', label: 'سیستمی' },
+  { key: 'new_qty', label: 'شمارش' },
+  { key: 'diff_qty', label: 'تفاوت' },
+  { key: 'diff_value', label: 'ارزش تفاوت' },
+]
+const reconciliationColumns = [
+  { key: 'name', label: 'سند' },
+  { key: 'posting_date', label: 'تاریخ' },
+  { key: 'company', label: 'شرکت' },
+  { key: 'difference_amount', label: 'مغایرت ارزشی' },
+  { key: 'actions', label: 'عملیات' },
+]
+const reconciliationDetailColumns = [
+  { key: 'item_code', label: 'کالا' },
+  { key: 'warehouse', label: 'انبار' },
+  { key: 'diff_qty', label: 'تغییر مقدار' },
+  { key: 'diff_value', label: 'تغییر ارزش' },
+]
 
 async function loadBoot() {
   bootLoading.value = true

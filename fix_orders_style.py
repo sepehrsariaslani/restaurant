@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "r") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "r") as f:
     content = f.read()
 
 # Make sure style is clean
@@ -786,6 +786,6 @@ button:disabled {
 
 content = content.replace(style_block, new_style)
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "w") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "w") as f:
     f.write(content)
 print("Updated ManagementOrdersPage style block")

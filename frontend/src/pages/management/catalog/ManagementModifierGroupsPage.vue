@@ -8,6 +8,6 @@
 </template>
 
 <script setup>
-import ManagementModifierGroupsSettings from '@/components/management/ManagementModifierGroupsSettings.vue'
+import ManagementModifierGroupsSettings from '@/components/management/catalog/ManagementModifierGroupsSettings.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 </script>

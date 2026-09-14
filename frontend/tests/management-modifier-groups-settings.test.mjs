@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const source = fs.readFileSync(
-  new URL('../src/components/management/ManagementModifierGroupsSettings.vue', import.meta.url),
+  new URL('../src/components/management/catalog/ManagementModifierGroupsSettings.vue', import.meta.url),
   'utf8',
 )
 const apiSource = fs.readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')

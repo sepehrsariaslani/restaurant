@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 # Replace any color-mix or rgb constructs with standard var(--mg-...) 
@@ -30,5 +30,5 @@ css_clean = """.pos-theme {
 
 content = content.replace(css_start, css_clean)
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'w') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'w') as f:
     f.write(content)

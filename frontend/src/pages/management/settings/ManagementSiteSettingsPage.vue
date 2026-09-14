@@ -1464,10 +1464,10 @@ import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
-import ManagementPageBuilderWorkspace from '@/components/management/ManagementPageBuilderWorkspace.vue'
+import ManagementPageBuilderWorkspace from '@/components/management/builder/ManagementPageBuilderWorkspace.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
-import ManagementThemeStudio from '@/components/management/ManagementThemeStudio.vue'
+import ManagementThemeStudio from '@/components/management/design-system/ManagementThemeStudio.vue'
 import MenuItemCard from '@/components/MenuItemCard.vue'
 import {
   getManagementSiteSettings,

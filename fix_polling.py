@@ -1,4 +1,4 @@
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'r') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'r') as f:
     content = f.read()
 
 # Make search include item details
@@ -159,7 +159,7 @@ onUnmounted(() => {
   }
 })""", on_mount_listeners)
 
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'w') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'w') as f:
     f.write(content)
 
 print("Frontend fixes applied.")

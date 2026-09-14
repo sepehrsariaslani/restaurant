@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 # Add editingOriginalOrder.isEditing = false to addToCart
@@ -21,5 +21,5 @@ content = content.replace(
     "line.note = String(next || '').trim()\n  editingOriginalOrder.isEditing = false\n  editingOriginalOrder.name = ''"
 )
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'w') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'w') as f:
     f.write(content)

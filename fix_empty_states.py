@@ -1,4 +1,4 @@
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'r') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'r') as f:
     content = f.read()
 
 # Add empty states for each column
@@ -92,5 +92,5 @@ css = """
 
 content = content.replace('/* Responsive adjustments */', css + '\n/* Responsive adjustments */')
 
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'w') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'w') as f:
     f.write(content)

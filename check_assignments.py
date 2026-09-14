@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 # simple check for assignments without declaration in <script setup>

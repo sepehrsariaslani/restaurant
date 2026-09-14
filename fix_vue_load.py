@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "r") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "r") as f:
     content = f.read()
 
 # I want to ensure my data formatting works. Let's see what is inside "mobileTabs"

@@ -11,17 +11,18 @@ const layoutSource = fs.readFileSync(new URL('components/management/ManagementLa
 const hooksSource = fs.readFileSync(new URL('../../restaurant/hooks.py', import.meta.url), 'utf8')
 const designSystemHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.html', import.meta.url), 'utf8')
 const designSystemPySource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.py', import.meta.url), 'utf8')
-const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
-const ordersSource = fs.readFileSync(new URL('../src/pages/management/ManagementOrdersPage.vue', import.meta.url), 'utf8')
-const couriersSource = fs.readFileSync(new URL('../src/pages/management/ManagementCouriersPage.vue', import.meta.url), 'utf8')
-const clubSource = fs.readFileSync(new URL('../src/pages/management/ManagementClubPage.vue', import.meta.url), 'utf8')
-const callCenterSource = fs.readFileSync(new URL('../src/pages/management/ManagementCallCenterPage.vue', import.meta.url), 'utf8')
-const reportSource = fs.readFileSync(new URL('../src/pages/management/ManagementReportPage.vue', import.meta.url), 'utf8')
-const reservationsSource = fs.readFileSync(new URL('../src/pages/management/ManagementReservationsPage.vue', import.meta.url), 'utf8')
-const surveysSource = fs.readFileSync(new URL('../src/pages/management/ManagementSurveysPage.vue', import.meta.url), 'utf8')
-const branchesSource = fs.readFileSync(new URL('../src/pages/management/ManagementBranchesPage.vue', import.meta.url), 'utf8')
-const costControlSource = fs.readFileSync(new URL('../src/pages/management/ManagementCostControlPage.vue', import.meta.url), 'utf8')
-const accountingSource = fs.readFileSync(new URL('../src/pages/management/ManagementAccountingPage.vue', import.meta.url), 'utf8')
+const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/catalog/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
+const ordersSource = fs.readFileSync(new URL('../src/pages/management/sales/ManagementOrdersPage.vue', import.meta.url), 'utf8')
+const couriersSource = fs.readFileSync(new URL('../src/pages/management/operations/ManagementCouriersPage.vue', import.meta.url), 'utf8')
+const clubSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementClubPage.vue', import.meta.url), 'utf8')
+const callCenterSource = fs.readFileSync(new URL('../src/pages/management/sales/ManagementCallCenterPage.vue', import.meta.url), 'utf8')
+const reportSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementReportPage.vue', import.meta.url), 'utf8')
+const reservationsSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementReservationsPage.vue', import.meta.url), 'utf8')
+const surveysSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementSurveysPage.vue', import.meta.url), 'utf8')
+const branchesSource = fs.readFileSync(new URL('../src/pages/management/operations/ManagementBranchesPage.vue', import.meta.url), 'utf8')
+const costControlSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementCostControlPage.vue', import.meta.url), 'utf8')
+const accountingSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementAccountingPage.vue', import.meta.url), 'utf8')
+const inventorySource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -95,7 +96,7 @@ test('semantic design tokens are published as CSS variables while legacy aliases
 })
 
 test('design system page declares all catalog tabs and reference language', () => {
-  const pageSource = fs.readFileSync(new URL('../src/pages/management/ManagementDesignSystemPage.vue', import.meta.url), 'utf8')
+  const pageSource = fs.readFileSync(new URL('../src/pages/management/design-system/ManagementDesignSystemPage.vue', import.meta.url), 'utf8')
   for (const label of ['تم و توکن‌ها', 'آیکون‌ها', 'کامپوننت‌ها', 'پترن‌ها', 'تمپلیت‌ها']) {
     assert.match(catalogSource, new RegExp(label))
   }
@@ -152,6 +153,38 @@ test('customer voice management uses the shared list pattern and preserves respo
   assert.match(clubSource, /@row-click="openVoiceReply"/)
   assert.match(clubSource, /openVoiceReply\(row\)/)
   assert.match(clubSource, /removeVoice\(row\)/)
+})
+
+test('club organization management keeps contracts, members and orders in shared lists', () => {
+  assert.match(clubSource, /orgContractColumns/)
+  assert.match(clubSource, /orgMemberColumns/)
+  assert.match(clubSource, /orgCreditMemberColumns/)
+  assert.match(clubSource, /orgOrderColumns/)
+  assert.match(clubSource, /:rows="orgContracts"/)
+  assert.match(clubSource, /:rows="orgMembers"/)
+  assert.match(clubSource, /:rows="orgOrders"/)
+  assert.match(clubSource, /selectedOrgOrders\[row\.name\]/)
+})
+
+test('club wallet, referral and campaign surfaces use shared list patterns', () => {
+  for (const token of [
+    'smsKindStatsColumns',
+    'walletColumns',
+    'pointEntryColumns',
+    'walletTransactionColumns',
+    'referralTopColumns',
+    'campaignColumns',
+    'couponColumns',
+  ]) {
+    assert.match(clubSource, new RegExp(token))
+  }
+  assert.match(clubSource, /:rows="smsKindStatsRows"/)
+  assert.match(clubSource, /:rows="wallets"/)
+  assert.match(clubSource, /:rows="walletDetail\.point_entries"/)
+  assert.match(clubSource, /:rows="walletDetail\.transactions"/)
+  assert.match(clubSource, /:rows="referral\.top"/)
+  assert.match(clubSource, /:rows="campaigns"/)
+  assert.match(clubSource, /:rows="coupons"/)
 })
 
 test('sms history uses the shared responsive list pattern', () => {
@@ -222,4 +255,78 @@ test('accounting uses shared lists for balance, tax submissions and journal entr
   assert.match(accountingSource, /taxSubmissionColumns/)
   assert.match(accountingSource, /journalEntryColumns/)
   assert.match(accountingSource, /cell-status/)
+})
+
+test('inventory read-only operational surfaces use shared lists', () => {
+  assert.match(inventorySource, /ManagementListView/)
+  for (const token of [
+    'materialColumns',
+    'warehouseColumns',
+    'movementColumns',
+    'reorderColumns',
+    'purchaseColumns',
+    'productionMaterialColumns',
+    'productionProductColumns',
+    'wasteItemColumns',
+    'orderLossColumns',
+    'countResultColumns',
+    'reconciliationColumns',
+    'reconciliationDetailColumns',
+  ]) {
+    assert.match(inventorySource, new RegExp(token))
+  }
+  for (const rows of [
+    'materials',
+    'warehouses',
+    'movements',
+    'reorderAlerts',
+    'purchases',
+    'plan.materials',
+    'plan.products',
+    'wasteReport.by_item',
+    'orderLosses',
+    'countResult.rows',
+    'reconciliations',
+    'reconciliationDetail.rows',
+  ]) {
+    assert.match(inventorySource, new RegExp(`:rows="${rows.replaceAll('.', '\\.')}"`))
+  }
+})
+
+test('management pages and domain components stay organized by module', () => {
+  const moduleFiles = [
+    'pages/management/catalog/ManagementProductsPage.vue',
+    'pages/management/catalog/ManagementProductDetailPage.vue',
+    'pages/management/catalog/ManagementBomsPage.vue',
+    'pages/management/sales/ManagementOrdersPage.vue',
+    'pages/management/sales/ManagementPosPage.vue',
+    'pages/management/customers/ManagementClubPage.vue',
+    'pages/management/inventory/ManagementInventoryPage.vue',
+    'pages/management/purchasing/ManagementInventoryPurchasesPage.vue',
+    'pages/management/operations/ManagementKitchenPage.vue',
+    'pages/management/finance/ManagementAccountingPage.vue',
+    'pages/management/settings/ManagementSiteSettingsPage.vue',
+    'pages/management/design-system/ManagementDesignSystemPage.vue',
+    'components/management/catalog/ManagementBomManager.vue',
+    'components/management/catalog/ManagementProductSummaryCard.vue',
+    'components/management/design-system/ManagementThemeStudio.vue',
+    'components/management/builder/ManagementPageBuilderWorkspace.vue',
+  ]
+  for (const file of moduleFiles) {
+    assert.equal(fs.existsSync(new URL(file, sourceRoot)), true, `${file} must stay in its module folder`)
+  }
+  for (const file of [
+    'pages/management/ManagementProductsPage.vue',
+    'pages/management/ManagementInventoryPage.vue',
+    'pages/management/ManagementInventoryPurchasesPage.vue',
+    'components/management/ManagementBomManager.vue',
+    'components/management/ManagementThemeStudio.vue',
+  ]) {
+    assert.equal(fs.existsSync(new URL(file, sourceRoot)), false, `${file} must not remain at the legacy root`)
+  }
+  assert.match(appSource, /pages\/management\/catalog\/ManagementProductsPage\.vue/)
+  assert.match(appSource, /pages\/management\/inventory\/ManagementInventoryPage\.vue/)
+  assert.match(appSource, /pages\/management\/purchasing\/ManagementInventoryPurchasesPage\.vue/)
+  assert.doesNotMatch(appSource, /pages\/management\/ManagementProductsPage\.vue/)
+  assert.doesNotMatch(appSource, /pages\/management\/ManagementInventoryPage\.vue/)
 })

@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 # Replace any var(--pos-something, fallback)
@@ -10,7 +10,7 @@ content = re.sub(r'var\(--pos-muted(,\s*[^)]+)?\)', 'var(--mg-text-muted)', cont
 content = re.sub(r'var\(--pos-border(,\s*[^)]+)?\)', 'var(--mg-border-light)', content)
 content = re.sub(r'var\(--pos-hover(,\s*[^)]+)?\)', 'var(--mg-bg-page)', content)
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'w') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'w') as f:
     f.write(content)
 
 with open('frontend/src/components/management/pos/PosCartPanel.vue', 'r') as f:
@@ -24,4 +24,3 @@ content = re.sub(r'var\(--pos-hover(,\s*[^)]+)?\)', 'var(--mg-bg-page)', content
 
 with open('frontend/src/components/management/pos/PosCartPanel.vue', 'w') as f:
     f.write(content)
-

@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementKitchenPage.vue", "r") as f:
+with open("frontend/src/pages/management/operations/ManagementKitchenPage.vue", "r") as f:
     content = f.read()
 
 # Make sure CSS is using actual earthy palette correctly
@@ -374,7 +374,7 @@ new_css = """<style scoped>
 
 if old_css in content:
     content = content.replace(old_css, new_css)
-    with open("frontend/src/pages/management/ManagementKitchenPage.vue", "w") as f:
+    with open("frontend/src/pages/management/operations/ManagementKitchenPage.vue", "w") as f:
         f.write(content)
     print("Fixed Vue KDS style")
 else:

@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 # Remove the broken .pos-theme variables block entirely. 
@@ -24,5 +24,5 @@ if broken_theme in content:
 else:
     content = re.sub(r'\.pos-theme\s*\{[^}]*\}', '', content)
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'w') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'w') as f:
     f.write(content)

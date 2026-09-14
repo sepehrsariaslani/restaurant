@@ -1,4 +1,4 @@
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'r') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'r') as f:
     content = f.read()
 
 content = content.replace(
@@ -30,5 +30,5 @@ content = content.replace(
 """
 )
 
-with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'w') as f:
+with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'w') as f:
     f.write(content)

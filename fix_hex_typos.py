@@ -11,5 +11,5 @@ def fix(path):
     with open(path, 'w') as f:
         f.write(content)
 
-fix('frontend/src/pages/management/ManagementPosPage.vue')
+fix('frontend/src/pages/management/sales/ManagementPosPage.vue')
 fix('frontend/src/components/management/pos/PosCartPanel.vue')

@@ -19,7 +19,7 @@ if (!layout.includes('/management/site-settings?stage=theme')) {
   failures.push('management layout does not point panel settings to the site settings theme stage')
 }
 
-const siteSettings = read('../src/pages/management/ManagementSiteSettingsPage.vue')
+const siteSettings = read('../src/pages/management/settings/ManagementSiteSettingsPage.vue')
 for (const marker of [
   "value: 'identity'",
   "value: 'theme'",
@@ -37,7 +37,7 @@ if (siteSettings.includes("value: 'components'")) {
   failures.push('legacy components stage still exists in site settings')
 }
 
-const themeStudio = read('../src/components/management/ManagementThemeStudio.vue')
+const themeStudio = read('../src/components/management/design-system/ManagementThemeStudio.vue')
 for (const marker of ['themePresets', 'saveThemeSettingsToServer', 'hydrateThemeSettingsFromServer']) {
   if (!themeStudio.includes(marker)) {
     failures.push(`theme studio is missing ${marker}`)

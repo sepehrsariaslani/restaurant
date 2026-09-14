@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementKitchenPage.vue", "r") as f:
+with open("frontend/src/pages/management/operations/ManagementKitchenPage.vue", "r") as f:
     content = f.read()
 
 # Make sure we use polling smartly
@@ -20,7 +20,7 @@ new_poll = """  if (pollTimer) clearInterval(pollTimer)
 
 if old_poll in content:
     content = content.replace(old_poll, new_poll)
-    with open("frontend/src/pages/management/ManagementKitchenPage.vue", "w") as f:
+    with open("frontend/src/pages/management/operations/ManagementKitchenPage.vue", "w") as f:
         f.write(content)
     print("Fixed polling interval")
 else:

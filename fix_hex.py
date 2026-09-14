@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 def repl_hex(match):
@@ -37,5 +37,5 @@ def repl_hex(match):
 
 content = re.sub(r'#[0-9a-fA-F]{3,6}', repl_hex, content)
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'w') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'w') as f:
     f.write(content)

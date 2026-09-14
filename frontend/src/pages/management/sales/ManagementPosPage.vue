@@ -1065,7 +1065,7 @@ import PosCartPanel from '@/components/management/pos/PosCartPanel.vue'
 import PosBomSheet from '@/components/management/pos/PosBomSheet.vue'
 import OpenInvoiceSettlementModal from '@/components/management/pos/OpenInvoiceSettlementModal.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
-import TableSplitBillSheet from '@/components/management/TableSplitBillSheet.vue'
+import TableSplitBillSheet from '@/components/management/pos/TableSplitBillSheet.vue'
 import {
   assignTableSessionCustomer,
   closeTableSession,

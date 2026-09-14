@@ -2,6 +2,25 @@
 
 این سند مرجع تصمیم‌گیری برای یکدست‌سازی رابط مدیریت است. هدف آن این است که هر صفحه بداند از کدام shell، فهرست، جزئیات، توکن و منبع داده استفاده می‌کند؛ نه این‌که برای هر صفحه یک منبع داده یا کامپوننت موازی ساخته شود.
 
+## ساختار ماژول‌های مدیریت
+
+صفحه‌ها و اجزای تخصصی بر اساس دامنهٔ کاری در پوشه‌های جدا قرار گرفته‌اند. مسیرهای URL و routeهای Frappe تغییر نکرده‌اند؛ این جابه‌جایی فقط مرزبندی سورس را روشن می‌کند:
+
+| پوشه | مسئولیت | نمونه‌ها |
+|---|---|---|
+| `src/pages/management/catalog` و `src/components/management/catalog` | محصولات، فرمول/BOM، منو، modifier و variant | `ManagementProductsPage.vue`، `ManagementProductDetailPage.vue`، `ManagementBomsPage.vue` |
+| `src/pages/management/sales` و `src/components/management/sales` | سفارش، POS، صندوق، تماس و داشبورد فروش | `ManagementOrdersPage.vue`، `ManagementPosPage.vue` |
+| `src/pages/management/customers` | مشتری، باشگاه، رزرو و نظرسنجی | `ManagementClubPage.vue`، `ManagementCustomersPage.vue` |
+| `src/pages/management/inventory` و `src/components/management/inventory` | موجودی، انبار، گردش، تولید، شمارش و بهای تمام‌شده | `ManagementInventoryPage.vue` و زیرصفحه‌های آن |
+| `src/pages/management/purchasing` | درخواست مواد و خرید | `ManagementInventoryPurchasesPage.vue`، `ManagementMaterialRequestsPage.vue` |
+| `src/pages/management/operations` و `src/components/management/tables` | آشپزخانه، میز، پیک و شعب | `ManagementKitchenPage.vue`، `ManagementTablesPage.vue` |
+| `src/pages/management/finance` و `src/components/management/bi` | حسابداری، کنترل هزینه و گزارش‌ها | `ManagementAccountingPage.vue`، `ManagementReportPage.vue` |
+| `src/pages/management/settings` | تنظیمات، دسترسی، چاپ و درگاه | `ManagementSiteSettingsPage.vue`، `ManagementUsersPage.vue` |
+| `src/pages/management/builder` و `src/components/management/builder` | home builder و قالب‌های صفحه | `ManagementBuilderTemplatesPage.vue` |
+| `src/pages/management/design-system` و `src/components/management/design-system` | مرجع توکن و تنظیمات دیزاین‌سیستم | `ManagementDesignSystemPage.vue`، `ManagementThemeStudio.vue` |
+
+کامپوننت‌های پایه مانند `ManagementPageScaffold`، `ManagementSurfaceCard`، `ManagementListView` و کنترل‌های عمومی در ریشهٔ `components/management` باقی می‌مانند تا همهٔ ماژول‌ها از یک قرارداد مشترک استفاده کنند.
+
 ## قرارداد مالکیت
 
 | حوزه | مالک داده و چرخهٔ عمر | نقش Restaurant |
@@ -24,7 +43,7 @@
 | پیک‌ها | `/management/couriers` | Restaurant courier/vehicle | فهرست پیک → فرم جزئیات چسبان → fleet/rules | تراز شده در این مرحله؛ تست source موفق |
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |
 | کاربران و دسترسی | `/management/users` | ERPNext User/Role | native access surface با shell مشترک | مالکیت حفظ شده؛ بررسی دیداری بعدی |
-| باشگاه مشتریان | `/management/club` | Restaurant CRM روی Customer و اسناد فروش ERPNext | تب‌های مشتری، سازمان، کیف پول، صدای مشتری و کمپین با فهرست مشترک برای مشتریان | مشتریان، صدای مشتری و سوابق پیامک تراز شده؛ تب‌های تخصصی دیگر در audit مرحله‌ای |
+| باشگاه مشتریان | `/management/club` | Restaurant CRM روی Customer و اسناد فروش ERPNext | تب‌های مشتری، سازمان، کیف پول، صدای مشتری و کمپین با فهرست مشترک برای مشتریان | مشتری، سازمان، کیف پول، پیامک، صدا، معرف و کمپین تراز شده؛ browser smoke باقی است |
 | رزرواسیون | `/management/reservations` | Reservation و Table context رستوران | فیلتر تاریخ/جایگاه/وضعیت، فهرست واکنش‌گرا و فرم ایجاد/ویرایش با چرخه وضعیت | تراز شده در این مرحله؛ تست source و SFC موفق |
 | نظرسنجی | `/management/surveys` | Survey Question/Response رستوران | مدیریت سؤال و پاسخ با فیلتر بازه/امتیاز و هشدار نارضایتی در فهرست مشترک | تراز شده در این مرحله؛ تست source و SFC موفق |
 | شعب | `/management/branches` | Company/Customer و KPIهای شعب ERPNext | شاخص‌های شعب، فهرست واکنش‌گرا، ویرایش/فعال‌سازی و انتقال مشتری | تراز شده در این مرحله؛ تست source و SFC موفق |
@@ -37,14 +56,14 @@
 
 این صفحات منبع دادهٔ اختصاصی Restaurant دارند و باید از `ManagementPageScaffold`، `ManagementSurfaceCard`، توکن‌های semantic و در صورت وجود schema پایدار از `ManagementListView` استفاده کنند:
 
-- پیک‌ها و ناوگان: `ManagementCouriersPage.vue`
-- آشپزخانه: `ManagementKitchenPage.vue`
-- میزها: `ManagementTablesPage.vue`
-- منو و گروه‌های منو: `ManagementMenuDesignerPage.vue`، `ManagementMenuGroupsPage.vue`، `ManagementMenuGroupDetailPage.vue`
-- modifierها: `ManagementModifierGroupsPage.vue`
-- POS و پیش‌فرض‌های POS: `ManagementPosPage.vue`، `ManagementPosProfilePage.vue`، `ManagementPosDefaultsPage.vue`
-- ثبت سفارش/صندوق: `ManagementRegisterPage.vue`
-- شعبه‌ها، رزرو و مرکز تماس: `ManagementBranchesPage.vue`، `ManagementReservationsPage.vue`، `ManagementCallCenterPage.vue`
+- پیک‌ها و ناوگان: `pages/management/operations/ManagementCouriersPage.vue`
+- آشپزخانه: `pages/management/operations/ManagementKitchenPage.vue`
+- میزها: `pages/management/operations/ManagementTablesPage.vue`
+- منو و گروه‌های منو: `pages/management/catalog/ManagementMenuDesignerPage.vue`، `pages/management/catalog/ManagementMenuGroupsPage.vue`، `pages/management/catalog/ManagementMenuGroupDetailPage.vue`
+- modifierها: `pages/management/catalog/ManagementModifierGroupsPage.vue`
+- POS و پیش‌فرض‌های POS: `pages/management/sales/ManagementPosPage.vue`، `pages/management/sales/ManagementPosProfilePage.vue`، `pages/management/sales/ManagementPosDefaultsPage.vue`
+- ثبت سفارش/صندوق: `pages/management/sales/ManagementRegisterPage.vue`
+- شعبه‌ها، رزرو و مرکز تماس: `pages/management/operations/ManagementBranchesPage.vue`، `pages/management/customers/ManagementReservationsPage.vue`، `pages/management/sales/ManagementCallCenterPage.vue`
 
 ## صفحات ERPNext-backed
 
@@ -84,7 +103,8 @@
 
 ## وضعیت اعتبارسنجی این نقشه
 
-- تست frontend این مرحله: موفق؛ ۱۶ تست contract.
-- parse/compile سه SFC تغییرکرده: موفق.
+- تست frontend این مرحله: موفق؛ تست‌های contract دیزاین‌سیستم، مسیرها و ماژول‌بندی.
+- parse/compile همهٔ ۱۲۱ SFC مدیریتی و کامپوننت‌های مدیریتی: موفق.
+- بررسی importهای نسبی و alias همهٔ SFCهای مدیریتی: موفق.
 - syntax بررسی `restaurant/hooks.py`: موفق.
 - build، restart، migrate، Graphify و browser smoke احراز‌شده: عمداً اجرا نشده و باید توسط کاربر در زمان انتشار انجام شود.

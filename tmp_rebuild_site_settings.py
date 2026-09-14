@@ -1,6 +1,6 @@
 from pathlib import Path
 
-p = Path("frontend/src/pages/management/ManagementSiteSettingsPage.vue")
+p = Path("frontend/src/pages/management/settings/ManagementSiteSettingsPage.vue")
 s = p.read_text()
 
 # Tabs: keep only general, components, loader

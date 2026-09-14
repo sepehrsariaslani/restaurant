@@ -2,7 +2,7 @@ import sys
 
 def check_frontend():
     print("Checking frontend files for requested functionality...")
-    with open('frontend/src/pages/management/ManagementKitchenPage.vue', 'r') as f:
+    with open('frontend/src/pages/management/operations/ManagementKitchenPage.vue', 'r') as f:
         vue = f.read()
 
     # 1. Check Optimistic Update Guard

@@ -19,7 +19,7 @@
 </template>
 
 <script setup>
-import ManagementSurfaceCard from './ManagementSurfaceCard.vue'
+import ManagementSurfaceCard from '../ManagementSurfaceCard.vue'
 
 defineProps({
   title: {

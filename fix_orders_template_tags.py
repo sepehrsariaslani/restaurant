@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "r") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "r") as f:
     content = f.read()
 
 # Let's cleanly rebuild the layout of the template.

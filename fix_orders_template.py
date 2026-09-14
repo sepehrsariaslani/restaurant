@@ -1,6 +1,6 @@
 import re
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "r") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "r") as f:
     content = f.read()
 
 template_block = content[content.find("<template>"):content.rfind("</template>") + len("</template>")]
@@ -236,7 +236,7 @@ new_template = """<template>
 
 content = content.replace(template_block, new_template)
 
-with open("frontend/src/pages/management/ManagementOrdersPage.vue", "w") as f:
+with open("frontend/src/pages/management/sales/ManagementOrdersPage.vue", "w") as f:
     f.write(content)
 
 print("Updated ManagementOrdersPage template cleanly")

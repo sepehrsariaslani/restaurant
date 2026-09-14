@@ -6,11 +6,11 @@ function read(path) {
 
 const failures = []
 
-if (!existsSync(new URL('../src/components/management/ManagementPageBuilderWorkspace.vue', import.meta.url))) {
+if (!existsSync(new URL('../src/components/management/builder/ManagementPageBuilderWorkspace.vue', import.meta.url))) {
   failures.push('missing reusable ManagementPageBuilderWorkspace component')
 }
 
-const siteSettings = read('../src/pages/management/ManagementSiteSettingsPage.vue')
+const siteSettings = read('../src/pages/management/settings/ManagementSiteSettingsPage.vue')
 if (!siteSettings.includes("value: 'layout'") && !siteSettings.includes("value: 'page-builder'")) {
   failures.push('site settings is missing the layout/page-builder authoring stage')
 }

@@ -1,6 +1,6 @@
 import re
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'r') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'r') as f:
     content = f.read()
 
 # Remove the broken .pos-theme variables block entirely. 
@@ -30,5 +30,5 @@ else:
 content = re.sub(r'var\(--mg-bg-surface,\s*var\(--mg-bg-surface\)\)', 'var(--mg-bg-surface)', content)
 content = re.sub(r'var\(--mg-text-main,\s*var\(--mg-text-main\)\)', 'var(--mg-text-main)', content)
 
-with open('frontend/src/pages/management/ManagementPosPage.vue', 'w') as f:
+with open('frontend/src/pages/management/sales/ManagementPosPage.vue', 'w') as f:
     f.write(content)

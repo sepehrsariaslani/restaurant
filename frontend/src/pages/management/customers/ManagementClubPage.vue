@@ -130,52 +130,55 @@
           <span class="muted">پورتال حسابدار: <code class="link-code">{{ orgPublicUrl }}</code></span>
         </div>
         <p class="muted" v-if="orgLoading">در حال دریافت قراردادها...</p>
-        <div v-else-if="orgContracts.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>سازمان</th><th>قرارداد</th><th>سقف روزانه</th><th>سقف ماهانه</th><th>روزها/ساعات مجاز</th><th>صدور فاکتور</th><th>وضعیت</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="c in orgContracts" :key="c.name">
-                <td><strong>{{ c.organization_label }}</strong></td>
-                <td><small class="muted">{{ c.contract_no || c.name }}</small></td>
-                <td>{{ c.daily_order_cap ? formatMoneyValue(c.daily_order_cap) : '—' }}</td>
-                <td>{{ c.monthly_order_cap ? formatMoneyValue(c.monthly_order_cap) : '—' }}</td>
-                <td><small class="muted">{{ (c.allowed_days && c.allowed_days.length ? c.allowed_days.join('، ') : 'همه روزها') }}{{ c.allowed_to_hour ? ` · ${c.allowed_from_hour} تا ${c.allowed_to_hour}` : '' }}</small></td>
-                <td>{{ c.invoice_mode }}</td>
-                <td><span class="pill" :class="{ ok: c.status === 'فعال', warn: c.status !== 'فعال' }">{{ c.status }}</span></td>
-                <td class="row-actions">
-                  <button type="button" class="secondary-btn" @click="selectOrg(c.organization)">اعتبار و سفارش‌ها</button>
-                  <button type="button" class="tertiary-btn" @click="openContractForm(c)">ویرایش</button>
-                  <button type="button" class="tertiary-btn danger" @click="removeContract(c)">حذف</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!orgLoading">قراردادی ثبت نشده است؛ ابتدا مشتری را با نوع «سازمانی» بسازید و سپس قرارداد جدید بزنید.</p>
+        <ManagementListView
+          v-else
+          :columns="orgContractColumns"
+          :rows="orgContracts"
+          row-key="name"
+          :row-clickable="true"
+          @row-click="openContractForm"
+        >
+          <template #cell-organization_label="{ row }"><strong>{{ row.organization_label }}</strong></template>
+          <template #cell-contract_no="{ row }"><small class="muted">{{ row.contract_no || row.name }}</small></template>
+          <template #cell-daily_order_cap="{ row }">{{ row.daily_order_cap ? formatMoneyValue(row.daily_order_cap) : '—' }}</template>
+          <template #cell-monthly_order_cap="{ row }">{{ row.monthly_order_cap ? formatMoneyValue(row.monthly_order_cap) : '—' }}</template>
+          <template #cell-allowed_schedule="{ row }"><small class="muted">{{ (row.allowed_days && row.allowed_days.length ? row.allowed_days.join('، ') : 'همه روزها') }}{{ row.allowed_to_hour ? ` · ${row.allowed_from_hour} تا ${row.allowed_to_hour}` : '' }}</small></template>
+          <template #cell-invoice_mode="{ value }">{{ value || '—' }}</template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'فعال', warn: row.status !== 'فعال' }">{{ row.status }}</span></template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button type="button" class="secondary-btn" @click="selectOrg(row.organization)">اعتبار و سفارش‌ها</button>
+              <button type="button" class="tertiary-btn" @click="openContractForm(row)">ویرایش</button>
+              <button type="button" class="tertiary-btn danger" @click="removeContract(row)">حذف</button>
+            </div>
+          </template>
+          <template #empty>قراردادی ثبت نشده است؛ ابتدا مشتری را با نوع «سازمانی» بسازید و سپس قرارداد جدید بزنید.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <ManagementSurfaceCard title="معین‌های سازمانی" subtitle="زیرمجموعه‌های هر سازمان با نام کاربری و رمز عبور اختصاصی و سقف سفارش جداگانه">
         <div class="toolbar"><button type="button" class="primary-btn" @click="openMemberForm(null)">معین جدید</button></div>
-        <div v-if="orgMembers.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>معین</th><th>سازمان</th><th>نام کاربری</th><th>سقف روزانه</th><th>سقف ماهانه</th><th>وضعیت</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="m in orgMembers" :key="m.name">
-                <td><strong>{{ m.full_name }}</strong><br><small class="muted">{{ m.mobile || '—' }}<template v-if="m.role_title"> · {{ m.role_title }}</template></small></td>
-                <td>{{ m.organization_label }}</td>
-                <td><span class="pill">{{ m.username }}</span></td>
-                <td>{{ m.daily_cap ? formatMoneyValue(m.daily_cap) : 'ارث از قرارداد' }}</td>
-                <td>{{ m.monthly_cap ? formatMoneyValue(m.monthly_cap) : 'ارث از قرارداد' }}</td>
-                <td><span class="pill" :class="{ ok: m.is_active, warn: !m.is_active }">{{ m.is_active ? 'فعال' : 'غیرفعال' }}</span></td>
-                <td class="row-actions">
-                  <button type="button" class="tertiary-btn" @click="openMemberForm(m)">ویرایش</button>
-                  <button type="button" class="tertiary-btn danger" @click="removeMember(m)">حذف</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else>معینی تعریف نشده است؛ برای هر زیرمجموعه سازمان یک معین با نام کاربری/رمز بسازید.</p>
+        <ManagementListView
+          :columns="orgMemberColumns"
+          :rows="orgMembers"
+          row-key="name"
+          :row-clickable="true"
+          @row-click="openMemberForm"
+        >
+          <template #cell-member="{ row }"><strong>{{ row.full_name }}</strong><small class="muted d-block">{{ row.mobile || '—' }}<template v-if="row.role_title"> · {{ row.role_title }}</template></small></template>
+          <template #cell-organization_label="{ value }">{{ value || '—' }}</template>
+          <template #cell-username="{ value }"><span class="pill">{{ value || '—' }}</span></template>
+          <template #cell-daily_cap="{ row }">{{ row.daily_cap ? formatMoneyValue(row.daily_cap) : 'ارث از قرارداد' }}</template>
+          <template #cell-monthly_cap="{ row }">{{ row.monthly_cap ? formatMoneyValue(row.monthly_cap) : 'ارث از قرارداد' }}</template>
+          <template #cell-is_active="{ row }"><span class="pill" :class="{ ok: row.is_active, warn: !row.is_active }">{{ row.is_active ? 'فعال' : 'غیرفعال' }}</span></template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openMemberForm(row)">ویرایش</button>
+              <button type="button" class="tertiary-btn danger" @click="removeMember(row)">حذف</button>
+            </div>
+          </template>
+          <template #empty>معینی تعریف نشده است؛ برای هر زیرمجموعه سازمان یک معین با نام کاربری/رمز بسازید.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <ManagementSurfaceCard v-if="selectedOrg && orgCredit" :title="`رصد لحظه‌ای اعتبار «${orgCredit.organization_label}»`" subtitle="مصرف روزانه/ماهانه نسبت به سقف قرارداد، وضعیت معین‌ها و سفارش‌های فاکتورنشده">
@@ -186,19 +189,17 @@
           <div class="total-box"><small>زمان صدور فاکتور</small><strong>{{ orgCredit.contract ? orgCredit.contract.invoice_mode : '—' }}</strong></div>
         </div>
 
-        <div v-if="orgCredit.members && orgCredit.members.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>معین</th><th>مصرف امروز</th><th>مصرف ماه</th><th>فاکتورنشده</th></tr></thead>
-            <tbody>
-              <tr v-for="m in orgCredit.members" :key="m.name">
-                <td><strong>{{ m.full_name }}</strong><br><small class="muted">{{ m.username }}</small></td>
-                <td>{{ formatMoneyValue(m.day_usage) }}</td>
-                <td>{{ formatMoneyValue(m.month_usage) }}</td>
-                <td>{{ formatMoneyValue(m.uninvoiced?.total || 0) }} ({{ formatQty(m.uninvoiced?.count || 0) }})</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-if="orgCredit.members && orgCredit.members.length"
+          :columns="orgCreditMemberColumns"
+          :rows="orgCredit.members"
+          row-key="name"
+        >
+          <template #cell-member="{ row }"><strong>{{ row.full_name }}</strong><small class="muted d-block">{{ row.username || '—' }}</small></template>
+          <template #cell-day_usage="{ row }">{{ formatMoneyValue(row.day_usage) }}</template>
+          <template #cell-month_usage="{ row }">{{ formatMoneyValue(row.month_usage) }}</template>
+          <template #cell-uninvoiced="{ row }">{{ formatMoneyValue(row.uninvoiced?.total || 0) }} ({{ formatQty(row.uninvoiced?.count || 0) }})</template>
+        </ManagementListView>
 
         <div class="toolbar" style="margin-top:0.8rem">
           <label class="date-label">از تاریخ<input class="input" type="date" v-model="orgOrderFilters.date_from" /></label>
@@ -213,23 +214,21 @@
           <button type="button" class="primary-btn" @click="issueConsolidatedInvoice" :disabled="orgInvoiceBusy || !selectedOrgOrderNames.length">{{ orgInvoiceBusy ? '...' : `صدور فاکتور تجمیعی (${formatQty(selectedOrgOrderNames.length)})` }}</button>
         </div>
         <p class="muted" v-if="orgOrdersLoading">در حال دریافت سفارش‌ها...</p>
-        <div v-else-if="orgOrders.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th></th><th>کد سفارش</th><th>تاریخ</th><th>معین</th><th>مبلغ</th><th>وضعیت</th><th>فاکتور</th></tr></thead>
-            <tbody>
-              <tr v-for="o in orgOrders" :key="o.name">
-                <td><input type="checkbox" :disabled="!!o.org_invoice" v-model="selectedOrgOrders[o.name]" /></td>
-                <td><strong>{{ o.name }}</strong></td>
-                <td>{{ o.date }}</td>
-                <td>{{ o.org_member || '—' }}</td>
-                <td>{{ formatMoneyValue(o.grand_total) }}</td>
-                <td><span class="pill">{{ o.status || '—' }}</span></td>
-                <td><small class="muted">{{ o.org_invoice || '—' }}</small></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!orgOrdersLoading">سفارشی مطابق فیلتر یافت نشد.</p>
+        <ManagementListView
+          v-else
+          :columns="orgOrderColumns"
+          :rows="orgOrders"
+          row-key="name"
+        >
+          <template #cell-select="{ row }"><input type="checkbox" :disabled="!!row.org_invoice" v-model="selectedOrgOrders[row.name]" /></template>
+          <template #cell-name="{ row }"><strong>{{ row.name }}</strong></template>
+          <template #cell-date="{ value }">{{ value || '—' }}</template>
+          <template #cell-org_member="{ value }">{{ value || '—' }}</template>
+          <template #cell-grand_total="{ row }">{{ formatMoneyValue(row.grand_total) }}</template>
+          <template #cell-status="{ row }"><span class="pill">{{ row.status || '—' }}</span></template>
+          <template #cell-org_invoice="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+          <template #empty>سفارشی مطابق فیلتر یافت نشد.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <!-- فرم قرارداد -->
@@ -458,24 +457,20 @@
             </div>
             <div class="total-box"><small>مجموع کل</small><strong>{{ formatQty(smsKindStats.grand_total) }}</strong><small class="muted">ارسال‌شده: {{ formatQty(smsKindStats.grand_sent) }}</small></div>
           </div>
-          <div class="table-wrap" style="margin-top:0.7rem">
-            <table class="data-table">
-              <thead><tr><th>نوع پیامک</th><th>کلاس</th><th>کل</th><th>ارسال‌شده</th><th>ناموفق</th><th>در صف</th><th>نرخ موفقیت</th></tr></thead>
-              <tbody>
-                <template v-for="cls in smsKindStats.classes" :key="cls.class">
-                  <tr v-for="k in cls.kinds" :key="cls.class + '-' + k.kind">
-                    <td>{{ k.kind }}</td>
-                    <td><span class="pill">{{ cls.class }}</span></td>
-                    <td>{{ formatQty(k.total) }}</td>
-                    <td class="ok-text">{{ formatQty(k.sent) }}</td>
-                    <td class="warn-text">{{ formatQty(k.failed) }}</td>
-                    <td>{{ formatQty(k.queued) }}</td>
-                    <td>{{ k.success_rate }}٪</td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            :columns="smsKindStatsColumns"
+            :rows="smsKindStatsRows"
+            row-key="row_key"
+          >
+            <template #cell-kind="{ value }">{{ value }}</template>
+            <template #cell-class_label="{ value }"><span class="pill">{{ value }}</span></template>
+            <template #cell-total="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-sent="{ value }"><span class="ok-text">{{ formatQty(value) }}</span></template>
+            <template #cell-failed="{ value }"><span class="warn-text">{{ formatQty(value) }}</span></template>
+            <template #cell-queued="{ value }">{{ formatQty(value) }}</template>
+            <template #cell-success_rate="{ value }">{{ value }}٪</template>
+            <template #empty>داده‌ای برای نمایش نیست.</template>
+          </ManagementListView>
         </template>
         <p class="muted" v-else>داده‌ای برای نمایش نیست.</p>
       </ManagementSurfaceCard>
@@ -526,29 +521,29 @@
         </div>
         <p class="muted hint-line">پرداخت با کیف پول در صندوق از طریق روش پرداخت «{{ (boot && boot.settings.wallet_mode_of_payment) || 'تنظیم‌نشده' }}» انجام می‌شود؛ پیکربندی در تب تنظیمات.</p>
         <p class="muted" v-if="walletsLoading">در حال دریافت کیف‌ها...</p>
-        <div v-else-if="wallets.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>مشتری</th><th>سطح</th><th>موجودی</th><th>مجموع شارژ</th><th>مصرف</th><th>پاداش‌ها</th><th>وضعیت</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="w in wallets" :key="w.wallet">
-                <td><strong>{{ w.customer_name }}</strong><br><small class="muted">{{ w.customer }}</small></td>
-                <td>{{ w.tier || '—' }}</td>
-                <td><strong>{{ formatMoneyValue(w.balance) }}</strong></td>
-                <td>{{ formatMoneyValue(w.total_charged) }}</td>
-                <td>{{ formatMoneyValue(w.total_spent) }}</td>
-                <td>{{ formatMoneyValue(w.total_rewards) }}</td>
-                <td><span class="pill" :class="{ ok: w.status === 'فعال', warn: w.status !== 'فعال' }">{{ w.status }}</span></td>
-                <td class="row-actions">
-                  <button type="button" class="tertiary-btn" @click="openWalletDetail(w.customer)">جزئیات</button>
-                  <button type="button" class="tertiary-btn" @click="openWalletAction('charge', w)">شارژ</button>
-                  <button type="button" class="tertiary-btn" @click="openWalletAction('transfer', w)">انتقال</button>
-                  <button type="button" class="tertiary-btn" @click="openWalletAction('adjust', w)">تعدیل</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!walletsLoading">کیف پولی یافت نشد؛ با اولین شارژ یا کش‌بک به‌صورت خودکار ساخته می‌شود.</p>
+        <ManagementListView
+          v-else
+          :columns="walletColumns"
+          :rows="wallets"
+          row-key="wallet"
+        >
+          <template #cell-customer_label="{ row }"><strong>{{ row.customer_name }}</strong><small class="muted d-block">{{ row.customer }}</small></template>
+          <template #cell-tier="{ value }">{{ value || '—' }}</template>
+          <template #cell-balance="{ row }"><strong>{{ formatMoneyValue(row.balance) }}</strong></template>
+          <template #cell-total_charged="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-total_spent="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-total_rewards="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'فعال', warn: row.status !== 'فعال' }">{{ row.status }}</span></template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openWalletDetail(row.customer)">جزئیات</button>
+              <button type="button" class="tertiary-btn" @click="openWalletAction('charge', row)">شارژ</button>
+              <button type="button" class="tertiary-btn" @click="openWalletAction('transfer', row)">انتقال</button>
+              <button type="button" class="tertiary-btn" @click="openWalletAction('adjust', row)">تعدیل</button>
+            </div>
+          </template>
+          <template #empty>کیف پولی یافت نشد؛ با اولین شارژ یا کش‌بک به‌صورت خودکار ساخته می‌شود.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <div v-if="walletAction" class="popup-backdrop" @click.self="walletAction = null">
@@ -599,36 +594,32 @@
             <button v-if="walletDetail.points.settings?.enabled" type="button" class="secondary-btn" @click="openRedeemForm(walletDetail.wallet.customer)">تبدیل امتیاز به اعتبار</button>
           </div>
           <p class="success-msg" v-if="walletDetailMessage">{{ walletDetailMessage }}</p>
-          <div class="table-wrap" v-if="walletDetail.point_entries && walletDetail.point_entries.length">
-            <table class="data-table">
-              <thead><tr><th>نوع</th><th>امتیاز</th><th>شرح</th><th>انقضا</th><th>زمان</th></tr></thead>
-              <tbody>
-                <tr v-for="p in walletDetail.point_entries" :key="p.name">
-                  <td><span class="pill">{{ p.kind }}</span></td>
-                  <td :class="p.points > 0 ? 'ok-text' : 'warn-text'">{{ formatQty(p.points) }}</td>
-                  <td class="sms-cell">{{ p.note }}</td>
-                  <td><small class="muted">{{ p.expiry_date || '—' }}</small></td>
-                  <td><small class="muted">{{ p.creation }}</small></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="table-wrap" v-if="walletDetail.transactions && walletDetail.transactions.length">
-            <table class="data-table">
-              <thead><tr><th>نوع</th><th>جهت</th><th>مبلغ</th><th>مانده</th><th>مرجع</th><th>شرح</th><th>زمان</th></tr></thead>
-              <tbody>
-                <tr v-for="t in walletDetail.transactions" :key="t.name">
-                  <td><span class="pill">{{ t.kind }}</span></td>
-                  <td :class="t.direction === 'واریز' ? 'ok-text' : 'warn-text'">{{ t.direction }}</td>
-                  <td>{{ formatMoneyValue(t.amount) }}</td>
-                  <td>{{ formatMoneyValue(t.balance_after) }}</td>
-                  <td><small class="muted">{{ t.reference_name || '—' }}</small></td>
-                  <td class="sms-cell">{{ t.note }}</td>
-                  <td><small class="muted">{{ t.entry_date }}</small></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementListView
+            v-if="walletDetail.point_entries && walletDetail.point_entries.length"
+            :columns="pointEntryColumns"
+            :rows="walletDetail.point_entries"
+            row-key="name"
+          >
+            <template #cell-kind="{ value }"><span class="pill">{{ value }}</span></template>
+            <template #cell-points="{ row }"><span :class="row.points > 0 ? 'ok-text' : 'warn-text'">{{ formatQty(row.points) }}</span></template>
+            <template #cell-note="{ value }"><span class="sms-cell">{{ value }}</span></template>
+            <template #cell-expiry_date="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+            <template #cell-creation="{ value }"><small class="muted">{{ value }}</small></template>
+          </ManagementListView>
+          <ManagementListView
+            v-if="walletDetail.transactions && walletDetail.transactions.length"
+            :columns="walletTransactionColumns"
+            :rows="walletDetail.transactions"
+            row-key="name"
+          >
+            <template #cell-kind="{ value }"><span class="pill">{{ value }}</span></template>
+            <template #cell-direction="{ row }"><span :class="row.direction === 'واریز' ? 'ok-text' : 'warn-text'">{{ row.direction }}</span></template>
+            <template #cell-amount="{ value }">{{ formatMoneyValue(value) }}</template>
+            <template #cell-balance_after="{ value }">{{ formatMoneyValue(value) }}</template>
+            <template #cell-reference_name="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+            <template #cell-note="{ value }"><span class="sms-cell">{{ value }}</span></template>
+            <template #cell-entry_date="{ value }"><small class="muted">{{ value }}</small></template>
+          </ManagementListView>
           <p class="muted" v-else>تراکنشی ثبت نشده است.</p>
           <div class="btn-row"><button type="button" class="tertiary-btn" @click="walletDetail = null">بستن</button></div>
         </div>
@@ -668,12 +659,15 @@
         <p class="success-msg" v-if="referralMessage">{{ referralMessage }}</p>
         <p class="error" v-if="referralError">{{ referralError }}</p>
         <h4 v-if="referral && referral.top && referral.top.length">برترین سفیران</h4>
-        <div class="table-wrap" v-if="referral && referral.top && referral.top.length">
-          <table class="data-table">
-            <thead><tr><th>سفیر</th><th>تعداد معرفی</th></tr></thead>
-            <tbody><tr v-for="row in referral.top" :key="row.referrer"><td>{{ row.customer_name }}</td><td>{{ formatQty(row.count) }}</td></tr></tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-if="referral && referral.top && referral.top.length"
+          :columns="referralTopColumns"
+          :rows="referral.top"
+          row-key="referrer"
+        >
+          <template #cell-customer_name="{ value }">{{ value }}</template>
+          <template #cell-count="{ value }">{{ formatQty(value) }}</template>
+        </ManagementListView>
         <p class="muted hint-line">کد معرف هر مشتری در تب «مشتریان» قابل مشاهده است و هنگام ثبت سفارش میهمان قابل استفاده است؛ پردازش پاداش هر شب به‌صورت خودکار انجام می‌شود.</p>
       </ManagementSurfaceCard>
     </section>
@@ -689,49 +683,46 @@
           <button type="button" class="primary-btn" @click="openCampaignForm()">کمپین جدید</button>
         </div>
         <p class="muted" v-if="campaignsLoading">در حال دریافت کمپین‌ها...</p>
-        <div v-else-if="campaigns.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>عنوان</th><th>کوپن</th><th>کانال‌ها</th><th>بازه</th><th>پاداش</th><th>وضعیت</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="c in campaigns" :key="c.name">
-                <td><strong>{{ c.title }}</strong><br><small class="muted">{{ c.name }}</small></td>
-                <td>{{ c.coupon || '—' }}</td>
-                <td><span v-for="ch in splitChannels(c.channels)" :key="ch" class="pill">{{ ch }}</span></td>
-                <td><small class="muted">{{ c.valid_from || '...' }} ← {{ c.valid_to || '...' }}</small></td>
-                <td>{{ c.bonus_type }}<span v-if="c.bonus_value"> ({{ c.bonus_type === 'کش‌بک' || c.bonus_type === 'تخفیف' ? formatQty(c.bonus_value) + '٪' : formatQty(c.bonus_value) }})</span></td>
-                <td><span class="pill" :class="{ ok: c.status === 'فعال', warn: c.status === 'متوقف' }">{{ c.status }}</span></td>
-                <td class="row-actions">
-                  <button type="button" class="tertiary-btn" @click="openCampaignForm(c)">ویرایش</button>
-                  <button type="button" class="tertiary-btn" @click="showCampaignStats(c)">آمار</button>
-                  <button type="button" class="tertiary-btn" @click="toggleCampaignStatus(c)">{{ c.status === 'فعال' ? 'توقف' : 'فعال‌سازی' }}</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!campaignsLoading">کمپینی ثبت نشده است.</p>
+        <ManagementListView
+          v-else
+          :columns="campaignColumns"
+          :rows="campaigns"
+          row-key="name"
+        >
+          <template #cell-title="{ row }"><strong>{{ row.title }}</strong><small class="muted d-block">{{ row.name }}</small></template>
+          <template #cell-coupon="{ value }">{{ value || '—' }}</template>
+          <template #cell-channels="{ row }"><span v-for="ch in splitChannels(row.channels)" :key="ch" class="pill">{{ ch }}</span></template>
+          <template #cell-validity="{ row }"><small class="muted">{{ row.valid_from || '...' }} ← {{ row.valid_to || '...' }}</small></template>
+          <template #cell-bonus="{ row }">{{ row.bonus_type }}<span v-if="row.bonus_value"> ({{ row.bonus_type === 'کش‌بک' || row.bonus_type === 'تخفیف' ? formatQty(row.bonus_value) + '٪' : formatQty(row.bonus_value) }})</span></template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'فعال', warn: row.status === 'متوقف' }">{{ row.status }}</span></template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openCampaignForm(row)">ویرایش</button>
+              <button type="button" class="tertiary-btn" @click="showCampaignStats(row)">آمار</button>
+              <button type="button" class="tertiary-btn" @click="toggleCampaignStatus(row)">{{ row.status === 'فعال' ? 'توقف' : 'فعال‌سازی' }}</button>
+            </div>
+          </template>
+          <template #empty>کمپینی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <ManagementSurfaceCard title="کدهای تخفیف (کوپن)" subtitle="کوپن‌ها برای اتصال به کمپین‌ها و فروش">
         <div class="btn-row"><button type="button" class="primary-btn" @click="openCouponForm()">کوپن جدید</button></div>
-        <div class="table-wrap" v-if="coupons.length">
-          <table class="data-table">
-            <thead><tr><th>کد</th><th>عنوان</th><th>تخفیف</th><th>حداقل سفارش</th><th>سقف استفاده</th><th>مصرف‌شده</th><th>وضعیت</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="cp in coupons" :key="cp.name" :class="{ inactive: !cp.is_active }">
-                <td><strong>{{ cp.coupon_code }}</strong></td>
-                <td>{{ cp.title || '—' }}</td>
-                <td>{{ cp.discount_type === 'Percent' ? formatQty(cp.discount_value) + '٪' : formatMoneyValue(cp.discount_value) }}</td>
-                <td>{{ formatMoneyValue(cp.min_order_amount) }}</td>
-                <td>{{ cp.usage_limit ? formatQty(cp.usage_limit) : 'نامحدود' }}</td>
-                <td>{{ formatQty(cp.used_count) }}</td>
-                <td><span class="pill" :class="{ ok: cp.is_active, warn: !cp.is_active }">{{ cp.is_active ? 'فعال' : 'غیرفعال' }}</span></td>
-                <td class="row-actions"><button type="button" class="tertiary-btn" @click="openCouponForm(cp)">ویرایش</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else>کوپنی ثبت نشده است.</p>
+        <ManagementListView
+          :columns="couponColumns"
+          :rows="coupons"
+          row-key="name"
+        >
+          <template #cell-coupon_code="{ row }"><strong>{{ row.coupon_code }}</strong></template>
+          <template #cell-title="{ value }">{{ value || '—' }}</template>
+          <template #cell-discount="{ row }">{{ row.discount_type === 'Percent' ? formatQty(row.discount_value) + '٪' : formatMoneyValue(row.discount_value) }}</template>
+          <template #cell-min_order_amount="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-usage_limit="{ row }">{{ row.usage_limit ? formatQty(row.usage_limit) : 'نامحدود' }}</template>
+          <template #cell-used_count="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-is_active="{ row }"><span class="pill" :class="{ ok: row.is_active, warn: !row.is_active }">{{ row.is_active ? 'فعال' : 'غیرفعال' }}</span></template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="openCouponForm(row)">ویرایش</button></template>
+          <template #empty>کوپنی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <div v-if="campaignForm" class="popup-backdrop" @click.self="campaignForm = null">
@@ -1240,6 +1231,32 @@ const walletActionSaving = ref(false)
 const walletDetail = ref(null)
 const walletDetailMessage = ref('')
 const walletActionTitles = { charge: 'شارژ کیف پول', transfer: 'انتقال اعتبار', adjust: 'تعدیل دستی' }
+const walletColumns = [
+  { key: 'customer_label', label: 'مشتری' },
+  { key: 'tier', label: 'سطح' },
+  { key: 'balance', label: 'موجودی' },
+  { key: 'total_charged', label: 'مجموع شارژ' },
+  { key: 'total_spent', label: 'مصرف' },
+  { key: 'total_rewards', label: 'پاداش‌ها' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
+const pointEntryColumns = [
+  { key: 'kind', label: 'نوع' },
+  { key: 'points', label: 'امتیاز' },
+  { key: 'note', label: 'شرح' },
+  { key: 'expiry_date', label: 'انقضا' },
+  { key: 'creation', label: 'زمان' },
+]
+const walletTransactionColumns = [
+  { key: 'kind', label: 'نوع' },
+  { key: 'direction', label: 'جهت' },
+  { key: 'amount', label: 'مبلغ' },
+  { key: 'balance_after', label: 'مانده' },
+  { key: 'reference_name', label: 'مرجع' },
+  { key: 'note', label: 'شرح' },
+  { key: 'entry_date', label: 'زمان' },
+]
 
 async function loadWallets() {
   walletsLoading.value = true
@@ -1309,6 +1326,10 @@ const referral = ref(null)
 const referralSaving = ref(false)
 const referralError = ref('')
 const referralMessage = ref('')
+const referralTopColumns = [
+  { key: 'customer_name', label: 'سفیر' },
+  { key: 'count', label: 'تعداد معرفی' },
+]
 
 async function loadReferral() {
   try {
@@ -1349,6 +1370,25 @@ const coupons = ref([])
 const couponForm = ref(null)
 const couponFormError = ref('')
 const couponSaving = ref(false)
+const campaignColumns = [
+  { key: 'title', label: 'عنوان' },
+  { key: 'coupon', label: 'کوپن' },
+  { key: 'channels', label: 'کانال‌ها' },
+  { key: 'validity', label: 'بازه' },
+  { key: 'bonus', label: 'پاداش' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
+const couponColumns = [
+  { key: 'coupon_code', label: 'کد' },
+  { key: 'title', label: 'عنوان' },
+  { key: 'discount', label: 'تخفیف' },
+  { key: 'min_order_amount', label: 'حداقل سفارش' },
+  { key: 'usage_limit', label: 'سقف استفاده' },
+  { key: 'used_count', label: 'مصرف‌شده' },
+  { key: 'is_active', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 async function loadCampaigns() {
   campaignsLoading.value = true
@@ -1470,6 +1510,22 @@ async function saveSettings() {
 // --------------------------------------------------------------------------
 const smsKindStats = ref(null)
 const smsKindStatsLoading = ref(false)
+const smsKindStatsColumns = [
+  { key: 'kind', label: 'نوع پیامک' },
+  { key: 'class_label', label: 'کلاس' },
+  { key: 'total', label: 'کل' },
+  { key: 'sent', label: 'ارسال‌شده' },
+  { key: 'failed', label: 'ناموفق' },
+  { key: 'queued', label: 'در صف' },
+  { key: 'success_rate', label: 'نرخ موفقیت' },
+]
+const smsKindStatsRows = computed(() => (smsKindStats.value?.classes || []).flatMap((cls) => (
+  (cls.kinds || []).map((kind) => ({
+    ...kind,
+    class_label: cls.class,
+    row_key: `${cls.class}-${kind.kind}`,
+  }))
+)))
 
 async function loadSmsKindStats() {
   smsKindStatsLoading.value = true
@@ -1607,6 +1663,40 @@ async function saveRedeem() {
 // --------------------------------------------------------------------------
 // Organizations (سازمان‌ها: قرارداد، معین، اعتبار، فاکتور تجمیعی)
 // --------------------------------------------------------------------------
+const orgContractColumns = [
+  { key: 'organization_label', label: 'سازمان' },
+  { key: 'contract_no', label: 'قرارداد' },
+  { key: 'daily_order_cap', label: 'سقف روزانه' },
+  { key: 'monthly_order_cap', label: 'سقف ماهانه' },
+  { key: 'allowed_schedule', label: 'روزها/ساعات مجاز' },
+  { key: 'invoice_mode', label: 'صدور فاکتور' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
+const orgMemberColumns = [
+  { key: 'member', label: 'معین' },
+  { key: 'organization_label', label: 'سازمان' },
+  { key: 'username', label: 'نام کاربری' },
+  { key: 'daily_cap', label: 'سقف روزانه' },
+  { key: 'monthly_cap', label: 'سقف ماهانه' },
+  { key: 'is_active', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
+const orgCreditMemberColumns = [
+  { key: 'member', label: 'معین' },
+  { key: 'day_usage', label: 'مصرف امروز' },
+  { key: 'month_usage', label: 'مصرف ماه' },
+  { key: 'uninvoiced', label: 'فاکتورنشده' },
+]
+const orgOrderColumns = [
+  { key: 'select', label: '' },
+  { key: 'name', label: 'کد سفارش' },
+  { key: 'date', label: 'تاریخ' },
+  { key: 'org_member', label: 'معین' },
+  { key: 'grand_total', label: 'مبلغ' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'org_invoice', label: 'فاکتور' },
+]
 const orgBoot = ref({ kpis: {}, weekdays: [], invoice_modes: [], contract_statuses: [] })
 const orgContracts = ref([])
 const orgMembers = ref([])

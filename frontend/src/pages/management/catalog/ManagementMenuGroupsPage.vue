@@ -9,6 +9,6 @@
 </template>
 
 <script setup>
-import ManagementMenuGroupsSettings from '@/components/management/ManagementMenuGroupsSettings.vue'
+import ManagementMenuGroupsSettings from '@/components/management/catalog/ManagementMenuGroupsSettings.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 </script>

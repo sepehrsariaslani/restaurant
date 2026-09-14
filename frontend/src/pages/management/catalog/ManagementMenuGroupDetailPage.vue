@@ -139,8 +139,8 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
-import ManagementImageDropzone from '@/components/management/ManagementImageDropzone.vue'
-import ManagementMenuIconSelector from '@/components/management/ManagementMenuIconSelector.vue'
+import ManagementImageDropzone from '@/components/management/catalog/ManagementImageDropzone.vue'
+import ManagementMenuIconSelector from '@/components/management/catalog/ManagementMenuIconSelector.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'

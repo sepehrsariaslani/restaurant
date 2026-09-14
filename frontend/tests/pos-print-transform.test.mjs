@@ -52,7 +52,7 @@ function addPrintProfile() { printProfiles.value.push({ profile_id: 'x', kind: '
 })
 
 test('receipt printing always uses the bundled Peyda font and waits for print assets', () => {
-  const source = fs.readFileSync(new URL('../src/pages/management/ManagementPosPage.vue', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../src/pages/management/sales/ManagementPosPage.vue', import.meta.url), 'utf8')
   assert.match(source, /function receiptFontAssetUrl\(fileName\)/)
   assert.match(source, /import\.meta\.env\.BASE_URL/)
   assert.match(source, /font-display: block/)
@@ -80,7 +80,7 @@ function printReceiptDocument(html) {
 })
 
 test('main POS print action sends the receipt directly without reopening the target picker', () => {
-  const source = fs.readFileSync(new URL('../src/pages/management/ManagementPosPage.vue', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../src/pages/management/sales/ManagementPosPage.vue', import.meta.url), 'utf8')
   const start = source.indexOf('function openQuickPrintTargetPicker()')
   const end = source.indexOf('\n}\n\n// رفتن از انتخابگر', start)
   const quickPrint = source.slice(start, end > start ? end : undefined)

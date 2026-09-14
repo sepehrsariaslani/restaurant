@@ -1,7 +1,7 @@
 import glob
 import re
 
-files = glob.glob("frontend/src/pages/management/ManagementOrdersPage.vue")
+files = glob.glob("frontend/src/pages/management/sales/ManagementOrdersPage.vue")
 
 for file in files:
     with open(file, "r") as f:

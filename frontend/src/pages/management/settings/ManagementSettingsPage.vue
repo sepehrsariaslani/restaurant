@@ -6,5 +6,5 @@
 
 <script setup>
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
-import ManagementThemeStudio from '@/components/management/ManagementThemeStudio.vue'
+import ManagementThemeStudio from '@/components/management/design-system/ManagementThemeStudio.vue'
 </script>

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const source = fs.readFileSync(new URL('../src/pages/management/ManagementProductsPage.vue', import.meta.url), 'utf8')
+const source = fs.readFileSync(new URL('../src/pages/management/catalog/ManagementProductsPage.vue', import.meta.url), 'utf8')
 const safeApiSource = fs.readFileSync(new URL('../src/utils/posReliabilityApi.js', import.meta.url), 'utf8')
 
 test('management products page defines runtime refs used by the template and watchers', () => {
