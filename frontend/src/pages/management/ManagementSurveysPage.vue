@@ -26,25 +26,26 @@
         <label class="check-row"><input type="checkbox" v-model="showInactive" @change="loadQuestions" /> نمایش غیرفعال‌ها</label>
       </div>
       <p class="muted" v-if="questionsLoading">در حال دریافت سوالات...</p>
-      <div v-else-if="questions.length" class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>#</th><th>سوال</th><th>نوع پاسخ</th><th>ترتیب</th><th>وضعیت</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="(q, i) in questions" :key="q.name" :class="{ inactive: !q.is_active }">
-              <td>{{ formatQty(i + 1) }}</td>
-              <td><strong>{{ q.question }}</strong></td>
-              <td><span class="pill">{{ q.answer_type }}</span></td>
-              <td>{{ formatQty(q.sort_order) }}</td>
-              <td><span class="pill" :class="{ ok: q.is_active, warn: !q.is_active }">{{ q.is_active ? 'فعال' : 'غیرفعال' }}</span></td>
-              <td class="row-actions">
-                <button type="button" class="tertiary-btn" @click="openQuestionForm(q)">ویرایش</button>
-                <button type="button" class="tertiary-btn danger" @click="removeQuestion(q)">حذف</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" v-else-if="!questionsLoading">هنوز سوالی تعریف نشده است؛ با «سوال جدید» شروع کنید.</p>
+      <ManagementListView
+        v-else
+        :columns="questionColumns"
+        :rows="questions"
+        row-key="name"
+        :row-clickable="true"
+        @row-click="openQuestionForm"
+      >
+        <template #cell-question="{ row }"><strong>{{ row.question }}</strong></template>
+        <template #cell-answer_type="{ value }"><span class="pill">{{ value }}</span></template>
+        <template #cell-sort_order="{ value }">{{ formatQty(value) }}</template>
+        <template #cell-is_active="{ row }"><span class="pill" :class="{ ok: row.is_active, warn: !row.is_active }">{{ row.is_active ? 'فعال' : 'غیرفعال' }}</span></template>
+        <template #cell-actions="{ row }">
+          <span class="row-actions">
+            <button type="button" class="tertiary-btn" @click="openQuestionForm(row)">ویرایش</button>
+            <button type="button" class="tertiary-btn danger" @click="removeQuestion(row)">حذف</button>
+          </span>
+        </template>
+        <template #empty>هنوز سوالی تعریف نشده است؛ با «سوال جدید» شروع کنید.</template>
+      </ManagementListView>
       <p class="error" v-if="questionsError">{{ questionsError }}</p>
     </ManagementSurfaceCard>
 
@@ -73,33 +74,29 @@
         <button type="button" class="secondary-btn" @click="loadResponses" :disabled="responsesLoading">{{ responsesLoading ? '...' : 'جستجو' }}</button>
       </div>
       <p class="muted" v-if="responsesLoading">در حال دریافت پاسخ‌ها...</p>
-      <div v-else-if="filteredResponses.length" class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>سفارش</th><th>مشتری</th><th>امتیاز کلی</th><th>پاسخ‌ها</th><th>توضیح</th><th>زمان</th></tr></thead>
-          <tbody>
-            <tr v-for="r in filteredResponses" :key="r.name" :class="{ 'alert-row': r.dissatisfaction_alerted }">
-              <td><strong>{{ r.sales_order || r.order_code }}</strong></td>
-              <td>{{ r.customer_name || '—' }}<br><small class="muted">{{ r.mobile }}</small></td>
-              <td>
-                <span class="stars-mini">{{ starString(r.overall_rating) }}</span>
-                <span class="pill" :class="{ ok: r.overall_rating >= 4, warn: r.overall_rating <= 2 }">{{ formatQty(r.overall_rating) }}</span>
-                <span v-if="r.dissatisfaction_alerted" class="pill warn">هشدار شد</span>
-              </td>
-              <td class="answers-cell">
-                <template v-if="r.answers && r.answers.length">
-                  <div v-for="(a, j) in r.answers" :key="j" class="answer-line">
-                    <small class="muted">{{ a.question }}:</small> <strong>{{ a.value }}</strong>
-                  </div>
-                </template>
-                <span v-else class="muted">—</span>
-              </td>
-              <td class="answers-cell">{{ r.comment || '—' }}</td>
-              <td><small class="muted">{{ (r.entry_date || '').slice(0, 16) }}</small></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" v-else-if="!responsesLoading">پاسخی در این بازه ثبت نشده است.</p>
+      <ManagementListView
+        v-else
+        :columns="responseColumns"
+        :rows="filteredResponses"
+        row-key="name"
+      >
+        <template #cell-order="{ row }"><strong>{{ row.sales_order || row.order_code }}</strong></template>
+        <template #cell-customer="{ row }">{{ row.customer_name || '—' }}<br><small class="muted">{{ row.mobile }}</small></template>
+        <template #cell-overall_rating="{ row }">
+          <span class="stars-mini">{{ starString(row.overall_rating) }}</span>
+          <span class="pill" :class="{ ok: row.overall_rating >= 4, warn: row.overall_rating <= 2 }">{{ formatQty(row.overall_rating) }}</span>
+          <span v-if="row.dissatisfaction_alerted" class="pill warn">هشدار شد</span>
+        </template>
+        <template #cell-answers="{ row }">
+          <span v-if="!row.answers || !row.answers.length" class="muted">—</span>
+          <span v-else class="answers-cell">
+            <span v-for="(a, j) in row.answers" :key="j" class="answer-line"><small class="muted">{{ a.question }}:</small> <strong>{{ a.value }}</strong></span>
+          </span>
+        </template>
+        <template #cell-comment="{ value }"><span class="answers-cell">{{ value || '—' }}</span></template>
+        <template #cell-entry_date="{ value }"><small class="muted">{{ (value || '').slice(0, 16) }}</small></template>
+        <template #empty>پاسخی در این بازه ثبت نشده است.</template>
+      </ManagementListView>
       <p class="error" v-if="responsesError">{{ responsesError }}</p>
       <p class="muted hint-line">
         برای تحلیل عمیق‌تر، گزارش‌های «تحلیل نظرسنجی» و «نظرات سایت» را در مرکز گزارش‌ها ببینید؛ نظرات محصولات سایت از همان بخش دیدگاه‌های فروشگاه جمع‌آوری می‌شود.
@@ -132,6 +129,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
@@ -157,6 +155,21 @@ const responsesLoading = ref(false)
 const responsesError = ref('')
 const responseFilters = reactive({ date_from: '', date_to: '', search: '', min_rating: 0, max_rating: 0 })
 const onlyDissatisfied = ref(false)
+const questionColumns = [
+  { key: 'question', label: 'سوال' },
+  { key: 'answer_type', label: 'نوع پاسخ' },
+  { key: 'sort_order', label: 'ترتیب' },
+  { key: 'is_active', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
+const responseColumns = [
+  { key: 'order', label: 'سفارش' },
+  { key: 'customer', label: 'مشتری' },
+  { key: 'overall_rating', label: 'امتیاز کلی' },
+  { key: 'answers', label: 'پاسخ‌ها' },
+  { key: 'comment', label: 'توضیح' },
+  { key: 'entry_date', label: 'زمان' },
+]
 
 const loadingAny = computed(() => questionsLoading.value || responsesLoading.value)
 const activeQuestionsCount = computed(() => questions.value.filter((q) => q.is_active).length)

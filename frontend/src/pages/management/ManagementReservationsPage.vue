@@ -32,36 +32,38 @@
       <p class="muted" v-if="loading">در حال دریافت رزروها...</p>
       <p class="error" v-if="error">{{ error }}</p>
       <p class="success-msg" v-if="message">{{ message }}</p>
-      <div v-if="!loading && rows.length" class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>مهمان</th><th>تاریخ</th><th>ساعت</th><th>نفرات</th><th>جایگاه</th><th>منشأ</th><th>یادآوری</th><th>وضعیت</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="r in rows" :key="r.name">
-              <td><strong>{{ r.customer_name || '—' }}</strong><br><small class="muted">{{ r.mobile }}</small></td>
-              <td>{{ r.reservation_date }}</td>
-              <td>{{ r.reservation_time }}</td>
-              <td>{{ formatQty(r.party_size) }}</td>
-              <td>{{ r.table_label || '—' }}</td>
-              <td><span class="pill">{{ r.source }}</span></td>
-              <td><span class="pill" :class="{ ok: r.reminder_sent }">{{ r.reminder_sent ? 'ارسال‌شده' : '—' }}</span></td>
-              <td><span class="pill" :class="statusClass(r.status)">{{ r.status }}</span></td>
-              <td class="row-actions">
-                <template v-if="r.status === 'در انتظار'">
-                  <button type="button" class="tertiary-btn" @click="setStatus(r, 'تأییدشده')">تأیید</button>
-                </template>
-                <template v-if="r.status === 'تأییدشده'">
-                  <button type="button" class="tertiary-btn" @click="setStatus(r, 'نشست')">نشست</button>
-                  <button type="button" class="tertiary-btn" @click="setStatus(r, 'حاضر نشد')">حاضر نشد</button>
-                </template>
-                <button type="button" class="tertiary-btn" @click="openForm(r)">ویرایش</button>
-                <button type="button" class="tertiary-btn danger" @click="setStatus(r, 'لغوشده')" v-if="r.status !== 'لغوشده'">لغو</button>
-                <button type="button" class="tertiary-btn danger" @click="removeReservation(r)">حذف</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" v-else-if="!loading">رزروی مطابق فیلتر یافت نشد.</p>
+      <ManagementListView
+        v-if="!loading"
+        :columns="reservationColumns"
+        :rows="rows"
+        row-key="name"
+        :row-clickable="true"
+        @row-click="openForm"
+      >
+        <template #cell-customer_name="{ row }">
+          <strong>{{ row.customer_name || '—' }}</strong><br><small class="muted">{{ row.mobile }}</small>
+        </template>
+        <template #cell-party_size="{ value }">{{ formatQty(value) }}</template>
+        <template #cell-table_label="{ value }">{{ value || '—' }}</template>
+        <template #cell-source="{ value }"><span class="pill">{{ value || '—' }}</span></template>
+        <template #cell-reminder_sent="{ row }"><span class="pill" :class="{ ok: row.reminder_sent }">{{ row.reminder_sent ? 'ارسال‌شده' : '—' }}</span></template>
+        <template #cell-status="{ row }"><span class="pill" :class="statusClass(row.status)">{{ row.status }}</span></template>
+        <template #cell-actions="{ row }">
+          <span class="row-actions">
+            <template v-if="row.status === 'در انتظار'">
+              <button type="button" class="tertiary-btn" @click="setStatus(row, 'تأییدشده')">تأیید</button>
+            </template>
+            <template v-if="row.status === 'تأییدشده'">
+              <button type="button" class="tertiary-btn" @click="setStatus(row, 'نشست')">نشست</button>
+              <button type="button" class="tertiary-btn" @click="setStatus(row, 'حاضر نشد')">حاضر نشد</button>
+            </template>
+            <button type="button" class="tertiary-btn" @click="openForm(row)">ویرایش</button>
+            <button type="button" class="tertiary-btn danger" @click="setStatus(row, 'لغوشده')" v-if="row.status !== 'لغوشده'">لغو</button>
+            <button type="button" class="tertiary-btn danger" @click="removeReservation(row)">حذف</button>
+          </span>
+        </template>
+        <template #empty>رزروی مطابق فیلتر یافت نشد.</template>
+      </ManagementListView>
     </ManagementSurfaceCard>
 
     <div v-if="form" class="popup-backdrop" @click.self="form = null">
@@ -102,6 +104,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -122,6 +125,17 @@ const filters = reactive({ date_from: '', date_to: '', status: '', table: '', se
 const form = ref(null)
 const formError = ref('')
 const saving = ref(false)
+const reservationColumns = [
+  { key: 'customer_name', label: 'مهمان' },
+  { key: 'reservation_date', label: 'تاریخ' },
+  { key: 'reservation_time', label: 'ساعت' },
+  { key: 'party_size', label: 'نفرات' },
+  { key: 'table_label', label: 'جایگاه' },
+  { key: 'source', label: 'منشأ' },
+  { key: 'reminder_sent', label: 'یادآوری' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 const publicUrl = computed(() => `${window.location.origin}/reserve`)
 const todayTotal = computed(() => Object.values(boot.value.today_counts || {}).reduce((a, b) => a + Number(b || 0), 0))

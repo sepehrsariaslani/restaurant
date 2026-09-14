@@ -15,6 +15,8 @@ const couriersSource = fs.readFileSync(new URL('../src/pages/management/Manageme
 const clubSource = fs.readFileSync(new URL('../src/pages/management/ManagementClubPage.vue', import.meta.url), 'utf8')
 const callCenterSource = fs.readFileSync(new URL('../src/pages/management/ManagementCallCenterPage.vue', import.meta.url), 'utf8')
 const reportSource = fs.readFileSync(new URL('../src/pages/management/ManagementReportPage.vue', import.meta.url), 'utf8')
+const reservationsSource = fs.readFileSync(new URL('../src/pages/management/ManagementReservationsPage.vue', import.meta.url), 'utf8')
+const surveysSource = fs.readFileSync(new URL('../src/pages/management/ManagementSurveysPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -42,9 +44,15 @@ test('design system catalog contains the requested reference tabs and product su
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'management-list-detail'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'order-fulfillment'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'courier-workbench'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'reservation-workbench'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'survey-feedback'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'crm-engagement'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'products-list'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-orders'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-couriers'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-reservations'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-surveys'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-club'))
 })
 
 test('design system route is registered in the management shell', () => {
@@ -124,6 +132,21 @@ test('club customer management uses the shared list pattern', () => {
   assert.match(clubSource, /ویرایش/)
 })
 
+test('customer voice management uses the shared list pattern and preserves response actions', () => {
+  assert.match(clubSource, /:rows="voices"/)
+  assert.match(clubSource, /voiceColumns/)
+  assert.match(clubSource, /@row-click="openVoiceReply"/)
+  assert.match(clubSource, /openVoiceReply\(row\)/)
+  assert.match(clubSource, /removeVoice\(row\)/)
+})
+
+test('sms history uses the shared responsive list pattern', () => {
+  assert.match(clubSource, /:rows="smsHistory\.messages \|\| \[\]"/)
+  assert.match(clubSource, /smsHistoryColumns/)
+  assert.match(clubSource, /row\.provider_note/)
+  assert.match(clubSource, /cell-status/)
+})
+
 test('call center uses the shared list pattern for recent calls', () => {
   assert.match(callCenterSource, /ManagementListView/)
   assert.match(callCenterSource, /:rows="calls"/)
@@ -139,4 +162,23 @@ test('management reports keep operational titles and waiter performance connecte
   assert.match(reportSource, /'tax-reconciliation'/)
   assert.match(reportSource, /reportSubtitle/)
   assert.doesNotMatch(reportSource, /:subtitle="reportKey"/)
+})
+
+test('reservations use the shared responsive list pattern without losing actions', () => {
+  assert.match(reservationsSource, /ManagementListView/)
+  assert.match(reservationsSource, /:rows="rows"/)
+  assert.match(reservationsSource, /reservationColumns/)
+  assert.match(reservationsSource, /@row-click="openForm"/)
+  assert.match(reservationsSource, /setStatus\(row, 'تأییدشده'\)/)
+  assert.match(reservationsSource, /removeReservation\(row\)/)
+})
+
+test('survey questions and responses use shared list patterns', () => {
+  assert.match(surveysSource, /ManagementListView/)
+  assert.match(surveysSource, /questionColumns/)
+  assert.match(surveysSource, /responseColumns/)
+  assert.match(surveysSource, /:rows="questions"/)
+  assert.match(surveysSource, /:rows="filteredResponses"/)
+  assert.match(surveysSource, /openQuestionForm\(row\)/)
+  assert.match(surveysSource, /starString\(row\.overall_rating\)/)
 })

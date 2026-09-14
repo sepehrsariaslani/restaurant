@@ -338,26 +338,28 @@
         <p class="muted" v-if="voicesLoading">در حال دریافت...</p>
         <p class="error" v-if="voicesError">{{ voicesError }}</p>
         <p class="success-msg" v-if="voicesMessage">{{ voicesMessage }}</p>
-        <div v-if="!voicesLoading && voices.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>نوع</th><th>موضوع</th><th>مشتری</th><th>پیام</th><th>وضعیت</th><th>پاسخ</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="v in voices" :key="v.name">
-                <td><span class="pill" :class="{ warn: v.type === 'شکایت' }">{{ v.type }}</span></td>
-                <td><strong>{{ v.subject }}</strong><br><small class="muted">{{ v.creation }}</small><small v-if="v.order_code" class="muted"> · {{ v.order_code }}</small></td>
-                <td>{{ v.customer_name || 'مهمان' }}<br><small class="muted">{{ v.mobile }}</small></td>
-                <td class="sms-cell">{{ v.message }}</td>
-                <td><span class="pill" :class="{ ok: v.status === 'پاسخ داده‌شده' || v.status === 'بسته', warn: v.status === 'جدید' }">{{ v.status }}</span></td>
-                <td class="sms-cell"><small>{{ v.response || '—' }}</small></td>
-                <td class="row-actions">
-                  <button type="button" class="tertiary-btn" @click="openVoiceReply(v)">پاسخ/وضعیت</button>
-                  <button type="button" class="tertiary-btn danger" @click="removeVoice(v)">حذف</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="!voicesLoading">پیامی ثبت نشده است.</p>
+        <ManagementListView
+          v-if="!voicesLoading"
+          :columns="voiceColumns"
+          :rows="voices"
+          row-key="name"
+          :row-clickable="true"
+          @row-click="openVoiceReply"
+        >
+          <template #cell-type="{ row }"><span class="pill" :class="{ warn: row.type === 'شکایت' }">{{ row.type }}</span></template>
+          <template #cell-subject="{ row }"><strong>{{ row.subject }}</strong><br><small class="muted">{{ row.creation }}</small><small v-if="row.order_code" class="muted"> · {{ row.order_code }}</small></template>
+          <template #cell-customer="{ row }">{{ row.customer_name || 'مهمان' }}<br><small class="muted">{{ row.mobile }}</small></template>
+          <template #cell-message="{ value }"><span class="sms-cell">{{ value }}</span></template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'پاسخ داده‌شده' || row.status === 'بسته', warn: row.status === 'جدید' }">{{ row.status }}</span></template>
+          <template #cell-response="{ value }"><span class="sms-cell"><small>{{ value || '—' }}</small></span></template>
+          <template #cell-actions="{ row }">
+            <span class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openVoiceReply(row)">پاسخ/وضعیت</button>
+              <button type="button" class="tertiary-btn danger" @click="removeVoice(row)">حذف</button>
+            </span>
+          </template>
+          <template #empty>پیامی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
 
       <div v-if="voiceForm" class="popup-backdrop" @click.self="voiceForm = null">
@@ -498,22 +500,20 @@
           <span v-for="(count, status) in smsHistory.summary" :key="status" class="pill" :class="{ ok: status === 'ارسال‌شده', warn: status !== 'ارسال‌شده' }">{{ status }}: {{ formatQty(count) }}</span>
         </div>
         <p class="muted" v-if="smsHistoryLoading">در حال دریافت سوابق...</p>
-        <div v-else-if="smsHistory && smsHistory.messages && smsHistory.messages.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>موبایل</th><th>نوع</th><th>متن</th><th>وضعیت</th><th>کمپین</th><th>زمان</th></tr></thead>
-            <tbody>
-              <tr v-for="m in smsHistory.messages" :key="m.name">
-                <td>{{ m.mobile }}</td>
-                <td><span class="pill">{{ m.kind }}</span></td>
-                <td class="sms-cell">{{ m.message }}<small v-if="m.provider_note" class="muted d-block">{{ m.provider_note }}</small></td>
-                <td><span class="pill" :class="{ ok: m.status === 'ارسال‌شده', warn: m.status !== 'ارسال‌شده' }">{{ m.status }}</span></td>
-                <td>{{ m.campaign || '—' }}</td>
-                <td><small class="muted">{{ m.sent_at || m.creation }}</small></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else-if="smsHistory">پیامکی یافت نشد.</p>
+        <ManagementListView
+          v-else-if="smsHistory"
+          :columns="smsHistoryColumns"
+          :rows="smsHistory.messages || []"
+          row-key="name"
+        >
+          <template #cell-mobile="{ value }">{{ value }}</template>
+          <template #cell-kind="{ value }"><span class="pill">{{ value }}</span></template>
+          <template #cell-message="{ row }"><span class="sms-cell">{{ row.message }}<small v-if="row.provider_note" class="muted d-block">{{ row.provider_note }}</small></span></template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'ارسال‌شده', warn: row.status !== 'ارسال‌شده' }">{{ row.status }}</span></template>
+          <template #cell-campaign="{ value }">{{ value || '—' }}</template>
+          <template #cell-sent_at="{ row }"><small class="muted">{{ row.sent_at || row.creation }}</small></template>
+          <template #empty>پیامکی یافت نشد.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
 
@@ -1158,6 +1158,14 @@ const smsFormMessage = ref('')
 const smsHistory = ref(null)
 const smsHistoryLoading = ref(false)
 const smsHistoryFilters = reactive({ kind: '', status: '', search: '' })
+const smsHistoryColumns = [
+  { key: 'mobile', label: 'موبایل' },
+  { key: 'kind', label: 'نوع' },
+  { key: 'message', label: 'متن' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'campaign', label: 'کمپین' },
+  { key: 'sent_at', label: 'زمان' },
+]
 
 async function loadSmsTemplates() {
   try {
@@ -1488,6 +1496,15 @@ const voiceFormError = ref('')
 const voiceFormSaving = ref(false)
 const voiceReply = ref(null)
 const voiceReplySaving = ref(false)
+const voiceColumns = [
+  { key: 'type', label: 'نوع' },
+  { key: 'subject', label: 'موضوع' },
+  { key: 'customer', label: 'مشتری' },
+  { key: 'message', label: 'پیام' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'response', label: 'پاسخ' },
+  { key: 'actions', label: 'عملیات' },
+]
 const voiceCustomerKinds = computed(() => boot.value?.settings?.voice_types || ['شکایت', 'انتقاد', 'پیشنهاد', 'درخواست', 'تقدیر'])
 const voiceStatusesList = computed(() => boot.value?.settings?.voice_statuses || ['جدید', 'در حال رسیدگی', 'پاسخ داده‌شده', 'بسته'])
 
