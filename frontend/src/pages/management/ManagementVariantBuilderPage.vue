@@ -69,71 +69,40 @@
         </button>
       </div>
 
-      <div class="variant-editor-table-wrap desktop-only-table" v-if="itemAttributeCatalog.length">
-        <table class="variant-editor-table">
-          <thead>
-            <tr>
-              <th>عملیات</th>
-              <th>صفت</th>
-              <th>نوع</th>
-              <th>تعداد مقدار</th>
-              <th>وضعیت</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in itemAttributeCatalog"
-              :key="`catalog-${row.name}`"
-              :class="{ active: selectedItemAttributeName === row.name }"
-            >
-              <td>
-                <button class="secondary-btn mini-link-btn" type="button" @click="openItemAttributeEditor(row.name)">
-                  ویرایش
-                </button>
-              </td>
-              <td>
-                <div class="variant-attr-meta">
-                  <strong>{{ row.label || row.name }}</strong>
-                  <small>{{ row.name }}</small>
-                </div>
-              </td>
-              <td>{{ Number(row.numeric_values || 0) === 1 ? 'عددی' : 'لیستی' }}</td>
-              <td>{{ Number(row.value_count || 0).toLocaleString('fa-IR') }}</td>
-              <td>
-                <span :class="['state-pill', Number(row.disabled || 0) ? 'off' : 'on']">
-                  {{ Number(row.disabled || 0) ? 'غیرفعال' : 'فعال' }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="variant-mobile-list" v-if="itemAttributeCatalog.length">
-        <article
-          v-for="row in itemAttributeCatalog"
-          :key="`catalog-mobile-${row.name}`"
-          class="variant-mobile-card"
-        >
-          <header>
+      <ManagementListView
+        :columns="itemAttributeColumns"
+        :rows="itemAttributeCatalog"
+        row-key="name"
+        :row-clickable="true"
+        @row-click="openItemAttributeEditor($event.name)"
+      >
+        <template #cell-actions="{ row }">
+          <button class="secondary-btn mini-link-btn" type="button" @click.stop="openItemAttributeEditor(row.name)">
+            ویرایش
+          </button>
+          <a class="secondary-btn mini-link-btn" :href="itemAttributeDocUrl(row.name)" target="_blank" rel="noreferrer" @click.stop>
+            ERP
+          </a>
+        </template>
+        <template #cell-label="{ row }">
+          <div class="variant-attr-meta">
             <strong>{{ row.label || row.name }}</strong>
-            <span :class="['state-pill', Number(row.disabled || 0) ? 'off' : 'on']">
-              {{ Number(row.disabled || 0) ? 'غیرفعال' : 'فعال' }}
-            </span>
-          </header>
-          <p class="muted">کد: {{ row.name }}</p>
-          <p class="muted">نوع: {{ Number(row.numeric_values || 0) === 1 ? 'عددی' : 'لیستی' }}</p>
-          <p class="muted">تعداد مقدار: {{ Number(row.value_count || 0).toLocaleString('fa-IR') }}</p>
-          <div class="inline-actions">
-            <button class="secondary-btn mini-link-btn" type="button" @click="openItemAttributeEditor(row.name)">
-              ویرایش
-            </button>
-            <a class="secondary-btn mini-link-btn" :href="itemAttributeDocUrl(row.name)" target="_blank" rel="noreferrer">
-              ERP
-            </a>
+            <small>{{ row.name }}</small>
           </div>
-        </article>
-      </div>
+        </template>
+        <template #cell-value_type="{ row }">
+          {{ Number(row.numeric_values || 0) === 1 ? 'عددی' : 'لیستی' }}
+        </template>
+        <template #cell-value_count="{ row }">
+          {{ Number(row.value_count || 0).toLocaleString('fa-IR') }}
+        </template>
+        <template #cell-status="{ row }">
+          <span :class="['state-pill', Number(row.disabled || 0) ? 'off' : 'on']">
+            {{ Number(row.disabled || 0) ? 'غیرفعال' : 'فعال' }}
+          </span>
+        </template>
+        <template #empty>صفتی با این جستجو پیدا نشد.</template>
+      </ManagementListView>
 
       <p class="error" v-if="itemAttributeCatalogError">{{ itemAttributeCatalogError }}</p>
       <p class="muted" v-if="!itemAttributeCatalogLoading && !itemAttributeCatalog.length">صفتی پیدا نشد.</p>
@@ -541,6 +510,7 @@
 import { computed, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -590,6 +560,14 @@ const variantColumns = [
   { key: 'slug', label: 'اسلاگ' },
   { key: 'is_active', label: 'وضعیت' },
   { key: 'actions', label: 'عملیات' },
+]
+
+const itemAttributeColumns = [
+  { key: 'actions', label: 'عملیات' },
+  { key: 'label', label: 'صفت' },
+  { key: 'value_type', label: 'نوع' },
+  { key: 'value_count', label: 'تعداد مقدار' },
+  { key: 'status', label: 'وضعیت' },
 ]
 
 const pageTitle = computed(() => 'استودیو Variant و Item Attribute')

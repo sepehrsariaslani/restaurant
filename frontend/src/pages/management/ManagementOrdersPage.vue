@@ -94,41 +94,45 @@
             <button class="floor-chip" :class="{ active: filters.source === 'table' }" @click="filters.source = 'table'; loadOrders()">سالن</button>
           </div>
 
-          <div v-if="displayOrders.length" class="order-list">
-            <article 
-              v-for="row in displayOrders" 
-              :key="row.name" 
-              class="order-row"
-              :class="{ 'is-selected': isOrderDetailView && selectedOrder?.order?.name === row.name }"
-              @click="openOrderDetail(row)"
-            >
-              <div class="order-row-main">
-                <div class="order-identity">
-                  <strong>{{ row.order_code || row.name }}</strong>
-                  <span class="customer-name">{{ row.customer_name || 'مشتری ناشناس' }}</span>
-                </div>
-                <div class="order-metrics">
-                  <span class="order-total" dir="ltr">{{ formatMoney(row.grand_total, currency) }}</span>
-                  <div class="order-badges">
-                    <span class="status-badge" :class="`status-${(row.status || '').toLowerCase()}`">{{ formatStatus(row.status) }}</span>
-                    <span v-if="row.payment_status" class="payment-badge" :class="`pay-${(row.payment_status || '').toLowerCase()}`">
-                      {{ row.payment_status }}
-                    </span>
-                  </div>
-                </div>
+          <ManagementListView
+            :columns="orderColumns"
+            :rows="displayOrders"
+            row-key="name"
+            :row-clickable="true"
+            @row-click="openOrderDetail"
+          >
+            <template #cell-order_code="{ row }">
+              <div class="order-identity">
+                <strong>{{ row.order_code || row.name }}</strong>
+                <span class="customer-name">{{ row.customer_name || 'مشتری ناشناس' }}</span>
               </div>
-              <div class="order-row-meta">
-                <span class="meta-item"><Clock3 :size="14" /> {{ formatDateTime(row.created_at) }}</span>
-                <span class="meta-item" v-if="row.channel"><Store :size="14" /> {{ row.channel }}</span>
+            </template>
+            <template #cell-channel="{ row }">{{ row.channel || '—' }}</template>
+            <template #cell-status="{ row }">
+              <span class="status-badge" :class="`status-${(row.status || '').toLowerCase()}`">{{ formatStatus(row.status) }}</span>
+            </template>
+            <template #cell-payment="{ row }">
+              <span v-if="row.payment_status" class="payment-badge" :class="`pay-${(row.payment_status || '').toLowerCase()}`">
+                {{ row.payment_status === 'Paid' ? 'پرداخت شده' : 'پرداخت نشده' }}
+              </span>
+              <span v-else>—</span>
+            </template>
+            <template #cell-grand_total="{ row }">
+              <span class="order-total" dir="ltr">{{ formatMoney(row.grand_total, currency) }}</span>
+            </template>
+            <template #cell-created_at="{ row }">{{ formatDateTime(row.created_at) }}</template>
+            <template #cell-actions="{ row }">
+              <button class="secondary-btn mini-link-btn" type="button" @click.stop="openOrderDetail(row)">جزئیات</button>
+            </template>
+            <template #empty>
+              <div class="empty-state">
+                <div class="empty-icon-wrapper"><ClipboardList :size="32" /></div>
+                <strong>سفارشی یافت نشد</strong>
+                <p>در این نما با فیلترهای فعلی موردی وجود ندارد.</p>
+                <button v-if="filters.source || search || activeTab !== 'all'" class="secondary-btn mt-2" @click="activeTab = 'all'; search = ''; filters.source = ''; loadOrders()">پاک کردن فیلترها</button>
               </div>
-            </article>
-          </div>
-          <div v-else class="empty-state">
-            <div class="empty-icon-wrapper"><ClipboardList :size="32" /></div>
-            <strong>سفارشی یافت نشد</strong>
-            <p>در این نما با فیلترهای فعلی موردی وجود ندارد.</p>
-            <button v-if="filters.source || search || activeTab !== 'all'" class="secondary-btn mt-2" @click="activeTab = 'all'; search = ''; filters.source = ''; loadOrders()">پاک کردن فیلترها</button>
-          </div>
+            </template>
+          </ManagementListView>
         </div>
 
         <aside class="floor-detail-area">
@@ -254,10 +258,8 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { CheckCheck, CreditCard, FileText, X } from 'lucide-vue-next'
-import SearchableDropdown from '@/components/SearchableDropdown.vue'
-import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
-import ManagementMobileCardList from '@/components/management/ManagementMobileCardList.vue'
+import { AlertCircle, CheckCheck, ClipboardList, Clock3, CreditCard, FileText, RefreshCcw, Search, Store, X } from 'lucide-vue-next'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import { completeManagementOrder, getManagementOrderDetail, listManagementOrders, markManagementOrderPaid, listManagementCouriers, assignManagementOrderCourier, createManagementOrderProforma } from '@/utils/api'
@@ -361,7 +363,7 @@ const mobileTabs = [
   { value: 'cancelled', label: 'لغو شده' },
 ]
 
-const columns = [
+const orderColumns = [
   { key: 'order_code', label: 'کد' },
   { key: 'customer_name', label: 'مشتری' },
   { key: 'channel', label: 'کانال' },
@@ -372,11 +374,6 @@ const columns = [
   { key: 'actions', label: 'عملیات' },
 ]
 
-const detailColumns = [
-  { key: 'title', label: 'آیتم' },
-  { key: 'qty', label: 'تعداد' },
-  { key: 'line_total', label: 'قیمت' },
-]
 const isOrderDetailView = computed(() => Boolean(detailOrderName.value))
 
 const displayOrders = computed(() => {
@@ -1374,4 +1371,3 @@ button:disabled {
   color: var(--accent-green, #2f6f5c);
 }
 </style>
-

@@ -54,90 +54,112 @@
     </ManagementSurfaceCard>
 
     <section v-if="activeTab === 'couriers'" class="panel-grid">
-      <ManagementSurfaceCard title="لیست پیک‌ها" subtitle="تعریف پیک، اولویت تخصیص و زون سرویس">
-        <div class="toolbar-row">
-          <input
-            v-model.trim="courierSearch"
-            class="input"
-            placeholder="جستجو بر اساس نام، کد، موبایل، پلاک یا زون"
-            @keyup.enter="loadCouriers"
-          />
-          <button class="secondary-btn" type="button" @click="resetCourierForm">پیک جدید</button>
-        </div>
+      <div class="courier-workbench">
+        <ManagementSurfaceCard title="لیست پیک‌ها" subtitle="برای دیدن و ویرایش جزئیات، یک پیک را انتخاب کنید">
+          <div class="toolbar-row">
+            <input
+              v-model.trim="courierSearch"
+              class="input"
+              placeholder="جستجو بر اساس نام، کد، موبایل، پلاک یا زون"
+              @keyup.enter="loadCouriers"
+            />
+            <button class="secondary-btn" type="button" @click="resetCourierForm">پیک جدید</button>
+          </div>
 
-        <div class="editor-grid">
-          <label>
-            نام پیک
-            <input v-model.trim="courierForm.courier_name" class="input" />
-          </label>
-          <label>
-            کد پیک
-            <input v-model.trim="courierForm.courier_code" class="input" />
-          </label>
-          <label>
-            موبایل
-            <input v-model.trim="courierForm.mobile" class="input" dir="ltr" />
-          </label>
-          <label>
-            کد دسترسی اپ پیک
-            <input v-model.trim="courierForm.access_code" class="input" dir="ltr" placeholder="برای ورود به /courier" />
-          </label>
-          <label>
-            نوع وسیله اصلی
-            <input v-model.trim="courierForm.vehicle_type" class="input" />
-          </label>
-          <label>
-            پلاک وسیله اصلی
-            <input v-model.trim="courierForm.plate_number" class="input" />
-          </label>
-          <label>
-            ناحیه / زون
-            <input v-model.trim="courierForm.zone" class="input" />
-          </label>
-          <label>
-            اولویت تخصیص
-            <input v-model.number="courierForm.assignment_priority" class="input" type="number" min="0" />
-          </label>
-          <label class="check-row">
-            <input v-model="courierForm.is_active" type="checkbox" />
-            فعال
-          </label>
-        </div>
-
-        <ManagementNoteField
-          v-model="courierForm.notes"
-          class="full-width"
-          label="یادداشت"
-          rows="3"
-          placeholder="یادداشت داخلی پیک..."
-        />
-
-        <div class="form-actions">
-          <button class="primary-btn" type="button" :disabled="savingCourier" @click="saveCourier">
-            {{ savingCourier ? 'در حال ذخیره...' : courierForm.name ? 'ذخیره تغییرات پیک' : 'ثبت پیک' }}
-          </button>
-          <button
-            v-if="courierForm.name"
-            class="ghost-btn danger"
-            type="button"
-            :disabled="savingCourier"
-            @click="removeCourier(courierForm.name)"
+          <ManagementListView
+            :columns="courierColumns"
+            :rows="couriers"
+            row-key="name"
+            :row-clickable="true"
+            @row-click="editCourier"
           >
-            حذف پیک
-          </button>
-        </div>
+            <template #cell-courier_name="{ row }">
+              <strong>{{ row.courier_name }}</strong>
+            </template>
+            <template #cell-mobile="{ value }">{{ value || '—' }}</template>
+            <template #cell-zone="{ value }">{{ value || '—' }}</template>
+            <template #cell-assignment_priority="{ value }">{{ toFa(value) }}</template>
+            <template #cell-vehicle_count="{ value }">{{ toFa(value) }}</template>
+            <template #cell-is_active="{ value }">{{ value ? 'فعال' : 'غیرفعال' }}</template>
+            <template #empty>پیکی با این مشخصات پیدا نشد.</template>
+          </ManagementListView>
+        </ManagementSurfaceCard>
 
-        <ManagementDataTable :columns="courierColumns" :rows="couriers" row-key="name">
-          <template #cell-courier_name="{ row }">
-            <button class="mini-link-btn" type="button" @click="editCourier(row)">{{ row.courier_name }}</button>
-          </template>
-          <template #cell-mobile="{ value }">{{ value || '-' }}</template>
-          <template #cell-zone="{ value }">{{ value || '-' }}</template>
-          <template #cell-assignment_priority="{ value }">{{ toFa(value) }}</template>
-          <template #cell-vehicle_count="{ value }">{{ toFa(value) }}</template>
-          <template #cell-is_active="{ value }">{{ value ? 'فعال' : 'غیرفعال' }}</template>
-        </ManagementDataTable>
-      </ManagementSurfaceCard>
+        <ManagementSurfaceCard
+          class="courier-detail-card"
+          :title="courierForm.name ? `جزئیات پیک: ${courierForm.courier_name || courierForm.name}` : 'جزئیات پیک جدید'"
+          subtitle="اطلاعات هویتی، تخصیص، دسترسی اپ و وضعیت عملیاتی"
+        >
+          <div class="detail-status-row">
+            <span class="detail-kicker">{{ courierForm.name ? 'در حال ویرایش' : 'ثبت پیک جدید' }}</span>
+            <span :class="['state-pill', courierForm.is_active ? 'on' : 'off']">
+              {{ courierForm.is_active ? 'فعال' : 'غیرفعال' }}
+            </span>
+          </div>
+
+          <div class="editor-grid">
+            <label>
+              نام پیک
+              <input v-model.trim="courierForm.courier_name" class="input" />
+            </label>
+            <label>
+              کد پیک
+              <input v-model.trim="courierForm.courier_code" class="input" />
+            </label>
+            <label>
+              موبایل
+              <input v-model.trim="courierForm.mobile" class="input" dir="ltr" />
+            </label>
+            <label>
+              کد دسترسی اپ پیک
+              <input v-model.trim="courierForm.access_code" class="input" dir="ltr" placeholder="برای ورود به /courier" />
+            </label>
+            <label>
+              نوع وسیله اصلی
+              <input v-model.trim="courierForm.vehicle_type" class="input" />
+            </label>
+            <label>
+              پلاک وسیله اصلی
+              <input v-model.trim="courierForm.plate_number" class="input" />
+            </label>
+            <label>
+              ناحیه / زون
+              <input v-model.trim="courierForm.zone" class="input" />
+            </label>
+            <label>
+              اولویت تخصیص
+              <input v-model.number="courierForm.assignment_priority" class="input" type="number" min="0" />
+            </label>
+            <label class="check-row">
+              <input v-model="courierForm.is_active" type="checkbox" />
+              فعال
+            </label>
+          </div>
+
+          <ManagementNoteField
+            v-model="courierForm.notes"
+            class="full-width"
+            label="یادداشت"
+            rows="3"
+            placeholder="یادداشت داخلی پیک..."
+          />
+
+          <div class="form-actions">
+            <button class="primary-btn" type="button" :disabled="savingCourier" @click="saveCourier">
+              {{ savingCourier ? 'در حال ذخیره...' : courierForm.name ? 'ذخیره تغییرات پیک' : 'ثبت پیک' }}
+            </button>
+            <button
+              v-if="courierForm.name"
+              class="ghost-btn danger"
+              type="button"
+              :disabled="savingCourier"
+              @click="removeCourier(courierForm.name)"
+            >
+              حذف پیک
+            </button>
+          </div>
+        </ManagementSurfaceCard>
+      </div>
     </section>
 
     <section v-else-if="activeTab === 'rules'" class="panel-grid">
@@ -422,6 +444,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -834,6 +857,34 @@ onMounted(() => {
   gap: 20px;
 }
 
+.courier-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+  gap: var(--ds-space-4, 1rem);
+  align-items: start;
+}
+
+.courier-detail-card {
+  position: sticky;
+  top: 1rem;
+}
+
+.detail-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3, 0.75rem);
+  margin-bottom: var(--ds-space-4, 1rem);
+  padding-bottom: var(--ds-space-3, 0.75rem);
+  border-bottom: 1px solid var(--ds-color-border, var(--mg-border-light));
+}
+
+.detail-kicker {
+  color: var(--ds-color-text-muted, var(--mg-text-muted));
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
 .section-picker {
   display: flex;
   align-items: center;
@@ -988,6 +1039,14 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
+  .courier-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .courier-detail-card {
+    position: static;
+  }
+
   .summary-grid,
   .editor-grid,
   .rules-grid {

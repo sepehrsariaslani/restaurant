@@ -8,6 +8,10 @@ const catalogSource = fs.readFileSync(new URL('design-system/catalog.js', source
 const appSource = fs.readFileSync(new URL('App.vue', sourceRoot), 'utf8')
 const themeSource = fs.readFileSync(new URL('theme.css', sourceRoot), 'utf8')
 const layoutSource = fs.readFileSync(new URL('components/management/ManagementLayout.vue', sourceRoot), 'utf8')
+const hooksSource = fs.readFileSync(new URL('../../restaurant/hooks.py', import.meta.url), 'utf8')
+const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
+const ordersSource = fs.readFileSync(new URL('../src/pages/management/ManagementOrdersPage.vue', import.meta.url), 'utf8')
+const couriersSource = fs.readFileSync(new URL('../src/pages/management/ManagementCouriersPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -32,7 +36,12 @@ test('design system catalog contains the requested reference tabs and product su
   assert.ok(designSystemCatalog.components.some((item) => item.id === 'product-card'))
   assert.ok(designSystemCatalog.components.some((item) => item.id === 'product-detail'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'product-search'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'management-list-detail'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'order-fulfillment'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'courier-workbench'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'products-list'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-orders'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-couriers'))
 })
 
 test('design system route is registered in the management shell', () => {
@@ -40,6 +49,7 @@ test('design system route is registered in the management shell', () => {
   assert.match(appSource, /page === 'management-design-system'/)
   assert.match(appSource, /pathname\.startsWith\('\/management\/design-system'\)/)
   assert.match(layoutSource, /management-design-system/)
+  assert.match(hooksSource, /from_route":\s*"\/management\/design-system"/)
 })
 
 test('semantic design tokens are published as CSS variables while legacy aliases remain available', () => {
@@ -78,4 +88,27 @@ test('design primitives expose semantic variants and accessible async state', ()
   assert.match(buttonSource, /ds-button/)
   assert.match(badgeSource, /status|tone/)
   assert.match(badgeSource, /ds-badge/)
+})
+
+test('ERPNext item attribute catalog uses the shared management list pattern', () => {
+  assert.match(variantBuilderSource, /ManagementListView/)
+  assert.match(variantBuilderSource, /:rows="itemAttributeCatalog"/)
+  assert.match(variantBuilderSource, /@row-click="openItemAttributeEditor/)
+  assert.match(variantBuilderSource, /itemAttributeColumns/)
+})
+
+test('management orders keep a shared list-to-detail workflow', () => {
+  assert.match(ordersSource, /ManagementListView/)
+  assert.match(ordersSource, /:rows="displayOrders"/)
+  assert.match(ordersSource, /@row-click="openOrderDetail"/)
+  assert.match(ordersSource, /getManagementOrderDetail/)
+  assert.match(ordersSource, /selectedOrder/)
+})
+
+test('courier management uses the shared list and product-like detail workflow', () => {
+  assert.match(couriersSource, /ManagementListView/)
+  assert.match(couriersSource, /:rows="couriers"/)
+  assert.match(couriersSource, /@row-click="editCourier"/)
+  assert.match(couriersSource, /courier-workbench/)
+  assert.match(couriersSource, /جزئیات پیک/)
 })
