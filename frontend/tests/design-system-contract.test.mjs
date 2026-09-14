@@ -19,6 +19,7 @@ const reservationsSource = fs.readFileSync(new URL('../src/pages/management/Mana
 const surveysSource = fs.readFileSync(new URL('../src/pages/management/ManagementSurveysPage.vue', import.meta.url), 'utf8')
 const branchesSource = fs.readFileSync(new URL('../src/pages/management/ManagementBranchesPage.vue', import.meta.url), 'utf8')
 const costControlSource = fs.readFileSync(new URL('../src/pages/management/ManagementCostControlPage.vue', import.meta.url), 'utf8')
+const accountingSource = fs.readFileSync(new URL('../src/pages/management/ManagementAccountingPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -51,6 +52,7 @@ test('design system catalog contains the requested reference tabs and product su
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'crm-engagement'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'branch-workbench'))
   assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'cost-control'))
+  assert.ok(designSystemCatalog.patterns.some((item) => item.id === 'accounting-workbench'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'products-list'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-orders'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-couriers'))
@@ -59,6 +61,7 @@ test('design system catalog contains the requested reference tabs and product su
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-club'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-branches'))
   assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-cost-control'))
+  assert.ok(designSystemCatalog.templates.some((item) => item.id === 'management-accounting'))
 })
 
 test('design system route is registered in the management shell', () => {
@@ -204,4 +207,14 @@ test('cost control uses shared lists for profit-loss and budgets', () => {
   assert.match(costControlSource, /plColumns/)
   assert.match(costControlSource, /budgetColumns/)
   assert.match(costControlSource, /openBudgetForm\(row\)/)
+})
+
+test('accounting uses shared lists for balance, tax submissions and journal entries', () => {
+  assert.match(accountingSource, /ManagementListView/)
+  assert.match(accountingSource, /balanceRows/)
+  assert.match(accountingSource, /balanceColumns/)
+  assert.match(accountingSource, /tax\.submissions/)
+  assert.match(accountingSource, /taxSubmissionColumns/)
+  assert.match(accountingSource, /journalEntryColumns/)
+  assert.match(accountingSource, /cell-status/)
 })

@@ -28,32 +28,32 @@
           <div class="total-box"><small>خالص</small><strong :class="(balance.summary.net_total || 0) >= 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(balance.summary.net_total) }}</strong></div>
         </div>
         <p class="muted" v-if="balanceLoading">در حال دریافت...</p>
-        <div v-else-if="balanceRows.length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>تاریخ</th><th>تعداد سند</th><th>دریافت</th><th>پرداخت</th><th>خالص</th><th>تراز انباشته</th></tr></thead>
-            <tbody>
-              <tr v-for="r in balanceRows" :key="r.date">
-                <td>{{ r.date }}</td>
-                <td>{{ formatQty(r.entries) }}</td>
-                <td class="ok-text">{{ formatMoneyValue(r.receipts) }}</td>
-                <td>{{ formatMoneyValue(r.payments) }}</td>
-                <td :class="r.net >= 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(r.net) }}</td>
-                <td>{{ formatMoneyValue(r.balance_run) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else>داده‌ای در این بازه نیست.</p>
-        <div v-if="(balance.summary?.by_mop || []).length" class="table-wrap" style="margin-top:0.7rem">
-          <table class="data-table">
-            <thead><tr><th>نوع</th><th>روش پرداخت</th><th>تعداد</th><th>مبلغ</th></tr></thead>
-            <tbody>
-              <tr v-for="(m, i) in balance.summary.by_mop" :key="i">
-                <td>{{ m.payment_type }}</td><td>{{ m.mode_of_payment }}</td><td>{{ formatQty(m.entries) }}</td><td>{{ formatMoneyValue(m.total) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-else
+          :columns="balanceColumns"
+          :rows="balanceRows"
+          row-key="date"
+        >
+          <template #cell-date="{ value }">{{ value }}</template>
+          <template #cell-entries="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-receipts="{ value }"><span class="ok-text">{{ formatMoneyValue(value) }}</span></template>
+          <template #cell-payments="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-net="{ row }"><span :class="row.net >= 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.net) }}</span></template>
+          <template #cell-balance_run="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #empty>داده‌ای در این بازه نیست.</template>
+        </ManagementListView>
+        <ManagementListView
+          v-if="balance.summary"
+          :columns="paymentMethodColumns"
+          :rows="balance.summary.by_mop || []"
+          row-key="mode_of_payment"
+        >
+          <template #cell-payment_type="{ value }">{{ value }}</template>
+          <template #cell-mode_of_payment="{ value }">{{ value }}</template>
+          <template #cell-entries="{ value }">{{ formatQty(value) }}</template>
+          <template #cell-total="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #empty>تفکیک روش‌های پرداخت در این بازه ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
 
@@ -85,23 +85,20 @@
           <input class="input" v-model.trim="tax.invoiceInput" placeholder="شماره فاکتور (ACC-SINV-...) برای ارسال دستی" />
           <button type="button" class="secondary-btn" @click="submitInvoice" :disabled="tax.submitting">{{ tax.submitting ? '...' : 'ارسال فاکتور' }}</button>
         </div>
-        <div class="table-wrap" v-if="tax.submissions.length">
-          <table class="data-table">
-            <thead><tr><th>فاکتور</th><th>وضعیت</th><th>شناسه مرجع</th><th>کد رهگیری مالیاتی</th><th>زمان ارسال</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="s in tax.submissions" :key="s.name">
-                <td><strong>{{ s.sales_invoice }}</strong></td>
-                <td><span class="pill" :class="{ ok: s.status === 'ارسال‌شده', warn: s.status === 'خطا' }">{{ s.status }}</span></td>
-                <td><small class="muted ltr">{{ s.reference_id || '—' }}</small></td>
-                <td><small class="muted ltr">{{ s.tax_id || '—' }}</small></td>
-                <td><small class="muted">{{ s.submitted_at || '—' }}</small></td>
-                <td class="row-actions">
-                  <button v-if="s.status === 'خطا'" type="button" class="tertiary-btn" @click="submitInvoice(s.sales_invoice)">تلاش مجدد</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementListView
+          v-if="tax.settings"
+          :columns="taxSubmissionColumns"
+          :rows="tax.submissions"
+          row-key="name"
+        >
+          <template #cell-sales_invoice="{ value }"><strong>{{ value }}</strong></template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'ارسال‌شده', warn: row.status === 'خطا' }">{{ row.status }}</span></template>
+          <template #cell-reference_id="{ value }"><small class="muted ltr">{{ value || '—' }}</small></template>
+          <template #cell-tax_id="{ value }"><small class="muted ltr">{{ value || '—' }}</small></template>
+          <template #cell-submitted_at="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+          <template #cell-actions="{ row }"><button v-if="row.status === 'خطا'" type="button" class="tertiary-btn" @click="submitInvoice(row.sales_invoice)">تلاش مجدد</button></template>
+          <template #empty>فاکتوری برای نمایش در صف مودیان نیست.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
 
@@ -116,21 +113,18 @@
         </div>
       </ManagementSurfaceCard>
       <ManagementSurfaceCard title="اسناد اخیر" subtitle="آخرین اسناد حسابداری (دستی/خودکار) — یکپارچه با فروش، انبار، باشگاه و صندوق">
-        <div v-if="(boot.recent_journal_entries || []).length" class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>سند</th><th>تاریخ</th><th>مبلغ بدهکار</th><th>وضعیت</th><th>شرح</th></tr></thead>
-            <tbody>
-              <tr v-for="j in boot.recent_journal_entries" :key="j.name">
-                <td><strong>{{ j.name }}</strong></td>
-                <td>{{ j.posting_date }}</td>
-                <td>{{ formatMoneyValue(j.total_debit) }}</td>
-                <td><span class="pill" :class="{ ok: j.status === 'ثبت‌شده', warn: j.status === 'لغوشده' }">{{ j.status }}</span></td>
-                <td class="sms-cell">{{ j.user_remark || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else>سندی ثبت نشده است.</p>
+        <ManagementListView
+          :columns="journalEntryColumns"
+          :rows="boot.recent_journal_entries || []"
+          row-key="name"
+        >
+          <template #cell-name="{ value }"><strong>{{ value }}</strong></template>
+          <template #cell-posting_date="{ value }">{{ value }}</template>
+          <template #cell-total_debit="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'ثبت‌شده', warn: row.status === 'لغوشده' }">{{ row.status }}</span></template>
+          <template #cell-user_remark="{ value }"><span class="sms-cell">{{ value || '—' }}</span></template>
+          <template #empty>سندی ثبت نشده است.</template>
+        </ManagementListView>
       </ManagementSurfaceCard>
     </section>
   </ManagementPageScaffold>
@@ -138,6 +132,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
@@ -165,6 +160,35 @@ const balanceLoading = ref(false)
 const tax = reactive({ boot: { summary: null }, settings: null, newToken: '', saving: false, submitting: false, error: '', message: '', invoiceInput: '', submissions: [] })
 
 const balanceRows = ref([])
+const balanceColumns = [
+  { key: 'date', label: 'تاریخ' },
+  { key: 'entries', label: 'تعداد سند' },
+  { key: 'receipts', label: 'دریافت' },
+  { key: 'payments', label: 'پرداخت' },
+  { key: 'net', label: 'خالص' },
+  { key: 'balance_run', label: 'تراز انباشته' },
+]
+const paymentMethodColumns = [
+  { key: 'payment_type', label: 'نوع' },
+  { key: 'mode_of_payment', label: 'روش پرداخت' },
+  { key: 'entries', label: 'تعداد' },
+  { key: 'total', label: 'مبلغ' },
+]
+const taxSubmissionColumns = [
+  { key: 'sales_invoice', label: 'فاکتور' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'reference_id', label: 'شناسه مرجع' },
+  { key: 'tax_id', label: 'کد رهگیری مالیاتی' },
+  { key: 'submitted_at', label: 'زمان ارسال' },
+  { key: 'actions', label: 'عملیات' },
+]
+const journalEntryColumns = [
+  { key: 'name', label: 'سند' },
+  { key: 'posting_date', label: 'تاریخ' },
+  { key: 'total_debit', label: 'مبلغ بدهکار' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'user_remark', label: 'شرح' },
+]
 
 function formatQty(v) { return Number(v || 0).toLocaleString('fa-IR') }
 function formatMoneyValue(v) { return formatMoneyUtil(Number(v || 0)) }

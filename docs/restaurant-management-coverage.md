@@ -29,6 +29,7 @@
 | نظرسنجی | `/management/surveys` | Survey Question/Response رستوران | مدیریت سؤال و پاسخ با فیلتر بازه/امتیاز و هشدار نارضایتی در فهرست مشترک | تراز شده در این مرحله؛ تست source و SFC موفق |
 | شعب | `/management/branches` | Company/Customer و KPIهای شعب ERPNext | شاخص‌های شعب، فهرست واکنش‌گرا، ویرایش/فعال‌سازی و انتقال مشتری | تراز شده در این مرحله؛ تست source و SFC موفق |
 | کنترل هزینه | `/management/cost-control` | گزارش فروش/بهای تمام‌شده و بودجه Restaurant/ERPNext | سود و زیان و بودجه در فهرست مشترک، جمع سال و ROI در کارت‌های semantic | تراز شده در این مرحله؛ تست source و SFC موفق |
+| حسابداری | `/management/accounting` | سندها و گزارش‌های مالی ERPNext، اتصال مودیان Restaurant | تراز دریافت/پرداخت، روش پرداخت، ارسال مودیان و اسناد اخیر در فهرست‌های مشترک | تراز شده در این مرحله؛ تست source و SFC موفق |
 | مرکز تماس | `/management/call-center` | Restaurant call log و Customer context | تماس‌های اخیر با فهرست مشترک، وضعیت فارسی و عملیات پاسخ/پایان | تراز شده در این مرحله؛ تست source موفق |
 | گزارش‌های مدیریتی | `/management/reports` و `/management/reports/:key` | API گزارش Restaurant/ERPNext | فهرست گزارش، فیلتر بازه، KPI، نمودار و جدول با عنوان فارسی | گارسون و عنوان‌های تکمیلی اصلاح شد؛ browser smoke باقی است |
 
