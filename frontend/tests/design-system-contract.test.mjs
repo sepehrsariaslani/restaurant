@@ -7,15 +7,18 @@ const tokensSource = fs.readFileSync(new URL('design-system/tokens.js', sourceRo
 const catalogSource = fs.readFileSync(new URL('design-system/catalog.js', sourceRoot), 'utf8')
 const appSource = fs.readFileSync(new URL('App.vue', sourceRoot), 'utf8')
 const themeSource = fs.readFileSync(new URL('theme.css', sourceRoot), 'utf8')
+const themeSettingsSource = fs.readFileSync(new URL('utils/themeSettings.js', sourceRoot), 'utf8')
 const layoutSource = fs.readFileSync(new URL('components/management/ManagementLayout.vue', sourceRoot), 'utf8')
 const hooksSource = fs.readFileSync(new URL('../../restaurant/hooks.py', import.meta.url), 'utf8')
 const designSystemHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.html', import.meta.url), 'utf8')
 const designSystemPySource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.py', import.meta.url), 'utf8')
+const designSystemHyphenHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/design-system.html', import.meta.url), 'utf8')
+const designSystemHyphenPySource = fs.readFileSync(new URL('../../restaurant/www/management/design-system.py', import.meta.url), 'utf8')
 const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/catalog/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
 const ordersSource = fs.readFileSync(new URL('../src/pages/management/sales/ManagementOrdersPage.vue', import.meta.url), 'utf8')
 const couriersSource = fs.readFileSync(new URL('../src/pages/management/operations/ManagementCouriersPage.vue', import.meta.url), 'utf8')
 const clubSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementClubPage.vue', import.meta.url), 'utf8')
-const callCenterSource = fs.readFileSync(new URL('../src/pages/management/sales/ManagementCallCenterPage.vue', import.meta.url), 'utf8')
+const callCenterSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementCallCenterPage.vue', import.meta.url), 'utf8')
 const reportSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementReportPage.vue', import.meta.url), 'utf8')
 const reservationsSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementReservationsPage.vue', import.meta.url), 'utf8')
 const surveysSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementSurveysPage.vue', import.meta.url), 'utf8')
@@ -76,6 +79,30 @@ test('design system route is registered in the management shell', () => {
   assert.match(designSystemHtmlSource, /window\._PAGE\s*=\s*'management-design-system'/)
   assert.match(designSystemHtmlSource, /assets\/restaurant\/frontend\/assets\/index\.js/)
   assert.match(designSystemPySource, /build_context\(context, "management-design-system"\)/)
+  assert.match(designSystemHyphenHtmlSource, /window\._PAGE\s*=\s*'management-design-system'/)
+  assert.match(designSystemHyphenHtmlSource, /assets\/restaurant\/frontend\/assets\/index\.js/)
+  assert.match(designSystemHyphenPySource, /from \.design_system import get_context/)
+})
+
+test('management navbar keeps operational modules separated and directly routable', () => {
+  for (const group of ['sales', 'menu', 'purchasing', 'inventory', 'operations', 'customers', 'reports', 'settings']) {
+    assert.match(layoutSource, new RegExp(`group: "${group}"`))
+    assert.match(layoutSource, new RegExp(`key: "${group}"`))
+  }
+  assert.doesNotMatch(layoutSource, /group: "crm"/)
+  assert.match(layoutSource, /title: "خرید"/)
+  assert.match(layoutSource, /title: "انبار و تولید"/)
+  assert.match(layoutSource, /title: "عملیات رستوران"/)
+  assert.match(layoutSource, /title: "مشتریان و ارتباط"/)
+  for (const route of [
+    '/management/couriers',
+    '/management/users',
+    '/management/tables',
+    '/management/modifier-groups',
+    '/management/zarinpal-settings',
+  ]) {
+    assert.match(hooksSource, new RegExp(`from_route":\\s*"${route.replaceAll('/', '\\\/')}"`))
+  }
 })
 
 test('semantic design tokens are published as CSS variables while legacy aliases remain available', () => {
@@ -93,6 +120,29 @@ test('semantic design tokens are published as CSS variables while legacy aliases
   }
   assert.match(themeSource, /--accent-green:\s*var\(--ds-color-action-primary\)/)
   assert.match(themeSource, /--text-primary:\s*var\(--ds-color-text-primary\)/)
+})
+
+test('management semantic aliases are driven by the shared theme source', () => {
+  for (const token of [
+    '--mg-bg-page',
+    '--mg-bg-surface',
+    '--mg-bg-soft',
+    '--mg-text-main',
+    '--mg-text-muted',
+    '--mg-border',
+    '--mg-primary',
+    '--mg-primary-hover',
+    '--mg-success',
+    '--mg-danger',
+  ]) {
+    assert.match(themeSource, new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`), `${token} must be declared in theme.css`)
+  }
+  assert.match(themeSettingsSource, /setCssVar\('--mg-primary', normalized\.primary\)/)
+  assert.match(themeSettingsSource, /setCssVar\('--mg-bg-page', normalized\.background\)/)
+  assert.match(themeSettingsSource, /setCssVar\('--mg-bg-surface', normalized\.surface\)/)
+  assert.match(themeSettingsSource, /setCssVar\('--mg-text-main', normalized\.text\)/)
+  assert.match(themeSettingsSource, /setCssVar\('--mg-border', borderColor\)/)
+  assert.doesNotMatch(appSource, /Global Management Theme Tokens/)
 })
 
 test('design system page declares all catalog tabs and reference language', () => {
@@ -294,6 +344,26 @@ test('inventory read-only operational surfaces use shared lists', () => {
 })
 
 test('management pages and domain components stay organized by module', () => {
+  const moduleDirectories = [
+    'pages/management/catalog',
+    'pages/management/sales',
+    'pages/management/customers',
+    'pages/management/inventory',
+    'pages/management/purchasing',
+    'pages/management/operations',
+    'pages/management/finance',
+    'pages/management/settings',
+    'pages/management/builder',
+    'pages/management/design-system',
+    'pages/management/dashboard',
+  ]
+  for (const directory of moduleDirectories) {
+    assert.equal(fs.existsSync(new URL(directory, sourceRoot)), true, `${directory} must exist`)
+  }
+  const rootVueFiles = fs.readdirSync(new URL('pages/management/', sourceRoot)).filter((file) => file.endsWith('.vue'))
+  assert.deepEqual(rootVueFiles, [], 'route-level management pages must live in a module folder')
+  assert.doesNotMatch(layoutSource, /management-inventory-overview/)
+
   const moduleFiles = [
     'pages/management/catalog/ManagementProductsPage.vue',
     'pages/management/catalog/ManagementProductDetailPage.vue',
@@ -301,6 +371,7 @@ test('management pages and domain components stay organized by module', () => {
     'pages/management/sales/ManagementOrdersPage.vue',
     'pages/management/sales/ManagementPosPage.vue',
     'pages/management/customers/ManagementClubPage.vue',
+    'pages/management/customers/ManagementCallCenterPage.vue',
     'pages/management/inventory/ManagementInventoryPage.vue',
     'pages/management/purchasing/ManagementInventoryPurchasesPage.vue',
     'pages/management/operations/ManagementKitchenPage.vue',
@@ -319,6 +390,7 @@ test('management pages and domain components stay organized by module', () => {
     'pages/management/ManagementProductsPage.vue',
     'pages/management/ManagementInventoryPage.vue',
     'pages/management/ManagementInventoryPurchasesPage.vue',
+    'pages/management/sales/ManagementCallCenterPage.vue',
     'components/management/ManagementBomManager.vue',
     'components/management/ManagementThemeStudio.vue',
   ]) {

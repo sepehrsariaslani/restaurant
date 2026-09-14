@@ -1,17 +1,17 @@
 const freeze = (value) => Object.freeze(value)
 
 const primitiveColors = freeze({
-  primary: '#6F4A31',
+  primary: '#C97852',
   accent: '#C98D42',
-  surface: '#FBF8F4',
-  surfaceAlt: '#F1E7DB',
-  background: '#F6F1EA',
-  border: '#D5C3AF',
-  text: '#3F2A1D',
+  surface: '#FBF7F1',
+  surfaceAlt: '#E8DDD0',
+  background: '#F6F0E6',
+  border: '#D8C8B4',
+  text: '#34261F',
   textSecondary: '#654A38',
-  muted: '#846B58',
-  success: '#2F8F5B',
-  danger: '#B84F4F',
+  muted: '#746454',
+  success: '#6F7B56',
+  danger: '#A6543F',
   warning: '#C67B2A',
 })
 
@@ -33,8 +33,8 @@ export const designTokens = freeze({
     }),
   }),
   spacing: freeze({ '0': '0', '1': '4px', '2': '8px', '3': '12px', '4': '16px', '5': '20px', '6': '24px', '8': '32px', '10': '40px', '12': '48px', '16': '64px' }),
-  radius: freeze({ sm: '10px', md: '14px', lg: '18px', xl: '24px', pill: '999px' }),
-  shadow: freeze({ none: 'none', sm: '0 8px 24px rgb(52 38 31 / 0.06)', md: '0 18px 40px rgb(52 38 31 / 0.10)', lg: '0 28px 70px rgb(52 38 31 / 0.14)' }),
+  radius: freeze({ sm: '10px', md: '16px', lg: '24px', xl: '24px', pill: '999px' }),
+  shadow: freeze({ none: 'none', sm: '0 8px 24px rgb(52 38 31 / 0.06)', md: '0 18px 40px rgb(52 38 31 / 0.09)', lg: '0 28px 70px rgb(52 38 31 / 0.14)' }),
   motion: freeze({ fast: '160ms', normal: '240ms', slow: '360ms', easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }),
   zIndex: freeze({ base: 0, sticky: 50, dropdown: 100, drawer: 200, modal: 500, overlay: 1100 }),
 })

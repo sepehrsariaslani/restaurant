@@ -312,7 +312,7 @@ function selectPreset(preset) {
 .ds-radius-row span { padding: .5rem .7rem; border: 1px solid var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-text-secondary); font-size: .72rem; }
 .ds-preview-toolbar { display: flex; gap: .5rem; margin-bottom: .75rem; }
 .ds-theme-preview { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.1rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-lg); background: var(--ds-preview-surface); color: var(--ds-preview-text); transition: background-color var(--ds-motion-normal) ease, color var(--ds-motion-normal) ease; }
-.ds-theme-preview--dark { --ds-preview-surface: #25221f; --ds-preview-text: #f4eee8; border-color: #51473f; }
+.ds-theme-preview--dark { --ds-preview-surface: #25221f; --ds-preview-text: #eae5df; border-color: #423c38; }
 .ds-theme-preview > div:first-child { display: grid; gap: .25rem; }
 .ds-theme-preview strong { font-size: 1.2rem; }
 .ds-theme-preview small { opacity: .74; }

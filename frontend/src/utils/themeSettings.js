@@ -17,7 +17,9 @@ export const defaultThemeSettings = {
   text: palette.text,
   textSecondary: palette.textSecondary,
   muted: palette.muted,
-  posPrimary: palette.primary,
+  // POS keeps its established deep-sapphire action color; management pages
+  // use the terracotta reference primary above.
+  posPrimary: '#6F4A31',
   posAccent: palette.accent,
   posSuccess: '#0B7D4A',
   posDanger: '#AB3535',
@@ -182,6 +184,39 @@ function tintHex(hex, whiteRatio = 0.86) {
   return `#${parts.join('')}`.toUpperCase()
 }
 
+function shadeHex(hex, blackRatio = 0.12) {
+  const safeRatio = Math.max(0, Math.min(1, Number(blackRatio) || 0))
+  const [red, green, blue] = hexToRgbTuple(hex)
+  const mix = (channel) => clampChannel(channel * (1 - safeRatio))
+  const parts = [mix(red), mix(green), mix(blue)].map((channel) => channel.toString(16).padStart(2, '0'))
+  return `#${parts.join('')}`.toUpperCase()
+}
+
+function managementPrimaryHover(primary) {
+  if (primary === '#C97852') return '#B96845'
+  return shadeHex(primary, 0.12)
+}
+
+function managementOlive(success) {
+  if (success === '#6F7B56') return '#8A8B63'
+  return success
+}
+
+function managementOliveSoft(success) {
+  if (success === '#6F7B56') return '#D9D8C7'
+  return tintHex(success, 0.74)
+}
+
+function managementDangerBackground(danger) {
+  if (danger === '#A6543F') return '#F3E1DA'
+  return tintHex(danger, 0.86)
+}
+
+function managementSuccessBackground(success) {
+  if (success === '#6F7B56') return '#E2E6D7'
+  return tintHex(success, 0.78)
+}
+
 export function sanitizeThemeSettings(partial = {}) {
   return COLOR_KEYS.reduce((acc, key) => {
     acc[key] = normalizeHex(partial[key], defaultThemeSettings[key])
@@ -297,6 +332,42 @@ export function applyThemeSettings(settings = {}) {
   setCssVar('--success-rgb', rgbStringFromHex(normalized.success))
   setCssVar('--warning', normalized.warning)
   setCssVar('--warning-rgb', rgbStringFromHex(normalized.warning))
+
+  // The management shell still consumes its established --mg-* vocabulary.
+  // Publish it from the same normalized settings so the reference pages and
+  // the design-system controls cannot drift apart.
+  setCssVar('--mg-bg-page', normalized.background)
+  setCssVar('--mg-bg-surface', normalized.surface)
+  setCssVar('--mg-bg-soft', softPrimary)
+  setCssVar('--mg-surface-alt', normalized.surfaceAlt)
+  setCssVar('--mg-text-main', normalized.text)
+  setCssVar('--mg-text-secondary', normalized.textSecondary)
+  setCssVar('--mg-secondary', normalized.textSecondary)
+  setCssVar('--mg-text-muted', normalized.muted)
+  setCssVar('--mg-border', borderColor)
+  setCssVar('--mg-border-rgb', rgbStringFromHex(borderColor))
+  setCssVar('--mg-border-light', alphaColorFromHex(borderColor, 0.4))
+  setCssVar('--mg-primary', normalized.primary)
+  setCssVar('--mg-primary-hover', managementPrimaryHover(normalized.primary))
+  setCssVar('--mg-primary-soft', alphaColorFromHex(normalized.primary, 0.12))
+  setCssVar('--mg-olive', managementOlive(normalized.success))
+  setCssVar('--mg-olive-soft', managementOliveSoft(normalized.success))
+  setCssVar('--mg-olive-rgb', rgbStringFromHex(managementOlive(normalized.success)))
+  setCssVar('--mg-surface-rgb', rgbStringFromHex(normalized.surface))
+  setCssVar('--mg-danger', normalized.danger)
+  setCssVar('--mg-danger-bg', managementDangerBackground(normalized.danger))
+  setCssVar('--mg-danger-rgb', rgbStringFromHex(normalized.danger))
+  setCssVar('--mg-success', normalized.success)
+  setCssVar('--mg-success-bg', managementSuccessBackground(normalized.success))
+  setCssVar('--mg-success-soft', alphaColorFromHex(normalized.success, 0.12))
+  setCssVar('--mg-success-rgb', rgbStringFromHex(normalized.success))
+  setCssVar('--mg-primary-rgb', rgbStringFromHex(normalized.primary))
+  setCssVar('--mg-shadow-sm', '0 8px 24px rgb(52 38 31 / 0.06)')
+  setCssVar('--mg-shadow-md', '0 18px 40px rgb(52 38 31 / 0.09)')
+  setCssVar('--mg-shadow', '0 18px 40px rgb(52 38 31 / 0.09)')
+  setCssVar('--mg-radius-sm', '10px')
+  setCssVar('--mg-radius-md', '16px')
+  setCssVar('--mg-radius-lg', '24px')
 
   setCssVar('--pos-primary-color', normalized.posPrimary)
   setCssVar('--pos-primary-rgb', rgbStringFromHex(normalized.posPrimary))

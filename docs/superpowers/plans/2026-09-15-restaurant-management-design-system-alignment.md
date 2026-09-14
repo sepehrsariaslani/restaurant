@@ -52,7 +52,7 @@ Expected: all design-system contract tests pass.
 ### Task 2: Product-reference shared list contract
 
 **Files:**
-- Modify: `frontend/src/pages/management/ManagementVariantBuilderPage.vue`
+- Modify: `frontend/src/pages/management/catalog/ManagementVariantBuilderPage.vue`
 - Test: `frontend/tests/design-system-contract.test.mjs`
 
 - [x] **Step 1: Add a failing source contract**
@@ -70,7 +70,7 @@ Run the focused contract and Vue SFC parse/template compilation for `ManagementV
 ### Task 3: Orders list-to-detail workflow
 
 **Files:**
-- Modify: `frontend/src/pages/management/ManagementOrdersPage.vue`
+- Modify: `frontend/src/pages/management/sales/ManagementOrdersPage.vue`
 - Test: `frontend/tests/design-system-contract.test.mjs`
 
 - [x] **Step 1: Add the workflow contract**
@@ -88,7 +88,7 @@ Run the focused contract and SFC parse/template compilation for `ManagementOrder
 ### Task 4: Courier list-to-detail workbench
 
 **Files:**
-- Modify: `frontend/src/pages/management/ManagementCouriersPage.vue`
+- Modify: `frontend/src/pages/management/operations/ManagementCouriersPage.vue`
 - Test: `frontend/tests/design-system-contract.test.mjs`
 
 - [x] **Step 1: Add the workbench contract**
@@ -106,8 +106,8 @@ Run the focused contract and SFC parse/template compilation for `ManagementCouri
 ### Task 5: Complete the management coverage audit
 
 **Files:**
-- Inspect/modify: `frontend/src/pages/management/*.vue`
-- Inspect/modify: `frontend/src/components/management/*.vue`
+- Inspect/modify: `frontend/src/pages/management/**/*.vue`
+- Inspect/modify: `frontend/src/components/management/**/*.vue`
 - Modify: `frontend/src/design-system/catalog.js`
 - Modify: `frontend/tests/*.test.mjs`
 

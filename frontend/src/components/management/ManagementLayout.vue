@@ -458,18 +458,9 @@ const navLinks = computed(() => {
 		},
 		{
 			key: "management-inventory",
-			label: "انبارداری هوشمند",
+			label: "داشبورد انبار",
 			shortLabel: "انبار",
 			caption: "موجودی، خرید، تولید و ضایعات",
-			iconComponent: InventoryIcon,
-			url: "/management/inventory",
-			group: "inventory",
-		},
-		{
-			key: "management-inventory-overview",
-			label: "موجودی و ارزش",
-			shortLabel: "موجودی",
-			caption: "موجودی مقداری و مبلغی",
 			iconComponent: InventoryIcon,
 			url: "/management/inventory",
 			group: "inventory",
@@ -481,7 +472,7 @@ const navLinks = computed(() => {
 			caption: "ثبت نیاز و انتقال به خرید",
 			iconComponent: OrdersIcon,
 			url: "/management/inventory/requests",
-			group: "inventory",
+			group: "purchasing",
 		},
 		{
 			key: "management-inventory-materials",
@@ -499,7 +490,7 @@ const navLinks = computed(() => {
 			caption: "سفارش خرید و دریافت",
 			iconComponent: StoreIcon,
 			url: "/management/inventory/purchases",
-			group: "inventory",
+			group: "purchasing",
 		},
 		{
 			key: "management-inventory-warehouses",
@@ -571,7 +562,7 @@ const navLinks = computed(() => {
 			caption: "وفاداری، پیامک، کیف پول و کمپین",
 			iconComponent: ClubIcon,
 			url: "/management/club",
-			group: "crm",
+			group: "customers",
 		},
 		{
 			key: "management-surveys",
@@ -580,7 +571,7 @@ const navLinks = computed(() => {
 			caption: "نظر سفارش‌محور و هشدار نارضایتی",
 			iconComponent: SurveyIcon,
 			url: "/management/surveys",
-			group: "crm",
+			group: "customers",
 		},
 		{
 			key: "management-cost-control",
@@ -607,7 +598,7 @@ const navLinks = computed(() => {
 			caption: "رزرو میز، میهمان و یادآوری",
 			iconComponent: CalendarCheckIcon,
 			url: "/management/reservations",
-			group: "sales",
+			group: "customers",
 		},
 		{
 			key: "management-call-center",
@@ -616,7 +607,7 @@ const navLinks = computed(() => {
 			caption: "تماس ورودی VOIP و پروفایل مشتری",
 			iconComponent: HeadsetIcon,
 			url: "/management/call-center",
-			group: "crm",
+			group: "customers",
 		},
 		{
 			key: "management-branches",
@@ -625,7 +616,7 @@ const navLinks = computed(() => {
 			caption: "مدیریت شعب و انتقال مشتری",
 			iconComponent: BuildingIcon,
 			url: "/management/branches",
-			group: "settings",
+			group: "operations",
 		},
 		{
 			key: "management-help",
@@ -643,7 +634,7 @@ const navLinks = computed(() => {
 			caption: "ناوگان و تخصیص",
 			iconComponent: UsersIcon,
 			url: "/management/couriers",
-			group: "sales",
+			group: "operations",
 		},
 		{
 			key: "management-orders",
@@ -662,7 +653,7 @@ const navLinks = computed(() => {
 			iconComponent: KitchenIcon,
 			url: "/management/kitchen",
 			target: "_blank",
-			group: "sales",
+			group: "operations",
 		},
 		{
 			key: "management-products",
@@ -676,7 +667,7 @@ const navLinks = computed(() => {
 		{
 			key: "management-modifier-groups",
 			label: "مودیفایرها",
-			shortLabel: "Modifier",
+			shortLabel: "گزینه‌ها",
 			caption: "گروه‌ها و قیمت‌گذاری",
 			iconComponent: TagsIcon,
 			url: "/management/modifier-groups",
@@ -686,7 +677,7 @@ const navLinks = computed(() => {
 			key: "management-menu-design",
 			label: "طراحی منو",
 			shortLabel: "طراحی",
-			caption: "Preview و چیدمان",
+			caption: "پیش‌نمایش و چیدمان",
 			iconComponent: LayoutGridIcon,
 			url: "/management/menu-design",
 			group: "menu",
@@ -720,12 +711,12 @@ const navLinks = computed(() => {
 		},
 		{
 			key: "management-boms",
-			label: "مواد اولیه",
-			shortLabel: "مواد",
-			caption: "فرمول و دستور ساخت",
+			label: "فرمول و رسپی",
+			shortLabel: "فرمول",
+			caption: "BOM و دستور ساخت محصول",
 			iconComponent: StoreIcon,
 			url: "/management/boms",
-			group: "inventory",
+			group: "menu",
 		},
 		{
 			key: "management-customers",
@@ -734,7 +725,7 @@ const navLinks = computed(() => {
 			caption: "اطلاعات مشتریان",
 			iconComponent: UsersIcon,
 			url: "/management/customers",
-			group: "crm",
+			group: "customers",
 		},
 		{
 			key: "management-users",
@@ -752,7 +743,7 @@ const navLinks = computed(() => {
 			caption: "مدیریت میز و رزرو",
 			iconComponent: LayoutGridIcon,
 			url: "/management/tables",
-			group: "sales",
+			group: "operations",
 		},
 		{
 			key: "management-reports",
@@ -846,16 +837,28 @@ const menuGroups = computed(() => [
 		items: navLinks.value.filter((link) => link.group === "menu"),
 	},
 	{
+		key: "purchasing",
+		title: "خرید",
+		icon: StoreIcon,
+		items: navLinks.value.filter((link) => link.group === "purchasing"),
+	},
+	{
 		key: "inventory",
-		title: "مواد و تولید",
+		title: "انبار و تولید",
 		icon: StoreIcon,
 		items: navLinks.value.filter((link) => link.group === "inventory"),
 	},
 	{
-		key: "crm",
-		title: "مشتریان",
+		key: "operations",
+		title: "عملیات رستوران",
+		icon: KitchenIcon,
+		items: navLinks.value.filter((link) => link.group === "operations"),
+	},
+	{
+		key: "customers",
+		title: "مشتریان و ارتباط",
 		icon: UsersIcon,
-		items: navLinks.value.filter((link) => link.group === "crm"),
+		items: navLinks.value.filter((link) => link.group === "customers"),
 	},
 	{
 		key: "reports",
@@ -941,7 +944,6 @@ function isGroupOpen(key) {
 function isLinkActive(key) {
 	const inventoryPageMap = {
 		"management-inventory": "management-inventory-dashboard",
-		"management-inventory-overview": "management-inventory-dashboard",
 		"management-material-requests": "management-material-requests",
 		"management-inventory-materials": "management-inventory-materials",
 		"management-inventory-purchase": "management-inventory-purchases",
@@ -1317,13 +1319,13 @@ onBeforeUnmount(() => {
 	--shadow: var(--mg-shadow-md);
 	--shadow-sm: var(--mg-shadow-sm);
 	--palette-deep-sapphire: var(--mg-primary);
-	--palette-deep-sapphire-rgb: 201, 120, 82;
+	--palette-deep-sapphire-rgb: var(--mg-primary-rgb);
 	--palette-june-bud: var(--mg-olive);
-	--palette-june-bud-rgb: 138, 139, 99;
+	--palette-june-bud-rgb: var(--mg-olive-rgb);
 	--palette-deep-saffron: var(--mg-border);
-	--palette-deep-saffron-rgb: 216, 200, 180;
+	--palette-deep-saffron-rgb: var(--mg-border-rgb);
 	--palette-eggshell: var(--mg-bg-surface);
-	--palette-eggshell-rgb: 251, 247, 241;
+	--palette-eggshell-rgb: var(--mg-surface-rgb);
 
 	min-height: 100vh;
 	background: var(--mg-bg-page);
@@ -1896,7 +1898,7 @@ onBeforeUnmount(() => {
 		color: #fff; 
 		border-color: var(--mg-primary);
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(var(--mg-primary-rgb), 0.2);
+		box-shadow: 0 4px 12px rgb(var(--mg-primary-rgb) / 0.2);
 	}
 
 	.user-dropdown-wrapper {
@@ -1916,7 +1918,7 @@ onBeforeUnmount(() => {
 	}
 	.user-dropdown-trigger:hover {
 		border-color: var(--mg-primary);
-		box-shadow: 0 4px 12px rgba(var(--mg-primary-rgb), 0.08);
+		box-shadow: 0 4px 12px rgb(var(--mg-primary-rgb) / 0.08);
 	}
 
 	.header-user-avatar {

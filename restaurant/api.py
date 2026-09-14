@@ -141,7 +141,10 @@ MANAGEMENT_THEME_LEGACY_DEFAULTS = {
 	"posDanger": "#AB3535",
 	"posWarning": "#F59E0B",
 }
-MANAGEMENT_THEME_DEFAULTS = {
+# Defaults used by the first Restaurant design-system rollout. Treating this
+# snapshot as legacy lets an existing global setting move to the management
+# reference palette without a DocType migration.
+MANAGEMENT_THEME_PREVIOUS_DEFAULTS = {
 	"primary": "#6F4A31",
 	"accent": "#C98D42",
 	"success": "#2F8F5B",
@@ -154,6 +157,25 @@ MANAGEMENT_THEME_DEFAULTS = {
 	"text": "#3F2A1D",
 	"textSecondary": "#654A38",
 	"muted": "#846B58",
+	"posPrimary": "#6F4A31",
+	"posAccent": "#C98D42",
+	"posSuccess": "#0B7D4A",
+	"posDanger": "#AB3535",
+	"posWarning": "#F59E0B",
+}
+MANAGEMENT_THEME_DEFAULTS = {
+	"primary": "#C97852",
+	"accent": "#C98D42",
+	"success": "#6F7B56",
+	"danger": "#A6543F",
+	"warning": "#C67B2A",
+	"surface": "#FBF7F1",
+	"surfaceAlt": "#E8DDD0",
+	"background": "#F6F0E6",
+	"border": "#D8C8B4",
+	"text": "#34261F",
+	"textSecondary": "#654A38",
+	"muted": "#746454",
 	"posPrimary": "#6F4A31",
 	"posAccent": "#C98D42",
 	"posSuccess": "#0B7D4A",
@@ -253,10 +275,13 @@ def _is_legacy_default_theme_settings(payload):
 	source = payload if isinstance(payload, dict) else {}
 	if not source:
 		return False
-	for key, default_value in MANAGEMENT_THEME_LEGACY_DEFAULTS.items():
-		if _normalize_theme_hex(source.get(key), default_value) != default_value:
-			return False
-	return True
+	for defaults in (MANAGEMENT_THEME_LEGACY_DEFAULTS, MANAGEMENT_THEME_PREVIOUS_DEFAULTS):
+		if all(
+			_normalize_theme_hex(source.get(key), default_value) == default_value
+			for key, default_value in defaults.items()
+		):
+			return True
+	return False
 
 
 def _load_management_theme_settings():

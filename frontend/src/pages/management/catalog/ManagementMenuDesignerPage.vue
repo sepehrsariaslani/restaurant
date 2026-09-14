@@ -63,7 +63,7 @@
       <main class="designer-preview">
         <div class="preview-toolbar">
           <div>
-            <span class="eyebrow">Preview</span>
+            <span class="eyebrow">پیش‌نمایش</span>
             <h3>{{ selectedCategoryTitle }}</h3>
           </div>
           <div class="preview-actions">

@@ -8,10 +8,10 @@
 
 صفحات زیر در این پروژه مرجع تغییر نیستند و نباید برای بازطراحی بصری یا تغییر فرایند بازنویسی شوند:
 
-- `ManagementProductsPage.vue`
-- `ManagementProductDetailPage.vue`
-- `ManagementPosPage.vue`
-- `ManagementSalesDashboardPage.vue` فقط در اولویت فعلی بازطراحی نیست
+- `frontend/src/pages/management/catalog/ManagementProductsPage.vue`
+- `frontend/src/pages/management/catalog/ManagementProductDetailPage.vue`
+- `frontend/src/pages/management/sales/ManagementPosPage.vue`
+- `frontend/src/pages/management/sales/ManagementSalesDashboardPage.vue` فقط در اولویت فعلی بازطراحی نیست
 
 صفحات هدف اول:
 

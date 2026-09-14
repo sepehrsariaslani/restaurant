@@ -200,11 +200,11 @@
                   <div class="form-grid">
                     <div class="form-group full-width">
                       <label>شماره پیگیری (اختیاری)</label>
-                      <input class="input" v-model="manualPayment.reference_no" placeholder="Reference No" dir="ltr" />
+                      <input class="input" v-model="manualPayment.reference_no" placeholder="شماره مرجع" dir="ltr" />
                     </div>
                     <div class="form-group full-width">
                       <label>RRN (اختیاری)</label>
-                      <input class="input" v-model="manualPayment.rrn" placeholder="RRN" dir="ltr" />
+                      <input class="input" v-model="manualPayment.rrn" placeholder="کد RRN" dir="ltr" />
                     </div>
                   </div>
                 </section>

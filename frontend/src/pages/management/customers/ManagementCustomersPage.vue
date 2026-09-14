@@ -7,7 +7,7 @@
     <ManagementSurfaceCard tone="accent" class="page-hero">
       <div class="hero-header">
         <div class="hero-title-block">
-          <span class="hero-kicker">Customer CRM</span>
+          <span class="hero-kicker">CRM مشتریان</span>
           <h2>{{ isDetailView ? 'جزئیات مشتری' : 'نمای چندحالته مشتریان' }}</h2>
           <p>
             {{

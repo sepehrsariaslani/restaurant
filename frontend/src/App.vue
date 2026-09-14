@@ -228,7 +228,7 @@ import ManagementSurveysPage from './pages/management/customers/ManagementSurvey
 import ManagementCostControlPage from './pages/management/finance/ManagementCostControlPage.vue'
 import ManagementReservationsPage from './pages/management/customers/ManagementReservationsPage.vue'
 import ManagementBranchesPage from './pages/management/operations/ManagementBranchesPage.vue'
-import ManagementCallCenterPage from './pages/management/sales/ManagementCallCenterPage.vue'
+import ManagementCallCenterPage from './pages/management/customers/ManagementCallCenterPage.vue'
 import ManagementAccountingPage from './pages/management/finance/ManagementAccountingPage.vue'
 import ManagementHelpPage from './pages/management/settings/ManagementHelpPage.vue'
 import ManagementPrintFormatsPage from './pages/management/settings/ManagementPrintFormatsPage.vue'
@@ -444,59 +444,5 @@ const lastOrderUrl = computed(() => {
   .app-layout.page-menu .app-main {
     padding-top: 0 !important;
   }
-}
-</style>
-
-<style>
-/* Global Management Theme Tokens (Canonical) */
-:root,
-body {
-  --mg-bg-page: #F6F0E6;
-  --mg-bg-surface: #FBF7F1;
-  --mg-bg-soft: #E8DDD0;
-  --mg-text-main: #34261F;
-  --mg-text-muted: #746454;
-  --mg-border: #D8C8B4;
-  --mg-border-light: rgba(216, 200, 180, 0.4);
-  --mg-primary: #C97852;
-  --mg-primary-hover: #B96845;
-  --mg-olive: #8A8B63;
-  --mg-olive-soft: #D9D8C7;
-  --mg-danger: #A6543F;
-  --mg-danger-bg: #F3E1DA;
-  --mg-success: #6F7B56;
-  --mg-success-bg: #E2E6D7;
-  --mg-primary-rgb: 201 120 82;
-  --mg-success-rgb: 111 123 86;
-  --mg-danger-rgb: 166 84 63;
-  --mg-shadow-sm: 0 8px 24px rgba(52, 38, 31, 0.06);
-  --mg-shadow-md: 0 18px 40px rgba(52, 38, 31, 0.09);
-  --mg-radius-sm: 10px;
-  --mg-radius-md: 16px;
-  --mg-radius-lg: 24px;
-}
-
-:root.dark,
-body.management-theme-dark {
-  --mg-bg-page: #1C1A18;
-  --mg-bg-surface: #25221F;
-  --mg-bg-soft: #2E2A27;
-  --mg-text-main: #EAE5DF;
-  --mg-text-muted: #A39B93;
-  --mg-border: #423C38;
-  --mg-border-light: rgba(66, 60, 56, 0.5);
-  --mg-primary: #C07050;
-  --mg-primary-hover: #D4805E;
-  --mg-olive: #838561;
-  --mg-olive-soft: #303225;
-  --mg-danger: #C25B4E;
-  --mg-danger-bg: #3D231E;
-  --mg-success: #7F8B54;
-  --mg-success-bg: #2E3321;
-  --mg-primary-rgb: 192 112 80;
-  --mg-success-rgb: 127 139 84;
-  --mg-danger-rgb: 194 91 78;
-  --mg-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --mg-shadow-md: 0 18px 40px rgba(0, 0, 0, 0.6);
 }
 </style>
