@@ -3,7 +3,7 @@
     <header class="group-toolbar">
       <div class="toolbar-meta">
         <strong>گروه‌های انتخاب مشتری</strong>
-        <small>تعریف اصلی گروه‌ها و قیمت‌هایشان در صفحه مدیریت Modifier انجام می‌شود.</small>
+        <small>تعریف اصلی گروه‌ها و قیمت‌هایشان در صفحه مدیریت گزینه‌ها انجام می‌شود.</small>
       </div>
 
       <div class="toolbar-actions">
@@ -61,7 +61,7 @@
         </div>
       </template>
 
-      <template #empty>هنوز گروهی برای این BOM ثبت نشده است.</template>
+      <template #empty>هنوز گروهی برای این فرمول ثبت نشده است.</template>
     </ManagementDataTable>
 
     <ManagementPopup v-model:open="groupMetaOpen" title="ویرایش تنظیمات گروه" subtitle="تنظیمات اصلی یک گروه مودیفایر">
@@ -187,7 +187,7 @@
               <select class="input" v-model="draft.modifier_type">
                 <option value="add_on">افزودنی</option>
                 <option value="replacement">جایگزینی</option>
-                <option value="bom_variant">BOM جایگزین</option>
+                <option value="bom_variant">فرمول جایگزین</option>
               </select>
             </label>
 
@@ -216,12 +216,12 @@
             </label>
 
             <label class="field">
-              <span>BOM جایگزین</span>
+              <span>فرمول جایگزین</span>
               <SearchableDropdown
                 :model-value="draft.alternative_bom"
                 :options="bomOptions"
-                placeholder="انتخاب BOM"
-                search-placeholder="جستجوی BOM..."
+                placeholder="انتخاب فرمول"
+                search-placeholder="جستجوی فرمول..."
                 @update:model-value="draft.alternative_bom = $event"
               />
             </label>
@@ -474,7 +474,7 @@ function modifierTypeLabel(value) {
     return 'جایگزینی'
   }
   if (normalized === 'bom_variant') {
-    return 'BOM جایگزین'
+    return 'فرمول جایگزین'
   }
   return 'افزودنی'
 }
@@ -550,7 +550,7 @@ function normalizeOptionRow(row) {
 
 function validateOptionRow(row) {
   if (!String(row?.option_label || '').trim() && !String(row?.option_item || '').trim() && !String(row?.alternative_bom || '').trim()) {
-    return 'حداقل عنوان گزینه یا آیتم گزینه یا BOM جایگزین را وارد کنید.'
+    return 'حداقل عنوان گزینه، آیتم گزینه یا فرمول جایگزین را وارد کنید.'
   }
   if (toNumeric(row?.option_qty, 0) <= 0) {
     return 'تعداد گزینه باید بیشتر از صفر باشد.'

@@ -1,6 +1,6 @@
 <template>
   <section class="product-inventory-panel" dir="rtl">
-    <ManagementSurfaceCard title="انبار و عملیات" subtitle="مانده، رزرو، ارزش و مسیرهای عملیاتی همین کالا از native ERPNext">
+    <ManagementSurfaceCard title="انبار و عملیات" subtitle="مانده، رزرو، ارزش و مسیرهای عملیاتی همین کالا">
       <div class="inventory-filters">
         <label>
           از تاریخ
@@ -20,6 +20,7 @@
             include-empty-option
             empty-label="همه انبارها"
             @update:modelValue="$emit('update:warehouse', $event)"
+            :create-config="warehouseCreateConfig"
           />
         </label>
         <button type="button" class="secondary-btn" :disabled="loading" @click="$emit('refresh')">{{ loading ? 'در حال بروزرسانی...' : 'بروزرسانی' }}</button>
@@ -42,7 +43,7 @@
         <div class="inventory-grid">
           <section class="inventory-surface">
             <header class="inventory-surface__head">
-              <div><strong>مانده به تفکیک انبار</strong><small>Bin native</small></div>
+              <div><strong>مانده به تفکیک انبار</strong><small>داده مرجع موجودی</small></div>
               <span>{{ bins.length.toLocaleString('fa-IR') }} انبار</span>
             </header>
             <ManagementSmartDataTable
@@ -62,34 +63,20 @@
             </ManagementSmartDataTable>
           </section>
 
-          <section class="inventory-surface">
+          <section class="inventory-surface inventory-ledger-shortcut">
             <header class="inventory-surface__head">
-              <div><strong>دفتر موجودی</strong><small>Stock Ledger Entry native</small></div>
-              <span>{{ ledger.length.toLocaleString('fa-IR') }} گردش</span>
+              <div><strong>دفتر گردش کالا</strong><small>فهرست کامل در صفحه مستقل بارگذاری می‌شود.</small></div>
+              <span>{{ ledger.length.toLocaleString('fa-IR') }} ردیف اخیر</span>
             </header>
-            <ManagementSmartDataTable
-              :columns="ledgerColumns"
-              :rows="ledger"
-              row-key="voucher_no"
-              :show-search="true"
-              :filterable="true"
-              :freezable="false"
-              :resizable="false"
-              empty-text="در این بازه برای این کالا گردش موجودی ثبت نشده است."
-            >
-              <template #cell-actual_qty="{ value }">
-                <span :class="Number(value) < 0 ? 'qty-negative' : 'qty-positive'">{{ formatQty(value) }}</span>
-              </template>
-              <template #cell-stock_value_difference="{ value }">{{ formatMoney(value) }}</template>
-              <template #cell-voucher_no="{ row }">
-                <a class="ledger-link" :href="voucherRoute(row)" target="_blank" rel="noreferrer" @click.stop>{{ row.voucher_no || '—' }}</a>
-              </template>
-            </ManagementSmartDataTable>
+            <div class="ledger-shortcut__body">
+              <p>برای جلوگیری از سنگین‌شدن صفحه محصول، تاریخچه کامل با جستجو و صفحه‌بندی در مسیر جداگانه قرار دارد.</p>
+              <a v-if="itemName" class="primary-btn" :href="`/management/inventory/ledger?item_name=${encodeURIComponent(itemName)}`">مشاهده دفتر گردش کامل</a>
+            </div>
           </section>
         </div>
 
         <section class="inventory-operations">
-          <header class="inventory-surface__head"><div><strong>عملیات مرتبط</strong><small>مسیرهای اجرای عملیات همچنان native هستند.</small></div></header>
+          <header class="inventory-surface__head"><div><strong>عملیات مرتبط</strong><small>ثبت نهایی عملیات در اسناد مرجع سیستم انجام می‌شود.</small></div></header>
           <div class="operation-links">
             <a class="operation-link" href="/management/inventory">مرکز موجودی و گردش‌ها</a>
             <a class="operation-link" href="/management/inventory/count">انبارگردانی</a>
@@ -118,6 +105,7 @@ const props = defineProps({
   error: { type: String, default: '' },
   dateRange: { type: Object, default: () => ({ date_from: '', date_to: '' }) },
   warehouse: { type: String, default: '' },
+  itemName: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:dateRange', 'update:warehouse', 'refresh', 'open-ledger'])
@@ -136,15 +124,8 @@ const binColumns = [
   { key: 'reserved_qty', label: 'رزرو' },
   { key: 'stock_value', label: 'ارزش' },
 ]
-const ledgerColumns = [
-  { key: 'posting_date', label: 'تاریخ' },
-  { key: 'warehouse', label: 'انبار' },
-  { key: 'actual_qty', label: 'تغییر مقدار' },
-  { key: 'qty_after_transaction', label: 'مانده پس از سند' },
-  { key: 'stock_value_difference', label: 'تغییر ارزش' },
-  { key: 'voucher_no', label: 'سند' },
-]
 const warehouseOptions = computed(() => props.bins.map((row) => ({ value: row.warehouse, label: row.warehouse })).filter((row) => row.value))
+const warehouseCreateConfig = { doctype: 'Warehouse', label: 'انبار', title: 'ایجاد انبار' }
 
 function updateDate(key, value) {
   emit('update:dateRange', { ...props.dateRange, [key]: value })
@@ -158,11 +139,6 @@ function formatMoney(value) {
   return `${new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(Math.round(Number(value || 0)))} ریال`
 }
 
-function voucherRoute(row) {
-  const doctype = encodeURIComponent(row?.voucher_type || '')
-  const name = encodeURIComponent(row?.voucher_no || '')
-  return row?.voucher_type === 'Stock Entry' ? `/management/inventory/documents/detail?doctype=${doctype}&name=${name}` : `/app/${String(row?.voucher_type || '').toLowerCase().replaceAll(' ', '-')}/${name}`
-}
 </script>
 
 <style scoped>
@@ -175,6 +151,9 @@ function voucherRoute(row) {
 .inventory-kpi strong { color: var(--mg-text-main); font-size: 1.05rem; }
 .inventory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .inventory-surface, .inventory-operations { min-width: 0; border: 1px solid var(--mg-border); border-radius: var(--mg-radius-md); background: var(--mg-bg-surface); overflow: hidden; }
+.ledger-shortcut__body { display: grid; gap: .75rem; align-content: center; min-height: 12rem; padding: 1rem; color: var(--mg-text-muted); }
+.ledger-shortcut__body p { margin: 0; line-height: 1.9; font-size: .78rem; }
+.ledger-shortcut__body .primary-btn { justify-self: start; }
 .inventory-surface__head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid var(--mg-border); }
 .inventory-surface__head div { display: grid; gap: .2rem; }
 .inventory-surface__head small, .inventory-surface__head > span { color: var(--mg-text-muted); font-size: .68rem; }

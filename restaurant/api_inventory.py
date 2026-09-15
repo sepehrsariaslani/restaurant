@@ -82,6 +82,7 @@ __all__ = [
 	# stock overview
 	"get_management_stock_overview",
 	"get_management_product_inventory",
+	"get_management_product_stock_ledger",
 	# movements
 	"create_management_stock_movement",
 	"list_management_stock_movements",
@@ -1825,6 +1826,115 @@ def get_management_product_inventory(item_name="", date_from="", date_to="", war
 		"bins": bins,
 		"ledger": ledger,
 		"reorder_levels": reorder_levels,
+	}
+
+
+@frappe.whitelist()
+def get_management_product_stock_ledger(
+	item_name="", date_from="", date_to="", warehouse="", search="", limit=50, offset=0
+):
+	"""Return a paginated native stock ledger for one product.
+
+	The product detail keeps only a compact inventory summary. This endpoint is
+	intentionally separate so a large history never blocks the detail page.
+	"""
+	_ensure_management_access()
+	item_name = _management_resolve_item_name(item_name)
+	item_doc = frappe.get_cached_doc("Item", item_name)
+	item_codes = tuple(sorted({value for value in {item_doc.name, item_doc.item_code} if value}))
+	limit = min(max(cint(limit) or 50, 1), 200)
+	offset = max(cint(offset) or 0, 0)
+	warehouse = (warehouse or "").strip()
+	search = (search or "").strip()
+	if warehouse and not _inv_warehouse_exists(warehouse):
+		warehouse = ""
+
+	ledger_fields = [
+		field
+		for field in [
+			"posting_date",
+			"posting_time",
+			"warehouse",
+			"actual_qty",
+			"qty_after_transaction",
+			"valuation_rate",
+			"incoming_rate",
+			"stock_value_difference",
+			"voucher_type",
+			"voucher_no",
+			"company",
+			"is_cancelled",
+		]
+		if _has_column("Stock Ledger Entry", field)
+	]
+	if len(ledger_fields) < 4:
+		return {
+			"item_name": item_doc.name,
+			"item_title": item_doc.item_name or item_doc.name,
+			"rows": [],
+			"total_count": 0,
+			"offset": offset,
+			"limit": limit,
+		}
+
+	conditions = ["item_code IN %(item_codes)s"]
+	params = {"item_codes": item_codes, "limit": limit, "offset": offset}
+	if _has_column("Stock Ledger Entry", "is_cancelled"):
+		conditions.append("is_cancelled = 0")
+	if warehouse:
+		conditions.append("warehouse = %(warehouse)s")
+		params["warehouse"] = warehouse
+	if date_from:
+		conditions.append("posting_date >= %(date_from)s")
+		params["date_from"] = getdate(date_from)
+	if date_to:
+		conditions.append("posting_date <= %(date_to)s")
+		params["date_to"] = getdate(date_to)
+	if search:
+		params["search"] = f"%{search}%"
+		conditions.append(
+			"(voucher_no LIKE %(search)s OR voucher_type LIKE %(search)s OR warehouse LIKE %(search)s OR company LIKE %(search)s)"
+		)
+	where_sql = " AND ".join(conditions)
+	count_row = frappe.db.sql(
+		"SELECT COUNT(*) AS total_count FROM `tabStock Ledger Entry` WHERE {conditions}".format(
+			conditions=where_sql
+		),
+		params,
+		as_dict=True,
+	)
+	total_count = cint((count_row[0] if count_row else {}).get("total_count") or 0)
+	rows = frappe.db.sql(
+		"SELECT {fields} FROM `tabStock Ledger Entry` WHERE {conditions} ORDER BY posting_date DESC, posting_time DESC, creation DESC LIMIT %(limit)s OFFSET %(offset)s".format(
+			fields=", ".join(ledger_fields), conditions=where_sql
+		),
+		params,
+		as_dict=True,
+	)
+	serialized = [
+		{
+			"posting_date": str(row.get("posting_date") or ""),
+			"posting_time": str(row.get("posting_time") or ""),
+			"warehouse": row.get("warehouse") or "",
+			"actual_qty": flt(row.get("actual_qty")),
+			"qty_after_transaction": flt(row.get("qty_after_transaction")),
+			"valuation_rate": flt(row.get("valuation_rate")),
+			"incoming_rate": flt(row.get("incoming_rate")),
+			"stock_value_difference": flt(row.get("stock_value_difference")),
+			"voucher_type": row.get("voucher_type") or "",
+			"voucher_no": row.get("voucher_no") or "",
+			"company": row.get("company") or "",
+		}
+		for row in rows
+	]
+	return {
+		"item_name": item_doc.name,
+		"item_title": item_doc.item_name or item_doc.name,
+		"rows": serialized,
+		"total_count": total_count,
+		"offset": offset,
+		"limit": limit,
+		"has_more": offset + len(serialized) < total_count,
 	}
 
 

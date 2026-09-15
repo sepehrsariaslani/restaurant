@@ -1,19 +1,19 @@
 <template>
   <ManagementEditableTable
     v-model="localRows"
-    title="جدول مواد BOM"
-    subtitle="افزودن و ویرایش مواد اولیه از طریق پنجره Pop-up"
+    title="جدول مواد فرمول"
+    subtitle="افزودن و ویرایش مواد اولیه از طریق پنجره ویرایش"
     tone="accent"
     add-button-label="افزودن آیتم"
-    popup-title-add="افزودن آیتم BOM"
-    popup-title-edit="ویرایش آیتم BOM"
+    popup-title-add="افزودن ماده به فرمول"
+    popup-title-edit="ویرایش ماده فرمول"
     :columns="columns"
     :disabled="disabled"
     :create-empty-row="createEmptyRow"
     :normalize-row="normalizeRow"
     :validate-row="validateRow"
     storage-key="restaurant:bom-items:v2"
-    empty-text="هنوز آیتمی برای BOM ثبت نشده است."
+    empty-text="هنوز ماده‌ای برای این فرمول ثبت نشده است."
   >
     <template #cell-item_code="{ value }">
       {{ resolveItemLabel(value) }}
@@ -35,8 +35,8 @@
 
     <template #cell-nutrition="{ row }">
       <div class="nutrition-chips">
-        <span class="chip" v-if="toNumeric(row.restaurant_nutrition_kcal, 0) > 0">Kcal {{ formatNumber(row.restaurant_nutrition_kcal) }}</span>
-        <span class="chip" v-if="toNumeric(row.restaurant_nutrition_sugar_g, 0) > 0">Sugar {{ formatNumber(row.restaurant_nutrition_sugar_g) }}g</span>
+        <span class="chip" v-if="toNumeric(row.restaurant_nutrition_kcal, 0) > 0">کالری {{ formatNumber(row.restaurant_nutrition_kcal) }}</span>
+        <span class="chip" v-if="toNumeric(row.restaurant_nutrition_sugar_g, 0) > 0">قند {{ formatNumber(row.restaurant_nutrition_sugar_g) }} گرم</span>
       </div>
     </template>
 
@@ -112,7 +112,7 @@
             <ManagementCheckboxField
               v-model="draft.allow_alternative_item"
               label="اجازه جایگزینی ماده اولیه"
-              hint="اگر در ERP جایگزین تعریف شده باشد، مشتری می‌تواند آن را انتخاب کند."
+              hint="اگر جایگزین در سند مرجع تعریف شده باشد، مشتری می‌تواند آن را انتخاب کند."
               compact
             />
             <ManagementCheckboxField
@@ -150,7 +150,7 @@
 
         <div class="alt-summary" v-if="toBool(draft.allow_alternative_item)">
           <template v-if="toNumeric(draft.alternatives_count, 0) > 0">
-            <p class="alt-summary__title">جایگزین‌های ثبت‌شده در ERP</p>
+            <p class="alt-summary__title">جایگزین‌های ثبت‌شده در سند مرجع</p>
             <div class="alt-summary__chips">
               <span class="chip" v-for="option in normalizeAlternatives(draft.alternatives)" :key="option.alternative_item">
                 {{ option.item_name || option.alternative_item }}
@@ -163,11 +163,11 @@
               target="_blank"
               rel="noreferrer"
             >
-              مدیریت جایگزین‌ها در ERP
+              مدیریت جایگزین‌ها در سند مرجع
             </a>
           </template>
           <p v-else class="alt-summary__warning">
-            این ماده اجازه جایگزینی دارد ولی هنوز هیچ Item Alternative برای آن ثبت نشده است.
+            این ماده اجازه جایگزینی دارد ولی هنوز جایگزین مرجعی برای آن ثبت نشده است.
           </p>
         </div>
 
@@ -213,19 +213,19 @@
               <NumericInput v-model="draft.restaurant_nutrition_kcal" input-class="input" />
             </label>
             <label class="field">
-              <span>پروتئین (g)</span>
+              <span>پروتئین (گرم)</span>
               <NumericInput v-model="draft.restaurant_nutrition_protein_g" input-class="input" />
             </label>
             <label class="field">
-              <span>کربوهیدرات (g)</span>
+              <span>کربوهیدرات (گرم)</span>
               <NumericInput v-model="draft.restaurant_nutrition_carb_g" input-class="input" />
             </label>
             <label class="field">
-              <span>قند (g)</span>
+              <span>قند (گرم)</span>
               <NumericInput v-model="draft.restaurant_nutrition_sugar_g" input-class="input" />
             </label>
             <label class="field">
-              <span>چربی (g)</span>
+              <span>چربی (گرم)</span>
               <NumericInput v-model="draft.restaurant_nutrition_fat_g" input-class="input" />
             </label>
           </div>

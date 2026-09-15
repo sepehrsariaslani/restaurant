@@ -2783,6 +2783,30 @@ export function getManagementProductInventory({
 	});
 }
 
+export function getManagementProductStockLedger({
+	item_name = "",
+	date_from = "",
+	date_to = "",
+	warehouse = "",
+	search = "",
+	limit = 50,
+	offset = 0,
+} = {}) {
+	return callRestaurantAPI("get_management_product_stock_ledger", {
+		item_name,
+		date_from,
+		date_to,
+		warehouse,
+		search,
+		limit,
+		offset,
+	});
+}
+
+export function createManagementReference({ doctype = "", values = {} } = {}) {
+	return callRestaurantAPI("create_management_reference", { doctype, values });
+}
+
 export function updateManagementProductNative(payload = {}) {
 	return callRestaurantAPI("update_management_product_native", { payload });
 }

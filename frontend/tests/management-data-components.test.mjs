@@ -83,7 +83,7 @@ test('Restaurant EditableTable keeps v-model/editor validation and adds persiste
 test('product BOM materials use one canonical heading and a versioned table view', () => {
   assert.equal((productDetail.match(/جدول مواد BOM/g) || []).length, 0, 'the product page must not duplicate the materials heading outside the table component')
   assert.match(bomItemsTable, /storage-key="restaurant:bom-items:v2"/, 'BOM columns need a versioned storage key so stale visibility settings cannot hide the table')
-  assert.match(bomItemsTable, /title="جدول مواد BOM"/, 'the reusable BOM table must own the single materials heading')
+  assert.match(bomItemsTable, /title="جدول مواد فرمول"/, 'the reusable formula table must own the single materials heading')
   assert.match(productDetail, /v-if="productBoms\.length > 1"/, 'the existing BOM list should only appear when there is more than one BOM to switch between')
 })
 

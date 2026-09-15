@@ -18396,6 +18396,106 @@ def list_management_price_lists(currency=None):
 
 
 @frappe.whitelist()
+def create_management_reference(doctype="", values=None):
+	"""Create a missing link option through one guarded native-document gateway.
+
+	The searchable picker uses this endpoint for master records only. It never
+	creates a parallel restaurant record and does not accept arbitrary DocTypes.
+	"""
+	_ensure_management_access()
+	doctype = str(doctype or "").strip()
+	allowed = {"Item", "Item Group", "Warehouse", "Supplier", "Customer", "Account", "Price List", "UOM"}
+	if doctype not in allowed:
+		frappe.throw(_("ساخت این نوع مورد از اینجا مجاز نیست."), frappe.PermissionError)
+	if isinstance(values, str):
+		values = _parse_json(values, {})
+	if not isinstance(values, dict):
+		values = {}
+
+	if doctype == "Item":
+		# Keep the existing inventory creation flow as the sole Item writer.
+		result = create_management_inventory_item(payload={**values, "is_stock_item": values.get("is_stock_item", 1)})
+		return {**result, "value": result.get("item_code") or result.get("name"), "label": result.get("item_name") or result.get("item_code")}
+	if doctype == "Warehouse":
+		result = save_management_warehouse(payload=values)
+		return {**result, "value": result.get("name"), "label": values.get("warehouse_name") or result.get("name")}
+	if doctype == "Supplier":
+		result = save_management_supplier(payload=values)
+		return {**result, "value": result.get("name"), "label": values.get("supplier_name") or result.get("name")}
+
+	def set_if_field(doc, fieldname, value):
+		if value not in (None, "") and doc.meta.has_field(fieldname):
+			doc.set(fieldname, value)
+
+	if doctype == "Item Group":
+		label = str(values.get("item_group_name") or values.get("name") or "").strip()
+		if not label:
+			frappe.throw(_("نام گروه کالا الزامی است."))
+		doc = frappe.new_doc(doctype)
+		set_if_field(doc, "item_group_name", label)
+		parent = str(values.get("parent_item_group") or "").strip()
+		if parent and not frappe.db.exists(doctype, parent):
+			frappe.throw(_("گروه والد پیدا نشد."))
+		if not parent:
+			parent = frappe.db.get_value(doctype, {"is_group": 1}, "name") or ""
+		set_if_field(doc, "parent_item_group", parent)
+		set_if_field(doc, "is_group", cint(values.get("is_group") or 0))
+	elif doctype == "Customer":
+		label = str(values.get("customer_name") or values.get("name") or "").strip()
+		if not label:
+			frappe.throw(_("نام مشتری الزامی است."))
+		doc = frappe.new_doc(doctype)
+		set_if_field(doc, "customer_name", label)
+		set_if_field(doc, "customer_group", str(values.get("customer_group") or "").strip() or frappe.db.get_value("Customer Group", {}, "name"))
+		set_if_field(doc, "territory", str(values.get("territory") or "").strip() or frappe.db.get_value("Territory", {}, "name"))
+	elif doctype == "Account":
+		label = str(values.get("account_name") or values.get("name") or "").strip()
+		company = str(values.get("company") or "").strip() or frappe.db.get_value("Company", {}, "name")
+		if not label or not company:
+			frappe.throw(_("نام حساب و شرکت الزامی است."))
+		doc = frappe.new_doc(doctype)
+		set_if_field(doc, "account_name", label)
+		set_if_field(doc, "company", company)
+		set_if_field(doc, "is_group", cint(values.get("is_group") or 0))
+		parent = str(values.get("parent_account") or "").strip()
+		if parent and not frappe.db.exists(doctype, parent):
+			frappe.throw(_("حساب والد پیدا نشد."))
+		if not parent:
+			parent = frappe.db.get_value(doctype, {"company": company, "is_group": 1}, "name") or ""
+		set_if_field(doc, "parent_account", parent)
+		set_if_field(doc, "root_type", str(values.get("root_type") or "Asset").strip())
+	elif doctype == "Price List":
+		label = str(values.get("price_list_name") or values.get("name") or "").strip()
+		if not label:
+			frappe.throw(_("نام لیست قیمت الزامی است."))
+		doc = frappe.new_doc(doctype)
+		set_if_field(doc, "price_list_name", label)
+		set_if_field(doc, "selling", 1)
+		set_if_field(doc, "buying", 0)
+		set_if_field(doc, "currency", str(values.get("currency") or "").strip() or _get_currency())
+	elif doctype == "UOM":
+		label = str(values.get("uom_name") or values.get("name") or "").strip()
+		if not label:
+			frappe.throw(_("نام واحد الزامی است."))
+		doc = frappe.new_doc(doctype)
+		set_if_field(doc, "uom_name", label)
+		set_if_field(doc, "name", label)
+		set_if_field(doc, "enabled", 1)
+	else:
+		frappe.throw(_("نوع مورد پشتیبانی نمی‌شود."))
+
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	label = (
+		doc.get("item_name") or doc.get("item_group_name") or doc.get("warehouse_name")
+		or doc.get("supplier_name") or doc.get("customer_name") or doc.get("account_name")
+		or doc.get("price_list_name") or doc.get("uom_name") or doc.name
+	)
+	return {"status": "success", "doctype": doctype, "name": doc.name, "value": doc.name, "label": label}
+
+
+@frappe.whitelist()
 def set_management_default_price_list(price_list_name):
 	_ensure_management_access()
 	price_list_name = (price_list_name or "").strip()

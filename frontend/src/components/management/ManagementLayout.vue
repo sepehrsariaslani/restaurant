@@ -520,6 +520,15 @@ const navLinks = computed(() => {
 			group: "inventory",
 		},
 		{
+			key: "management-inventory-ledger",
+			label: "دفتر گردش کالا",
+			shortLabel: "دفتر گردش",
+			caption: "جستجو و گزارش کامل گردش کالا",
+			iconComponent: FileTextIcon,
+			url: "/management/inventory/ledger",
+			group: "inventory",
+		},
+		{
 			key: "management-inventory-reorder",
 			label: "نقطه سفارش",
 			shortLabel: "هشدار",
@@ -959,6 +968,7 @@ function isLinkActive(key) {
 		"management-inventory-documents": "management-inventory-documents",
 		"management-inventory-warehouses": "management-inventory-warehouses",
 		"management-inventory-movements": "management-inventory-movements",
+		"management-inventory-ledger": "management-inventory-ledger",
 		"management-inventory-reorder": "management-inventory-reorder",
 		"management-inventory-production": "management-inventory-production",
 		"management-inventory-losses": "management-inventory-losses",

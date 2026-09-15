@@ -74,7 +74,17 @@
         </button>
 
         <button
-          v-if="createOption"
+          v-if="createRecordOption"
+          type="button"
+          class="option-btn create-option-btn"
+          @click="openCreateDrawer"
+        >
+          <span class="option-label">{{ createRecordOption.label }}</span>
+          <span class="option-check">+</span>
+        </button>
+
+        <button
+          v-else-if="createOption"
           type="button"
           class="option-btn create-option-btn"
           @click="createOptionFromSearch"
@@ -84,70 +94,34 @@
         </button>
 
         <button
-          v-if="missingItemOption"
+          v-else-if="missingItemOption"
           type="button"
           class="option-btn create-item-option"
-          @click="openItemCreator"
+          @click="openCreateDrawer"
         >
           <span class="option-label">ایجاد کالا «{{ missingItemOption.value }}»</span>
           <span class="option-check">+</span>
         </button>
-        <p v-if="!filteredOptions.length && !createOption && !missingItemOption" class="empty-text">{{ noResultsText }}</p>
+        <p v-if="!filteredOptions.length && !createOption && !createRecordOption && !missingItemOption" class="empty-text">{{ noResultsText }}</p>
       </div>
     </div>
 
-    <Teleport to="body">
-      <div v-if="itemCreatorOpen" class="item-create-backdrop" @click.self="closeItemCreator">
-        <section class="item-create-modal" dir="rtl" role="dialog" aria-modal="true" aria-label="ایجاد کالای جدید" @click.stop>
-          <header class="item-create-head">
-            <div>
-              <span class="item-create-kicker">کالای جدید</span>
-              <h3>ایجاد «{{ itemForm.item_name }}»</h3>
-            </div>
-            <button type="button" class="item-create-close" @click="closeItemCreator">×</button>
-          </header>
-          <p class="item-create-hint">این کالا در ERPNext ساخته می‌شود و سپس در همین فهرست انتخاب خواهد شد.</p>
-          <p v-if="itemCreateError" class="item-create-error">{{ itemCreateError }}</p>
-          <div class="item-create-grid">
-            <label>نام کالا
-              <input class="input" v-model.trim="itemForm.item_name" />
-            </label>
-            <label>کد کالا
-              <input class="input" v-model.trim="itemForm.item_code" dir="ltr" />
-            </label>
-            <label>واحد پیش‌فرض
-              <select class="input" v-model="itemForm.stock_uom" :disabled="itemUomsLoading">
-                <option v-for="uom in itemUomOptions" :key="uom" :value="uom">{{ uom }}</option>
-              </select>
-            </label>
-            <label>گروه کالا
-              <input class="input" v-model.trim="itemForm.item_group" placeholder="All Item Groups" />
-            </label>
-            <label>موجودی اولیه
-              <input class="input" type="number" min="0" step="0.001" v-model.number="itemForm.opening_qty" />
-            </label>
-            <label>انبار موجودی اولیه
-              <select class="input" v-model="itemForm.opening_warehouse" :disabled="warehousesLoading">
-                <option value="">بدون موجودی اولیه</option>
-                <option v-for="warehouse in itemWarehouses" :key="warehouse" :value="warehouse">{{ warehouse }}</option>
-              </select>
-            </label>
-          </div>
-          <footer class="item-create-actions">
-            <button type="button" class="secondary-btn" @click="closeItemCreator">انصراف</button>
-            <button type="button" class="primary-btn" :disabled="itemCreateSaving || !itemForm.item_name || !itemForm.item_code || !itemForm.stock_uom" @click="createMissingItem">
-              {{ itemCreateSaving ? 'در حال ساخت...' : 'ساخت و انتخاب کالا' }}
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <ManagementSearchableCreateDrawer
+      :open="createDrawerOpen"
+      :config="activeCreateConfig"
+      :query="createDrawerQuery"
+      :saving="createSaving"
+      :error="createError"
+      @close="closeCreateDrawer"
+      @submit="createRecord"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { createManagementInventoryItem, listManagementUOMs, listManagementWarehouses } from '@/utils/api'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import ManagementSearchableCreateDrawer from '@/components/management/catalog/ManagementSearchableCreateDrawer.vue'
+import { createManagementReference } from '@/utils/api'
 
 const props = defineProps({
   modelValue: {
@@ -214,6 +188,10 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  createConfig: {
+    type: Object,
+    default: null,
+  },
   createOptionLabel: {
     type: String,
     default: 'افزودن مقدار جدید',
@@ -240,25 +218,14 @@ const isOpen = ref(false)
 const panelStyle = ref({})
 const searchQuery = ref('')
 const highlightedIndex = ref(-1)
-const itemCreatorOpen = ref(false)
-const itemCreateSaving = ref(false)
-const itemCreateError = ref('')
-const itemUomsLoading = ref(false)
-const warehousesLoading = ref(false)
-const itemUomOptions = ref([])
-const itemWarehouses = ref([])
+const createDrawerOpen = ref(false)
+const createSaving = ref(false)
+const createError = ref('')
+const createDrawerQuery = ref('')
 const remoteOptions = ref([])
 const remoteLoading = ref(false)
 let remoteSearchTimer = null
 let remoteRequestId = 0
-const itemForm = reactive({
-  item_name: '',
-  item_code: '',
-  stock_uom: '',
-  item_group: 'All Item Groups',
-  opening_qty: 0,
-  opening_warehouse: '',
-})
 const createdOptions = ref([])
 
 const normalizedOptions = computed(() => {
@@ -309,14 +276,14 @@ const filteredOptions = computed(() => {
 })
 
 const missingItemOption = computed(() => {
-  if (!props.allowItemCreate) return null
+  if (!props.allowItemCreate || props.createConfig) return null
   const query = String(searchQuery.value || '').trim()
   if (!query || filteredOptions.value.length) return null
   return { value: query, label: query }
 })
 
 const createOption = computed(() => {
-  if (!props.allowCreate) {
+  if (!props.allowCreate || props.createConfig) {
     return null
   }
   const query = String(searchQuery.value || '').trim()
@@ -334,6 +301,29 @@ const createOption = computed(() => {
   }
   return {
     label: `${props.createOptionLabel}: ${query}`,
+    value: query,
+  }
+})
+
+const activeCreateConfig = computed(() => props.createConfig || (props.allowItemCreate ? {
+  doctype: 'Item',
+  label: 'کالا',
+  title: 'ایجاد کالای جدید',
+  fields: [
+    { key: 'item_name', label: 'نام کالا', type: 'text', required: true },
+    { key: 'item_code', label: 'کد کالا', type: 'text' },
+    { key: 'item_group', label: 'گروه کالا', type: 'text' },
+    { key: 'stock_uom', label: 'واحد پایه', type: 'text' },
+  ],
+  defaults: props.itemCreateDefaults || {},
+} : null))
+
+const createRecordOption = computed(() => {
+  if (!activeCreateConfig.value || remoteLoading.value) return null
+  const query = String(searchQuery.value || '').trim()
+  if (!query || filteredOptions.value.length) return null
+  return {
+    label: `ایجاد ${activeCreateConfig.value.label || 'مورد'} «${query}»`,
     value: query,
   }
 })
@@ -551,7 +541,9 @@ function highlightPrev() {
 
 function selectHighlighted() {
   if (highlightedIndex.value < 0 || highlightedIndex.value >= filteredOptions.value.length) {
-    if (createOption.value) {
+    if (createRecordOption.value) {
+      openCreateDrawer()
+    } else if (createOption.value) {
       createOptionFromSearch()
     }
     return
@@ -568,66 +560,47 @@ function createOptionFromSearch() {
   selectOption(option.value)
 }
 
-async function openItemCreator() {
-  const query = String(missingItemOption.value?.value || searchQuery.value || '').trim()
-  if (!query) return
-  itemCreateError.value = ''
-  itemForm.item_name = query
-  itemForm.item_code = query
-  itemForm.stock_uom = String(props.itemCreateDefaults?.stock_uom || '')
-  itemForm.item_group = String(props.itemCreateDefaults?.item_group || 'All Item Groups')
-  itemForm.opening_qty = Number(props.itemCreateDefaults?.opening_qty || 0)
-  itemForm.opening_warehouse = String(props.itemCreateDefaults?.opening_warehouse || '')
-  itemCreatorOpen.value = true
+function openCreateDrawer() {
+  const query = String(createRecordOption.value?.value || missingItemOption.value?.value || searchQuery.value || '').trim()
+  if (!query || !activeCreateConfig.value) return
+  createDrawerQuery.value = query
+  createError.value = ''
+  createDrawerOpen.value = true
   isOpen.value = false
-  itemUomsLoading.value = true
-  warehousesLoading.value = true
-  try {
-    const [uomPayload, warehousePayload] = await Promise.all([
-      listManagementUOMs({ limit: 300 }),
-      listManagementWarehouses({ options_only: 1 }),
-    ])
-    itemUomOptions.value = Array.isArray(uomPayload?.uoms) ? uomPayload.uoms : []
-    itemWarehouses.value = (warehousePayload?.warehouses || [])
-      .filter((row) => Number(row?.is_group || 0) !== 1 && Number(row?.disabled || 0) !== 1)
-      .map((row) => row.name || row.warehouse_name)
-      .filter(Boolean)
-    if (!itemForm.stock_uom) itemForm.stock_uom = itemUomOptions.value[0] || 'Nos'
-    if (!itemForm.opening_warehouse) itemForm.opening_warehouse = itemWarehouses.value[0] || ''
-  } catch (error) {
-    itemCreateError.value = error?.message || 'دریافت واحدها و انبارها ناموفق بود.'
-    if (!itemForm.stock_uom) itemForm.stock_uom = 'Nos'
-  } finally {
-    itemUomsLoading.value = false
-    warehousesLoading.value = false
-  }
 }
 
-function closeItemCreator() {
-  if (itemCreateSaving.value) return
-  itemCreatorOpen.value = false
-  itemCreateError.value = ''
+function closeCreateDrawer() {
+  if (createSaving.value) return
+  createDrawerOpen.value = false
+  createError.value = ''
 }
 
-async function createMissingItem() {
-  if (itemCreateSaving.value) return
-  itemCreateSaving.value = true
-  itemCreateError.value = ''
+async function createRecord(values = {}) {
+  if (createSaving.value || !activeCreateConfig.value) return
+  createSaving.value = true
+  createError.value = ''
   try {
-    const result = await createManagementInventoryItem({ ...itemForm, is_stock_item: 1 })
-    const value = result.item_code || result.name
+    const result = await createManagementReference({ doctype: activeCreateConfig.value.doctype, values })
+    const value = result.value || result.item_code || result.name
+    if (!value) throw new Error('شناسه مورد ایجادشده از سرور دریافت نشد.')
     createdOptions.value = [
-      { value, label: `${result.item_name || value} (${value})` },
+      { value, label: result.label || result.item_name || value },
       ...createdOptions.value.filter((option) => String(option.value) !== String(value)),
     ]
-    emit('update:modelValue', value)
+    if (props.multiple) selectOption(value)
+    else emit('update:modelValue', value)
     emit('item-created', result)
-    itemCreatorOpen.value = false
-    itemCreateError.value = ''
+    createDrawerOpen.value = false
+    createError.value = ''
+    if (props.multiple) {
+      isOpen.value = true
+      searchQuery.value = ''
+      nextTick(() => searchInputRef.value?.focus?.())
+    }
   } catch (error) {
-    itemCreateError.value = error?.message || 'ساخت کالا ناموفق بود.'
+    createError.value = error?.message || 'ایجاد مورد ناموفق بود.'
   } finally {
-    itemCreateSaving.value = false
+    createSaving.value = false
   }
 }
 

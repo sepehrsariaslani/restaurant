@@ -41,6 +41,7 @@
       <ManagementInventoryPurchaseDetailPage v-else-if="page === 'management-inventory-purchase-detail'" />
       <ManagementInventoryWarehousesPage v-else-if="page === 'management-inventory-warehouses'" />
       <ManagementInventoryMovementsPage v-else-if="page === 'management-inventory-movements'" />
+      <ManagementProductStockLedgerPage v-else-if="page === 'management-inventory-ledger'" />
       <ManagementInventoryReorderPage v-else-if="page === 'management-inventory-reorder'" />
       <ManagementInventoryProductionPage v-else-if="page === 'management-inventory-production'" />
       <ManagementInventoryLossesPage v-else-if="page === 'management-inventory-losses'" />
@@ -227,6 +228,7 @@ import ManagementInventoryPurchasesPage from './pages/management/purchasing/Mana
 import ManagementInventoryPurchaseDetailPage from './pages/management/purchasing/ManagementInventoryPurchaseDetailPage.vue'
 import ManagementInventoryWarehousesPage from './pages/management/inventory/ManagementInventoryWarehousesPage.vue'
 import ManagementInventoryMovementsPage from './pages/management/inventory/ManagementInventoryMovementsPage.vue'
+import ManagementProductStockLedgerPage from './pages/management/inventory/ManagementProductStockLedgerPage.vue'
 import ManagementInventoryReorderPage from './pages/management/inventory/ManagementInventoryReorderPage.vue'
 import ManagementInventoryProductionPage from './pages/management/inventory/ManagementInventoryProductionPage.vue'
 import ManagementInventoryLossesPage from './pages/management/inventory/ManagementInventoryLossesPage.vue'
@@ -294,6 +296,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/inventory/purchases')) return 'management-inventory-purchases'
     if (pathname.startsWith('/management/inventory/warehouses')) return 'management-inventory-warehouses'
     if (pathname.startsWith('/management/inventory/movements')) return 'management-inventory-movements'
+    if (pathname.startsWith('/management/inventory/ledger')) return 'management-inventory-ledger'
     if (pathname.startsWith('/management/inventory/reorder')) return 'management-inventory-reorder'
     if (pathname.startsWith('/management/inventory/production')) return 'management-inventory-production'
     if (pathname.startsWith('/management/inventory/losses')) return 'management-inventory-losses'

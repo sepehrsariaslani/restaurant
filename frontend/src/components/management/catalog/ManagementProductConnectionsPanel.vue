@@ -1,6 +1,6 @@
 <template>
   <section class="product-connections-panel" dir="rtl">
-    <ManagementSurfaceCard title="اتصالات محصول" subtitle="اسناد native ERPNext که به این کالا متصل هستند">
+    <ManagementSurfaceCard title="اتصالات محصول" subtitle="اسناد مرجع مرتبط با این کالا">
       <div v-if="loading" class="connection-state">در حال دریافت اتصالات اسناد...</div>
       <div v-else-if="error" class="connection-state connection-state--error">
         <p>{{ error }}</p>
@@ -33,7 +33,7 @@
             <template #cell-title="{ row }">
               <div class="connection-title">
                 <strong>{{ row.title || row.name }}</strong>
-                <small>{{ connectionTypeLabels[row.doctype] || row.doctype }}</small>
+                <small>{{ connectionTypeLabels[row.doctype] || 'سند مرتبط' }}</small>
               </div>
             </template>
             <template #cell-amount="{ value }">{{ formatMoney(value) }}</template>
@@ -45,8 +45,12 @@
       </div>
     </ManagementSurfaceCard>
 
-    <ManagementSurfaceCard title="مرزهای داده" subtitle="این صفحه فقط نمای عملیاتی است؛ ثبت نهایی اسناد در ERPNext انجام می‌شود." tone="soft">
-      <p class="connection-note">اتصالات فروش، خرید، رسید، Stock Entry، BOM و Item Price از اسناد native خوانده می‌شوند و اینجا مدل موازی ساخته نمی‌شود.</p>
+    <ManagementSurfaceCard title="دسترسی‌های مرتبط" subtitle="مسیرهای پرتکرار همین کالا" tone="soft">
+      <div class="connection-shortcuts">
+        <a v-if="itemName" class="operation-link" :href="`/management/inventory/ledger?item_name=${encodeURIComponent(itemName)}`">دفتر گردش کالا</a>
+        <a class="operation-link" href="/management/inventory/documents">اسناد خرید و انبار</a>
+        <a class="operation-link" href="/management/reports?report=stock-movements">گزارش گردش موجودی</a>
+      </div>
     </ManagementSurfaceCard>
   </section>
 </template>
@@ -83,7 +87,7 @@ const connectionTypeLabels = {
   'Purchase Order': 'سفارش خرید',
   'Stock Entry': 'سند انبار',
   'Material Request': 'درخواست مواد',
-  BOM: 'فرمول و BOM',
+  BOM: 'فرمول',
   'Item Price': 'قیمت کالا',
 }
 
@@ -105,5 +109,7 @@ function formatMoney(value) {
 .connection-title small { color: var(--mg-text-muted); font-size: .68rem; }
 .connection-state { display: grid; place-items: center; gap: .7rem; min-height: 9rem; border: 1px dashed var(--mg-border); border-radius: var(--mg-radius-md); color: var(--mg-text-muted); text-align: center; }
 .connection-state--error { color: var(--mg-danger); }
-.connection-note { margin: 0; color: var(--mg-text-muted); font-size: .78rem; line-height: 1.9; }
+.connection-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.operation-link { min-height: 46px; display: grid; place-items: center; border: 1px solid var(--mg-border); border-radius: var(--mg-radius-sm); color: var(--mg-primary); font-size: .76rem; font-weight: 800; text-align: center; text-decoration: none; }
+@media (max-width: 700px) { .connection-shortcuts { grid-template-columns: 1fr; } }
 </style>

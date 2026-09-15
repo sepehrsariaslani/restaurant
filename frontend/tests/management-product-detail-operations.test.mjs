@@ -43,6 +43,12 @@ test('native link fields use the shared remote-searchable dropdown contract', ()
   assert.match(searchableDropdownSource, /loadRemoteOptions/)
 })
 
+test('native link search uses the stable link-search endpoint', () => {
+  const nativePanelSource = fs.readFileSync(new URL('components/management/catalog/ManagementProductNativePanel.vue', src), 'utf8')
+  assert.match(nativePanelSource, /frappe\.desk\.search\.search_link/)
+  assert.doesNotMatch(nativePanelSource, /frappe\.client\.get_list/)
+})
+
 test('connections tab uses native document links and a read-only smart table', () => {
   assert.ok(sourceExists('components/management/catalog/ManagementProductConnectionsPanel.vue'))
   const connectionsSource = fs.readFileSync(new URL('components/management/catalog/ManagementProductConnectionsPanel.vue', src), 'utf8')

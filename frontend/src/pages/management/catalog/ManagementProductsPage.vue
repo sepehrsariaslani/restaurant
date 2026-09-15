@@ -307,6 +307,7 @@
             include-empty-option
             empty-label="همه گروه‌ها"
             fixed-panel
+            :create-config="itemGroupParentCreateConfig"
           />
           <small class="hint">گروه اصلی از ساختار native Item Group انتخاب می‌شود.</small>
         </label>
@@ -318,6 +319,7 @@
             placeholder="انتخاب واحد"
             search-placeholder="جستجوی واحد..."
             fixed-panel
+            :create-config="unitCreateConfig"
           />
           <small class="hint">واحد اندازه‌گیری (مثلا: عدد، لیتر، کیلوگرم)</small>
         </label>
@@ -331,6 +333,7 @@
             include-empty-option
             empty-label="انتخاب گروه نهایی"
             fixed-panel
+            :create-config="itemGroupCreateConfig"
           />
           <small class="hint">همین مقدار در `Item.item_group` ذخیره می‌شود.</small>
         </label>
@@ -391,6 +394,7 @@
               placeholder="انتخاب واحد"
               search-placeholder="جستجوی واحد..."
               fixed-panel
+              :create-config="unitCreateConfig"
             />
             <small class="hint">واحد اندازه‌گیری (مثلا: عدد، لیتر، کیلوگرم)</small>
           </label>
@@ -402,6 +406,7 @@
               placeholder="انتخاب گروه"
               search-placeholder="جستجوی گروه..."
               fixed-panel
+              :create-config="itemGroupCreateConfig"
             />
             <small class="hint">دسته‌بندی محصول برای مدیریت بهتر</small>
           </label>
@@ -568,6 +573,7 @@ import {
 import { formatMoney } from '@/utils/format'
 import { jalaliToGregorian } from '@/utils/jalali'
 import { buildItemGroupOptions, getChildItemGroupOptions, resolveItemGroupSelection } from '@/utils/managementProductGrouping'
+import { getSearchableCreateConfig } from '@/utils/managementSearchableCreate'
 import { Folder, Package, Plus, Search, X } from 'lucide-vue-next'
 
 const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'management-products-visibility-overrides'
@@ -737,6 +743,13 @@ const itemGroupParentOptions = computed(() => normalizeOptionRows(bootFieldOptio
 const createItemGroupOptions = computed(() =>
   getChildItemGroupOptions(bootFieldOptions.value.item_groups, createForm.value.item_group_parent),
 )
+const unitCreateConfig = getSearchableCreateConfig('UOM')
+const itemGroupParentCreateConfig = getSearchableCreateConfig('Item Group', {
+  defaults: { is_group: true },
+})
+const itemGroupCreateConfig = computed(() => getSearchableCreateConfig('Item Group', {
+  defaults: { parent_item_group: createForm.value.item_group_parent || '', is_group: false },
+}))
 
 const productTreeNodes = computed(() => {
   const grouped = groupRows(visibleProducts.value, treeGroupBy.value || 'category_title', '')

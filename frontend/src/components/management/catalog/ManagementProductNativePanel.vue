@@ -1,8 +1,8 @@
 <template>
   <section class="native-product-panel" dir="rtl">
-    <div v-if="loading" class="native-state">در حال دریافت تنظیمات native کالا...</div>
+    <div v-if="loading" class="native-state">در حال دریافت تنظیمات پایه کالا...</div>
     <div v-else>
-      <div v-if="visibleSections.length" class="native-section-tabs" role="tablist" aria-label="بخش‌های native کالا">
+      <div v-if="visibleSections.length" class="native-section-tabs" role="tablist" aria-label="بخش‌های پایه کالا">
         <button
           v-for="section in visibleSections"
           :key="`native-tab-${section.id}`"
@@ -55,6 +55,7 @@
                 :placeholder="`${fieldConfig.label} را انتخاب کنید`"
                     search-placeholder="جستجو..."
                 fixed-panel
+                    :create-config="getCreateConfig(fieldConfig.doctype)"
                     @update:modelValue="value => updateField(fieldConfig.key, value)"
               />
 
@@ -65,7 +66,7 @@
                 :disabled="fieldConfig.readOnly"
                 @change="updateField(fieldConfig.key, $event.target.value)"
               >
-                <option v-for="option in fieldConfig.options || []" :key="option" :value="option">{{ option || 'پیش‌فرض سیستم' }}</option>
+                <option v-for="option in fieldConfig.options || []" :key="option" :value="option">{{ selectOptionLabel(option) }}</option>
               </select>
 
               <input
@@ -105,7 +106,7 @@
             :model-value="state.tables[table.key] || []"
             :columns="table.columns"
             :title="table.title"
-            :subtitle="`${table.doctype} · داده native ERPNext`"
+            :subtitle="'ردیف‌های متصل به سند مرجع سیستم'"
             :storage-key="`management-product-native-${table.key}`"
             row-key="name"
             max-height="420px"
@@ -127,6 +128,7 @@
                     :placeholder="`${column.label} را انتخاب کنید`"
                     search-placeholder="جستجو..."
                     fixed-panel
+                    :create-config="getCreateConfig(column.options)"
                     @update:modelValue="value => { draft[column.key] = value }"
                   />
                   <select
@@ -134,7 +136,7 @@
                     class="native-field-input"
                     v-model="draft[column.key]"
                   >
-                    <option v-for="option in selectOptions(column.options)" :key="option" :value="option">{{ option || 'پیش‌فرض' }}</option>
+                    <option v-for="option in selectOptions(column.options)" :key="option" :value="option">{{ selectOptionLabel(option) }}</option>
                   </select>
                   <label v-else-if="column.fieldtype === 'Check'" class="native-check-field">
                     <input type="checkbox" v-model="draft[column.key]" />
@@ -155,9 +157,9 @@
       </div>
     </div>
 
-    <p v-if="!loading && !visibleSections.length" class="native-state">فیلد native قابل نمایشی برای این نسخه ERPNext پیدا نشد.</p>
+    <p v-if="!loading && !visibleSections.length" class="native-state">فیلد پایه قابل نمایشی برای این نسخه پیدا نشد.</p>
     <button v-if="!loading" type="button" class="primary-btn native-save-button" :disabled="saving" @click="$emit('save')">
-      {{ saving ? 'در حال ذخیره تنظیمات native...' : 'ذخیره تنظیمات native کالا' }}
+      {{ saving ? 'در حال ذخیره تنظیمات پایه...' : 'ذخیره تنظیمات پایه کالا' }}
     </button>
   </section>
 </template>
@@ -168,6 +170,7 @@ import { callMethodByPath } from '@/utils/api'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import { getSearchableCreateConfig } from '@/utils/managementSearchableCreate'
 import {
   nativeFieldSections,
   nativeTableConfigs,
@@ -235,6 +238,19 @@ function selectOptions(value = '') {
   return ['', ...String(value || '').split('\n').map((option) => option.trim()).filter(Boolean)]
 }
 
+function getCreateConfig(doctype) {
+  return getSearchableCreateConfig(doctype)
+}
+
+function selectOptionLabel(value) {
+  return ({
+    'Item Attribute': 'ویژگی کالا', Manufacturer: 'تولیدکننده', FIFO: 'اولین ورود، اولین خروج',
+    'Moving Average': 'میانگین متحرک', LIFO: 'آخرین ورود، اولین خروج', Purchase: 'خرید',
+    'Material Transfer': 'انتقال مواد', 'Material Issue': 'خروج مواد', Manufacture: 'تولید',
+    'Customer Provided': 'تأمین‌شده توسط مشتری', Transfer: 'انتقال',
+  })[value] || value || 'پیش‌فرض سیستم'
+}
+
 function linkLabelField(doctype = '') {
   return {
     Item: 'item_name',
@@ -250,22 +266,20 @@ function linkLabelField(doctype = '') {
 async function searchLink(fieldConfig, query = '') {
   const doctype = String(fieldConfig?.doctype || '').trim()
   if (!doctype) return []
-  const labelField = fieldConfig.labelField || linkLabelField(doctype)
-  const fields = labelField === 'name' ? ['name'] : ['name', labelField]
   const term = String(query || '').trim()
-  const filters = term
-    ? [['name', 'like', `%${term}%`]]
-    : undefined
   try {
-    const rows = await callMethodByPath('frappe.client.get_list', {
+    const rows = await callMethodByPath('frappe.desk.search.search_link', {
       doctype,
-      fields,
-      filters,
-      or_filters: term && labelField !== 'name' ? [['name', 'like', `%${term}%`], [labelField, 'like', `%${term}%`]] : undefined,
-      order_by: `${labelField} asc`,
-      limit_page_length: 30,
+      txt: term,
+      page_length: 30,
+      ...(fieldConfig?.searchField ? { searchfield: fieldConfig.searchField } : {}),
     })
-    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, name: row.name, label: row[labelField] || row.name }))
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      ...row,
+      name: row.name || row.value,
+      label: row.label || row.description || row.name || row.value,
+      value: row.value || row.name,
+    }))
   } catch {
     return []
   }

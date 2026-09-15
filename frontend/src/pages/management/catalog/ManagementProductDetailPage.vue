@@ -13,103 +13,28 @@
 
     <ManagementPageScaffold>
 
-    <ManagementSurfaceCard v-if="detail" class="product-general-card product-general-card--compact" title="اطلاعات کلی" subtitle="تصویر و تنظیمات سریع محصول">
-      <div class="product-general-layout">
-        <aside class="product-general-media" aria-label="عکس محصول">
-          <div class="general-image-shell is-clickable" @click="openMediaDialog">
-            <img v-if="mainImage" :src="mainImage" :alt="settingsForm.item_name || 'عکس محصول'" class="general-product-image" />
-            <div v-else class="general-image-empty">
-              <span aria-hidden="true">+</span>
-            </div>
-            <button
-              type="button"
-              class="pg-image-edit-btn"
-              title="مدیریت تصاویر"
-              aria-label="مدیریت تصاویر"
-              @click.stop="openMediaDialog"
-            >
-              <Camera :size="13" />
-            </button>
-          </div>
-        </aside>
+    <ManagementProductOverviewCard
+      v-if="detail"
+      :form="settingsForm"
+      :price-form="priceForm"
+      :main-image="mainImage"
+      :out-of-stock="Boolean(Number(detail?.item?.restaurant_out_of_stock || 0))"
+      :selected-item-group-path="selectedItemGroupPath"
+      :readiness-checks="productReadinessChecks"
+      :readiness-score="readinessScore"
+      :saving-price="savingPrice"
+      @open-media="openMediaDialog"
+      @save-price="savePrice"
+    />
 
-        <div class="product-general-main">
-          <div class="product-general-fields">
-            <label class="pg-name-field">
-              نام کالا
-              <input class="input" v-model="settingsForm.item_name" placeholder="نام نمایشی محصول" />
-            </label>
-
-            <div class="pg-status-row">
-              <span class="pg-status-pill" :class="settingsForm.restaurant_enabled ? 'is-on' : 'is-off'">
-                {{ settingsForm.restaurant_enabled ? 'فعال در منو' : 'غیرفعال در منو' }}
-              </span>
-              <span v-if="settingsForm.restaurant_coming_soon" class="pg-status-pill is-soon">به‌زودی</span>
-              <span v-if="Number(detail?.item?.restaurant_out_of_stock || 0)" class="pg-status-pill is-warn">ناموجود</span>
-              <span v-if="settingsForm.disabled" class="pg-status-pill is-off">غیرفعال در ERPNext</span>
-              <button
-                type="button"
-                class="pg-status-pill pg-status-pill--btn"
-                :class="settingsForm.restaurant_kitchen_ticket ? 'is-kitchen-on' : 'is-kitchen-off'"
-                title="فیش آشپزخانه — با کلیک روشن/خاموش می‌شود"
-                @click="settingsForm.restaurant_kitchen_ticket = !settingsForm.restaurant_kitchen_ticket"
-              >
-                فیش آشپزخانه
-              </button>
-              <span class="pg-status-pill is-code" :title="settingsForm.item_code">{{ settingsForm.item_code }}</span>
-            </div>
-
-            <div class="pg-meta-row">
-              <span v-if="selectedItemGroupPath" class="pg-meta-chip">
-                <strong>گروه کالا</strong>
-                {{ selectedItemGroupPath }}
-              </span>
-              <span v-if="productReadinessChecks.length" class="pg-readiness" :class="readinessScore === productReadinessChecks.length ? 'is-ready' : ''">
-                آمادگی: {{ readinessScore.toLocaleString('fa-IR') }} / {{ productReadinessChecks.length.toLocaleString('fa-IR') }}
-              </span>
-            </div>
-          </div>
-
-          <label class="price-inline-field">
-            قیمت کالا
-            <span class="price-inline-control">
-              <PersianNumberInput v-model="priceForm.price_list_rate" :min="0" suffix="ریال" />
-              <button class="secondary-btn quick-price-save" type="button" @click="savePrice" :disabled="savingPrice">
-                {{ savingPrice ? 'در حال ثبت...' : 'ثبت قیمت' }}
-              </button>
-            </span>
-          </label>
-
-          <div class="pg-quick-toggles">
-            <ManagementToggleSwitch v-model="settingsForm.restaurant_enabled" label="فعال در منو" />
-            <ManagementToggleSwitch v-model="settingsForm.restaurant_coming_soon" label="به‌زودی" />
-          </div>
-        </div>
-      </div>
-    </ManagementSurfaceCard>
-
-    <ManagementSurfaceCard tone="soft" class="section-picker-shell">
-      <div class="section-picker">
-        <div class="simple-tabs" role="tablist" aria-label="بخش‌های جزئیات محصول">
-          <button
-            v-for="tab in tabOptions"
-            :key="tab.value"
-            class="simple-tab"
-            :class="{ active: activeTab === tab.value }"
-            type="button"
-            role="tab"
-            :aria-selected="activeTab === tab.value"
-            @click="activeTab = tab.value"
-          >
-            <span>{{ tab.label }}</span>
-            <span v-if="getTabBadge(tab.value)" class="tab-badge">{{ getTabBadge(tab.value) }}</span>
-          </button>
-        </div>
-        <button class="secondary-btn" type="button" @click="loadDetail" :disabled="loading">
-          {{ loading ? 'در حال بروزرسانی...' : 'تازه‌سازی' }}
-        </button>
-      </div>
-    </ManagementSurfaceCard>
+    <ManagementProductDetailTabs
+      :tabs="tabOptions"
+      :active-tab="activeTab"
+      :badges="Object.fromEntries(tabOptions.map(tab => [tab.value, getTabBadge(tab.value)]))"
+      :loading="loading"
+      @update:active-tab="activeTab = $event"
+      @refresh="loadDetail"
+    />
 
     <ManagementSurfaceCard tone="accent" v-if="activeTab === 'reports'">
       <div class="filters">
@@ -143,6 +68,7 @@
                 search-placeholder="جستجوی واحد..."
                 include-empty-option
                 empty-label="انتخاب واحد"
+                :create-config="unitCreateConfig"
               />
             </label>
             <label>
@@ -154,6 +80,7 @@
                 search-placeholder="جستجوی گروه اصلی..."
                 include-empty-option
                 empty-label="همه گروه‌ها"
+                :create-config="itemGroupParentCreateConfig"
               />
             </label>
 
@@ -166,8 +93,9 @@
                 search-placeholder="جستجوی گروه نهایی..."
                 include-empty-option
                 empty-label="انتخاب گروه نهایی"
+                :create-config="itemGroupCreateConfig"
               />
-              <small class="field-help">مقدار نهایی در فیلد native `Item.item_group` ذخیره می‌شود.</small>
+              <small class="field-help">مقدار نهایی در گروه کالای مرجع سیستم ذخیره می‌شود.</small>
             </label>
 
             <div v-if="selectedItemGroupPath" class="pg-group-path" aria-live="polite">
@@ -199,19 +127,19 @@
                 <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
               </label>
               <label>
-                پروتئین (g)
+                پروتئین (گرم)
                 <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
               </label>
               <label>
-                کربوهیدرات (g)
+                کربوهیدرات (گرم)
                 <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
               </label>
               <label>
-                قند (g)
+                قند (گرم)
                 <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
               </label>
               <label>
-                چربی (g)
+                چربی (گرم)
                 <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
               </label>
             </div>
@@ -242,7 +170,7 @@
             />
             <ManagementToggleSwitch
               v-model="settingsForm.restaurant_requires_bom"
-              label="نیازمند BOM"
+              label="نیازمند فرمول"
               hint="اگر مواد اولیه و فرمول ساخت دارد روشن باشد."
             />
             <ManagementToggleSwitch
@@ -281,8 +209,8 @@
             />
             <ManagementToggleSwitch
               v-model="settingsForm.disabled"
-              label="غیرفعال در ERPNext"
-              hint="در کل سیستم ERP غیرفعال می‌شود."
+              label="غیرفعال در سیستم"
+              hint="در کل سیستم غیرفعال می‌شود."
             />
           </div>
         </ManagementSurfaceCard>
@@ -290,7 +218,12 @@
       </section>
 
       <section class="product-settings-grid" v-if="activeTab === 'settings'">
-        <ManagementSurfaceCard title="تنظیمات رستورانی و وب">
+        <div class="detail-subtabs settings-subtabs" role="tablist" aria-label="بخش‌های فروش و نمایش">
+          <button type="button" class="detail-subtab" :class="{ active: settingsSubtab === 'storefront' }" @click="settingsSubtab = 'storefront'">رستوران و نمایش</button>
+          <button type="button" class="detail-subtab" :class="{ active: settingsSubtab === 'pricing' }" @click="settingsSubtab = 'pricing'">قیمت‌گذاری</button>
+          <button type="button" class="detail-subtab" :class="{ active: settingsSubtab === 'system' }" @click="settingsSubtab = 'system'">تنظیمات پایه</button>
+        </div>
+        <ManagementSurfaceCard v-if="settingsSubtab === 'storefront'" title="تنظیمات رستورانی و وب">
           <div class="identity-grid">
             <label>
               اسلاگ
@@ -339,7 +272,7 @@
 
         </ManagementSurfaceCard>
 
-        <ManagementSurfaceCard title="قیمت‌گذاری" subtitle="پیروی از Price List پیش‌فرض">
+        <ManagementSurfaceCard v-if="settingsSubtab === 'pricing'" title="قیمت‌گذاری" subtitle="پیروی از لیست قیمت پیش‌فرض">
           <div class="identity-grid">
             <label>
               لیست قیمت پیش‌فرض
@@ -348,6 +281,7 @@
                 :options="priceListOptions"
                 placeholder="انتخاب لیست قیمت"
                 search-placeholder="جستجوی لیست قیمت..."
+                :create-config="priceListCreateConfig"
               />
             </label>
             <label>
@@ -378,6 +312,7 @@
                 :options="priceListOptions"
                 placeholder="انتخاب لیست قیمت"
                 search-placeholder="جستجوی لیست قیمت..."
+                :create-config="priceListCreateConfig"
               />
             </label>
             <label>
@@ -398,7 +333,7 @@
       </section>
 
       <ManagementProductNativePanel
-        v-if="activeTab === 'settings'"
+        v-if="activeTab === 'settings' && settingsSubtab === 'system'"
         :model-value="nativeState"
         :saving="nativeSaving"
         @update:modelValue="nativeState = $event"
@@ -415,6 +350,7 @@
           :error="inventoryError"
           :date-range="filters"
           :warehouse="inventoryWarehouse"
+          :item-name="detail?.item?.name || itemName"
           @update:dateRange="updateInventoryDateRange"
           @update:warehouse="updateInventoryWarehouse"
           @refresh="loadProductInventory({ force: true })"
@@ -436,55 +372,17 @@
           <button type="button" class="detail-subtab" :class="{ active: reportSubtab === 'analytics' }" @click="reportSubtab = 'analytics'">تحلیل فروش</button>
           <button type="button" class="detail-subtab" :class="{ active: reportSubtab === 'history' }" @click="reportSubtab = 'history'">تاریخچه تغییرات</button>
         </div>
-        <ManagementSurfaceCard title="تاریخچه تغییرات" subtitle="نسخه‌های ثبت‌شده این محصول در ERPNext">
-          <p v-if="activityLoading" class="muted">در حال بارگذاری تاریخچه...</p>
-          <p v-else-if="!activityVersions.length" class="muted">تغییری روی این محصول ثبت نشده است.</p>
-          <ol v-else class="changes-timeline">
-            <li v-for="ver in activityVersions" :key="ver.name" class="change-item">
-              <div class="change-item-head">
-                <strong>{{ ver.owner }}</strong>
-                <span class="change-item-date">{{ formatPersianDate(ver.creation, true) }}</span>
-              </div>
-              <ul v-if="parseVersionChanges(ver).length" class="change-fields">
-                <li v-for="(ch, idx) in parseVersionChanges(ver).slice(0, 8)" :key="idx">
-                  <span class="change-field">{{ fieldLabel(ch.field) }}</span>
-                  <span class="change-old">{{ ch.old }}</span>
-                  <span class="change-arrow" aria-hidden="true">←</span>
-                  <span class="change-new">{{ ch.new }}</span>
-                </li>
-                <li v-if="parseVersionChanges(ver).length > 8" class="change-more">
-                  +{{ parseVersionChanges(ver).length - 8 }} تغییر دیگر
-                </li>
-              </ul>
-              <p v-else class="muted change-empty">جزئیات این نسخه ثبت نشده است.</p>
-            </li>
-          </ol>
-        </ManagementSurfaceCard>
-
-        <ManagementSurfaceCard title="نظرات" subtitle="یادداشت‌های شما و تیم روی این محصول">
-          <div class="comments-list">
-            <div v-for="cm in activityComments" :key="cm.name" class="comment-item">
-              <div class="comment-item-head">
-                <strong>{{ cm.owner }}</strong>
-                <span class="comment-item-date">{{ formatPersianDate(cm.creation, true) }}</span>
-              </div>
-              <p class="comment-content">{{ cm.content }}</p>
-            </div>
-            <p v-if="!activityComments.length" class="muted">هنوز نظری ثبت نشده است.</p>
-          </div>
-          <div class="comment-form">
-            <textarea v-model="commentDraft" class="textarea" rows="2" placeholder="نظر خود را بنویسید..."></textarea>
-            <div class="comment-form-actions">
-              <button class="primary-btn" type="button" :disabled="!String(commentDraft || '').trim() || commentSaving" @click="submitComment">
-                {{ commentSaving ? 'در حال ثبت...' : 'ثبت نظر' }}
-              </button>
-            </div>
-          </div>
-        </ManagementSurfaceCard>
+        <ManagementProductHistoryPanel
+          :versions="activityVersions"
+          :comments="activityComments"
+          :loading="activityLoading"
+          :saving="commentSaving"
+          @submit-comment="submitComment"
+        />
       </section>
 
             <section v-if="activeTab === 'formula'" class="variants-grid">
-              <ManagementSurfaceCard title="فرمول و رسپی" subtitle="ثبت BOM و دستور پخت همین محصول از همین صفحه">
+              <ManagementSurfaceCard title="فرمول و رسپی" subtitle="ثبت فرمول و دستور پخت همین محصول از همین صفحه">
                 <div class="identity-grid">
                   <label>
                     تعداد خروجی فرمول
@@ -513,8 +411,8 @@
                     />
                   </label>
                   <label>
-                    نام BOM فعال
-                    <input class="input" :value="bomForm.name || 'BOM جدید'" readonly />
+                    نام فرمول فعال
+                    <input class="input" :value="bomForm.name || 'فرمول جدید'" readonly />
                   </label>
                 </div>
 
@@ -526,18 +424,18 @@
                 <section class="bom-status-section">
                   <header class="bom-status-section__head">
                     <strong>وضعیت این فرمول</strong>
-                    <small>مشخص کنید این BOM فقط ثبت باشد یا فرمول فعال و پیش‌فرض محصول هم باشد.</small>
+                    <small>مشخص کنید این فرمول فقط ثبت باشد یا فرمول فعال و پیش‌فرض محصول هم باشد.</small>
                   </header>
 
                   <div class="checks-grid compact-checks">
                     <ManagementCheckboxField
                       v-model="bomForm.is_active"
-                      label="BOM فعال"
+                      label="فرمول فعال"
                       hint="در فرمول‌های قابل استفاده محصول قرار بگیرد."
                     />
                     <ManagementCheckboxField
                       v-model="bomForm.is_default"
-                      label="BOM پیش‌فرض"
+                      label="فرمول پیش‌فرض"
                       hint="به عنوان فرمول اصلی همین محصول استفاده شود."
                     />
                   </div>
@@ -566,7 +464,7 @@
                   <section class="formula-block">
                     <header class="formula-block__head">
                       <div>
-                        <strong>Modifierهای متصل به همین BOM</strong>
+                        <strong>گزینه‌های متصل به همین فرمول</strong>
                         <small>گروه‌های انتخاب مشتری که روی همین فرمول اثر می‌گذارند.</small>
                       </div>
                       <span class="formula-block__meta">
@@ -588,7 +486,7 @@
                   <header class="formula-block__head">
                     <div>
                       <strong>فرمول‌های دیگر همین محصول</strong>
-                      <small>برای ویرایش، یکی از BOMهای ثبت‌شده را در فرم بالا بارگذاری کنید.</small>
+                      <small>برای ویرایش، یکی از فرمول‌های ثبت‌شده را در فرم بالا بارگذاری کنید.</small>
                     </div>
                     <span class="formula-block__meta">{{ formatNumber(productBoms.length) }} فرمول</span>
                   </header>
@@ -609,7 +507,7 @@
                     <template #cell-actions="{ row }">
                       <div class="row-actions">
                         <button class="secondary-btn mini-link-btn" type="button" @click="loadBomDocIntoForm(row.name)">بارگذاری</button>
-                        <a class="secondary-btn mini-link-btn" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
+                        <a class="secondary-btn mini-link-btn" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">مشاهده سند</a>
                       </div>
                     </template>
                   </ManagementDataTable>
@@ -625,7 +523,7 @@
             <section v-if="activeTab === 'variants' && variantSubtab === 'models'" class="variants-grid">
         <ManagementSurfaceCard
           v-if="isVariantContext"
-          title="ویژگی‌های همین Variant"
+          title="ویژگی‌های همین مدل"
           subtitle="این کالا از قالب ساخته شده و در این تب فقط ویژگی‌های فعلی نمایش داده می‌شود"
         >
           <p class="hint-line">
@@ -643,7 +541,7 @@
               :filterable="false"
               :freezable="false"
               :resizable="false"
-              empty-text="ویژگی‌ای برای این Variant ثبت نشده است."
+              empty-text="ویژگی‌ای برای این مدل ثبت نشده است."
             >
               <template #cell-index="{ value }">{{ Number(value || 0).toLocaleString('fa-IR') }}</template>
               <template #cell-attribute="{ value }">{{ value || '-' }}</template>
@@ -657,12 +555,12 @@
               <p class="muted">مقدار: {{ row.value || '-' }}</p>
             </article>
           </div>
-          <p v-else class="muted">برای این Variant هنوز ویژگی ثبت نشده است.</p>
+          <p v-else class="muted">برای این مدل هنوز ویژگی ثبت نشده است.</p>
         </ManagementSurfaceCard>
 
         <ManagementSurfaceCard
           v-else-if="hasVariantFeatureEnabled"
-          title="مدیریت Item Attribute و Variant"
+          title="مدیریت ویژگی کالا و مدل"
           subtitle="ویژگی‌های موثر در منو و ویژگی‌های انتخابی مشتری"
         >
           <p class="muted">
@@ -767,11 +665,11 @@
           <p v-else-if="!variantBuilderLoading" class="muted">ویژگی فعالی برای این تمپلیت ثبت نشده است.</p>
         </ManagementSurfaceCard>
 
-        <ManagementSurfaceCard v-else title="Variant برای این کالا فعال نیست" subtitle="این بخش فقط برای کالا/قالبی نمایش داده می‌شود که has_variants روشن باشد">
-          <p class="muted">برای مدیریت و ساخت Variant، ابتدا گزینه has_variants را روی قالب کالا فعال کنید.</p>
+        <ManagementSurfaceCard v-else title="مدل برای این کالا فعال نیست" subtitle="این بخش فقط برای کالا یا قالبی نمایش داده می‌شود که مدل‌ها برای آن روشن باشند">
+          <p class="muted">برای مدیریت و ساخت مدل، ابتدا قابلیت مدل‌ها را روی قالب کالا فعال کنید.</p>
         </ManagementSurfaceCard>
 
-        <ManagementSurfaceCard v-if="!isVariantContext && hasVariantFeatureEnabled" title="Variantهای ساخته‌شده" subtitle="لیست خروجی Variantهای این تمپلیت">
+        <ManagementSurfaceCard v-if="!isVariantContext && hasVariantFeatureEnabled" title="مدل‌های ساخته‌شده" subtitle="فهرست مدل‌های ساخته‌شده از این قالب">
           <ManagementDataTable
             class="variant-desktop-table"
             v-if="variantRows.length"
@@ -812,7 +710,7 @@
               <a class="secondary-btn mini-link-btn" :href="`/management/product?item_name=${encodeURIComponent(row.name)}`">جزئیات</a>
             </article>
           </div>
-          <p v-else class="muted">هنوز وریانتی برای این تمپلیت ثبت نشده است. از بخش بالا ویژگی‌ها را انتخاب کنید و روی «ساخت Variantها» بزنید.</p>
+          <p v-else class="muted">هنوز مدلی برای این قالب ثبت نشده است. از بخش بالا ویژگی‌ها را انتخاب کنید و روی «ساخت مدل‌ها» بزنید.</p>
         </ManagementSurfaceCard>
 
       </section>
@@ -1101,7 +999,7 @@
     <template v-if="activeVariantAttributeRow">
       <div class="variant-values-head">
         <small class="muted">{{ activeVariantAttributeRow.name }}</small>
-        <a class="secondary-btn mini-link-btn" :href="activeAttributeDocUrl" target="_blank" rel="noreferrer">مشاهده در ERP</a>
+            <a class="secondary-btn mini-link-btn" :href="activeAttributeDocUrl" target="_blank" rel="noreferrer">مشاهده سند مرجع</a>
       </div>
 
       <div class="variant-editor-table-wrap">
@@ -1113,13 +1011,13 @@
           :filterable="false"
           :freezable="false"
           :resizable="false"
-          empty-text="مقداری برای تولید Variant وجود ندارد."
+              empty-text="مقداری برای تولید مدل وجود ندارد."
         >
           <template #cell-generate="{ row }">
-            <ManagementToggleSwitch :model-value="activeAttributeSelectedValues.includes(row.value)" label="تولید Variant" compact @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, row.value)" />
+            <ManagementToggleSwitch :model-value="activeAttributeSelectedValues.includes(row.value)" label="تولید مدل" compact @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, row.value)" />
           </template>
           <template #cell-abbr="{ row }">
-            <input class="input mini-abbr" :value="row.abbr" @input="row.abbr = String($event.target.value || '').trim()" placeholder="abbr" />
+            <input class="input mini-abbr" :value="row.abbr" @input="row.abbr = String($event.target.value || '').trim()" placeholder="اختصار" />
           </template>
           <template #cell-is_default="{ row }">
             <input type="radio" :name="`default-${activeVariantAttributeRow.name}`" :checked="Number(row.is_default || 0) === 1" @change="updateAttributeDefault(activeVariantAttributeRow.name, row.value)" />
@@ -1136,16 +1034,16 @@
           <strong>{{ valueRow.value }}</strong>
           <ManagementToggleSwitch
             :model-value="activeAttributeSelectedValues.includes(valueRow.value)"
-            label="تولید Variant"
+            label="تولید مدل"
             @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
           />
           <label>
-            abbr
+            اختصار
             <input
               class="input mini-abbr"
               :value="valueRow.abbr"
               @input="valueRow.abbr = String($event.target.value || '').trim()"
-              placeholder="abbr"
+              placeholder="اختصار"
             />
           </label>
           <label class="check">
@@ -1183,7 +1081,7 @@
 
       <ManagementToggleSwitch
         v-model="variantCreationForm.create_multiple"
-        label="ساخت گروهی Variant"
+        label="ساخت گروهی مدل"
         hint="اگر روشن باشد چند مدل با هم ساخته می‌شود."
       />
 
@@ -1227,7 +1125,7 @@
           </label>
         </div>
         <p class="muted">
-          مثال: اگر فقط «نوع شیر = نارگیل» بزنید و «چربی» را خالی بگذارید، همه Variantهای نارگیل ساخته می‌شود.
+          مثال: اگر فقط «نوع شیر = نارگیل» بزنید و «چربی» را خالی بگذارید، همه مدل‌های نارگیل ساخته می‌شود.
         </p>
       </template>
     </div>
@@ -1239,7 +1137,7 @@
       <div class="popup-actions">
         <button class="secondary-btn" type="button" :disabled="variantBuilderGenerating" @click="closeVariantCreationDialog">انصراف</button>
         <button class="primary-btn" type="button" :disabled="variantBuilderGenerating" @click="createVariantsFromDialog">
-          {{ variantBuilderGenerating ? 'در حال ساخت...' : variantCreationForm.create_multiple ? 'ساخت گروهی' : 'ساخت محصول' }}
+          {{ variantBuilderGenerating ? 'در حال ساخت...' : variantCreationForm.create_multiple ? 'ساخت گروهی' : 'ساخت مدل' }}
         </button>
       </div>
     </template>
@@ -1289,6 +1187,9 @@ import ManagementBomModifiersTable from '@/components/management/catalog/Managem
 import ManagementProductNativePanel from '@/components/management/catalog/ManagementProductNativePanel.vue'
 import ManagementProductConnectionsPanel from '@/components/management/catalog/ManagementProductConnectionsPanel.vue'
 import ManagementProductInventoryPanel from '@/components/management/catalog/ManagementProductInventoryPanel.vue'
+import ManagementProductOverviewCard from '@/components/management/catalog/ManagementProductOverviewCard.vue'
+import ManagementProductDetailTabs from '@/components/management/catalog/ManagementProductDetailTabs.vue'
+import ManagementProductHistoryPanel from '@/components/management/catalog/ManagementProductHistoryPanel.vue'
 import ManagementCheckboxField from '@/components/management/ManagementCheckboxField.vue'
 import ManagementImageUploaderView from '@/components/management/catalog/ManagementImageUploaderView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
@@ -1300,7 +1201,6 @@ import { clearNavbarTitle, setNavbarTitle } from '@/utils/navbarTitle'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
-import { Camera } from 'lucide-vue-next'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import ReportInsightCards from '@/components/management/bi/ReportInsightCards.vue'
@@ -1358,6 +1258,7 @@ import {
   resolveItemGroupSelection,
   ROOT_ITEM_GROUP,
 } from '@/utils/managementProductGrouping'
+import { getSearchableCreateConfig } from '@/utils/managementSearchableCreate'
 
 const props = defineProps({
   boot: {
@@ -1399,6 +1300,7 @@ const inventoryLoading = ref(false)
 const inventoryError = ref('')
 const inventoryWarehouse = ref('')
 const reportSubtab = ref('analytics')
+const settingsSubtab = ref('storefront')
 const variantSubtab = ref('models')
 const mediaDialogOpen = ref(false)
 const mediaUploading = ref(false)
@@ -1462,7 +1364,7 @@ const bomForm = reactive({
 const tabOptions = PRODUCT_DETAIL_TABS
 
 const bomColumns = [
-  { key: 'name', label: 'BOM' },
+  { key: 'name', label: 'نام فرمول' },
   { key: 'quantity', label: 'تعداد' },
   { key: 'status', label: 'وضعیت' },
   { key: 'modified', label: 'آخرین بروزرسانی' },
@@ -1484,9 +1386,9 @@ const templateAttributeColumns = [
 ]
 
 const variantValueColumns = [
-  { key: 'generate', label: 'تولید Variant', align: 'center' },
+  { key: 'generate', label: 'تولید مدل', align: 'center' },
   { key: 'value', label: 'مقدار' },
-  { key: 'abbr', label: 'abbr' },
+  { key: 'abbr', label: 'اختصار' },
   { key: 'is_default', label: 'پیش‌فرض', align: 'center' },
 ]
 
@@ -1573,6 +1475,19 @@ const priceListOptions = computed(() =>
     label: `${row.title} (${row.currency || activeCurrency.value})`
 })),
 )
+const unitCreateConfig = getSearchableCreateConfig('UOM')
+const priceListCreateConfig = getSearchableCreateConfig('Price List')
+const itemGroupParentCreateConfig = getSearchableCreateConfig('Item Group', {
+  defaults: { is_group: true },
+  fields: [
+    { key: 'item_group_name', label: 'نام گروه', type: 'text', required: true },
+    { key: 'parent_item_group', label: 'گروه والد', type: 'text' },
+    { key: 'is_group', label: 'این گروه زیرگروه می‌پذیرد', type: 'checkbox', default: true },
+  ],
+})
+const itemGroupCreateConfig = computed(() => getSearchableCreateConfig('Item Group', {
+  defaults: { parent_item_group: settingsForm.item_group_parent || '', is_group: false },
+}))
 const currentPriceRate = computed(() => Number(detail.value?.pricing?.current_price?.price_list_rate || 0))
 const latestPriceRate = computed(() => Number(detail.value?.pricing?.latest_price?.price_list_rate || 0))
 const latestPriceDate = computed(() => detail.value?.pricing?.latest_price?.effective_at || '')
@@ -1621,7 +1536,7 @@ const productSummaryChips = computed(() => [
 },
   {
     key: 'bom',
-    label: 'BOM',
+    label: 'فرمول',
     value: defaultBomName.value || activeBomName.value ? 'متصل' : 'ندارد',
     tone: defaultBomName.value || activeBomName.value ? 'info' : settingsForm.restaurant_requires_bom ? 'warn' : 'neutral'
 },
@@ -1648,7 +1563,7 @@ const activeTabHint = computed(() => {
     return 'جزئیات تحلیلی و آمار فروش این محصول در این تب نمایش داده می‌شود.'
   }
   if (activeTab.value === 'variants') {
-    return 'جزئیات مدل‌ها، ویژگی‌ها و Variantهای این محصول در این تب مدیریت می‌شود.'
+    return 'جزئیات مدل‌ها و ویژگی‌های این محصول در این تب مدیریت می‌شود.'
   }
   if (activeTab.value === 'settings') {
     return 'جزئیات فروش، نمایش، گروه کالا و قیمت‌گذاری در این تب قرار دارد.'
@@ -2105,12 +2020,12 @@ const ACTIVITY_FIELD_LABELS = {
   restaurant_prep_time_mins: 'زمان آماده‌سازی',
   restaurant_is_featured: 'محصول ویژه',
   restaurant_is_best_seller: 'پرفروش',
-  restaurant_requires_bom: 'نیازمند BOM',
+  restaurant_requires_bom: 'نیازمند فرمول',
   restaurant_auto_add_to_order: 'افزودن خودکار',
   restaurant_branch: 'شعبه',
   restaurant_slug: 'اسلاگ',
   image: 'تصویر',
-  disabled: 'غیرفعال در ERPNext',
+  disabled: 'غیرفعال در سیستم',
   restaurant_packaging_price: 'هزینه بسته‌بندی',
   restaurant_show_in_website: 'نمایش در وب',
   restaurant_item_tags: 'تگ‌ها'
@@ -2164,9 +2079,9 @@ async function loadProductActivity() {
   }
 }
 
-async function submitComment() {
+async function submitComment(nextText = '') {
   const itemName = String(detail.value?.item?.name || detail.value?.item?.item_code || '').trim()
-  const text = String(commentDraft.value || '').trim()
+  const text = String(nextText || commentDraft.value || '').trim()
   if (!itemName || !text || commentSaving.value) return
   commentSaving.value = true
   try {
@@ -2425,7 +2340,7 @@ async function saveNativeProduct() {
     connectionsLoaded.value = false
     inventoryData.value = { summary: {}, bins: [], ledger: [], reorder_levels: [] }
   } catch (errObj) {
-    error.value = errObj?.message || 'ذخیره تنظیمات native کالا ناموفق بود.'
+    error.value = errObj?.message || 'ذخیره تنظیمات پایه کالا ناموفق بود.'
   } finally {
     nativeSaving.value = false
   }
@@ -2462,7 +2377,7 @@ async function loadProductBoms(itemCode = '') {
       resetBomForm()
     }
   } catch (bomErr) {
-    bomError.value = bomErr.message || 'دریافت لیست BOM ناموفق بود.'
+    bomError.value = bomErr.message || 'دریافت فهرست فرمول‌ها ناموفق بود.'
     productBoms.value = []
     resetBomForm()
   } finally {
@@ -2526,7 +2441,7 @@ function addBomItemRow() {
 async function saveBomFromProduct() {
   const normalizedItem = String(detail.value?.item?.name || detail.value?.item?.item_code || '').trim()
   if (!normalizedItem) {
-    bomError.value = 'محصول معتبری برای ثبت BOM پیدا نشد.'
+    bomError.value = 'محصول معتبری برای ثبت فرمول پیدا نشد.'
     return
   }
 
@@ -2540,7 +2455,7 @@ async function saveBomFromProduct() {
     .filter((row) => row.item_code && row.qty > 0 && row.uom)
 
   if (!normalizedItems.length) {
-    bomError.value = 'حداقل یک ماده اولیه معتبر برای BOM وارد کنید.'
+    bomError.value = 'حداقل یک ماده اولیه معتبر برای فرمول وارد کنید.'
     return
   }
 
@@ -5143,13 +5058,6 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
     padding-inline: 0.55rem;
     min-height: 36px;
     font-size: 0.72rem;
-  }
-
-  /* نام، وضعیت و چیپ‌ها در موبایل حذف می‌شوند */
-  .product-general-card--compact .pg-name-field,
-  .product-general-card--compact .pg-status-row,
-  .product-general-card--compact .pg-meta-row {
-    display: none;
   }
 
   .pg-quick-toggles {

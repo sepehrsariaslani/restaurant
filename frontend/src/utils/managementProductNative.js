@@ -7,11 +7,11 @@ export const nativeFieldSections = [
   {
     id: 'classification',
     title: 'پایه و رفتار',
-    description: 'فیلدهای native که رفتار کالا را در ERPNext کنترل می‌کنند.',
+    description: 'فیلدهای پایه‌ای که رفتار کالا را در سیستم مرجع کنترل می‌کنند.',
     fields: [
       field('naming_series', 'سری نام‌گذاری'),
       link('brand', 'برند', 'Brand', { labelField: 'brand_name' }),
-      check('disabled', 'غیرفعال در ERPNext'),
+      check('disabled', 'غیرفعال در سیستم'),
       check('allow_alternative_item', 'اجازه کالای جایگزین'),
       check('include_item_in_manufacturing', 'استفاده در تولید'),
       number('opening_stock', 'موجودی افتتاحیه'),
@@ -24,7 +24,7 @@ export const nativeFieldSections = [
   {
     id: 'variants',
     title: 'مدل‌ها و بارکدها',
-    description: 'قالب Variant، ویژگی‌ها و بارکدهای native کالا.',
+    description: 'قالب مدل، ویژگی‌ها و بارکدهای کالا.',
     fields: [
       check('has_variants', 'این کالا دارای مدل است'),
       link('variant_of', 'مدل پایه', 'Item', { showWhen: (state) => !state.fields.has_variants }),
@@ -99,7 +99,7 @@ export const nativeFieldSections = [
       check('inspection_required_before_purchase', 'بازرسی پیش از خرید'),
       check('inspection_required_before_delivery', 'بازرسی پیش از تحویل'),
       link('quality_inspection_template', 'الگوی بازرسی کیفیت', 'Quality Inspection Template'),
-      link('default_bom', 'BOM پیش‌فرض', 'BOM'),
+      link('default_bom', 'فرمول پیش‌فرض', 'BOM'),
       check('is_sub_contracted_item', 'کالای پیمانکاری'),
       number('production_capacity', 'ظرفیت تولید'),
       number('over_delivery_receipt_allowance', 'تلورانس تحویل/دریافت', { suffix: '٪' }),
