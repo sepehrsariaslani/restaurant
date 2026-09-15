@@ -34,39 +34,21 @@
           <div class="total-box"><small>ارزش ریالی موجودی</small><strong>{{ formatMoneyValue(overview.total_value) }}</strong></div>
         </div>
         <p class="muted" v-if="overviewLoading">در حال دریافت موجودی...</p>
-        <div v-else-if="overview && overview.items.length" class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>کالا</th><th v-if="!overviewFilters.warehouse">انبار</th><th>مقدار</th><th>نرخ</th><th>ارزش</th></tr>
-            </thead>
-            <tbody>
-              <template v-for="row in overview.items" :key="row.item_code">
-                <tr v-if="overviewFilters.warehouse">
-                  <td><strong>{{ row.item_name }}</strong><br><small class="muted">{{ row.item_code }}</small></td>
-                  <td>{{ formatQty(row.qty) }} {{ row.stock_uom }}</td>
-                  <td>{{ formatMoneyValue(row.rate) }}</td>
-                  <td>{{ formatMoneyValue(row.value) }}</td>
-                </tr>
-                <template v-else>
-                  <tr>
-                    <td><strong>{{ row.item_name }}</strong><br><small class="muted">{{ row.item_code }}</small></td>
-                    <td>{{ warehouseKeys(row).length }} انبار</td>
-                    <td>{{ formatQty(row.qty) }} {{ row.stock_uom }}</td>
-                    <td>{{ formatMoneyValue(row.rate) }}</td>
-                    <td>{{ formatMoneyValue(row.value) }}</td>
-                  </tr>
-                  <tr v-for="wh in warehouseKeys(row)" :key="row.item_code + wh" class="sub-row">
-                    <td colspan="2" class="muted">↳ {{ wh }}</td>
-                    <td>{{ formatQty(row.warehouses[wh].qty) }}</td>
-                    <td>{{ formatMoneyValue(row.warehouses[wh].rate) }}</td>
-                    <td>{{ formatMoneyValue(row.warehouses[wh].value) }}</td>
-                  </tr>
-                </template>
-              </template>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" v-else>موردی یافت نشد.</p>
+        <ManagementSmartDataTable
+          v-else
+          :columns="overviewColumns"
+          :rows="overviewTableRows"
+          row-key="row_key"
+          :show-search="false"
+          :filterable="false"
+          :row-class="(row) => row.is_subrow ? 'inventory-sub-row' : ''"
+          empty-text="موردی یافت نشد."
+        >
+          <template #cell-item="{ row }"><strong>{{ row.item }}</strong><small class="table-subtext">{{ row.item_code }}</small></template>
+          <template #cell-qty="{ row }">{{ formatQty(row.qty) }} {{ row.stock_uom }}</template>
+          <template #cell-rate="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-value="{ value }">{{ formatMoneyValue(value) }}</template>
+        </ManagementSmartDataTable>
       </ManagementSurfaceCard>
     </section>
 
@@ -563,24 +545,26 @@
             <div><small class="muted">مبلغ کل</small><strong>{{ formatMoneyValue(purchaseDetail.grand_total) }}</strong></div>
           </div>
           <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr><th>کالا</th><th>سفارش</th><th>دریافت‌شده</th><th>باقی‌مانده</th><th>نرخ</th><th>مبلغ</th><th v-if="canReceivePurchase">دریافت این نوبت</th></tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in purchaseDetail.items" :key="row.idx">
-                  <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                  <td>{{ formatQty(row.qty) }} {{ row.uom }}</td>
-                  <td>{{ formatQty(row.received_qty) }}</td>
-                  <td :class="row.remaining_qty > 0 ? 'warn-text' : 'ok-text'">{{ formatQty(row.remaining_qty) }}</td>
-                  <td>{{ formatMoneyValue(row.rate) }}</td>
-                  <td>{{ formatMoneyValue(row.amount) }}</td>
-                  <td v-if="canReceivePurchase">
-                    <input class="input compact" type="number" min="0" step="0.001" :max="row.remaining_qty" v-model.number="receiveLines[row.item_code]" placeholder="0" :disabled="row.remaining_qty <= 0" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <ManagementSmartDataTable
+              :columns="purchaseDetailColumns"
+              :rows="purchaseDetail.items || []"
+              row-key="idx"
+              :show-search="false"
+              :filterable="false"
+              :freezable="false"
+              :resizable="false"
+              empty-text="قلمی برای این سفارش ثبت نشده است."
+            >
+              <template #cell-item="{ row }"><strong>{{ row.item_name }}</strong><small class="table-subtext">{{ row.item_code }}</small></template>
+              <template #cell-qty="{ row }">{{ formatQty(row.qty) }} {{ row.uom }}</template>
+              <template #cell-received_qty="{ value }">{{ formatQty(value) }}</template>
+              <template #cell-remaining_qty="{ row }"><span :class="row.remaining_qty > 0 ? 'warn-text' : 'ok-text'">{{ formatQty(row.remaining_qty) }}</span></template>
+              <template #cell-rate="{ value }">{{ formatMoneyValue(value) }}</template>
+              <template #cell-amount="{ value }">{{ formatMoneyValue(value) }}</template>
+              <template v-if="canReceivePurchase" #cell-receive_qty="{ row }">
+                <input class="input compact" type="number" min="0" step="0.001" :max="row.remaining_qty" v-model.number="receiveLines[row.item_code]" placeholder="0" :disabled="row.remaining_qty <= 0" />
+              </template>
+            </ManagementSmartDataTable>
           </div>
           <div v-if="canReceivePurchase" class="form-grid receive-warehouse-row">
             <label>انبار دریافت
@@ -803,20 +787,20 @@
         </p>
         <p class="muted" v-if="countLoading">در حال دریافت موجودی سیستمی...</p>
         <template v-else-if="countRows.length">
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>کالا</th><th>موجودی سیستمی</th><th>شمارش فیزیکی</th><th>مغایرت</th><th>نرخ</th></tr></thead>
-              <tbody>
-                <tr v-for="row in countRows" :key="row.item_code">
-                  <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                  <td>{{ formatQty(row.system_qty) }} {{ row.stock_uom }}</td>
-                  <td><input class="input compact" type="number" step="0.001" v-model.number="row.counted" /></td>
-                  <td :class="countDiff(row) === 0 ? 'ok-text' : 'warn-text'">{{ countDiff(row) === 0 ? '—' : formatQty(countDiff(row)) }}</td>
-                  <td>{{ formatMoneyValue(row.valuation_rate) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ManagementSmartDataTable
+            :columns="countColumns"
+            :rows="countRows"
+            row-key="item_code"
+            :show-search="false"
+            :filterable="false"
+            empty-text="قلمی برای شمارش پیدا نشد."
+          >
+            <template #cell-item="{ row }">{{ row.item_name }}<small class="table-subtext">{{ row.item_code }}</small></template>
+            <template #cell-system_qty="{ row }">{{ formatQty(row.system_qty) }} {{ row.stock_uom }}</template>
+            <template #cell-counted="{ row }"><input class="input compact" type="number" step="0.001" v-model.number="row.counted" /></template>
+            <template #cell-difference="{ row }"><span :class="countDiff(row) === 0 ? 'ok-text' : 'warn-text'">{{ countDiff(row) === 0 ? '—' : formatQty(countDiff(row)) }}</span></template>
+            <template #cell-valuation_rate="{ value }">{{ formatMoneyValue(value) }}</template>
+          </ManagementSmartDataTable>
           <div class="btn-row">
             <button type="button" class="secondary-btn" @click="resetCountRows">انصراف از شمارش</button>
             <button type="button" class="primary-btn" @click="submitCount" :disabled="countSaving || !countedRows.length">
@@ -870,52 +854,45 @@
       <ManagementSurfaceCard title="بهای تمام‌شده محصولات" subtitle="محاسبه خودکار بر اساس فرمول تولید و نرخ مواد اولیه">
         <div class="toolbar">
           <input class="input" v-model.trim="costSearch" placeholder="جستجوی محصول..." @keyup.enter="loadCosts" />
-          <button type="button" class="secondary-btn" @click="loadCosts" :disabled="costsLoading">{{ costsLoading ? '...' : 'جستجو' }}</button>
+        <button type="button" class="secondary-btn" @click="loadCosts" :disabled="costsLoading">{{ costsLoading ? '...' : 'جستجو' }}</button>
         </div>
         <p class="muted" v-if="costsLoading">در حال محاسبه...</p>
-        <div v-else class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>محصول</th><th>فرمول</th><th>بهای واحد</th><th>قیمت فروش</th><th>حاشیه سود</th><th>اجزا</th></tr>
-            </thead>
-            <tbody>
-              <template v-for="row in costs" :key="row.item_code">
-                <tr>
-                  <td>{{ row.item_name }}<br><small class="muted">{{ row.item_code }}</small></td>
-                  <td><small class="muted">{{ row.bom }}</small></td>
-                  <td><strong>{{ formatMoneyValue(row.unit_cost) }}</strong></td>
-                  <td>{{ formatMoneyValue(row.sale_price) }}</td>
-                  <td :class="row.margin_amount >= 0 ? 'ok-text' : 'warn-text'">
-                    {{ formatMoneyValue(row.margin_amount) }}
-                    <br><small>{{ row.margin_pct }}٪</small>
-                  </td>
-                  <td>
-                    <button type="button" class="tertiary-btn" @click="toggleCostDetail(row.item_code)">
-                      {{ expandedCost === row.item_code ? 'بستن' : `${row.components.length} قلم` }}
-                    </button>
-                    <span v-if="row.missing_prices" class="badge warn">بدون نرخ: {{ row.missing_prices }}</span>
-                  </td>
-                </tr>
-                <tr v-if="expandedCost === row.item_code" class="sub-row">
-                  <td colspan="6">
-                    <table class="data-table inner">
-                      <thead><tr><th>ماده</th><th>مقدار</th><th>نرخ</th><th>مبلغ</th></tr></thead>
-                      <tbody>
-                        <tr v-for="comp in row.components" :key="comp.item_code">
-                          <td>{{ comp.item_name }}</td>
-                          <td>{{ formatQty(comp.qty) }} {{ comp.uom }}</td>
-                          <td>{{ formatMoneyValue(comp.rate) }}</td>
-                          <td>{{ formatMoneyValue(comp.amount) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </template>
-              <tr v-if="!costs.length"><td colspan="6" class="muted">محصولی با فرمول فعال یافت نشد.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementSmartDataTable
+          v-else
+          :columns="costColumns"
+          :rows="costs"
+          row-key="item_code"
+          :show-search="false"
+          :filterable="false"
+          :expandable-rows="true"
+          :expanded-row-keys="expandedCostKeys"
+          empty-text="محصولی با فرمول فعال یافت نشد."
+          @row-toggle="toggleCostDetail($event.row.item_code)"
+        >
+          <template #cell-item="{ row }">{{ row.item_name }}<small class="table-subtext">{{ row.item_code }}</small></template>
+          <template #cell-bom="{ value }"><small class="muted">{{ value || '—' }}</small></template>
+          <template #cell-unit_cost="{ row }"><strong>{{ formatMoneyValue(row.unit_cost) }}</strong></template>
+          <template #cell-sale_price="{ row }">{{ formatMoneyValue(row.sale_price) }}</template>
+          <template #cell-margin="{ row }"><span :class="row.margin_amount >= 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.margin_amount) }}<small class="table-subtext">{{ row.margin_pct }}٪</small></span></template>
+          <template #cell-components="{ row }"><span>{{ (row.components || []).length.toLocaleString('fa-IR') }} قلم</span><small v-if="row.missing_prices" class="table-subtext warn-text">بدون نرخ: {{ row.missing_prices }}</small></template>
+          <template #row-detail="{ row }">
+            <div class="cost-components-detail">
+              <ManagementSmartDataTable
+                :columns="costComponentColumns"
+                :rows="row.components || []"
+                row-key="item_code"
+                :show-search="false"
+                :filterable="false"
+                :show-count="false"
+                empty-text="اجزای فرمول ثبت نشده است."
+              >
+                <template #cell-qty="{ row: component }">{{ formatQty(component.qty) }} {{ component.uom }}</template>
+                <template #cell-rate="{ value }">{{ formatMoneyValue(value) }}</template>
+                <template #cell-amount="{ value }">{{ formatMoneyValue(value) }}</template>
+              </ManagementSmartDataTable>
+            </div>
+          </template>
+        </ManagementSmartDataTable>
       </ManagementSurfaceCard>
     </section>
     </div>
@@ -926,6 +903,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
@@ -1173,6 +1151,40 @@ const overview = ref(null)
 const overviewLoading = ref(false)
 const overviewError = ref('')
 const overviewFilters = reactive({ warehouse: '', search: '', only_materials: false })
+const overviewColumns = [
+  { key: 'item', label: 'کالا', width: '16rem' },
+  { key: 'warehouse', label: 'انبار' },
+  { key: 'qty', label: 'مقدار', type: 'number' },
+  { key: 'rate', label: 'نرخ', type: 'currency', align: 'left' },
+  { key: 'value', label: 'ارزش', type: 'currency', align: 'left' },
+]
+const overviewTableRows = computed(() => {
+  const items = Array.isArray(overview.value?.items) ? overview.value.items : []
+  return items.flatMap((row) => {
+    const root = {
+      row_key: `${row.item_code}:total`,
+      item: row.item_name,
+      item_code: row.item_code,
+      warehouse: overviewFilters.warehouse || `${warehouseKeys(row).length} انبار`,
+      qty: row.qty,
+      stock_uom: row.stock_uom,
+      rate: row.rate,
+      value: row.value,
+    }
+    if (overviewFilters.warehouse) return [root]
+    return [root, ...warehouseKeys(row).map((warehouse) => ({
+      row_key: `${row.item_code}:${warehouse}`,
+      item: `↳ ${warehouse}`,
+      item_code: row.item_code,
+      warehouse,
+      qty: row.warehouses?.[warehouse]?.qty,
+      stock_uom: row.stock_uom,
+      rate: row.warehouses?.[warehouse]?.rate,
+      value: row.warehouses?.[warehouse]?.value,
+      is_subrow: true,
+    }))]
+  })
+})
 
 async function loadOverview() {
   overviewLoading.value = true
@@ -1789,6 +1801,15 @@ const supplierSaving = ref(false)
 const canReceivePurchase = computed(
   () => purchaseDetail.value && ['ارسال‌شده', 'دریافت جزئی'].includes(purchaseDetail.value.status),
 )
+const purchaseDetailColumns = computed(() => [
+  { key: 'item', label: 'کالا' },
+  { key: 'qty', label: 'سفارش' },
+  { key: 'received_qty', label: 'دریافت‌شده' },
+  { key: 'remaining_qty', label: 'باقی‌مانده' },
+  { key: 'rate', label: 'نرخ', type: 'currency' },
+  { key: 'amount', label: 'مبلغ', type: 'currency' },
+  ...(canReceivePurchase.value ? [{ key: 'receive_qty', label: 'دریافت این نوبت' }] : []),
+])
 
 async function loadPurchases() {
   purchaseLoading.value = true
@@ -2109,6 +2130,13 @@ const countError = ref('')
 const countMessage = ref('')
 const countResult = ref(null)
 const reconciliations = ref([])
+const countColumns = [
+  { key: 'item', label: 'کالا', width: '16rem' },
+  { key: 'system_qty', label: 'موجودی سیستمی', type: 'number' },
+  { key: 'counted', label: 'شمارش فیزیکی', type: 'number' },
+  { key: 'difference', label: 'مغایرت', type: 'number' },
+  { key: 'valuation_rate', label: 'نرخ', type: 'currency', align: 'left' },
+]
 
 const countedRows = computed(() => countRows.value.filter((row) => countDiff(row) !== 0))
 function countDiff(row) {
@@ -2188,6 +2216,21 @@ const costsLoading = ref(false)
 const costsError = ref('')
 const costSearch = ref('')
 const expandedCost = ref('')
+const costColumns = [
+  { key: 'item', label: 'محصول', width: '16rem' },
+  { key: 'bom', label: 'فرمول' },
+  { key: 'unit_cost', label: 'بهای واحد', type: 'currency', align: 'left' },
+  { key: 'sale_price', label: 'قیمت فروش', type: 'currency', align: 'left' },
+  { key: 'margin', label: 'حاشیه سود' },
+  { key: 'components', label: 'اجزا', type: 'number', align: 'center' },
+]
+const costComponentColumns = [
+  { key: 'item_name', label: 'ماده' },
+  { key: 'qty', label: 'مقدار', type: 'number' },
+  { key: 'rate', label: 'نرخ', type: 'currency', align: 'left' },
+  { key: 'amount', label: 'مبلغ', type: 'currency', align: 'left' },
+]
+const expandedCostKeys = computed(() => expandedCost.value ? [expandedCost.value] : [])
 
 async function loadCosts() {
   costsLoading.value = true
@@ -2866,6 +2909,16 @@ onMounted(async () => {
 }
 .alert-row td {
   background: rgba(184, 79, 79, 0.04);
+}
+.table-subtext {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--mg-text-muted, var(--text-muted));
+  font-size: 0.68rem;
+}
+.cost-components-detail {
+  padding: 0.7rem;
+  background: color-mix(in srgb, var(--mg-primary, #c8754e) 4%, var(--mg-bg-surface, #fffaf3));
 }
 @media (max-width: 720px) {
   .line-row {

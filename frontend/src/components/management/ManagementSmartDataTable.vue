@@ -1,7 +1,7 @@
 <template>
   <section class="smart-data-table" dir="rtl">
-    <header class="smart-data-table__toolbar">
-      <label class="smart-data-table__search">
+    <header v-if="showSearch || showCount" class="smart-data-table__toolbar">
+      <label v-if="showSearch" class="smart-data-table__search">
         <span class="sr-only">جستجو در جدول</span>
         <input v-model.trim="search" class="input" type="search" :placeholder="searchPlaceholder" />
       </label>
@@ -169,6 +169,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   emptyText: { type: String, default: 'داده‌ای برای نمایش وجود ندارد.' },
   searchPlaceholder: { type: String, default: 'جستجو در ردیف‌ها...' },
+  showSearch: { type: Boolean, default: true },
+  showCount: { type: Boolean, default: true },
   defaultSortKey: { type: String, default: '' },
   defaultSortDir: { type: String, default: 'none' },
   rowKey: { type: [String, Function], default: '' },

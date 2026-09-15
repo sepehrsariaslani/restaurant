@@ -1,25 +1,28 @@
 <template>
-  <ManagementDataTable
+  <ManagementSmartDataTable
     :columns="columns"
     :rows="rows"
     :row-key="rowKey"
     :row-clickable="rowClickable"
+    :show-search="false"
     @row-click="$emit('row-click', $event)"
   >
     <template v-for="column in columns" :key="`col-${column.key}`" #[`cell-${column.key}`]="slotProps">
       <slot :name="`cell-${column.key}`" v-bind="slotProps">
-        {{ slotProps.value }}
+        <slot :name="`cell.${column.key}`" v-bind="slotProps">
+          {{ slotProps.value }}
+        </slot>
       </slot>
     </template>
 
     <template #empty>
       <slot name="empty">داده‌ای برای نمایش وجود ندارد.</slot>
     </template>
-  </ManagementDataTable>
+  </ManagementSmartDataTable>
 </template>
 
 <script setup>
-import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 
 defineProps({
   columns: {

@@ -231,25 +231,21 @@
           </p>
         </section>
 
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>قلم</th><th>سفارش</th><th>دریافت</th><th>باقی‌مانده</th><th>نرخ</th><th>مبلغ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="line in order.items" :key="line.idx">
-                <td><strong>{{ line.item_name }}</strong><small>{{ line.item_code }}</small></td>
-                <td>{{ qty(line.qty) }} {{ line.uom }}</td>
-                <td>{{ qty(line.received_qty) }}</td>
-                <td :class="line.remaining_qty > 0 ? 'warning' : 'success'">{{ qty(line.remaining_qty) }}</td>
-                <td>{{ money(line.rate) }}</td>
-                <td>{{ money(line.amount) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <ManagementSmartDataTable
+          :columns="purchaseItemColumns"
+          :rows="order.items || []"
+          row-key="idx"
+          :show-search="false"
+          :filterable="false"
+          empty-text="قلمی برای این سفارش ثبت نشده است."
+        >
+          <template #cell-item="{ row }"><strong>{{ row.item_name }}</strong><small class="table-subtext">{{ row.item_code }}</small></template>
+          <template #cell-ordered="{ row }">{{ qty(row.qty) }} {{ row.uom }}</template>
+          <template #cell-received="{ row }">{{ qty(row.received_qty) }}</template>
+          <template #cell-remaining="{ row }"><span :class="row.remaining_qty > 0 ? 'warning' : 'success'">{{ qty(row.remaining_qty) }}</span></template>
+          <template #cell-rate="{ row }">{{ money(row.rate) }}</template>
+          <template #cell-amount="{ row }">{{ money(row.amount) }}</template>
+        </ManagementSmartDataTable>
 
         <footer class="actions">
           <button v-if="order.status === 'پیش‌نویس'" type="button" class="secondary-btn" @click="editing = true">
@@ -272,6 +268,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
@@ -316,6 +313,15 @@ const form = reactive({
   items: [newLine()],
 })
 let progressTimer = null
+
+const purchaseItemColumns = [
+  { key: 'item', label: 'قلم', width: '15rem' },
+  { key: 'ordered', label: 'سفارش', type: 'number' },
+  { key: 'received', label: 'دریافت', type: 'number' },
+  { key: 'remaining', label: 'باقی‌مانده', type: 'number' },
+  { key: 'rate', label: 'نرخ', type: 'currency', align: 'left' },
+  { key: 'amount', label: 'مبلغ', type: 'currency', align: 'left' },
+]
 
 const materialOptions = computed(() =>
   (boot.value?.materials || []).map((item) => ({

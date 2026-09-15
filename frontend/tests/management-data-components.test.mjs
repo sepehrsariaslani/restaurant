@@ -4,8 +4,15 @@ import { readFileSync } from 'node:fs'
 
 const smartTable = readFileSync(new URL('../src/components/management/ManagementSmartDataTable.vue', import.meta.url), 'utf8')
 const editableTable = readFileSync(new URL('../src/components/management/ManagementEditableTable.vue', import.meta.url), 'utf8')
+const listView = readFileSync(new URL('../src/components/management/ManagementListView.vue', import.meta.url), 'utf8')
+const dataTable = readFileSync(new URL('../src/components/management/ManagementDataTable.vue', import.meta.url), 'utf8')
 const catalog = readFileSync(new URL('../src/design-system/catalog.js', import.meta.url), 'utf8')
 const showcase = readFileSync(new URL('../src/pages/management/design-system/ManagementDesignSystemPage.vue', import.meta.url), 'utf8')
+const productDetail = readFileSync(new URL('../src/pages/management/catalog/ManagementProductDetailPage.vue', import.meta.url), 'utf8')
+const variantBuilder = readFileSync(new URL('../src/pages/management/catalog/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
+const inventory = readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
+const purchaseDetail = readFileSync(new URL('../src/pages/management/purchasing/ManagementInventoryPurchaseDetailPage.vue', import.meta.url), 'utf8')
+const coverageDoc = readFileSync(new URL('../../docs/restaurant-management-coverage.md', import.meta.url), 'utf8')
 
 test('Restaurant SmartDataTable keeps the Accounts table contract with Restaurant-native behavior', () => {
   for (const token of [
@@ -48,6 +55,14 @@ test('Restaurant EditableTable keeps v-model/editor validation and adds persiste
   assert.match(editableTable, /localStorage/, 'column visibility should persist per table')
 })
 
+test('all shared management list facades resolve to SmartDataTable', () => {
+  assert.match(listView, /import ManagementSmartDataTable/)
+  assert.match(listView, /<ManagementSmartDataTable/)
+  assert.match(dataTable, /import ManagementSmartDataTable/)
+  assert.match(dataTable, /<ManagementSmartDataTable/)
+  assert.doesNotMatch(listView, /import ManagementDataTable/)
+})
+
 test('data-table components are discoverable in the Restaurant design-system showcase', () => {
   assert.match(catalog, /management-smart-table/)
   assert.match(catalog, /management-editable-table/)
@@ -55,4 +70,23 @@ test('data-table components are discoverable in the Restaurant design-system sho
   assert.match(showcase, /import ManagementEditableTable/)
   assert.match(showcase, /<ManagementSmartDataTable/)
   assert.match(showcase, /<ManagementEditableTable/)
+})
+
+test('management data pages use shared table owners for internal data grids', () => {
+  for (const [name, source] of [
+    ['product detail', productDetail],
+    ['variant builder', variantBuilder],
+    ['inventory', inventory],
+    ['purchase detail', purchaseDetail],
+  ]) {
+    assert.match(source, /ManagementSmartDataTable/, `${name} should use SmartDataTable for internal grids`)
+    assert.doesNotMatch(source, /<table\b/, `${name} should not introduce a parallel raw data table`)
+  }
+})
+
+test('coverage documentation records the canonical table ownership chain and exceptions', () => {
+  assert.match(coverageDoc, /ManagementSmartDataTable/)
+  assert.match(coverageDoc, /ManagementEditableTable/)
+  assert.match(coverageDoc, /ManagementSheetView/)
+  assert.match(coverageDoc, /جدول میانبرهای صفحهٔ POS/)
 })

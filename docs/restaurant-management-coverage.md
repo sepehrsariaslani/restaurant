@@ -36,6 +36,19 @@
 | `components/management/tables` | سالن، میز، نشست و رزرو | table card، detail panel، status badge و reservations panel |
 | `components/management/notion` | کنترل‌های view قابل استفادهٔ مجدد | view tabs، controls، settings و save bar |
 
+## قرارداد جدول‌های داده
+
+تمام فهرست‌ها و جدول‌های داده‌ای مدیریت باید از این زنجیرهٔ canonical استفاده کنند:
+
+| مالک | کاربرد | قرارداد |
+|---|---|---|
+| `ManagementSmartDataTable` | جدول گزارش، فهرست، جزئیات ردیفی و جدول‌های inline | جستجو، فیلتر ستونی، مرتب‌سازی، فریز/تغییر عرض ستون، empty/loading، action و row detail |
+| `ManagementEditableTable` | جدول‌های قابل ویرایش با ایجاد/ویرایش/حذف ردیف | ویرایشگر popup، validation/normalize، تنظیمات ستون و انتشار `v-model`/رویدادهای ردیف |
+| `ManagementListView` | facade فهرست‌های مدیریتی | API قدیمی فهرست را حفظ می‌کند و درون خود از `ManagementSmartDataTable` استفاده می‌کند |
+| `ManagementDataTable` | facade سازگاری برای گزارش‌ها و صفحه‌های قدیمی | slot و eventهای قبلی را حفظ می‌کند و به `ManagementSmartDataTable` می‌رسد |
+
+صفحات جزئیات محصول، سازندهٔ Variant، انبار و خرید نیز جدول‌های داخلی خود را از همین ownerها می‌گیرند؛ در نتیجه تغییر مشترک در جدول، فهرست‌های قدیمی و جدید را هم‌زمان یکدست می‌کند. دو جدول عمداً خارج از این قرارداد عمومی هستند: `ManagementSheetView` چون یک spreadsheet با انتخاب سلول/ردیف، ویرایش مستقیم و bulk action است؛ و جدول میانبرهای صفحهٔ POS چون دادهٔ عملیاتی نیست و فقط راهنمای صفحه‌کلید است.
+
 ## قرارداد مالکیت
 
 | حوزه | مالک داده و چرخهٔ عمر | نقش Restaurant |

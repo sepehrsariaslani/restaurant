@@ -600,22 +600,20 @@
             تمپلیت: {{ resolvedTemplateLabel || '-' }} ({{ resolvedTemplateName || '-' }})
           </p>
           <div class="variant-editor-table-wrap" v-if="currentVariantAttributeRows.length">
-            <table class="variant-values-table">
-              <thead>
-                <tr>
-                  <th>شماره</th>
-                  <th>ویژگی</th>
-                  <th>مقدار</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in currentVariantAttributeRows" :key="`current-variant-attr-${row.index}-${row.attribute}-${row.value}`">
-                  <td>{{ row.index.toLocaleString('fa-IR') }}</td>
-                  <td>{{ row.attribute || '-' }}</td>
-                  <td>{{ row.value || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <ManagementSmartDataTable
+              :columns="currentVariantAttributeColumns"
+              :rows="currentVariantAttributeRows"
+              row-key="index"
+              :show-search="false"
+              :filterable="false"
+              :freezable="false"
+              :resizable="false"
+              empty-text="ویژگی‌ای برای این Variant ثبت نشده است."
+            >
+              <template #cell-index="{ value }">{{ Number(value || 0).toLocaleString('fa-IR') }}</template>
+              <template #cell-attribute="{ value }">{{ value || '-' }}</template>
+              <template #cell-value="{ value }">{{ value || '-' }}</template>
+            </ManagementSmartDataTable>
           </div>
           <div class="variant-value-mobile-list" v-if="currentVariantAttributeRows.length">
             <article v-for="row in currentVariantAttributeRows" :key="`current-variant-mobile-${row.index}-${row.attribute}-${row.value}`" class="variant-value-mobile-card">
@@ -657,60 +655,37 @@
               </div>
 
               <div class="variant-editor-table-wrap">
-                <table class="variant-editor-table">
-                  <thead>
-                    <tr>
-                      <th>ویژگی</th>
-                      <th>نمایش در سایت</th>
-                      <th>انتخابی مشتری</th>
-                      <th>مقادیر فعال</th>
-                      <th>عملیات</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="row in activeTemplateAttributes"
-                      :key="`table-${row.name}`"
-                      class="variant-clickable-row"
-                      :class="{ active: activeVariantAttributeName === row.name }"
-                      @click="openAttributeEditor(row.name)"
-                    >
-                      <td>
-                        <div class="variant-attr-meta">
-                          <strong>{{ row.label }}</strong>
-                          <small>{{ row.name }}</small>
-                        </div>
-                      </td>
-                      <td>
-                        <ManagementToggleSwitch
-                          :model-value="Number(row.show_in_website || 0) === 1"
-                          label="نمایش در سایت"
-                          compact
-                          @click.stop
-                          @update:modelValue="updateAttributeToggle(row.name, 'show_in_website', $event)"
-                        />
-                      </td>
-                      <td>
-                        <ManagementToggleSwitch
-                          :model-value="Number(row.selection_only || 0) === 1"
-                          label="انتخابی مشتری"
-                          compact
-                          @click.stop
-                          @update:modelValue="updateAttributeToggle(row.name, 'selection_only', $event)"
-                        />
-                      </td>
-                      <td>
-                        {{ countSelectedValues(row.name).toLocaleString('fa-IR') }} / {{ (row.values || []).length.toLocaleString('fa-IR') }}
-                      </td>
-                      <td>
-                        <div class="row-actions" @click.stop>
-                          <button class="secondary-btn mini-link-btn" type="button" @click.stop="openAttributeEditor(row.name)">ویرایش</button>
-                          <button class="secondary-btn mini-link-btn delete-mini-btn" type="button" @click.stop="removeAttributeFromTemplate(row.name)">حذف</button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <ManagementSmartDataTable
+                  :columns="templateAttributeColumns"
+                  :rows="activeTemplateAttributes"
+                  row-key="name"
+                  :show-search="false"
+                  :filterable="false"
+                  :freezable="false"
+                  :resizable="false"
+                  :row-clickable="true"
+                  @row-click="openAttributeEditor($event.name)"
+                  empty-text="ویژگی فعالی ثبت نشده است."
+                >
+                  <template #cell-label="{ row }">
+                    <div class="variant-attr-meta"><strong>{{ row.label }}</strong><small>{{ row.name }}</small></div>
+                  </template>
+                  <template #cell-show_in_website="{ row }">
+                    <ManagementToggleSwitch :model-value="Number(row.show_in_website || 0) === 1" label="نمایش در سایت" compact @click.stop @update:modelValue="updateAttributeToggle(row.name, 'show_in_website', $event)" />
+                  </template>
+                  <template #cell-selection_only="{ row }">
+                    <ManagementToggleSwitch :model-value="Number(row.selection_only || 0) === 1" label="انتخابی مشتری" compact @click.stop @update:modelValue="updateAttributeToggle(row.name, 'selection_only', $event)" />
+                  </template>
+                  <template #cell-selected_values="{ row }">
+                    {{ countSelectedValues(row.name).toLocaleString('fa-IR') }} / {{ (row.values || []).length.toLocaleString('fa-IR') }}
+                  </template>
+                  <template #cell-actions="{ row }">
+                    <div class="row-actions" @click.stop>
+                      <button class="secondary-btn mini-link-btn" type="button" @click="openAttributeEditor(row.name)">ویرایش</button>
+                      <button class="secondary-btn mini-link-btn delete-mini-btn" type="button" @click="removeAttributeFromTemplate(row.name)">حذف</button>
+                    </div>
+                  </template>
+                </ManagementSmartDataTable>
               </div>
 
               <div class="variant-attribute-mobile-list">
@@ -1090,45 +1065,26 @@
       </div>
 
       <div class="variant-editor-table-wrap">
-        <table class="variant-values-table">
-          <thead>
-            <tr>
-              <th>تولید Variant</th>
-              <th>مقدار</th>
-              <th>abbr</th>
-              <th>پیش‌فرض</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="valueRow in activeVariantAttributeRow.values" :key="`value-table-${activeVariantAttributeRow.name}-${valueRow.value}`">
-              <td>
-                <ManagementToggleSwitch
-                  :model-value="activeAttributeSelectedValues.includes(valueRow.value)"
-                  label="تولید Variant"
-                  compact
-                  @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
-                />
-              </td>
-              <td>{{ valueRow.value }}</td>
-              <td>
-                <input
-                  class="input mini-abbr"
-                  :value="valueRow.abbr"
-                  @input="valueRow.abbr = String($event.target.value || '').trim()"
-                  placeholder="abbr"
-                />
-              </td>
-              <td>
-                <input
-                  type="radio"
-                  :name="`default-${activeVariantAttributeRow.name}`"
-                  :checked="Number(valueRow.is_default || 0) === 1"
-                  @change="updateAttributeDefault(activeVariantAttributeRow.name, valueRow.value)"
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <ManagementSmartDataTable
+          :columns="variantValueColumns"
+          :rows="activeVariantAttributeRow.values"
+          row-key="value"
+          :show-search="false"
+          :filterable="false"
+          :freezable="false"
+          :resizable="false"
+          empty-text="مقداری برای تولید Variant وجود ندارد."
+        >
+          <template #cell-generate="{ row }">
+            <ManagementToggleSwitch :model-value="activeAttributeSelectedValues.includes(row.value)" label="تولید Variant" compact @update:modelValue="toggleGeneratedValue(activeVariantAttributeRow.name, row.value)" />
+          </template>
+          <template #cell-abbr="{ row }">
+            <input class="input mini-abbr" :value="row.abbr" @input="row.abbr = String($event.target.value || '').trim()" placeholder="abbr" />
+          </template>
+          <template #cell-is_default="{ row }">
+            <input type="radio" :name="`default-${activeVariantAttributeRow.name}`" :checked="Number(row.is_default || 0) === 1" @change="updateAttributeDefault(activeVariantAttributeRow.name, row.value)" />
+          </template>
+        </ManagementSmartDataTable>
       </div>
 
       <div class="variant-value-mobile-list">
@@ -1291,6 +1247,7 @@ import ManagementBomModifiersTable from '@/components/management/catalog/Managem
 import ManagementCheckboxField from '@/components/management/ManagementCheckboxField.vue'
 import ManagementImageUploaderView from '@/components/management/catalog/ManagementImageUploaderView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs.vue'
 import { clearNavbarTitle, setNavbarTitle } from '@/utils/navbarTitle'
@@ -1437,6 +1394,27 @@ const bomColumns = [
   { key: 'status', label: 'وضعیت' },
   { key: 'modified', label: 'آخرین بروزرسانی' },
   { key: 'actions', label: 'عملیات' },
+]
+
+const currentVariantAttributeColumns = [
+  { key: 'index', label: 'شماره', align: 'center' },
+  { key: 'attribute', label: 'ویژگی' },
+  { key: 'value', label: 'مقدار' },
+]
+
+const templateAttributeColumns = [
+  { key: 'label', label: 'ویژگی' },
+  { key: 'show_in_website', label: 'نمایش در سایت', align: 'center' },
+  { key: 'selection_only', label: 'انتخابی مشتری', align: 'center' },
+  { key: 'selected_values', label: 'مقادیر فعال', align: 'center' },
+  { key: 'actions', label: 'عملیات' },
+]
+
+const variantValueColumns = [
+  { key: 'generate', label: 'تولید Variant', align: 'center' },
+  { key: 'value', label: 'مقدار' },
+  { key: 'abbr', label: 'abbr' },
+  { key: 'is_default', label: 'پیش‌فرض', align: 'center' },
 ]
 
 const bomModifierGroupOptions = ref([])

@@ -160,52 +160,29 @@
           </div>
 
           <div class="variant-editor-table-wrap desktop-only-table">
-            <table class="variant-values-table">
-              <thead>
-                <tr>
-                  <th>مقدار</th>
-                  <th>abbr</th>
-                  <th>پیش‌فرض</th>
-                  <th>حذف</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(valueRow, valueIndex) in itemAttributeEditor.values"
-                  :key="`attribute-editor-value-${valueIndex}`"
-                >
-                  <td>
-                    <input
-                      class="input"
-                      :value="valueRow.value"
-                      @input="valueRow.value = String($event.target.value || '').trim()"
-                      placeholder="مقدار"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      class="input mini-abbr"
-                      :value="valueRow.abbr"
-                      @input="valueRow.abbr = String($event.target.value || '').trim()"
-                      placeholder="abbr"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="radio"
-                      name="item-attribute-default"
-                      :checked="Number(valueRow.is_default || 0) === 1"
-                      @change="setItemAttributeDefaultValue(valueIndex)"
-                    />
-                  </td>
-                  <td>
-                    <button class="secondary-btn mini-link-btn" type="button" @click="removeItemAttributeValueRow(valueIndex)">
-                      حذف
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <ManagementSmartDataTable
+              :columns="itemAttributeValueColumns"
+              :rows="itemAttributeEditor.values"
+              :row-key="(_row, index) => index"
+              :show-search="false"
+              :filterable="false"
+              :freezable="false"
+              :resizable="false"
+              empty-text="مقداری برای این صفت ثبت نشده است."
+            >
+              <template #cell-value="{ row }">
+                <input class="input" :value="row.value" @input="row.value = String($event.target.value || '').trim()" placeholder="مقدار" />
+              </template>
+              <template #cell-abbr="{ row }">
+                <input class="input mini-abbr" :value="row.abbr" @input="row.abbr = String($event.target.value || '').trim()" placeholder="abbr" />
+              </template>
+              <template #cell-is_default="{ row, rowIndex }">
+                <input type="radio" name="item-attribute-default" :checked="Number(row.is_default || 0) === 1" @change="setItemAttributeDefaultValue(rowIndex)" />
+              </template>
+              <template #cell-actions="{ rowIndex }">
+                <button class="secondary-btn mini-link-btn" type="button" @click="removeItemAttributeValueRow(rowIndex)">حذف</button>
+              </template>
+            </ManagementSmartDataTable>
           </div>
         </template>
 
@@ -241,55 +218,38 @@
         </div>
 
         <div class="variant-editor-table-wrap desktop-only-table">
-          <table class="variant-editor-table">
-            <thead>
-              <tr>
-                <th>ویژگی</th>
-                <th>نمایش در سایت</th>
-                <th>انتخابی مشتری</th>
-                <th>مقادیر فعال</th>
-                <th>عملیات</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in activeTemplateAttributes"
-                :key="`table-${row.name}`"
-                :class="{ active: activeVariantAttributeName === row.name }"
-              >
-                <td>
-                  <div class="variant-attr-meta">
-                    <strong>{{ row.label }}</strong>
-                    <small>{{ row.name }}</small>
-                  </div>
-                </td>
-                <td>
-                  <input
-                    type="checkbox"
-                    :checked="Number(row.show_in_website || 0) === 1"
-                    @change="updateAttributeToggle(row.name, 'show_in_website', $event.target.checked)"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="checkbox"
-                    :checked="Number(row.selection_only || 0) === 1"
-                    @change="updateAttributeToggle(row.name, 'selection_only', $event.target.checked)"
-                  />
-                </td>
-                <td>
-                  {{ countSelectedValues(row.name).toLocaleString('fa-IR') }} / {{ (row.values || []).length.toLocaleString('fa-IR') }}
-                </td>
-                <td>
-                  <div class="inline-actions inline-actions--tight">
-                    <button class="secondary-btn mini-link-btn" type="button" @click="openAttributeEditor(row.name)">ویرایش</button>
-                    <button class="secondary-btn mini-link-btn delete-mini-btn" type="button" @click="removeAttributeFromTemplate(row.name)">حذف</button>
-                    <a class="secondary-btn mini-link-btn" :href="itemAttributeDocUrl(row.name)" target="_blank" rel="noreferrer">ERP</a>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <ManagementSmartDataTable
+            :columns="templateAttributeColumns"
+            :rows="activeTemplateAttributes"
+            row-key="name"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+            :row-clickable="true"
+            @row-click="openAttributeEditor($event.name)"
+            empty-text="ویژگی فعالی ثبت نشده است."
+          >
+            <template #cell-label="{ row }">
+              <div class="variant-attr-meta"><strong>{{ row.label }}</strong><small>{{ row.name }}</small></div>
+            </template>
+            <template #cell-show_in_website="{ row }">
+              <input type="checkbox" :checked="Number(row.show_in_website || 0) === 1" @click.stop @change="updateAttributeToggle(row.name, 'show_in_website', $event.target.checked)" />
+            </template>
+            <template #cell-selection_only="{ row }">
+              <input type="checkbox" :checked="Number(row.selection_only || 0) === 1" @click.stop @change="updateAttributeToggle(row.name, 'selection_only', $event.target.checked)" />
+            </template>
+            <template #cell-selected_values="{ row }">
+              {{ countSelectedValues(row.name).toLocaleString('fa-IR') }} / {{ (row.values || []).length.toLocaleString('fa-IR') }}
+            </template>
+            <template #cell-actions="{ row }">
+              <div class="inline-actions inline-actions--tight" @click.stop>
+                <button class="secondary-btn mini-link-btn" type="button" @click="openAttributeEditor(row.name)">ویرایش</button>
+                <button class="secondary-btn mini-link-btn delete-mini-btn" type="button" @click="removeAttributeFromTemplate(row.name)">حذف</button>
+                <a class="secondary-btn mini-link-btn" :href="itemAttributeDocUrl(row.name)" target="_blank" rel="noreferrer">ERP</a>
+              </div>
+            </template>
+          </ManagementSmartDataTable>
         </div>
 
         <div class="variant-attribute-mobile-list">
@@ -345,47 +305,26 @@
 
           <template v-if="selectedTemplateAttributes.includes(activeVariantAttributeRow.name)">
             <div class="variant-editor-table-wrap desktop-only-table">
-              <table class="variant-values-table">
-                <thead>
-                  <tr>
-                    <th>تولید Variant</th>
-                    <th>مقدار</th>
-                    <th>abbr</th>
-                    <th>پیش‌فرض</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="valueRow in activeVariantAttributeRow.values"
-                    :key="`value-${activeVariantAttributeRow.name}-${valueRow.value}`"
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        :checked="activeAttributeSelectedValues.includes(valueRow.value)"
-                        @change="toggleGeneratedValue(activeVariantAttributeRow.name, valueRow.value)"
-                      />
-                    </td>
-                    <td>{{ valueRow.value }}</td>
-                    <td>
-                      <input
-                        class="input mini-abbr"
-                        :value="valueRow.abbr"
-                        @input="valueRow.abbr = String($event.target.value || '').trim()"
-                        placeholder="abbr"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="radio"
-                        :name="`default-${activeVariantAttributeRow.name}`"
-                        :checked="Number(valueRow.is_default || 0) === 1"
-                        @change="updateAttributeDefault(activeVariantAttributeRow.name, valueRow.value)"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <ManagementSmartDataTable
+                :columns="variantValueColumns"
+                :rows="activeVariantAttributeRow.values"
+                row-key="value"
+                :show-search="false"
+                :filterable="false"
+                :freezable="false"
+                :resizable="false"
+                empty-text="مقداری برای تولید Variant وجود ندارد."
+              >
+                <template #cell-generate="{ row }">
+                  <input type="checkbox" :checked="activeAttributeSelectedValues.includes(row.value)" @change="toggleGeneratedValue(activeVariantAttributeRow.name, row.value)" />
+                </template>
+                <template #cell-abbr="{ row }">
+                  <input class="input mini-abbr" :value="row.abbr" @input="row.abbr = String($event.target.value || '').trim()" placeholder="abbr" />
+                </template>
+                <template #cell-is_default="{ row }">
+                  <input type="radio" :name="`default-${activeVariantAttributeRow.name}`" :checked="Number(row.is_default || 0) === 1" @change="updateAttributeDefault(activeVariantAttributeRow.name, row.value)" />
+                </template>
+              </ManagementSmartDataTable>
             </div>
             <div class="variant-values-mobile-list">
               <article
@@ -513,6 +452,7 @@ import ManagementDataTable from '@/components/management/ManagementDataTable.vue
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import NumericInput from '@/components/NumericInput.vue'
 import {
@@ -568,6 +508,28 @@ const itemAttributeColumns = [
   { key: 'value_type', label: 'نوع' },
   { key: 'value_count', label: 'تعداد مقدار' },
   { key: 'status', label: 'وضعیت' },
+]
+
+const itemAttributeValueColumns = [
+  { key: 'value', label: 'مقدار' },
+  { key: 'abbr', label: 'abbr' },
+  { key: 'is_default', label: 'پیش‌فرض', align: 'center' },
+  { key: 'actions', label: 'حذف', align: 'center' },
+]
+
+const templateAttributeColumns = [
+  { key: 'label', label: 'ویژگی' },
+  { key: 'show_in_website', label: 'نمایش در سایت', align: 'center' },
+  { key: 'selection_only', label: 'انتخابی مشتری', align: 'center' },
+  { key: 'selected_values', label: 'مقادیر فعال', align: 'center' },
+  { key: 'actions', label: 'عملیات' },
+]
+
+const variantValueColumns = [
+  { key: 'generate', label: 'تولید Variant', align: 'center' },
+  { key: 'value', label: 'مقدار' },
+  { key: 'abbr', label: 'abbr' },
+  { key: 'is_default', label: 'پیش‌فرض', align: 'center' },
 ]
 
 const pageTitle = computed(() => 'استودیو Variant و Item Attribute')
