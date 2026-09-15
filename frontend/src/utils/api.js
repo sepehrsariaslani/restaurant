@@ -541,8 +541,13 @@ async function listManagementProductsFallback({
 	const itemHasCustomSnappCode = await hasDoctypeField("Item", "custom_snapp_code");
 	const itemHasImage = await hasDoctypeField("Item", "image");
 	const itemHasItemImage = await hasDoctypeField("Item", "item_image");
+	const itemHasWebsiteImage = await hasDoctypeField("Item", "website_image");
+	const itemHasRestaurantImage = await hasDoctypeField("Item", "restaurant_image");
 	const itemHasRestaurantItemTags = await hasDoctypeField("Item", "restaurant_item_tags");
 	const itemHasRestaurantCalendarDate = await hasDoctypeField("Item", "restaurant_calendar_date");
+	const itemHasComingSoon = await hasDoctypeField("Item", "restaurant_coming_soon");
+	const itemHasOutOfStock = await hasDoctypeField("Item", "restaurant_out_of_stock");
+	const itemHasCustomizable = await hasDoctypeField("Item", "restaurant_is_customizable");
 	const itemGroupHasSlug = await hasDoctypeField("Item Group", "restaurant_slug");
 
 	const fields = ["name", "item_code", "item_name", "item_group", "standard_rate", "disabled"];
@@ -573,11 +578,26 @@ async function listManagementProductsFallback({
 	if (itemHasItemImage && !fields.includes("item_image")) {
 		fields.push("item_image");
 	}
+	if (itemHasWebsiteImage) {
+		fields.push("website_image");
+	}
+	if (itemHasRestaurantImage) {
+		fields.push("restaurant_image");
+	}
 	if (itemHasRestaurantItemTags) {
 		fields.push("restaurant_item_tags");
 	}
 	if (itemHasRestaurantCalendarDate) {
 		fields.push("restaurant_calendar_date");
+	}
+	if (itemHasComingSoon) {
+		fields.push("restaurant_coming_soon");
+	}
+	if (itemHasOutOfStock) {
+		fields.push("restaurant_out_of_stock");
+	}
+	if (itemHasCustomizable) {
+		fields.push("restaurant_is_customizable");
 	}
 
 	const query = String(search || "").trim();
@@ -709,6 +729,36 @@ async function listManagementProductsFallback({
 	}
 
 	const pageRows = (rows || []).slice(0, pageSize);
+	const attachmentImageMap = new Map();
+	const imagelessNames = pageRows
+		.filter((row) => ![row?.restaurant_image, row?.website_image, row?.item_image, row?.image].some((value) => String(value || "").trim()))
+		.map((row) => String(row?.name || "").trim())
+		.filter(Boolean);
+	if (imagelessNames.length) {
+		try {
+			const attachments = await callMethodByPath("frappe.client.get_list", {
+				doctype: "File",
+				fields: ["attached_to_name", "file_url", "is_private", "is_folder"],
+				filters: [
+					["attached_to_doctype", "=", "Item"],
+					["attached_to_name", "in", imagelessNames],
+					["is_folder", "=", 0],
+					["is_private", "=", 0],
+				],
+				order_by: "creation asc",
+				limit_page_length: Math.min(imagelessNames.length * 3, 1000),
+			});
+			for (const attachment of attachments || []) {
+				const itemName = String(attachment?.attached_to_name || "").trim();
+				const fileUrl = String(attachment?.file_url || "").trim();
+				if (itemName && fileUrl && !attachmentImageMap.has(itemName)) {
+					attachmentImageMap.set(itemName, fileUrl);
+				}
+			}
+		} catch (_) {
+			// File permissions must not prevent the product list from loading.
+		}
+	}
 	const groupNames = new Set();
 	for (const row of pageRows || []) {
 		const categoryName = String(row?.restaurant_category || row?.item_group || "").trim();
@@ -773,7 +823,14 @@ async function listManagementProductsFallback({
 		const subcategoryMeta = groupMap.get(subcategoryName) || {};
 		const title = String(row?.item_name || row?.name || "").trim();
 		const itemCode = String(row?.item_code || row?.name || "").trim();
-		const image = String(row?.image || row?.item_image || "").trim();
+		const image = String(
+			row?.restaurant_image ||
+				row?.website_image ||
+				row?.item_image ||
+				row?.image ||
+				attachmentImageMap.get(String(row?.name || "").trim()) ||
+				"",
+		).trim();
 		const slug =
 			String(row?.restaurant_slug || "").trim() ||
 			makeFallbackSlug(title) ||
@@ -804,6 +861,9 @@ async function listManagementProductsFallback({
 			is_disabled: Number(row?.disabled || 0) ? 1 : 0,
 			stock_qty: Number(stockMap.get(itemCode) || 0),
 			calendar_date: String(row?.restaurant_calendar_date || "").slice(0, 10),
+			coming_soon: Number(row?.restaurant_coming_soon || 0) ? 1 : 0,
+			out_of_stock: Number(row?.restaurant_out_of_stock || 0) ? 1 : 0,
+			has_customization: Number(row?.restaurant_is_customizable || 0) ? 1 : 0,
 			tags: itemHasRestaurantItemTags
 				? String(row?.restaurant_item_tags || "")
 						.split(",")

@@ -407,14 +407,22 @@ function clearValue() {
 function updatePanelPosition() {
   if (!props.fixedPanel || !rootRef.value) return
   const rect = rootRef.value.getBoundingClientRect()
-  const panelWidth = Math.max(rect.width, 220)
+  const panelWidth = Math.min(
+    Math.max(rect.width, 220),
+    Math.max(220, window.innerWidth - 16),
+  )
   const spaceBelow = window.innerHeight - rect.bottom
   const panelHeight = 320
   const openUp = spaceBelow < panelHeight && rect.top > spaceBelow
+  const left = Math.max(
+    8,
+    Math.min(rect.right - panelWidth, window.innerWidth - panelWidth - 8),
+  )
   panelStyle.value = {
     position: 'fixed',
     top: openUp ? `${Math.max(8, rect.top - panelHeight)}px` : `${rect.bottom + 6}px`,
-    insetInlineStart: `${Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8))}px`,
+    left: `${left}px`,
+    right: 'auto',
     width: `${panelWidth}px`,
     maxHeight: `${Math.min(panelHeight, window.innerHeight - 16)}px`,
     zIndex: 13000,
@@ -437,6 +445,12 @@ function openAndFocus() {
   }
   updatePanelPosition()
   isOpen.value = true
+}
+
+function onViewportChange() {
+  if (isOpen.value && props.fixedPanel) {
+    updatePanelPosition()
+  }
 }
 
 function close() {
@@ -556,10 +570,14 @@ function onDocumentClick(event) {
 
 onMounted(() => {
   document.addEventListener('mousedown', onDocumentClick)
+  window.addEventListener('resize', onViewportChange)
+  window.addEventListener('scroll', onViewportChange, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocumentClick)
+  window.removeEventListener('resize', onViewportChange)
+  window.removeEventListener('scroll', onViewportChange, true)
 })
 </script>
 

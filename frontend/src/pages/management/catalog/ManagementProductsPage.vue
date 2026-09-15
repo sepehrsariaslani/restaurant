@@ -47,14 +47,15 @@
             @search="search = $event"
           />
         </div>
-        <NotionSaveBar
-          v-if="viewSys.isCurrentViewDirty.value"
-          :visible="viewSys.isCurrentViewDirty.value"
-          :view-name="viewSys.currentView.value?.name"
-          @save-self="viewSys.saveForSelf()"
-          @save-all="viewSys.saveForEveryone()"
-          @discard="viewSys.resetView(viewSys.currentViewId.value)"
-        />
+        <div v-if="viewSys.isCurrentViewDirty.value" class="notion-save-row">
+          <NotionSaveBar
+            :visible="viewSys.isCurrentViewDirty.value"
+            :view-name="viewSys.currentView.value?.name"
+            @save-self="viewSys.saveForSelf()"
+            @save-all="viewSys.saveForEveryone()"
+            @discard="viewSys.resetView(viewSys.currentViewId.value)"
+          />
+        </div>
       </div>
     </ManagementSurfaceCard>
 
@@ -97,15 +98,29 @@
             search-placeholder="جستجو..."
             @update:model-value="kanbanGroupBy = $event || 'category_title'; writeStoredKanbanGroupBy(kanbanGroupBy)"
           />
+          <span class="kanban-group-label kanban-group-label--secondary">زیرگروه</span>
+          <SearchableDropdown
+            :model-value="kanbanSubGroupBy"
+            :options="kanbanSubGroupOptions"
+            placeholder="بدون زیرگروه"
+            search-placeholder="جستجوی زیرگروه..."
+            clearable
+            @update:model-value="kanbanSubGroupBy = $event || ''; writeStoredKanbanSubGroupBy(kanbanSubGroupBy)"
+          />
         </div>
         <ManagementKanbanView
           :rows="visibleProducts"
           :group-by="kanbanGroupBy"
+          :sub-group-by="kanbanSubGroupBy"
           :group-options="kanbanGroupOptions"
+          :sub-group-options="kanbanSubGroupOptions"
           row-key="name"
           :clickable="true"
           image-field="image"
           secondary-image-field="website_image"
+          :properties="viewSys.currentView.value?.properties"
+          :property-order="currentViewPropertyOrder"
+          :chip-renderers="chipRenderers"
           :price-formatter="(value) => formatMoney(value, currency.value)"
           :row-class="rowClassOf"
           empty-text="محصولی برای نمایش وجود ندارد."
@@ -587,6 +602,7 @@ const collapseGroupsByDefault = ref(readStoredGroupCollapseMode())
 const collapsedGroupKeys = ref([])
 const treeGroupBy = ref(readStoredTreeGroupBy())
 const kanbanGroupBy = ref(readStoredKanbanGroupBy())
+const kanbanSubGroupBy = ref(readStoredKanbanSubGroupBy())
 const isMobileView = ref(getInitialMobileView())
 const excelFileInput = ref(null)
 const excelBusy = ref(false)
@@ -621,8 +637,12 @@ const treeGroupOptions = PRODUCT_PROPERTIES
   .map((prop) => ({ value: prop.key, label: prop.label }))
 
 const kanbanGroupOptions = PRODUCT_PROPERTIES
-  .filter((prop) => ['select', 'boolean'].includes(prop.type))
+  .filter((prop) => ['category_title', 'subcategory_title', 'is_active', 'coming_soon', 'out_of_stock', 'has_customization'].includes(prop.key))
   .map((prop) => ({ value: prop.key, label: prop.label }))
+const kanbanSubGroupOptions = [
+  { value: '', label: 'بدون زیرگروه' },
+  ...kanbanGroupOptions,
+]
 
 // ── سیستم View به سبک Notion ────────────────────────────────────────────────
 const viewSys = useViewSystem({ storageKey: 'mg-products-notion-views-v1' })
@@ -779,10 +799,22 @@ const chipRenderers = {
     text: isProductActive(row) ? 'فعال' : 'غیرفعال',
     cls: isProductActive(row) ? 'notion-chip--on' : 'notion-chip--off',
   }),
-  coming_soon: (row) => (Number(row.coming_soon) === 1 ? { text: 'به‌زودی', cls: 'notion-chip--warn' } : null),
-  out_of_stock: (row) => (Number(row.out_of_stock) === 1 ? { text: 'ناموجود', cls: 'notion-chip--off' } : null),
-  has_customization: (row) => (Number(row.has_customization) === 1 ? { text: 'قابل شخصی‌سازی', cls: 'notion-chip--on' } : null),
-  has_bom: (row) => (Number(row.has_bom) === 1 ? { text: 'دارای BOM', cls: 'notion-chip--soft' } : null),
+  coming_soon: (row) => ({
+    text: Number(row.coming_soon) === 1 ? 'به‌زودی' : 'عادی',
+    cls: Number(row.coming_soon) === 1 ? 'notion-chip--warn' : 'notion-chip--soft',
+  }),
+  out_of_stock: (row) => ({
+    text: Number(row.out_of_stock) === 1 ? 'ناموجود' : 'موجود',
+    cls: Number(row.out_of_stock) === 1 ? 'notion-chip--off' : 'notion-chip--on',
+  }),
+  has_customization: (row) => ({
+    text: Number(row.has_customization) === 1 ? 'قابل شخصی‌سازی' : 'ساده',
+    cls: Number(row.has_customization) === 1 ? 'notion-chip--on' : 'notion-chip--soft',
+  }),
+  has_bom: (row) => ({
+    text: Number(row.has_bom) === 1 ? 'دارای فرمول' : 'بدون فرمول',
+    cls: Number(row.has_bom) === 1 ? 'notion-chip--soft' : 'notion-chip--off',
+  }),
   // تگ‌ها جداگانه مدیریت می‌شوند (showTags)
 }
 
@@ -1128,6 +1160,8 @@ function resolveImage(row) {
       row?.restaurant_image ||
       row?.image_url ||
       row?.thumbnail ||
+      row?.media?.main_image ||
+      row?.media?.gallery?.[0] ||
       '',
   ).trim()
 }
@@ -1493,6 +1527,57 @@ function openProductDetail(row) {
   window.location.href = target
 }
 
+const KANBAN_FIELD_MAP = {
+  category_title: 'restaurant_category',
+  subcategory_title: 'restaurant_subcategory',
+  is_active: 'restaurant_enabled',
+  coming_soon: 'restaurant_coming_soon',
+  out_of_stock: 'restaurant_out_of_stock',
+  has_customization: 'restaurant_is_customizable',
+}
+
+function normalizeKanbanBoolean(value) {
+  const text = String(value ?? '').trim().toLowerCase()
+  return ['بله', 'yes', 'true', '1', 'on'].includes(text) || value === true ? 1 : 0
+}
+
+async function handleKanbanMove({ row, field, value } = {}) {
+  const itemName = String(row?.name || '').trim()
+  const sourceField = String(field || '').trim()
+  const backendField = KANBAN_FIELD_MAP[sourceField]
+  if (!itemName || !backendField) {
+    error.value = 'این گروه‌بندی قابلیت ذخیره‌سازی ندارد.'
+    return
+  }
+
+  const previousValue = row?.[sourceField]
+  const normalizedValue = ['is_active', 'coming_soon', 'out_of_stock', 'has_customization'].includes(sourceField)
+    ? normalizeKanbanBoolean(value)
+    : String(value || '').trim()
+  if (sourceField === 'is_active') row.is_active = normalizedValue
+  else if (sourceField === 'coming_soon') row.coming_soon = normalizedValue
+  else if (sourceField === 'out_of_stock') row.out_of_stock = normalizedValue
+  else if (sourceField === 'has_customization') row.has_customization = normalizedValue
+  else if (sourceField === 'category_title') row.category_title = normalizedValue
+  else if (sourceField === 'subcategory_title') row.subcategory_title = normalizedValue
+
+  error.value = ''
+  successMessage.value = ''
+  try {
+    await setManagementProductKanbanField({
+      item_name: itemName,
+      field: backendField,
+      value: normalizedValue,
+    })
+    await loadProducts()
+    successMessage.value = 'گروه‌بندی محصول ذخیره شد.'
+    setTimeout(() => { successMessage.value = '' }, 2500)
+  } catch (errObj) {
+    if (sourceField) row[sourceField] = previousValue
+    error.value = errObj?.message || 'ذخیره گروه‌بندی محصول ناموفق بود.'
+  }
+}
+
 function canOpenProductTreeNode(node) {
   return Boolean(node?.name && node?.badge === 'محصول')
 }
@@ -1575,6 +1660,22 @@ function readStoredKanbanGroupBy() {
 function writeStoredKanbanGroupBy(value) {
   try {
     localStorage.setItem('management-products-kanban-group-by', String(value || 'category_title'))
+  } catch (_) { /* ignore */ }
+}
+
+function readStoredKanbanSubGroupBy() {
+  try {
+    const raw = localStorage.getItem('management-products-kanban-subgroup-by')
+    if (['category_title', 'subcategory_title', 'is_active', 'coming_soon', 'out_of_stock', 'has_customization'].includes(raw)) {
+      return raw
+    }
+  } catch (_) { /* ignore */ }
+  return ''
+}
+
+function writeStoredKanbanSubGroupBy(value) {
+  try {
+    localStorage.setItem('management-products-kanban-subgroup-by', String(value || ''))
   } catch (_) { /* ignore */ }
 }
 
@@ -1976,16 +2077,29 @@ loadProducts()
   padding-top: 0.5rem;
   border-top: 1px dashed var(--mg-border-light);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.notion-view-bar > :first-child {
+  flex: 0 0 auto;
 }
 
 .notion-view-tools {
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: nowrap;
   gap: 0.4rem;
+}
+
+.notion-save-row {
+  flex: 0 0 100%;
+  min-width: 0;
 }
 
 .subgroup-block {
@@ -2327,6 +2441,20 @@ loadProducts()
 
   .toolbar-toggle {
     flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .notion-view-bar {
+    flex-direction: column;
+  }
+
+  .notion-view-tools {
+    width: 100%;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+
+  .notion-save-row {
     width: 100%;
   }
 

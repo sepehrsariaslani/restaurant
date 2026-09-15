@@ -11,7 +11,7 @@
         >
           <Filter :size="13" /> فیلتر <span v-if="view?.filters?.length" class="nvc-badge">{{ view.filters.length }}</span>
         </button>
-        <div v-if="open === 'filter'" class="nvc-panel">
+        <div v-if="open === 'filter'" class="nvc-panel" @click.stop>
           <div class="nvc-panel-head">
             <strong><Filter :size="12" /> فیلترها</strong>
             <button type="button" class="nvc-panel-close" @click="open = ''"><X :size="13" /></button>
@@ -29,6 +29,7 @@
                 :options="propertyOptions"
                 placeholder="انتخاب فیلد..."
                 search-placeholder="جستجوی فیلد..."
+                fixed-panel
                 @update:model-value="onPropertyChange(f, $event)"
               />
               <SearchableDropdown
@@ -36,6 +37,7 @@
                 :options="operatorOptionsForDropdown(f.property)"
                 placeholder="شرط..."
                 search-placeholder="جستجوی شرط..."
+                fixed-panel
                 @update:model-value="onOperatorChange(f, $event)"
               />
             </div>
@@ -50,6 +52,7 @@
                   :options="optionsFor(f.property)"
                   placeholder="انتخاب چند مورد..."
                   search-placeholder="جستجوی مقدار..."
+                  fixed-panel
                   multiple
                   clearable
                   include-empty-option
@@ -66,6 +69,7 @@
                   :options="optionsFor(f.property)"
                   placeholder="انتخاب کنید..."
                   search-placeholder="جستجوی مقدار..."
+                  fixed-panel
                   clearable
                   include-empty-option
                   empty-label="همه"
@@ -80,6 +84,7 @@
                   :options="optionsFor(f.property)"
                   placeholder="انتخاب تگ..."
                   search-placeholder="جستجوی تگ..."
+                  fixed-panel
                   clearable
                   include-empty-option
                   empty-label="همه"
@@ -114,7 +119,7 @@
         >
           <ArrowUpDown :size="13" /> مرتب‌سازی <span v-if="view?.sorts?.length" class="nvc-badge">{{ view.sorts.length }}</span>
         </button>
-        <div v-if="open === 'sort'" class="nvc-panel">
+        <div v-if="open === 'sort'" class="nvc-panel" @click.stop>
           <div class="nvc-panel-head">
             <strong><ArrowUpDown :size="12" /> مرتب‌سازی</strong>
             <button type="button" class="nvc-panel-close" @click="open = ''"><X :size="13" /></button>
@@ -126,6 +131,7 @@
               :options="propertyOptions"
               placeholder="فیلد..."
               search-placeholder="جستجو..."
+              fixed-panel
               @update:model-value="s.property = $event || ''"
             />
             <button type="button" class="nvc-dir" :title="s.direction === 'asc' ? 'صعودی' : 'نزولی'" @click="s.direction = s.direction === 'asc' ? 'desc' : 'asc'">
@@ -148,7 +154,7 @@
         >
           <Layers :size="13" /> گروه <span v-if="view?.groupBy" class="nvc-badge">1</span>
         </button>
-        <div v-if="open === 'group'" class="nvc-panel">
+        <div v-if="open === 'group'" class="nvc-panel" @click.stop>
           <div class="nvc-panel-head">
             <strong><Layers :size="12" /> گروه‌بندی</strong>
             <button type="button" class="nvc-panel-close" @click="open = ''"><X :size="13" /></button>
@@ -159,6 +165,7 @@
             :options="propertyOptions"
             placeholder="بدون گروه"
             search-placeholder="جستجو..."
+            fixed-panel
             include-empty-option
             empty-label="بدون گروه"
             @update:model-value="view.groupBy = $event || ''"
@@ -169,6 +176,7 @@
             :options="propertyOptions"
             placeholder="بدون زیرگروه"
             search-placeholder="جستجو..."
+            fixed-panel
             include-empty-option
             empty-label="بدون زیرگروه"
             @update:model-value="view.subGroupBy = $event || ''"
@@ -186,7 +194,7 @@
         >
           <Eye :size="13" /> خواص
         </button>
-        <div v-if="open === 'props'" class="nvc-panel">
+        <div v-if="open === 'props'" class="nvc-panel" @click.stop>
           <div class="nvc-panel-head">
             <strong><Eye :size="12" /> خواص نمایشی</strong>
             <button type="button" class="nvc-panel-close" @click="open = ''"><X :size="13" /></button>
@@ -236,7 +244,7 @@
         >
           <Palette :size="13" /> رنگ <span v-if="view?.colors?.length" class="nvc-badge">{{ view.colors.length }}</span>
         </button>
-        <div v-if="open === 'color'" class="nvc-panel">
+        <div v-if="open === 'color'" class="nvc-panel" @click.stop>
           <div class="nvc-panel-head">
             <strong><Palette :size="12" /> رنگ شرطی</strong>
             <button type="button" class="nvc-panel-close" @click="open = ''"><X :size="13" /></button>
@@ -247,6 +255,7 @@
               :options="propertyOptions"
               placeholder="فیلد..."
               search-placeholder="جستجو..."
+              fixed-panel
               @update:model-value="onPropertyChange(c, $event)"
             />
             <SearchableDropdown
@@ -254,6 +263,7 @@
               :options="operatorOptionsForDropdown(c.property)"
               placeholder="شرط..."
               search-placeholder="جستجو..."
+              fixed-panel
               @update:model-value="onOperatorChange(c, $event)"
             />
             <div
@@ -265,6 +275,7 @@
                 :options="optionsFor(c.property)"
                 placeholder="انتخاب چند مورد..."
                 search-placeholder="جستجو..."
+                fixed-panel
                 multiple
                 clearable
                 include-empty-option
@@ -281,6 +292,7 @@
                 :options="optionsFor(c.property)"
                 placeholder="انتخاب..."
                 search-placeholder="جستجو..."
+                fixed-panel
                 clearable
                 include-empty-option
                 empty-label="همه"
@@ -295,6 +307,7 @@
                 :options="optionsFor(c.property)"
                 placeholder="انتخاب تگ..."
                 search-placeholder="جستجو..."
+                fixed-panel
                 clearable
                 include-empty-option
                 empty-label="همه"

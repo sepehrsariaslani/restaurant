@@ -39,7 +39,11 @@ const zarinpalSource = fs.readFileSync(new URL('../src/pages/management/settings
 const productsSource = fs.readFileSync(new URL('../src/pages/management/catalog/ManagementProductsPage.vue', import.meta.url), 'utf8')
 const galleryViewSource = fs.readFileSync(new URL('../src/components/management/ManagementGalleryView.vue', import.meta.url), 'utf8')
 const kanbanViewSource = fs.readFileSync(new URL('../src/components/management/ManagementKanbanView.vue', import.meta.url), 'utf8')
+const notionControlsSource = fs.readFileSync(new URL('../src/components/management/notion/NotionViewControls.vue', import.meta.url), 'utf8')
+const notionSettingsSource = fs.readFileSync(new URL('../src/components/management/notion/NotionViewSettings.vue', import.meta.url), 'utf8')
+const searchableDropdownSource = fs.readFileSync(new URL('../src/components/SearchableDropdown.vue', import.meta.url), 'utf8')
 const restaurantApiSource = fs.readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
+const restaurantFeaturePackSource = fs.readFileSync(new URL('../../restaurant/api_feature_pack.py', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -110,8 +114,17 @@ test('product views keep shared controls left-aligned and resolve fallback media
   assert.match(productsSource, /\.notion-view-tools\s*\{[\s\S]*?justify-content:\s*flex-end/)
   assert.match(galleryViewSource, /row\?\.item_image/)
   assert.match(kanbanViewSource, /row\?\.item_image/)
+  assert.match(kanbanViewSource, /subGroupBy/)
+  assert.match(kanbanViewSource, /data-kanban-field/)
+  assert.match(productsSource, /handleKanbanMove/)
+  assert.match(productsSource, /kanbanSubGroupBy/)
+  assert.match(notionControlsSource, /fixed-panel/)
+  assert.match(notionControlsSource, /@click\.stop/)
+  assert.match(notionSettingsSource, /position: "fixed"/)
+  assert.match(searchableDropdownSource, /rect\.right - panelWidth/)
   assert.match(restaurantApiSource, /_core_item_image_select_fields\(\)/)
   assert.match(restaurantApiSource, /attached_to_doctype.*Item/)
+  assert.match(restaurantFeaturePackSource, /has_customization.*restaurant_is_customizable/)
 })
 
 test('management navbar keeps operational modules separated and directly routable', () => {

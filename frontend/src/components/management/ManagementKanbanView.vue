@@ -7,7 +7,10 @@
           :key="`kb-col-${column.value || 'none'}`"
           class="kb-col"
           :data-col-value="column.value || '__none__'"
-          :class="{ 'kb-col--over': dragOverCol === (column.value || '__none__') && dragRow }"
+          data-kanban-drop="primary"
+          :data-kanban-field="groupBy"
+          :data-kanban-value="column.value"
+          :class="{ 'kb-col--over': isDropTarget(groupBy, column.value) && dragRow }"
         >
           <header class="kb-col-head">
             <span class="kb-dot" :style="{ background: dotColor(index) }"></span>
@@ -15,7 +18,64 @@
             <span class="kb-col-count">{{ column.rows.length }}</span>
           </header>
 
-          <div class="kb-col-body">
+          <div v-if="column.subgroups?.length" class="kb-subgroups">
+            <section
+              v-for="subgroup in column.subgroups"
+              :key="`${column.value || 'none'}-${subgroup.value || 'none'}`"
+              class="kb-subgroup"
+              data-kanban-drop="secondary"
+              :data-kanban-field="subGroupBy"
+              :data-kanban-value="subgroup.value"
+              :class="{ 'kb-subgroup--over': isDropTarget(subGroupBy, subgroup.value) && dragRow }"
+            >
+              <header class="kb-subgroup-head">
+                <strong>{{ subgroup.label }}</strong>
+                <span>{{ subgroup.rows.length }}</span>
+              </header>
+              <div class="kb-col-body">
+                <article
+                  v-for="row in subgroup.rows"
+                  :key="rowKey(row)"
+                  class="kb-card"
+                  :class="[cardClasses(row), { 'kb-card--drag': dragRow && rowKey(dragRow) === rowKey(row) }]"
+                  @pointerdown="onCardPointerDown($event, row)"
+                  @click="handleCardClick(row)"
+                >
+                  <div class="kb-card-top">
+                    <div class="kb-card-media">
+                      <img v-if="imageOf(row)" :src="imageOf(row)" loading="lazy" alt="" />
+                      <span v-else class="kb-card-fallback">{{ initials(row) }}</span>
+                    </div>
+                    <div class="kb-card-main">
+                      <strong class="kb-card-title">{{ row[titleField] || '—' }}</strong>
+                      <span class="kb-card-code">{{ row.item_code || '' }}</span>
+                    </div>
+                    <span v-if="statusBadge(row)" class="kb-status" :class="statusClass(row)">
+                      {{ statusBadge(row) }}
+                    </span>
+                  </div>
+                  <div v-if="hasChips(row)" class="kb-card-chips">
+                    <template v-for="propertyKey in orderedProps" :key="`${rowKey(row)}-${propertyKey}`">
+                      <span
+                        v-if="isPropVisible(propertyKey) && chipTextFor(row, propertyKey)"
+                        class="kb-chip"
+                        :class="chipClassFor(row, propertyKey)"
+                      >{{ chipTextFor(row, propertyKey) }}</span>
+                    </template>
+                    <template v-if="isPropVisible('tags')">
+                      <span
+                        v-for="tag in (row.tags || []).slice(0, 3)"
+                        :key="`${rowKey(row)}-tag-${tag}`"
+                        class="kb-chip kb-chip--tag"
+                      >{{ tag }}</span>
+                    </template>
+                  </div>
+                </article>
+                <p v-if="!subgroup.rows.length" class="kb-empty">بدون مورد — اینجا رها کنید</p>
+              </div>
+            </section>
+          </div>
+          <div v-else class="kb-col-body">
             <article
               v-for="row in column.rows"
               :key="rowKey(row)"
@@ -37,22 +97,23 @@
                   {{ statusBadge(row) }}
                 </span>
               </div>
-
-              <div class="kb-card-chips">
-                <span v-if="priceOf(row) > 0" class="kb-chip kb-chip--price">{{ priceText(row) }}</span>
-                <span v-if="groupBy !== 'category_title' && row.category_title" class="kb-chip">
-                  {{ row.category_title }}
-                </span>
-                <span
-                  v-for="tag in (row.tags || []).slice(0, 3)"
-                  :key="`${rowKey(row)}-${tag}`"
-                  class="kb-chip kb-chip--tag"
-                >
-                  {{ tag }}
-                </span>
+              <div v-if="hasChips(row)" class="kb-card-chips">
+                <template v-for="propertyKey in orderedProps" :key="`${rowKey(row)}-${propertyKey}`">
+                  <span
+                    v-if="isPropVisible(propertyKey) && chipTextFor(row, propertyKey)"
+                    class="kb-chip"
+                    :class="chipClassFor(row, propertyKey)"
+                  >{{ chipTextFor(row, propertyKey) }}</span>
+                </template>
+                <template v-if="isPropVisible('tags')">
+                  <span
+                    v-for="tag in (row.tags || []).slice(0, 3)"
+                    :key="`${rowKey(row)}-tag-${tag}`"
+                    class="kb-chip kb-chip--tag"
+                  >{{ tag }}</span>
+                </template>
               </div>
             </article>
-
             <p v-if="!column.rows.length" class="kb-empty">بدون مورد — اینجا رها کنید</p>
           </div>
         </section>
@@ -69,7 +130,9 @@ import { computed, ref } from "vue";
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   groupBy: { type: String, default: "category_title" },
+  subGroupBy: { type: String, default: "" },
   groupOptions: { type: Array, default: () => [] },
+  subGroupOptions: { type: Array, default: () => [] },
   rowKey: { type: [String, Function], default: "name" },
   imageField: { type: String, default: "image" },
   secondaryImageField: { type: String, default: "website_image" },
@@ -78,6 +141,9 @@ const props = defineProps({
   rowClass: { type: [String, Function], default: "" },
   clickable: { type: Boolean, default: false },
   emptyText: { type: String, default: "محصولی برای نمایش وجود ندارد." },
+  properties: { type: Object, default: null },
+  propertyOrder: { type: Array, default: () => [] },
+  chipRenderers: { type: Object, default: null },
 });
 
 const emit = defineEmits(["row-click", "move-row"]);
@@ -89,8 +155,8 @@ function rowKey(row) {
   return row?.[props.rowKey] ?? row?.name ?? JSON.stringify(row);
 }
 
-function groupValue(row) {
-  const raw = row?.[props.groupBy];
+function groupValue(row, field = props.groupBy) {
+  const raw = row?.[field];
   if (raw === null || raw === undefined || raw === "") return "";
   if (typeof raw === "boolean" || raw === 1 || raw === 0 || String(raw).trim() === "1" || String(raw).trim() === "0") {
     return Number(raw) === 1 || raw === true ? "بله" : "خیر";
@@ -99,27 +165,74 @@ function groupValue(row) {
   return String(raw).trim();
 }
 
-const groups = computed(() => {
+function groupOptionsMap(options) {
+  return new Map((options || []).map((o) => [String(o.value), String(o.label || o.value)]));
+}
+
+function buildGroups(rows, field, options, subField = "", subOptions = []) {
   const map = new Map();
-  const ungrouped = [];
-  for (const row of props.rows || []) {
-    const value = groupValue(row);
-    if (!value) {
-      ungrouped.push(row);
-      continue;
+  const labels = groupOptionsMap(options);
+  for (const row of rows || []) {
+    const value = groupValue(row, field);
+    if (!map.has(value)) {
+      map.set(value, { value, label: labels.get(value) || value || "بدون گروه", rows: [], subgroups: null });
     }
-    if (!map.has(value)) map.set(value, []);
-    map.get(value).push(row);
+    const group = map.get(value);
+    if (subField) {
+      if (!group.subgroups) group.subgroups = [];
+      const subValue = groupValue(row, subField);
+      let subgroup = group.subgroups.find((entry) => entry.value === subValue);
+      if (!subgroup) {
+        const subLabels = groupOptionsMap(subOptions);
+        subgroup = {
+          value: subValue,
+          label: subLabels.get(subValue) || subValue || "بدون زیرگروه",
+          rows: [],
+        };
+        group.subgroups.push(subgroup);
+      }
+      subgroup.rows.push(row);
+    } else {
+      group.rows.push(row);
+    }
   }
-  const labels = new Map((props.groupOptions || []).map((o) => [String(o.value), String(o.label || o.value)]));
-  const columns = Array.from(map.entries())
-    .map(([value, rows]) => ({ value, label: labels.get(value) || value, rows }))
-    .sort((a, b) => a.label.localeCompare(b.label, "fa"));
-  if (ungrouped.length) {
-    columns.unshift({ value: "", label: "بدون گروه", rows: ungrouped });
-  }
-  return columns;
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "fa"));
+}
+
+const groups = computed(() => {
+  return buildGroups(props.rows, props.groupBy, props.groupOptions, props.subGroupBy, props.subGroupOptions);
 });
+
+const DEFAULT_PROPERTY_ORDER = ["category_title", "subcategory_title", "base_price", "stock_qty", "is_active", "tags"];
+const orderedProps = computed(() => {
+  const requested = props.propertyOrder?.length ? props.propertyOrder : DEFAULT_PROPERTY_ORDER;
+  return requested.filter((key) => !props.properties || props.properties[key] !== undefined);
+});
+
+function isPropVisible(key) {
+  return props.properties?.[key] !== false;
+}
+
+function chipValue(row, key) {
+  try {
+    return props.chipRenderers?.[key]?.(row) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function chipTextFor(row, key) {
+  return String(chipValue(row, key)?.text || "").trim();
+}
+
+function chipClassFor(row, key) {
+  return chipValue(row, key)?.cls || "";
+}
+
+function hasChips(row) {
+  return orderedProps.value.some((key) => isPropVisible(key) && chipTextFor(row, key)) ||
+    (isPropVisible("tags") && Array.isArray(row?.tags) && row.tags.length > 0);
+}
 
 function imageOf(row) {
   return String(
@@ -129,6 +242,8 @@ function imageOf(row) {
       row?.restaurant_image ||
       row?.image_url ||
       row?.thumbnail ||
+      row?.media?.main_image ||
+      row?.media?.gallery?.[0] ||
       "",
   ).trim() || "";
 }
@@ -188,7 +303,7 @@ function dotColor(index) {
 // به setPointerCapture وابسته نیست. یک «کارت شناور» (ghost) دنبال اشاره‌گر
 // حرکت می‌کند و ستون زیر اشاره‌گر هایلایت می‌شود.
 const dragRow = ref(null);
-const dragOverCol = ref("");
+const dragOverTarget = ref({ field: "", value: "" });
 const suppressClick = ref(false);
 
 let dragCandidate = null;
@@ -273,31 +388,36 @@ function updateGhost(event) {
   ghostEl.style.top = `${event.clientY - 16}px`;
   ghostEl.style.left = `${event.clientX - ghostEl.offsetWidth / 2}px`;
 
-  // ستون زیر اشاره‌گر را پیدا کن
-  let targetValue = "";
+  // گروه زیر اشاره‌گر را پیدا کن؛ در حالت دو لایه، زیردسته برنده است.
+  let target = { field: "", value: "" };
   try {
     const el = document.elementFromPoint(event.clientX, event.clientY);
-    const col = el && typeof el.closest === "function" ? el.closest(".kb-col") : null;
-    if (col) targetValue = col.getAttribute("data-col-value") || "";
+    const dropZone = el && typeof el.closest === "function" ? el.closest("[data-kanban-drop]") : null;
+    if (dropZone) {
+      target = {
+        field: dropZone.getAttribute("data-kanban-field") || "",
+        value: dropZone.getAttribute("data-kanban-value") || "",
+      };
+    }
   } catch (_) {
     /* ignore */
   }
-  dragOverCol.value = targetValue;
+  dragOverTarget.value = target;
 }
 
 function onDocPointerUp(event) {
   if (event.pointerId !== activePointerId) return;
   const row = dragRow.value;
-  const targetValue = dragOverCol.value;
+  const target = dragOverTarget.value;
   const wasDragging = dragActive;
   cleanupDrag(wasDragging);
   // کلیک ساده (بدون درگ) → بدون جابه‌جایی؛ خود کلیک کارت را باز می‌کند
   if (!row || !wasDragging) return;
   // رها کردن بیرون از هر ستون → بدون تغییر
-  if (targetValue === "") return;
-  const normalized = targetValue === "__none__" ? "" : targetValue;
-  if (String(normalized ?? "") === groupValue(row)) return;
-  emit("move-row", { row, field: props.groupBy, value: normalized });
+  if (!target.field) return;
+  const normalized = String(target.value || "");
+  if (normalized === groupValue(row, target.field)) return;
+  emit("move-row", { row, field: target.field, value: normalized });
 }
 
 function onDocPointerCancel(event) {
@@ -317,7 +437,7 @@ function cleanupDrag(wasDragging = false) {
   document.body.style.userSelect = "";
   document.body.style.cursor = "";
   dragRow.value = null;
-  dragOverCol.value = "";
+  dragOverTarget.value = { field: "", value: "" };
   dragCandidate = null;
   dragActive = false;
   activePointerId = null;
@@ -333,6 +453,10 @@ function cleanupDrag(wasDragging = false) {
   } else {
     suppressClick.value = false;
   }
+}
+
+function isDropTarget(field, value) {
+  return dragOverTarget.value.field === field && dragOverTarget.value.value === String(value || "");
 }
 
 function handleCardClick(row) {
@@ -380,6 +504,46 @@ function handleCardClick(row) {
 .kb-col--over {
   border-color: color-mix(in srgb, var(--mg-primary) 55%, var(--mg-border-light));
   background: color-mix(in srgb, var(--mg-primary) 6%, var(--mg-bg-surface));
+}
+
+.kb-subgroups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow-y: auto;
+  padding: 0.4rem;
+}
+
+.kb-subgroup {
+  border: 1px solid var(--mg-border-light);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mg-bg-page) 42%, var(--mg-bg-surface));
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.kb-subgroup--over {
+  border-color: color-mix(in srgb, var(--mg-primary) 55%, var(--mg-border-light));
+  background: color-mix(in srgb, var(--mg-primary) 6%, var(--mg-bg-surface));
+}
+
+.kb-subgroup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px dashed var(--mg-border-light);
+  color: var(--mg-text-muted);
+  font-size: 0.66rem;
+}
+
+.kb-subgroup-head strong {
+  color: var(--mg-success);
+}
+
+.kb-subgroup .kb-col-body {
+  overflow: visible;
+  max-height: none;
 }
 
 .kb-col-head {

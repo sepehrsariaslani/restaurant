@@ -437,12 +437,21 @@ def _fp_resolve_category_group(title, is_subcategory=0):
 	if _has_column("Item Group", "restaurant_active"):
 		filters["restaurant_active"] = 1
 	name = frappe.db.get_value("Item Group", filters, "name", order_by="name asc")
+	if not name:
+		# Older Item Groups may not have the Restaurant marker fields yet, but
+		# they are still valid native groups that can own an Item.
+		name = frappe.db.get_value(
+			"Item Group",
+			{"item_group_name": title},
+			"name",
+			order_by="name asc",
+		)
 	return (name or "").strip()
 
 
 @frappe.whitelist()
 def set_management_product_kanban_field(item_name=None, field=None, value=None):
-	"""Set a single product field when a kanban card is dragged to another column."""
+	"""Persist a product's primary or secondary Kanban group after drag and drop."""
 	_ensure_management_access()
 	_fp_ensure_item_ops_fields()
 	field = (field or "").strip()
@@ -452,6 +461,15 @@ def set_management_product_kanban_field(item_name=None, field=None, value=None):
 	if not target or not frappe.db.exists("Item", target):
 		frappe.throw(_("Item not found."), frappe.DoesNotExistError)
 
+	field_aliases = {
+		"category_title": "restaurant_category",
+		"subcategory_title": "restaurant_subcategory",
+		"is_active": "restaurant_enabled",
+		"coming_soon": "restaurant_coming_soon",
+		"out_of_stock": "restaurant_out_of_stock",
+		"has_customization": "restaurant_is_customizable",
+	}
+	field = field_aliases.get(field, field)
 	updates = {}
 	if field == "restaurant_category":
 		group = _fp_resolve_category_group(value, is_subcategory=0)
@@ -459,8 +477,14 @@ def set_management_product_kanban_field(item_name=None, field=None, value=None):
 	elif field == "restaurant_subcategory":
 		group = _fp_resolve_category_group(value, is_subcategory=1)
 		updates["restaurant_subcategory"] = group or (value or "").strip()
-	elif field in ("restaurant_enabled", "restaurant_out_of_stock", "restaurant_coming_soon"):
-		updates[field] = cint(value)
+	elif field in (
+		"restaurant_enabled",
+		"restaurant_out_of_stock",
+		"restaurant_coming_soon",
+		"restaurant_is_customizable",
+	):
+		boolean_value = str(value or "").strip().lower()
+		updates[field] = 1 if value is True or boolean_value in ("1", "true", "yes", "on", "بله") else 0
 	else:
 		frappe.throw(_("Invalid field for kanban move: {0}").format(field))
 

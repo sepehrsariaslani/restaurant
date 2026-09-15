@@ -1,14 +1,14 @@
 <template>
   <div class="nvs" ref="rootRef">
     <!-- دکمه باز کردن تنظیمات نما -->
-    <button type="button" class="nvs-trigger" :class="{ active: open, has: hasActive }" @click="open = !open">
+    <button type="button" class="nvs-trigger" :class="{ active: open, has: hasActive }" @click="toggleOpen">
       <Settings :size="14" :stroke-width="2.2" />
       <span>تنظیمات نما</span>
       <ChevronDown :size="13" :class="['nvs-chev', { open }]" />
     </button>
 
     <!-- پنل کامل تنظیمات -->
-    <div v-if="open" class="nvs-panel">
+    <div v-if="open" class="nvs-panel" :style="panelStyle" @click.stop>
       <div class="nvs-head">
         <div class="nvs-head-title">
           <strong>تنظیمات نما</strong>
@@ -58,6 +58,7 @@
               :options="optionsFor(f.property)"
               placeholder="انتخاب..."
               search-placeholder="جستجو..."
+              fixed-panel
               clearable
               include-empty-option
               empty-label="همه"
@@ -72,6 +73,7 @@
               :options="optionsFor(f.property)"
               placeholder="انتخاب تگ..."
               search-placeholder="جستجوی تگ..."
+              fixed-panel
               clearable
               include-empty-option
               empty-label="همه"
@@ -181,6 +183,7 @@
               :options="optionsFor(c.property)"
               placeholder="انتخاب..."
               search-placeholder="جستجو..."
+              fixed-panel
               clearable
               include-empty-option
               empty-label="همه"
@@ -195,6 +198,7 @@
               :options="optionsFor(c.property)"
               placeholder="انتخاب تگ..."
               search-placeholder="جستجوی تگ..."
+              fixed-panel
               clearable
               include-empty-option
               empty-label="همه"
@@ -235,7 +239,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ArrowUpDown,
   Calendar,
@@ -269,6 +273,7 @@ const emit = defineEmits(["reset", "search", "update"]);
 
 const open = ref(false);
 const rootRef = ref(null);
+const panelStyle = ref({});
 const searchQuery = ref("");
 const dragPropKey = ref("");
 const dropOverKey = ref("");
@@ -440,6 +445,33 @@ function colorHex(color) {
   return COLOR_HEX[color] || "#6b7280";
 }
 
+async function toggleOpen() {
+  open.value = !open.value;
+  if (!open.value) return;
+  await nextTick();
+  updatePanelPosition();
+}
+
+function updatePanelPosition() {
+  if (!open.value || !rootRef.value) return;
+  const trigger = rootRef.value.querySelector(".nvs-trigger");
+  if (!trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.min(380, Math.max(260, window.innerWidth - 16));
+  const maxHeight = Math.min(640, Math.max(240, window.innerHeight - 16));
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const openUp = spaceBelow < Math.min(maxHeight, 420) && rect.top > spaceBelow;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  panelStyle.value = {
+    position: "fixed",
+    top: openUp ? `${Math.max(8, rect.top - maxHeight - 6)}px` : `${rect.bottom + 6}px`,
+    left: `${left}px`,
+    right: "auto",
+    width: `${width}px`,
+    maxHeight: `${maxHeight}px`,
+  };
+}
+
 function onOutsideClick(event) {
   if (rootRef.value && !rootRef.value.contains(event.target)) {
     open.value = false;
@@ -447,7 +479,15 @@ function onOutsideClick(event) {
 }
 
 onMounted(() => document.addEventListener("click", onOutsideClick));
-onBeforeUnmount(() => document.removeEventListener("click", onOutsideClick));
+onMounted(() => {
+  window.addEventListener("resize", updatePanelPosition);
+  window.addEventListener("scroll", updatePanelPosition, true);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onOutsideClick);
+  window.removeEventListener("resize", updatePanelPosition);
+  window.removeEventListener("scroll", updatePanelPosition, true);
+});
 </script>
 
 <style scoped>

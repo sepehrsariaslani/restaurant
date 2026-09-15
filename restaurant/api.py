@@ -3572,7 +3572,16 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 	)
 	nutrition = _nutrition_payload(row)
 	image = ""
-	for key in ("image", "image_image", "image_item_image", "image_website_image", "image_restaurant_image"):
+	for key in (
+		"image",
+		"image_image",
+		"image_item_image",
+		"image_website_image",
+		"image_restaurant_image",
+		"item_image",
+		"website_image",
+		"restaurant_image",
+	):
 		value = row.get(key) if hasattr(row, "get") else getattr(row, key, "")
 		if value:
 			image = value
@@ -8765,24 +8774,28 @@ def _template_display_variants(template_doc, branch=None):
 	if branch and _has_column("Item", "restaurant_branch"):
 		filters["restaurant_branch"] = ["in", [branch, ""]]
 
+	variant_fields = [
+		"name",
+		"item_code",
+		"item_name",
+		"restaurant_slug",
+		"restaurant_short_desc",
+		"restaurant_base_price",
+		"standard_rate",
+		"restaurant_enabled",
+		"disabled",
+		"restaurant_category",
+		"restaurant_subcategory",
+		"restaurant_sort_order",
+		*_core_item_image_select_fields(),
+	]
+	if _has_column("Item", "restaurant_is_customizable"):
+		variant_fields.append("restaurant_is_customizable")
+
 	variants = frappe.get_all(
 		"Item",
 		filters=filters,
-		fields=[
-			"name",
-			"item_code",
-			"item_name",
-			"restaurant_slug",
-			"restaurant_short_desc",
-			"restaurant_base_price",
-			"standard_rate",
-			"restaurant_enabled",
-			"disabled",
-			"restaurant_category",
-			"restaurant_subcategory",
-			"restaurant_sort_order",
-			*_core_item_image_select_fields(),
-		],
+		fields=variant_fields,
 		ignore_permissions=True,
 		order_by="restaurant_sort_order asc, item_name asc",
 		limit_page_length=1000,
@@ -8803,6 +8816,36 @@ def _template_display_variants(template_doc, branch=None):
 		for row in variants:
 			for fieldname in extra_fields:
 				row[fieldname] = extra_map.get(row.name, {}).get(fieldname)
+
+	variant_names_without_image = [
+		row.get("name")
+		for row in variants
+		if not any(
+			(row.get(key) or "").strip()
+			for key in ("image", "image_image", "image_item_image", "image_website_image", "image_restaurant_image")
+		)
+	]
+	if variant_names_without_image and frappe.db.exists("DocType", "File"):
+		attachments = frappe.get_all(
+			"File",
+			fields=["attached_to_name", "file_url"],
+			filters={
+				"attached_to_doctype": "Item",
+				"attached_to_name": ["in", variant_names_without_image],
+				"is_folder": 0,
+				"is_private": 0,
+			},
+			order_by="creation asc",
+			ignore_permissions=True,
+		)
+		attachment_map = {}
+		for attachment in attachments:
+			item_name = attachment.get("attached_to_name")
+			if item_name and item_name not in attachment_map:
+				attachment_map[item_name] = attachment.get("file_url") or ""
+		for row in variants:
+			if row.get("name") in attachment_map:
+				row["image"] = attachment_map[row.get("name")]
 
 	grouped = {}
 	for variant in variants:
@@ -19476,8 +19519,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		item_fields.append("restaurant_out_of_stock")
 	if _has_column("Item", "restaurant_out_of_stock_until"):
 		item_fields.append("restaurant_out_of_stock_until")
-	if _has_column("Item", "restaurant_out_of_stock"):
-		item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_is_customizable"):
+		item_fields.append("restaurant_is_customizable")
 	if _has_column("Item", "restaurant_packaging_price"):
 		item_fields.append("restaurant_packaging_price")
 	if _has_column("Item", "restaurant_calendar_date"):
@@ -19533,8 +19576,16 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 	for template_row in template_rows:
 		rows.extend(_template_display_row_or_self(template_row, branch=branch))
 
-	stock_by_item = {}
 	item_names = [row.get("name") for row in rows if row.get("name")]
+	bom_item_map = _get_items_with_bom(item_names) if frappe.db.exists("DocType", "BOM") else {}
+	for row in rows:
+		item_name = row.get("name") or ""
+		row["has_bom"] = 1 if bom_item_map.get(item_name) else 0
+		row["has_customization"] = cint(
+			row.get("has_customization") or row.get("restaurant_is_customizable") or 0
+		)
+
+	stock_by_item = {}
 	if item_names and frappe.db.exists("DocType", "Bin"):
 		bin_rows = frappe.get_all(
 			"Bin",

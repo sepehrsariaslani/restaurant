@@ -155,6 +155,8 @@ function resolveImage(row) {
       row?.restaurant_image ||
       row?.image_url ||
       row?.thumbnail ||
+      row?.media?.main_image ||
+      row?.media?.gallery?.[0] ||
       '',
   ).trim()
 }
