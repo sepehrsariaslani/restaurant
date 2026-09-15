@@ -71,3 +71,17 @@ test('product detail has the complete operational tab contract', async () => {
   ])
   assert.match(detailSource, /builder.*variants|legacy|changes.*reports/)
 })
+
+test('product classification uses the native Item Group hierarchy on the product card', () => {
+  const nativePanelSource = fs.readFileSync(new URL('components/management/catalog/ManagementProductNativePanel.vue', src), 'utf8')
+  const productsSource = fs.readFileSync(new URL('pages/management/catalog/ManagementProductsPage.vue', src), 'utf8')
+  const apiSource = fs.readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
+  assert.match(detailSource, /item_group_parent/)
+  assert.match(detailSource, /item_group_path/)
+  assert.doesNotMatch(detailSource, /v-model="settingsForm\.restaurant_category"/)
+  assert.doesNotMatch(productsSource, /v-model="createForm\.restaurant_category"/)
+  assert.match(productsSource, /(?:category_title|subcategory_title):\s*['"]item_group['"]/)
+  assert.match(apiSource, /item_group_parents/)
+  assert.match(apiSource, /parent_item_group/)
+  assert.match(nativePanelSource, /activeSection/)
+})

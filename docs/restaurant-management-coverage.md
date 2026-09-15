@@ -111,7 +111,7 @@
 | `ManagementBomsPage` | `/management/boms` | ERPNext BOM | Scaffold/Card | فهرست تخصصی و انتخاب BOM | بررسی منبع؛ مسیر حفظ شده |
 | `ManagementBomDetailPage` | `/management/bom?bom=...` | ERPNext BOM و Item | Scaffold/Card | detail/form اقلام BOM | بررسی منبع؛ چرخهٔ native حفظ شده |
 | `ManagementMenuDesignerPage` | `/management/menu-design` | Restaurant menu config + ERPNext Item/Group | Scaffold + ویرایشگر تخصصی | نمای دسته/محصول و انتشار | بررسی منبع؛ editor عمداً custom است |
-| `ManagementMenuGroupsPage` | `/management/menu-groups` | ERPNext Item Group + فیلدهای Restaurant | Scaffold | فهرست تخصصی گروه‌ها | بررسی منبع؛ فرم detail جداست |
+| `ManagementMenuGroupsPage` | `/management/menu-groups` | ERPNext Item Group + فیلدهای Restaurant | Scaffold | فهرست تخصصی گروه‌ها | hierarchy native گروه کالا مرجع ایجاد/ویرایش محصول است؛ فیلدهای قدیمی فقط fallback |
 | `ManagementMenuGroupDetailPage` | `/management/menu-group?name=...` | ERPNext Item Group | Scaffold/Card | فرم ایجاد/ویرایش گروه | بررسی منبع؛ payload حفظ شده |
 | `ManagementModifierGroupsPage` | `/management/modifier-groups` | Restaurant modifier groups | Scaffold | فهرست/تنظیمات تخصصی | بررسی منبع؛ editor فعلی حفظ شده |
 
@@ -218,6 +218,8 @@
 برای صفحات انبار، `InventorySectionShell` مالک الگوی دامنه‌ای است. برای صفحات گزارش و ledger، `SmartDataTable` یا primitive معادل موجود باید بر جدول محلی ترجیح داده شود.
 
 در جزئیات محصول، `ManagementProductNativePanel` فیلدهای allowlist‌شدهٔ `Item` و child tableهای native را با `ManagementEditableTable` مدیریت می‌کند؛ `ManagementProductConnectionsPanel` اسناد فروش، خرید، BOM و قیمت را به‌صورت خواندنی از DocTypeهای native جمع می‌کند؛ و `ManagementProductInventoryPanel` ماندهٔ `Bin` و گردش `Stock Ledger Entry` را با `ManagementSmartDataTable` نمایش می‌دهد. Linkهای native از قرارداد remote-searchable `SearchableDropdown` استفاده می‌کنند تا گزینه‌های ERPNext در پنل‌های محدود بریده نشوند.
+
+در اصلاح جدید محصولات، سلسله‌مراتب `Item Group` مرجع واحد گروه‌بندی محصول است: فرم‌ها یک گروه اصلی و یک گروه نهایی را از همین درخت می‌گیرند و فقط مقدار نهایی را در `Item.item_group` ذخیره می‌کنند. فیلدهای قدیمی `restaurant_category` و `restaurant_subcategory` برای داده‌های legacy در API نگه داشته شده‌اند، اما دیگر در UI فرم محصول مالک دسته‌بندی نیستند. تنظیمات native نیز در همان پنل به تب‌های پایه، فروش و نمایش، خرید و تأمین، انبار، تولید و کیفیت، مالی و مالیات و مدل‌ها تفکیک شده‌اند.
 
 ## مرزهای باقی‌مانده برای انتشار
 

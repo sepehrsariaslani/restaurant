@@ -6,7 +6,7 @@ const number = (key, label, extra = {}) => field(key, label, 'number', extra)
 export const nativeFieldSections = [
   {
     id: 'classification',
-    title: 'طبقه‌بندی و رفتار پایه',
+    title: 'پایه و رفتار',
     description: 'فیلدهای native که رفتار کالا را در ERPNext کنترل می‌کنند.',
     fields: [
       field('naming_series', 'سری نام‌گذاری'),
@@ -33,7 +33,7 @@ export const nativeFieldSections = [
   },
   {
     id: 'sales',
-    title: 'سیاست فروش و درآمد',
+    title: 'فروش و نمایش',
     fields: [
       check('is_sales_item', 'قابل فروش'),
       link('sales_uom', 'واحد پیش‌فرض فروش', 'UOM'),
@@ -48,7 +48,7 @@ export const nativeFieldSections = [
   },
   {
     id: 'purchase',
-    title: 'سیاست خرید و تأمین',
+    title: 'خرید و تأمین',
     fields: [
       check('is_purchase_item', 'قابل خرید'),
       link('purchase_uom', 'واحد پیش‌فرض خرید', 'UOM'),
@@ -65,7 +65,7 @@ export const nativeFieldSections = [
   },
   {
     id: 'inventory',
-    title: 'کنترل موجودی و ردیابی',
+    title: 'انبار و ردیابی',
     fields: [
       check('is_stock_item', 'نگهداری موجودی'),
       field('valuation_method', 'روش ارزش‌گذاری', 'select', { options: ['', 'FIFO', 'Moving Average', 'LIFO'] }),
@@ -91,7 +91,7 @@ export const nativeFieldSections = [
   },
   {
     id: 'operations',
-    title: 'وب‌سایت، کیفیت و تولید',
+    title: 'تولید و کیفیت',
     fields: [
       check('show_on_site', 'نمایش در وب‌سایت'),
       field('custom_url', 'لینک سفارشی وب‌سایت'),
@@ -112,7 +112,7 @@ export const nativeFieldSections = [
   },
   {
     id: 'accounting',
-    title: 'مالیات و پیش‌فرض‌های مالی',
+    title: 'مالی و مالیات',
     fields: [
       link('purchase_tax_withholding_category', 'مالیات تکلیفی خرید', 'Tax Withholding Category'),
       link('sales_tax_withholding_category', 'مالیات تکلیفی فروش', 'Tax Withholding Category'),

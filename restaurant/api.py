@@ -3564,8 +3564,22 @@ def _resolve_modifier_option_pricing(option_row=None, price_list=None):
 def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None):
 	category_meta_map = category_meta_map or {}
 	subcategory_meta_map = subcategory_meta_map or {}
-	category_meta = category_meta_map.get(row.restaurant_category, {})
-	subcategory_meta = subcategory_meta_map.get(row.restaurant_subcategory, {})
+	legacy_category = str(row.get("restaurant_category") or getattr(row, "restaurant_category", "") or "").strip()
+	legacy_subcategory = str(row.get("restaurant_subcategory") or getattr(row, "restaurant_subcategory", "") or "").strip()
+	category_meta = category_meta_map.get(legacy_category, {})
+	subcategory_meta = subcategory_meta_map.get(legacy_subcategory, {})
+	native_group = _management_item_group_context(row.get("item_group") or getattr(row, "item_group", ""))
+	if native_group.get("item_group"):
+		parent_value = str(native_group.get("item_group_parent") or "").strip()
+		category_value = parent_value or native_group.get("item_group")
+		category_title = native_group.get("item_group_parent_title") or native_group.get("item_group_title")
+		subcategory_value = native_group.get("item_group") if parent_value else ""
+		subcategory_title = native_group.get("item_group_title") if parent_value else ""
+	else:
+		category_value = legacy_category
+		category_title = category_meta.get("title")
+		subcategory_value = legacy_subcategory
+		subcategory_title = subcategory_meta.get("title")
 	item_price = _get_default_item_price_rate(row)
 	base_price = (
 		item_price if item_price is not None else (flt(row.restaurant_base_price) or flt(row.standard_rate))
@@ -3594,12 +3608,15 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"short_desc": row.restaurant_short_desc,
 		"base_price": base_price,
 		"image": image,
-		"category": row.restaurant_category,
-		"category_title": category_meta.get("title"),
-		"category_slug": category_meta.get("slug"),
-		"subcategory": row.restaurant_subcategory,
-		"subcategory_title": subcategory_meta.get("title"),
-		"subcategory_slug": subcategory_meta.get("slug"),
+		"item_group": row.get("item_group") or getattr(row, "item_group", ""),
+		"item_group_parent": native_group.get("item_group_parent") or "",
+		"item_group_path": native_group.get("item_group_path") or "",
+		"category": category_value,
+		"category_title": category_title or category_meta.get("title") or category_value,
+		"category_slug": category_meta.get("slug") or _public_menu_slugify(category_title or category_value),
+		"subcategory": subcategory_value,
+		"subcategory_title": subcategory_title or subcategory_meta.get("title") or subcategory_value,
+		"subcategory_slug": subcategory_meta.get("slug") or _public_menu_slugify(subcategory_title or subcategory_value),
 		"sort_order": cint(row.get("restaurant_sort_order") or 0),
 		"restaurant_sort_order": cint(row.get("restaurant_sort_order") or 0),
 		"nutrition": nutrition,
@@ -4388,6 +4405,7 @@ def _get_core_menu_items(
 		"name",
 		"item_code",
 		"item_name",
+		"item_group",
 		"restaurant_slug",
 		"restaurant_short_desc",
 		"restaurant_base_price",
@@ -7085,6 +7103,7 @@ def get_related_items(item_slug, limit=6, branch=None):
 		"name",
 		"item_code",
 		"item_name",
+		"item_group",
 		"restaurant_slug",
 		"restaurant_short_desc",
 		"restaurant_base_price",
@@ -16630,10 +16649,65 @@ def _management_collect_item_media(item_doc, image_field):
 	}
 
 
+def _management_item_group_context(item_group):
+	"""Return the native Item Group hierarchy for a product-facing surface.
+
+	Item Group remains the source of truth. The legacy restaurant category fields
+	are intentionally not used to build this context; they are kept elsewhere
+	only as a compatibility fallback for older menu records.
+	"""
+	item_group = str(item_group or "").strip()
+	if not item_group or not frappe.db.exists("Item Group", item_group):
+		return {
+			"item_group": item_group,
+			"item_group_title": item_group,
+			"item_group_parent": "",
+			"item_group_parent_title": "",
+			"item_group_path": item_group,
+		}
+
+	fields = ["name", "item_group_name", "parent_item_group"]
+	if _has_column("Item Group", "is_group"):
+		fields.append("is_group")
+
+	rows = []
+	current_name = item_group
+	seen = set()
+	while current_name and current_name not in seen and len(rows) < 20:
+		seen.add(current_name)
+		row = frappe.db.get_value("Item Group", current_name, fields, as_dict=True)
+		if not row:
+			break
+		rows.append(row)
+		current_name = str(row.get("parent_item_group") or "").strip()
+
+	labels = [str(row.get("item_group_name") or row.get("name") or "").strip() for row in reversed(rows)]
+	labels = [label for label in labels if label]
+	leaf = rows[0] if rows else {}
+	parent_name = str(leaf.get("parent_item_group") or "").strip()
+	parent_row = rows[1] if len(rows) > 1 else None
+	parent_row_name = str((parent_row or {}).get("name") or "").strip()
+	parent_title = str(
+		(parent_row or {}).get("item_group_name")
+		or (parent_row or {}).get("name")
+		or "همه گروه‌ها"
+	).strip()
+	if parent_row_name == "All Item Groups":
+		parent_title = "همه گروه‌ها"
+	return {
+		"item_group": item_group,
+		"item_group_title": str(leaf.get("item_group_name") or item_group).strip(),
+		"item_group_parent": parent_name or "All Item Groups",
+		"item_group_parent_title": parent_title,
+		"item_group_path": " / ".join(labels) or item_group,
+	}
+
+
 def _management_product_field_options():
 	options = {
 		"uoms": [],
 		"item_groups": [],
+		"item_group_parents": [],
 		"categories": [],
 		"subcategories": [],
 		"branches": [],
@@ -16671,23 +16745,41 @@ def _management_product_field_options():
 		]
 
 	if frappe.db.exists("DocType", "Item Group"):
-		group_filters = {}
-		if _has_column("Item Group", "is_group"):
-			group_filters["is_group"] = 0
+		group_fields = ["name", "item_group_name", "parent_item_group"]
+		has_group_flag = _has_column("Item Group", "is_group")
+		if has_group_flag:
+			group_fields.append("is_group")
 		group_rows = frappe.get_all(
 			"Item Group",
-			fields=["name", "item_group_name"],
-			filters=group_filters,
+			fields=group_fields,
 			order_by="item_group_name asc",
 			ignore_permissions=True,
 		)
+		leaf_rows = [row for row in group_rows if not has_group_flag or cint(row.get("is_group") or 0) != 1]
 		options["item_groups"] = [
 			{
 				"value": row.name,
 				"label": row.item_group_name or row.name,
+				"item_group_name": row.item_group_name or row.name,
+				"parent_item_group": row.get("parent_item_group") or "All Item Groups",
+				"parent_label": _management_item_group_context(row.name).get("item_group_parent_title") or "همه گروه‌ها",
+				"path": _management_item_group_context(row.name).get("item_group_path") or row.item_group_name or row.name,
 			}
-			for row in group_rows
+			for row in leaf_rows
 		]
+		parent_rows = [row for row in group_rows if not has_group_flag or cint(row.get("is_group") or 0) == 1]
+		parent_options = [
+			{
+				"value": row.name,
+				"label": "همه گروه‌ها" if row.name == "All Item Groups" else row.item_group_name or row.name,
+				"item_group_name": row.item_group_name or row.name,
+			}
+			for row in parent_rows
+		]
+		if any(str(row.get("parent_item_group") or "").strip() in ("", "All Item Groups") for row in leaf_rows):
+			if not any(option["value"] == "All Item Groups" for option in parent_options):
+				parent_options.insert(0, {"value": "All Item Groups", "label": "همه گروه‌ها", "item_group_name": "همه گروه‌ها"})
+		options["item_group_parents"] = parent_options
 
 		category_rows = frappe.get_all(
 			"Item Group",
@@ -18919,6 +19011,7 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 	_ensure_management_access()
 	item_name = _management_resolve_item_name(item_name)
 	item_doc = frappe.get_doc("Item", item_name)
+	item_group_context = _management_item_group_context(item_doc.get("item_group"))
 	image_field = _core_item_image_field()
 	refreshed_nutrition = _refresh_item_nutrition_from_bom(item_doc.name)
 	if refreshed_nutrition:
@@ -18990,6 +19083,10 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			if _has_column("Item", "custom_snapp_code")
 			else "",
 			"item_group": item_doc.item_group,
+			"item_group_title": item_group_context.get("item_group_title") or item_doc.item_group,
+			"item_group_parent": item_group_context.get("item_group_parent") or "",
+			"item_group_parent_title": item_group_context.get("item_group_parent_title") or "",
+			"item_group_path": item_group_context.get("item_group_path") or item_doc.item_group,
 			"stock_uom": item_doc.stock_uom,
 			"disabled": cint(item_doc.disabled),
 			"is_sales_item": cint(item_doc.get("is_sales_item") or 0),
@@ -19246,6 +19343,25 @@ def update_management_product_settings(payload=None):
 		if flt(item_doc.get(fieldname) or 0) != next_value:
 			item_doc.set(fieldname, next_value)
 			changed = True
+
+	# Keep the old menu fields readable for legacy endpoints, while native
+	# Item.item_group remains the only value selected and owned by the UI.
+	if "item_group" in parsed_payload and _has_column("Item", "item_group"):
+		group_context = _management_item_group_context(item_doc.get("item_group"))
+		parent_value = str(group_context.get("item_group_parent") or "").strip()
+		is_nested_group = bool(parent_value and parent_value != "All Item Groups")
+		legacy_category = parent_value if is_nested_group else item_doc.get("item_group") or ""
+		legacy_subcategory = item_doc.get("item_group") or "" if is_nested_group else ""
+		for fieldname, next_value in (
+			("restaurant_category", legacy_category),
+			("restaurant_subcategory", legacy_subcategory),
+		):
+			if not _has_column("Item", fieldname):
+				continue
+			next_value = str(next_value or "").strip()
+			if str(item_doc.get(fieldname) or "").strip() != next_value:
+				item_doc.set(fieldname, next_value)
+				changed = True
 
 	# Handle tag table (child table) only after its optional custom doctypes are installed.
 	tag_table_field = "restaurant_item_tag_table"
@@ -19821,6 +19937,7 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		"name",
 		"item_code",
 		"item_name",
+		"item_group",
 		"restaurant_slug",
 		"restaurant_short_desc",
 		"restaurant_base_price",

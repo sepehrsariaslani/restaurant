@@ -74,13 +74,12 @@ export function createInitialProductSettingsForm() {
 		item_code: "",
 		item_name: "",
 		item_group: "",
+		item_group_parent: "",
 		stock_uom: "",
 		description: "",
 		restaurant_slug: "",
 		restaurant_short_desc: "",
 		restaurant_long_desc: "",
-		restaurant_category: "",
-		restaurant_subcategory: "",
 		restaurant_branch: "",
 		image: "",
 		website_image: "",
@@ -123,13 +122,12 @@ export function hydrateProductSettingsForm(form, payload = {}, tagOptions = []) 
 	form.item_code = item.item_code || "";
 	form.item_name = item.item_name || "";
 	form.item_group = item.item_group || "";
+	form.item_group_parent = item.item_group_parent || "";
 	form.stock_uom = item.stock_uom || "";
 	form.description = item.description || "";
 	form.restaurant_slug = item.restaurant_slug || "";
 	form.restaurant_short_desc = item.short_description || "";
 	form.restaurant_long_desc = item.long_description || "";
-	form.restaurant_category = item.restaurant_category || "";
-	form.restaurant_subcategory = item.restaurant_subcategory || "";
 	form.restaurant_branch = item.restaurant_branch || "";
 	form.image = item.image || "";
 	form.website_image = item.website_image || "";
@@ -208,8 +206,6 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 		restaurant_slug: String(form.restaurant_slug || "").trim(),
 		restaurant_short_desc: String(form.restaurant_short_desc || "").trim(),
 		restaurant_long_desc: String(form.restaurant_long_desc || "").trim(),
-		restaurant_category: String(form.restaurant_category || "").trim(),
-		restaurant_subcategory: String(form.restaurant_subcategory || "").trim(),
 		restaurant_branch: String(form.restaurant_branch || "").trim(),
 		image: String(form.image || "").trim(),
 		website_image: String(form.website_image || "").trim(),

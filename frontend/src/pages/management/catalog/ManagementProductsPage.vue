@@ -298,17 +298,17 @@
           <small class="hint">نام محصول که به مشتری نمایش داده می‌شود</small>
         </label>
         <label>
-          گروه کالا
+          گروه اصلی کالا
           <SearchableDropdown
-            v-model="createForm.item_group"
-            :options="itemGroupOptions"
-            placeholder="انتخاب گروه"
-            search-placeholder="جستجوی گروه..."
+            v-model="createForm.item_group_parent"
+            :options="itemGroupParentOptions"
+            placeholder="انتخاب گروه اصلی"
+            search-placeholder="جستجوی گروه اصلی..."
             include-empty-option
             empty-label="همه گروه‌ها"
             fixed-panel
           />
-          <small class="hint">دسته‌بندی محصول برای مدیریت بهتر</small>
+          <small class="hint">گروه اصلی از ساختار native Item Group انتخاب می‌شود.</small>
         </label>
         <label>
           واحد
@@ -322,28 +322,17 @@
           <small class="hint">واحد اندازه‌گیری (مثلا: عدد، لیتر، کیلوگرم)</small>
         </label>
         <label>
-          دسته رستورانی
+          گروه نهایی کالا
           <SearchableDropdown
-            v-model="createForm.restaurant_category"
-            :options="categoryOptions"
-            placeholder="بدون دسته"
-            search-placeholder="جستجوی دسته..."
+            v-model="createForm.item_group"
+            :options="createItemGroupOptions"
+            placeholder="انتخاب گروه نهایی"
+            search-placeholder="جستجوی گروه نهایی..."
             include-empty-option
-            empty-label="بدون دسته"
+            empty-label="انتخاب گروه نهایی"
             fixed-panel
           />
-        </label>
-        <label>
-          زیردسته
-          <SearchableDropdown
-            v-model="createForm.restaurant_subcategory"
-            :options="createSubcategoryOptions"
-            placeholder="بدون زیردسته"
-            search-placeholder="جستجوی زیردسته..."
-            include-empty-option
-            empty-label="بدون زیردسته"
-            fixed-panel
-          />
+          <small class="hint">همین مقدار در `Item.item_group` ذخیره می‌شود.</small>
         </label>
         <label class="full">
           توضیح کوتاه
@@ -578,6 +567,7 @@ import {
 } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { jalaliToGregorian } from '@/utils/jalali'
+import { buildItemGroupOptions, getChildItemGroupOptions, resolveItemGroupSelection } from '@/utils/managementProductGrouping'
 import { Folder, Package, Plus, Search, X } from 'lucide-vue-next'
 
 const PRODUCT_VISIBILITY_OVERRIDES_KEY = 'management-products-visibility-overrides'
@@ -741,29 +731,12 @@ const activeViewSubtitle = computed(() => {
   return `${count} کالا از ${total} کالا در نمایش فعلی`
 })
 
-const categoryOptions = computed(() => {
-  const options = buildSelectOptions(products.value, 'category_title')
-  return options.length ? options : normalizeOptionRows(bootFieldOptions.value.categories)
-})
-
-const createSubcategoryOptions = computed(() => {
-  const selectedCategory = String(createForm.value.restaurant_category || '').trim()
-  const rows = normalizeOptionRows(bootFieldOptions.value.subcategories)
-  if (!selectedCategory) {
-    return rows.length ? rows : buildSelectOptions(products.value, 'subcategory_title')
-  }
-  const filtered = rows.filter((row) => {
-    const category = String(row.category || row.parent_category || row.restaurant_category || '').trim()
-    return !category || category === selectedCategory
-  })
-  return filtered.length ? filtered : buildSelectOptions(
-    products.value.filter((row) => String(row?.category_title || row?.category || '').trim() === selectedCategory),
-    'subcategory_title',
-  )
-})
-
 const uomOptions = computed(() => normalizeOptionRows(bootFieldOptions.value.uoms))
-const itemGroupOptions = computed(() => normalizeOptionRows(bootFieldOptions.value.item_groups))
+const itemGroupOptions = computed(() => buildItemGroupOptions(bootFieldOptions.value.item_groups))
+const itemGroupParentOptions = computed(() => normalizeOptionRows(bootFieldOptions.value.item_group_parents))
+const createItemGroupOptions = computed(() =>
+  getChildItemGroupOptions(bootFieldOptions.value.item_groups, createForm.value.item_group_parent),
+)
 
 const productTreeNodes = computed(() => {
   const grouped = groupRows(visibleProducts.value, treeGroupBy.value || 'category_title', '')
@@ -898,6 +871,7 @@ const deletingProductNames = ref([])
 const bootFieldOptions = ref({
   uoms: [],
   item_groups: [],
+  item_group_parents: [],
   categories: [],
   subcategories: [],
 })
@@ -1344,6 +1318,7 @@ async function loadFieldOptionsForCreate() {
     bootFieldOptions.value = {
       uoms: Array.isArray(fieldOptions?.uoms) ? fieldOptions.uoms : [],
       item_groups: Array.isArray(fieldOptions?.item_groups) ? fieldOptions.item_groups : [],
+      item_group_parents: Array.isArray(fieldOptions?.item_group_parents) ? fieldOptions.item_group_parents : [],
       categories: Array.isArray(fieldOptions?.categories) ? fieldOptions.categories : [],
       subcategories: Array.isArray(fieldOptions?.subcategories) ? fieldOptions.subcategories : [],
     }
@@ -1352,6 +1327,10 @@ async function loadFieldOptionsForCreate() {
     }
     if (!createForm.value.item_group && bootFieldOptions.value.item_groups.length) {
       createForm.value.item_group = String(bootFieldOptions.value.item_groups[0]?.value || bootFieldOptions.value.item_groups[0]?.name || '').trim()
+    }
+    if (!createForm.value.item_group_parent && createForm.value.item_group) {
+      const selection = resolveItemGroupSelection(bootFieldOptions.value.item_groups, createForm.value.item_group)
+      createForm.value.item_group_parent = selection.parentItemGroup
     }
   } catch (fieldOptionsError) {
     // Keep manual entry fallback when field options cannot be loaded.
@@ -1363,9 +1342,8 @@ function createDefaultForm() {
     item_code: '',
     item_name: '',
     item_group: '',
+    item_group_parent: '',
     stock_uom: '',
-    restaurant_category: '',
-    restaurant_subcategory: '',
     description: '',
     restaurant_enabled: true,
     show_in_print: true,
@@ -1395,6 +1373,7 @@ function openCreatePopup() {
   }
   if (itemGroupOptions.value.length) {
     createForm.value.item_group = itemGroupOptions.value[0].value
+    createForm.value.item_group_parent = itemGroupOptions.value[0].parentValue
   }
   createPopupOpen.value = true
 }
@@ -1494,8 +1473,6 @@ async function submitCreate(openFullDetail = false) {
     item_name: String(createForm.value.item_name || '').trim(),
     stock_uom: String(createForm.value.stock_uom || '').trim(),
     item_group: String(createForm.value.item_group || '').trim(),
-    restaurant_category: String(createForm.value.restaurant_category || '').trim(),
-    restaurant_subcategory: String(createForm.value.restaurant_subcategory || '').trim(),
     description: String(createForm.value.description || '').trim(),
     restaurant_enabled: createForm.value.restaurant_enabled ? 1 : 0,
     show_in_print: createForm.value.show_in_print ? 1 : 0,
@@ -1511,6 +1488,10 @@ async function submitCreate(openFullDetail = false) {
   }
   if (!payload.stock_uom) {
     createError.value = '⚠️ لطفاً واحد کالا را انتخاب کنید (مثال: عدد، لیتر)'
+    return
+  }
+  if (!payload.item_group) {
+    createError.value = '⚠️ لطفاً گروه نهایی کالا را انتخاب کنید.'
     return
   }
 
@@ -1541,8 +1522,8 @@ function openProductDetail(row) {
 }
 
 const KANBAN_FIELD_MAP = {
-  category_title: 'restaurant_category',
-  subcategory_title: 'restaurant_subcategory',
+  category_title: 'item_group',
+  subcategory_title: 'item_group',
   is_active: 'restaurant_enabled',
   coming_soon: 'restaurant_coming_soon',
   out_of_stock: 'restaurant_out_of_stock',
@@ -1819,15 +1800,15 @@ watch(
 )
 
 watch(
-  () => createForm.value.restaurant_category,
-  () => {
-    const current = String(createForm.value.restaurant_subcategory || '').trim()
-    if (!current) {
+  () => createForm.value.item_group_parent,
+  (parentValue) => {
+    const current = String(createForm.value.item_group || '').trim()
+    if (!current || !String(parentValue || '').trim()) {
       return
     }
-    const isValid = createSubcategoryOptions.value.some((row) => String(row?.value || '').trim() === current)
-    if (!isValid) {
-      createForm.value.restaurant_subcategory = ''
+    const selection = resolveItemGroupSelection(bootFieldOptions.value.item_groups, current)
+    if (selection.parentItemGroup !== String(parentValue).trim()) {
+      createForm.value.item_group = ''
     }
   },
 )

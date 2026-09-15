@@ -449,6 +449,18 @@ def _fp_resolve_category_group(title, is_subcategory=0):
 	return (name or "").strip()
 
 
+def _fp_resolve_native_item_group(value):
+	"""Resolve a Kanban column label to any native Item Group node."""
+	value = str(value or "").strip()
+	if not value or not frappe.db.exists("DocType", "Item Group"):
+		return ""
+	for filters in ({"name": value}, {"item_group_name": value}):
+		name = frappe.db.get_value("Item Group", filters, "name", order_by="name asc")
+		if name:
+			return str(name).strip()
+	return ""
+
+
 @frappe.whitelist()
 def set_management_product_kanban_field(item_name=None, field=None, value=None):
 	"""Persist a product's primary or secondary Kanban group after drag and drop."""
@@ -462,8 +474,8 @@ def set_management_product_kanban_field(item_name=None, field=None, value=None):
 		frappe.throw(_("Item not found."), frappe.DoesNotExistError)
 
 	field_aliases = {
-		"category_title": "restaurant_category",
-		"subcategory_title": "restaurant_subcategory",
+		"category_title": "item_group",
+		"subcategory_title": "item_group",
 		"is_active": "restaurant_enabled",
 		"coming_soon": "restaurant_coming_soon",
 		"out_of_stock": "restaurant_out_of_stock",
@@ -471,12 +483,11 @@ def set_management_product_kanban_field(item_name=None, field=None, value=None):
 	}
 	field = field_aliases.get(field, field)
 	updates = {}
-	if field == "restaurant_category":
-		group = _fp_resolve_category_group(value, is_subcategory=0)
-		updates["restaurant_category"] = group or (value or "").strip()
-	elif field == "restaurant_subcategory":
-		group = _fp_resolve_category_group(value, is_subcategory=1)
-		updates["restaurant_subcategory"] = group or (value or "").strip()
+	if field == "item_group":
+		group = _fp_resolve_native_item_group(value)
+		if not group:
+			frappe.throw(_("Item Group not found: {0}").format(value or "-"))
+		updates["item_group"] = group
 	elif field in (
 		"restaurant_enabled",
 		"restaurant_out_of_stock",

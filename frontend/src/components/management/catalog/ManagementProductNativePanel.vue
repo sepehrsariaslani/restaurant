@@ -1,17 +1,32 @@
 <template>
   <section class="native-product-panel" dir="rtl">
     <div v-if="loading" class="native-state">در حال دریافت تنظیمات native کالا...</div>
-    <div v-else class="native-sections">
+    <div v-else>
+      <div v-if="visibleSections.length" class="native-section-tabs" role="tablist" aria-label="بخش‌های native کالا">
+        <button
+          v-for="section in visibleSections"
+          :key="`native-tab-${section.id}`"
+          type="button"
+          class="native-section-tab"
+          :class="{ active: activeSection === section.id }"
+          role="tab"
+          :aria-selected="activeSection === section.id"
+          @click="activeSection = section.id"
+        >
+          {{ section.title }}
+        </button>
+      </div>
+
+      <div v-if="activeSectionConfig" class="native-sections">
       <ManagementSurfaceCard
-        v-for="section in visibleSections"
-        :key="section.id"
-        :title="section.title"
-        :subtitle="section.description"
+        :key="activeSectionConfig.id"
+        :title="activeSectionConfig.title"
+        :subtitle="activeSectionConfig.description"
         class="native-section-card"
       >
-        <div v-if="visibleFields(section).length" class="native-fields-grid">
+        <div v-if="visibleFields(activeSectionConfig).length" class="native-fields-grid">
           <div
-            v-for="fieldConfig in visibleFields(section)"
+            v-for="fieldConfig in visibleFields(activeSectionConfig)"
             :key="fieldConfig.key"
             class="native-field"
             :class="{ 'native-field--check': fieldConfig.type === 'check' }"
@@ -85,7 +100,7 @@
           </div>
         </div>
 
-        <div v-for="table in visibleTables(section)" :key="table.key" class="native-table-block">
+        <div v-for="table in visibleTables(activeSectionConfig)" :key="table.key" class="native-table-block">
           <ManagementEditableTable
             :model-value="state.tables[table.key] || []"
             :columns="table.columns"
@@ -137,6 +152,7 @@
           </ManagementEditableTable>
         </div>
       </ManagementSurfaceCard>
+      </div>
     </div>
 
     <p v-if="!loading && !visibleSections.length" class="native-state">فیلد native قابل نمایشی برای این نسخه ERPNext پیدا نشد.</p>
@@ -147,7 +163,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { callMethodByPath } from '@/utils/api'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
@@ -169,6 +185,18 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'save'])
 const state = computed(() => ({ fields: props.modelValue?.fields || {}, tables: props.modelValue?.tables || {} }))
 const visibleSections = computed(() => nativeFieldSections.filter((section) => isNativeSectionVisible(section, state.value)))
+const activeSection = ref('classification')
+const activeSectionConfig = computed(() => visibleSections.value.find((section) => section.id === activeSection.value) || visibleSections.value[0] || null)
+
+watch(
+  visibleSections,
+  (sections) => {
+    if (!sections.some((section) => section.id === activeSection.value)) {
+      activeSection.value = sections[0]?.id || ''
+    }
+  },
+  { immediate: true },
+)
 
 function visibleFields(section) {
   return (section.fields || []).filter((fieldConfig) => isNativeFieldVisible(fieldConfig, state.value))
@@ -253,6 +281,10 @@ async function resolveLink(fieldConfig, value) {
 
 <style scoped>
 .native-product-panel { display: grid; gap: 1rem; }
+.native-section-tabs { display: flex; gap: .55rem; overflow-x: auto; padding: .3rem; border: 1px solid var(--mg-border); border-radius: var(--mg-radius-md); background: var(--mg-bg-surface-soft); scrollbar-width: thin; }
+.native-section-tab { flex: 0 0 auto; border: 1px solid transparent; border-radius: var(--mg-radius-sm); background: transparent; color: var(--mg-text-muted); padding: .6rem .85rem; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.native-section-tab:hover { color: var(--mg-text-main); background: color-mix(in srgb, var(--mg-primary) 7%, transparent); }
+.native-section-tab.active { border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border)); background: color-mix(in srgb, var(--mg-primary) 12%, var(--mg-bg-surface)); color: var(--mg-primary); }
 .native-sections { display: grid; gap: 1rem; }
 .native-section-card { min-width: 0; }
 .native-fields-grid, .native-editor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }

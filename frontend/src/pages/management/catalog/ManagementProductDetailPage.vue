@@ -60,9 +60,9 @@
             </div>
 
             <div class="pg-meta-row">
-              <span v-if="selectedCategoryLabel || selectedSubcategoryLabel" class="pg-meta-chip">
-                <strong>دسته‌بندی</strong>
-                {{ [selectedCategoryLabel, selectedSubcategoryLabel].filter(Boolean).join(' / ') || '-' }}
+              <span v-if="selectedItemGroupPath" class="pg-meta-chip">
+                <strong>گروه کالا</strong>
+                {{ selectedItemGroupPath }}
               </span>
               <span v-if="productReadinessChecks.length" class="pg-readiness" :class="readinessScore === productReadinessChecks.length ? 'is-ready' : ''">
                 آمادگی: {{ readinessScore.toLocaleString('fa-IR') }} / {{ productReadinessChecks.length.toLocaleString('fa-IR') }}
@@ -146,28 +146,34 @@
               />
             </label>
             <label>
-              گروه کالا
-              <SearchableDropdown
-                v-model="settingsForm.item_group"
-                :options="fieldOptions.item_groups || []"
-                placeholder="انتخاب گروه کالا"
-                search-placeholder="جستجوی گروه کالا..."
+              گروه اصلی کالا
+                <SearchableDropdown
+                v-model="settingsForm.item_group_parent"
+                :options="fieldOptions.item_group_parents || []"
+                placeholder="انتخاب گروه اصلی"
+                search-placeholder="جستجوی گروه اصلی..."
                 include-empty-option
-                empty-label="انتخاب گروه کالا"
+                empty-label="همه گروه‌ها"
               />
             </label>
 
             <label>
-              زیرگروه کالا
+              گروه نهایی کالا
               <SearchableDropdown
-                v-model="settingsForm.restaurant_subcategory"
-                :options="filteredSubcategoryOptions"
-                placeholder="بدون زیرگروه"
-                search-placeholder="جستجوی زیرگروه..."
+                v-model="settingsForm.item_group"
+                :options="itemGroupChildOptions"
+                placeholder="انتخاب گروه نهایی"
+                search-placeholder="جستجوی گروه نهایی..."
                 include-empty-option
-                empty-label="بدون زیرگروه"
+                empty-label="انتخاب گروه نهایی"
               />
+              <small class="field-help">مقدار نهایی در فیلد native `Item.item_group` ذخیره می‌شود.</small>
             </label>
+
+            <div v-if="selectedItemGroupPath" class="pg-group-path" aria-live="polite">
+              <span class="field-label">مسیر کامل</span>
+              <strong>{{ selectedItemGroupPath }}</strong>
+            </div>
 
           </div>
 
@@ -289,28 +295,6 @@
             <label>
               اسلاگ
               <input class="input" v-model="settingsForm.restaurant_slug" />
-            </label>
-            <label>
-              دسته
-              <SearchableDropdown
-                v-model="settingsForm.restaurant_category"
-                :options="fieldOptions.categories || []"
-                placeholder="بدون دسته"
-                search-placeholder="جستجوی دسته..."
-                include-empty-option
-                empty-label="بدون دسته"
-              />
-            </label>
-            <label>
-              زیردسته
-              <SearchableDropdown
-                v-model="settingsForm.restaurant_subcategory"
-                :options="filteredSubcategoryOptions"
-                placeholder="بدون زیردسته"
-                search-placeholder="جستجوی زیردسته..."
-                include-empty-option
-                empty-label="بدون زیردسته"
-              />
             </label>
             <label>
               شعبه
@@ -1368,6 +1352,12 @@ import {
   createInitialNativeProductState,
   hydrateNativeProductState,
 } from '@/utils/managementProductNative'
+import {
+  buildItemGroupOptions,
+  getChildItemGroupOptions,
+  resolveItemGroupSelection,
+  ROOT_ITEM_GROUP,
+} from '@/utils/managementProductGrouping'
 
 const props = defineProps({
   boot: {
@@ -1586,15 +1576,29 @@ const priceListOptions = computed(() =>
 const currentPriceRate = computed(() => Number(detail.value?.pricing?.current_price?.price_list_rate || 0))
 const latestPriceRate = computed(() => Number(detail.value?.pricing?.latest_price?.price_list_rate || 0))
 const latestPriceDate = computed(() => detail.value?.pricing?.latest_price?.effective_at || '')
+const itemGroupOptions = computed(() => buildItemGroupOptions(fieldOptions.value?.item_groups || []))
+const itemGroupChildOptions = computed(() =>
+  getChildItemGroupOptions(fieldOptions.value?.item_groups || [], settingsForm.item_group_parent),
+)
+const selectedItemGroupSelection = computed(() =>
+  resolveItemGroupSelection(fieldOptions.value?.item_groups || [], settingsForm.item_group),
+)
+const selectedItemGroupPath = computed(() => {
+  if (!String(settingsForm.item_group || '').trim()) return ''
+  return selectedItemGroupSelection.value.path || String(detail.value?.item?.item_group_path || '').trim()
+})
 const selectedCategoryLabel = computed(() => {
-  const selected = String(settingsForm.restaurant_category || '').trim()
-  if (!selected) return ''
-  return (fieldOptions.value?.categories || []).find((row) => String(row?.value || '').trim() === selected)?.label || selected
+  const selection = selectedItemGroupSelection.value
+  if (!selection.itemGroup) return ''
+  if (selection.parentItemGroup && selection.parentItemGroup !== ROOT_ITEM_GROUP) {
+    return itemGroupOptions.value.find((row) => row.value === selection.itemGroup)?.parentLabel || ''
+  }
+  return itemGroupOptions.value.find((row) => row.value === selection.itemGroup)?.label || selection.path
 })
 const selectedSubcategoryLabel = computed(() => {
-  const selected = String(settingsForm.restaurant_subcategory || '').trim()
-  if (!selected) return ''
-  return (fieldOptions.value?.subcategories || []).find((row) => String(row?.value || '').trim() === selected)?.label || selected
+  const selection = selectedItemGroupSelection.value
+  if (!selection.itemGroup || !selection.parentItemGroup || selection.parentItemGroup === ROOT_ITEM_GROUP) return ''
+  return itemGroupOptions.value.find((row) => row.value === selection.itemGroup)?.label?.split(' / ').pop() || selection.itemGroup
 })
 const productSummarySubtitle = computed(() => {
   const item = detail.value?.item || {}
@@ -1647,7 +1651,7 @@ const activeTabHint = computed(() => {
     return 'جزئیات مدل‌ها، ویژگی‌ها و Variantهای این محصول در این تب مدیریت می‌شود.'
   }
   if (activeTab.value === 'settings') {
-    return 'جزئیات فروش، نمایش، دسته‌بندی وب و قیمت‌گذاری در این تب قرار دارد.'
+    return 'جزئیات فروش، نمایش، گروه کالا و قیمت‌گذاری در این تب قرار دارد.'
   }
   if (activeTab.value === 'builder') {
     return 'جزئیات سفارشی‌سازی و ساختار انتخاب‌های مشتری در این تب قرار دارد.'
@@ -1742,6 +1746,7 @@ const fieldOptions = computed(() => {
   return {
     uoms: payload.uoms || [],
     item_groups: payload.item_groups || [],
+    item_group_parents: payload.item_group_parents || [],
     categories: payload.categories || [],
     subcategories: payload.subcategories || [],
     branches: payload.branches || [],
@@ -1762,15 +1767,6 @@ const builderLayoutOptions = [
   { value: 'accordion', label: 'آکاردئون' },
   { value: 'wizard', label: 'مرحله‌ای (ویزارد)' },
 ]
-const filteredSubcategoryOptions = computed(() => {
-  const rows = fieldOptions.value?.subcategories || []
-  const category = String(settingsForm.restaurant_category || '').trim()
-  if (!category) {
-    return rows
-  }
-  return rows.filter((row) => String(row.category || '').trim() === category)
-})
-
 function createEmptyBomItemRow() {
   return {
     item_code: '',
@@ -2001,15 +1997,15 @@ watch(
 )
 
 watch(
-  () => settingsForm.restaurant_category,
-  () => {
-    const currentSubcategory = String(settingsForm.restaurant_subcategory || '').trim()
-    if (!currentSubcategory) {
+  () => settingsForm.item_group_parent,
+  (parentValue) => {
+    const currentItemGroup = String(settingsForm.item_group || '').trim()
+    if (!currentItemGroup || !String(parentValue || '').trim()) {
       return
     }
-    const valid = filteredSubcategoryOptions.value.some((row) => row.value === currentSubcategory)
-    if (!valid) {
-      settingsForm.restaurant_subcategory = ''
+    const selection = resolveItemGroupSelection(fieldOptions.value?.item_groups || [], currentItemGroup)
+    if (selection.parentItemGroup !== String(parentValue).trim()) {
+      settingsForm.item_group = ''
     }
   },
 )
@@ -2194,6 +2190,10 @@ async function submitComment() {
 
 function syncForms(payload) {
   hydrateProductSettingsForm(settingsForm, payload, allTagOptions.value)
+  if (!settingsForm.item_group_parent) {
+    const selection = resolveItemGroupSelection(payload?.field_options?.item_groups || [], settingsForm.item_group)
+    settingsForm.item_group_parent = payload?.item?.item_group_parent || selection.parentItemGroup || ''
+  }
   nativeState.value = hydrateNativeProductState(payload)
   nativeSnapshot.value = JSON.stringify(nativeState.value)
 
@@ -3667,6 +3667,23 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 
 .pg-meta-chip strong {
   color: var(--mg-text-main);
+}
+
+.pg-group-path {
+  display: grid;
+  align-content: center;
+  gap: 0.18rem;
+  min-height: 42px;
+  padding: 0.5rem 0.65rem;
+  border: 1px dashed var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  background: var(--mg-bg-soft);
+  color: var(--mg-text-main);
+  font-size: 0.76rem;
+}
+
+.pg-group-path strong {
+  font-size: 0.8rem;
 }
 
 .pg-readiness {

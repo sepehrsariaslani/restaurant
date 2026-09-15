@@ -55,3 +55,15 @@ test('product detail save serializes legacy tag text from selected tag rows', ()
   )
   assert.equal(payload.restaurant_item_tags, 'پرفروش, رژیمی, جدید')
 })
+
+test('product detail payload keeps native item group and does not create parallel category state', () => {
+  const form = createInitialProductSettingsForm()
+  form.item_group_parent = 'Food'
+  form.item_group = 'Pizza'
+
+  const payload = buildProductSettingsPayload({ itemName: 'ITEM-2', form })
+
+  assert.equal(payload.item_group, 'Pizza')
+  assert.equal(Object.hasOwn(payload, 'restaurant_category'), false)
+  assert.equal(Object.hasOwn(payload, 'restaurant_subcategory'), false)
+})
