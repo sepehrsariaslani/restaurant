@@ -48,7 +48,7 @@
 - Modify: `frontend/src/pages/management/catalog/ManagementProductsPage.vue`
 
 **Interfaces:**
-- Consumes: `title`, `subtitle`, `tone`, `loading`, `error`, `retryLabel`, `@retry`, and slots `toolbar`, `status`, `default`, `overlays`.
+- Consumes: `title`, `subtitle`, `loading`, `error`, `retryLabel`, `@retry`, and slots `toolbar`, `status`, `default`, `overlays`.
 - Produces: reusable collection frame with semantic loading/error regions and slot-based view content.
 
 - [ ] **Step 1: Write the failing test**
@@ -62,7 +62,7 @@
 
 - [ ] **Step 3: Write minimal implementation**
 
-  shell را با `ManagementSurfaceCard`، slotهای قراردادی، `aria-live` برای status و خطای semantic پیاده‌سازی کن. صفحه‌ی محصولات فقط toolbar، پیام‌ها، بدنه‌ی نماها و popupهای فعلی را به slotهای shell منتقل کند.
+  shell را به‌عنوان یک قاب semantic با slotهای قراردادی، `aria-live` برای status و خطای قابل retry پیاده‌سازی کن. محتوای slot هنگام loading mounted باقی بماند تا state داخلی نماها، scroll و selection از بین نرود. صفحه‌ی محصولات فقط toolbar، پیام‌ها، بدنه‌ی نماها و popupهای فعلی را به slotهای shell منتقل کند.
 
 - [ ] **Step 4: Run test to verify it passes**
 

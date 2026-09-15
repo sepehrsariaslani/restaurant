@@ -93,10 +93,14 @@ test('product reference shells are reusable in routes and the design-system cata
   assert.match(productCollectionShell, /defineProps/, 'collection shell must expose a stable prop contract')
   assert.match(productCollectionShell, /#toolbar|name="toolbar"/, 'collection shell must expose a toolbar slot')
   assert.match(productCollectionShell, /#overlays|name="overlays"/, 'collection shell must expose an overlays slot')
+  assert.match(productCollectionShell, /@click="\$emit\('retry'\)"/, 'collection shell must expose a working retry action')
+  assert.doesNotMatch(productCollectionShell, /\$attrs\.onRetry/, 'collection retry must not depend on declared emits being present in attrs')
+  assert.doesNotMatch(productCollectionShell, /v-if="!loading && !error"[^>]*class="product-reference-shell__body"/, 'collection content must stay mounted while loading')
   assert.match(productDetailShell, /defineProps/, 'detail shell must expose a stable prop contract')
   for (const slot of ['breadcrumb', 'hero', 'navigation', 'overlays']) {
     assert.match(productDetailShell, new RegExp(`name=["']${slot}["']`), `${slot} slot must remain part of the detail contract`)
   }
+  assert.doesNotMatch(productDetailShell, /v-if="!loading && !error"[^>]*class="product-reference-shell__body"/, 'detail content must stay mounted while loading')
   assert.match(catalog, /management-product-collection-shell/)
   assert.match(catalog, /management-product-detail-shell/)
   assert.match(catalog, /product-collection-shell/)

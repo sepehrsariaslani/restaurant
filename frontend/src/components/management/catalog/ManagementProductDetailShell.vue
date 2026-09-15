@@ -33,7 +33,7 @@
       <button type="button" class="secondary-btn" @click="$emit('retry')">{{ retryLabel }}</button>
     </div>
 
-    <div v-if="!loading && !error" class="product-reference-shell__body">
+    <div class="product-reference-shell__body">
       <slot />
     </div>
 

@@ -24,10 +24,10 @@
     </div>
     <div v-else-if="error" class="product-reference-shell__feedback product-reference-shell__feedback--error" role="alert">
       <span>{{ error }}</span>
-      <button v-if="$attrs.onRetry" type="button" class="secondary-btn" @click="$emit('retry')">{{ retryLabel }}</button>
+      <button type="button" class="secondary-btn" @click="$emit('retry')">{{ retryLabel }}</button>
     </div>
 
-    <div v-if="!loading && !error" class="product-reference-shell__body">
+    <div class="product-reference-shell__body">
       <slot />
     </div>
 
