@@ -26,7 +26,7 @@
 | پوشه | مالکیت | اجزای شاخص |
 |---|---|---|
 | `components/management/` | primitiveهای مشترک مدیریت | shell، surface، list، table، فیلتر، popup، state و view switcher |
-| `components/management/catalog` | محصولات، BOM، منو و رسانه | `ManagementBomManager`، جدول اقلام BOM، uploader و readiness panel |
+| `components/management/catalog` | محصولات، BOM، منو و رسانه | `ManagementProductCollectionShell`، `ManagementProductDetailShell`، `ManagementBomManager`، جدول اقلام BOM، uploader و readiness panel |
 | `components/management/design-system` | تنظیمات و specimenهای DS | `ManagementThemeStudio` |
 | `components/management/builder` | صفحه‌ساز و قالب‌ها | `ManagementPageBuilderWorkspace`، فرم property و step card |
 | `components/management/inventory` | الگوی مشترک انبار | `InventorySectionShell`، `InventoryResponsiveList` |
@@ -49,6 +49,8 @@
 
 صفحات جزئیات محصول، سازندهٔ Variant، انبار، خرید، گزارش، صندوق، POS Profile، داشبورد فروش، builder و master-listهای سالن نیز جدول‌های داخلی خود را از همین ownerها می‌گیرند؛ در نتیجه تغییر مشترک در جدول، فهرست‌های قدیمی و جدید را هم‌زمان یکدست می‌کند.
 
+قالب فهرست و جزئیات محصول نیز صاحب مشترک دارد: `ManagementProductCollectionShell` قاب toolbar، وضعیت async، نماهای تخصصی و overlayها را فراهم می‌کند و `ManagementProductDetailShell` قاب breadcrumb، hero، navigation، وضعیت async و محتوای جزئیات را فراهم می‌کند. این دو shell فقط presentation/composition هستند؛ API، فرم، payload و lifecycle در routeهای محصول باقی می‌مانند و Design System نمونه‌ی زنده‌ی همین قراردادها را نمایش می‌دهد.
+
 صفحه‌هایی که هنوز collection دارند اما عمداً از جدول عمومی استفاده نمی‌کنند، interaction متفاوتی دارند: `ManagementProductsPage` به‌عنوان مرجع چندنما (لیست Notion، gallery، kanban، sheet، تقویم و tree)، `ManagementMenuDesignerPage` و `ManagementHomeBuilderPage` برای drag/drop چندسطحی، `ManagementKitchenPage` برای KDS کانبان، `ManagementTablesPage` برای نمای سالن و کارت میز، `ManagementPosPage` برای workspace عملیاتی و `ManagementPrintFormatsPage` برای gallery/preview. همچنین `ManagementSheetView` یک spreadsheet با انتخاب سلول/ردیف، ویرایش مستقیم و bulk action است و جدول میانبرهای صفحهٔ POS دادهٔ عملیاتی نیست. این موارد باید از primitiveهای تخصصی خودشان استفاده کنند و نباید با جدول عمومی جایگزین شوند.
 
 ## قرارداد مالکیت
@@ -64,8 +66,8 @@
 
 | سطح | مسیر | منبع داده | قرارداد بصری | وضعیت بررسی |
 |---|---|---|---|---|
-| فهرست محصولات | `/management/products` | ERPNext Item + API امن محصولات | مرجع collection، جستجو، نماها و bulk actions | مرجع تثبیت‌شده |
-| جزئیات محصول | `/management/product` | ERPNext Item و داده‌های Restaurant | مرجع detail، رسانه، قیمت، BOM، modifier، variant و activity | مرجع تثبیت‌شده |
+| فهرست محصولات | `/management/products` | ERPNext Item + API امن محصولات | `ManagementProductCollectionShell` + نماهای collection، جستجو و bulk actions | مرجع تثبیت‌شده و shell-backed |
+| جزئیات محصول | `/management/product` | ERPNext Item و داده‌های Restaurant | `ManagementProductDetailShell` + detail، رسانه، قیمت، BOM، modifier، variant و activity | مرجع تثبیت‌شده و shell-backed |
 | کارت محصول مشتری | `/menu` | API منوی رستوران | تصویرمحور، قیمت، وضعیت و اقدام | مرجع تثبیت‌شده |
 | جزئیات محصول مشتری | `/item` | API منوی رستوران | gallery، nutrition، customization و cart | مرجع تثبیت‌شده |
 | دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ با bundle فعال روی `veederakht` تأیید شد |
@@ -103,8 +105,8 @@
 
 | صفحه | مسیر | منبع | ترکیب UI | فهرست/جزئیات | وضعیت |
 |---|---|---|---|---|---|
-| `ManagementProductsPage` | `/management/products` | ERPNext Item + API محصولات | مرجع collection | `List`، gallery، kanban، sheet، تقویم، درخت | protected reference؛ دست‌نخورده |
-| `ManagementProductDetailPage` | `/management/product?item_name=...` | ERPNext Item + دادهٔ رستوران | مرجع detail | detail، BOM، modifier، variant و activity | protected reference؛ دست‌نخورده |
+| `ManagementProductsPage` | `/management/products` | ERPNext Item + API محصولات | `ManagementProductCollectionShell` + مرجع collection | `List`، gallery، kanban، sheet، تقویم، درخت | protected reference؛ shell-backed |
+| `ManagementProductDetailPage` | `/management/product?item_name=...` | ERPNext Item + دادهٔ رستوران | `ManagementProductDetailShell` + مرجع detail | detail، BOM، modifier، variant و activity | protected reference؛ shell-backed |
 | `ManagementVariantBuilderPage` | `/management/product?variant_studio=1` | ERPNext Item Attribute/Variant | Scaffold/Card | `List` → ویرایشگر صفت | بررسی منبع؛ payload و API حفظ شده |
 | `ManagementBomsPage` | `/management/boms` | ERPNext BOM | Scaffold/Card | فهرست تخصصی و انتخاب BOM | بررسی منبع؛ مسیر حفظ شده |
 | `ManagementBomDetailPage` | `/management/bom?bom=...` | ERPNext BOM و Item | Scaffold/Card | detail/form اقلام BOM | بررسی منبع؛ چرخهٔ native حفظ شده |

@@ -184,6 +184,54 @@
             <ManagementProductSummaryCard title="خلاصه محصول در مدیریت" subtitle="کارت خلاصه‌ی مرجع برای detail و پنل‌ها" :chips="referenceSummaryChips" />
             <ManagementProductReadinessPanel :checks="referenceChecks" :score="4" />
           </section>
+
+          <ManagementSurfaceCard title="قالب‌های قابل استفاده مجدد محصول" subtitle="همان قاب‌های صفحه‌ی واقعی محصولات؛ محتوا با slot و داده‌ی دامنه‌ای جایگزین می‌شود.">
+            <section class="ds-grid-2 ds-product-shell-grid">
+              <ManagementProductCollectionShell
+                title="مجموعه محصولات"
+                subtitle="قاب مشترک برای لیست، گالری و کانبان"
+              >
+                <template #toolbar>
+                  <div class="ds-shell-toolbar">
+                    <label class="ds-field-sample">جستجو<input class="input" value="کاسه نودل" aria-label="جستجوی مجموعه محصول" /></label>
+                    <DsButton size="sm" variant="primary">کالای جدید</DsButton>
+                  </div>
+                </template>
+                <template #status><DsBadge tone="success">۲۴ کالا آماده نمایش</DsBadge></template>
+                <ManagementSmartDataTable
+                  :columns="dataTablePreviewColumns"
+                  :rows="editableTablePreviewRows"
+                  row-key="name"
+                  :show-search="false"
+                  :filterable="false"
+                  :freezable="false"
+                  :resizable="false"
+                >
+                  <template #cell-amount="{ value }">{{ Number(value).toLocaleString('fa-IR') }} ریال</template>
+                  <template #cell-status="{ value }"><DsBadge :tone="value === 'فعال' ? 'success' : 'neutral'">{{ value }}</DsBadge></template>
+                </ManagementSmartDataTable>
+              </ManagementProductCollectionShell>
+
+              <ManagementProductDetailShell
+                title="کاسه نودل بیف"
+                subtitle="قاب مشترک برای صفحات جزئیات و ویرایش"
+              >
+                <template #breadcrumb><span class="ds-shell-breadcrumb">محصولات / کاسه نودل بیف</span></template>
+                <template #hero>
+                  <ManagementProductSummaryCard title="کاسه نودل بیف" subtitle="غذای اصلی / نمایش مدیریت" :chips="referenceSummaryChips" />
+                </template>
+                <template #navigation>
+                  <div class="ds-shell-tabs" role="tablist" aria-label="نمونه تب‌های جزئیات محصول">
+                    <button type="button" class="active">اطلاعات کلی</button>
+                    <button type="button">قیمت‌گذاری</button>
+                    <button type="button">فرمول و Variant</button>
+                  </div>
+                </template>
+                <template #status><DsBadge tone="success">فعال در منو</DsBadge></template>
+                <ManagementProductReadinessPanel :checks="referenceChecks" :score="4" />
+              </ManagementProductDetailShell>
+            </section>
+          </ManagementSurfaceCard>
         </template>
 
         <template v-else-if="activeTab === 'patterns'">
@@ -237,6 +285,8 @@ import ManagementEditableTable from '@/components/management/ManagementEditableT
 import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementProductReadinessPanel from '@/components/management/catalog/ManagementProductReadinessPanel.vue'
 import ManagementProductSummaryCard from '@/components/management/catalog/ManagementProductSummaryCard.vue'
+import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
+import ManagementProductDetailShell from '@/components/management/catalog/ManagementProductDetailShell.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import DsBadge from '@/components/design/DsBadge.vue'
 import DsButton from '@/components/design/DsButton.vue'
@@ -392,6 +442,13 @@ function selectPreset(preset) {
 .ds-reference-list p, .ds-template-copy p, .ds-pattern-card p { margin: 0; color: var(--ds-color-text-muted); font-size: .76rem; line-height: 1.7; }
 .ds-product-card-stage { max-width: 760px; margin: 0 auto; padding: .85rem; border: 1px dashed var(--ds-color-border); border-radius: var(--ds-radius-lg); background: var(--ds-color-bg-page); }
 .ds-product-card-stage :deep(.product-card) { box-shadow: var(--ds-shadow-sm); }
+.ds-product-shell-grid { align-items: start; }
+.ds-shell-toolbar { display: flex; align-items: end; justify-content: space-between; gap: var(--ds-space-3); margin-bottom: var(--ds-space-3); }
+.ds-shell-toolbar .ds-field-sample { flex: 1; }
+.ds-shell-breadcrumb { display: inline-flex; padding: .45rem .65rem; border-radius: var(--ds-radius-sm); color: var(--ds-color-text-muted); background: var(--ds-color-surface-muted); font-size: .75rem; }
+.ds-shell-tabs { display: flex; flex-wrap: wrap; gap: .35rem; padding: .35rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-muted); }
+.ds-shell-tabs button { border: 1px solid transparent; border-radius: var(--ds-radius-sm); padding: .5rem .7rem; color: var(--ds-color-text-secondary); background: transparent; font: inherit; cursor: pointer; }
+.ds-shell-tabs button.active { border-color: var(--ds-color-action-primary); color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); }
 .ds-pattern-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
 .ds-pattern-card { display: flex; gap: .7rem; padding: .8rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); }
 .ds-pattern-number { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); font-weight: 900; }

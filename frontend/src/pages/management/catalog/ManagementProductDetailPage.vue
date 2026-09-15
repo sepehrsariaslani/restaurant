@@ -1,6 +1,17 @@
 <template>
-  <ManagementBreadcrumbs class="page-breadcrumbs" :items="breadcrumbItems" />
-  <ManagementPageScaffold>
+  <ManagementProductDetailShell
+    :title="pageTitle"
+    :subtitle="pageSubtitle"
+    :loading="loading"
+    :error="error"
+    :show-header="false"
+    @retry="loadDetail"
+  >
+    <template #breadcrumb>
+      <ManagementBreadcrumbs class="page-breadcrumbs" :items="breadcrumbItems" />
+    </template>
+
+    <ManagementPageScaffold>
 
     <ManagementSurfaceCard v-if="detail" class="product-general-card product-general-card--compact" title="اطلاعات کلی" subtitle="تصویر و تنظیمات سریع محصول">
       <div class="product-general-layout">
@@ -113,9 +124,6 @@
         <button class="primary-btn" type="button" @click="loadDetail">اجرای تحلیل</button>
       </div>
     </ManagementSurfaceCard>
-
-    <p class="muted" v-if="loading">در حال بارگذاری اطلاعات محصول...</p>
-    <p class="error" v-if="error">{{ error }}</p>
 
     <template v-if="detail && !loading">
       <section class="product-top-grid" v-if="activeTab === 'overview'">
@@ -1014,6 +1022,7 @@
     </template>
   </ManagementPageScaffold>
 
+  <template #overlays>
   <ManagementPopup
     v-model:open="mediaDialogOpen"
     title="تصاویر محصول"
@@ -1234,6 +1243,8 @@
       </div>
     </template>
   </ManagementPopup>
+  </template>
+</ManagementProductDetailShell>
 </template>
 
 <script setup>
@@ -1249,6 +1260,7 @@ import ManagementImageUploaderView from '@/components/management/catalog/Managem
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementProductDetailShell from '@/components/management/catalog/ManagementProductDetailShell.vue'
 import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs.vue'
 import { clearNavbarTitle, setNavbarTitle } from '@/utils/navbarTitle'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'

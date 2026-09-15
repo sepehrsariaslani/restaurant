@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+
+const readOptional = (url) => (existsSync(url) ? readFileSync(url, 'utf8') : '')
 
 const smartTable = readFileSync(new URL('../src/components/management/ManagementSmartDataTable.vue', import.meta.url), 'utf8')
 const editableTable = readFileSync(new URL('../src/components/management/ManagementEditableTable.vue', import.meta.url), 'utf8')
@@ -8,6 +10,9 @@ const listView = readFileSync(new URL('../src/components/management/ManagementLi
 const dataTable = readFileSync(new URL('../src/components/management/ManagementDataTable.vue', import.meta.url), 'utf8')
 const catalog = readFileSync(new URL('../src/design-system/catalog.js', import.meta.url), 'utf8')
 const showcase = readFileSync(new URL('../src/pages/management/design-system/ManagementDesignSystemPage.vue', import.meta.url), 'utf8')
+const productCollectionShell = readOptional(new URL('../src/components/management/catalog/ManagementProductCollectionShell.vue', import.meta.url))
+const productDetailShell = readOptional(new URL('../src/components/management/catalog/ManagementProductDetailShell.vue', import.meta.url))
+const productsPage = readFileSync(new URL('../src/pages/management/catalog/ManagementProductsPage.vue', import.meta.url), 'utf8')
 const productDetail = readFileSync(new URL('../src/pages/management/catalog/ManagementProductDetailPage.vue', import.meta.url), 'utf8')
 const variantBuilder = readFileSync(new URL('../src/pages/management/catalog/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
 const inventory = readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
@@ -84,6 +89,24 @@ test('data-table components are discoverable in the Restaurant design-system sho
   assert.match(showcase, /<ManagementEditableTable/)
 })
 
+test('product reference shells are reusable in routes and the design-system catalog', () => {
+  assert.match(productCollectionShell, /defineProps/, 'collection shell must expose a stable prop contract')
+  assert.match(productCollectionShell, /#toolbar|name="toolbar"/, 'collection shell must expose a toolbar slot')
+  assert.match(productCollectionShell, /#overlays|name="overlays"/, 'collection shell must expose an overlays slot')
+  assert.match(productDetailShell, /defineProps/, 'detail shell must expose a stable prop contract')
+  for (const slot of ['breadcrumb', 'hero', 'navigation', 'overlays']) {
+    assert.match(productDetailShell, new RegExp(`name=["']${slot}["']`), `${slot} slot must remain part of the detail contract`)
+  }
+  assert.match(catalog, /management-product-collection-shell/)
+  assert.match(catalog, /management-product-detail-shell/)
+  assert.match(catalog, /product-collection-shell/)
+  assert.match(catalog, /product-detail-shell/)
+  assert.match(showcase, /ManagementProductCollectionShell/)
+  assert.match(showcase, /ManagementProductDetailShell/)
+  assert.match(productsPage, /ManagementProductCollectionShell/)
+  assert.match(productDetail, /ManagementProductDetailShell/)
+})
+
 test('management data pages use shared table owners for internal data grids', () => {
   for (const [name, source] of [
     ['product detail', productDetail],
@@ -99,6 +122,8 @@ test('management data pages use shared table owners for internal data grids', ()
 test('coverage documentation records the canonical table ownership chain and exceptions', () => {
   assert.match(coverageDoc, /ManagementSmartDataTable/)
   assert.match(coverageDoc, /ManagementEditableTable/)
+  assert.match(coverageDoc, /ManagementProductCollectionShell/)
+  assert.match(coverageDoc, /ManagementProductDetailShell/)
   assert.match(coverageDoc, /ManagementSheetView/)
   assert.match(coverageDoc, /جدول میانبرهای صفحهٔ POS/)
 })

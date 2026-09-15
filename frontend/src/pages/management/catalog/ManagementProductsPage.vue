@@ -1,5 +1,14 @@
 <template>
-  <div class="products-page">
+  <ManagementProductCollectionShell
+    class="products-page"
+    :title="activeViewTitle"
+    :subtitle="activeViewSubtitle"
+    :loading="loading"
+    :error="error"
+    :show-header="false"
+    @retry="loadProducts"
+  >
+    <template #toolbar>
     <ManagementSurfaceCard tone="accent" class="products-filter-card">
       <!-- تولبار تمیز: سرچ + کالای جدید -->
       <div class="toolbar toolbar--clean">
@@ -58,10 +67,11 @@
         </div>
       </div>
     </ManagementSurfaceCard>
+    </template>
 
-    <p class="muted" v-if="loading">در حال بارگذاری محصولات...</p>
-    <p class="error" v-if="error">{{ error }}</p>
-    <p class="success-msg" v-if="successMessage">{{ successMessage }}</p>
+    <template #status>
+      <p class="success-msg" v-if="successMessage">{{ successMessage }}</p>
+    </template>
 
     <ManagementSurfaceCard :title="activeViewTitle" :subtitle="activeViewSubtitle">
       <template v-if="viewMode === 'tree'">
@@ -268,6 +278,7 @@
       </small>
     </div>
 
+    <template #overlays>
     <ManagementPopup
       v-model:open="createPopupOpen"
       title="ایجاد کالای جدید"
@@ -517,12 +528,14 @@
       </template>
     </ManagementPopup>
 
-  </div>
+    </template>
+  </ManagementProductCollectionShell>
 </template>
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import NotionViewTabs from '@/components/management/notion/NotionViewTabs.vue'
