@@ -53,6 +53,13 @@ test('Restaurant SmartDataTable keeps the Accounts table contract with Restauran
   assert.doesNotMatch(smartTable, /@\/components\/design\/StatePanel/, 'Restaurant must not import Accounts-only StatePanel')
 })
 
+test('Restaurant SmartDataTable fills its parent and only overflows inside the table viewport', () => {
+  assert.match(smartTable, /\.smart-data-table\s*\{[^}]*width:\s*100%/, 'the table root must participate in the full-width parent layout')
+  assert.match(smartTable, /\.smart-data-table__scroll\s*\{[^}]*width:\s*100%[^}]*max-width:\s*100%[^}]*min-width:\s*0/, 'overflow must stay inside a full-width scroll viewport')
+  assert.match(smartTable, /\.smart-data-table__table\s*\{[^}]*width:\s*max-content[^}]*min-width:\s*100%/, 'the table must fill narrow parents and grow only when its columns need more room')
+  assert.match(smartTable, /maxWidth: column\.maxWidth \|\| undefined/, 'default columns must not be capped at their preferred width')
+})
+
 test('Restaurant EditableTable keeps v-model/editor validation and adds persistent column settings', () => {
   for (const token of [
     'modelValue',

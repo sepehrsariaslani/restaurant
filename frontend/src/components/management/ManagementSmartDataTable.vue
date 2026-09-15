@@ -363,7 +363,7 @@ function stickyStyle(columnKey) {
 
 function columnSizeStyle(column) {
   const width = columnWidthValue(column)
-  return { minWidth: width, width, maxWidth: column.maxWidth || width }
+  return { minWidth: width, width, maxWidth: column.maxWidth || undefined }
 }
 
 function frozenCellBackground(row, index, columnKey) {
@@ -431,15 +431,15 @@ onBeforeUnmount(stopColumnResize)
 </script>
 
 <style scoped>
-.smart-data-table { min-width: 0; display: grid; gap: .65rem; color: var(--mg-text-main, #34261d); }
+.smart-data-table { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; display: grid; gap: .65rem; color: var(--mg-text-main, #34261d); }
 .smart-data-table__toolbar { display: flex; align-items: center; justify-content: space-between; gap: .65rem; flex-wrap: wrap; }
 .smart-data-table__search { min-width: min(100%, 240px); flex: 1 1 280px; }
 .smart-data-table__search .input { width: 100%; }
 .smart-data-table__meta { display: inline-flex; align-items: center; gap: .55rem; color: var(--mg-text-muted, #7b6b5c); font-size: .75rem; }
 .table-quiet-button { border: 0; background: transparent; color: var(--mg-primary, #c8754e); cursor: pointer; font: inherit; font-size: .72rem; }
 .table-state { padding: 1.1rem; border: 1px dashed var(--mg-border, #dfcbb8); border-radius: 13px; color: var(--mg-text-muted, #7b6b5c); text-align: center; }
-.smart-data-table__scroll { overflow: auto; border: 1px solid var(--mg-border-light, #eadccc); border-radius: 15px; background: var(--mg-bg-surface, #fffaf3); }
-.smart-data-table__table { width: 100%; min-width: max-content; border-collapse: separate; border-spacing: 0; }
+.smart-data-table__scroll { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--mg-border-light, #eadccc); border-radius: 15px; background: var(--mg-bg-surface, #fffaf3); }
+.smart-data-table__table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; }
 .smart-data-table__table th, .smart-data-table__table td { border-bottom: 1px solid var(--mg-border-light, #eadccc); padding: .58rem .55rem; white-space: nowrap; }
 .smart-data-table__table thead { background: var(--mg-bg-soft, #f6eee4); }
 .smart-data-table__table thead.is-sticky { position: sticky; top: 0; z-index: 5; }
