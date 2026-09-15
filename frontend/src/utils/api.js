@@ -259,6 +259,7 @@ function shouldPreferPublicGET() {
 }
 
 const unsupportedDoctypesCache = new Set();
+const MANAGEMENT_PRODUCTS_SAFE_METHOD = "restaurant.api_management_products_safe.list_management_products_safe";
 
 function normalizeListRows(rows) {
 	return Array.isArray(rows) ? rows : [];
@@ -289,7 +290,6 @@ async function safeGetList(args = {}, { fallback = [] } = {}) {
 }
 
 const doctypeColumnsCache = new Map();
-let coreMenuSupportCache = null;
 let preferBootFallback = false;
 let preferManagementProductsFallback = false;
 let preferMenuItemsFallback = false;
@@ -372,23 +372,6 @@ function makeFallbackSlug(value = "") {
 		.replace(/-+/g, "-")
 		.replace(/^-|-$/g, "");
 	return normalized;
-}
-
-async function hasCoreMenuSupportOnClient() {
-	if (typeof coreMenuSupportCache === "boolean") {
-		return coreMenuSupportCache;
-	}
-
-	const checks = await Promise.all([
-		hasDoctypeField("Item", "restaurant_enabled"),
-		hasDoctypeField("Item", "restaurant_slug"),
-		hasDoctypeField("Item", "restaurant_category"),
-		hasDoctypeField("Item Group", "restaurant_is_menu_category"),
-		hasDoctypeField("Item Group", "restaurant_is_subcategory"),
-		hasDoctypeField("Item Group", "restaurant_slug"),
-	]);
-	coreMenuSupportCache = checks.every(Boolean);
-	return coreMenuSupportCache;
 }
 
 async function getMenuBootFallback() {
@@ -1794,29 +1777,25 @@ export async function listManagementProducts({
 	limit_start = 0,
 	limit_page_length = 80,
 } = {}) {
-	if (preferManagementProductsFallback) {
-		return listManagementProductsFallback({ search, category, active_only, branch, tag, limit_start, limit_page_length });
-	}
+	const args = { search, category, active_only, branch, tag, limit_start, limit_page_length };
 
-	const hasCoreSupport = await hasCoreMenuSupportOnClient();
-	if (!hasCoreSupport) {
-		preferManagementProductsFallback = true;
-		return listManagementProductsFallback({ search, category, active_only, branch, tag, limit_start, limit_page_length });
+	if (preferManagementProductsFallback) {
+		try {
+			return await callMethodByPath(MANAGEMENT_PRODUCTS_SAFE_METHOD, args);
+		} catch (_) {
+			return listManagementProductsFallback(args);
+		}
 	}
 
 	try {
-		return await callRestaurantAPI("list_management_products", {
-			search,
-			category,
-			active_only,
-			branch,
-			tag,
-			limit_start,
-			limit_page_length,
-		});
+		return await callRestaurantAPI("list_management_products", args);
 	} catch (error) {
-		preferManagementProductsFallback = true;
-		return listManagementProductsFallback({ search, category, active_only, branch, tag, limit_start, limit_page_length });
+		try {
+			return await callMethodByPath(MANAGEMENT_PRODUCTS_SAFE_METHOD, args);
+		} catch (_) {
+			preferManagementProductsFallback = true;
+			return listManagementProductsFallback(args);
+		}
 	}
 }
 

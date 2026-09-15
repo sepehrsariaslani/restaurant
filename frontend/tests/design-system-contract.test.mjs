@@ -44,6 +44,7 @@ const notionSettingsSource = fs.readFileSync(new URL('../src/components/manageme
 const searchableDropdownSource = fs.readFileSync(new URL('../src/components/SearchableDropdown.vue', import.meta.url), 'utf8')
 const restaurantApiSource = fs.readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
 const restaurantFeaturePackSource = fs.readFileSync(new URL('../../restaurant/api_feature_pack.py', import.meta.url), 'utf8')
+const apiSource = fs.readFileSync(new URL('../src/utils/api.js', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -125,6 +126,8 @@ test('product views keep shared controls left-aligned and resolve fallback media
   assert.match(restaurantApiSource, /_core_item_image_select_fields\(\)/)
   assert.match(restaurantApiSource, /attached_to_doctype.*Item/)
   assert.match(restaurantFeaturePackSource, /has_customization.*restaurant_is_customizable/)
+  assert.match(apiSource, /restaurant\.api_management_products_safe\.list_management_products_safe/)
+  assert.match(apiSource, /callMethodByPath\(MANAGEMENT_PRODUCTS_SAFE_METHOD, args\)/)
 })
 
 test('management navbar keeps operational modules separated and directly routable', () => {
