@@ -98,6 +98,11 @@ import {
   getManagementReportKitchenPerformance,
   getManagementReportProfitLoss,
   getManagementReportBreakeven,
+  getManagementReportMenuEngineering,
+  getManagementReportTaxReconciliation,
+  getManagementReportBranchPerformance,
+  getManagementReportVendorSales,
+  getManagementReportReceiptPaymentBalance,
   getManagementReportModifierUsage,
   getManagementReportOrderStatus,
   getManagementReportPaymentMethods,
@@ -218,6 +223,11 @@ const apiMap = {
   'kitchen-performance': getManagementReportKitchenPerformance,
   'profit-loss': getManagementReportProfitLoss,
   'breakeven': getManagementReportBreakeven,
+  'menu-engineering': getManagementReportMenuEngineering,
+  'tax-reconciliation': getManagementReportTaxReconciliation,
+  'branch-performance': getManagementReportBranchPerformance,
+  'vendor-sales': getManagementReportVendorSales,
+  'receipt-payment-balance': getManagementReportReceiptPaymentBalance,
 }
 
 const chartPalette = Object.freeze({

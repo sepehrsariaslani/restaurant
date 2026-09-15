@@ -53,7 +53,7 @@
 | جزئیات محصول | `/management/product` | ERPNext Item و داده‌های Restaurant | مرجع detail، رسانه، قیمت، BOM، modifier، variant و activity | مرجع تثبیت‌شده |
 | کارت محصول مشتری | `/menu` | API منوی رستوران | تصویرمحور، قیمت، وضعیت و اقدام | مرجع تثبیت‌شده |
 | جزئیات محصول مشتری | `/item` | API منوی رستوران | gallery، nutrition، customization و cart | مرجع تثبیت‌شده |
-| دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ نیازمند build/restart برای bundle فعال |
+| دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ با bundle فعال روی `veederakht` تأیید شد |
 | سفارش‌ها | `/management/orders` | ERPNext Sales Order/Invoice + فیلدهای Restaurant | `ManagementListView` → جزئیات انتخاب‌شده → پرداخت/تکمیل/پیک | تراز شده در این مرحله؛ تست source موفق |
 | پیک‌ها | `/management/couriers` | Restaurant courier/vehicle | فهرست پیک → فرم جزئیات چسبان → fleet/rules | تراز شده در این مرحله؛ تست source موفق |
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |
@@ -65,7 +65,7 @@
 | کنترل هزینه | `/management/cost-control` | گزارش فروش/بهای تمام‌شده و بودجه Restaurant/ERPNext | سود و زیان و بودجه در فهرست مشترک، جمع سال و ROI در کارت‌های semantic | تراز شده در این مرحله؛ تست source و SFC موفق |
 | حسابداری | `/management/accounting` | سندها و گزارش‌های مالی ERPNext، اتصال مودیان Restaurant | تراز دریافت/پرداخت، روش پرداخت، ارسال مودیان و اسناد اخیر در فهرست‌های مشترک | تراز شده در این مرحله؛ تست source و SFC موفق |
 | مرکز تماس | `/management/call-center` | Restaurant call log و Customer context | تماس‌های اخیر با فهرست مشترک، وضعیت فارسی و عملیات پاسخ/پایان | در ماژول مشتریان و ارتباط؛ تست source موفق |
-| گزارش‌های مدیریتی | `/management/reports` و `/management/reports/:key` | API گزارش Restaurant/ERPNext | فهرست گزارش، فیلتر بازه، KPI، نمودار و جدول با عنوان فارسی | گارسون و عنوان‌های تکمیلی اصلاح شد؛ browser smoke باقی است |
+| گزارش‌های مدیریتی | `/management/reports` و `/management/reports/:key` | API گزارش Restaurant/ERPNext | فهرست گزارش، فیلتر بازه، KPI، نمودار و جدول با عنوان فارسی | همهٔ کلیدهای فهرست به wrapper/API متصل و گزارش‌های نماینده با browser smoke تأیید شدند |
 
 ## صفحات Restaurant-specific
 
@@ -204,10 +204,10 @@
 
 ممیزی سورس و ماژول‌بندی تمام شد؛ موارد زیر عمداً خارج از ادعای «فعال‌شدن روی سایت» باقی می‌مانند:
 
-1. browser smoke احراز هویت‌شده برای صفحات مدیریت باید روی محیط واقعی اجرا شود.
+1. smoke احراز هویت‌شده روی سایت `veederakht` انجام شده است؛ برای هر سایت دیگری باید host/site درست انتخاب شود.
 2. صفحهٔ زرین‌پال تا زمان وجود endpoint و قرارداد backend واقعی placeholder می‌ماند.
 3. wrapperهای legacy انبار، `ManagementSettingsPage` و `ManagementHomeBuilderPage` برای سازگاری نگه داشته شده‌اند؛ قابلیت‌های فعال از صفحات جدید/aggregate عبور می‌کنند.
-4. فایل‌های bundle داخل `public/frontend/assets` در این کار build نشده‌اند و تغییرات موجود کاربر دست‌نخورده مانده‌اند.
+4. فایل‌های bundle داخل `public/frontend/assets` با build تولید شده‌اند؛ فایل‌های generated عمداً برای commit feature stage نشده‌اند.
 
 ## تعریف Done برای هر صفحه
 
@@ -223,8 +223,12 @@
 
 ## وضعیت اعتبارسنجی این نقشه
 
-- تست frontend این مرحله: موفق؛ تست‌های contract دیزاین‌سیستم، مسیرها و ماژول‌بندی.
+- تست frontend این مرحله: موفق؛ ۲۵ تست contract دیزاین‌سیستم، مسیرها، API گزارش و ماژول‌بندی.
 - parse/compile همهٔ ۱۲۱ SFC مدیریتی و کامپوننت‌های مدیریتی: موفق.
 - بررسی importهای نسبی و alias همهٔ SFCهای مدیریتی: موفق.
 - syntax بررسی `restaurant/hooks.py`: موفق.
-- build، restart، migrate، Graphify و browser smoke احراز‌شده: عمداً اجرا نشده و باید توسط کاربر در زمان انتشار انجام شود.
+- build production: موفق؛ ۲۱۷۱ ماژول Vite تبدیل شد و bundle فعال تولید شد.
+- migrate سایت `veederakht`: موفق؛ route ruleهای مستقیم و hookهای سایت refresh شدند.
+- restart سرویس‌های web/socketio/worker: موفق.
+- browser smoke احراز‌شده: مسیرهای اصلی تمام ماژول‌ها، aliasهای مستقیم، صفحات create/detail و گزارش‌های `sales-summary`، `menu-engineering`، `tax-reconciliation`، `branch-performance`، `vendor-sales` و `receipt-payment-balance` بدون 404 یا خطای runtime تأیید شدند.
+- Graphify/remote update: اجرا نشد؛ خارج از دامنهٔ این ممیزی باقی مانده است.

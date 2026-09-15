@@ -66,4 +66,4 @@
 
 ## محدودیت انتشار
 
-در این پروژه build، restart، migrate و Graphify اجرا نمی‌شوند. تغییر routeهای `hooks.py` بعد از انتشار نیازمند reload/restart سرویس Frappe است؛ تغییرات frontend برای bundle نهایی نیازمند build است. هیچ‌کدام از این دو، تا درخواست صریح کاربر اجرا نمی‌شوند.
+در اجرای اولیهٔ این پروژه build، restart، migrate و Graphify جزو دامنه نبودند؛ با درخواست صریح بعدی کاربر، build، migrate و restart روی سایت `veederakht` اجرا و با browser smoke تأیید شدند. Graphify همچنان اجرا نشده است.

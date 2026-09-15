@@ -3820,6 +3820,26 @@ export function getManagementReportBreakeven({ date_from = "", date_to = "" } = 
 	return callRestaurantAPI("get_management_report_breakeven", { date_from, date_to });
 }
 
+export function getManagementReportMenuEngineering({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_menu_engineering", { date_from, date_to });
+}
+
+export function getManagementReportTaxReconciliation({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_tax_reconciliation", { date_from, date_to });
+}
+
+export function getManagementReportBranchPerformance({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_branch_performance", { date_from, date_to });
+}
+
+export function getManagementReportVendorSales({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_vendor_sales", { date_from, date_to });
+}
+
+export function getManagementReportReceiptPaymentBalance({ date_from = "", date_to = "" } = {}) {
+	return callRestaurantAPI("get_management_report_receipt_payment_balance", { date_from, date_to });
+}
+
 export function listManagementCoupons({ search = "", include_inactive = 0 } = {}) {
 	return callRestaurantAPI("list_management_coupons", { search, include_inactive });
 }

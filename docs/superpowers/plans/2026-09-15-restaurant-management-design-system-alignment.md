@@ -16,7 +16,7 @@
 - تمرکز فعلی روی `ManagementSalesDashboardPage.vue` نیست.
 - ERPNext برای User/Role، Item، Item Attribute، اسناد مالی، stock، customer و lifecycle منبع authoritative است.
 - UI قابل مشاهده باید فارسی، RTL، Peyda و token-based باشد.
-- build، restart، `bench migrate` و Graphify اجرا نمی‌شوند.
+- Graphify اجرا نمی‌شود؛ build، restart و `bench migrate` فقط با درخواست صریح کاربر انجام می‌شوند و در ممیزی نهایی این کار روی `veederakht` انجام شدند.
 - تغییرات موجود کاربر در `public/frontend/assets` stage یا overwrite نمی‌شوند.
 
 ---
@@ -171,4 +171,4 @@ Run the Restaurant scanner and `git diff --check`; inspect `git status --short` 
 
 - [ ] **Step 4: Report deployment boundary**
 
-Report that build is needed for the frontend bundle, route reload/restart is needed for updated Frappe hooks, migration is not needed unless a DocType/schema change was introduced, and Graphify was not run.
+Report that the production bundle was built, Frappe hooks were refreshed with `bench migrate` and services restarted on `veederakht`; Graphify was not run.

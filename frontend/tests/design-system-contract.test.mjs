@@ -14,6 +14,14 @@ const designSystemHtmlSource = fs.readFileSync(new URL('../../restaurant/www/man
 const designSystemPySource = fs.readFileSync(new URL('../../restaurant/www/management/design_system.py', import.meta.url), 'utf8')
 const designSystemHyphenHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/design-system.html', import.meta.url), 'utf8')
 const designSystemHyphenPySource = fs.readFileSync(new URL('../../restaurant/www/management/design-system.py', import.meta.url), 'utf8')
+const usersHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/users.html', import.meta.url), 'utf8')
+const usersPySource = fs.readFileSync(new URL('../../restaurant/www/management/users.py', import.meta.url), 'utf8')
+const userAccessHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/user_access.html', import.meta.url), 'utf8')
+const userAccessPySource = fs.readFileSync(new URL('../../restaurant/www/management/user_access.py', import.meta.url), 'utf8')
+const menuDesignHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/menu_design.html', import.meta.url), 'utf8')
+const menuDesignPySource = fs.readFileSync(new URL('../../restaurant/www/management/menu_design.py', import.meta.url), 'utf8')
+const variantBuilderHtmlSource = fs.readFileSync(new URL('../../restaurant/www/management/variant_builder.html', import.meta.url), 'utf8')
+const variantBuilderPySource = fs.readFileSync(new URL('../../restaurant/www/management/variant_builder.py', import.meta.url), 'utf8')
 const variantBuilderSource = fs.readFileSync(new URL('../src/pages/management/catalog/ManagementVariantBuilderPage.vue', import.meta.url), 'utf8')
 const ordersSource = fs.readFileSync(new URL('../src/pages/management/sales/ManagementOrdersPage.vue', import.meta.url), 'utf8')
 const couriersSource = fs.readFileSync(new URL('../src/pages/management/operations/ManagementCouriersPage.vue', import.meta.url), 'utf8')
@@ -26,6 +34,7 @@ const branchesSource = fs.readFileSync(new URL('../src/pages/management/operatio
 const costControlSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementCostControlPage.vue', import.meta.url), 'utf8')
 const accountingSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementAccountingPage.vue', import.meta.url), 'utf8')
 const inventorySource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
+const zarinpalSource = fs.readFileSync(new URL('../src/pages/management/settings/ManagementZarinpalSettingsPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -82,6 +91,14 @@ test('design system route is registered in the management shell', () => {
   assert.match(designSystemHyphenHtmlSource, /window\._PAGE\s*=\s*'management-design-system'/)
   assert.match(designSystemHyphenHtmlSource, /assets\/restaurant\/frontend\/assets\/index\.js/)
   assert.match(designSystemHyphenPySource, /from \.design_system import get_context/)
+  assert.match(usersHtmlSource, /window\._PAGE\s*=\s*'management-users'/)
+  assert.match(usersPySource, /build_context\(context, "management-users"\)/)
+  assert.match(userAccessHtmlSource, /window\._PAGE\s*=\s*'management-users'/)
+  assert.match(userAccessPySource, /build_context\(context, "management-users"\)/)
+  assert.match(menuDesignHtmlSource, /window\._PAGE\s*=\s*'management-menu-design'/)
+  assert.match(menuDesignPySource, /build_context\(context, "management-menu-design"\)/)
+  assert.match(variantBuilderHtmlSource, /window\._PAGE\s*=\s*'management-variant-builder'/)
+  assert.match(variantBuilderPySource, /build_context\(context, "management-variant-builder"\)/)
 })
 
 test('management navbar keeps operational modules separated and directly routable', () => {
@@ -100,6 +117,11 @@ test('management navbar keeps operational modules separated and directly routabl
     '/management/tables',
     '/management/modifier-groups',
     '/management/zarinpal-settings',
+    '/management/variant-builder',
+    '/management/user-access',
+    '/management/call_center',
+    '/management/print_formats',
+    '/management/site_settings',
   ]) {
     assert.match(hooksSource, new RegExp(`from_route":\\s*"${route.replaceAll('/', '\\\/')}"`))
   }
@@ -257,6 +279,10 @@ test('management reports keep operational titles and waiter performance connecte
   assert.match(reportSource, /'waiter-performance'/)
   assert.match(reportSource, /'menu-engineering'/)
   assert.match(reportSource, /'tax-reconciliation'/)
+  assert.match(reportSource, /getManagementReportBranchPerformance/)
+  assert.match(reportSource, /getManagementReportVendorSales/)
+  assert.match(reportSource, /getManagementReportReceiptPaymentBalance/)
+  assert.match(reportSource, /'receipt-payment-balance': getManagementReportReceiptPaymentBalance/)
   assert.match(reportSource, /reportSubtitle/)
   assert.doesNotMatch(reportSource, /:subtitle="reportKey"/)
 })
@@ -341,6 +367,13 @@ test('inventory read-only operational surfaces use shared lists', () => {
   ]) {
     assert.match(inventorySource, new RegExp(`:rows="${rows.replaceAll('.', '\\.')}"`))
   }
+})
+
+test('zarinpal placeholder stays explicit and uses the shared management shell', () => {
+  assert.match(zarinpalSource, /ManagementPageScaffold/)
+  assert.match(zarinpalSource, /ManagementSurfaceCard/)
+  assert.match(zarinpalSource, /قرارداد درگاه هنوز فعال نشده است/)
+  assert.doesNotMatch(zarinpalSource, /getZarinpalSettings|saveZarinpalSettings|testZarinpalConnection/)
 })
 
 test('management pages and domain components stay organized by module', () => {
