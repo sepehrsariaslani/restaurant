@@ -14,14 +14,8 @@
       <div class="toolbar">
         <label class="date-label">از تاریخ<input class="input" type="date" v-model="filters.date_from" @change="loadList" /></label>
         <label class="date-label">تا تاریخ<input class="input" type="date" v-model="filters.date_to" @change="loadList" /></label>
-        <select class="input" v-model="filters.status" @change="loadList">
-          <option value="">همه وضعیت‌ها</option>
-          <option v-for="s in boot.statuses || []" :key="s" :value="s">{{ s }}</option>
-        </select>
-        <select class="input" v-model="filters.table" @change="loadList">
-          <option value="">همه جایگاه‌ها</option>
-          <option v-for="t in boot.tables || []" :key="t.name" :value="t.name">{{ t.table_name || t.name }} ({{ t.location || '—' }})</option>
-        </select>
+        <SearchableDropdown v-model="filters.status" :options="statusOptions" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="loadList" />
+        <SearchableDropdown v-model="filters.table" :options="tableOptions" placeholder="همه جایگاه‌ها" search-placeholder="جستجوی میز یا سالن..." @update:model-value="loadList" />
         <input class="input" v-model.trim="filters.search" placeholder="جستجوی نام یا موبایل..." @keyup.enter="loadList" />
         <button type="button" class="secondary-btn" @click="loadList">جستجو</button>
       </div>
@@ -76,13 +70,10 @@
           <label>ساعت<input class="input" type="time" v-model="form.reservation_time" /></label>
           <label>تعداد نفرات<input class="input" type="number" min="1" v-model.number="form.party_size" /></label>
           <label>جایگاه (میز/اتاق/سالن)
-            <select class="input" v-model="form.restaurant_table">
-              <option value="">— بدون تخصیص —</option>
-              <option v-for="t in boot.tables || []" :key="t.name" :value="t.name">{{ t.table_name || t.name }} ({{ t.location || '—' }})</option>
-            </select>
+            <SearchableDropdown v-model="form.restaurant_table" :options="tableAssignmentOptions" placeholder="— بدون تخصیص —" search-placeholder="جستجوی میز یا سالن..." />
           </label>
           <label>منشأ
-            <select class="input" v-model="form.source"><option v-for="s in boot.sources || []" :key="s" :value="s">{{ s }}</option></select>
+            <SearchableDropdown v-model="form.source" :options="sourceOptions" placeholder="انتخاب منشأ" search-placeholder="جستجوی منشأ..." />
           </label>
           <ManagementNoteField
             v-model="form.note"
@@ -108,6 +99,7 @@ import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   getManagementReservationBoot,
   listManagementReservations,
@@ -136,6 +128,17 @@ const reservationColumns = [
   { key: 'status', label: 'وضعیت' },
   { key: 'actions', label: 'عملیات' },
 ]
+const statusOptions = computed(() => [
+  { value: '', label: 'همه وضعیت‌ها' },
+  ...(boot.value.statuses || []).map((status) => ({ value: status, label: status })),
+])
+const tableOptionRows = computed(() => (boot.value.tables || []).map((table) => ({
+  value: table.name,
+  label: String(table.table_name || table.name) + ' (' + String(table.location || '—') + ')',
+})))
+const tableOptions = computed(() => [{ value: '', label: 'همه جایگاه‌ها' }, ...tableOptionRows.value])
+const tableAssignmentOptions = computed(() => [{ value: '', label: '— بدون تخصیص —' }, ...tableOptionRows.value])
+const sourceOptions = computed(() => (boot.value.sources || []).map((source) => ({ value: source, label: source })))
 
 const publicUrl = computed(() => `${window.location.origin}/reserve`)
 const todayTotal = computed(() => Object.values(boot.value.today_counts || {}).reduce((a, b) => a + Number(b || 0), 0))

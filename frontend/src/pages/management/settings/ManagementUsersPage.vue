@@ -1,26 +1,66 @@
 <template>
-  <ManagementPageScaffold title="کاربران و دسترسی‌ها" subtitle="مدیریت کاربران، نقش‌ها و دسترسی ورود به پنل">
+  <ManagementPageScaffold
+    :title="detailOnly ? (form.name ? 'جزئیات کاربر' : 'کاربر جدید') : 'کاربران و دسترسی‌ها'"
+    :subtitle="detailOnly ? 'پروفایل کاربر، نقش‌ها و وضعیت دسترسی' : 'مدیریت کاربران، نقش‌ها و دسترسی ورود به پنل'"
+  >
     <template #actions>
-      <button class="primary-btn" type="button" @click="startNew">+ کاربر جدید</button>
+      <a v-if="detailOnly" class="secondary-btn" href="/management/users">بازگشت به لیست کاربران</a>
+      <button v-if="!detailOnly" class="primary-btn" type="button" @click="openNewUser">+ کاربر جدید</button>
       <button class="secondary-btn" type="button" :disabled="loading" @click="loadUsers">بروزرسانی</button>
     </template>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="success" class="success">{{ success }}</p>
 
-    <div class="users-layout">
-      <ManagementSurfaceCard title="فهرست کاربران" subtitle="برای ویرایش، روی نام کاربر کلیک کنید.">
-        <div class="toolbar-row">
-          <input v-model.trim="search" class="input" placeholder="جستجو بر اساس نام یا ایمیل" @keyup.enter="loadUsers" />
-        </div>
-        <div class="user-list">
-          <button v-for="user in users" :key="user.name" type="button" class="user-row" :class="{ selected: form.name === user.name }" @click="editUser(user)">
-            <span class="avatar">{{ (user.full_name || user.email || '?').slice(0, 1).toUpperCase() }}</span>
-            <span class="user-main"><strong>{{ user.full_name || user.email }}</strong><small>{{ user.email }}</small></span>
-            <span class="user-meta"><span :class="['status-pill', user.enabled ? 'active' : 'disabled']">{{ user.enabled ? 'فعال' : 'غیرفعال' }}</span><small>{{ user.roles?.join('، ') || 'بدون نقش' }}</small></span>
-          </button>
+    <div class="users-layout" :class="{ 'users-layout--detail': detailOnly }">
+      <ManagementSurfaceCard v-if="!detailOnly" title="فهرست کاربران" subtitle="برای ویرایش، روی نام کاربر کلیک کنید.">
+        <template v-if="!detailOnly">
+          <ManagementCollectionView v-model="viewMode" :modes="userViewModes">
+            <template #toolbar>
+              <div class="toolbar-row">
+                <input v-model.trim="search" class="input" placeholder="جستجو بر اساس نام یا ایمیل" @keyup.enter="loadUsers" />
+                <button class="secondary-btn" type="button" @click="loadUsers">جستجو</button>
+              </div>
+            </template>
+
+            <template #table>
+              <ManagementListView :columns="userColumns" :rows="users" row-key="name" :row-clickable="true" @row-click="openUserDetail">
+                <template #cell-full_name="{ row }"><strong>{{ row.full_name || row.email }}</strong></template>
+                <template #cell-email="{ value }"><span dir="ltr">{{ value || '—' }}</span></template>
+                <template #cell-enabled="{ row }"><span :class="['status-pill', row.enabled ? 'active' : 'disabled']">{{ row.enabled ? 'فعال' : 'غیرفعال' }}</span></template>
+                <template #cell-roles="{ row }">{{ row.roles?.join('، ') || 'بدون نقش' }}</template>
+                <template #cell-actions="{ row }"><button class="secondary-btn mini-link-btn" type="button" @click.stop="openUserDetail(row)">جزئیات</button></template>
+                <template #empty>کاربری پیدا نشد.</template>
+              </ManagementListView>
+            </template>
+
+            <template #list>
+              <ManagementNotionListView
+                :rows="users"
+                row-key="name"
+                title-key="full_name"
+                code-key="email"
+                :properties="{ enabled: true, roles: true }"
+                :property-order="['enabled', 'roles']"
+                :chip-renderers="userChipRenderers"
+                :row-clickable="true"
+                @row-click="openUserDetail"
+              />
+            </template>
+
+            <template #gallery>
+              <ManagementGalleryView
+                :rows="users"
+                row-key="name"
+                title-field="full_name"
+                code-field="email"
+                :clickable="true"
+                @click-item="openUserDetail"
+              />
+            </template>
+          </ManagementCollectionView>
           <p v-if="!loading && !users.length" class="empty">کاربری پیدا نشد.</p>
-        </div>
+        </template>
       </ManagementSurfaceCard>
 
       <ManagementSurfaceCard :title="form.name ? 'ویرایش کاربر' : 'ایجاد کاربر جدید'" subtitle="نقش‌ها سطح دسترسی پایه کاربر را مشخص می‌کنند.">
@@ -49,10 +89,21 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import ManagementCollectionView from '@/components/management/ManagementCollectionView.vue'
+import ManagementGalleryView from '@/components/management/ManagementGalleryView.vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
+import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import { deleteManagementUser, listManagementUsers, saveManagementUser } from '@/utils/api'
+import { parseQuery } from '@/utils/format'
+
+const props = defineProps({ detailOnly: { type: Boolean, default: false } })
+const detailOnly = computed(() => Boolean(props.detailOnly))
+const query = parseQuery()
+const detailUserName = ref(String(query.name || query.user || query.email || '').trim())
+const viewMode = ref(String(query.view || 'table').trim() || 'table')
 
 const users = ref([])
 const roles = ref([])
@@ -64,10 +115,32 @@ const success = ref('')
 const currentUser = typeof window !== 'undefined' ? String(window._BOOT?.user || window._BOOT?.user_email || '').trim() : ''
 const form = reactive(createForm())
 
+const userColumns = [
+  { key: 'full_name', label: 'نام کاربر' },
+  { key: 'email', label: 'ایمیل' },
+  { key: 'enabled', label: 'وضعیت' },
+  { key: 'roles', label: 'نقش‌ها' },
+  { key: 'actions', label: 'عملیات' },
+]
+const userViewModes = [
+  { value: 'table', label: 'جدول', icon: '☷' },
+  { value: 'list', label: 'لیست', icon: '≡' },
+  { value: 'gallery', label: 'گالری', icon: '▦' },
+]
+const userChipRenderers = {
+  enabled: (row) => ({ text: row.enabled ? 'فعال' : 'غیرفعال', cls: row.enabled ? 'chip-ok' : 'chip-danger' }),
+  roles: (row) => ({ text: row.roles?.join('، ') || 'بدون نقش', cls: '' }),
+}
+
 function createForm() {
   return { name: '', email: '', full_name: '', mobile_no: '', new_password: '', enabled: true, roles: [] }
 }
 function startNew() { Object.assign(form, createForm()) }
+function openNewUser() { window.location.href = '/management/user' }
+function openUserDetail(user) {
+  const name = String(user?.name || '').trim()
+  if (name) window.location.href = `/management/user?name=${encodeURIComponent(name)}`
+}
 function editUser(user) { Object.assign(form, { ...createForm(), ...user, roles: [...(user.roles || [])], enabled: Boolean(user.enabled) }) }
 async function loadUsers() {
   loading.value = true; error.value = ''
@@ -89,11 +162,19 @@ async function removeUser() {
   catch (err) { error.value = err?.message || 'حذف کاربر ناموفق بود.' }
   finally { saving.value = false }
 }
-onMounted(loadUsers)
+onMounted(async () => {
+  await loadUsers()
+  if (detailOnly.value && detailUserName.value) {
+    const user = users.value.find((row) => String(row.name || '') === detailUserName.value || String(row.email || '') === detailUserName.value)
+    if (user) editUser(user)
+    else error.value = 'کاربر موردنظر پیدا نشد.'
+  }
+})
 </script>
 
 <style scoped>
 .users-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: 1rem; }
+.users-layout--detail { grid-template-columns: minmax(0, 1fr); }
 .toolbar-row, .form-actions { display: flex; gap: .65rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
 .user-list { display: grid; gap: .5rem; max-height: 620px; overflow: auto; }
 .user-row { width: 100%; display: flex; align-items: center; gap: .75rem; border: 1px solid var(--mg-border-light); border-radius: var(--mg-radius-sm); padding: .75rem; background: transparent; color: var(--mg-text-main); text-align: right; cursor: pointer; transition: .2s ease; }

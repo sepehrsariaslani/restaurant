@@ -47,10 +47,7 @@
       <div class="form-grid">
         <label>مشتری (نام Customer یا موبایل)<input class="input" v-model.trim="transferForm.customer" placeholder="Customer-0001 یا 09xxxxxxxxx" /></label>
         <label>شعبه مقصد
-          <select class="input" v-model="transferForm.target_branch">
-            <option value="">— انتخاب کنید —</option>
-            <option v-for="b in activeBranches" :key="b.name" :value="b.name">{{ b.label || b.company_name }}</option>
-          </select>
+          <SearchableDropdown v-model="transferForm.target_branch" :options="branchOptions" placeholder="— انتخاب کنید —" search-placeholder="جستجوی شعبه..." />
         </label>
       </div>
       <div class="btn-row">
@@ -97,6 +94,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   getManagementBranchBoot,
   listManagementBranches,
@@ -118,6 +116,10 @@ const saving = ref(false)
 const transferForm = reactive({ customer: '', target_branch: '' })
 const transferBusy = ref(false)
 const transferError = ref('')
+const branchOptions = computed(() => [
+  { value: '', label: '— انتخاب کنید —' },
+  ...activeBranches.value.map((branch) => ({ value: branch.name, label: branch.label || branch.company_name || branch.name })),
+])
 const branchColumns = [
   { key: 'branch', label: 'شعبه' },
   { key: 'today_orders', label: 'سفارش‌های امروز' },

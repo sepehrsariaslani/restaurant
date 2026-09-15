@@ -7,7 +7,9 @@
       <ManagementPosProfilePage v-else-if="page === 'management-pos-profile'" />
       <ManagementPosDefaultsPage v-else-if="page === 'management-pos-defaults'" />
       <ManagementCouriersPage v-else-if="page === 'management-couriers'" />
+      <ManagementUserDetailPage v-else-if="page === 'management-user-detail'" />
       <ManagementUsersPage v-else-if="page === 'management-users'" />
+      <ManagementOrderDetailPage v-else-if="page === 'management-order-detail'" />
       <ManagementOrdersPage v-else-if="page === 'management-orders'" />
       <ManagementProductsPage v-else-if="page === 'management-products'" />
       <ManagementDesignSystemPage v-else-if="page === 'management-design-system'" />
@@ -23,6 +25,7 @@
       <ManagementVariantBuilderPage v-else-if="page === 'management-variant-builder'" />
       <ManagementBuilderTemplatesPage v-else-if="page === 'management-builder-templates' && !isBuilderTemplateEdit" />
       <ManagementBuilderTemplatePage v-else-if="page === 'management-builder-templates' && isBuilderTemplateEdit" :template-id="builderTemplateId" />
+      <ManagementCustomerDetailPage v-else-if="page === 'management-customer-detail'" />
       <ManagementCustomersPage v-else-if="page === 'management-customers'" />
       <ManagementKitchenPage v-else-if="page === 'management-kitchen'" />
       <ManagementTablesPage v-else-if="page === 'management-tables'" />
@@ -41,7 +44,10 @@
       <ManagementInventoryReorderPage v-else-if="page === 'management-inventory-reorder'" />
       <ManagementInventoryProductionPage v-else-if="page === 'management-inventory-production'" />
       <ManagementInventoryLossesPage v-else-if="page === 'management-inventory-losses'" />
+      <ManagementInventoryDocumentsPage v-else-if="page === 'management-inventory-documents'" />
+      <ManagementInventoryDocumentDetailPage v-else-if="page === 'management-inventory-document-detail'" />
       <ManagementInventoryCountPage v-else-if="page === 'management-inventory-count'" />
+      <ManagementInventoryCountDetailPage v-else-if="page === 'management-inventory-count-detail'" />
       <ManagementInventoryCostsPage v-else-if="page === 'management-inventory-costs'" />
       <ManagementInventoryPage v-else-if="page === 'management-inventory'" />
       <ManagementClubPage v-else-if="page === 'management-club'" />
@@ -188,7 +194,9 @@ import ManagementPosProfilePage from './pages/management/sales/ManagementPosProf
 import ManagementPosDefaultsPage from './pages/management/sales/ManagementPosDefaultsPage.vue'
 import ManagementCouriersPage from './pages/management/operations/ManagementCouriersPage.vue'
 import ManagementUsersPage from './pages/management/settings/ManagementUsersPage.vue'
+import ManagementUserDetailPage from './pages/management/settings/ManagementUserDetailPage.vue'
 import ManagementOrdersPage from './pages/management/sales/ManagementOrdersPage.vue'
+import ManagementOrderDetailPage from './pages/management/sales/ManagementOrderDetailPage.vue'
 import ManagementProductsPage from './pages/management/catalog/ManagementProductsPage.vue'
 import ManagementDesignSystemPage from './pages/management/design-system/ManagementDesignSystemPage.vue'
 import ManagementModifierGroupsPage from './pages/management/catalog/ManagementModifierGroupsPage.vue'
@@ -203,6 +211,7 @@ import ManagementVariantBuilderPage from './pages/management/catalog/ManagementV
 import ManagementBuilderTemplatesPage from './pages/management/builder/ManagementBuilderTemplatesPage.vue'
 import ManagementBuilderTemplatePage from './pages/management/builder/ManagementBuilderTemplatePage.vue'
 import ManagementCustomersPage from './pages/management/customers/ManagementCustomersPage.vue'
+import ManagementCustomerDetailPage from './pages/management/customers/ManagementCustomerDetailPage.vue'
 import ManagementKitchenPage from './pages/management/operations/ManagementKitchenPage.vue'
 import ManagementTablesPage from './pages/management/operations/ManagementTablesPage.vue'
 import ManagementReportsIndexPage from './pages/management/finance/ManagementReportsIndexPage.vue'
@@ -221,7 +230,10 @@ import ManagementInventoryMovementsPage from './pages/management/inventory/Manag
 import ManagementInventoryReorderPage from './pages/management/inventory/ManagementInventoryReorderPage.vue'
 import ManagementInventoryProductionPage from './pages/management/inventory/ManagementInventoryProductionPage.vue'
 import ManagementInventoryLossesPage from './pages/management/inventory/ManagementInventoryLossesPage.vue'
+import ManagementInventoryDocumentsPage from './pages/management/inventory/ManagementInventoryDocumentsPage.vue'
+import ManagementInventoryDocumentDetailPage from './pages/management/inventory/ManagementInventoryDocumentDetailPage.vue'
 import ManagementInventoryCountPage from './pages/management/inventory/ManagementInventoryCountPage.vue'
+import ManagementInventoryCountDetailPage from './pages/management/inventory/ManagementInventoryCountDetailPage.vue'
 import ManagementInventoryCostsPage from './pages/management/inventory/ManagementInventoryCostsPage.vue'
 import ManagementClubPage from './pages/management/customers/ManagementClubPage.vue'
 import ManagementSurveysPage from './pages/management/customers/ManagementSurveysPage.vue'
@@ -250,10 +262,12 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
     if (pathname.startsWith('/management/sales')) return 'management-sales-dashboard'
     if (pathname.startsWith('/management/couriers')) return 'management-couriers'
+    if (pathname === '/management/user' || pathname.startsWith('/management/user/')) return 'management-user-detail'
     if (pathname.startsWith('/management/users') || pathname.startsWith('/management/user-access')) return 'management-users'
     if (pathname.startsWith('/management/pos-defaults') || pathname.startsWith('/management/pos_defaults')) return 'management-pos-defaults'
     if (pathname.startsWith('/management/pos-profile') || pathname.startsWith('/management/pos_profile')) return 'management-pos-profile'
     if (pathname.startsWith('/management/pos')) return 'management-pos'
+    if (pathname === '/management/order' || pathname.startsWith('/management/order/')) return 'management-order-detail'
     if (pathname.startsWith('/management/orders')) return 'management-orders'
     if (pathname.startsWith('/management/design-system') || pathname.startsWith('/management/design_system')) return 'management-design-system'
     if (pathname.startsWith('/management/products/detail') && variantStudioMode) return 'management-variant-builder'
@@ -266,6 +280,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/menu-group') || pathname.startsWith('/management/menu_group')) return 'management-menu-group'
     if (pathname.startsWith('/management/boms')) return 'management-boms'
     if (pathname.startsWith('/management/bom')) return 'management-bom'
+    if (pathname === '/management/customer' || pathname.startsWith('/management/customer/')) return 'management-customer-detail'
     if (pathname.startsWith('/management/customers')) return 'management-customers'
     if (pathname.startsWith('/management/tables')) return 'management-tables'
     if (pathname.startsWith('/management/reports/')) return 'management-report'
@@ -282,6 +297,9 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/inventory/reorder')) return 'management-inventory-reorder'
     if (pathname.startsWith('/management/inventory/production')) return 'management-inventory-production'
     if (pathname.startsWith('/management/inventory/losses')) return 'management-inventory-losses'
+    if (pathname.startsWith('/management/inventory/documents/detail')) return 'management-inventory-document-detail'
+    if (pathname.startsWith('/management/inventory/documents')) return 'management-inventory-documents'
+    if (pathname.startsWith('/management/inventory/count/detail')) return 'management-inventory-count-detail'
     if (pathname.startsWith('/management/inventory/count')) return 'management-inventory-count'
     if (pathname.startsWith('/management/inventory/costs')) return 'management-inventory-costs'
     if (pathname === '/management/inventory' || pathname === '/management/inventory/') return 'management-inventory-dashboard'

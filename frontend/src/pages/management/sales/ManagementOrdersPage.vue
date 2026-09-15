@@ -1,7 +1,7 @@
 <template>
   <ManagementPageScaffold title="" subtitle="" :show-title="false">
     
-    <div class="workspace-header">
+    <div v-if="!detailOnly" class="workspace-header">
       <div class="header-intro">
         <h1 class="page-title">مدیریت سفارش‌ها</h1>
         <p class="page-subtitle">پایش لحظه‌ای سفارش‌ها، وضعیت پرداخت و پیشرفت تولید</p>
@@ -24,7 +24,7 @@
     </div>
 
     <!-- Composed KPI Strip -->
-    <div class="kpi-strip">
+    <div v-if="!detailOnly" class="kpi-strip">
       <div class="kpi-hero">
         <div class="kpi-hero-val">{{ toFaDigits(orders.length) }}</div>
         <div class="kpi-hero-label">کل سفارش‌ها</div>
@@ -61,7 +61,7 @@
       </div>
     </div>
 
-    <div class="workspace-tabs-container">
+    <div v-if="!detailOnly" class="workspace-tabs-container">
       <div class="workspace-tabs" role="tablist">
         <button
           v-for="tab in mobileTabs"
@@ -86,7 +86,7 @@
 
     <template v-if="!loading || orders.length">
       <section class="workspace-floor">
-        <div class="floor-grid-area">
+        <div v-if="!detailOnly" class="floor-grid-area">
           <div class="floor-filters">
             <span class="floor-filter-label">فیلتر منبع:</span>
             <button class="floor-chip" :class="{ active: !filters.source }" @click="filters.source = ''; loadOrders()">همه</button>
@@ -135,7 +135,7 @@
           </ManagementListView>
         </div>
 
-        <aside class="floor-detail-area">
+        <aside class="floor-detail-area" :class="{ 'floor-detail-area--standalone': detailOnly }">
           <div class="inspection-panel">
             <div v-if="!isOrderDetailView || !selectedOrder" class="inspection-empty">
               <div class="empty-illustration"><ClipboardList :size="32" /></div>
@@ -183,10 +183,14 @@
                 <section class="inspection-section mt-4" v-if="isDeliveryOrder(selectedOrder.order)">
                   <h3 class="section-title">تحویل و پیک</h3>
                   <div class="courier-assign-row">
-                    <select class="input" v-model="courierAssign.courier">
-                      <option value="">انتخاب پیک...</option>
-                      <option v-for="c in couriers" :key="c.name" :value="c.name">{{ c.courier_name }}</option>
-                    </select>
+                    <SearchableDropdown
+                      v-model="courierAssign.courier"
+                      :options="courierOptions"
+                      include-empty-option
+                      empty-label="انتخاب پیک..."
+                      placeholder="انتخاب پیک..."
+                      search-placeholder="جستجوی پیک..."
+                    />
                     <button class="secondary-btn" type="button" :disabled="courierAssign.busy" @click="assignCourier(selectedOrder.order.name)">
                       {{ courierAssign.busy ? '...' : 'تخصیص پیک' }}
                     </button>
@@ -262,12 +266,19 @@ import { AlertCircle, CheckCheck, ClipboardList, Clock3, CreditCard, FileText, R
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { completeManagementOrder, getManagementOrderDetail, listManagementOrders, markManagementOrderPaid, listManagementCouriers, assignManagementOrderCourier, createManagementOrderProforma } from '@/utils/api'
 import { formatMoney, formatStatus, parseQuery } from '@/utils/format'
+
+const props = defineProps({
+  detailOnly: { type: Boolean, default: false },
+})
+const detailOnly = computed(() => Boolean(props.detailOnly))
 
 const query = parseQuery()
 const detailOrderName = ref(String(query.order_name || query.order || '').trim())
 const detailOrderSource = ref(String(query.source || '').trim())
+const search = ref(String(query.search || '').trim())
 
 const loading = ref(false)
 const error = ref('')
@@ -283,6 +294,7 @@ const manualPayment = reactive({
 
 const couriers = ref([])
 const courierAssign = reactive({ courier: '', busy: false, message: '', error: '' })
+const courierOptions = computed(() => couriers.value.map((courier) => ({ value: courier.name, label: courier.courier_name || courier.name })))
 
 function isDeliveryOrder(order) {
   const channel = String(order?.channel || '').toLowerCase()
@@ -474,6 +486,7 @@ async function loadOrders() {
     const payload = await listManagementOrders({
       source: filters.source,
       status: filters.status,
+      search: search.value,
     })
     orders.value = payload.orders || []
   } catch (errObj) {
@@ -520,7 +533,11 @@ function openOrderDetail(row) {
   if (source) {
     params.set('source', source)
   }
-  window.location.href = `/management/orders?${params.toString()}`
+  window.location.href = `/management/order?${params.toString()}`
+}
+
+function closeOrderDetail() {
+  window.location.href = '/management/orders'
 }
 
 async function markOrderPaid(order) {
@@ -982,6 +999,14 @@ if (isOrderDetailView.value) {
   position: sticky;
   top: 2rem;
   height: calc(100vh - 4rem);
+}
+
+.floor-detail-area--standalone {
+  position: static;
+  top: auto;
+  height: auto;
+  min-height: 560px;
+  grid-column: 1 / -1;
 }
 
 .inspection-panel {

@@ -15,10 +15,7 @@
 
     <ManagementSurfaceCard title="موجودی لحظه‌ای" subtitle="برای مشاهده جزئیات ماده، ردیف را انتخاب کنید.">
       <div class="inventory-toolbar">
-        <select class="input" v-model="filters.warehouse" @change="loadOverview">
-          <option value="">همه انبارها</option>
-          <option v-for="warehouse in boot?.leaf_warehouses || []" :key="warehouse" :value="warehouse">{{ warehouse }}</option>
-        </select>
+        <SearchableDropdown v-model="filters.warehouse" :options="warehouseOptions" placeholder="همه انبارها" search-placeholder="جستجوی انبار..." @update:model-value="loadOverview" />
         <input class="input" v-model.trim="filters.search" placeholder="جستجوی کالا یا کد..." @keyup.enter="loadOverview" />
         <label class="check"><input v-model="filters.only_materials" type="checkbox" @change="loadOverview" /> فقط مواد اولیه</label>
         <button type="button" class="secondary-btn" @click="loadOverview">جستجو</button>
@@ -29,7 +26,8 @@
         :columns="columns"
         :rows="overviewRows"
         row-key="item_code"
-        :row-clickable="false"
+        :row-clickable="true"
+        @row-click="openMaterialDetail"
         empty-text="موجودی برای نمایش وجود ندارد."
       >
         <template #cell-item_name="{ row }"><strong>{{ row.item_name }}</strong><small class="sub">{{ row.item_code }}</small></template>
@@ -52,6 +50,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import InventoryResponsiveList from '@/components/management/inventory/InventoryResponsiveList.vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { getManagementInventoryBoot, getManagementStockOverview } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 
@@ -70,6 +69,10 @@ const columns = [
 ]
 
 const overviewRows = computed(() => overview.value?.items || [])
+const warehouseOptions = computed(() => [
+  { value: '', label: 'همه انبارها' },
+  ...(boot.value?.leaf_warehouses || []).map((warehouse) => ({ value: warehouse, label: warehouse })),
+])
 
 function fa(value) {
   return Number(value || 0).toLocaleString('fa-IR')
@@ -79,6 +82,10 @@ function moneyNumber(value) {
 }
 function money(value) {
   return formatMoney(Number(value || 0), 'IRR')
+}
+function openMaterialDetail(row) {
+  const item = String(row?.item_code || '').trim()
+  if (item) window.location.href = '/management/inventory/materials/detail?item=' + encodeURIComponent(item)
 }
 
 async function loadBoot() {

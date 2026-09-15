@@ -2,7 +2,7 @@
   <InventorySectionShell title="خرید مواد" subtitle="سفارش خرید، ارسال به تأمین‌کننده و دریافت مرحله‌ای">
     <template #actions><button type="button" class="primary-btn" @click="openNew">+ سفارش خرید جدید</button></template>
     <ManagementSurfaceCard title="لیست سفارش‌های خرید" subtitle="برای مشاهده اقلام و ثبت دریافت، یک سفارش را انتخاب کنید.">
-      <div class="inventory-toolbar"><select class="input" v-model="filters.status" @change="load"><option value="">همه وضعیت‌ها</option><option v-for="status in statuses" :key="status" :value="status">{{ status }}</option></select><input class="input" v-model.trim="filters.search" placeholder="شماره یا تأمین‌کننده..." @keyup.enter="load" /><button type="button" class="secondary-btn" @click="load" :disabled="loading">{{ loading ? '...' : 'جستجو' }}</button></div>
+      <div class="inventory-toolbar"><SearchableDropdown v-model="filters.status" :options="statusOptions" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="load" /><input class="input" v-model.trim="filters.search" placeholder="شماره یا تأمین‌کننده..." @keyup.enter="load" /><button type="button" class="secondary-btn" @click="load" :disabled="loading">{{ loading ? '...' : 'جستجو' }}</button></div>
       <p v-if="error" class="error">{{ error }}</p><p v-if="loading" class="muted">در حال دریافت سفارش‌های خرید...</p>
       <InventoryResponsiveList v-else :columns="columns" :rows="orders" row-key="name" @row-click="openRow" empty-text="سفارش خریدی ثبت نشده است.">
         <template #cell-name="{ row }"><strong>{{ row.name }}</strong><small class="sub">{{ formatPersianDate(row.posting_date) }}</small></template>
@@ -21,11 +21,13 @@ import { onMounted, reactive, ref } from 'vue'
 import InventoryResponsiveList from '@/components/management/inventory/InventoryResponsiveList.vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { formatPersianDate } from '@/utils/persianDate'
 import { listManagementPurchaseOrders } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 const orders=ref([]), loading=ref(false), error=ref(''), filters=reactive({status:'',search:''})
 const statuses=['پیش‌نویس','ارسال‌شده','دریافت جزئی','دریافت کامل','لغوشده']
+const statusOptions=[{value:'',label:'همه وضعیت‌ها'}, ...statuses.map((status)=>({value:status,label:status}))]
 const columns=[{key:'name',label:'شماره'},{key:'supplier_name',label:'تأمین‌کننده'},{key:'posting_date',label:'تاریخ'},{key:'status',label:'وضعیت'},{key:'total_qty',label:'تعداد'},{key:'grand_total',label:'مبلغ'}]
 function qty(v){return Number(v||0).toLocaleString('fa-IR',{maximumFractionDigits:3})};function money(v){return formatMoney(Number(v||0),'IRR')};function statusClass(v){return v==='دریافت کامل'?'ok':v==='لغوشده'?'danger':''}
 function openNew(){window.location.href='/management/inventory/purchases/detail?new=1'}

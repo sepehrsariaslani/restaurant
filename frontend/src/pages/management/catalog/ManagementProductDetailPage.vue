@@ -857,12 +857,7 @@
               </label>
               <label>
                 نوع محصول سفارشی
-                <select class="input" v-model="settingsForm.restaurant_custom_product_type">
-                  <option value="">انتخاب کنید</option>
-                  <option value="configured">پیکربندی‌شده</option>
-                  <option value="made_to_order">سفارشی/سفارش‌ساز</option>
-                  <option value="assembled">مونتاژ‌شده</option>
-                </select>
+                <SearchableDropdown v-model="settingsForm.restaurant_custom_product_type" :options="productTypeOptions" placeholder="انتخاب کنید" search-placeholder="جستجوی نوع محصول..." />
               </label>
               <label>
                 قالب سفارشی‌سازی
@@ -901,27 +896,11 @@
               />
               <label>
                 حالت چاپ آشپزخانه
-                <select class="input" v-model="settingsForm.restaurant_kitchen_print_mode">
-                  <option
-                    v-for="option in fieldOptions.kitchen_print_modes"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </select>
+                <SearchableDropdown v-model="settingsForm.restaurant_kitchen_print_mode" :options="fieldOptions.kitchen_print_modes" placeholder="انتخاب حالت چاپ" search-placeholder="جستجوی حالت چاپ..." />
               </label>
               <label>
                 حالت مصرف موجودی
-                <select class="input" v-model="settingsForm.restaurant_stock_consumption_mode">
-                  <option
-                    v-for="option in fieldOptions.stock_consumption_modes"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </select>
+                <SearchableDropdown v-model="settingsForm.restaurant_stock_consumption_mode" :options="fieldOptions.stock_consumption_modes" placeholder="انتخاب حالت مصرف" search-placeholder="جستجوی حالت مصرف..." />
               </label>
             </div>
 
@@ -980,12 +959,7 @@
                   </label>
                   <label>
                     حالت چیدمان
-                    <select class="input" v-model="builderConfig.layout_mode">
-                      <option value="vertical_steps">مرحله‌ای عمودی</option>
-                      <option value="horizontal_tabs">تب‌های افقی</option>
-                      <option value="accordion">آکاردئون</option>
-                      <option value="wizard">مرحله‌ای (ویزارد)</option>
-                    </select>
+                    <SearchableDropdown v-model="builderConfig.layout_mode" :options="builderLayoutOptions" placeholder="انتخاب حالت چیدمان" search-placeholder="جستجوی حالت چیدمان..." />
                   </label>
                   <label>
                     رنگ اصلی
@@ -1716,6 +1690,18 @@ const fieldOptions = computed(() => {
       payload.stock_consumption_modes || STOCK_CONSUMPTION_MODE_OPTIONS
 }
 })
+const productTypeOptions = [
+  { value: '', label: 'انتخاب کنید' },
+  { value: 'configured', label: 'پیکربندی‌شده' },
+  { value: 'made_to_order', label: 'سفارشی/سفارش‌ساز' },
+  { value: 'assembled', label: 'مونتاژ‌شده' },
+]
+const builderLayoutOptions = [
+  { value: 'vertical_steps', label: 'مرحله‌ای عمودی' },
+  { value: 'horizontal_tabs', label: 'تب‌های افقی' },
+  { value: 'accordion', label: 'آکاردئون' },
+  { value: 'wizard', label: 'مرحله‌ای (ویزارد)' },
+]
 const filteredSubcategoryOptions = computed(() => {
   const rows = fieldOptions.value?.subcategories || []
   const category = String(settingsForm.restaurant_category || '').trim()

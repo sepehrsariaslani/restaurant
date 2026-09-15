@@ -23,10 +23,7 @@
       <p class="error" v-if="overviewError">{{ overviewError }}</p>
       <ManagementSurfaceCard title="کنترل موجودی انبارها" subtitle="موجودی مقداری و مبلغی اقلام، به تفکیک انبار">
         <div class="toolbar">
-          <select class="input" v-model="overviewFilters.warehouse" @change="loadOverview">
-            <option value="">همه انبارها</option>
-            <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-          </select>
+          <SearchableDropdown v-model="overviewFilters.warehouse" :options="warehouseOptions" include-empty-option empty-label="همه انبارها" placeholder="همه انبارها" search-placeholder="جستجوی انبار..." @update:model-value="loadOverview" />
           <input class="input" v-model.trim="overviewFilters.search" placeholder="جستجوی کد یا نام کالا..." @keyup.enter="loadOverview" />
           <label class="check-row"><input type="checkbox" v-model="overviewFilters.only_materials" @change="loadOverview" /> فقط مواد اولیه</label>
           <button type="button" class="secondary-btn" @click="loadOverview" :disabled="overviewLoading">{{ overviewLoading ? '...' : 'جستجو' }}</button>
@@ -105,6 +102,8 @@
           :columns="materialColumns"
           :rows="materials"
           row-key="name"
+          :row-clickable="true"
+          @row-click="openMaterialDetailPage"
         >
           <template #cell-item="{ row }"><strong>{{ row.item_name }}</strong><span v-if="row.below_reorder" class="badge warn">کمبود</span><small class="muted d-block">{{ row.name }}</small></template>
           <template #cell-item_group="{ value }">{{ value || '—' }}</template>
@@ -112,7 +111,7 @@
           <template #cell-value="{ row }">{{ formatMoneyValue(row.value) }}</template>
           <template #cell-reorder="{ row }"><template v-if="row.reorder_levels.length"><span v-for="rl in row.reorder_levels.slice(0, 2)" :key="row.name + rl.warehouse" class="pill">{{ rl.warehouse }}: {{ formatQty(rl.level) }}</span></template><span v-else class="muted">—</span></template>
           <template #cell-default_supplier="{ value }">{{ value || '—' }}</template>
-          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="openMaterialForm(row)">ویرایش</button></template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click.stop="openMaterialForm(row)">ویرایش</button></template>
           <template #empty>ماده اولیه‌ای ثبت نشده است.</template>
         </ManagementListView>
         <div class="btn-row" v-if="materialsHasMore">
@@ -132,9 +131,7 @@
               <input class="input" v-model.trim="materialForm.item_name" placeholder="مثلاً پنیر موزارلا" />
             </label>
             <label>گروه کالا
-              <select class="input" v-model="materialForm.item_group">
-                <option v-for="g in (boot ? boot.item_groups : [])" :key="g.name" :value="g.name">{{ g.name }}</option>
-              </select>
+              <SearchableDropdown v-model="materialForm.item_group" :options="itemGroupOptions" placeholder="انتخاب گروه کالا" search-placeholder="جستجوی گروه کالا..." />
             </label>
             <label>واحد اندازه‌گیری
               <input class="input" v-model.trim="materialForm.stock_uom" placeholder="Nos / Kg / Gram" />
@@ -143,10 +140,7 @@
               <input class="input" type="number" min="0" v-model.number="materialForm.purchase_rate" />
             </label>
             <label>تأمین‌کننده پیش‌فرض
-              <select class="input" v-model="materialForm.default_supplier">
-                <option value="">بدون تأمین‌کننده</option>
-                <option v-for="s in supplierOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
-              </select>
+              <SearchableDropdown v-model="materialForm.default_supplier" :options="supplierOptions" include-empty-option empty-label="بدون تأمین‌کننده" placeholder="بدون تأمین‌کننده" search-placeholder="جستجوی تأمین‌کننده..." />
             </label>
             <label class="check-row full-row"><input type="checkbox" v-model="materialForm.disabled" /> غیرفعال</label>
           </div>
@@ -155,10 +149,7 @@
             <h4>موجودی اولیه (اختیاری)</h4>
             <div class="form-grid">
               <label>انبار
-                <select class="input" v-model="materialForm.opening.warehouse">
-                  <option value="">—</option>
-                  <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-                </select>
+                <SearchableDropdown v-model="materialForm.opening.warehouse" :options="warehouseOptions" include-empty-option empty-label="—" placeholder="انتخاب انبار" search-placeholder="جستجوی انبار..." />
               </label>
               <label>مقدار
                 <input class="input" type="number" min="0" v-model.number="materialForm.opening.qty" />
@@ -169,10 +160,7 @@
           <h4>نقطه سفارش به تفکیک انبار</h4>
           <div class="lines-editor">
             <div v-for="(rl, i) in materialForm.reorder_levels" :key="i" class="line-row">
-              <select class="input" v-model="rl.warehouse">
-                <option value="">انبار...</option>
-                <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-              </select>
+              <SearchableDropdown v-model="rl.warehouse" :options="warehouseOptions" include-empty-option empty-label="انبار..." placeholder="انبار..." search-placeholder="جستجوی انبار..." />
               <input class="input" type="number" min="0" step="0.001" v-model.number="rl.level" placeholder="حداقل موجودی" />
               <input class="input" type="number" min="0" step="0.001" v-model.number="rl.request_qty" placeholder="مقدار پیشنهادی خرید" />
               <button type="button" class="tertiary-btn danger" @click="materialForm.reorder_levels.splice(i, 1)">حذف</button>
@@ -222,10 +210,7 @@
               <input class="input" v-model.trim="warehouseForm.warehouse_name" placeholder="مثلاً انبار آشپزخانه" />
             </label>
             <label>انبار والد (گروه)
-              <select class="input" v-model="warehouseForm.parent_warehouse">
-                <option value="">بدون والد</option>
-                <option v-for="w in warehouses.filter((x) => x.is_group && x.name !== warehouseForm.name)" :key="w.name" :value="w.name">{{ w.warehouse_name }}</option>
-              </select>
+              <SearchableDropdown v-model="warehouseForm.parent_warehouse" :options="parentWarehouseOptions" include-empty-option empty-label="بدون والد" placeholder="بدون والد" search-placeholder="جستجوی انبار والد..." />
             </label>
             <label class="check-row"><input type="checkbox" v-model="warehouseForm.is_group" /> انبار گروهی است</label>
             <label class="check-row"><input type="checkbox" v-model="warehouseForm.disabled" /> غیرفعال</label>
@@ -245,13 +230,7 @@
       <ManagementSurfaceCard title="ثبت گردش جدید" subtitle="ورود، خروج، انتقال، ضایعات و خسارت با جزئیات کامل">
         <div class="form-grid">
           <label>نوع گردش
-            <select class="input" v-model="movementForm.movement_type">
-              <option value="receipt">ورود کالا (خرید/سایر)</option>
-              <option value="issue">خروج کالا (مصرف/سایر)</option>
-              <option value="transfer">انتقال بین انبارها</option>
-              <option value="waste">ضایعات</option>
-              <option value="damage">خسارت</option>
-            </select>
+            <SearchableDropdown v-model="movementForm.movement_type" :options="movementTypeOptions" placeholder="نوع گردش" search-placeholder="جستجوی نوع گردش..." />
           </label>
           <label v-if="movementForm.movement_type !== 'receipt'">انبار مبدأ
             <SearchableDropdown
@@ -294,14 +273,8 @@
         <div class="toolbar">
           <PersianDateInput v-model="movementFilters.date_from" />
           <PersianDateInput v-model="movementFilters.date_to" />
-          <select class="input" v-model="movementFilters.warehouse">
-            <option value="">همه انبارها</option>
-            <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-          </select>
-          <select class="input" v-model="movementFilters.kind">
-            <option value="">همه انواع</option>
-            <option v-for="(label, key) in movementKinds" :key="key" :value="label">{{ label }}</option>
-          </select>
+          <SearchableDropdown v-model="movementFilters.warehouse" :options="warehouseOptions" include-empty-option empty-label="همه انبارها" placeholder="همه انبارها" search-placeholder="جستجوی انبار..." />
+          <SearchableDropdown v-model="movementFilters.kind" :options="movementKindOptions" include-empty-option empty-label="همه انواع" placeholder="همه انواع" search-placeholder="جستجوی نوع..." />
           <button type="button" class="secondary-btn" @click="loadMovements" :disabled="movementsLoading">{{ movementsLoading ? '...' : 'جستجو' }}</button>
         </div>
         <p class="muted" v-if="movementsLoading">در حال دریافت...</p>
@@ -310,6 +283,8 @@
           :columns="movementColumns"
           :rows="movements"
           :row-key="movementRowKey"
+          :row-clickable="true"
+          @row-click="openStockEntryDetail"
         >
           <template #cell-posting_date="{ row }">{{ formatPersianDate(row.posting_date) }}<small class="muted d-block">{{ row.posting_time }}</small></template>
           <template #cell-item="{ row }">{{ row.item_name }}<small class="muted d-block">{{ row.item_code }}</small></template>
@@ -329,10 +304,7 @@
       <p class="success-msg" v-if="reorderMessage">{{ reorderMessage }}</p>
       <ManagementSurfaceCard title="هشدار نقطه سفارش" subtitle="اقلامی که موجودی‌شان به حداقل تعیین‌شده رسیده است">
         <div class="toolbar">
-          <select class="input" v-model="reorderWarehouse" @change="loadReorderAlerts">
-            <option value="">همه انبارها</option>
-            <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-          </select>
+          <SearchableDropdown v-model="reorderWarehouse" :options="warehouseOptions" include-empty-option empty-label="همه انبارها" placeholder="همه انبارها" search-placeholder="جستجوی انبار..." @update:model-value="loadReorderAlerts" />
           <button type="button" class="secondary-btn" @click="loadReorderAlerts" :disabled="reorderLoading">{{ reorderLoading ? '...' : 'بروزرسانی' }}</button>
           <button type="button" class="primary-btn" @click="createPurchaseFromAlerts" :disabled="!selectedAlerts.length || reorderSaving">
             {{ reorderSaving ? '...' : `ایجاد پیش‌نویس خرید (${formatQty(selectedAlerts.length)})` }}
@@ -364,13 +336,7 @@
 
       <ManagementSurfaceCard title="درخواست مواد اولیه" subtitle="نیاز مواد را ثبت کنید، مقدار و واحد را ببینید و سپس به خرید منتقل کنید">
         <div class="request-toolbar">
-          <select class="input" v-model="requestFilters.status" @change="loadMaterialRequests">
-            <option value="">همه وضعیت‌ها</option>
-            <option value="draft">پیش‌نویس</option>
-            <option value="pending">در انتظار خرید</option>
-            <option value="ordered">خرید کامل</option>
-            <option value="cancelled">لغوشده</option>
-          </select>
+          <SearchableDropdown v-model="requestFilters.status" :options="requestStatusOptions" include-empty-option empty-label="همه وضعیت‌ها" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="loadMaterialRequests" />
         <PersianDateInput v-model="requestFilters.date_from" @update:model-value="loadMaterialRequests" />
         <PersianDateInput v-model="requestFilters.date_to" @update:model-value="loadMaterialRequests" />
           <input class="input request-search" v-model.trim="requestFilters.search" placeholder="جستجوی شماره یا ماده..." @keyup.enter="loadMaterialRequests" />
@@ -384,7 +350,7 @@
             v-for="request in materialRequests"
             :key="request.name"
             class="material-request-card"
-            @click="openMaterialRequestDetail(request.name)"
+            @click="openMaterialRequestPage(request.name)"
           >
             <header class="material-request-card-head">
               <div>
@@ -518,10 +484,7 @@
       <p class="success-msg" v-if="purchaseMessage">{{ purchaseMessage }}</p>
       <ManagementSurfaceCard title="سفارش‌های خرید مواد اولیه" subtitle="ثبت، ارسال و دریافت از تأمین‌کنندگان">
         <div class="toolbar">
-          <select class="input" v-model="purchaseFilters.status" @change="loadPurchases">
-            <option value="">همه وضعیت‌ها</option>
-            <option v-for="s in purchaseStatuses" :key="s" :value="s">{{ s }}</option>
-          </select>
+          <SearchableDropdown v-model="purchaseFilters.status" :options="purchaseStatusOptions" include-empty-option empty-label="همه وضعیت‌ها" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="loadPurchases" />
           <input class="input" v-model.trim="purchaseFilters.search" placeholder="جستجوی شماره یا تأمین‌کننده..." @keyup.enter="loadPurchases" />
           <button type="button" class="secondary-btn" @click="loadPurchases" :disabled="purchaseLoading">{{ purchaseLoading ? '...' : 'جستجو' }}</button>
           <button type="button" class="primary-btn" @click="togglePurchaseForm">{{ showPurchaseForm ? 'بستن فرم' : '+ سفارش خرید جدید' }}</button>
@@ -584,7 +547,7 @@
           <template #cell-status="{ row }"><span :class="['pill', purchaseStatusClass(row.status)]">{{ row.status }}</span></template>
           <template #cell-total_qty="{ value }">{{ formatQty(value) }}</template>
           <template #cell-grand_total="{ value }">{{ formatMoneyValue(value) }}</template>
-          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="openPurchaseDetail(row.name)">مشاهده</button></template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click.stop="openPurchasePage(row.name)">مشاهده</button></template>
           <template #empty>سفارش خریدی ثبت نشده است.</template>
         </ManagementListView>
       </ManagementSurfaceCard>
@@ -621,9 +584,7 @@
           </div>
           <div v-if="canReceivePurchase" class="form-grid receive-warehouse-row">
             <label>انبار دریافت
-              <select class="input" v-model="receiveWarehouse">
-                <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-              </select>
+              <SearchableDropdown v-model="receiveWarehouse" :options="warehouseOptions" placeholder="انتخاب انبار دریافت" search-placeholder="جستجوی انبار..." />
             </label>
           </div>
           <div class="btn-row">
@@ -713,16 +674,10 @@
             <input class="input" type="number" min="0.5" step="0.5" v-model.number="productionForm.qty" />
           </label>
           <label>انبار مواد اولیه
-            <select class="input" v-model="productionForm.source_warehouse">
-              <option value="">پیش‌فرض</option>
-              <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-            </select>
+            <SearchableDropdown v-model="productionForm.source_warehouse" :options="warehouseOptions" include-empty-option empty-label="پیش‌فرض" placeholder="پیش‌فرض" search-placeholder="جستجوی انبار..." />
           </label>
           <label>انبار محصول
-            <select class="input" v-model="productionForm.target_warehouse">
-              <option value="">پیش‌فرض</option>
-              <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-            </select>
+            <SearchableDropdown v-model="productionForm.target_warehouse" :options="warehouseOptions" include-empty-option empty-label="پیش‌فرض" placeholder="پیش‌فرض" search-placeholder="جستجوی انبار..." />
           </label>
         </div>
         <div class="btn-row">
@@ -741,10 +696,7 @@
         <div class="toolbar">
           <PersianDateInput v-model="lossFilters.date_from" />
           <PersianDateInput v-model="lossFilters.date_to" />
-          <select class="input" v-model="lossFilters.warehouse">
-            <option value="">همه انبارها</option>
-            <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-          </select>
+          <SearchableDropdown v-model="lossFilters.warehouse" :options="warehouseOptions" include-empty-option empty-label="همه انبارها" placeholder="همه انبارها" search-placeholder="جستجوی انبار..." />
           <button type="button" class="secondary-btn" @click="loadWasteReport" :disabled="lossesLoading">{{ lossesLoading ? '...' : 'بروزرسانی' }}</button>
         </div>
         <template v-if="wasteReport">
@@ -778,14 +730,10 @@
       <ManagementSurfaceCard title="ثبت اوتی / خسارت / مرجوعی" subtitle="ثبت و پیگیری سفارش‌های اوت‌شده و خسارات وارده">
         <div class="form-grid">
           <label>نوع
-            <select class="input" v-model="lossForm.loss_kind">
-              <option v-for="k in lossKinds" :key="k" :value="k">{{ k }}</option>
-            </select>
+            <SearchableDropdown v-model="lossForm.loss_kind" :options="lossKindOptions" placeholder="نوع ضایعه" search-placeholder="جستجوی نوع..." />
           </label>
           <label>منشأ
-            <select class="input" v-model="lossForm.source_type">
-              <option>دستی</option><option>POS</option><option>وب</option><option>میز</option>
-            </select>
+            <SearchableDropdown v-model="lossForm.source_type" :options="lossSourceOptions" placeholder="منشأ" search-placeholder="جستجوی منشأ..." />
           </label>
           <label>مرجع سفارش (اختیاری)
             <input class="input" v-model.trim="lossForm.source_reference" placeholder="شماره سفارش / میز" />
@@ -797,10 +745,7 @@
             <input class="input" type="number" min="0.0001" step="0.001" v-model.number="lossForm.qty" />
           </label>
           <label>انبار (برای خسارت/مرجوعی)
-            <select class="input" v-model="lossForm.warehouse">
-              <option value="">—</option>
-              <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-            </select>
+            <SearchableDropdown v-model="lossForm.warehouse" :options="warehouseOptions" include-empty-option empty-label="—" placeholder="انتخاب انبار" search-placeholder="جستجوی انبار..." />
           </label>
           <label class="full-row">علت
             <input class="input" v-model.trim="lossForm.reason" placeholder="مثلاً سوختن سفارش، برگشت مشتری، فساد ماده اولیه" />
@@ -815,16 +760,15 @@
 
       <ManagementSurfaceCard title="سوابق اوتی‌ها و خسارات" subtitle="آخرین رخدادهای ثبت‌شده">
         <div class="toolbar">
-          <select class="input" v-model="lossListFilter" @change="loadOrderLosses">
-            <option value="">همه انواع</option>
-            <option v-for="k in lossKinds" :key="k" :value="k">{{ k }}</option>
-          </select>
+          <SearchableDropdown v-model="lossListFilter" :options="lossKindOptions" include-empty-option empty-label="همه انواع" placeholder="همه انواع" search-placeholder="جستجوی نوع..." @update:model-value="loadOrderLosses" />
           <button type="button" class="secondary-btn" @click="loadOrderLosses">بروزرسانی</button>
         </div>
         <ManagementListView
           :columns="orderLossColumns"
           :rows="orderLosses"
           row-key="name"
+          :row-clickable="true"
+          @row-click="openStockEntryDetail"
         >
           <template #cell-entry_date="{ value }">{{ value || '—' }}</template>
           <template #cell-loss_kind="{ row }"><span :class="['pill', row.loss_kind === 'مرجوعی به انبار' ? 'ok' : 'warn']">{{ row.loss_kind }}</span></template>
@@ -845,10 +789,12 @@
       <p class="success-msg" v-if="countMessage">{{ countMessage }}</p>
       <ManagementSurfaceCard title="انبارگردانی و مغایرت‌گیری" subtitle="شمارش فیزیکی و مقایسه با موجودی سیستمی">
         <div class="toolbar">
-          <select class="input" v-model="countWarehouse">
-            <option value="">انتخاب انبار...</option>
-            <option v-for="wh in leafWarehouses" :key="wh" :value="wh">{{ wh }}</option>
-          </select>
+          <SearchableDropdown
+            v-model="countWarehouse"
+            :options="warehouseOptions"
+            placeholder="انتخاب انبار..."
+            search-placeholder="جستجوی انبار..."
+          />
           <input class="input" v-model.trim="countSearch" placeholder="جستجوی کالا (اختیاری)..." @keyup.enter="loadCountContext" />
           <button type="button" class="primary-btn" @click="loadCountContext" :disabled="countLoading || !countWarehouse">{{ countLoading ? '...' : 'بارگذاری برگه شمارش' }}</button>
         </div>
@@ -905,27 +851,16 @@
           :columns="reconciliationColumns"
           :rows="reconciliations"
           row-key="name"
+          :row-clickable="true"
+          @row-click="openReconciliationDetail"
         >
           <template #cell-name="{ row }"><strong>{{ row.name }}</strong></template>
           <template #cell-posting_date="{ value }">{{ formatPersianDate(value) }}</template>
           <template #cell-company="{ value }">{{ value || '—' }}</template>
           <template #cell-difference_amount="{ row }"><span :class="row.difference_amount === 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.difference_amount) }}</span></template>
-          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click="viewReconciliation(row.name)">جزئیات</button></template>
+          <template #cell-actions="{ row }"><button type="button" class="tertiary-btn" @click.stop="openReconciliationDetail(row)">جزئیات</button></template>
           <template #empty>انبارگردانی‌ای ثبت نشده است.</template>
         </ManagementListView>
-        <div v-if="reconciliationDetail" class="inline-form result-block">
-          <h4>جزئیات {{ reconciliationDetail.name }}</h4>
-          <ManagementListView
-            :columns="reconciliationDetailColumns"
-            :rows="reconciliationDetail.rows"
-            :row-key="reconciliationDetailRowKey"
-          >
-            <template #cell-item_code="{ value }">{{ value }}</template>
-            <template #cell-warehouse="{ value }">{{ value || '—' }}</template>
-            <template #cell-diff_qty="{ row }"><span :class="row.diff_qty >= 0 ? 'ok-text' : 'warn-text'">{{ row.diff_qty > 0 ? '+' : '' }}{{ formatQty(row.diff_qty) }}</span></template>
-            <template #cell-diff_value="{ value }">{{ formatMoneyValue(value) }}</template>
-          </ManagementListView>
-        </div>
       </ManagementSurfaceCard>
     </section>
 
@@ -1012,7 +947,6 @@ import {
   getManagementReconciliationContext,
   getManagementReorderAlerts,
   getManagementStockOverview,
-  getManagementStockReconciliation,
   getManagementWasteLossReport,
   importManagementMaterialsExcel,
   listManagementMaterialRequests,
@@ -1085,12 +1019,36 @@ const loadingAny = computed(() => bootLoading.value || requestLoading.value || p
 
 const leafWarehouses = computed(() => (boot.value ? boot.value.leaf_warehouses || [] : []))
 const warehouseOptions = computed(() => leafWarehouses.value.map((value) => ({ value, label: value })))
+const parentWarehouseOptions = computed(() => warehouses.value.filter((row) => row.is_group && row.name !== warehouseForm.value?.name).map((row) => ({ value: row.name, label: row.warehouse_name || row.name })))
+const itemGroupOptions = computed(() => (boot.value?.item_groups || []).map((row) => ({ value: row.name, label: row.name })))
 const supplierOptions = computed(() =>
   (boot.value ? boot.value.suppliers || [] : []).map((s) => ({ value: s.name, label: s.supplier_name || s.name })),
 )
 const movementKinds = computed(() => (boot.value ? boot.value.movement_kinds || {} : {}))
 const purchaseStatuses = computed(() => (boot.value ? boot.value.purchase_statuses || [] : []))
 const lossKinds = computed(() => (boot.value ? boot.value.loss_kinds || [] : []))
+const movementTypeOptions = [
+  { value: 'receipt', label: 'ورود کالا (خرید/سایر)' },
+  { value: 'issue', label: 'خروج کالا (مصرف/سایر)' },
+  { value: 'transfer', label: 'انتقال بین انبارها' },
+  { value: 'waste', label: 'ضایعات' },
+  { value: 'damage', label: 'خسارت' },
+]
+const requestStatusOptions = [
+  { value: 'draft', label: 'پیش‌نویس' },
+  { value: 'pending', label: 'در انتظار خرید' },
+  { value: 'ordered', label: 'خرید کامل' },
+  { value: 'cancelled', label: 'لغوشده' },
+]
+const movementKindOptions = computed(() => Object.entries(movementKinds.value).map(([value, label]) => ({ value: label, label })))
+const purchaseStatusOptions = computed(() => purchaseStatuses.value.map((value) => ({ value, label: value })))
+const lossKindOptions = computed(() => lossKinds.value.map((value) => ({ value, label: value })))
+const lossSourceOptions = [
+  { value: 'دستی', label: 'دستی' },
+  { value: 'POS', label: 'POS' },
+  { value: 'وب', label: 'وب' },
+  { value: 'میز', label: 'میز' },
+]
 
 function formatMoneyValue(value) {
   return formatMoneyUtil(Number(value || 0))
@@ -1111,10 +1069,6 @@ function reorderRowKey(row, index) {
 function wasteItemRowKey(row, index) {
   return `${row.item_code || row.item_name || 'loss'}-${row.kind || index}`
 }
-function reconciliationDetailRowKey(row, index) {
-  return `${row.item_code || 'reconciliation'}-${row.warehouse || index}`
-}
-
 const materialColumns = [
   { key: 'item', label: 'ماده اولیه' },
   { key: 'item_group', label: 'گروه' },
@@ -1202,13 +1156,6 @@ const reconciliationColumns = [
   { key: 'difference_amount', label: 'مغایرت ارزشی' },
   { key: 'actions', label: 'عملیات' },
 ]
-const reconciliationDetailColumns = [
-  { key: 'item_code', label: 'کالا' },
-  { key: 'warehouse', label: 'انبار' },
-  { key: 'diff_qty', label: 'تغییر مقدار' },
-  { key: 'diff_value', label: 'تغییر ارزش' },
-]
-
 async function loadBoot() {
   bootLoading.value = true
   try {
@@ -1362,6 +1309,11 @@ async function openMaterialRequestDetail(name) {
   }
 }
 
+function openMaterialRequestPage(name) {
+  const normalized = String(name || '').trim()
+  if (normalized) window.location.href = `/management/inventory/requests/detail?name=${encodeURIComponent(normalized)}`
+}
+
 async function saveMaterialRequest(submit = false) {
   if (!materialRequestForm.value) return
   requestSaving.value = true
@@ -1407,9 +1359,8 @@ async function saveMaterialRequest(submit = false) {
 }
 
 function openLinkedPurchase(name) {
-  materialRequestDetail.value = null
-  setActiveTab('purchase')
-  openPurchaseDetail(name)
+  const normalized = String(name || '').trim()
+  if (normalized) window.location.href = `/management/inventory/purchases/detail?name=${encodeURIComponent(normalized)}`
 }
 
 function editMaterialRequestDetail() {
@@ -1598,6 +1549,11 @@ function openMaterialForm(row = null) {
       opening: { warehouse: boot.value?.settings?.default_warehouse || '', qty: 0, rate: 0 },
     }
   }
+}
+
+function openMaterialDetailPage(row) {
+  const item = String(row?.name || row?.item_code || '').trim()
+  if (item) window.location.href = `/management/inventory/materials/detail?item=${encodeURIComponent(item)}`
 }
 
 async function saveMaterial() {
@@ -1907,6 +1863,11 @@ async function openPurchaseDetail(name) {
   }
 }
 
+function openPurchasePage(name) {
+  const normalized = String(name || '').trim()
+  if (normalized) window.location.href = `/management/inventory/purchases/detail?name=${encodeURIComponent(normalized)}`
+}
+
 function editPurchaseDraft() {
   if (!purchaseDetail.value) return
   const detail = purchaseDetail.value
@@ -2148,7 +2109,6 @@ const countError = ref('')
 const countMessage = ref('')
 const countResult = ref(null)
 const reconciliations = ref([])
-const reconciliationDetail = ref(null)
 
 const countedRows = computed(() => countRows.value.filter((row) => countDiff(row) !== 0))
 function countDiff(row) {
@@ -2211,13 +2171,15 @@ async function loadReconciliations() {
   }
 }
 
-async function viewReconciliation(name) {
-  countError.value = ''
-  try {
-    reconciliationDetail.value = await getManagementStockReconciliation(name)
-  } catch (err) {
-    countError.value = err.message || 'خطا در دریافت جزئیات.'
-  }
+function openReconciliationDetail(row) {
+  const name = String(row?.name || '').trim()
+  if (!name) return
+  window.location.href = `/management/inventory/count/detail?name=${encodeURIComponent(name)}`
+}
+
+function openStockEntryDetail(row) {
+  const name = String(row?.voucher || row?.stock_entry || '').trim()
+  if (name) window.location.href = `/management/inventory/documents/detail?doctype=Stock%20Entry&name=${encodeURIComponent(name)}`
 }
 
 // ------------------------- costs -------------------------

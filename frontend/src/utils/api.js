@@ -1688,6 +1688,7 @@ export function listManagementOrders({
 	status = "",
 	source = "",
 	cashier = "",
+	search = "",
 } = {}) {
 	return callRestaurantAPI("list_management_orders", {
 		date_from,
@@ -1695,6 +1696,7 @@ export function listManagementOrders({
 		status,
 		source,
 		cashier,
+		search,
 	});
 }
 

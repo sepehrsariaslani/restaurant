@@ -3,7 +3,7 @@
     <template #actions><button type="button" class="primary-btn" @click="openDetail('new')">+ درخواست جدید</button></template>
     <ManagementSurfaceCard title="لیست درخواست‌های مواد" subtitle="برای مشاهده جزئیات هر درخواست، کارت یا ردیف را انتخاب کنید.">
       <div class="inventory-toolbar">
-        <select class="input" v-model="filters.status" @change="load"><option value="">همه وضعیت‌ها</option><option value="draft">پیش‌نویس</option><option value="pending">در انتظار خرید</option><option value="ordered">خرید کامل</option><option value="cancelled">لغوشده</option></select>
+        <SearchableDropdown v-model="filters.status" :options="statusOptions" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="load" />
         <PersianDateInput v-model="filters.date_from" placeholder="از تاریخ" @update:model-value="load" />
         <PersianDateInput v-model="filters.date_to" placeholder="تا تاریخ" @update:model-value="load" />
         <input class="input" v-model.trim="filters.search" placeholder="جستجوی شماره یا ماده..." @keyup.enter="load" />
@@ -30,6 +30,7 @@ import InventoryResponsiveList from '@/components/management/inventory/Inventory
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { formatPersianDate } from '@/utils/persianDate'
 import { listManagementMaterialRequests } from '@/utils/api'
 
@@ -37,6 +38,13 @@ const requests = ref([])
 const loading = ref(false)
 const error = ref('')
 const filters = reactive({ status: '', search: '', date_from: '', date_to: '' })
+const statusOptions = [
+  { value: '', label: 'همه وضعیت‌ها' },
+  { value: 'draft', label: 'پیش‌نویس' },
+  { value: 'pending', label: 'در انتظار خرید' },
+  { value: 'ordered', label: 'خرید کامل' },
+  { value: 'cancelled', label: 'لغوشده' },
+]
 const columns = [
   { key: 'name', label: 'شماره' },
   { key: 'status_label', label: 'وضعیت' },

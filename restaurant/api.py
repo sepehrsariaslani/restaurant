@@ -12795,10 +12795,11 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_transaction_date = _has_column("Sales Order", "transaction_date")
 	filters = {"docstatus": ["<", 2]}
-	if has_transaction_date:
-		filters["transaction_date"] = ["between", [start_date, end_date]]
-	else:
-		filters["creation"] = ["between", [start_dt, end_dt]]
+	if date_from or date_to:
+		if has_transaction_date:
+			filters["transaction_date"] = ["between", [start_date, end_date]]
+		else:
+			filters["creation"] = ["between", [start_dt, end_dt]]
 	if cashier:
 		filters["owner"] = cashier
 
@@ -13005,10 +13006,11 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_created_at = _has_column("Restaurant Table Order", "created_at")
 	filters = {"docstatus": ["<", 2]}
-	if has_created_at:
-		filters["created_at"] = ["between", [start_dt, end_dt]]
-	else:
-		filters["creation"] = ["between", [start_dt, end_dt]]
+	if date_from or date_to:
+		if has_created_at:
+			filters["created_at"] = ["between", [start_dt, end_dt]]
+		else:
+			filters["creation"] = ["between", [start_dt, end_dt]]
 	if status:
 		filters["status"] = status
 	if cashier:
@@ -13116,7 +13118,7 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 	return payload
 
 
-def _management_collect_orders(date_from=None, date_to=None, status=None, source="all", cashier=None):
+def _management_collect_orders(date_from=None, date_to=None, status=None, source="all", cashier=None, search=None):
 	source = (source or "all").strip().lower()
 	orders = []
 	if source in {"all", "web", "restaurant"}:
@@ -13143,6 +13145,31 @@ def _management_collect_orders(date_from=None, date_to=None, status=None, source
 			return get_datetime(order.get("created_at"))
 		except Exception:
 			return now_datetime()
+
+	search_text = " ".join(str(search or "").strip().lower().split())
+	if search_text:
+		orders = [
+			order
+			for order in orders
+			if search_text in " ".join(
+				str(value or "").lower()
+				for value in (
+					order.get("name"),
+					order.get("order_code"),
+					order.get("customer_name"),
+					order.get("mobile"),
+					order.get("cashier"),
+					order.get("channel"),
+				)
+			)
+			or any(
+				search_text in " ".join(
+					str(value or "").lower()
+					for value in (item.get("item_code"), item.get("title"))
+				)
+				for item in order.get("items") or []
+			)
+		]
 
 	return sorted(orders, key=_sort_key, reverse=True)
 
@@ -16113,7 +16140,7 @@ def list_management_pos_orders(date_from=None, date_to=None, status=None, cashie
 
 
 @frappe.whitelist()
-def list_management_orders(date_from=None, date_to=None, status=None, source=None, cashier=None):
+def list_management_orders(date_from=None, date_to=None, status=None, source=None, cashier=None, search=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(
 		date_from=date_from,
@@ -16121,6 +16148,7 @@ def list_management_orders(date_from=None, date_to=None, status=None, source=Non
 		status=status,
 		source=source or "all",
 		cashier=cashier,
+		search=search,
 	)
 	return {"orders": orders}
 

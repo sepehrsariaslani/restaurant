@@ -493,6 +493,15 @@ const navLinks = computed(() => {
 			group: "purchasing",
 		},
 		{
+			key: "management-inventory-documents",
+			label: "اسناد خرید و انبار",
+			shortLabel: "اسناد",
+			caption: "فاکتور خرید، رسید و انتقال انبار",
+			iconComponent: FileTextIcon,
+			url: "/management/inventory/documents",
+			group: "purchasing",
+		},
+		{
 			key: "management-inventory-warehouses",
 			label: "انبارها",
 			shortLabel: "انبارها",
@@ -947,6 +956,7 @@ function isLinkActive(key) {
 		"management-material-requests": "management-material-requests",
 		"management-inventory-materials": "management-inventory-materials",
 		"management-inventory-purchase": "management-inventory-purchases",
+		"management-inventory-documents": "management-inventory-documents",
 		"management-inventory-warehouses": "management-inventory-warehouses",
 		"management-inventory-movements": "management-inventory-movements",
 		"management-inventory-reorder": "management-inventory-reorder",
@@ -960,6 +970,8 @@ function isLinkActive(key) {
 			"management-inventory-materials": "management-inventory-material-detail",
 			"management-material-requests": "management-material-request-detail",
 			"management-inventory-purchase": "management-inventory-purchase-detail",
+			"management-inventory-count": "management-inventory-count-detail",
+			"management-inventory-documents": "management-inventory-document-detail",
 		};
 		return props.page === inventoryPageMap[key] ||
 			props.page === detailPages[key] ||
@@ -968,6 +980,9 @@ function isLinkActive(key) {
 	if (props.page === key) return true;
 	if (props.page.startsWith(key + "-")) return true;
 	if (key === "management-products" && props.page.startsWith("management-product")) return true;
+	if (key === "management-orders" && props.page.startsWith("management-order")) return true;
+	if (key === "management-users" && props.page.startsWith("management-user")) return true;
+	if (key === "management-customers" && props.page.startsWith("management-customer")) return true;
 	if (key === "management-menu-groups" && props.page.startsWith("management-menu-group"))
 		return true;
 	if (key === "management-boms" && props.page.startsWith("management-bom")) return true;
@@ -2026,7 +2041,7 @@ onBeforeUnmount(() => {
 
 	.desktop-main {
 		flex: 1;
-		padding: 1.5rem 2rem;
+		padding: 1rem 1.1rem;
 		overflow-y: auto;
 	}
 

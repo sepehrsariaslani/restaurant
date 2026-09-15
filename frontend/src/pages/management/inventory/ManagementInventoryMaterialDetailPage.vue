@@ -22,9 +22,7 @@
             <input class="input" v-model.trim="form.item_name" placeholder="مثلاً پنیر موزارلا" />
           </label>
           <label>گروه کالا
-            <select class="input" v-model="form.item_group">
-              <option v-for="group in boot?.item_groups || []" :key="group.name" :value="group.name">{{ group.name }}</option>
-            </select>
+            <SearchableDropdown v-model="form.item_group" :options="itemGroupOptions" placeholder="انتخاب گروه کالا" search-placeholder="جستجوی گروه کالا..." />
           </label>
           <label>واحد اندازه‌گیری
             <input class="input" v-model.trim="form.stock_uom" placeholder="Kg / Gram / Nos" />
@@ -33,17 +31,14 @@
             <input class="input" type="number" min="0" v-model.number="form.purchase_rate" />
           </label>
           <label>تأمین‌کننده پیش‌فرض
-            <select class="input" v-model="form.default_supplier">
-              <option value="">بدون تأمین‌کننده</option>
-              <option v-for="supplier in boot?.suppliers || []" :key="supplier.name" :value="supplier.name">{{ supplier.supplier_name || supplier.name }}</option>
-            </select>
+            <SearchableDropdown v-model="form.default_supplier" :options="supplierOptions" placeholder="بدون تأمین‌کننده" search-placeholder="جستجوی تأمین‌کننده..." />
           </label>
           <label class="check"><input type="checkbox" v-model="form.disabled" /> غیرفعال</label>
         </div>
         <section class="reorder-section">
           <header><div><h4>نقطه سفارش</h4><p>برای هر انبار حداقل موجودی و مقدار پیشنهادی خرید را ثبت کنید.</p></div><button type="button" class="secondary-btn" @click="form.reorder_levels.push({ warehouse: '', level: 0, request_qty: 0 })">+ افزودن</button></header>
           <div v-for="(row, index) in form.reorder_levels" :key="index" class="reorder-row">
-            <select class="input" v-model="row.warehouse"><option value="">انبار</option><option v-for="warehouse in boot?.leaf_warehouses || []" :key="warehouse" :value="warehouse">{{ warehouse }}</option></select>
+            <SearchableDropdown v-model="row.warehouse" :options="warehouseOptions" placeholder="انبار" search-placeholder="جستجوی انبار..." />
             <input class="input" type="number" min="0" step="0.001" v-model.number="row.level" placeholder="حداقل" />
             <input class="input" type="number" min="0" step="0.001" v-model.number="row.request_qty" placeholder="پیشنهاد خرید" />
             <button type="button" class="tertiary-btn danger" @click="form.reorder_levels.splice(index, 1)">حذف</button>
@@ -67,6 +62,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import InventoryResponsiveList from '@/components/management/inventory/InventoryResponsiveList.vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { getManagementInventoryBoot, getManagementRawMaterialDetail, saveManagementRawMaterial } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 
@@ -80,6 +76,15 @@ const saving = ref(false)
 const error = ref('')
 const message = ref('')
 const form = reactive({ name: '', item_code: itemCode, item_name: '', item_group: '', stock_uom: 'Nos', purchase_rate: 0, default_supplier: '', disabled: false, reorder_levels: [] })
+const itemGroupOptions = computed(() => (boot.value?.item_groups || []).map((group) => ({ value: group.name, label: group.name })))
+const supplierOptions = computed(() => [
+  { value: '', label: 'بدون تأمین‌کننده' },
+  ...(boot.value?.suppliers || []).map((supplier) => ({ value: supplier.name, label: supplier.supplier_name || supplier.name })),
+])
+const warehouseOptions = computed(() => [
+  { value: '', label: 'انبار' },
+  ...(boot.value?.leaf_warehouses || []).map((warehouse) => ({ value: warehouse, label: warehouse })),
+])
 const movementColumns = [
   { key: 'posting_date', label: 'تاریخ' },
   { key: 'warehouse', label: 'انبار' },

@@ -11,6 +11,10 @@
 
     <slot v-if="internalMode === 'list'" name="list" />
     <slot v-else-if="internalMode === 'gallery'" name="gallery" />
+    <slot v-else-if="internalMode === 'table'" name="table" />
+    <slot v-else-if="internalMode === 'kanban'" name="kanban" />
+    <slot v-else-if="internalMode === 'sheet'" name="sheet" />
+    <slot v-else-if="internalMode === 'calendar'" name="calendar" />
     <slot v-else-if="internalMode === 'tree'" name="tree" />
     <slot v-else-if="internalMode === 'sort'" name="sort" />
     <slot v-else />
@@ -31,6 +35,10 @@ const props = defineProps({
     default: () => [
       { value: 'list', label: 'لیست', icon: '≡' },
       { value: 'gallery', label: 'گالری', icon: '▦' },
+      { value: 'table', label: 'جدول', icon: '☷' },
+      { value: 'kanban', label: 'کانبان', icon: '▥' },
+      { value: 'sheet', label: 'شیت', icon: '▤' },
+      { value: 'calendar', label: 'تقویم', icon: '◫' },
       { value: 'tree', label: 'درخت', icon: '⋰' },
     ],
   },

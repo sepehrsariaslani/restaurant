@@ -68,10 +68,6 @@
         </div>
       </div>
 
-      <div v-if="!isDetailView" class="toolbar-secondary">
-        <ManagementViewSwitcher v-model="viewMode" :modes="viewModes" />
-      </div>
-
       <div v-else class="detail-toolbar">
         <a class="secondary-btn" href="/management/customers">بازگشت به لیست مشتریان</a>
 
@@ -136,101 +132,54 @@
         </div>
       </ManagementSurfaceCard>
 
-      <ManagementSurfaceCard
-        title="لیست مشتریان"
-        :subtitle="`تعداد: ${customers.length.toLocaleString('fa-IR')} مشتری`"
-      >        <ManagementDataTable
-          v-if="viewMode === 'table'"
-          :columns="customerColumns"
-          :rows="customers"
-          :row-key="(row) => `${row.mobile}-${row.customer_name}`"
-        >
-          <template #cell-customer_name="{ value }">{{ value || 'بدون نام' }}</template>
-          <template #cell-mobile="{ value }">{{ value || '-' }}</template>
-          <template #cell-orders_count="{ value }">{{ Number(value || 0).toLocaleString('fa-IR') }}</template>
-          <template #cell-total_spent="{ value }">{{ formatMoney(value, currency) }}</template>
-          <template #cell-last_order_at="{ value }">{{ formatPersianDate(value) }}</template>
-          <template #cell-actions="{ row }">
-            <button
-              class="secondary-btn mini-link-btn"
-              type="button"
-              @click="openCustomerDetail(row)"
+      <ManagementSurfaceCard title="لیست مشتریان" :subtitle="`تعداد: ${customers.length.toLocaleString('fa-IR')} مشتری`">
+        <ManagementCollectionView v-model="viewMode" :modes="viewModes">
+          <template #table>
+            <ManagementDataTable
+              :columns="customerColumns"
+              :rows="customers"
+              :row-key="(row) => `${row.mobile}-${row.customer_name}`"
+              :row-clickable="true"
+              @row-click="openCustomerDetail"
             >
-              جزئیات
-            </button>
+              <template #cell-customer_name="{ value }">{{ value || 'بدون نام' }}</template>
+              <template #cell-mobile="{ value }">{{ value || '-' }}</template>
+              <template #cell-orders_count="{ value }">{{ Number(value || 0).toLocaleString('fa-IR') }}</template>
+              <template #cell-total_spent="{ value }">{{ formatMoney(value, currency) }}</template>
+              <template #cell-last_order_at="{ value }">{{ formatPersianDate(value) }}</template>
+              <template #cell-actions="{ row }"><button class="secondary-btn mini-link-btn" type="button" @click.stop="openCustomerDetail(row)">جزئیات</button></template>
+              <template #empty>مشتری‌ای در این بازه پیدا نشد.</template>
+            </ManagementDataTable>
           </template>
-        </ManagementDataTable>
 
-        <div v-else-if="viewMode === 'list'" class="customer-list-view">
-          <article
-            v-for="row in customers"
-            :key="`list-customer-${row.mobile}-${row.customer_name}`"
-            class="customer-list-item"
-            role="button"
-            tabindex="0"
-            @click="openCustomerDetail(row)"
-            @keydown.enter.prevent="openCustomerDetail(row)"
-            @keydown.space.prevent="openCustomerDetail(row)"
-          >
-            <div class="customer-list-meta">
-              <div>
-                <strong>{{ row.customer_name || 'بدون نام' }}</strong>
-                <small>{{ row.mobile || '-' }}</small>
-              </div>
-              <span class="customer-chip">
-                {{ Number(row.orders_count || 0).toLocaleString('fa-IR') }} سفارش
-              </span>
-            </div>
+          <template #list>
+            <ManagementNotionListView
+              :rows="customers"
+              :row-key="(row) => `${row.mobile}-${row.customer_name}`"
+              title-key="customer_name"
+              code-key="mobile"
+              :properties="{ orders_count: true, total_spent: true, last_order_at: true }"
+              :property-order="['orders_count', 'total_spent', 'last_order_at']"
+              :chip-renderers="customerChipRenderers"
+              :row-clickable="true"
+              @row-click="openCustomerDetail"
+            />
+          </template>
 
-            <div class="customer-list-stats">
-              <span>خرید: {{ formatMoney(row.total_spent, currency) }}</span>
-              <span>آخرین خرید: {{ formatPersianDate(row.last_order_at) }}</span>
-            </div>
-
-            <button class="secondary-btn mini-link-btn" type="button" @click.stop="openCustomerDetail(row)">
-              مشاهده جزئیات
-            </button>
-          </article>
-
-          <p v-if="!customers.length" class="muted empty-state">
-            مشتری‌ای در این بازه پیدا نشد.
-          </p>
-        </div>
-
-        <div v-else class="customer-grid-view">
-          <article
-            v-for="row in customers"
-            :key="`grid-customer-${row.mobile}-${row.customer_name}`"
-            class="customer-grid-card"
-            role="button"
-            tabindex="0"
-            @click="openCustomerDetail(row)"
-            @keydown.enter.prevent="openCustomerDetail(row)"
-            @keydown.space.prevent="openCustomerDetail(row)"
-          >
-            <header>
-              <div class="customer-avatar">{{ initials(row.customer_name || row.mobile || 'مشتری') }}</div>
-              <div class="grid-meta">
-                <strong>{{ row.customer_name || 'بدون نام' }}</strong>
-                <small>{{ row.mobile || '-' }}</small>
-              </div>
-            </header>
-
-            <div class="grid-metrics">
-              <p>تعداد سفارش: <strong>{{ Number(row.orders_count || 0).toLocaleString('fa-IR') }}</strong></p>
-              <p>کل خرید: <strong>{{ formatMoney(row.total_spent, currency) }}</strong></p>
-              <p>آخرین خرید: <strong>{{ formatPersianDate(row.last_order_at) }}</strong></p>
-            </div>
-
-            <button class="secondary-btn mini-link-btn" type="button" @click.stop="openCustomerDetail(row)">
-              مشاهده جزئیات
-            </button>
-          </article>
-
-          <p v-if="!customers.length" class="muted empty-state">
-            مشتری‌ای در این بازه پیدا نشد.
-          </p>
-        </div>
+          <template #gallery>
+            <ManagementGalleryView
+              :rows="customers"
+              :row-key="(row) => `${row.mobile}-${row.customer_name}`"
+              title-field="customer_name"
+              code-field="mobile"
+              :clickable="true"
+              :properties="{ orders_count: true, total_spent: true, last_order_at: true }"
+              :property-order="['orders_count', 'total_spent', 'last_order_at']"
+              :chip-renderers="customerChipRenderers"
+              @click-item="openCustomerDetail"
+            />
+          </template>
+        </ManagementCollectionView>
       </ManagementSurfaceCard>
     </template>
 
@@ -318,7 +267,7 @@
               <template #cell-actions="{ row }">
                 <a
                   class="secondary-btn mini-link-btn"
-                  :href="`/management/orders?order_name=${encodeURIComponent(row.name)}&source=${encodeURIComponent(row.source || 'web')}`"
+                  :href="`/management/order?order_name=${encodeURIComponent(row.name)}&source=${encodeURIComponent(row.source || 'web')}`"
                 >
                   جزئیات سفارش
                 </a>
@@ -411,15 +360,19 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
+import ManagementCollectionView from '@/components/management/ManagementCollectionView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
+import ManagementGalleryView from '@/components/management/ManagementGalleryView.vue'
+import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
-import ManagementViewSwitcher from '@/components/management/ManagementViewSwitcher.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import ReportKpiGrid from '@/components/management/bi/ReportKpiGrid.vue'
 import { addManagementCustomer, getManagementCustomerDetail, listManagementCustomers } from '@/utils/api'
 import { formatMoney, formatStatus, parseQuery } from '@/utils/format'
 
+const props = defineProps({ detailOnly: { type: Boolean, default: false } })
+const detailOnly = computed(() => Boolean(props.detailOnly))
 const query = parseQuery()
 const today = new Date()
 const start = new Date(today)
@@ -431,7 +384,8 @@ const currency = ref('IRR')
 const customers = ref([])
 const customerDetail = ref(null)
 const customerReport = ref({ kpis: [], charts: [], tables: [], insights: [] })
-const viewMode = ref(String(query.view || 'table').trim() || 'table')
+const requestedView = String(query.view || 'table').trim()
+const viewMode = ref(requestedView === 'grid' ? 'gallery' : requestedView || 'table')
 const search = ref(String(query.search || '').trim())
 const detailMobile = ref(String(query.mobile || '').trim())
 const detailCustomerName = ref(String(query.customer_name || query.customer || '').trim())
@@ -498,8 +452,14 @@ async function submitAddCustomer() {
 const viewModes = [
   { value: 'table', label: 'جدولی', icon: '☷' },
   { value: 'list', label: 'لیستی', icon: '≡' },
-  { value: 'grid', label: 'گرید', icon: '▦' },
+  { value: 'gallery', label: 'گالری', icon: '▦' },
 ]
+
+const customerChipRenderers = {
+  orders_count: (row) => ({ text: `${Number(row.orders_count || 0).toLocaleString('fa-IR')} سفارش`, cls: '' }),
+  total_spent: (row) => ({ text: formatMoney(row.total_spent, currency.value), cls: 'chip-money' }),
+  last_order_at: (row) => ({ text: `آخرین خرید: ${formatPersianDate(row.last_order_at)}`, cls: '' }),
+}
 
 const detailTabs = [
   { value: 'main', label: 'اطلاعات اصلی' },
@@ -525,7 +485,7 @@ const detailOrderColumns = [
   { key: 'actions', label: 'عملیات' },
 ]
 
-const isDetailView = computed(() => Boolean(detailMobile.value || detailCustomerName.value))
+const isDetailView = computed(() => Boolean(detailOnly.value || detailMobile.value || detailCustomerName.value))
 const loadingLabel = computed(() =>
   isDetailView.value ? 'در حال دریافت جزئیات مشتری...' : 'در حال بارگذاری مشتریان...',
 )
@@ -623,7 +583,7 @@ function openCustomerDetail(row) {
   params.set('date_to', filters.date_to)
   params.set('tab', 'main')
 
-  window.location.href = `/management/customers?${params.toString()}`
+  window.location.href = `/management/customer?${params.toString()}`
 }
 
 function setDetailTab(nextTab) {

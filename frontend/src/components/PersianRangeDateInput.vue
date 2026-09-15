@@ -174,6 +174,7 @@ const calendarCells = computed(() => {
   for (let day = 1; day <= daysInMonth; day += 1) {
     cells.push({
       key: jalaliToIso(activeYear.value, activeMonth.value, day),
+      iso: jalaliToIso(activeYear.value, activeMonth.value, day),
       day,
       blank: false,
     })

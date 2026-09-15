@@ -34,6 +34,7 @@ const branchesSource = fs.readFileSync(new URL('../src/pages/management/operatio
 const costControlSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementCostControlPage.vue', import.meta.url), 'utf8')
 const accountingSource = fs.readFileSync(new URL('../src/pages/management/finance/ManagementAccountingPage.vue', import.meta.url), 'utf8')
 const inventorySource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
+const inventoryCountDetailSource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryCountDetailPage.vue', import.meta.url), 'utf8')
 const zarinpalSource = fs.readFileSync(new URL('../src/pages/management/settings/ManagementZarinpalSettingsPage.vue', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
@@ -203,6 +204,37 @@ test('management orders keep a shared list-to-detail workflow', () => {
   assert.match(ordersSource, /selectedOrder/)
 })
 
+test('management collections and detail routes stay reusable across operational domains', () => {
+  const collectionSource = fs.readFileSync(new URL('../src/components/management/ManagementCollectionView.vue', import.meta.url), 'utf8')
+  const usersSource = fs.readFileSync(new URL('../src/pages/management/settings/ManagementUsersPage.vue', import.meta.url), 'utf8')
+  const customersSource = fs.readFileSync(new URL('../src/pages/management/customers/ManagementCustomersPage.vue', import.meta.url), 'utf8')
+  const inventorySource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryCountDetailPage.vue', import.meta.url), 'utf8')
+  const documentsSource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryDocumentsPage.vue', import.meta.url), 'utf8')
+  const dateInputSource = fs.readFileSync(new URL('../src/components/PersianRangeDateInput.vue', import.meta.url), 'utf8')
+
+  for (const mode of ['list', 'gallery', 'table', 'kanban', 'sheet', 'calendar', 'tree']) {
+    assert.match(collectionSource, new RegExp(`name="${mode}"`))
+  }
+  assert.match(usersSource, /ManagementCollectionView/)
+  assert.match(usersSource, /ManagementNotionListView/)
+  assert.match(usersSource, /openUserDetail/)
+  assert.match(customersSource, /ManagementCollectionView/)
+  assert.ok(customersSource.includes('/management/customer?'))
+  assert.match(inventorySource, /ManagementSmartDataTable/)
+  assert.match(documentsSource, /Purchase Invoice/)
+  assert.match(documentsSource, /Purchase Receipt/)
+  assert.match(documentsSource, /Stock Entry/)
+  assert.ok(dateInputSource.includes('iso: jalaliToIso'))
+  assert.match(appSource, /management-order-detail/)
+  assert.match(appSource, /management-user-detail/)
+  assert.match(appSource, /management-customer-detail/)
+  assert.match(appSource, /management-inventory-document-detail/)
+  assert.match(hooksSource, /from_route":\s*"\/management\/order"/)
+  assert.match(hooksSource, /from_route":\s*"\/management\/user"/)
+  assert.match(hooksSource, /from_route":\s*"\/management\/customer"/)
+  assert.match(hooksSource, /from_route":\s*"\/management\/inventory\/documents"/)
+})
+
 test('courier management uses the shared list and product-like detail workflow', () => {
   assert.match(couriersSource, /ManagementListView/)
   assert.match(couriersSource, /:rows="couriers"/)
@@ -347,7 +379,6 @@ test('inventory read-only operational surfaces use shared lists', () => {
     'orderLossColumns',
     'countResultColumns',
     'reconciliationColumns',
-    'reconciliationDetailColumns',
   ]) {
     assert.match(inventorySource, new RegExp(token))
   }
@@ -363,10 +394,11 @@ test('inventory read-only operational surfaces use shared lists', () => {
     'orderLosses',
     'countResult.rows',
     'reconciliations',
-    'reconciliationDetail.rows',
   ]) {
     assert.match(inventorySource, new RegExp(`:rows="${rows.replaceAll('.', '\\.')}"`))
   }
+  assert.match(inventorySource, /openReconciliationDetail/)
+  assert.match(inventoryCountDetailSource, /ManagementSmartDataTable/)
 })
 
 test('zarinpal placeholder stays explicit and uses the shared management shell', () => {

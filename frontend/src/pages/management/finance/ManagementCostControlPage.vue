@@ -1,9 +1,7 @@
 <template>
   <ManagementPageScaffold title="کاست کنترل" subtitle="بودجه‌بندی، سود و زیان ماهانه، نقطه سربه‌سر و بازگشت سرمایه">
     <template #actions>
-      <select class="input year-input" v-model.number="fiscalYear" @change="loadAll">
-        <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
-      </select>
+      <SearchableDropdown v-model="fiscalYear" :options="yearDropdownOptions" placeholder="سال مالی" search-placeholder="جستجوی سال..." @update:model-value="loadAll" />
       <button type="button" class="secondary-btn" @click="loadAll" :disabled="loadingAny">
         {{ loadingAny ? 'در حال بروزرسانی...' : 'بروزرسانی' }}
       </button>
@@ -105,13 +103,11 @@
             <label>عنوان <span class="req">*</span><input class="input" v-model.trim="budgetForm.title" placeholder="مثلاً بودجه خرید مواد اولیه" /></label>
             <label>دسته هزینه<input class="input" v-model.trim="budgetForm.category" placeholder="مواد اولیه / مارکتینگ / پرسنل ..." /></label>
             <label>دوره
-              <select class="input" v-model="budgetForm.period"><option value="ماهانه">ماهانه</option><option value="سالانه">سالانه</option></select>
+              <SearchableDropdown v-model="budgetForm.period" :options="periodOptions" placeholder="انتخاب دوره" search-placeholder="جستجوی دوره..." />
             </label>
             <label>سال مالی<input class="input" type="number" min="1400" v-model.number="budgetForm.fiscal_year" /></label>
             <label v-if="budgetForm.period === 'ماهانه'">ماه
-              <select class="input" v-model.number="budgetForm.month">
-                <option v-for="m in 12" :key="m" :value="m">{{ monthName(m) }}</option>
-              </select>
+              <SearchableDropdown v-model="budgetForm.month" :options="monthOptions" placeholder="انتخاب ماه" search-placeholder="جستجوی ماه..." />
             </label>
             <label>مبلغ بودجه (ریال) <span class="req">*</span><input class="input" type="number" min="0" v-model.number="budgetForm.planned_amount" /></label>
             <label class="check-row full-row"><input type="checkbox" v-model="budgetForm.is_active" /> فعال</label>
@@ -143,9 +139,7 @@
         <div class="form-grid">
           <label>مبلغ سرمایه‌گذاری (ریال) <span class="req">*</span><input class="input" type="number" min="0" v-model.number="roiForm.investment" placeholder="مثلاً 500,000,000" /></label>
           <label>سال مالی
-            <select class="input" v-model.number="roiForm.fiscal_year">
-              <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
-            </select>
+            <SearchableDropdown v-model="roiForm.fiscal_year" :options="yearDropdownOptions" placeholder="سال مالی" search-placeholder="جستجوی سال..." />
           </label>
         </div>
         <div class="btn-row">
@@ -168,6 +162,7 @@ import { computed, onMounted, ref } from 'vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   getManagementCostControlBoot,
   listManagementBudgets,
@@ -186,6 +181,11 @@ const activeTab = ref('pl')
 
 const currentYear = new Date().getFullYear()
 const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
+const yearDropdownOptions = yearOptions.map((year) => ({ value: year, label: String(year) }))
+const periodOptions = [
+  { value: 'ماهانه', label: 'ماهانه' },
+  { value: 'سالانه', label: 'سالانه' },
+]
 const fiscalYear = ref(currentYear)
 
 const boot = ref(null)
@@ -224,6 +224,7 @@ const budgetColumns = [
 
 const loadingAny = computed(() => bootLoading.value || budgetsLoading.value)
 const monthNames = ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر']
+const monthOptions = monthNames.map((label, index) => ({ value: index + 1, label }))
 const currentMonthHighlight = computed(() => (fiscalYear.value === currentYear ? new Date().getMonth() + 1 : 0))
 const totals = computed(() => {
   const rows = boot.value?.pl_rows || []

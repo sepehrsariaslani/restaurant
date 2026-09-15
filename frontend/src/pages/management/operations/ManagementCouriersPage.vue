@@ -194,10 +194,7 @@
 
       <ManagementSurfaceCard title="بهینه‌سازی مسیر تحویل" subtitle="چیدمان سفارش‌های در حال ارسال هر پیک بر اساس نزدیک‌ترین مسیر؛ ترتیب در اپ پیک اعمال می‌شود">
         <div class="dispatch-box">
-          <select v-model="routeForm.courier" class="input">
-            <option value="">— انتخاب پیک —</option>
-            <option v-for="courier in courierOptions" :key="courier.name" :value="courier.name">{{ courier.label || courier.name }}</option>
-          </select>
+          <SearchableDropdown v-model="routeForm.courier" :options="courierDropdownOptions" placeholder="— انتخاب پیک —" search-placeholder="جستجوی پیک..." />
           <button class="secondary-btn" type="button" :disabled="routeOptimizing || !routeForm.courier" @click="runRouteOptimization">
             {{ routeOptimizing ? 'در حال محاسبه...' : 'بهینه‌سازی مسیر' }}
           </button>
@@ -232,12 +229,7 @@
         <div class="editor-grid">
           <label>
             پیک
-            <select v-model="vehicleForm.courier" class="input">
-              <option value="">انتخاب پیک</option>
-              <option v-for="courier in courierOptions" :key="courier.name" :value="courier.name">
-                {{ courier.label }}
-              </option>
-            </select>
+            <SearchableDropdown v-model="vehicleForm.courier" :options="courierDropdownOptions" placeholder="انتخاب پیک" search-placeholder="جستجوی پیک..." />
           </label>
           <label>
             نوع وسیله
@@ -407,10 +399,7 @@
         <div class="editor-grid">
           <label>
             پلتفرم
-            <select v-model="providerForm.provider" class="input">
-              <option value="">— غیرفعال —</option>
-              <option v-for="p in providerOptions" :key="p" :value="p">{{ p }}</option>
-            </select>
+            <SearchableDropdown v-model="providerForm.provider" :options="providerDropdownOptions" placeholder="— غیرفعال —" search-placeholder="جستجوی پلتفرم..." />
           </label>
           <label>
             توکن / کلید API {{ providerForm.token_set ? '(ثبت‌شده — برای تغییر مقدار جدید وارد کنید)' : '' }}
@@ -448,6 +437,7 @@ import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   deleteManagementCourier,
   deleteManagementCourierVehicle,
@@ -540,6 +530,10 @@ const vehicleColumns = [
 const courierOptions = computed(() =>
   couriers.value.map((row) => ({ name: row.name, label: row.courier_name })),
 )
+const courierDropdownOptions = computed(() => [
+  { value: '', label: '— انتخاب پیک —' },
+  ...courierOptions.value.map((courier) => ({ value: courier.name, label: courier.label || courier.name })),
+])
 
 function createCourierForm() {
   return {
@@ -713,6 +707,10 @@ const zoneChecking = ref(false)
 const zoneCheckResult = ref(null)
 const providerForm = reactive({ provider: '', token: '', base_url: '', token_set: false, zone_control_enabled: false })
 const providerOptions = ref([])
+const providerDropdownOptions = computed(() => [
+  { value: '', label: '— غیرفعال —' },
+  ...(providerOptions.value || []).map((provider) => ({ value: provider, label: provider })),
+])
 const savingProvider = ref(false)
 const dispatchForm = reactive({ order_name: '' })
 const dispatching = ref(false)
