@@ -533,16 +533,6 @@
 
                 <div class="formula-workspace">
                   <section class="formula-block">
-                    <header class="formula-block__head">
-                      <div>
-                        <strong>جدول مواد BOM</strong>
-                        <small>مواد اولیه، جایگزینی ماده، چاپ و تنظیمات فرمول را یک‌جا ببینید.</small>
-                      </div>
-                      <span class="formula-block__meta">
-                        {{ formatNumber(bomItemsSummary.length) }} ردیف
-                      </span>
-                    </header>
-
                     <ManagementBomItemsTable
                       v-model="bomForm.items"
                       :item-options="bomItemOptions"
@@ -572,26 +562,36 @@
                   </section>
                 </div>
 
-                <ManagementDataTable v-if="productBoms.length" :columns="bomColumns" :rows="productBoms" row-key="name">
-                  <template #cell-status="{ row }">
-                    <div class="status-pills">
-                      <span :class="['pill', Number(row.is_active) ? 'active' : 'inactive']">
-                        {{ Number(row.is_active) ? 'فعال' : 'غیرفعال' }}
-                      </span>
-                      <span class="pill default" v-if="Number(row.is_default)">پیش فرض</span>
-                      <span class="pill docstatus" v-if="Number(row.docstatus) === 0">پیش نویس</span>
-                      <span class="pill docstatus submitted" v-else-if="Number(row.docstatus) === 1">ثبت شده</span>
+                <section v-if="productBoms.length > 1" class="bom-existing-list">
+                  <header class="formula-block__head">
+                    <div>
+                      <strong>فرمول‌های دیگر همین محصول</strong>
+                      <small>برای ویرایش، یکی از BOMهای ثبت‌شده را در فرم بالا بارگذاری کنید.</small>
                     </div>
-                  </template>
-                  <template #cell-quantity="{ value }">{{ formatNumber(value) }}</template>
-                  <template #cell-modified="{ value }">{{ formatPersianDate(value, true) }}</template>
-                  <template #cell-actions="{ row }">
-                    <div class="row-actions">
-                      <button class="secondary-btn mini-link-btn" type="button" @click="loadBomDocIntoForm(row.name)">بارگذاری</button>
-                      <a class="secondary-btn mini-link-btn" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
-                    </div>
-                  </template>
-                </ManagementDataTable>
+                    <span class="formula-block__meta">{{ formatNumber(productBoms.length) }} فرمول</span>
+                  </header>
+
+                  <ManagementDataTable :columns="bomColumns" :rows="productBoms" row-key="name">
+                    <template #cell-status="{ row }">
+                      <div class="status-pills">
+                        <span :class="['pill', Number(row.is_active) ? 'active' : 'inactive']">
+                          {{ Number(row.is_active) ? 'فعال' : 'غیرفعال' }}
+                        </span>
+                        <span class="pill default" v-if="Number(row.is_default)">پیش فرض</span>
+                        <span class="pill docstatus" v-if="Number(row.docstatus) === 0">پیش نویس</span>
+                        <span class="pill docstatus submitted" v-else-if="Number(row.docstatus) === 1">ثبت شده</span>
+                      </div>
+                    </template>
+                    <template #cell-quantity="{ value }">{{ formatNumber(value) }}</template>
+                    <template #cell-modified="{ value }">{{ formatPersianDate(value, true) }}</template>
+                    <template #cell-actions="{ row }">
+                      <div class="row-actions">
+                        <button class="secondary-btn mini-link-btn" type="button" @click="loadBomDocIntoForm(row.name)">بارگذاری</button>
+                        <a class="secondary-btn mini-link-btn" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
+                      </div>
+                    </template>
+                  </ManagementDataTable>
+                </section>
               </ManagementSurfaceCard>
             </section>
 
@@ -1487,7 +1487,6 @@ const activeBomRow = computed(() => {
 })
 const bomCompanyOptions = computed(() => (bomContext.value?.companies || []).map((row) => ({ value: row, label: row })))
 const bomCurrencyOptions = computed(() => (bomContext.value?.currencies || []).map((row) => ({ value: row, label: row })))
-const bomItemsSummary = computed(() => Array.isArray(bomForm.items) ? bomForm.items : [])
 const bomModifierRowsSummary = computed(() =>
   Array.isArray(bomForm.restaurant_modifier_rows) ? bomForm.restaurant_modifier_rows : [],
 )

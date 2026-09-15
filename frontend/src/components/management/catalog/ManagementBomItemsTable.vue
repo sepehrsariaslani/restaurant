@@ -1,8 +1,8 @@
 <template>
   <ManagementEditableTable
     v-model="localRows"
-    title="جدول آیتم های BOM"
-    subtitle="افزودن/ویرایش آیتم ها از طریق پنجره Pop-up"
+    title="جدول مواد BOM"
+    subtitle="افزودن و ویرایش مواد اولیه از طریق پنجره Pop-up"
     tone="accent"
     add-button-label="افزودن آیتم"
     popup-title-add="افزودن آیتم BOM"
@@ -12,6 +12,7 @@
     :create-empty-row="createEmptyRow"
     :normalize-row="normalizeRow"
     :validate-row="validateRow"
+    storage-key="restaurant:bom-items:v2"
     empty-text="هنوز آیتمی برای BOM ثبت نشده است."
   >
     <template #cell-item_code="{ value }">

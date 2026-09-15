@@ -6,6 +6,7 @@ const readOptional = (url) => (existsSync(url) ? readFileSync(url, 'utf8') : '')
 
 const smartTable = readFileSync(new URL('../src/components/management/ManagementSmartDataTable.vue', import.meta.url), 'utf8')
 const editableTable = readFileSync(new URL('../src/components/management/ManagementEditableTable.vue', import.meta.url), 'utf8')
+const bomItemsTable = readFileSync(new URL('../src/components/management/catalog/ManagementBomItemsTable.vue', import.meta.url), 'utf8')
 const listView = readFileSync(new URL('../src/components/management/ManagementListView.vue', import.meta.url), 'utf8')
 const dataTable = readFileSync(new URL('../src/components/management/ManagementDataTable.vue', import.meta.url), 'utf8')
 const catalog = readFileSync(new URL('../src/design-system/catalog.js', import.meta.url), 'utf8')
@@ -70,6 +71,13 @@ test('Restaurant EditableTable keeps v-model/editor validation and adds persiste
   }
   assert.match(editableTable, /cell\.\$\{column\.key\}/, 'legacy dotted slot names should remain usable')
   assert.match(editableTable, /localStorage/, 'column visibility should persist per table')
+})
+
+test('product BOM materials use one canonical heading and a versioned table view', () => {
+  assert.equal((productDetail.match(/جدول مواد BOM/g) || []).length, 0, 'the product page must not duplicate the materials heading outside the table component')
+  assert.match(bomItemsTable, /storage-key="restaurant:bom-items:v2"/, 'BOM columns need a versioned storage key so stale visibility settings cannot hide the table')
+  assert.match(bomItemsTable, /title="جدول مواد BOM"/, 'the reusable BOM table must own the single materials heading')
+  assert.match(productDetail, /v-if="productBoms\.length > 1"/, 'the existing BOM list should only appear when there is more than one BOM to switch between')
 })
 
 test('all shared management list facades resolve to SmartDataTable', () => {
