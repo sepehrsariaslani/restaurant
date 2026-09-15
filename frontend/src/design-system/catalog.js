@@ -59,6 +59,7 @@ export const designSystemCatalog = Object.freeze({
     { id: 'management-list', title: 'فهرست مدیریتی', description: 'جدول واکنش‌گرا با حالت خالی، انتخاب سطر و نمایش موبایل.', source: 'components/management/ManagementListView.vue', kind: 'domain' },
     { id: 'management-collection', title: 'مجموعه چندنما', description: 'کنترل مشترک نماهای جدول، لیست، گالری، کانبان، شیت، تقویم و درخت.', source: 'components/management/ManagementCollectionView.vue', kind: 'domain' },
     { id: 'management-smart-table', title: 'جدول هوشمند', description: 'آداپتر جدول جستجوپذیر با تم Restaurant برای ledger، اسناد و گزارش‌ها.', source: 'components/management/ManagementSmartDataTable.vue', kind: 'domain' },
+    { id: 'management-editable-table', title: 'جدول قابل ویرایش', description: 'جدول child-row با ویرایش پنجره‌ای، اعتبارسنجی، تنظیمات ستون و همان قرارداد جدول هوشمند.', source: 'components/management/ManagementEditableTable.vue', kind: 'domain' },
   ]),
   patterns: Object.freeze([
     { id: 'product-search', title: 'جستجو و ایجاد محصول', description: 'جستجوی سروری، فیلتر سریع، نماهای ذخیره‌شده و اقدام ایجاد.' },

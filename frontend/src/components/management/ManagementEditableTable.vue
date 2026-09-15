@@ -1,69 +1,59 @@
 <template>
-  <section class="editable-table" :class="[`tone-${tone}`]">
+  <section class="editable-table" :class="[`tone-${tone}`]" dir="rtl">
     <header class="table-head">
       <div class="meta">
         <strong>{{ title }}</strong>
         <small v-if="subtitle">{{ subtitle }}</small>
+        <span class="row-count">{{ rows.length.toLocaleString('fa-IR') }} ردیف</span>
       </div>
       <div class="head-actions">
         <slot name="toolbar" />
+        <button v-if="showColumnSettings" type="button" class="secondary-btn mini" @click="settingsOpen = !settingsOpen">
+          {{ settingsOpen ? 'بستن تنظیمات جدول' : 'تنظیمات جدول' }}
+        </button>
         <button type="button" class="primary-btn" @click="openAdd" :disabled="disabled || !allowCreate">
           {{ addButtonLabel }}
         </button>
       </div>
     </header>
 
-    <div class="desktop-editable-table">
-      <ManagementDataTable :columns="tableColumns" :rows="rows" :row-key="rowKey">
-        <template v-for="column in columns" :key="`slot-${column.key}`" #[`cell-${column.key}`]="slotProps">
-          <slot :name="`cell-${column.key}`" v-bind="slotProps">
+    <div v-if="settingsOpen" class="column-settings" role="region" aria-label="تنظیمات ستون‌های جدول">
+      <div class="column-settings__head">
+        <strong>ستون‌های قابل نمایش</strong>
+        <button type="button" class="table-quiet-button" @click="resetColumnVisibility">بازنشانی</button>
+      </div>
+      <label v-for="column in columns" :key="`setting-${column.key}`" class="column-setting">
+        <input type="checkbox" :checked="isColumnVisible(column)" @change="toggleColumn(column.key)" />
+        <span>{{ column.label }}</span>
+      </label>
+    </div>
+
+    <ManagementSmartDataTable
+      :columns="visibleColumns"
+      :rows="rows"
+      :row-key="rowKey"
+      :row-actions="rowActions"
+      :filterable="filterable"
+      :loading="loading"
+      :empty-text="emptyText"
+      :sticky-header="stickyHeader"
+      :max-height="maxHeight"
+      :frozen-storage-key="`${tableStorageKey()}:frozen`"
+      :column-width-storage-key="`${tableStorageKey()}:widths`"
+      @row-action="handleRowAction"
+    >
+      <template v-for="column in visibleColumns" :key="`slot-${column.key}`" #[`cell-${column.key}`]="slotProps">
+        <slot :name="`cell-${column.key}`" v-bind="slotProps" :update="(value) => updateCell(slotProps.row, column.key, value)">
+          <slot :name="`cell.${column.key}`" v-bind="slotProps" :update="(value) => updateCell(slotProps.row, column.key, value)">
             {{ slotProps.value }}
           </slot>
-        </template>
+        </slot>
+      </template>
 
-        <template #cell-actions="{ row, rowIndex }">
-          <div class="row-actions">
-            <button type="button" class="secondary-btn mini" @click="openEdit(row, rowIndex)" :disabled="disabled || !allowEdit">
-              {{ editButtonLabel }}
-            </button>
-            <button
-              type="button"
-              class="secondary-btn mini danger"
-              @click="removeRow(rowIndex)"
-              :disabled="disabled || !allowDelete"
-            >
-              {{ deleteButtonLabel }}
-            </button>
-          </div>
-        </template>
-
-        <template #empty>{{ emptyText }}</template>
-      </ManagementDataTable>
-    </div>
-
-    <div class="mobile-editable-table">
-      <p v-if="!rows.length" class="mobile-empty">{{ emptyText }}</p>
-      <article v-for="(row, rowIndex) in rows" :key="resolveRowKey(row, rowIndex)" class="mobile-editable-row">
-        <div class="mobile-row-fields">
-          <div v-for="column in columns" :key="`mobile-${resolveRowKey(row, rowIndex)}-${column.key}`" class="mobile-row-field">
-            <small>{{ column.label }}</small>
-            <div class="mobile-row-value">
-              <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :row-index="rowIndex">
-                {{ row[column.key] }}
-              </slot>
-            </div>
-          </div>
-        </div>
-        <div class="mobile-row-actions">
-          <button type="button" class="secondary-btn mini" @click="openEdit(row, rowIndex)" :disabled="disabled || !allowEdit">
-            ویرایش ردیف
-          </button>
-          <button type="button" class="secondary-btn mini danger" @click="removeRow(rowIndex)" :disabled="disabled || !allowDelete">
-            {{ deleteButtonLabel }}
-          </button>
-        </div>
-      </article>
-    </div>
+      <template #empty>
+        <slot name="empty">{{ emptyText }}</slot>
+      </template>
+    </ManagementSmartDataTable>
 
     <ManagementPopup v-model:open="editorOpen" :title="popupTitle" :subtitle="popupSubtitle">
       <p v-if="editorError" class="error">{{ editorError }}</p>
@@ -83,108 +73,90 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementPopup from '@/components/management/ManagementPopup.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Array,
-    default: () => [],
-  },
-  columns: {
-    type: Array,
-    default: () => [],
-  },
-  rowKey: {
-    type: [String, Function],
-    default: 'name',
-  },
-  title: {
-    type: String,
-    default: 'جدول',
-  },
-  subtitle: {
-    type: String,
-    default: '',
-  },
-  tone: {
-    type: String,
-    default: 'default',
-  },
-  addButtonLabel: {
-    type: String,
-    default: 'افزودن آیتم',
-  },
-  editButtonLabel: {
-    type: String,
-    default: 'ویرایش',
-  },
-  deleteButtonLabel: {
-    type: String,
-    default: 'حذف',
-  },
-  saveButtonLabel: {
-    type: String,
-    default: 'ذخیره',
-  },
-  emptyText: {
-    type: String,
-    default: 'داده ای برای نمایش وجود ندارد.',
-  },
-  popupTitleAdd: {
-    type: String,
-    default: 'افزودن آیتم',
-  },
-  popupTitleEdit: {
-    type: String,
-    default: 'ویرایش آیتم',
-  },
-  popupSubtitle: {
-    type: String,
-    default: 'اطلاعات را تکمیل کنید.',
-  },
-  disabled: {
-    type: Boolean,
-    default: false,
-  },
-  allowCreate: {
-    type: Boolean,
-    default: true,
-  },
-  allowEdit: {
-    type: Boolean,
-    default: true,
-  },
-  allowDelete: {
-    type: Boolean,
-    default: true,
-  },
-  createEmptyRow: {
-    type: Function,
-    default: () => ({}),
-  },
-  normalizeRow: {
-    type: Function,
-    default: (row) => row,
-  },
-  validateRow: {
-    type: Function,
-    default: () => '',
-  },
+  modelValue: { type: Array, default: () => [] },
+  columns: { type: Array, default: () => [] },
+  rowKey: { type: [String, Function], default: 'name' },
+  title: { type: String, default: 'جدول' },
+  subtitle: { type: String, default: '' },
+  tone: { type: String, default: 'default' },
+  addButtonLabel: { type: String, default: 'افزودن آیتم' },
+  editButtonLabel: { type: String, default: 'ویرایش' },
+  deleteButtonLabel: { type: String, default: 'حذف' },
+  saveButtonLabel: { type: String, default: 'ذخیره' },
+  emptyText: { type: String, default: 'داده‌ای برای نمایش وجود ندارد.' },
+  popupTitleAdd: { type: String, default: 'افزودن آیتم' },
+  popupTitleEdit: { type: String, default: 'ویرایش آیتم' },
+  popupSubtitle: { type: String, default: 'اطلاعات را تکمیل کنید.' },
+  disabled: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
+  allowCreate: { type: Boolean, default: true },
+  allowEdit: { type: Boolean, default: true },
+  allowDelete: { type: Boolean, default: true },
+  createEmptyRow: { type: Function, default: () => ({}) },
+  normalizeRow: { type: Function, default: (row) => row },
+  validateRow: { type: Function, default: () => '' },
+  storageKey: { type: String, default: '' },
+  showColumnSettings: { type: Boolean, default: true },
+  filterable: { type: Boolean, default: true },
+  stickyHeader: { type: Boolean, default: false },
+  maxHeight: { type: String, default: '' },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'row-update', 'row-delete', 'row-add'])
 
 const rows = computed(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
-const tableColumns = computed(() => [...props.columns, { key: 'actions', label: 'عملیات' }])
-
+const settingsOpen = ref(false)
+const columnVisibility = ref(loadColumnVisibility())
 const editorOpen = ref(false)
 const editorMode = ref('add')
 const editorIndex = ref(-1)
 const editorError = ref('')
 const draft = reactive({})
 
+const visibleColumns = computed(() => props.columns.filter((column) => column?.key && isColumnVisible(column)))
 const popupTitle = computed(() => (editorMode.value === 'edit' ? props.popupTitleEdit : props.popupTitleAdd))
+const rowActions = computed(() => [
+  ...(props.allowEdit ? [{ key: 'edit', label: props.editButtonLabel, visible: () => !props.disabled }] : []),
+  ...(props.allowDelete ? [{ key: 'delete', label: props.deleteButtonLabel, visible: () => !props.disabled, disabled: () => props.disabled }] : []),
+])
+
+function tableStorageKey() {
+  return props.storageKey || `restaurant:editable-table:${props.title || 'table'}`
+}
+
+function loadColumnVisibility() {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem(`${tableStorageKey()}:columns`) || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch { return {} }
+}
+
+function persistColumnVisibility() {
+  if (typeof localStorage === 'undefined') return
+  try { localStorage.setItem(`${tableStorageKey()}:columns`, JSON.stringify(columnVisibility.value)) } catch {}
+}
+
+function isColumnVisible(column) {
+  return column?.hidden !== true && columnVisibility.value[column.key] !== false
+}
+
+function toggleColumn(key) {
+  const currentlyVisible = columnVisibility.value[key] !== false
+  const visibleCount = visibleColumns.value.length
+  if (currentlyVisible && visibleCount <= 1) return
+  columnVisibility.value = { ...columnVisibility.value, [key]: !currentlyVisible }
+  persistColumnVisibility()
+}
+
+function resetColumnVisibility() {
+  columnVisibility.value = {}
+  persistColumnVisibility()
+}
 
 function resolveRowKey(row, rowIndex) {
   if (typeof props.rowKey === 'function') return props.rowKey(row, rowIndex)
@@ -192,27 +164,22 @@ function resolveRowKey(row, rowIndex) {
   return row?.name || row?.id || rowIndex
 }
 
+function rowIndexFor(row) {
+  const rowKey = String(resolveRowKey(row, 0))
+  const byKey = rows.value.findIndex((candidate, index) => String(resolveRowKey(candidate, index)) === rowKey)
+  return byKey >= 0 ? byKey : rows.value.indexOf(row)
+}
+
 function cloneValue(value) {
   if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(value)
-    } catch (cloneError) {
-      // Fallback for objects that browser structuredClone cannot serialize.
-    }
+    try { return structuredClone(value) } catch {}
   }
-  try {
-    return JSON.parse(JSON.stringify(value || {}))
-  } catch (jsonError) {
-    return {}
-  }
+  try { return JSON.parse(JSON.stringify(value || {})) } catch { return {} }
 }
 
 function writeDraft(payload) {
-  for (const key of Object.keys(draft)) {
-    delete draft[key]
-  }
-  const source = payload && typeof payload === 'object' ? payload : {}
-  Object.assign(draft, cloneValue(source))
+  for (const key of Object.keys(draft)) delete draft[key]
+  Object.assign(draft, cloneValue(payload && typeof payload === 'object' ? payload : {}))
 }
 
 function openAdd() {
@@ -220,25 +187,41 @@ function openAdd() {
   editorIndex.value = -1
   editorError.value = ''
   const baseRow = cloneValue(props.createEmptyRow())
-  const normalizedBaseRow = props.normalizeRow(cloneValue(baseRow))
-  writeDraft({ ...baseRow, ...normalizedBaseRow })
+  const normalized = props.normalizeRow(cloneValue(baseRow)) || baseRow
+  writeDraft({ ...baseRow, ...normalized })
   editorOpen.value = true
 }
 
-function openEdit(row, index) {
+function openEdit(row) {
   editorMode.value = 'edit'
-  editorIndex.value = Number(index || 0)
+  editorIndex.value = rowIndexFor(row)
   editorError.value = ''
   const rawRow = cloneValue(row)
-  const normalizedRow = props.normalizeRow(cloneValue(rawRow))
-  writeDraft({ ...props.createEmptyRow(), ...rawRow, ...normalizedRow })
+  const normalized = props.normalizeRow(cloneValue(rawRow)) || rawRow
+  writeDraft({ ...cloneValue(props.createEmptyRow()), ...rawRow, ...normalized })
   editorOpen.value = true
 }
 
-function removeRow(index) {
-  const next = [...rows.value]
-  next.splice(index, 1)
+function handleRowAction({ action, row }) {
+  if (action?.key === 'edit') openEdit(row)
+  if (action?.key === 'delete') removeRow(row)
+}
+
+function updateCell(row, key, value) {
+  const index = rowIndexFor(row)
+  if (index < 0) return
+  const next = rows.value.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, [key]: value } : candidate)
   emit('update:modelValue', next)
+  emit('row-update', { row: next[index], index, key, value })
+}
+
+function removeRow(row) {
+  const index = rowIndexFor(row)
+  if (index < 0) return
+  const next = [...rows.value]
+  const [removed] = next.splice(index, 1)
+  emit('update:modelValue', next)
+  emit('row-delete', { row: removed, index })
 }
 
 function saveDraft() {
@@ -247,178 +230,36 @@ function saveDraft() {
     editorError.value = validationMessage
     return
   }
-
-  const normalized = props.normalizeRow(cloneValue(draft))
+  const normalized = props.normalizeRow(cloneValue(draft)) || cloneValue(draft)
   const next = [...rows.value]
-
   if (editorMode.value === 'edit' && editorIndex.value >= 0) {
     next.splice(editorIndex.value, 1, normalized)
+    emit('row-update', { row: normalized, index: editorIndex.value })
   } else {
     next.push(normalized)
+    emit('row-add', { row: normalized, index: next.length - 1 })
   }
-
   emit('update:modelValue', next)
   editorOpen.value = false
 }
 </script>
 
 <style scoped>
-.editable-table {
-  border: 1px solid var(--border, var(--mg-border-light));
-  border-radius: 16px;
-  background: var(--bg-card, #fff);
-  padding: 0.56rem;
-  display: grid;
-  gap: 0.48rem;
-  box-shadow: var(--shadow-sm, 0 8px 22px rgb(15 23 42 / 0.045));
-}
-
-.editable-table.tone-accent {
-  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.18);
-  background: linear-gradient(180deg, var(--bg-card, #fff), color-mix(in srgb, var(--bg-card, #fff) 92%, var(--module-50, rgb(139 94 52 / 0.075))));
-}
-
-.table-head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.meta {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.meta strong {
-  font-size: 0.88rem;
-}
-
-.meta small {
-  color: var(--muted, var(--text-muted));
-  font-size: 0.76rem;
-  line-height: 1.7;
-}
-
-.head-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-  justify-content: end;
-}
-
-.row-actions,
-.mobile-row-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.26rem;
-}
-
-.mobile-editable-table {
-  display: none;
-}
-
-.mobile-editable-row {
-  display: grid;
-  gap: 0.65rem;
-  padding: 0.7rem;
-  border: 1px solid var(--mg-border-light, var(--border));
-  border-radius: 13px;
-  background: var(--mg-bg-surface, var(--bg-card));
-}
-
-.mobile-row-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.48rem;
-}
-
-.mobile-row-field {
-  display: grid;
-  min-width: 0;
-  gap: 0.16rem;
-  padding: 0.42rem 0.48rem;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--mg-bg-page) 58%, var(--mg-bg-surface) 42%);
-}
-
-.mobile-row-field:first-child {
-  grid-column: 1 / -1;
-}
-
-.mobile-row-field small {
-  color: var(--mg-text-muted, var(--muted));
-  font-size: 0.65rem;
-}
-
-.mobile-row-value {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--mg-text-main, var(--text));
-  font-size: 0.75rem;
-}
-
-.mobile-row-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.mobile-row-actions .mini {
-  min-height: 36px;
-}
-
-.mobile-empty {
-  margin: 0;
-  padding: 0.8rem;
-  color: var(--mg-text-muted, var(--muted));
-  text-align: center;
-}
-
-.mini {
-  padding: 0.3rem 0.48rem;
-  font-size: 0.7rem;
-}
-
-.danger {
-  color: var(--danger);
-  border-color: rgb(var(--danger-rgb, 220 38 38) / 0.28);
-}
-
-.foot-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.4rem;
-}
-
-.error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 0.78rem;
-}
-
-@media (max-width: 760px) {
-  .desktop-editable-table {
-    display: none;
-  }
-
-  .mobile-editable-table {
-    display: grid;
-    gap: 0.55rem;
-  }
-
-  .table-head {
-    display: grid;
-  }
-
-  .head-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .head-actions :deep(.searchable-dropdown) {
-    width: 100%;
-  }
-}
+.editable-table { display: grid; gap: .62rem; min-width: 0; border: 1px solid var(--mg-border-light, #eadccc); border-radius: 16px; padding: .62rem; background: var(--mg-bg-surface, #fffaf3); box-shadow: var(--shadow-sm, 0 8px 22px rgb(15 23 42 / .045)); }
+.editable-table.tone-accent { border-color: color-mix(in srgb, var(--mg-primary, #c8754e) 28%, var(--mg-border-light, #eadccc)); background: linear-gradient(180deg, var(--mg-bg-surface, #fffaf3), color-mix(in srgb, var(--mg-bg-surface, #fffaf3) 88%, var(--mg-primary, #c8754e))); }
+.table-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .65rem; }
+.meta { display: grid; gap: .12rem; min-width: 0; }
+.meta strong { font-size: .88rem; }
+.meta small { color: var(--mg-text-muted, #7b6b5c); font-size: .76rem; line-height: 1.7; }
+.row-count { color: var(--mg-text-muted, #7b6b5c); font-size: .7rem; }
+.head-actions { display: inline-flex; flex-wrap: wrap; gap: .35rem; align-items: center; justify-content: flex-end; }
+.mini { padding: .3rem .48rem; font-size: .7rem; }
+.column-settings { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .65rem; padding: .55rem .62rem; border: 1px dashed var(--mg-border, #dfcbb8); border-radius: 11px; background: var(--mg-bg-soft, #f6eee4); }
+.column-settings__head { display: inline-flex; align-items: center; gap: .45rem; width: 100%; color: var(--mg-text-muted, #7b6b5c); font-size: .74rem; }
+.column-setting { display: inline-flex; align-items: center; gap: .3rem; color: var(--mg-text-main, #34261d); font-size: .74rem; cursor: pointer; }
+.column-setting input { accent-color: var(--mg-primary, #c8754e); }
+.table-quiet-button { border: 0; background: transparent; color: var(--mg-primary, #c8754e); cursor: pointer; font: inherit; font-size: .7rem; }
+.foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; }
+.error { margin: 0; color: var(--mg-danger, #b34336); font-size: .78rem; }
+@media (max-width: 760px) { .table-head { display: grid; } .head-actions { display: grid; grid-template-columns: minmax(0, 1fr); } .head-actions > * { width: 100%; } }
 </style>

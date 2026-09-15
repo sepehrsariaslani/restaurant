@@ -144,6 +144,43 @@
           </ManagementSurfaceCard>
 
           <section class="ds-grid-2">
+            <ManagementSurfaceCard title="SmartDataTable" subtitle="جستجو، فیلتر ستونی، مرتب‌سازی، فریز و تغییر عرض ستون">
+              <ManagementSmartDataTable
+                :columns="dataTablePreviewColumns"
+                :rows="editableTablePreviewRows"
+                row-key="name"
+                filterable
+                sticky-header
+                max-height="260px"
+                frozen-storage-key="restaurant-design-system-smart-table"
+              >
+                <template #cell-amount="{ value }">{{ Number(value).toLocaleString('fa-IR') }} ریال</template>
+                <template #cell-status="{ value }"><DsBadge :tone="value === 'فعال' ? 'success' : 'neutral'">{{ value }}</DsBadge></template>
+              </ManagementSmartDataTable>
+            </ManagementSurfaceCard>
+
+            <ManagementSurfaceCard title="EditableTable" subtitle="افزودن، ویرایش، حذف، اعتبارسنجی و تنظیمات ستون با تم Restaurant">
+              <ManagementEditableTable
+                v-model="editableTablePreviewRows"
+                :columns="editableTablePreviewColumns"
+                row-key="name"
+                title="آیتم‌های نمونه"
+                storage-key="restaurant-design-system-editable-table"
+                :create-empty-row="() => ({ name: '', amount: 0, status: 'پیش‌نویس' })"
+                :normalize-row="(row) => ({ ...row, amount: Number(row.amount || 0) })"
+              >
+                <template #editor="{ draft }">
+                  <div class="ds-editor-grid">
+                    <label>نام محصول<input v-model.trim="draft.name" class="input" /></label>
+                    <label>مبلغ پایه<input v-model.number="draft.amount" class="input" type="number" min="0" /></label>
+                    <label>وضعیت<input v-model.trim="draft.status" class="input" /></label>
+                  </div>
+                </template>
+              </ManagementEditableTable>
+            </ManagementSurfaceCard>
+          </section>
+
+          <section class="ds-grid-2">
             <ManagementProductSummaryCard title="خلاصه محصول در مدیریت" subtitle="کارت خلاصه‌ی مرجع برای detail و پنل‌ها" :chips="referenceSummaryChips" />
             <ManagementProductReadinessPanel :checks="referenceChecks" :score="4" />
           </section>
@@ -196,6 +233,8 @@ import { computed, ref } from 'vue'
 import { CircleHelp, Package, Search, Sparkles } from 'lucide-vue-next'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementProductReadinessPanel from '@/components/management/catalog/ManagementProductReadinessPanel.vue'
 import ManagementProductSummaryCard from '@/components/management/catalog/ManagementProductSummaryCard.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
@@ -210,6 +249,22 @@ const previewMode = ref('light')
 const selectedPresetId = ref(themePresets[0]?.id || 'nooshyar-brown')
 const previewSettings = ref({ ...defaultThemeSettings })
 const patternSearch = ref('')
+const editableTablePreviewRows = ref([
+  { name: 'کاسه نودل بیف', amount: 285000, status: 'فعال' },
+  { name: 'برگر مخصوص', amount: 320000, status: 'پیش‌نویس' },
+])
+
+const dataTablePreviewColumns = [
+  { key: 'name', label: 'نام', width: '12rem' },
+  { key: 'amount', label: 'مبلغ', type: 'currency', align: 'left' },
+  { key: 'status', label: 'وضعیت', sortable: false },
+]
+
+const editableTablePreviewColumns = [
+  { key: 'name', label: 'نام محصول', width: '12rem' },
+  { key: 'amount', label: 'مبلغ پایه', type: 'currency', align: 'left' },
+  { key: 'status', label: 'وضعیت' },
+]
 
 const selectedPreset = computed(() => themePresets.find((preset) => preset.id === selectedPresetId.value) || themePresets[0])
 const previewStyle = computed(() => ({
@@ -326,6 +381,9 @@ function selectPreset(preset) {
 .ds-icon-box { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 14px; color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); }
 .ds-icon-card strong { font-size: .76rem; }
 .ds-component-stack { display: grid; gap: .8rem; }
+.ds-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.ds-editor-grid label { display: grid; gap: .3rem; color: var(--ds-color-text-secondary); font-size: .76rem; font-weight: 700; }
+.ds-editor-grid label:last-child { grid-column: 1 / -1; }
 .ds-field-sample { display: grid; gap: .35rem; color: var(--ds-color-text-secondary); font-size: .78rem; font-weight: 700; }
 .ds-reference-list { display: grid; gap: .8rem; }
 .ds-reference-list > div { display: flex; gap: .55rem; }
@@ -357,6 +415,6 @@ function selectPreset(preset) {
 .ds-template-card .secondary-btn { white-space: nowrap; }
 .ds-template-preview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 980px) { .ds-intro { align-items: stretch; flex-direction: column; } .ds-workbench { grid-template-columns: 1fr; } .ds-tabs { position: static; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow-x: auto; } .ds-tab { min-width: 140px; } }
-@media (max-width: 720px) { .ds-grid-2, .ds-template-preview, .ds-pattern-grid { grid-template-columns: 1fr; } .ds-preset-grid { grid-template-columns: 1fr; } .ds-icon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ds-intro-stats { min-width: 0; } .ds-theme-preview, .ds-template-card { align-items: flex-start; flex-direction: column; } .ds-preview-actions { width: 100%; } }
+@media (max-width: 720px) { .ds-grid-2, .ds-template-preview, .ds-pattern-grid, .ds-editor-grid { grid-template-columns: 1fr; } .ds-preset-grid { grid-template-columns: 1fr; } .ds-icon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ds-intro-stats { min-width: 0; } .ds-theme-preview, .ds-template-card { align-items: flex-start; flex-direction: column; } .ds-preview-actions { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .ds-tab, .ds-preset, .ds-theme-preview { transition: none; } }
 </style>
