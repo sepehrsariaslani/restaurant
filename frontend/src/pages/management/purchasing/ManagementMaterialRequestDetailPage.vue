@@ -56,43 +56,33 @@
           <span>با انتخاب ماده، واحد اندازه‌گیری خودکار می‌آید.</span>
         </header>
 
-        <div v-for="(line, index) in form.items" :key="index" class="request-line">
-          <SearchableDropdown
-            v-model="line.item_code"
-            allow-item-create
-            :disabled="editorLoading"
-            :item-create-defaults="{ opening_warehouse: form.set_warehouse }"
-            :options="materialOptions"
-            placeholder="انتخاب ماده..."
-            search-placeholder="جستجوی ماده..."
-            @update:model-value="syncLine(line, $event)"
-            @item-created="applyCreatedItem(line, $event)"
-          />
-          <input
-            class="input"
-            type="number"
-            min="0.001"
-            step="0.001"
-            v-model.number="line.qty"
-            placeholder="مقدار"
-          />
-          <SearchableDropdown
-            v-model="line.uom"
-            :disabled="editorLoading"
-            :options="uomOptions"
-            placeholder="واحد"
-            search-placeholder="جستجوی واحد..."
-            @update:model-value="line.conversion_factor = 0"
-          />
-          <button
-            type="button"
-            class="tertiary-btn danger"
-            @click="removeLine(index)"
-            :disabled="form.items.length === 1"
-          >
-            حذف
-          </button>
-        </div>
+        <ManagementSmartDataTable
+          :columns="requestLineColumns"
+          :rows="form.items"
+          :row-key="(_row, index) => index"
+          :show-search="false"
+          :filterable="false"
+          :freezable="false"
+          :resizable="false"
+          empty-text="قلمی برای درخواست ثبت نشده است."
+        >
+          <template #cell-item_code="{ row }">
+            <SearchableDropdown
+              v-model="row.item_code"
+              allow-item-create
+              :disabled="editorLoading"
+              :item-create-defaults="{ opening_warehouse: form.set_warehouse }"
+              :options="materialOptions"
+              placeholder="انتخاب ماده..."
+              search-placeholder="جستجوی ماده..."
+              @update:model-value="syncLine(row, $event)"
+              @item-created="applyCreatedItem(row, $event)"
+            />
+          </template>
+          <template #cell-qty="{ row }"><input class="input" type="number" min="0.001" step="0.001" v-model.number="row.qty" placeholder="مقدار" /></template>
+          <template #cell-uom="{ row }"><SearchableDropdown v-model="row.uom" :disabled="editorLoading" :options="uomOptions" placeholder="واحد" search-placeholder="جستجوی واحد..." @update:model-value="row.conversion_factor = 0" /></template>
+          <template #cell-actions="{ rowIndex }"><button type="button" class="tertiary-btn danger" @click="removeLine(rowIndex)" :disabled="form.items.length === 1">حذف</button></template>
+        </ManagementSmartDataTable>
 
         <button type="button" class="secondary-btn add-line-btn" @click="addLine">
           + افزودن ردیف
@@ -151,21 +141,36 @@
         </div>
 
         <div class="detail-lines">
-          <article v-for="line in request.items" :key="line.idx + line.item_code" class="detail-line">
-            <div>
-              <strong>{{ line.item_name }}</strong>
-              <small>{{ line.item_code }}</small>
-            </div>
-            <strong class="line-qty">{{ qty(line.qty) }} {{ line.uom || line.stock_uom }}</strong>
-          </article>
+          <ManagementSmartDataTable
+            :columns="requestDetailColumns"
+            :rows="request.items || []"
+            row-key="idx"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+            empty-text="قلمی در این درخواست ثبت نشده است."
+          >
+            <template #cell-item="{ row }"><strong>{{ row.item_name }}</strong><small class="table-subtext">{{ row.item_code }}</small></template>
+            <template #cell-qty="{ row }"><strong class="line-qty">{{ qty(row.qty) }} {{ row.uom || row.stock_uom }}</strong></template>
+          </ManagementSmartDataTable>
         </div>
 
         <p v-if="request.note" class="note">{{ request.note }}</p>
         <div v-if="purchases.length" class="linked-purchases">
           <strong>سفارش‌های خرید مرتبط</strong>
-          <button v-for="purchase in purchases" :key="purchase.name" type="button" @click="openPurchase(purchase.name)">
-            {{ purchase.name }} • {{ purchase.status }}
-          </button>
+          <ManagementSmartDataTable
+            :columns="linkedPurchaseColumns"
+            :rows="purchases"
+            row-key="name"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+          >
+            <template #cell-purchase="{ row }"><strong>{{ row.name }}</strong><small class="table-subtext">{{ row.status }}</small></template>
+            <template #cell-actions="{ row }"><button type="button" class="secondary-btn mini-link-btn" @click="openPurchase(row.name)">مشاهده</button></template>
+          </ManagementSmartDataTable>
         </div>
 
         <footer class="actions">
@@ -196,6 +201,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { formatPersianDate } from '@/utils/persianDate'
@@ -245,6 +251,20 @@ const warehouseOptions = computed(() => (boot.value?.leaf_warehouses || []).map(
 const hasValidItems = computed(() => form.items.some((line) => line.item_code && Number(line.qty) > 0))
 const hasWarehouse = computed(() => Boolean(String(form.set_warehouse || '').trim()))
 const canSave = computed(() => editorReady.value && hasValidItems.value && hasWarehouse.value)
+const requestLineColumns = [
+  { key: 'item_code', label: 'ماده' },
+  { key: 'qty', label: 'مقدار', type: 'number' },
+  { key: 'uom', label: 'واحد' },
+  { key: 'actions', label: 'عملیات' },
+]
+const requestDetailColumns = [
+  { key: 'item', label: 'ماده' },
+  { key: 'qty', label: 'مقدار', type: 'number' },
+]
+const linkedPurchaseColumns = [
+  { key: 'purchase', label: 'سفارش خرید' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 function today() {
   return new Date().toISOString().slice(0, 10)

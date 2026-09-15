@@ -72,24 +72,24 @@
         subtitle="پرفروش‌ترین مشتریان این بازه — برای مشاهده جزئیات فروش هر مشتری، روی آن کلیک کنید"
       >
         <div class="top-customers">
-          <div class="top-customers-list">
-            <button
-              v-for="(customer, idx) in topCustomers"
-              :key="customer.customer_name || idx"
-              type="button"
-              class="top-customer-row"
-              :class="{ active: selectedCustomerName === customer.customer_name }"
-              @click="selectCustomer(customer)"
-            >
-              <span class="tc-rank">{{ toFa(idx + 1) }}</span>
-              <span class="tc-main">
-                <strong>{{ customer.customer_name || 'بدون نام' }}</strong>
-                <small>{{ Number(customer.orders_count || 0).toLocaleString('fa-IR') }} سفارش</small>
-              </span>
-              <span class="tc-amount">{{ formatMoney(customer.total_spent || 0, currency) }}</span>
-            </button>
-            <p v-if="!topCustomers.length" class="muted">در این بازه مشتری‌ای ثبت نشده است.</p>
-          </div>
+          <ManagementSmartDataTable
+            :columns="topCustomerColumns"
+            :rows="topCustomers"
+            row-key="customer_name"
+            :row-clickable="true"
+            :row-class="(row) => selectedCustomerName === row.customer_name ? 'is-selected' : ''"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+            @row-click="selectCustomer"
+            empty-text="در این بازه مشتری‌ای ثبت نشده است."
+          >
+            <template #cell-rank="{ rowIndex }">{{ toFa(rowIndex + 1) }}</template>
+            <template #cell-customer="{ row }"><strong>{{ row.customer_name || 'بدون نام' }}</strong></template>
+            <template #cell-orders_count="{ value }">{{ Number(value || 0).toLocaleString('fa-IR') }} سفارش</template>
+            <template #cell-total_spent="{ value }">{{ formatMoney(value || 0, currency) }}</template>
+          </ManagementSmartDataTable>
 
           <div class="customer-picker">
             <label class="customer-picker-label">
@@ -127,12 +127,21 @@
 
               <div class="customer-detail-orders" v-if="(customerDetail.orders || []).length">
                 <strong class="cdo-title">آخرین سفارش‌های این مشتری</strong>
-                <article v-for="order in customerDetail.orders.slice(0, 6)" :key="order.name" class="cdo-row">
-                  <span class="cdo-name">{{ order.name }}</span>
-                  <span class="cdo-status" :class="`status-${order.status}`">{{ formatStatus(order.status) }}</span>
-                  <span class="cdo-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
-                  <strong class="cdo-amount">{{ formatMoney(order.grand_total || 0, currency) }}</strong>
-                </article>
+                <ManagementSmartDataTable
+                  :columns="customerOrderColumns"
+                  :rows="(customerDetail.orders || []).slice(0, 6)"
+                  row-key="name"
+                  :show-search="false"
+                  :filterable="false"
+                  :freezable="false"
+                  :resizable="false"
+                  empty-text="سفارشی برای این مشتری ثبت نشده است."
+                >
+                  <template #cell-name="{ value }"><strong>{{ value }}</strong></template>
+                  <template #cell-status="{ value }"><span :class="`status-${value}`">{{ formatStatus(value) }}</span></template>
+                  <template #cell-created_at="{ value }">{{ formatInvoiceDateTime(value) }}</template>
+                  <template #cell-grand_total="{ value }">{{ formatMoney(value || 0, currency) }}</template>
+                </ManagementSmartDataTable>
               </div>
             </template>
 
@@ -254,6 +263,7 @@ import ManagementPageScaffold from '@/components/management/ManagementPageScaffo
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementBarList from '@/components/management/bi/ManagementBarList.vue'
 import ManagementLineChart from '@/components/management/bi/ManagementLineChart.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import SalesHourlyChart from '@/components/management/sales/SalesHourlyChart.vue'
 import PersianRangeDateInput from '@/components/PersianRangeDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
@@ -294,6 +304,18 @@ const selectedCustomerName = ref('')
 const customerDetail = ref(null)
 const customerDetailLoading = ref(false)
 const customerDetailError = ref('')
+const topCustomerColumns = [
+  { key: 'rank', label: '#', align: 'center' },
+  { key: 'customer', label: 'مشتری' },
+  { key: 'orders_count', label: 'سفارش‌ها', align: 'center' },
+  { key: 'total_spent', label: 'فروش', type: 'currency' },
+]
+const customerOrderColumns = [
+  { key: 'name', label: 'سفارش' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'created_at', label: 'زمان' },
+  { key: 'grand_total', label: 'مبلغ', type: 'currency' },
+]
 
 // حالت نمایش روند: ساعتی / روزانه / هفتگی
 const trendMode = ref('daily')

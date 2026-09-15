@@ -47,7 +47,9 @@
 | `ManagementListView` | facade فهرست‌های مدیریتی | API قدیمی فهرست را حفظ می‌کند و درون خود از `ManagementSmartDataTable` استفاده می‌کند |
 | `ManagementDataTable` | facade سازگاری برای گزارش‌ها و صفحه‌های قدیمی | slot و eventهای قبلی را حفظ می‌کند و به `ManagementSmartDataTable` می‌رسد |
 
-صفحات جزئیات محصول، سازندهٔ Variant، انبار و خرید نیز جدول‌های داخلی خود را از همین ownerها می‌گیرند؛ در نتیجه تغییر مشترک در جدول، فهرست‌های قدیمی و جدید را هم‌زمان یکدست می‌کند. دو جدول عمداً خارج از این قرارداد عمومی هستند: `ManagementSheetView` چون یک spreadsheet با انتخاب سلول/ردیف، ویرایش مستقیم و bulk action است؛ و جدول میانبرهای صفحهٔ POS چون دادهٔ عملیاتی نیست و فقط راهنمای صفحه‌کلید است.
+صفحات جزئیات محصول، سازندهٔ Variant، انبار، خرید، گزارش، صندوق، POS Profile، داشبورد فروش، builder و master-listهای سالن نیز جدول‌های داخلی خود را از همین ownerها می‌گیرند؛ در نتیجه تغییر مشترک در جدول، فهرست‌های قدیمی و جدید را هم‌زمان یکدست می‌کند.
+
+صفحه‌هایی که هنوز collection دارند اما عمداً از جدول عمومی استفاده نمی‌کنند، interaction متفاوتی دارند: `ManagementProductsPage` به‌عنوان مرجع چندنما (لیست Notion، gallery، kanban، sheet، تقویم و tree)، `ManagementMenuDesignerPage` و `ManagementHomeBuilderPage` برای drag/drop چندسطحی، `ManagementKitchenPage` برای KDS کانبان، `ManagementTablesPage` برای نمای سالن و کارت میز، `ManagementPosPage` برای workspace عملیاتی و `ManagementPrintFormatsPage` برای gallery/preview. همچنین `ManagementSheetView` یک spreadsheet با انتخاب سلول/ردیف، ویرایش مستقیم و bulk action است و جدول میانبرهای صفحهٔ POS دادهٔ عملیاتی نیست. این موارد باید از primitiveهای تخصصی خودشان استفاده کنند و نباید با جدول عمومی جایگزین شوند.
 
 ## قرارداد مالکیت
 

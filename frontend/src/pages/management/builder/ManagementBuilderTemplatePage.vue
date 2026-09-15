@@ -82,6 +82,24 @@
           <button class="secondary-btn" type="button" @click="addStep">افزودن اولین مرحله</button>
         </div>
 
+        <ManagementSmartDataTable
+          v-if="form.steps.length"
+          :columns="stepSummaryColumns"
+          :rows="form.steps"
+          row-key="step_key"
+          :show-search="false"
+          :filterable="false"
+          :freezable="false"
+          :resizable="false"
+          empty-text="مرحله‌ای برای نمایش وجود ندارد."
+        >
+          <template #cell-index="{ rowIndex }">{{ (rowIndex + 1).toLocaleString('fa-IR') }}</template>
+          <template #cell-step_title="{ row }"><strong>{{ row.step_title || 'بدون عنوان' }}</strong><small class="table-subtext">{{ row.step_key }}</small></template>
+          <template #cell-selection_mode="{ value }">{{ value === 'single' ? 'تک‌انتخابی' : 'چندانتخابی' }}</template>
+          <template #cell-options="{ row }">{{ Number(row.options?.length || 0).toLocaleString('fa-IR') }} گزینه</template>
+          <template #cell-actions="{ rowIndex }"><button type="button" class="secondary-btn mini-link-btn" @click="deleteStep(rowIndex)">حذف</button></template>
+        </ManagementSmartDataTable>
+
         <div class="steps-list">
           <BuilderStepCard
             v-for="(step, index) in form.steps"
@@ -104,6 +122,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementToggleSwitch from '@/components/management/ManagementToggleSwitch.vue'
 import ManagementBearLoader from '@/components/management/ManagementBearLoader.vue'
@@ -145,6 +164,14 @@ const form = reactive({
 })
 
 const itemOptions = ref([])
+
+const stepSummaryColumns = [
+  { key: 'index', label: 'ردیف', align: 'center' },
+  { key: 'step_title', label: 'مرحله' },
+  { key: 'selection_mode', label: 'نوع انتخاب' },
+  { key: 'options', label: 'گزینه‌ها', align: 'center' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 const canSave = computed(() => {
   return !saving.value && !loading.value && hasUnsavedChanges.value && form.title.trim() && form.steps.length > 0

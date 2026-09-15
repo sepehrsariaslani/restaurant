@@ -114,19 +114,19 @@
       <ManagementSurfaceCard title="جایگاه‌های بیرون بر (مشتری)" subtitle="لیست جایگاه‌هایی که در حالت بیرون بر نمایش داده می‌شود">
         <div class="places-editor">
           <p class="muted" v-if="!localConfig.takeaway_places.length">هیچ جایگاهی تعریف نشده است.</p>
-          <div v-for="(place, idx) in localConfig.takeaway_places" :key="'takeaway-' + idx" class="place-row">
-            <input
-              class="input"
-              v-model="localConfig.takeaway_places[idx]"
-              :placeholder="`جایگاه ${idx + 1}`"
-            />
-            <button
-              type="button"
-              class="ghost-btn danger"
-              @click="removeTakeawayPlace(idx)"
-              title="حذف"
-            >×</button>
-          </div>
+          <ManagementSmartDataTable
+            v-if="localConfig.takeaway_places.length"
+            :columns="takeawayPlaceColumns"
+            :rows="takeawayPlaceRows"
+            row-key="index"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+          >
+            <template #cell-place="{ row }"><input class="input" v-model="localConfig.takeaway_places[row.index]" :placeholder="`جایگاه ${row.index + 1}`" /></template>
+            <template #cell-actions="{ row }"><button type="button" class="ghost-btn danger" @click="removeTakeawayPlace(row.index)" title="حذف">×</button></template>
+          </ManagementSmartDataTable>
           <button type="button" class="secondary-btn" @click="addTakeawayPlace">+ افزودن جایگاه</button>
 
           <div class="default-place-select" v-if="localConfig.takeaway_places.length">
@@ -304,6 +304,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Settings2 } from 'lucide-vue-next'
 import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
@@ -380,6 +381,12 @@ const localConfig = reactive({
   default_payment_option: '',
   default_payment_method: 'cash',
 })
+
+const takeawayPlaceRows = computed(() => localConfig.takeaway_places.map((place, index) => ({ place, index })))
+const takeawayPlaceColumns = [
+  { key: 'place', label: 'جایگاه' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 // تشخیص تغییرات ذخیره‌نشده
 const hasUnsavedChanges = ref(false)

@@ -225,41 +225,23 @@
               <button type="button" class="secondary-btn" @click="addPaymentRow">افزودن روش پرداخت</button>
             </header>
             <p class="muted" v-if="!paymentRows.length">هیچ روش پرداختی ثبت نشده است.</p>
-            <div v-else class="payment-grid">
-              <article v-for="(payment, index) in paymentRows" :key="`payment-${index}`" class="payment-row">
-                <label>
-                  روش
-                  <SearchableDropdown
-                    v-model="payment.mode_of_payment"
-                    :options="optionList('modes_of_payment')"
-                    placeholder="انتخاب روش"
-                    search-placeholder="جستجوی روش..."
-                    include-empty-option
-                    empty-label="انتخاب روش"
-                  />
-                </label>
-                <label>
-                  حساب
-                  <SearchableDropdown
-                    v-model="payment.account"
-                    :options="optionList('accounts')"
-                    placeholder="انتخاب حساب"
-                    search-placeholder="جستجوی حساب..."
-                    include-empty-option
-                    empty-label="انتخاب حساب"
-                  />
-                </label>
-                <label>
-                  نوع
-                  <input v-model.trim="payment.type" class="input" type="text" placeholder="cash / card" />
-                </label>
-                <label class="check-row">
-                  <input v-model="payment.default" type="checkbox" />
-                  پیش فرض
-                </label>
-                <button type="button" class="secondary-btn danger" @click="removePaymentRow(index)">حذف</button>
-              </article>
-            </div>
+            <ManagementSmartDataTable
+              v-else
+              :columns="paymentColumns"
+              :rows="paymentRows"
+              :row-key="(_row, index) => index"
+              :show-search="false"
+              :filterable="false"
+              :freezable="false"
+              :resizable="false"
+              empty-text="هیچ روش پرداختی ثبت نشده است."
+            >
+              <template #cell-mode_of_payment="{ row }"><SearchableDropdown v-model="row.mode_of_payment" :options="optionList('modes_of_payment')" placeholder="انتخاب روش" search-placeholder="جستجوی روش..." include-empty-option empty-label="انتخاب روش" /></template>
+              <template #cell-account="{ row }"><SearchableDropdown v-model="row.account" :options="optionList('accounts')" placeholder="انتخاب حساب" search-placeholder="جستجوی حساب..." include-empty-option empty-label="انتخاب حساب" /></template>
+              <template #cell-type="{ row }"><input v-model.trim="row.type" class="input" type="text" placeholder="cash / card" /></template>
+              <template #cell-default="{ row }"><input v-model="row.default" type="checkbox" /></template>
+              <template #cell-actions="{ rowIndex }"><button type="button" class="secondary-btn danger" @click="removePaymentRow(rowIndex)">حذف</button></template>
+            </ManagementSmartDataTable>
           </div>
 
           <div class="detail-box">
@@ -291,6 +273,7 @@
 import { computed, reactive, ref } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import { getManagementPOSProfile, setManagementPOSProfile, setManagementPOSProfileSettings } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
@@ -328,6 +311,14 @@ const profileForm = reactive({
   allow_negative_stock: false,
   print_receipt_on_order_complete: false,
 })
+
+const paymentColumns = [
+  { key: 'mode_of_payment', label: 'روش پرداخت' },
+  { key: 'account', label: 'حساب' },
+  { key: 'type', label: 'نوع' },
+  { key: 'default', label: 'پیش‌فرض', align: 'center' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 const sourceLabel = computed(() => {
   const map = {

@@ -13,6 +13,18 @@ const variantBuilder = readFileSync(new URL('../src/pages/management/catalog/Man
 const inventory = readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
 const purchaseDetail = readFileSync(new URL('../src/pages/management/purchasing/ManagementInventoryPurchaseDetailPage.vue', import.meta.url), 'utf8')
 const coverageDoc = readFileSync(new URL('../../docs/restaurant-management-coverage.md', import.meta.url), 'utf8')
+const additionalDataPages = [
+  readFileSync(new URL('../src/pages/management/finance/ManagementReportsIndexPage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryMaterialDetailPage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/purchasing/ManagementMaterialRequestDetailPage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/sales/ManagementPosProfilePage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/sales/ManagementPosDefaultsPage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/sales/ManagementRegisterPage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/sales/ManagementSalesDashboardPage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/pages/management/builder/ManagementBuilderTemplatePage.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/components/management/tables/ManagementReservationsPanel.vue', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/components/management/tables/ManagementSessionsPanel.vue', import.meta.url), 'utf8'),
+]
 
 test('Restaurant SmartDataTable keeps the Accounts table contract with Restaurant-native behavior', () => {
   for (const token of [
@@ -89,4 +101,10 @@ test('coverage documentation records the canonical table ownership chain and exc
   assert.match(coverageDoc, /ManagementEditableTable/)
   assert.match(coverageDoc, /ManagementSheetView/)
   assert.match(coverageDoc, /جدول میانبرهای صفحهٔ POS/)
+})
+
+test('additional management collections use the shared table owners', () => {
+  for (const source of additionalDataPages) {
+    assert.match(source, /ManagementSmartDataTable|ManagementListView|ManagementEditableTable/)
+  }
 })

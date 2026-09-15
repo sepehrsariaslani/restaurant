@@ -37,12 +37,23 @@
         </div>
         <section class="reorder-section">
           <header><div><h4>نقطه سفارش</h4><p>برای هر انبار حداقل موجودی و مقدار پیشنهادی خرید را ثبت کنید.</p></div><button type="button" class="secondary-btn" @click="form.reorder_levels.push({ warehouse: '', level: 0, request_qty: 0 })">+ افزودن</button></header>
-          <div v-for="(row, index) in form.reorder_levels" :key="index" class="reorder-row">
-            <SearchableDropdown v-model="row.warehouse" :options="warehouseOptions" placeholder="انبار" search-placeholder="جستجوی انبار..." />
-            <input class="input" type="number" min="0" step="0.001" v-model.number="row.level" placeholder="حداقل" />
-            <input class="input" type="number" min="0" step="0.001" v-model.number="row.request_qty" placeholder="پیشنهاد خرید" />
-            <button type="button" class="tertiary-btn danger" @click="form.reorder_levels.splice(index, 1)">حذف</button>
-          </div>
+          <ManagementSmartDataTable
+            :columns="reorderColumns"
+            :rows="form.reorder_levels"
+            :row-key="(_row, index) => index"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+            empty-text="برای این ماده نقطه سفارشی ثبت نشده است."
+          >
+            <template #cell-warehouse="{ row }">
+              <SearchableDropdown v-model="row.warehouse" :options="warehouseOptions" placeholder="انبار" search-placeholder="جستجوی انبار..." />
+            </template>
+            <template #cell-level="{ row }"><input class="input" type="number" min="0" step="0.001" v-model.number="row.level" placeholder="حداقل" /></template>
+            <template #cell-request_qty="{ row }"><input class="input" type="number" min="0" step="0.001" v-model.number="row.request_qty" placeholder="پیشنهاد خرید" /></template>
+            <template #cell-actions="{ rowIndex }"><button type="button" class="tertiary-btn danger" @click="form.reorder_levels.splice(rowIndex, 1)">حذف</button></template>
+          </ManagementSmartDataTable>
         </section>
         <footer class="detail-actions"><button type="button" class="primary-btn" @click="save" :disabled="saving">{{ saving ? 'در حال ذخیره...' : 'ذخیره تغییرات' }}</button></footer>
       </template>
@@ -62,6 +73,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import InventoryResponsiveList from '@/components/management/inventory/InventoryResponsiveList.vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { getManagementInventoryBoot, getManagementRawMaterialDetail, saveManagementRawMaterial } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
@@ -90,6 +102,12 @@ const movementColumns = [
   { key: 'warehouse', label: 'انبار' },
   { key: 'qty_change', label: 'تغییر مقدار' },
   { key: 'voucher', label: 'سند' },
+]
+const reorderColumns = [
+  { key: 'warehouse', label: 'انبار' },
+  { key: 'level', label: 'حداقل موجودی', type: 'number' },
+  { key: 'request_qty', label: 'پیشنهاد خرید', type: 'number' },
+  { key: 'actions', label: 'عملیات' },
 ]
 function qty(value) { return Number(value || 0).toLocaleString('fa-IR', { maximumFractionDigits: 3 }) }
 function money(value) { return formatMoney(Number(value || 0), 'IRR') }

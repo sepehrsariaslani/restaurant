@@ -21,39 +21,25 @@
         </select>
       </div>
 
-      <div class="master-list">
-        <button
-          v-for="row in filteredRows"
-          :key="row.name"
-          class="list-item"
-          :class="{ active: row.name === selectedName }"
-          type="button"
-          @click="$emit('select', row.name)"
-        >
-          <div class="list-item-head">
-            <strong class="item-title">{{ row.customer_name || 'بدون نام' }}</strong>
-            <ManagementTableStatusBadge :status="row.status" />
-          </div>
-          <div class="list-item-body">
-            <div class="item-meta">
-              <CalendarClock :size="14" class="meta-icon" />
-              <span>{{ formatReservationDate(row.reservation_date) }}</span>
-              <span v-if="row.reservation_time">{{ row.reservation_time }}</span>
-            </div>
-            <div class="item-meta" v-if="row.guest_count">
-              <Users :size="14" class="meta-icon" />
-              <span>{{ Number(row.guest_count || 0).toLocaleString('fa-IR') }} نفر</span>
-            </div>
-            <div class="item-meta table-meta" :class="{ 'has-table': row.table }">
-              <Armchair :size="14" class="meta-icon" />
-              <span>{{ tableLabelMap[row.table] || row.table || 'بدون میز' }}</span>
-            </div>
-          </div>
-        </button>
-        <div v-if="!filteredRows.length" class="list-empty">
-          <p>رزروی با این مشخصات یافت نشد.</p>
-        </div>
-      </div>
+      <ManagementSmartDataTable
+        :columns="reservationColumns"
+        :rows="filteredRows"
+        row-key="name"
+        :row-clickable="true"
+        :row-class="(row) => row.name === selectedName ? 'is-selected' : ''"
+        :show-search="false"
+        :show-count="false"
+        :filterable="false"
+        @row-click="$emit('select', $event.name)"
+        empty-text="رزروی با این مشخصات یافت نشد."
+      >
+        <template #cell-customer="{ row }"><strong>{{ row.customer_name || 'بدون نام' }}</strong></template>
+        <template #cell-status="{ row }"><ManagementTableStatusBadge :status="row.status" /></template>
+        <template #cell-date="{ row }"><span>{{ formatReservationDate(row.reservation_date) }}<small v-if="row.reservation_time" class="table-subtext">{{ row.reservation_time }}</small></span></template>
+        <template #cell-guests="{ value }"><span>{{ Number(value || 0).toLocaleString('fa-IR') }} نفر</span></template>
+        <template #cell-table="{ row }">{{ tableLabelMap[row.table] || row.table || 'بدون میز' }}</template>
+      </ManagementSmartDataTable>
+
     </div>
 
     <aside class="detail-area">
@@ -162,8 +148,9 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { CalendarClock, Users, Armchair, CalendarDays, Save, LayoutGrid } from 'lucide-vue-next'
+import { CalendarDays, Save, LayoutGrid } from 'lucide-vue-next'
 import ManagementNoteField from '../ManagementNoteField.vue'
+import ManagementSmartDataTable from '../ManagementSmartDataTable.vue'
 import ManagementTableStatusBadge from './ManagementTableStatusBadge.vue'
 
 const props = defineProps({
@@ -176,6 +163,14 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select', 'update-field', 'save', 'jump-table'])
+
+const reservationColumns = [
+  { key: 'customer', label: 'مشتری' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'date', label: 'زمان' },
+  { key: 'guests', label: 'مهمانان', align: 'center' },
+  { key: 'table', label: 'میز' },
+]
 
 const statusFilter = ref('')
 const linkFilter = ref('all')
@@ -311,6 +306,10 @@ function formatReservationDate(value) {
   background: var(--mg-bg-surface);
   border-color: var(--mg-primary);
   box-shadow: 4px 0 0 0 var(--mg-primary) inset, var(--mg-shadow-sm);
+}
+
+:deep(.smart-data-table__table tbody tr.is-selected) {
+  background: var(--mg-primary-soft, color-mix(in srgb, var(--mg-primary) 10%, transparent));
 }
 
 .list-item-head {

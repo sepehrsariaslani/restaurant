@@ -1,19 +1,38 @@
 <template>
-  <ManagementPageScaffold title="گزارش‌های مدیریتی" subtitle="انتخاب سریع نوع گزارش با کارت‌های یکپارچه">
-    <section class="report-grid">
-      <a class="report-link" v-for="report in reports" :key="report.key" :href="`/management/reports/${report.key}`">
-        <ManagementSurfaceCard class="report-card" tone="soft">
-          <strong>{{ report.title }}</strong>
-          <small class="muted">{{ report.desc }}</small>
-        </ManagementSurfaceCard>
-      </a>
-    </section>
+  <ManagementPageScaffold title="گزارش‌های مدیریتی" subtitle="انتخاب سریع نوع گزارش با جدول مشترک و مسیر جزئیات">
+    <ManagementSurfaceCard tone="soft">
+      <ManagementListView
+        :columns="reportColumns"
+        :rows="reports"
+        row-key="key"
+        :row-clickable="true"
+        @row-click="openReport"
+      >
+        <template #cell-title="{ row }">
+          <strong>{{ row.title }}</strong>
+        </template>
+        <template #cell-description="{ value }">
+          <span class="muted">{{ value }}</span>
+        </template>
+        <template #cell-actions="{ row }">
+          <a class="secondary-btn mini-link-btn" :href="`/management/reports/${row.key}`" @click.stop>مشاهده گزارش</a>
+        </template>
+        <template #empty>گزارشی برای نمایش وجود ندارد.</template>
+      </ManagementListView>
+    </ManagementSurfaceCard>
   </ManagementPageScaffold>
 </template>
 
 <script setup>
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+
+const reportColumns = [
+  { key: 'title', label: 'گزارش' },
+  { key: 'description', label: 'توضیح' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 const reports = [
   { key: 'sales-summary', title: 'خلاصه فروش', desc: 'فروش کل، تعداد سفارش و میانگین سبد' },
@@ -51,43 +70,12 @@ const reports = [
   { key: 'vendor-sales', title: 'فروش غرفه‌ها', desc: 'فروش و کمیسیون غرفه‌داران و همکاران' },
   { key: 'receipt-payment-balance', title: 'تراز دریافت و پرداخت', desc: 'جریان نقد، بانک و آمار دریافتی‌ها' },
 ]
+
+function openReport(row) {
+  if (row?.key) window.location.href = `/management/reports/${encodeURIComponent(row.key)}`
+}
 </script>
 
 <style scoped>
-.report-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.report-link {
-  display: block;
-}
-
-.report-card {
-  min-height: 116px;
-  display: grid;
-  gap: 0.3rem;
-}
-
-.report-card strong {
-  font-size: 0.92rem;
-}
-
-.report-card small {
-  line-height: 1.65;
-  font-size: 0.78rem;
-}
-
-@media (max-width: 980px) {
-  .report-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .report-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.mini-link-btn { white-space: nowrap; }
 </style>

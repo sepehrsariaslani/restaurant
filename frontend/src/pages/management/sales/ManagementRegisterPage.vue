@@ -101,29 +101,33 @@
 
       <ManagementSurfaceCard title="سوابق اختتامیه" subtitle="آخرین تسویه‌های ثبت‌شده صندوق">
         <p class="muted" v-if="!closings.length">تاکنون اختتامیه‌ای ثبت نشده است.</p>
-        <div v-else class="closing-list">
-          <article v-for="closing in closings" :key="closing.name" class="closing-row">
-            <div class="closing-row-main">
-              <strong>{{ closing.name }}</strong>
-              <small class="muted">{{ formatDateTime(closing.period_end) }} • {{ closing.cashier }}</small>
-            </div>
-            <div class="closing-row-nums">
-              <span>فروش: {{ formatMoneyValue(closing.total_sales) }}</span>
-              <span :class="Number(closing.cash_difference) === 0 ? 'ok-text' : 'warn-text'">
-                اختلاف: {{ formatMoneyValue(closing.cash_difference) }}
-              </span>
-            </div>
-            <div class="closing-row-actions">
-              <button type="button" class="tertiary-btn" @click="viewClosingDetail(closing)">مشاهده</button>
-            </div>
-            <div v-if="expandedClosing === closing.name && closingDetail" class="receipt-html detail-receipt">
-              <div class="btn-row">
-                <button type="button" class="secondary-btn" @click="printReceipt(closingDetail.receipt_html)">چاپ رسید</button>
-              </div>
+        <ManagementSmartDataTable
+          v-else
+          :columns="closingColumns"
+          :rows="closings"
+          row-key="name"
+          :expandable-rows="true"
+          :expanded-row-keys="expandedClosingKeys"
+          :row-actions="closingRowActions"
+          :show-search="false"
+          :filterable="false"
+          :freezable="false"
+          :resizable="false"
+          @row-toggle="viewClosingDetail($event.row)"
+          @row-action="viewClosingDetail($event.row)"
+          empty-text="تاکنون اختتامیه‌ای ثبت نشده است."
+        >
+          <template #cell-name="{ row }"><strong>{{ row.name }}</strong><small class="table-subtext">{{ formatDateTime(row.period_end) }} • {{ row.cashier }}</small></template>
+          <template #cell-total_sales="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-cash_difference="{ row }"><span :class="Number(row.cash_difference) === 0 ? 'ok-text' : 'warn-text'">{{ formatMoneyValue(row.cash_difference) }}</span></template>
+          <template #row-detail="{ row }">
+            <div v-if="expandedClosing === row.name && closingDetail" class="receipt-html detail-receipt">
+              <div class="btn-row"><button type="button" class="secondary-btn" @click="printReceipt(closingDetail.receipt_html)">چاپ رسید</button></div>
               <div v-html="closingDetail.receipt_html"></div>
             </div>
-          </article>
-        </div>
+            <p v-else class="muted">در حال دریافت جزئیات اختتامیه...</p>
+          </template>
+        </ManagementSmartDataTable>
       </ManagementSurfaceCard>
     </section>
 
@@ -135,20 +139,21 @@
       <ManagementSurfaceCard title="تعریف شیفت‌های کاری" subtitle="شیفت‌ها برای گزارش «فروش بر اساس شیفت» استفاده می‌شوند">
         <p class="muted" v-if="shiftsLoading">در حال دریافت شیفت‌ها...</p>
         <template v-else>
-          <div class="shift-rows">
-            <div class="shift-row shift-head">
-              <span>عنوان شیفت</span>
-              <span>شروع</span>
-              <span>پایان</span>
-              <span></span>
-            </div>
-            <div class="shift-row" v-for="(shift, index) in shiftsForm" :key="index">
-              <input class="input" type="text" v-model="shift.label" placeholder="مثلاً صبح" />
-              <input class="input" type="time" v-model="shift.start" />
-              <input class="input" type="time" v-model="shift.end" />
-              <button type="button" class="tertiary-btn danger" @click="removeShift(index)" :disabled="shiftsForm.length <= 1">حذف</button>
-            </div>
-          </div>
+          <ManagementSmartDataTable
+            :columns="shiftColumns"
+            :rows="shiftsForm"
+            row-key="key"
+            :show-search="false"
+            :filterable="false"
+            :freezable="false"
+            :resizable="false"
+            empty-text="شیفتی برای تنظیم وجود ندارد."
+          >
+            <template #cell-label="{ row }"><input class="input" type="text" v-model="row.label" placeholder="مثلاً صبح" /></template>
+            <template #cell-start="{ row }"><input class="input" type="time" v-model="row.start" /></template>
+            <template #cell-end="{ row }"><input class="input" type="time" v-model="row.end" /></template>
+            <template #cell-actions="{ rowIndex }"><button type="button" class="tertiary-btn danger" @click="removeShift(rowIndex)" :disabled="shiftsForm.length <= 1">حذف</button></template>
+          </ManagementSmartDataTable>
           <div class="btn-row">
             <button type="button" class="secondary-btn" @click="addShift" :disabled="shiftsForm.length >= 8">افزودن شیفت</button>
             <button type="button" class="primary-btn" @click="saveShifts" :disabled="shiftsSaving">
@@ -255,25 +260,28 @@
       <ManagementSurfaceCard title="لیست کمبوها" subtitle="کمبوهای فعال مجموعه">
         <p class="muted" v-if="combosLoading">در حال دریافت کمبوها...</p>
         <p class="muted" v-else-if="!combos.length">هنوز کمبویی تعریف نشده است.</p>
-        <div v-else class="combo-list">
-          <article class="combo-card" v-for="combo in combos" :key="combo.name">
-            <header>
-              <strong>{{ combo.item_name }}</strong>
-              <small class="muted">{{ combo.combo_item }} • {{ formatMoneyValue(combo.price) }}</small>
-            </header>
-            <ul>
-              <li v-for="(component, idx) in combo.items" :key="idx">
-                {{ component.item_name }} × {{ component.qty }}
-              </li>
-            </ul>
+        <ManagementSmartDataTable
+          v-else
+          :columns="comboColumns"
+          :rows="combos"
+          row-key="name"
+          :show-search="false"
+          :filterable="false"
+          :freezable="false"
+          :resizable="false"
+          empty-text="هنوز کمبویی تعریف نشده است."
+        >
+          <template #cell-price="{ value }">{{ formatMoneyValue(value) }}</template>
+          <template #cell-components="{ row }">
+            <span v-for="component in row.items || []" :key="component.item_code" class="table-chip">{{ component.item_name }} × {{ component.qty }}</span>
+          </template>
+          <template #cell-actions="{ row }">
             <div class="btn-row">
-              <button type="button" class="secondary-btn" @click="editCombo(combo)">ویرایش</button>
-              <button type="button" class="tertiary-btn danger" @click="removeCombo(combo)" :disabled="comboDeleting === combo.name">
-                {{ comboDeleting === combo.name ? 'در حال حذف...' : 'حذف' }}
-              </button>
+              <button type="button" class="secondary-btn" @click="editCombo(row)">ویرایش</button>
+              <button type="button" class="tertiary-btn danger" @click="removeCombo(row)" :disabled="comboDeleting === row.name">{{ comboDeleting === row.name ? 'در حال حذف...' : 'حذف' }}</button>
             </div>
-          </article>
-        </div>
+          </template>
+        </ManagementSmartDataTable>
       </ManagementSurfaceCard>
     </section>
 
@@ -330,6 +338,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
+import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
@@ -413,6 +422,13 @@ const closingForm = reactive({ opening_float: 0, counted_cash: null, note: '' })
 const lastClosingResult = ref(null)
 const expandedClosing = ref('')
 const closingDetail = ref(null)
+const expandedClosingKeys = computed(() => expandedClosing.value ? [expandedClosing.value] : [])
+const closingColumns = [
+  { key: 'name', label: 'اختتامیه' },
+  { key: 'total_sales', label: 'فروش', type: 'currency' },
+  { key: 'cash_difference', label: 'اختلاف', type: 'currency' },
+]
+const closingRowActions = [{ key: 'view', label: 'مشاهده' }]
 
 const expectedCashPreview = computed(() =>
   Number(closingForm.opening_float || 0) + Number(closingSummary.value?.totals?.cash_sales || 0),
@@ -491,6 +507,12 @@ const shiftsSaving = ref(false)
 const shiftsError = ref('')
 const shiftsMessage = ref('')
 const shiftsForm = ref([])
+const shiftColumns = [
+  { key: 'label', label: 'عنوان شیفت' },
+  { key: 'start', label: 'شروع' },
+  { key: 'end', label: 'پایان' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 async function loadShifts() {
   shiftsLoading.value = true
@@ -609,6 +631,13 @@ const combosError = ref('')
 const combosMessage = ref('')
 const productOptions = ref([])
 const comboForm = reactive({ combo_item: '', items: [{ item_code: '', qty: 1 }] })
+const comboColumns = [
+  { key: 'item_name', label: 'کمبو' },
+  { key: 'combo_item', label: 'کد محصول' },
+  { key: 'price', label: 'قیمت', type: 'currency' },
+  { key: 'components', label: 'اجزا' },
+  { key: 'actions', label: 'عملیات' },
+]
 
 async function loadCombosTab() {
   combosLoading.value = true

@@ -6,35 +6,24 @@
         <span class="list-count">{{ rows.length.toLocaleString('fa-IR') }} سشن</span>
       </div>
 
-      <div class="master-list">
-        <button
-          v-for="row in rows"
-          :key="row.name"
-          class="list-item"
-          :class="{ active: row.name === selectedName }"
-          type="button"
-          @click="$emit('select', row.name)"
-        >
-          <div class="list-item-head">
-            <strong class="item-title">{{ tableLabelMap[row.table] || row.table || '-' }}</strong>
-            <ManagementTableStatusBadge :status="row.status" />
-          </div>
-          <div class="list-item-body">
-            <div class="item-meta">
-              <Clock3 :size="14" class="meta-icon" />
-              <span>{{ formatDateTime(row.opened_at) }}</span>
-            </div>
-            <div class="item-meta" v-if="row.total_confirmed_amount > 0">
-              <Receipt :size="14" class="meta-icon" />
-              <span class="font-bold">{{ formatMoney(row.total_confirmed_amount, currency) }}</span>
-            </div>
-            <div class="item-meta" v-if="row.customer_name">
-              <UserRound :size="14" class="meta-icon" />
-              <span>{{ row.customer_name }}</span>
-            </div>
-          </div>
-        </button>
-      </div>
+      <ManagementSmartDataTable
+        :columns="sessionColumns"
+        :rows="rows"
+        row-key="name"
+        :row-clickable="true"
+        :row-class="(row) => row.name === selectedName ? 'is-selected' : ''"
+        :show-search="false"
+        :show-count="false"
+        :filterable="false"
+        @row-click="$emit('select', $event.name)"
+        empty-text="سشنی برای نمایش وجود ندارد."
+      >
+        <template #cell-table="{ row }"><strong>{{ tableLabelMap[row.table] || row.table || '-' }}</strong></template>
+        <template #cell-status="{ row }"><ManagementTableStatusBadge :status="row.status" /></template>
+        <template #cell-opened_at="{ value }">{{ formatDateTime(value) }}</template>
+        <template #cell-total_confirmed_amount="{ value }">{{ formatMoney(value, currency) }}</template>
+        <template #cell-customer_name="{ value }">{{ value || '—' }}</template>
+      </ManagementSmartDataTable>
     </div>
 
     <aside class="detail-area">
@@ -122,8 +111,9 @@
 </template>
 
 <script setup>
-import { Clock3, Receipt, UserRound, History, Save, LayoutGrid } from 'lucide-vue-next'
+import { History, Save, LayoutGrid } from 'lucide-vue-next'
 import ManagementNoteField from '../ManagementNoteField.vue'
+import ManagementSmartDataTable from '../ManagementSmartDataTable.vue'
 import ManagementTableStatusBadge from './ManagementTableStatusBadge.vue'
 import { formatMoney } from '@/utils/format'
 
@@ -137,6 +127,14 @@ defineProps({
 })
 
 const emit = defineEmits(['select', 'update-field', 'save', 'jump-table'])
+
+const sessionColumns = [
+  { key: 'table', label: 'میز' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'opened_at', label: 'شروع' },
+  { key: 'total_confirmed_amount', label: 'مبلغ', type: 'currency' },
+  { key: 'customer_name', label: 'مشتری' },
+]
 
 function emitField(key, value) {
   emit('update-field', { key, value })
@@ -261,6 +259,10 @@ function formatDateTime(value) {
   background: var(--mg-bg-surface);
   border-color: var(--mg-primary);
   box-shadow: 4px 0 0 0 var(--mg-primary) inset, var(--mg-shadow-sm);
+}
+
+:deep(.smart-data-table__table tbody tr.is-selected) {
+  background: var(--mg-primary-soft, color-mix(in srgb, var(--mg-primary) 10%, transparent));
 }
 
 .list-item-head {
