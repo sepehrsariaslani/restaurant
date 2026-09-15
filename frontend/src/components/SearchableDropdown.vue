@@ -222,6 +222,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  searchFn: {
+    type: Function,
+    default: null,
+  },
+  resolveFn: {
+    type: Function,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'create-option', 'item-created'])
@@ -239,6 +247,10 @@ const itemUomsLoading = ref(false)
 const warehousesLoading = ref(false)
 const itemUomOptions = ref([])
 const itemWarehouses = ref([])
+const remoteOptions = ref([])
+const remoteLoading = ref(false)
+let remoteSearchTimer = null
+let remoteRequestId = 0
 const itemForm = reactive({
   item_name: '',
   item_code: '',
@@ -273,12 +285,23 @@ const normalizedOptions = computed(() => {
   return merged
 })
 
+const optionList = computed(() => {
+  const merged = [...remoteOptions.value, ...normalizedOptions.value]
+  const seen = new Set()
+  return merged.filter((option) => {
+    const key = String(option?.value ?? '')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+})
+
 const filteredOptions = computed(() => {
   const query = String(searchQuery.value || '').trim().toLowerCase()
   if (!query) {
-    return normalizedOptions.value
+    return optionList.value
   }
-  return normalizedOptions.value.filter((option) => {
+  return optionList.value.filter((option) => {
     const label = String(option.label || '').toLowerCase()
     const value = String(option.value || '').toLowerCase()
     return label.includes(query) || value.includes(query)
@@ -301,7 +324,7 @@ const createOption = computed(() => {
     return null
   }
   const normalizedQuery = query.toLowerCase()
-  const exists = normalizedOptions.value.some((option) => {
+  const exists = optionList.value.some((option) => {
     const label = String(option.label || '').trim().toLowerCase()
     const value = String(option.value || '').trim().toLowerCase()
     return normalizedQuery === label || normalizedQuery === value
@@ -329,7 +352,7 @@ const selectedValues = computed(() => {
 })
 
 const selectedOptions = computed(() =>
-  normalizedOptions.value.filter((option) => selectedValues.value.some((value) => isSameValue(value, option.value))),
+  optionList.value.filter((option) => selectedValues.value.some((value) => isSameValue(value, option.value))),
 )
 
 const selectedLabel = computed(() => {
@@ -359,6 +382,8 @@ watch(
     if (openState) {
       searchQuery.value = ''
       highlightedIndex.value = selectedOptionIndex()
+      await loadRemoteOptions('')
+      await loadRemoteSelections()
       await nextTick()
       searchInputRef.value?.focus?.()
       return
@@ -367,6 +392,57 @@ watch(
     highlightedIndex.value = -1
   },
 )
+
+watch(
+  () => searchQuery.value,
+  (query) => {
+    if (!isOpen.value || typeof props.searchFn !== 'function') return
+    if (remoteSearchTimer) clearTimeout(remoteSearchTimer)
+    remoteSearchTimer = setTimeout(() => loadRemoteOptions(query), 140)
+  },
+)
+
+function normalizeRemoteOptions(rows) {
+  return (Array.isArray(rows) ? rows : []).map((option) => {
+    if (option && typeof option === 'object') {
+      return {
+        ...option,
+        value: option.value ?? option.name ?? option[props.valueKey] ?? '',
+        label: String(option.label ?? option.title ?? option.name ?? option[props.labelKey] ?? option.value ?? ''),
+      }
+    }
+    return { value: option, label: String(option ?? '') }
+  }).filter((option) => option.value !== '' && option.value !== null && option.value !== undefined)
+}
+
+async function loadRemoteOptions(query = '') {
+  if (typeof props.searchFn !== 'function') return
+  const requestId = ++remoteRequestId
+  remoteLoading.value = true
+  try {
+    const rows = await props.searchFn(String(query || ''))
+    if (requestId === remoteRequestId) remoteOptions.value = normalizeRemoteOptions(rows)
+  } catch {
+    if (requestId === remoteRequestId) remoteOptions.value = []
+  } finally {
+    if (requestId === remoteRequestId) remoteLoading.value = false
+  }
+}
+
+async function loadRemoteSelections() {
+  if (typeof props.resolveFn !== 'function') return
+  const values = selectedValues.value.filter((value) => value !== '' && value !== null && value !== undefined)
+  if (!values.length) return
+  const resolved = await Promise.all(values.map(async (value) => {
+    try {
+      return await props.resolveFn(value)
+    } catch {
+      return null
+    }
+  }))
+  const options = normalizeRemoteOptions(resolved)
+  remoteOptions.value = [...options, ...remoteOptions.value]
+}
 
 function selectedOptionIndex() {
   const firstSelected = selectedValues.value[0]
@@ -575,6 +651,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (remoteSearchTimer) clearTimeout(remoteSearchTimer)
   document.removeEventListener('mousedown', onDocumentClick)
   window.removeEventListener('resize', onViewportChange)
   window.removeEventListener('scroll', onViewportChange, true)

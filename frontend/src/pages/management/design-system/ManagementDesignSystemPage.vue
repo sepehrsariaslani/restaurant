@@ -185,6 +185,15 @@
             <ManagementProductReadinessPanel :checks="referenceChecks" :score="4" />
           </section>
 
+          <ManagementSurfaceCard title="معماری جزئیات محصول" subtitle="قرارداد مرجع برای این‌که هر تب چه نوع داده‌ای را مالک باشد">
+            <div class="ds-detail-contract-grid">
+              <article v-for="tab in productDetailContract" :key="tab.id" class="ds-detail-contract-card">
+                <span class="ds-detail-contract-index">{{ tab.index }}</span>
+                <div><strong>{{ tab.label }}</strong><small>{{ tab.owner }}</small><p>{{ tab.description }}</p></div>
+              </article>
+            </div>
+          </ManagementSurfaceCard>
+
           <ManagementSurfaceCard title="قالب‌های قابل استفاده مجدد محصول" subtitle="همان قاب‌های صفحه‌ی واقعی محصولات؛ محتوا با slot و داده‌ی دامنه‌ای جایگزین می‌شود.">
             <section class="ds-grid-2 ds-product-shell-grid">
               <ManagementProductCollectionShell
@@ -292,6 +301,7 @@ import DsBadge from '@/components/design/DsBadge.vue'
 import DsButton from '@/components/design/DsButton.vue'
 import { designTokens, tokenRows } from '@/design-system/tokens'
 import { designSystemCatalog, designSystemTabs, iconCatalog } from '@/design-system/catalog'
+import { PRODUCT_DETAIL_TABS } from '@/utils/managementProductDetail'
 import { defaultThemeSettings, themePresets } from '@/utils/themeSettings'
 
 const activeTab = ref('theme')
@@ -315,6 +325,14 @@ const editableTablePreviewColumns = [
   { key: 'amount', label: 'مبلغ پایه', type: 'currency', align: 'left' },
   { key: 'status', label: 'وضعیت' },
 ]
+
+const productDetailContract = PRODUCT_DETAIL_TABS.map((tab, index) => ({
+  id: tab.value,
+  index: (index + 1).toLocaleString('fa-IR'),
+  label: tab.label,
+  owner: ['SmartDataTable', 'native Item + EditableTable', 'EditableTable / BOM', 'Variant + builder', 'Bin + Stock Ledger', 'native documents', 'report + activity'][index],
+  description: ['خلاصه، تصویر و آمادگی اقدام بعدی.', 'فروش، نمایش و اطلاعات native قابل ویرایش.', 'رسپی و مواد اولیه‌ی همان محصول.', 'مدل‌ها و سفارشی‌سازی مشتری.', 'مانده، گردش و عملیات انبار.', 'اسناد متصل برای ردیابی.', 'تحلیل فروش و تاریخچه‌ی خواندنی.'][index],
+}))
 
 const selectedPreset = computed(() => themePresets.find((preset) => preset.id === selectedPresetId.value) || themePresets[0])
 const previewStyle = computed(() => ({
@@ -453,6 +471,13 @@ function selectPreset(preset) {
 .ds-pattern-card { display: flex; gap: .7rem; padding: .8rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); }
 .ds-pattern-number { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); font-weight: 900; }
 .ds-pattern-card strong { font-size: .84rem; }
+.ds-detail-contract-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
+.ds-detail-contract-card { display: flex; gap: .55rem; min-width: 0; padding: .75rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); }
+.ds-detail-contract-index { width: 27px; height: 27px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); font-size: .72rem; font-weight: 900; }
+.ds-detail-contract-card > div { min-width: 0; display: grid; gap: .12rem; }
+.ds-detail-contract-card strong { font-size: .78rem; }
+.ds-detail-contract-card small { color: var(--ds-color-action-accent); font-size: .64rem; font-weight: 800; direction: ltr; text-align: start; }
+.ds-detail-contract-card p { margin: .2rem 0 0; color: var(--ds-color-text-muted); font-size: .7rem; line-height: 1.65; }
 .ds-search-control { position: relative; display: flex; align-items: center; }
 .ds-search-control > svg { position: absolute; right: .75rem; color: var(--ds-color-text-muted); z-index: 1; }
 .ds-search-control input { padding-right: 2.4rem; }
@@ -472,6 +497,7 @@ function selectPreset(preset) {
 .ds-template-card .secondary-btn { white-space: nowrap; }
 .ds-template-preview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 980px) { .ds-intro { align-items: stretch; flex-direction: column; } .ds-workbench { grid-template-columns: 1fr; } .ds-tabs { position: static; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow-x: auto; } .ds-tab { min-width: 140px; } }
-@media (max-width: 720px) { .ds-grid-2, .ds-template-preview, .ds-pattern-grid, .ds-editor-grid { grid-template-columns: 1fr; } .ds-preset-grid { grid-template-columns: 1fr; } .ds-icon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ds-intro-stats { min-width: 0; } .ds-theme-preview, .ds-template-card { align-items: flex-start; flex-direction: column; } .ds-preview-actions { width: 100%; } }
+@media (max-width: 980px) { .ds-detail-contract-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .ds-grid-2, .ds-template-preview, .ds-pattern-grid, .ds-editor-grid, .ds-detail-contract-grid { grid-template-columns: 1fr; } .ds-preset-grid { grid-template-columns: 1fr; } .ds-icon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ds-intro-stats { min-width: 0; } .ds-theme-preview, .ds-template-card { align-items: flex-start; flex-direction: column; } .ds-preview-actions { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .ds-tab, .ds-preset, .ds-theme-preview { transition: none; } }
 </style>

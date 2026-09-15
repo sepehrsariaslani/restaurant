@@ -26,7 +26,7 @@
 | پوشه | مالکیت | اجزای شاخص |
 |---|---|---|
 | `components/management/` | primitiveهای مشترک مدیریت | shell، surface، list، table، فیلتر، popup، state و view switcher |
-| `components/management/catalog` | محصولات، BOM، منو و رسانه | `ManagementProductCollectionShell`، `ManagementProductDetailShell`، `ManagementBomManager`، جدول اقلام BOM، uploader و readiness panel |
+| `components/management/catalog` | محصولات، BOM، منو و رسانه | `ManagementProductCollectionShell`، `ManagementProductDetailShell`، `ManagementProductNativePanel`، `ManagementProductConnectionsPanel`، `ManagementProductInventoryPanel`، `ManagementBomManager`، جدول اقلام BOM، uploader و readiness panel |
 | `components/management/design-system` | تنظیمات و specimenهای DS | `ManagementThemeStudio` |
 | `components/management/builder` | صفحه‌ساز و قالب‌ها | `ManagementPageBuilderWorkspace`، فرم property و step card |
 | `components/management/inventory` | الگوی مشترک انبار | `InventorySectionShell`، `InventoryResponsiveList` |
@@ -67,7 +67,7 @@
 | سطح | مسیر | منبع داده | قرارداد بصری | وضعیت بررسی |
 |---|---|---|---|---|
 | فهرست محصولات | `/management/products` | ERPNext Item + API امن محصولات | `ManagementProductCollectionShell` + نماهای collection، جستجو و bulk actions | مرجع تثبیت‌شده و shell-backed |
-| جزئیات محصول | `/management/product` | ERPNext Item و داده‌های Restaurant | `ManagementProductDetailShell` + detail، رسانه، قیمت، BOM، modifier، variant و activity | مرجع تثبیت‌شده و shell-backed |
+| جزئیات محصول | `/management/product` | ERPNext Item، Item child tables، Bin، Stock Ledger Entry و اسناد native | `ManagementProductDetailShell` + تب‌های detail، native settings، فرمول، variant، موجودی، اتصالات و گزارش | مرجع تثبیت‌شده؛ داده و lifecycle همچنان native ERPNext |
 | کارت محصول مشتری | `/menu` | API منوی رستوران | تصویرمحور، قیمت، وضعیت و اقدام | مرجع تثبیت‌شده |
 | جزئیات محصول مشتری | `/item` | API منوی رستوران | gallery، nutrition، customization و cart | مرجع تثبیت‌شده |
 | دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ با bundle فعال روی `veederakht` تأیید شد |
@@ -216,6 +216,8 @@
 برای هر کدام، صفحهٔ Restaurant فقط facade و presentation layer است؛ مجوز، lifecycle، submit/cancel و ثبت ledger باید از قرارداد Frappe/ERPNext عبور کند.
 
 برای صفحات انبار، `InventorySectionShell` مالک الگوی دامنه‌ای است. برای صفحات گزارش و ledger، `SmartDataTable` یا primitive معادل موجود باید بر جدول محلی ترجیح داده شود.
+
+در جزئیات محصول، `ManagementProductNativePanel` فیلدهای allowlist‌شدهٔ `Item` و child tableهای native را با `ManagementEditableTable` مدیریت می‌کند؛ `ManagementProductConnectionsPanel` اسناد فروش، خرید، BOM و قیمت را به‌صورت خواندنی از DocTypeهای native جمع می‌کند؛ و `ManagementProductInventoryPanel` ماندهٔ `Bin` و گردش `Stock Ledger Entry` را با `ManagementSmartDataTable` نمایش می‌دهد. Linkهای native از قرارداد remote-searchable `SearchableDropdown` استفاده می‌کنند تا گزینه‌های ERPNext در پنل‌های محدود بریده نشوند.
 
 ## مرزهای باقی‌مانده برای انتشار
 

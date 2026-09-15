@@ -18588,6 +18588,332 @@ def _build_item_specific_builder_template(item_doc, builder_payload, selected_te
 	return data.get("name") or template_name
 
 
+MANAGEMENT_NATIVE_ITEM_FIELDS = (
+	"naming_series",
+	"brand",
+	"disabled",
+	"allow_alternative_item",
+	"include_item_in_manufacturing",
+	"opening_stock",
+	"valuation_rate",
+	"is_fixed_asset",
+	"asset_category",
+	"asset_naming_series",
+	"has_variants",
+	"variant_of",
+	"variant_based_on",
+	"is_sales_item",
+	"sales_uom",
+	"standard_rate",
+	"max_discount",
+	"grant_commission",
+	"enable_deferred_revenue",
+	"no_of_months",
+	"enable_deferred_expense",
+	"no_of_months_exp",
+	"is_purchase_item",
+	"purchase_uom",
+	"min_order_qty",
+	"safety_stock",
+	"lead_time_days",
+	"last_purchase_rate",
+	"is_customer_provided_item",
+	"delivered_by_supplier",
+	"country_of_origin",
+	"customs_tariff_number",
+	"customer_code",
+	"is_stock_item",
+	"valuation_method",
+	"default_material_request_type",
+	"end_of_life",
+	"warranty_period",
+	"weight_per_unit",
+	"weight_uom",
+	"allow_negative_stock",
+	"custom_stock_status",
+	"reorder_level",
+	"total_projected_qty",
+	"has_serial_no",
+	"serial_no_series",
+	"has_batch_no",
+	"create_new_batch",
+	"batch_number_series",
+	"has_expiry_date",
+	"shelf_life_in_days",
+	"retain_sample",
+	"sample_quantity",
+	"show_on_site",
+	"custom_url",
+	"custom_website",
+	"inspection_required_before_purchase",
+	"inspection_required_before_delivery",
+	"quality_inspection_template",
+	"default_bom",
+	"is_sub_contracted_item",
+	"production_capacity",
+	"over_delivery_receipt_allowance",
+	"over_billing_allowance",
+	"default_item_manufacturer",
+	"default_manufacturer_part_no",
+	"auto_create_assets",
+	"is_grouped_asset",
+	"purchase_tax_withholding_category",
+	"sales_tax_withholding_category",
+)
+
+MANAGEMENT_NATIVE_CHILD_TABLES = {
+	"attributes": "Item Variant Attribute",
+	"barcodes": "Item Barcode",
+	"reorder_levels": "Item Reorder",
+	"uoms": "UOM Conversion Detail",
+	"supplier_items": "Item Supplier",
+	"customer_items": "Item Customer Detail",
+	"taxes": "Item Tax",
+	"item_defaults": "Item Default",
+}
+
+
+def _management_native_json_value(value):
+	if value is None:
+		return None
+	if isinstance(value, (str, int, float, bool)):
+		return value
+	if isinstance(value, (list, tuple)):
+		return [_management_native_json_value(row) for row in value]
+	if isinstance(value, dict):
+		return {str(key): _management_native_json_value(row) for key, row in value.items()}
+	return str(value)
+
+
+def _management_native_item_payload(item_doc):
+	meta = frappe.get_meta("Item")
+	fieldnames = {field.fieldname for field in (meta.fields or [])}
+	fields = {
+		fieldname: _management_native_json_value(item_doc.get(fieldname))
+		for fieldname in MANAGEMENT_NATIVE_ITEM_FIELDS
+		if fieldname in fieldnames
+	}
+	tables = {}
+	for fieldname, child_doctype in MANAGEMENT_NATIVE_CHILD_TABLES.items():
+		if fieldname not in fieldnames or not frappe.db.exists("DocType", child_doctype):
+			continue
+		rows = []
+		for row in item_doc.get(fieldname) or []:
+			row_data = row.as_dict() if hasattr(row, "as_dict") else dict(row or {})
+			rows.append(
+				{
+					key: _management_native_json_value(value)
+					for key, value in row_data.items()
+					if key not in {"name", "parent", "parenttype", "parentfield", "idx", "doctype"}
+				}
+			)
+		tables[fieldname] = rows
+	return {"fields": fields, "tables": tables}
+
+
+def _management_native_field_value(fieldname, value):
+	if value in (None, ""):
+		return None if fieldname in {"end_of_life"} else ""
+	try:
+		field = frappe.get_meta("Item").get_field(fieldname)
+		fieldtype = field.fieldtype if field else ""
+		if fieldtype == "Check":
+			return cint(value)
+		if fieldtype in {"Int", "Long Int"}:
+			return cint(value)
+		if fieldtype in {"Float", "Currency", "Percent"}:
+			return flt(value)
+		if fieldtype == "Date":
+			return getdate(value)
+	except Exception:
+		pass
+	return value
+
+
+@frappe.whitelist()
+def update_management_product_native(payload=None):
+	_ensure_management_access()
+	parsed_payload = payload
+	if isinstance(parsed_payload, str):
+		parsed_payload = _parse_json(parsed_payload, {})
+	if not isinstance(parsed_payload, dict):
+		frappe.throw(_("Invalid native item payload."))
+
+	item_name = _management_resolve_item_name(parsed_payload.get("item_name") or parsed_payload.get("name"))
+	item_doc = frappe.get_doc("Item", item_name)
+	native = parsed_payload.get("native") if isinstance(parsed_payload.get("native"), dict) else parsed_payload
+	meta = frappe.get_meta("Item")
+	fieldnames = {field.fieldname for field in (meta.fields or [])}
+	changed = False
+
+	for fieldname, value in (native.get("fields") or {}).items():
+		if fieldname not in MANAGEMENT_NATIVE_ITEM_FIELDS or fieldname not in fieldnames:
+			continue
+		next_value = _management_native_field_value(fieldname, value)
+		if item_doc.get(fieldname) != next_value:
+			item_doc.set(fieldname, next_value)
+			changed = True
+
+	for fieldname, child_doctype in MANAGEMENT_NATIVE_CHILD_TABLES.items():
+		if fieldname not in (native.get("tables") or {}) or fieldname not in fieldnames:
+			continue
+		if not frappe.db.exists("DocType", child_doctype):
+			continue
+		child_meta = frappe.get_meta(child_doctype)
+		child_fields = {
+			field.fieldname
+			for field in (child_meta.fields or [])
+			if field.fieldname not in {"name", "parent", "parenttype", "parentfield", "idx", "doctype"}
+		}
+		item_doc.set(fieldname, [])
+		for row in native.get("tables", {}).get(fieldname) or []:
+			if not isinstance(row, dict):
+				continue
+			clean_row = {
+				key: value
+				for key, value in row.items()
+				if key in child_fields
+			}
+			item_doc.append(fieldname, clean_row)
+		changed = True
+
+	if changed:
+		item_doc.save(ignore_permissions=True)
+		frappe.db.commit()
+		frappe.clear_cache(doctype="Item")
+
+	return get_management_product_detail(item_doc.name)
+
+
+def _management_connection_route(doctype, name, item_name=""):
+	if doctype == "Sales Order":
+		return f"/management/order?order_name={name}"
+	if doctype in {"Purchase Receipt", "Purchase Invoice", "Stock Entry"}:
+		return f"/management/inventory/documents/detail?doctype={doctype}&name={name}"
+	if doctype == "BOM":
+		return f"/management/boms?item={item_name}"
+	return f"/app/{doctype.lower().replace(' ', '-')}/{name}"
+
+
+@frappe.whitelist()
+def get_management_product_connections(item_name, limit=200):
+	_ensure_management_access()
+	item_name = _management_resolve_item_name(item_name)
+	item_doc = frappe.get_cached_doc("Item", item_name)
+	item_codes = sorted({value for value in {item_doc.name, item_doc.item_code} if value})
+	limit = min(max(cint(limit) or 200, 1), 500)
+
+	specs = [
+		("sales", "فروش", "Sales Invoice Item", "Sales Invoice"),
+		("sales_orders", "سفارش‌های فروش", "Sales Order Item", "Sales Order"),
+		("delivery", "تحویل", "Delivery Note Item", "Delivery Note"),
+		("purchase", "خرید", "Purchase Invoice Item", "Purchase Invoice"),
+		("receipts", "رسید خرید", "Purchase Receipt Item", "Purchase Receipt"),
+		("purchase_orders", "سفارش‌های خرید", "Purchase Order Item", "Purchase Order"),
+		("stock", "انبار", "Stock Entry Detail", "Stock Entry"),
+		("requests", "درخواست مواد", "Material Request Item", "Material Request"),
+	]
+	groups = []
+	seen = set()
+	for key, label, child_doctype, parent_doctype in specs:
+		if not frappe.db.exists("DocType", child_doctype):
+			continue
+		child_meta = frappe.get_meta(child_doctype)
+		child_fields = {field.fieldname for field in (child_meta.fields or [])}
+		if "item_code" not in child_fields or "parent" not in child_fields:
+			continue
+		select_fields = [field for field in ["name", "parent", "modified", "qty", "rate", "amount", "stock_qty", "warehouse", "source_warehouse", "target_warehouse"] if field in child_fields]
+		rows = frappe.get_all(
+			child_doctype,
+			filters={"item_code": ["in", item_codes]},
+			fields=select_fields,
+			order_by="modified desc",
+			limit_page_length=limit,
+		)
+		connection_rows = []
+		for row in rows:
+			parent_name = str(row.get("parent") or "").strip()
+			if not parent_name or (parent_doctype, parent_name) in seen:
+				continue
+			seen.add((parent_doctype, parent_name))
+			parent_fields = [field for field in ["status", "docstatus", "posting_date", "transaction_date", "grand_total", "total", "company"] if _has_column(parent_doctype, field)]
+			parent = frappe.db.get_value(parent_doctype, parent_name, parent_fields, as_dict=True) if parent_fields else {}
+			parent = parent or {}
+			connection_rows.append({
+				"doctype": parent_doctype,
+				"name": parent_name,
+				"title": parent_name,
+				"date": str(parent.get("posting_date") or parent.get("transaction_date") or row.get("modified") or ""),
+				"status": parent.get("status") or ("ثبت‌شده" if cint(parent.get("docstatus")) == 1 else "پیش‌نویس"),
+				"amount": flt(parent.get("grand_total") or parent.get("total") or row.get("amount")),
+				"qty": flt(row.get("qty") or row.get("stock_qty")),
+				"warehouse": row.get("warehouse") or row.get("source_warehouse") or row.get("target_warehouse") or "",
+				"route": _management_connection_route(parent_doctype, parent_name, item_doc.name),
+			})
+		if connection_rows:
+			groups.append({"key": key, "label": label, "count": len(connection_rows), "rows": connection_rows})
+
+	if frappe.db.exists("DocType", "BOM"):
+		bom_rows = frappe.get_all(
+			"BOM",
+			filters={"item": ["in", item_codes]},
+			fields=["name", "item", "item_name", "quantity", "uom", "is_active", "is_default", "modified", "docstatus"],
+			order_by="modified desc",
+			limit_page_length=limit,
+		)
+		if bom_rows:
+			groups.append({
+				"key": "boms",
+				"label": "فرمول و BOM",
+				"count": len(bom_rows),
+				"rows": [
+					{
+						"doctype": "BOM",
+						"name": row.get("name"),
+						"title": row.get("item_name") or row.get("name"),
+						"date": str(row.get("modified") or ""),
+						"status": "فعال" if cint(row.get("is_active")) else "غیرفعال",
+						"amount": 0,
+						"qty": flt(row.get("quantity")),
+						"warehouse": row.get("uom") or "",
+						"route": _management_connection_route("BOM", row.get("name"), item_doc.name),
+					}
+					for row in bom_rows
+				],
+			})
+
+	if frappe.db.exists("DocType", "Item Price"):
+		price_rows = frappe.get_all(
+			"Item Price",
+			filters={"item_code": ["in", item_codes]},
+			fields=["name", "price_list", "price_list_rate", "currency", "uom", "valid_from", "modified"],
+			order_by="modified desc",
+			limit_page_length=limit,
+		)
+		if price_rows:
+			groups.append({
+				"key": "prices",
+				"label": "قیمت‌ها",
+				"count": len(price_rows),
+				"rows": [
+					{
+						"doctype": "Item Price",
+						"name": row.get("name"),
+						"title": row.get("price_list") or row.get("name"),
+						"date": str(row.get("valid_from") or row.get("modified") or ""),
+						"status": row.get("currency") or "",
+						"amount": flt(row.get("price_list_rate")),
+						"qty": 0,
+						"warehouse": row.get("uom") or "",
+						"route": f"/app/item-price/{row.get('name')}",
+					}
+					for row in price_rows
+				],
+			})
+
+	return {"groups": groups, "count": sum(group["count"] for group in groups)}
+
+
 @frappe.whitelist()
 def get_management_product_detail(item_name, date_from=None, date_to=None):
 	_ensure_management_access()
@@ -18730,6 +19056,7 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_nutrition_fat_g": flt(item_doc.get("restaurant_nutrition_fat_g") or 0),
 			"nutrition": _nutrition_payload(item_doc),
 		},
+		"native": _management_native_item_payload(item_doc),
 		"media": media,
 		"field_options": _management_product_field_options(),
 		"builder_templates": builder_templates,

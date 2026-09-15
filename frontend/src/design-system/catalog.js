@@ -62,6 +62,9 @@ export const designSystemCatalog = Object.freeze({
     { id: 'management-editable-table', title: 'جدول قابل ویرایش', description: 'جدول child-row با ویرایش پنجره‌ای، اعتبارسنجی، تنظیمات ستون و همان قرارداد جدول هوشمند.', source: 'components/management/ManagementEditableTable.vue', kind: 'domain' },
     { id: 'management-product-collection-shell', title: 'قاب مجموعه محصول', description: 'قاب مشترک لیست، گالری، کانبان، شیت و نماهای تخصصی مجموعه محصول با وضعیت‌های async.', source: 'components/management/catalog/ManagementProductCollectionShell.vue', kind: 'reference' },
     { id: 'management-product-detail-shell', title: 'قاب جزئیات محصول', description: 'قاب مشترک breadcrumb، hero، navigation، محتوای جزئیات و overlayهای محصول.', source: 'components/management/catalog/ManagementProductDetailShell.vue', kind: 'reference' },
+    { id: 'management-product-native-panel', title: 'پنل اطلاعات native کالا', description: 'فیلدهای Item و child tableهای ERPNext با همان EditableTable و بدون مدل داده‌ی موازی.', source: 'components/management/catalog/ManagementProductNativePanel.vue', kind: 'domain' },
+    { id: 'management-product-connections-panel', title: 'پنل اتصالات محصول', description: 'نمای یکپارچه‌ی سندهای فروش، خرید، رسید، انبار، BOM و قیمت‌های native.', source: 'components/management/catalog/ManagementProductConnectionsPanel.vue', kind: 'domain' },
+    { id: 'management-product-inventory-panel', title: 'پنل موجودی و دفتر گردش', description: 'مانده‌ی Bin، دفتر Stock Ledger، سطح سفارش و مسیرهای عملیاتی کالا.', source: 'components/management/catalog/ManagementProductInventoryPanel.vue', kind: 'domain' },
   ]),
   patterns: Object.freeze([
     { id: 'product-search', title: 'جستجو و ایجاد محصول', description: 'جستجوی سروری، فیلتر سریع، نماهای ذخیره‌شده و اقدام ایجاد.' },
@@ -69,6 +72,9 @@ export const designSystemCatalog = Object.freeze({
     { id: 'product-collection-shell', title: 'قالب قاب مجموعه محصول', description: 'استفاده از shell مشترک برای جستجو، toolbar، وضعیت بارگذاری و بدنه‌ی نماها.' },
     { id: 'product-availability', title: 'وضعیت فروش', description: 'فعال، به‌زودی، ناموجود و اتمام با مسیر اصلاح واضح.' },
     { id: 'product-detail-sections', title: 'بخش‌بندی جزئیات', description: 'تب‌های اطلاعات، رسانه، قیمت، BOM، صفت‌ها، گزارش و فعالیت.' },
+    { id: 'product-detail-native-settings', title: 'تنظیمات native کالا', description: 'اطلاعات پایه، فروش، خرید، انبار، عملیات و حسابداری در بخش‌های جدا با child tableهای قابل ویرایش.' },
+    { id: 'product-detail-connections', title: 'اتصالات و اسناد محصول', description: 'سندهای native مرتبط با کالا به‌صورت گروه‌بندی‌شده و قابل پیگیری.' },
+    { id: 'product-detail-inventory-ledger', title: 'موجودی و دفتر گردش', description: 'تفکیک مانده‌ی انبار از گردش سندی و ارائه‌ی مسیر مستقیم به عملیات stock.' },
     { id: 'product-detail-shell', title: 'قالب قاب جزئیات محصول', description: 'ترکیب breadcrumb، hero، navigation، وضعیت async و بخش‌های جزئیات با slot.' },
     { id: 'management-list-detail', title: 'فهرست به جزئیات', description: 'انتخاب یک رکورد از فهرست و نمایش جزئیات و عملیات همان رکورد در کنار آن.' },
     { id: 'separate-detail-route', title: 'مسیر جزئیات مستقل', description: 'کلیک روی ردیف به صفحه جزئیات مستقل می‌رود و فهرست context خود را حفظ می‌کند.' },
@@ -87,7 +93,7 @@ export const designSystemCatalog = Object.freeze({
   templates: Object.freeze([
     { id: 'products-list', title: 'تمپلیت مدیریت محصولات', description: 'صفحه مرجع برای جستجو، نماها و مدیریت جمعی.', source: 'pages/management/catalog/ManagementProductsPage.vue', href: '/management/products' },
     { id: 'products-collection-shell', title: 'تمپلیت مجموعه محصول قابل استفاده مجدد', description: 'قاب مشترک صفحه‌ی لیست محصولات برای انتقال به مجموعه‌های مدیریتی دیگر.', source: 'components/management/catalog/ManagementProductCollectionShell.vue', href: '/management/products' },
-    { id: 'product-detail-editor', title: 'تمپلیت ویرایش محصول', description: 'جزئیات کامل یک محصول و مسیر آماده‌سازی آن.', source: 'pages/management/catalog/ManagementProductDetailPage.vue', href: '/management/product' },
+    { id: 'product-detail-editor', title: 'تمپلیت ویرایش محصول', description: 'جزئیات کامل یک محصول با تب‌های native، فرمول، مدل‌ها، موجودی، اتصالات و گزارش.', source: 'pages/management/catalog/ManagementProductDetailPage.vue', href: '/management/product' },
     { id: 'product-detail-shell-template', title: 'تمپلیت جزئیات محصول قابل استفاده مجدد', description: 'قاب مشترک صفحه‌ی detail برای انتقال identity، section navigation و محتوای دامنه.', source: 'components/management/catalog/ManagementProductDetailShell.vue', href: '/management/product' },
     { id: 'management-orders', title: 'تمپلیت مدیریت سفارش‌ها', description: 'فهرست سفارش‌ها با جزئیات، پرداخت، تکمیل و تخصیص پیک.', source: 'pages/management/sales/ManagementOrdersPage.vue', href: '/management/orders' },
     { id: 'management-order-detail', title: 'تمپلیت جزئیات سفارش', description: 'صفحه مستقل جزئیات سفارش برای اقلام، پرداخت و تخصیص پیک.', source: 'pages/management/sales/ManagementOrderDetailPage.vue', href: '/management/order' },

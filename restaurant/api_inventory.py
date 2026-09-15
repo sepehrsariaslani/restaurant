@@ -34,6 +34,7 @@ from restaurant.api import (
 	_get_currency,
 	_has_column,
 	_item_uom_conversion_to_stock,
+	_management_resolve_item_name,
 	_management_get_print_brand_settings,
 	_table_columns_from_rows,
 )
@@ -80,6 +81,7 @@ __all__ = [
 	"delete_management_warehouse",
 	# stock overview
 	"get_management_stock_overview",
+	"get_management_product_inventory",
 	# movements
 	"create_management_stock_movement",
 	"list_management_stock_movements",
@@ -1649,6 +1651,180 @@ def get_management_stock_overview(warehouse="", search="", only_materials=0, lim
 		"count": len(items),
 		"total_value": flt(sum(by_item[code]["value"] for code in codes)),
 		"total_qty": flt(sum(by_item[code]["qty"] for code in codes)),
+	}
+
+
+@frappe.whitelist()
+def get_management_product_inventory(item_name="", date_from="", date_to="", warehouse="", limit=200):
+	"""Return native Bin and Stock Ledger data for one Item."""
+	_ensure_management_access()
+	item_name = _management_resolve_item_name(item_name)
+	item_doc = frappe.get_cached_doc("Item", item_name)
+	item_codes = tuple(sorted({value for value in {item_doc.name, item_doc.item_code} if value}))
+	limit = min(max(cint(limit) or 200, 1), 500)
+	warehouse = (warehouse or "").strip()
+	if warehouse and not _inv_warehouse_exists(warehouse):
+		warehouse = ""
+
+	bin_fields = [
+		field
+		for field in [
+			"item_code",
+			"warehouse",
+			"actual_qty",
+			"projected_qty",
+			"reserved_qty",
+			"reserved_qty_for_production",
+			"ordered_qty",
+			"indented_qty",
+			"planned_qty",
+			"valuation_rate",
+			"stock_value",
+		]
+		if _has_column("Bin", field)
+	]
+	bins = []
+	if len(bin_fields) >= 2:
+		bin_conditions = ["item_code IN %(item_codes)s"]
+		bin_params = {"item_codes": item_codes}
+		if warehouse:
+			bin_conditions.append("warehouse = %(warehouse)s")
+			bin_params["warehouse"] = warehouse
+		bin_rows = frappe.db.sql(
+			"SELECT {fields} FROM `tabBin` WHERE {conditions} ORDER BY warehouse".format(
+				fields=", ".join(bin_fields),
+				conditions=" AND ".join(bin_conditions),
+			),
+			bin_params,
+			as_dict=True,
+		)
+		bins = [
+			{
+				"warehouse": row.get("warehouse") or "",
+				"actual_qty": flt(row.get("actual_qty")),
+				"projected_qty": flt(row.get("projected_qty")),
+				"reserved_qty": flt(row.get("reserved_qty")),
+				"reserved_qty_for_production": flt(row.get("reserved_qty_for_production")),
+				"ordered_qty": flt(row.get("ordered_qty")),
+				"indented_qty": flt(row.get("indented_qty")),
+				"planned_qty": flt(row.get("planned_qty")),
+				"valuation_rate": flt(row.get("valuation_rate")),
+				"stock_value": flt(row.get("stock_value")),
+			}
+			for row in bin_rows
+		]
+
+	ledger_fields = [
+		field
+		for field in [
+			"posting_date",
+			"posting_time",
+			"warehouse",
+			"actual_qty",
+			"qty_after_transaction",
+			"valuation_rate",
+			"incoming_rate",
+			"stock_value_difference",
+			"voucher_type",
+			"voucher_no",
+			"company",
+			"is_cancelled",
+		]
+		if _has_column("Stock Ledger Entry", field)
+	]
+	ledger = []
+	if len(ledger_fields) >= 4:
+		ledger_conditions = ["item_code IN %(item_codes)s"]
+		ledger_params = {"item_codes": item_codes, "limit": limit}
+		if _has_column("Stock Ledger Entry", "is_cancelled"):
+			ledger_conditions.append("is_cancelled = 0")
+		if warehouse:
+			ledger_conditions.append("warehouse = %(warehouse)s")
+			ledger_params["warehouse"] = warehouse
+		if date_from:
+			ledger_conditions.append("posting_date >= %(date_from)s")
+			ledger_params["date_from"] = getdate(date_from)
+		if date_to:
+			ledger_conditions.append("posting_date <= %(date_to)s")
+			ledger_params["date_to"] = getdate(date_to)
+		ledger_rows = frappe.db.sql(
+			"SELECT {fields} FROM `tabStock Ledger Entry` WHERE {conditions} ORDER BY posting_date DESC, posting_time DESC, creation DESC LIMIT %(limit)s".format(
+				fields=", ".join(ledger_fields),
+				conditions=" AND ".join(ledger_conditions),
+			),
+			ledger_params,
+			as_dict=True,
+		)
+		ledger = [
+			{
+				"posting_date": str(row.get("posting_date") or ""),
+				"posting_time": str(row.get("posting_time") or ""),
+				"warehouse": row.get("warehouse") or "",
+				"actual_qty": flt(row.get("actual_qty")),
+				"qty_after_transaction": flt(row.get("qty_after_transaction")),
+				"valuation_rate": flt(row.get("valuation_rate")),
+				"incoming_rate": flt(row.get("incoming_rate")),
+				"stock_value_difference": flt(row.get("stock_value_difference")),
+				"voucher_type": row.get("voucher_type") or "",
+				"voucher_no": row.get("voucher_no") or "",
+				"company": row.get("company") or "",
+			}
+			for row in ledger_rows
+		]
+
+	reorder_levels = []
+	if frappe.db.exists("DocType", "Item Reorder"):
+		meta = frappe.get_meta("Item Reorder")
+		fields = [
+			field
+			for field in [
+				"name",
+				"warehouse_group",
+				"warehouse",
+				"warehouse_reorder_level",
+				"warehouse_reorder_qty",
+				"material_request_type",
+			]
+			if meta.has_field(field)
+		]
+		reorder_levels = [
+			{
+				key: (flt(row.get(key)) if key.endswith(("_level", "_qty")) else row.get(key) or "")
+				for key in fields
+				if key != "name"
+			}
+			for row in frappe.get_all(
+				"Item Reorder",
+				filters={"parent": item_doc.name},
+				fields=fields,
+				order_by="idx asc",
+			)
+		]
+
+	summary = {
+		"actual_qty": flt(sum(row.get("actual_qty", 0) for row in bins)),
+		"projected_qty": flt(sum(row.get("projected_qty", 0) for row in bins)),
+		"reserved_qty": flt(sum(row.get("reserved_qty", 0) for row in bins)),
+		"ordered_qty": flt(sum(row.get("ordered_qty", 0) for row in bins)),
+		"indented_qty": flt(sum(row.get("indented_qty", 0) for row in bins)),
+		"stock_value": flt(sum(row.get("stock_value", 0) for row in bins)),
+		"valuation_rate": flt(sum(row.get("stock_value", 0) for row in bins) / sum(row.get("actual_qty", 0) for row in bins), 6)
+		if sum(row.get("actual_qty", 0) for row in bins)
+		else 0,
+		"stock_uom": item_doc.stock_uom or "",
+		"is_stock_item": cint(item_doc.get("is_stock_item") or 0),
+		"has_serial_no": cint(item_doc.get("has_serial_no") or 0),
+		"has_batch_no": cint(item_doc.get("has_batch_no") or 0),
+	}
+	return {
+		"item_name": item_doc.name,
+		"date_from": str(date_from or ""),
+		"date_to": str(date_to or ""),
+		"warehouse": warehouse,
+		"summary": summary,
+		"bins": bins,
+		"ledger": ledger,
+		"reorder_levels": reorder_levels,
 	}
 
 

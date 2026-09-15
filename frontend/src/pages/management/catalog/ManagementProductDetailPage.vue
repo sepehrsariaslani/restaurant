@@ -413,7 +413,45 @@
 
       </section>
 
-      <section v-else-if="activeTab === 'changes'" class="product-changes-grid">
+      <ManagementProductNativePanel
+        v-if="activeTab === 'settings'"
+        :model-value="nativeState"
+        :saving="nativeSaving"
+        @update:modelValue="nativeState = $event"
+        @save="saveNativeProduct"
+      />
+
+      <section v-if="activeTab === 'inventory'" class="product-inventory-section">
+        <ManagementProductInventoryPanel
+          :summary="inventoryData.summary"
+          :bins="inventoryData.bins"
+          :ledger="inventoryData.ledger"
+          :reorder-levels="inventoryData.reorder_levels"
+          :loading="inventoryLoading"
+          :error="inventoryError"
+          :date-range="filters"
+          :warehouse="inventoryWarehouse"
+          @update:dateRange="updateInventoryDateRange"
+          @update:warehouse="updateInventoryWarehouse"
+          @refresh="loadProductInventory({ force: true })"
+        />
+      </section>
+
+      <section v-if="activeTab === 'connections'" class="product-connections-section">
+        <ManagementProductConnectionsPanel
+          :groups="connections"
+          :loading="connectionsLoading"
+          :error="connectionsError"
+          :item-name="itemName"
+          @retry="loadProductConnections({ force: true })"
+        />
+      </section>
+
+      <section v-if="activeTab === 'reports' && reportSubtab === 'history'" class="product-changes-grid">
+        <div class="detail-subtabs" role="tablist" aria-label="بخش‌های گزارش محصول">
+          <button type="button" class="detail-subtab" :class="{ active: reportSubtab === 'analytics' }" @click="reportSubtab = 'analytics'">تحلیل فروش</button>
+          <button type="button" class="detail-subtab" :class="{ active: reportSubtab === 'history' }" @click="reportSubtab = 'history'">تاریخچه تغییرات</button>
+        </div>
         <ManagementSurfaceCard title="تاریخچه تغییرات" subtitle="نسخه‌های ثبت‌شده این محصول در ERPNext">
           <p v-if="activityLoading" class="muted">در حال بارگذاری تاریخچه...</p>
           <p v-else-if="!activityVersions.length" class="muted">تغییری روی این محصول ثبت نشده است.</p>
@@ -595,7 +633,12 @@
               </ManagementSurfaceCard>
             </section>
 
-            <section v-if="activeTab === 'variants'" class="variants-grid">
+            <div v-if="activeTab === 'variants'" class="detail-subtabs" role="tablist" aria-label="بخش‌های مدل محصول">
+              <button type="button" class="detail-subtab" :class="{ active: variantSubtab === 'models' }" @click="variantSubtab = 'models'">مدل‌ها و ویژگی‌ها</button>
+              <button type="button" class="detail-subtab" :class="{ active: variantSubtab === 'customization' }" @click="variantSubtab = 'customization'">سفارشی‌سازی مشتری</button>
+            </div>
+
+            <section v-if="activeTab === 'variants' && variantSubtab === 'models'" class="variants-grid">
         <ManagementSurfaceCard
           v-if="isVariantContext"
           title="ویژگی‌های همین Variant"
@@ -790,7 +833,11 @@
 
       </section>
 
-      <section v-if="activeTab === 'reports'" class="reports-content">
+      <section v-if="activeTab === 'reports' && reportSubtab === 'analytics'" class="reports-content">
+        <div class="detail-subtabs" role="tablist" aria-label="بخش‌های گزارش محصول">
+          <button type="button" class="detail-subtab" :class="{ active: reportSubtab === 'analytics' }" @click="reportSubtab = 'analytics'">تحلیل فروش</button>
+          <button type="button" class="detail-subtab" :class="{ active: reportSubtab === 'history' }" @click="reportSubtab = 'history'; loadProductActivity()">تاریخچه تغییرات</button>
+        </div>
         <p class="muted" v-if="!hasReportData">برای این محصول گزارشی در بازه انتخابی ثبت نشده است.</p>
 
         <ReportKpiGrid :kpis="localizedReport.kpis" :currency="activeCurrency" />
@@ -821,7 +868,7 @@
         <ReportInsightCards :insights="localizedReport.insights" />
       </section>
 
-      <section v-if="activeTab === 'builder'" class="builder-section">
+      <section v-if="activeTab === 'variants' && variantSubtab === 'customization'" class="builder-section">
         <ManagementSurfaceCard title="سفارشی‌سازی محصول" subtitle="تنظیم ساختار سفارشی‌سازی برای مشتری" tone="accent">
           <div class="builder-grid">
             <ManagementToggleSwitch
@@ -1255,6 +1302,9 @@ import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import BuilderStepCard from '@/components/management/builder/BuilderStepCard.vue'
 import ManagementBomItemsTable from '@/components/management/catalog/ManagementBomItemsTable.vue'
 import ManagementBomModifiersTable from '@/components/management/catalog/ManagementBomModifiersTable.vue'
+import ManagementProductNativePanel from '@/components/management/catalog/ManagementProductNativePanel.vue'
+import ManagementProductConnectionsPanel from '@/components/management/catalog/ManagementProductConnectionsPanel.vue'
+import ManagementProductInventoryPanel from '@/components/management/catalog/ManagementProductInventoryPanel.vue'
 import ManagementCheckboxField from '@/components/management/ManagementCheckboxField.vue'
 import ManagementImageUploaderView from '@/components/management/catalog/ManagementImageUploaderView.vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
@@ -1280,6 +1330,8 @@ import {
   getManagementBomDoc,
   getManagementProductVariantBuilder,
   getManagementProductDetail,
+  getManagementProductConnections,
+  getManagementProductInventory,
   getManagementProductActivity,
   addManagementProductComment,
   listManagementModifierGroups,
@@ -1291,7 +1343,8 @@ import {
   setManagementProductPrice,
   updateManagementBom,
   uploadManagementItemImage,
-  updateManagementProductSettings
+  updateManagementProductSettings,
+  updateManagementProductNative,
 } from '@/utils/api'
 import { formatMoney, parseQuery } from '@/utils/format'
 import {
@@ -1310,6 +1363,11 @@ import {
   serializeProductSettingsState,
   STOCK_CONSUMPTION_MODE_OPTIONS
 } from '@/utils/managementProductDetail'
+import {
+  buildNativeProductPayload,
+  createInitialNativeProductState,
+  hydrateNativeProductState,
+} from '@/utils/managementProductNative'
 
 const props = defineProps({
   boot: {
@@ -1339,6 +1397,19 @@ const activeTab = ref(readStoredDetailTab())
 const savingSettings = ref(false)
 const savingDefaultPriceList = ref(false)
 const savingPrice = ref(false)
+const nativeState = ref(createInitialNativeProductState())
+const nativeSnapshot = ref('')
+const nativeSaving = ref(false)
+const connections = ref([])
+const connectionsLoading = ref(false)
+const connectionsError = ref('')
+const connectionsLoaded = ref(false)
+const inventoryData = ref({ summary: {}, bins: [], ledger: [], reorder_levels: [] })
+const inventoryLoading = ref(false)
+const inventoryError = ref('')
+const inventoryWarehouse = ref('')
+const reportSubtab = ref('analytics')
+const variantSubtab = ref('models')
 const mediaDialogOpen = ref(false)
 const mediaUploading = ref(false)
 const mediaSaving = ref(false)
@@ -1874,10 +1945,17 @@ function getTabBadge(tabValue) {
     return missingCount > 0 ? `!${missingCount.toLocaleString('fa-IR')}` : '✓'
   }
   if (tabValue === 'variants') {
-    return variantRows.value.length ? variantRows.value.length.toLocaleString('fa-IR') : ''
-  }
-  if (tabValue === 'builder') {
+    if (variantRows.value.length) {
+      return variantRows.value.length.toLocaleString('fa-IR')
+    }
     return settingsForm.restaurant_is_customizable || hasBuilderConfig.value ? 'فعال' : ''
+  }
+  if (tabValue === 'inventory') {
+    return inventoryData.value?.bins?.length ? inventoryData.value.bins.length.toLocaleString('fa-IR') : ''
+  }
+  if (tabValue === 'connections') {
+    const count = connections.value.reduce((total, group) => total + Number(group?.count || group?.rows?.length || 0), 0)
+    return count ? count.toLocaleString('fa-IR') : ''
   }
   if (tabValue === 'reports') {
     return hasReportData.value ? 'داده' : ''
@@ -1885,11 +1963,20 @@ function getTabBadge(tabValue) {
   return ''
 }
 
-const hasUnsavedChanges = computed(() => {
+const hasSettingsUnsavedChanges = computed(() => {
   if (!detail.value?.item?.name || !settingsSnapshot.value) {
     return false
   }
   return serializeSettingsState() !== settingsSnapshot.value
+})
+const hasNativeUnsavedChanges = computed(() => {
+  if (!detail.value?.item?.name || !nativeSnapshot.value) {
+    return false
+  }
+  return JSON.stringify(nativeState.value) !== nativeSnapshot.value
+})
+const hasUnsavedChanges = computed(() => {
+  return hasSettingsUnsavedChanges.value || hasNativeUnsavedChanges.value
 })
 
 watch(
@@ -1938,7 +2025,13 @@ watch(
     if (nextTab === 'variants') {
       await loadVariantBuilder()
     }
-    if (nextTab === 'changes' && !activityLoaded) {
+    if (nextTab === 'connections') {
+      await loadProductConnections()
+    }
+    if (nextTab === 'inventory') {
+      await loadProductInventory()
+    }
+    if (nextTab === 'reports' && reportSubtab.value === 'history' && !activityLoaded) {
       await loadProductActivity()
     }
   },
@@ -2101,6 +2194,8 @@ async function submitComment() {
 
 function syncForms(payload) {
   hydrateProductSettingsForm(settingsForm, payload, allTagOptions.value)
+  nativeState.value = hydrateNativeProductState(payload)
+  nativeSnapshot.value = JSON.stringify(nativeState.value)
 
   const item = payload?.item || {}
   builderSourceTemplateName.value = String(payload?.builder?.template_name || item.restaurant_builder_template || '').trim()
@@ -2253,10 +2348,86 @@ async function loadDetail() {
     if (activeTab.value === 'variants') {
       await loadVariantBuilder({ force: true })
     }
+    if (activeTab.value === 'connections') {
+      await loadProductConnections({ force: true })
+    }
+    if (activeTab.value === 'inventory') {
+      await loadProductInventory({ force: true })
+    }
   } catch (errObj) {
     error.value = errObj.message || 'بارگذاری جزئیات محصول ناموفق بود.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadProductConnections({ force = false } = {}) {
+  const targetItem = String(detail.value?.item?.name || itemName.value || '').trim()
+  if (!targetItem || (connectionsLoaded.value && !force) || connectionsLoading.value) return
+  connectionsLoading.value = true
+  connectionsError.value = ''
+  try {
+    const payload = await getManagementProductConnections({ item_name: targetItem, limit: 200 })
+    connections.value = Array.isArray(payload?.groups) ? payload.groups : []
+    connectionsLoaded.value = true
+  } catch (errObj) {
+    connections.value = []
+    connectionsError.value = errObj?.message || 'دریافت اتصالات محصول ناموفق بود.'
+  } finally {
+    connectionsLoading.value = false
+  }
+}
+
+async function loadProductInventory({ force = false } = {}) {
+  const targetItem = String(detail.value?.item?.name || itemName.value || '').trim()
+  if (!targetItem || inventoryLoading.value) return
+  if (!force && inventoryData.value?.item_name === targetItem && inventoryData.value?.date_from === filters.date_from && inventoryData.value?.date_to === filters.date_to && inventoryData.value?.warehouse === inventoryWarehouse.value) return
+  inventoryLoading.value = true
+  inventoryError.value = ''
+  try {
+    const payload = await getManagementProductInventory({
+      item_name: targetItem,
+      date_from: filters.date_from,
+      date_to: filters.date_to,
+      warehouse: inventoryWarehouse.value,
+      limit: 200,
+    })
+    inventoryData.value = { ...(payload || {}), summary: payload?.summary || {}, bins: payload?.bins || [], ledger: payload?.ledger || [], reorder_levels: payload?.reorder_levels || [] }
+  } catch (errObj) {
+    inventoryData.value = { summary: {}, bins: [], ledger: [], reorder_levels: [] }
+    inventoryError.value = errObj?.message || 'دریافت مانده و دفتر موجودی ناموفق بود.'
+  } finally {
+    inventoryLoading.value = false
+  }
+}
+
+function updateInventoryDateRange(nextRange = {}) {
+  filters.date_from = nextRange.date_from || filters.date_from
+  filters.date_to = nextRange.date_to || filters.date_to
+  loadProductInventory({ force: true })
+}
+
+function updateInventoryWarehouse(nextWarehouse = '') {
+  inventoryWarehouse.value = String(nextWarehouse || '').trim()
+  loadProductInventory({ force: true })
+}
+
+async function saveNativeProduct() {
+  const targetItem = String(detail.value?.item?.name || itemName.value || '').trim()
+  if (!targetItem || nativeSaving.value) return
+  nativeSaving.value = true
+  error.value = ''
+  try {
+    const payload = await updateManagementProductNative(buildNativeProductPayload({ itemName: targetItem, state: nativeState.value }))
+    detail.value = payload
+    nativeState.value = hydrateNativeProductState(payload)
+    nativeSnapshot.value = JSON.stringify(nativeState.value)
+    connectionsLoaded.value = false
+    inventoryData.value = { summary: {}, bins: [], ledger: [], reorder_levels: [] }
+  } catch (errObj) {
+    error.value = errObj?.message || 'ذخیره تنظیمات native کالا ناموفق بود.'
+  } finally {
+    nativeSaving.value = false
   }
 }
 
@@ -2411,6 +2582,14 @@ async function saveBomFromProduct() {
 async function saveSettings() {
   if (!detail.value?.item?.name || !hasUnsavedChanges.value) {
     return
+  }
+  if (!hasSettingsUnsavedChanges.value && hasNativeUnsavedChanges.value) {
+    await saveNativeProduct()
+    return
+  }
+  if (hasNativeUnsavedChanges.value) {
+    await saveNativeProduct()
+    if (error.value) return
   }
   savingSettings.value = true
   error.value = ''
@@ -3144,6 +3323,8 @@ function bomManagerUrl(row) {
 function readStoredDetailTab() {
   try {
     const raw = localStorage.getItem('management-product-detail-tab')
+    if (raw === 'builder') return 'variants'
+    if (raw === 'changes') return 'reports'
     if (PRODUCT_DETAIL_TABS.some((tab) => tab.value === raw)) {
       return raw
     }
@@ -3933,6 +4114,45 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
 }
 
 .reports-content > * {
+  min-width: 0;
+}
+
+.detail-subtabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.25rem;
+  border: 1px solid var(--mg-border-light);
+  border-radius: 14px;
+  background: var(--mg-bg-soft);
+  overflow-x: auto;
+}
+
+.detail-subtab {
+  min-height: 2.2rem;
+  padding: 0.42rem 0.78rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--mg-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.detail-subtab:hover,
+.detail-subtab.active {
+  border-color: color-mix(in srgb, var(--mg-primary) 28%, transparent);
+  color: var(--mg-primary);
+  background: var(--mg-bg-surface);
+}
+
+.product-inventory-section,
+.product-connections-section {
   min-width: 0;
 }
 

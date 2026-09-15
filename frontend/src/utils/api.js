@@ -2760,6 +2760,33 @@ export function getManagementProductDetail({ item_name = "", date_from = "", dat
 	return callRestaurantAPI("get_management_product_detail", { item_name, date_from, date_to });
 }
 
+export function getManagementProductConnections({ item_name = "", limit = 200 } = {}) {
+	return callRestaurantAPI("get_management_product_connections", {
+		item_name,
+		limit,
+	});
+}
+
+export function getManagementProductInventory({
+	item_name = "",
+	date_from = "",
+	date_to = "",
+	warehouse = "",
+	limit = 200,
+} = {}) {
+	return callRestaurantAPI("get_management_product_inventory", {
+		item_name,
+		date_from,
+		date_to,
+		warehouse,
+		limit,
+	});
+}
+
+export function updateManagementProductNative(payload = {}) {
+	return callRestaurantAPI("update_management_product_native", { payload });
+}
+
 export function updateManagementProductSettings(payload = {}) {
 	return callRestaurantAPI("update_management_product_settings", { payload });
 }

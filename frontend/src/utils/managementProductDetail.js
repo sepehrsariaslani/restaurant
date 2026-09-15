@@ -2,10 +2,10 @@ export const PRODUCT_DETAIL_TABS = [
 	{ value: "overview", label: "کارت محصول" },
 	{ value: "settings", label: "فروش و نمایش" },
 	{ value: "formula", label: "فرمول و رسپی" },
-	{ value: "variants", label: "مدل‌ها" },
-	{ value: "builder", label: "سفارشی‌سازی" },
-	{ value: "reports", label: "گزارش فروش" },
-	{ value: "changes", label: "تغییرات" },
+	{ value: "variants", label: "مدل‌ها و سفارشی‌سازی" },
+	{ value: "inventory", label: "انبار و موجودی" },
+	{ value: "connections", label: "اتصالات" },
+	{ value: "reports", label: "گزارش و تاریخچه" },
 ];
 
 export const KITCHEN_PRINT_MODE_OPTIONS = [
