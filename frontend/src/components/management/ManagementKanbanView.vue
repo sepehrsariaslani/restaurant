@@ -122,7 +122,15 @@ const groups = computed(() => {
 });
 
 function imageOf(row) {
-  return String(row?.[props.imageField] || row?.[props.secondaryImageField] || "").trim() || "";
+  return String(
+    row?.[props.imageField] ||
+      row?.[props.secondaryImageField] ||
+      row?.item_image ||
+      row?.restaurant_image ||
+      row?.image_url ||
+      row?.thumbnail ||
+      "",
+  ).trim() || "";
 }
 
 function initials(row) {

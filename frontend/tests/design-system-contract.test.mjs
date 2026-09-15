@@ -36,6 +36,10 @@ const accountingSource = fs.readFileSync(new URL('../src/pages/management/financ
 const inventorySource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryPage.vue', import.meta.url), 'utf8')
 const inventoryCountDetailSource = fs.readFileSync(new URL('../src/pages/management/inventory/ManagementInventoryCountDetailPage.vue', import.meta.url), 'utf8')
 const zarinpalSource = fs.readFileSync(new URL('../src/pages/management/settings/ManagementZarinpalSettingsPage.vue', import.meta.url), 'utf8')
+const productsSource = fs.readFileSync(new URL('../src/pages/management/catalog/ManagementProductsPage.vue', import.meta.url), 'utf8')
+const galleryViewSource = fs.readFileSync(new URL('../src/components/management/ManagementGalleryView.vue', import.meta.url), 'utf8')
+const kanbanViewSource = fs.readFileSync(new URL('../src/components/management/ManagementKanbanView.vue', import.meta.url), 'utf8')
+const restaurantApiSource = fs.readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
 
 test('design system tokens expose stable semantic layers for RTL restaurant UI', async () => {
   const { designTokens } = await import('../src/design-system/tokens.js')
@@ -100,6 +104,14 @@ test('design system route is registered in the management shell', () => {
   assert.match(menuDesignPySource, /build_context\(context, "management-menu-design"\)/)
   assert.match(variantBuilderHtmlSource, /window\._PAGE\s*=\s*'management-variant-builder'/)
   assert.match(variantBuilderPySource, /build_context\(context, "management-variant-builder"\)/)
+})
+
+test('product views keep shared controls left-aligned and resolve fallback media', () => {
+  assert.match(productsSource, /\.notion-view-tools\s*\{[\s\S]*?justify-content:\s*flex-end/)
+  assert.match(galleryViewSource, /row\?\.item_image/)
+  assert.match(kanbanViewSource, /row\?\.item_image/)
+  assert.match(restaurantApiSource, /_core_item_image_select_fields\(\)/)
+  assert.match(restaurantApiSource, /attached_to_doctype.*Item/)
 })
 
 test('management navbar keeps operational modules separated and directly routable', () => {

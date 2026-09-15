@@ -2855,10 +2855,21 @@ def _use_core_menu_data():
 
 
 def _core_item_image_field():
-	for fieldname in ("image", "item_image", "website_image"):
+	for fieldname in ("image", "item_image", "website_image", "restaurant_image"):
 		if _has_column("Item", fieldname):
 			return fieldname
 	return "image"
+
+
+def _core_item_image_select_fields():
+	"""Select the preferred Item image plus supported fallback image fields."""
+	primary = _core_item_image_field()
+	fields = [f"{primary} as image"]
+	for fieldname in ("image", "item_image", "website_image", "restaurant_image"):
+		if fieldname == primary or not _has_column("Item", fieldname):
+			continue
+		fields.append(f"{fieldname} as image_{fieldname}")
+	return fields
 
 
 def sync_item_image_from_attachment(doc, method=None):
@@ -3560,6 +3571,12 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		item_price if item_price is not None else (flt(row.restaurant_base_price) or flt(row.standard_rate))
 	)
 	nutrition = _nutrition_payload(row)
+	image = ""
+	for key in ("image", "image_image", "image_item_image", "image_website_image", "image_restaurant_image"):
+		value = row.get(key) if hasattr(row, "get") else getattr(row, key, "")
+		if value:
+			image = value
+			break
 
 	return {
 		"name": row.name,
@@ -3567,7 +3584,7 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"title": row.item_name,
 		"short_desc": row.restaurant_short_desc,
 		"base_price": base_price,
-		"image": row.image,
+		"image": image,
 		"category": row.restaurant_category,
 		"category_title": category_meta.get("title"),
 		"category_slug": category_meta.get("slug"),
@@ -8748,7 +8765,6 @@ def _template_display_variants(template_doc, branch=None):
 	if branch and _has_column("Item", "restaurant_branch"):
 		filters["restaurant_branch"] = ["in", [branch, ""]]
 
-	image_field = _core_item_image_field()
 	variants = frappe.get_all(
 		"Item",
 		filters=filters,
@@ -8765,7 +8781,7 @@ def _template_display_variants(template_doc, branch=None):
 			"restaurant_category",
 			"restaurant_subcategory",
 			"restaurant_sort_order",
-			f"{image_field} as image",
+			*_core_item_image_select_fields(),
 		],
 		ignore_permissions=True,
 		order_by="restaurant_sort_order asc, item_name asc",
@@ -19369,7 +19385,6 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 	offset = max(cint(limit_start), 0)
 	page_size = min(max(cint(limit_page_length) or 80, 1), 200)
 
-	image_field = _core_item_image_field()
 	category_meta_map = _get_core_category_meta_map()
 	subcategory_meta_map = _get_core_subcategory_meta_map()
 
@@ -19447,8 +19462,8 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 		"restaurant_sort_order",
 		"creation",
 		"modified",
-		f"{image_field} as image",
 	]
+	item_fields.extend(_core_item_image_select_fields())
 	if _has_column("Item", "custom_snapp_code"):
 		item_fields.append("custom_snapp_code")
 	if _has_column("Item", "restaurant_item_tags"):
@@ -19480,6 +19495,39 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 	)
 	has_more = len(template_rows) > page_size
 	template_rows = template_rows[:page_size]
+
+	# Older Items may keep their photo as a File attachment instead of an Item
+	# image field. Resolve that fallback once for the current page so every view
+	# receives the same media contract.
+	imageless_names = [
+		row.get("name")
+		for row in template_rows
+		if not any(
+			(row.get(key) or "").strip()
+			for key in ("image", "image_image", "image_item_image", "image_website_image", "image_restaurant_image")
+		)
+	]
+	if imageless_names and frappe.db.exists("DocType", "File"):
+		attachments = frappe.get_all(
+			"File",
+			fields=["attached_to_name", "file_url"],
+			filters={
+				"attached_to_doctype": "Item",
+				"attached_to_name": ["in", imageless_names],
+				"is_folder": 0,
+				"is_private": 0,
+			},
+			order_by="creation asc",
+			ignore_permissions=True,
+		)
+		attachment_map = {}
+		for attachment in attachments:
+			item_name = attachment.get("attached_to_name")
+			if item_name and item_name not in attachment_map:
+				attachment_map[item_name] = attachment.get("file_url") or ""
+		for row in template_rows:
+			if row.get("name") in attachment_map:
+				row["image"] = attachment_map[row.get("name")]
 
 	rows = []
 	for template_row in template_rows:

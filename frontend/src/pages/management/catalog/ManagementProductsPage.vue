@@ -1121,7 +1121,15 @@ function displayProductCode(row) {
 }
 
 function resolveImage(row) {
-  return String(row?.image || row?.website_image || '').trim()
+  return String(
+    row?.image ||
+      row?.website_image ||
+      row?.item_image ||
+      row?.restaurant_image ||
+      row?.image_url ||
+      row?.thumbnail ||
+      '',
+  ).trim()
 }
 
 function isActiveValue(value) {
@@ -1975,6 +1983,7 @@ loadProducts()
 .notion-view-tools {
   display: flex;
   align-items: flex-start;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.4rem;
 }
