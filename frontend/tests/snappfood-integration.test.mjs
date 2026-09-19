@@ -17,6 +17,15 @@ test('Food Partner settings blocks mapping and sync until the native schema is m
   assert.match(page, /syncing \|\| !status\.schema_ready/)
 })
 
+test('Food Partner route has a Frappe page wrapper for the SPA entry point', () => {
+  const html = read('../restaurant/www/management/snappfood.html')
+  const context = read('../restaurant/www/management/snappfood.py')
+
+  assert.match(html, /window\._PAGE = 'management-snappfood'/)
+  assert.match(html, /assets\/restaurant\/frontend\/assets\/index\.js/)
+  assert.match(context, /build_context\(context, "management-snappfood"\)/)
+})
+
 test('Food Partner settings keeps orders and invoices on the shared POS flow', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 
