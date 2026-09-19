@@ -15,7 +15,7 @@
 | `src/pages/management/purchasing` | درخواست مواد و خرید | `ManagementInventoryPurchasesPage.vue`، `ManagementMaterialRequestsPage.vue` |
 | `src/pages/management/operations` و `src/components/management/tables` | آشپزخانه، میز، پیک و شعب | `ManagementKitchenPage.vue`، `ManagementTablesPage.vue` |
 | `src/pages/management/finance` و `src/components/management/bi` | حسابداری، کنترل هزینه و گزارش‌ها | `ManagementAccountingPage.vue`، `ManagementReportPage.vue` |
-| `src/pages/management/settings` | تنظیمات، دسترسی، چاپ و درگاه | `ManagementSiteSettingsPage.vue`، `ManagementUsersPage.vue` |
+| `src/pages/management/settings` | تنظیمات، دسترسی، چاپ، درگاه و اتصال Food Partner | `ManagementSiteSettingsPage.vue`، `ManagementUsersPage.vue`، `ManagementSnappfoodPage.vue` |
 | `src/pages/management/builder` و `src/components/management/builder` | home builder و قالب‌های صفحه | `ManagementBuilderTemplatesPage.vue` |
 | `src/pages/management/design-system` و `src/components/management/design-system` | مرجع توکن و تنظیمات دیزاین‌سیستم | `ManagementDesignSystemPage.vue`، `ManagementThemeStudio.vue` |
 
@@ -72,6 +72,7 @@
 | جزئیات محصول مشتری | `/item` | API منوی رستوران | gallery، nutrition، customization و cart | مرجع تثبیت‌شده |
 | دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ با bundle فعال روی `veederakht` تأیید شد |
 | سفارش‌ها | `/management/orders` | ERPNext Sales Order/Invoice + فیلدهای Restaurant | `ManagementListView` → جزئیات انتخاب‌شده → پرداخت/تکمیل/پیک | تراز شده در این مرحله؛ تست source موفق |
+| اتصال Food Partner | `/management/snappfood` | Food Partner report/menu API + ERPNext Item/Customer/Sales Order/Sales Invoice | تنظیمات اتصال و نگاشت؛ سفارش‌ها در همان POS و لیست سفارش‌ها | اتصال، نگاشت کالا، همگام‌سازی امروز؛ بدون بخش فاکتور موازی | کد و قراردادها تراز شده؛ migrate/build و تست احراز‌شدهٔ API باقی است |
 | پیک‌ها | `/management/couriers` | Restaurant courier/vehicle | فهرست پیک → فرم جزئیات چسبان → fleet/rules | تراز شده در این مرحله؛ تست source موفق |
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |
 | کاربران و دسترسی | `/management/users` | ERPNext User/Role | native access surface با shell مشترک | مالکیت حفظ شده؛ بررسی دیداری بعدی |
@@ -94,6 +95,7 @@
 - منو و گروه‌های منو: `pages/management/catalog/ManagementMenuDesignerPage.vue`، `pages/management/catalog/ManagementMenuGroupsPage.vue`، `pages/management/catalog/ManagementMenuGroupDetailPage.vue`
 - modifierها: `pages/management/catalog/ManagementModifierGroupsPage.vue`
 - POS و پیش‌فرض‌های POS: `pages/management/sales/ManagementPosPage.vue`، `pages/management/sales/ManagementPosProfilePage.vue`، `pages/management/sales/ManagementPosDefaultsPage.vue`
+- اتصال Food Partner: `pages/management/settings/ManagementSnappfoodPage.vue`؛ فقط تنظیمات/نگاشت مستقل است و سفارش و فاکتور از مسیر native POS می‌گذرد.
 - ثبت سفارش/صندوق: `pages/management/sales/ManagementRegisterPage.vue`
 - شعبه‌ها، رزرو و مرکز تماس: `pages/management/operations/ManagementBranchesPage.vue`، `pages/management/customers/ManagementReservationsPage.vue`، `pages/management/customers/ManagementCallCenterPage.vue`
 
