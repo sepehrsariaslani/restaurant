@@ -22523,6 +22523,20 @@ def run_snapp_sync_now(from_datetime=None, to_datetime=None, only_new=1):
 
 
 @frappe.whitelist()
+def run_snapp_sync_today(only_new=1):
+	"""Import the current local business day, not only the scheduler lookback window."""
+	from restaurant.snapp_sync import sync_snapp_orders
+
+	day = today()
+	return sync_snapp_orders(
+		trigger="manual_today",
+		from_datetime=f"{day} 00:00:00",
+		to_datetime=f"{day} 23:59:59",
+		only_new=only_new,
+	)
+
+
+@frappe.whitelist()
 def get_snapp_sync_status():
 	from restaurant.snapp_sync import get_sync_status
 

@@ -621,6 +621,7 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
         "final_price": _scale_amount(
             raw_order.get("finalPrice") or raw_order.get("totalPrice") or raw_order.get("paidPrice"), amount_multiplier
         ),
+        "paid_price": _scale_amount(raw_order.get("paidPrice") or raw_order.get("paid_price"), amount_multiplier),
         "discount": _scale_amount(
             raw_order.get("discount") or raw_order.get("discountAmount") or raw_order.get("otherDiscounts"),
             amount_multiplier,
@@ -1050,15 +1051,7 @@ def _sync_existing_sales_order(sales_order_name, order_payload, reconcile_lines=
 
 
 def _create_sales_order(order_payload):
-    company = _default_company()
-    if not company:
-        raise frappe.ValidationError("Default company is not configured.")
-
-    currency = frappe.db.get_value("Company", company, "default_currency")
-    selling_price_list = _default_selling_price_list(currency)
-    if not selling_price_list:
-        raise frappe.ValidationError("Selling Price List is not configured.")
-
+    """Create an imported order through the same native POS order builder."""
     external_customer = _ensure_customer(
         customer_name=order_payload["customer_name"],
         mobile=order_payload["mobile"],
@@ -1067,70 +1060,129 @@ def _create_sales_order(order_payload):
     settings = _get_settings()
     customer = external_customer
     secondary_customer = ""
+    customer_mobile_for_pos = order_payload["mobile"]
     configured_customer = settings.get("default_customer") or ""
     if configured_customer and frappe.db.exists("Customer", configured_customer):
         customer = configured_customer
+        customer_mobile_for_pos = ""
         if external_customer != configured_customer:
             secondary_customer = frappe.db.get_value("Customer", external_customer, "customer_name") or external_customer
-    items = _build_sales_order_items(order_payload)
-    if not items:
+    source_items = order_payload.get("items") or []
+    if not source_items:
         raise frappe.ValidationError(f"Order {order_payload['order_id']} has no valid items.")
+    # POS resolves pricing, BOM/customization, service items, taxes and order
+    # context itself. Resolve each mapped Item to the slug/name accepted by it.
+    cart_items = []
+    resolved_lines = []
+    for line in source_items:
+        item_code = _resolve_item_code(line)
+        item_slug = (frappe.db.get_value("Item", item_code, "restaurant_slug") or item_code or "").strip()
+        if not item_slug:
+            raise frappe.ValidationError(f"کد Item برای ردیف سفارش {order_payload['order_id']} خالی است.")
+        cart_items.append(
+            {
+                "item_slug": item_slug,
+                "qty": max(flt(line.get("qty") or 1), 1),
+                "note": line.get("title") or "",
+            }
+        )
+        resolved_lines.append({**line, "item_code": item_code, "item_slug": item_slug})
 
-    created_date = get_datetime(order_payload.get("created_at")) if order_payload.get("created_at") else now_datetime()
-    order_code = _unique_restaurant_order_code(order_payload["bill_number"] or f"SNP-{order_payload['order_id'][:8]}")
-
-    doc_payload = {
-        "doctype": "Sales Order",
-        "customer": customer,
-        "company": company,
-        "transaction_date": str(created_date.date()) if created_date else today(),
-        "delivery_date": str(created_date.date()) if created_date else today(),
-        "currency": currency,
-        "selling_price_list": selling_price_list,
-        "ignore_pricing_rule": 1,
-        "items": items,
+    totals = {
+        "discountAmount": flt(order_payload.get("discount_amount") or order_payload.get("discount") or 0),
+        "taxAmount": flt(order_payload.get("tax") or 0),
+        "serviceAmount": flt(order_payload.get("service_cost") or order_payload.get("service_fee") or 0),
+        "packagingAmount": flt(order_payload.get("packaging_cost") or 0),
+        "tipAmount": flt(order_payload.get("tip") or 0),
     }
-    if _has_column("Sales Order", "restaurant_order_code"):
-        doc_payload["restaurant_order_code"] = order_code
+    order_context = {
+        "source": SNAPP_SOURCE,
+        "external_order_id": order_payload["order_id"],
+        "order_type": order_payload["order_type"],
+    }
+    # Import lazily to avoid loading the API module while Frappe imports this module.
+    from restaurant.api import place_order
+
+    result = place_order(
+        customer_info={
+            "name": frappe.db.get_value("Customer", customer, "customer_name") or customer,
+            "mobile": customer_mobile_for_pos,
+        },
+        order_type=order_payload["order_type"],
+        items=cart_items,
+        address=order_payload["address"],
+        note=order_payload["note"],
+        include_service_items=1,
+        order_context=order_context,
+        totals=totals,
+        commit=False,
+        secondary_customer=secondary_customer,
+    )
+    so_name = result.get("order_id") or result.get("name") or ""
+    if not so_name:
+        raise frappe.ValidationError(f"سفارش Food Partner {order_payload['order_id']} ساخته نشد.")
+
+    updates = {}
+    _apply_sales_order_external_fields(updates, order_payload)
     if _has_column("Sales Order", "restaurant_customer_mobile"):
-        doc_payload["restaurant_customer_mobile"] = order_payload["mobile"]
+        updates["restaurant_customer_mobile"] = order_payload["mobile"]
     if _has_column("Sales Order", "restaurant_order_type"):
-        doc_payload["restaurant_order_type"] = order_payload["order_type"]
+        updates["restaurant_order_type"] = order_payload["order_type"]
     if _has_column("Sales Order", "restaurant_delivery_address"):
-        doc_payload["restaurant_delivery_address"] = order_payload["address"]
+        updates["restaurant_delivery_address"] = order_payload["address"]
     if _has_column("Sales Order", "restaurant_note"):
-        doc_payload["restaurant_note"] = order_payload["note"]
-    if secondary_customer and _has_column("Sales Order", "restaurant_secondary_customer"):
-        doc_payload["restaurant_secondary_customer"] = secondary_customer
+        updates["restaurant_note"] = order_payload["note"]
     if _has_column("Sales Order", "restaurant_status"):
-        doc_payload["restaurant_status"] = order_payload["status"]
-    _apply_sales_order_external_fields(doc_payload, order_payload)
+        updates["restaurant_status"] = order_payload["status"]
+    if secondary_customer and _has_column("Sales Order", "restaurant_secondary_customer"):
+        updates["restaurant_secondary_customer"] = secondary_customer
+    for fieldname, value in updates.items():
+        frappe.db.set_value("Sales Order", so_name, fieldname, value, update_modified=False)
 
-    so_doc = frappe.get_doc(doc_payload)
-    subtotal = sum(flt(row.get("amount") or 0) for row in items)
+    # POS added service rows as well; only annotate the imported product lines.
+    so_rows = frappe.get_all(
+        "Sales Order Item",
+        filters={"parent": so_name},
+        fields=["name", "item_code", "idx"],
+        order_by="idx asc",
+        limit_page_length=500,
+        ignore_permissions=True,
+    )
+    used_rows = set()
+    for line in resolved_lines:
+        target = next(
+            (
+                row
+                for row in so_rows
+                if row.name not in used_rows and row.item_code == line["item_code"]
+            ),
+            None,
+        )
+        if not target:
+            continue
+        used_rows.add(target.name)
+        line_updates = {}
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_line_id", line.get("line_id") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_menu_item_id", line.get("menu_item_id") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_item_title", line.get("title") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_product_id", line.get("product_id") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_variation_id", line.get("variation_id") or "")
+        if line_updates:
+            frappe.db.set_value("Sales Order Item", target.name, line_updates, update_modified=False)
 
-    # Some ERPNext forks include custom commission hooks that expect these attributes.
-    if not getattr(so_doc, "total_structure", None):
-        setattr(so_doc, "total_structure", subtotal)
-    if getattr(so_doc, "amount_eligible_for_commission", None) is None:
-        setattr(so_doc, "amount_eligible_for_commission", subtotal or flt(order_payload.get("final_amount") or 0))
-    if getattr(so_doc, "commission_rate", None) is None:
-        setattr(so_doc, "commission_rate", 0)
-    if getattr(so_doc, "total_commission", None) is None:
-        setattr(so_doc, "total_commission", 0)
-
-    so_doc.insert(ignore_permissions=True)
-    so_doc.submit()
-
-    if order_payload["status"] == "cancelled" and so_doc.docstatus == 1:
-        so_doc.flags.ignore_permissions = True
-        so_doc.cancel()
-        return so_doc.name, "cancelled"
-    return so_doc.name, "created"
+    _append_sales_order_note(so_name, f"[FOOD_PARTNER] Imported order {order_payload['order_id']} through POS flow.")
+    _set_restaurant_order_status(so_name, order_payload["status"], force=True)
+    if order_payload["status"] == "cancelled":
+        so_doc = frappe.get_doc("Sales Order", so_name)
+        if so_doc.docstatus == 1:
+            so_doc.flags.ignore_permissions = True
+            so_doc.cancel()
+        return so_name, "cancelled"
+    return so_name, "created"
 
 
 def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
-    """Create the native Sales Invoice for an imported order, idempotently."""
+    """Create the native Sales Invoice through the existing POS settlement path."""
     if not _has_column("Sales Invoice", "restaurant_external_order_id"):
         return {"status": "skipped", "reason": "Sales Invoice integration fields are not migrated."}
 
@@ -1142,39 +1194,109 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     if existing_invoice:
         return {"status": "exists", "sales_invoice": existing_invoice}
 
-    make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
-    si_doc = make_si(sales_order_name)
-    if isinstance(si_doc, dict):
-        si_doc = frappe.get_doc(si_doc)
-    si_doc.flags.ignore_permissions = True
-    if _has_column("Sales Invoice", "is_pos"):
-        si_doc.is_pos = 0
-    if _has_column("Sales Invoice", "update_stock"):
-        si_doc.update_stock = 0
-    if _has_column("Sales Invoice", "restaurant_secondary_customer") and _has_column("Sales Order", "restaurant_secondary_customer"):
-        si_doc.restaurant_secondary_customer = frappe.db.get_value(
-            "Sales Order", sales_order_name, "restaurant_secondary_customer"
-        ) or ""
-    for fieldname, value in (
-        ("restaurant_external_source", SNAPP_SOURCE),
-        ("restaurant_external_order_id", order_payload.get("order_id")),
-        ("restaurant_external_bill_number", order_payload.get("bill_number")),
-        ("restaurant_external_state", order_payload.get("external_state")),
-        ("restaurant_external_payment_method", order_payload.get("payment_method")),
-        ("restaurant_external_payload_json", json.dumps(order_payload.get("raw") or {}, ensure_ascii=False)),
-    ):
-        _set_if_column(si_doc, "Sales Invoice", fieldname, value)
-    for index, row in enumerate(si_doc.get("items") or []):
-        source_line = (order_payload.get("items") or [])[index] if index < len(order_payload.get("items") or []) else {}
-        for fieldname, value in (
-            ("restaurant_external_line_id", source_line.get("line_id")),
-            ("restaurant_external_menu_item_id", source_line.get("menu_item_id")),
-            ("restaurant_external_item_title", source_line.get("title")),
+    payment_text = str(order_payload.get("payment_method") or "").strip().lower()
+    if any(token in payment_text for token in ("cash", "نقد")):
+        payment_method = "cash"
+    elif any(token in payment_text for token in ("credit", "اعتبار")):
+        payment_method = "credit"
+    elif any(token in payment_text for token in ("card", "online", "bank", "درگاه", "کارت")):
+        payment_method = "card"
+    elif flt(order_payload.get("paid_price") or order_payload.get("final_amount") or 0) > 0:
+        payment_method = "card"
+    else:
+        payment_method = "credit"
+
+    # This is the same settlement function used by Management POS. It creates
+    # the SI, payments, payment method, status and audit note consistently.
+    from restaurant.api import settle_pos_order
+
+    settlement = settle_pos_order(
+        order_name=sales_order_name,
+        payment={
+            "method": payment_method,
+            "reference_no": order_payload.get("bill_number") or order_payload.get("order_id") or "",
+        },
+        commit=False,
+    )
+    invoice_name = settlement.get("sales_invoice") if isinstance(settlement, dict) else ""
+    if not invoice_name:
+        raise frappe.ValidationError(f"فاکتور سفارش Food Partner {order_payload['order_id']} ساخته نشد.")
+
+    invoice_updates = {
+        "restaurant_external_source": SNAPP_SOURCE,
+        "restaurant_external_order_id": order_payload.get("order_id"),
+        "restaurant_external_bill_number": order_payload.get("bill_number"),
+        "restaurant_external_state": order_payload.get("external_state"),
+        "restaurant_external_payment_method": order_payload.get("payment_method"),
+        "restaurant_external_payload_json": json.dumps(order_payload.get("raw") or {}, ensure_ascii=False),
+    }
+    for fieldname in list(invoice_updates):
+        if not _has_column("Sales Invoice", fieldname):
+            invoice_updates.pop(fieldname, None)
+    if invoice_updates:
+        frappe.db.set_value("Sales Invoice", invoice_name, invoice_updates, update_modified=False)
+
+    so_rows = frappe.get_all(
+        "Sales Order Item",
+        filters={"parent": sales_order_name},
+        fields=["name", "item_code", "restaurant_external_line_id", "restaurant_external_menu_item_id"],
+        order_by="idx asc",
+        limit_page_length=500,
+        ignore_permissions=True,
+    )
+    invoice_rows = frappe.get_all(
+        "Sales Invoice Item",
+        filters={"parent": invoice_name},
+        fields=["name", "sales_order", "so_detail", "item_code", "idx"],
+        order_by="idx asc",
+        limit_page_length=500,
+        ignore_permissions=True,
+    )
+    for invoice_row in invoice_rows:
+        source_row = next(
+            (
+                row
+                for row in so_rows
+                if row.item_code == invoice_row.item_code
+                and (
+                    not invoice_row.so_detail
+                    or row.name == invoice_row.so_detail
+                )
+            ),
+            None,
+        )
+        if not source_row:
+            continue
+        source_values = frappe.db.get_value(
+            "Sales Order Item",
+            source_row.name,
+            [
+                field
+                for field in (
+                    "restaurant_external_line_id",
+                    "restaurant_external_menu_item_id",
+                    "restaurant_external_item_title",
+                    "restaurant_external_product_id",
+                    "restaurant_external_variation_id",
+                )
+                if _has_column("Sales Order Item", field)
+            ],
+            as_dict=True,
+        ) or {}
+        invoice_values = {}
+        for fieldname in (
+            "restaurant_external_line_id",
+            "restaurant_external_menu_item_id",
+            "restaurant_external_item_title",
+            "restaurant_external_product_id",
+            "restaurant_external_variation_id",
         ):
-            _set_if_column(row, "Sales Invoice Item", fieldname, value or "")
-    si_doc.insert(ignore_permissions=True)
-    si_doc.submit()
-    return {"status": "created", "sales_invoice": si_doc.name}
+            if _has_column("Sales Invoice Item", fieldname) and fieldname in source_values:
+                invoice_values[fieldname] = source_values.get(fieldname) or ""
+        if invoice_values:
+            frappe.db.set_value("Sales Invoice Item", invoice_row.name, invoice_values, update_modified=False)
+
+    return {"status": "created", "sales_invoice": invoice_name, "payment_method": payment_method}
 
 
 def _notify_new_order(sales_order_name, order_payload):

@@ -1416,7 +1416,7 @@ export function saveSnappfoodItemMapping(payload = {}) {
 }
 
 export function runSnappfoodSyncToday() {
-	return callRestaurantAPI("run_snapp_sync_now", { only_new: 1 });
+	return callRestaurantAPI("run_snapp_sync_today", { only_new: 1 });
 }
 
 export function setManagementPOSConfig(payload = {}) {
