@@ -63,6 +63,19 @@ test('Food Partner token helper supports explicit clipboard paste without readin
   assert.doesNotMatch(page, /partner\.snappfood\.ir[^\n]+(?:localStorage|document\.cookie)/i)
 })
 
+test('Food Partner settings lets the server infer vendor ID from a saved token and surfaces menu API errors', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const backend = read('../restaurant/api.py')
+  const sync = read('../restaurant/snapp_sync.py')
+
+  assert.match(page, /توکن خودکار تشخیص داده می‌شود/)
+  assert.match(page, /data\?\.status === 'error'/)
+  assert.match(backend, /_extract_vendor_id_from_token/)
+  assert.match(backend, /"status": "error"/)
+  assert.match(sync, /_normalize_bearer_token/)
+  assert.match(sync, /401, 403/)
+})
+
 test('Food Partner settings makes disabled automatic invoicing explicit', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 

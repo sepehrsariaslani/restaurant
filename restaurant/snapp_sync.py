@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 import json
 import re
@@ -175,6 +177,82 @@ def _extract_orders(payload):
     return []
 
 
+def _normalize_bearer_token(value):
+    """Accept either the raw token or the full ``Bearer <token>`` header value."""
+    token = str(value or "").strip()
+    if token.lower().startswith("bearer "):
+        return token[7:].strip()
+    return token
+
+
+def _extract_vendor_id_from_token(value):
+    """Read a vendor identifier claim from a JWT without logging or returning the token."""
+    token = _normalize_bearer_token(value)
+    parts = token.split(".")
+    if len(parts) != 3 or not parts[1]:
+        return ""
+    try:
+        encoded = parts[1] + ("=" * (-len(parts[1]) % 4))
+        payload = json.loads(base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8"))
+    except (binascii.Error, ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+
+    id_keys = {
+        "vendorid",
+        "vendorids",
+        "vendor_id",
+        "vendor_ids",
+        "restaurantid",
+        "restaurantids",
+        "restaurant_id",
+        "restaurant_ids",
+        "merchantid",
+        "merchantids",
+        "merchant_id",
+        "merchant_ids",
+    }
+    container_keys = {"vendor", "restaurant", "merchant"}
+
+    def candidate(raw):
+        if isinstance(raw, (list, tuple)):
+            for value in raw:
+                found = candidate(value)
+                if found:
+                    return found
+            return ""
+        if isinstance(raw, bool) or raw is None:
+            return ""
+        text = str(raw).strip()
+        if not text or len(text) > 80 or not re.fullmatch(r"[A-Za-z0-9_-]+", text):
+            return ""
+        return text
+
+    def visit(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                normalized = re.sub(r"[^a-z0-9_]", "", str(key or "").lower())
+                if normalized in id_keys:
+                    found = candidate(value)
+                    if found:
+                        return found
+                if normalized in container_keys and isinstance(value, dict):
+                    found = visit(value)
+                    if found:
+                        return found
+                if isinstance(value, (dict, list)):
+                    found = visit(value)
+                    if found:
+                        return found
+        elif isinstance(node, list):
+            for value in node:
+                found = visit(value)
+                if found:
+                    return found
+        return ""
+
+    return visit(payload)
+
+
 def _extract_total_pages(payload):
     if not isinstance(payload, dict):
         return None
@@ -206,7 +284,9 @@ def _get_settings():
         settings_doc = frappe.get_doc("Restaurant Web Settings")
     token = ""
     if _has_field("Restaurant Web Settings", "snapp_bearer_token"):
-        token = (settings_doc.get_password("snapp_bearer_token", raise_exception=False) or "").strip()
+        token = _normalize_bearer_token(
+            settings_doc.get_password("snapp_bearer_token", raise_exception=False) or ""
+        )
 
     enabled = cint(settings_doc.get("snapp_sync_enabled")) if _has_field("Restaurant Web Settings", "snapp_sync_enabled") else 0
     return {
@@ -412,13 +492,29 @@ def fetch_snapp_menu(settings=None):
     if cfg.get("origin_url"):
         headers["origin"] = cfg["origin_url"]
         headers["referer"] = f"{cfg['origin_url'].rstrip('/')}/"
-    response = requests.get(
-        f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendor/{cfg['vendor_id']}/menu",
-        headers=headers,
-        timeout=30,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    try:
+        response = requests.get(
+            f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendor/{cfg['vendor_id']}/menu",
+            headers=headers,
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.HTTPError as exc:
+        status_code = getattr(exc.response, "status_code", None)
+        if status_code in (401, 403):
+            raise frappe.ValidationError(
+                "توکن Food Partner معتبر نیست یا دسترسی منوی فروشنده رد شد. توکن خام یا مقدار Bearer را دوباره ذخیره کنید."
+            ) from exc
+        raise frappe.ValidationError(
+            f"دریافت منوی Food Partner با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+        ) from exc
+    except requests.RequestException as exc:
+        raise frappe.ValidationError(
+            "ارتباط با API منوی Food Partner برقرار نشد؛ آدرس API و اتصال شبکه را بررسی کنید."
+        ) from exc
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("پاسخ API منوی Food Partner قابل خواندن نیست.") from exc
     rows = []
     for entry in _extract_menu_entries(payload):
         rows.append(

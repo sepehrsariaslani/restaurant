@@ -22622,7 +22622,14 @@ def save_snappfood_integration_config(payload=None):
 	for fieldname in allowed:
 		if fieldname in payload and _has_doctype_field("Restaurant Web Settings", fieldname):
 			frappe.db.set_single_value("Restaurant Web Settings", fieldname, payload.get(fieldname))
-	token = str(payload.get("snapp_bearer_token") or "").strip()
+	from restaurant.snapp_sync import _extract_vendor_id_from_token, _normalize_bearer_token
+
+	token = _normalize_bearer_token(payload.get("snapp_bearer_token") or "")
+	vendor_id = str(payload.get("snapp_vendor_id") or "").strip()
+	if not vendor_id and token:
+		vendor_id = _extract_vendor_id_from_token(token)
+	if vendor_id and _has_doctype_field("Restaurant Web Settings", "snapp_vendor_id"):
+		frappe.db.set_single_value("Restaurant Web Settings", "snapp_vendor_id", vendor_id)
 	if token and _has_doctype_field("Restaurant Web Settings", "snapp_bearer_token"):
 		set_encrypted_password(
 			"Restaurant Web Settings",
@@ -22641,7 +22648,20 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
 	_ensure_management_access()
 	from restaurant.snapp_sync import get_snappfood_mapping_rows as _get_rows
 
-	return _get_rows(search=search, refresh_menu=cint(refresh_menu))
+	try:
+		return _get_rows(search=search, refresh_menu=cint(refresh_menu))
+	except frappe.ValidationError as exc:
+		# A rejected Food Partner token or unavailable menu API should be shown in
+		# the mapping panel, not converted into an opaque HTTP 500 response.
+		from restaurant.snapp_sync import get_sync_status
+
+		return {
+			"status": "error",
+			"error": str(exc),
+			"settings": get_sync_status(),
+			"menu": [],
+			"items": [],
+		}
 
 
 @frappe.whitelist()

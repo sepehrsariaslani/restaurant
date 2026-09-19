@@ -42,7 +42,7 @@
     <template v-if="activeTab === 'connection'">
       <ManagementSurfaceCard title="تنظیمات اتصال" subtitle="این مقادیر از capture جدید Food Partner آمده‌اند؛ مسیر قدیمی سفارش در این اتصال استفاده نمی‌شود.">
         <div class="form-grid">
-          <label>شناسه فروشنده<input v-model.trim="form.snapp_vendor_id" class="input" placeholder="مثلاً 466275" /></label>
+          <label>شناسه فروشنده<input v-model.trim="form.snapp_vendor_id" class="input" placeholder="اختیاری؛ بعد از ذخیرهٔ توکن خودکار تشخیص داده می‌شود" /></label>
           <div class="token-field">
             <label>Bearer token<input v-model="form.snapp_bearer_token" class="input" :type="tokenVisible ? 'text' : 'password'" autocomplete="new-password" placeholder="فقط در سمت سرور ذخیره می‌شود" /></label>
             <div class="token-actions">
@@ -185,7 +185,15 @@ async function pasteToken() {
 async function saveConfig() {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
   saving.value = true; error.value = ''; successMessage.value = ''
-  try { applyStatus(await saveSnappfoodIntegrationConfig({ ...form })); form.snapp_bearer_token = ''; successMessage.value = 'تنظیمات اتصال ذخیره شد.' } catch (err) { error.value = err?.message || 'ذخیره تنظیمات ناموفق بود.' } finally { saving.value = false }
+  try {
+    const hadVendorId = Boolean(form.snapp_vendor_id)
+    const result = await saveSnappfoodIntegrationConfig({ ...form })
+    applyStatus(result)
+    form.snapp_bearer_token = ''
+    successMessage.value = !hadVendorId && result?.vendor_id
+      ? `تنظیمات ذخیره شد؛ شناسه فروشنده ${result.vendor_id} از توکن تشخیص داده شد.`
+      : 'تنظیمات اتصال ذخیره شد.'
+  } catch (err) { error.value = err?.message || 'ذخیره تنظیمات ناموفق بود.' } finally { saving.value = false }
 }
 async function loadMappings(refreshMenu = false) {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
@@ -193,6 +201,10 @@ async function loadMappings(refreshMenu = false) {
   try {
     const data = await getSnappfoodMappingRows({ search: mappingSearch.value, refresh_menu: refreshMenu ? 1 : 0 })
     mappingRows.menu = data?.menu || []; mappingRows.items = data?.items || []
+    if (data?.status === 'error' || data?.error) {
+      error.value = data.error || 'منوی Food Partner خوانده نشد.'
+      return
+    }
     mappingRows.menu.forEach((row) => { mappingDrafts[row.external_id] = row.suggested_item?.name || '' })
   } catch (err) { error.value = err?.message || 'منوی Food Partner خوانده نشد.' } finally { mappingLoading.value = false }
 }

@@ -1,8 +1,13 @@
+import base64
+import json
 import sys
 import types
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import requests
+
+import frappe
 from frappe.tests.utils import FrappeTestCase
 import restaurant.snapp_sync as snapp_sync
 
@@ -14,6 +19,9 @@ from restaurant.snapp_sync import (
     _create_sales_order,
     _ensure_sales_invoice_for_order,
     _get_schema_status,
+    _extract_vendor_id_from_token,
+    fetch_snapp_menu,
+    _normalize_bearer_token,
     fetch_snapp_orders,
     _map_order_type,
     _map_status,
@@ -22,6 +30,36 @@ from restaurant.snapp_sync import (
 
 
 class TestSnappSync(FrappeTestCase):
+    def test_normalize_bearer_header_value_before_request(self):
+        self.assertEqual(_normalize_bearer_token(" Bearer abc123 "), "abc123")
+
+    def test_extract_vendor_id_from_jwt_claim(self):
+        payload = base64.urlsafe_b64encode(
+            json.dumps({"vendorId": 466275}).encode("utf-8")
+        ).decode("ascii").rstrip("=")
+
+        self.assertEqual(
+            _extract_vendor_id_from_token(f"header.{payload}.signature"),
+            "466275",
+        )
+
+    def test_menu_auth_failure_becomes_user_facing_validation_error(self):
+        response = Mock(status_code=401, reason="Unauthorized")
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "401 Client Error", response=response
+        )
+        with patch("restaurant.snapp_sync.requests.get", return_value=response):
+            with self.assertRaises(frappe.ValidationError) as context:
+                fetch_snapp_menu(
+                    {
+                        "token": "secret",
+                        "vendor_id": "466275",
+                        "menu_api_base_url": "https://apigw.snappfood.ir",
+                    }
+                )
+
+        self.assertIn("توکن Food Partner", str(context.exception))
+
     def test_extract_orders_from_nested_payload(self):
         payload = {"data": {"items": [{"id": "ord-1"}, {"id": "ord-2"}], "totalPages": 4}}
         orders = _extract_orders(payload)
