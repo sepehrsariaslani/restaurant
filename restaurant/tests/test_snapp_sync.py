@@ -195,7 +195,7 @@ class TestSnappSync(FrappeTestCase):
             "items": [{"title": "شیر خرما", "qty": 1, "unit_price": 185000}],
         }
         fake_api = types.ModuleType("restaurant.api")
-        fake_api.place_order = Mock(return_value={"order_id": "SO-1"})
+        fake_api._create_pos_order_payload = Mock(return_value={"order_id": "SO-1"})
         fake_api._set_restaurant_order_status = Mock()
         fake_api._append_sales_order_note = Mock()
         fake_db = SimpleNamespace(
@@ -213,10 +213,58 @@ class TestSnappSync(FrappeTestCase):
             result = _create_sales_order(order_payload)
 
         self.assertEqual(result, ("SO-1", "created"))
-        fake_api.place_order.assert_called_once()
-        self.assertEqual(fake_api.place_order.call_args.kwargs["commit"], False)
-        self.assertEqual(fake_api.place_order.call_args.kwargs["order_type"], "delivery")
-        self.assertEqual(fake_api.place_order.call_args.kwargs["items"][0]["item_slug"], "item-1")
+        fake_api._create_pos_order_payload.assert_called_once()
+        payload = fake_api._create_pos_order_payload.call_args.args[0]
+        self.assertEqual(fake_api._create_pos_order_payload.call_args.kwargs["commit"], False)
+        self.assertEqual(payload["order_type"], "delivery")
+        self.assertEqual(payload["items"][0]["item_slug"], "item-1")
+
+    def test_imported_order_uses_the_same_management_pos_payload_builder(self):
+        order_payload = {
+            "order_id": "884984813",
+            "customer_name": "مشتری تست",
+            "mobile": "09120000000",
+            "external_customer_id": "customer-8",
+            "order_type": "takeaway",
+            "address": "",
+            "note": "یادداشت تست",
+            "status": "confirmed",
+            "discount_amount": 120,
+            "tax": 0,
+            "service_cost": 0,
+            "service_fee": 0,
+            "packaging_cost": 0,
+            "tip": 0,
+            "items": [{"title": "شیر خرما", "qty": 2, "unit_price": 185000}],
+        }
+        fake_api = types.ModuleType("restaurant.api")
+        fake_api._create_pos_order_payload = Mock(return_value={"order_id": "SO-2"})
+        fake_api._set_restaurant_order_status = Mock()
+        fake_api._append_sales_order_note = Mock()
+        fake_db = SimpleNamespace(
+            get_value=lambda doctype, *args, **kwargs: "item-2" if doctype == "Item" else "مشتری تست"
+        )
+        with patch("restaurant.snapp_sync._ensure_customer", return_value="CUST-8"), patch(
+            "restaurant.snapp_sync._get_settings", return_value={"default_customer": ""}
+        ), patch("restaurant.snapp_sync._resolve_item_code", return_value="ITEM-2"), patch(
+            "restaurant.snapp_sync._apply_sales_order_external_fields"
+        ), patch("restaurant.snapp_sync._has_column", return_value=False), patch.object(
+            snapp_sync.frappe, "db", fake_db
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
+            sys.modules, {"restaurant.api": fake_api}
+        ):
+            result = _create_sales_order(order_payload)
+
+        self.assertEqual(result, ("SO-2", "created"))
+        fake_api._create_pos_order_payload.assert_called_once()
+        payload = fake_api._create_pos_order_payload.call_args.args[0]
+        self.assertEqual(payload["customer_name"], "مشتری تست")
+        self.assertEqual(payload["mobile"], "09120000000")
+        self.assertEqual(payload["order_type"], "takeaway")
+        self.assertEqual(payload["secondary_customer"], "")
+        self.assertEqual(payload["items"][0]["item_slug"], "item-2")
+        self.assertEqual(payload["totals"]["discountAmount"], 120)
+        self.assertFalse(fake_api._create_pos_order_payload.call_args.kwargs["commit"])
 
     def test_item_mapping_can_resolve_variation_hash_id(self):
         lookup = Mock(side_effect=lambda doctype, filters, *args, **kwargs: (

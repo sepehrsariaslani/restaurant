@@ -1243,22 +1243,22 @@ def _create_sales_order(order_payload):
         "order_type": order_payload["order_type"],
     }
     # Import lazily to avoid loading the API module while Frappe imports this module.
-    from restaurant.api import _append_sales_order_note, _set_restaurant_order_status, place_order
+    from restaurant.api import _append_sales_order_note, _create_pos_order_payload, _set_restaurant_order_status
 
-    result = place_order(
-        customer_info={
-            "name": frappe.db.get_value("Customer", customer, "customer_name") or customer,
+    result = _create_pos_order_payload(
+        {
+            "customer_name": frappe.db.get_value("Customer", customer, "customer_name") or customer,
             "mobile": customer_mobile_for_pos,
+            "order_type": order_payload["order_type"],
+            "items": cart_items,
+            "address": order_payload["address"],
+            "note": order_payload["note"],
+            "include_service_items": 1,
+            "order_context": order_context,
+            "totals": totals,
+            "secondary_customer": secondary_customer,
         },
-        order_type=order_payload["order_type"],
-        items=cart_items,
-        address=order_payload["address"],
-        note=order_payload["note"],
-        include_service_items=1,
-        order_context=order_context,
-        totals=totals,
         commit=False,
-        secondary_customer=secondary_customer,
     )
     so_name = result.get("order_id") or result.get("name") or ""
     if not so_name:
