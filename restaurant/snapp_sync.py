@@ -1450,6 +1450,14 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
         return {"status": "skipped", "reason": settings["reason"]}
     if not settings["enabled"]:
         return {"status": "skipped", "reason": "Snapp sync is disabled in Restaurant Web Settings."}
+    schema_status = _get_schema_status()
+    if not schema_status["ready"]:
+        return {
+            "status": "skipped",
+            "reason": "Food Partner integration fields are not migrated.",
+            "schema_ready": False,
+            "schema_missing": schema_status["missing"],
+        }
     if not settings["token"]:
         return {"status": "error", "reason": "Snapp bearer token is missing."}
     if not settings.get("vendor_id"):

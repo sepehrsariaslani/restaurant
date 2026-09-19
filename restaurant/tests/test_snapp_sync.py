@@ -236,3 +236,18 @@ class TestSnappSync(FrappeTestCase):
         self.assertFalse(status["ready"])
         self.assertIn("Sales Invoice.restaurant_external_order_id", status["missing"])
         self.assertIn("Item.restaurant_external_product_id", status["missing"])
+
+    def test_sync_skips_before_request_when_native_schema_is_not_migrated(self):
+        with patch(
+            "restaurant.snapp_sync._get_settings",
+            return_value={"enabled": True, "token": "secret", "vendor_id": "466275"},
+        ), patch(
+            "restaurant.snapp_sync._get_schema_status",
+            return_value={"ready": False, "missing": ["Sales Invoice.restaurant_external_order_id"]},
+        ), patch("restaurant.snapp_sync.fetch_snapp_orders") as fetch_orders:
+            result = snapp_sync.sync_snapp_orders(trigger="test")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertFalse(result["schema_ready"])
+        self.assertIn("Sales Invoice.restaurant_external_order_id", result["schema_missing"])
+        fetch_orders.assert_not_called()
