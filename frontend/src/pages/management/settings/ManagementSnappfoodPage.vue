@@ -43,7 +43,13 @@
       <ManagementSurfaceCard title="تنظیمات اتصال" subtitle="این مقادیر از capture جدید Food Partner آمده‌اند؛ مسیر قدیمی سفارش در این اتصال استفاده نمی‌شود.">
         <div class="form-grid">
           <label>شناسه فروشنده<input v-model.trim="form.snapp_vendor_id" class="input" placeholder="مثلاً 466275" /></label>
-          <label>Bearer token<input v-model="form.snapp_bearer_token" class="input" type="password" autocomplete="new-password" placeholder="فقط در سمت سرور ذخیره می‌شود" /></label>
+          <div class="token-field">
+            <label>Bearer token<input v-model="form.snapp_bearer_token" class="input" :type="tokenVisible ? 'text' : 'password'" autocomplete="new-password" placeholder="فقط در سمت سرور ذخیره می‌شود" /></label>
+            <div class="token-actions">
+              <button class="secondary-btn" type="button" @click="pasteToken">چسباندن از کلیپ‌بورد</button>
+              <button class="secondary-btn" type="button" @click="tokenVisible = !tokenVisible">{{ tokenVisible ? 'مخفی‌کردن توکن' : 'نمایش توکن' }}</button>
+            </div>
+          </div>
           <label>گزارش سفارش<input v-model.trim="form.snapp_report_url" class="input" /></label>
           <label>پایه API منو<input v-model.trim="form.snapp_menu_api_base_url" class="input" /></label>
           <label>Origin (اختیاری)<input v-model.trim="form.snapp_origin_url" class="input" placeholder="https://dakhl-ordering.snappfood.ir" /></label>
@@ -122,6 +128,7 @@ const mappingSearch = ref('')
 const syncResult = ref(null)
 const mappingRows = reactive({ menu: [], items: [] })
 const mappingDrafts = reactive({})
+const tokenVisible = ref(false)
 const status = reactive({ has_token: false, vendor_id: '', enabled: false, require_item_mapping: true, auto_sync_invoices: true, schema_ready: false, schema_missing: [] })
 const form = reactive({ snapp_vendor_id: '', snapp_bearer_token: '', snapp_report_url: 'https://snappfood.ir/vms/v3/restaurant/report', snapp_menu_api_base_url: 'https://apigw.snappfood.ir', snapp_origin_url: '', snapp_hostdomain: '', snapp_page_size: 50, snapp_amount_multiplier: 10, snapp_default_customer: '', snapp_sync_enabled: false, snapp_auto_sync_invoices: true, snapp_require_item_mapping: true })
 
@@ -157,6 +164,24 @@ async function testConnection() {
     successMessage.value = `اتصال موفق بود؛ ${result?.orders_count || 0} سفارش در صفحهٔ آزمایشی خوانده شد.`
   } catch (err) { error.value = err?.message || 'تست اتصال ناموفق بود.' } finally { testingConnection.value = false }
 }
+async function pasteToken() {
+  error.value = ''; successMessage.value = ''
+  if (!navigator.clipboard?.readText) {
+    error.value = 'مرورگر اجازهٔ خواندن کلیپ‌بورد را نمی‌دهد؛ توکن را دستی در همین فیلد Paste کنید.'
+    return
+  }
+  try {
+    const value = (await navigator.clipboard.readText()).trim()
+    if (!value) {
+      error.value = 'کلیپ‌بورد خالی است.'
+      return
+    }
+    form.snapp_bearer_token = value
+    successMessage.value = 'توکن در فیلد قرار گرفت و هنوز به سرور ارسال نشده است.'
+  } catch {
+    error.value = 'دسترسی کلیپ‌بورد رد شد؛ توکن را دستی در همین فیلد Paste کنید.'
+  }
+}
 async function saveConfig() {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
   saving.value = true; error.value = ''; successMessage.value = ''
@@ -187,5 +212,5 @@ onMounted(loadConfig)
 </script>
 
 <style scoped>
-.status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card{display:flex;gap:10px;align-items:center;margin-top:20px}.mapping-search{max-width:300px}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
+.status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card,.token-actions{display:flex;gap:10px;align-items:center;margin-top:20px}.token-field{min-width:0}.token-actions{margin-top:8px}.mapping-search{max-width:300px}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
 </style>

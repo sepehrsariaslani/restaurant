@@ -54,6 +54,15 @@ test('Food Partner connection opens the official Partner panel without harvestin
   assert.doesNotMatch(page, /document\.cookie|localStorage\.getItem\(['"](?:token|authorization|cookie)/i)
 })
 
+test('Food Partner token helper supports explicit clipboard paste without reading Partner storage', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+
+  assert.match(page, /چسباندن از کلیپ‌بورد/)
+  assert.match(page, /navigator\.clipboard\.readText\(\)/)
+  assert.match(page, /نمایش توکن|مخفی‌کردن توکن/)
+  assert.doesNotMatch(page, /partner\.snappfood\.ir[^\n]+(?:localStorage|document\.cookie)/i)
+})
+
 test('Food Partner settings makes disabled automatic invoicing explicit', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 
