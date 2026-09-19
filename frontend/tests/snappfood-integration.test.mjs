@@ -45,6 +45,15 @@ test('Food Partner settings exposes a read-only connection test', () => {
   assert.match(backend, /max_pages=1/)
 })
 
+test('Food Partner connection opens the official Partner panel without harvesting browser secrets', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+
+  assert.match(page, /https:\/\/partner\.snappfood\.ir\//)
+  assert.match(page, /ورود به پنل Partner/)
+  assert.match(page, /Cookie، localStorage و Header مرورگر جمع‌آوری نمی‌شود/)
+  assert.doesNotMatch(page, /document\.cookie|localStorage\.getItem\(['"](?:token|authorization|cookie)/i)
+})
+
 test('Food Partner settings makes disabled automatic invoicing explicit', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 

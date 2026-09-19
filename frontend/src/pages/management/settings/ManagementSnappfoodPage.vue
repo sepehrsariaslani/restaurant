@@ -7,7 +7,8 @@
     <template #actions>
       <button class="secondary-btn" type="button" @click="loadConfig" :disabled="loading || testingConnection">تازه‌سازی</button>
       <button class="secondary-btn" type="button" @click="testConnection" :disabled="testingConnection || !status.schema_ready">{{ testingConnection ? 'در حال تست...' : 'تست اتصال' }}</button>
-      <a class="secondary-btn" href="https://vendors.snappfood.ir/installation-foodpartner/" target="_blank" rel="noreferrer">باز کردن Food Partner</a>
+      <a class="secondary-btn" href="https://partner.snappfood.ir/" target="_blank" rel="noopener noreferrer">ورود به پنل Partner</a>
+      <a class="secondary-btn" href="https://vendors.snappfood.ir/installation-foodpartner/" target="_blank" rel="noopener noreferrer">راهنمای نصب Food Partner</a>
     </template>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -56,7 +57,7 @@
           <label class="check-row"><input v-model="form.snapp_auto_sync_invoices" type="checkbox" /> برای سفارش واردشده فاکتور فروش ساخته شود</label>
           <label class="check-row"><input v-model="form.snapp_require_item_mapping" type="checkbox" /> کالای نگاشت‌نشده سفارش را متوقف کند</label>
         </div>
-        <p class="security-note">در captureهای فعلی OAuth رسمی دیده نشده است. این دکمه فقط صفحهٔ رسمی Food Partner را باز می‌کند؛ Cookie، localStorage و Header مرورگر جمع‌آوری نمی‌شود.</p>
+        <p class="security-note">این دکمه فقط پنل رسمی Partner را باز می‌کند؛ Cookie، localStorage و Header مرورگر جمع‌آوری نمی‌شود. توکن را فقط از مسیر رسمی دریافت و در همین فیلد رمزنگاری‌شده ثبت کنید.</p>
         <div class="actions-row"><button class="primary-btn" type="button" @click="saveConfig" :disabled="saving || !status.schema_ready">{{ saving ? 'در حال ذخیره...' : 'ذخیره اتصال' }}</button></div>
       </ManagementSurfaceCard>
     </template>
