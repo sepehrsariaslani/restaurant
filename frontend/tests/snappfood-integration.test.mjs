@@ -44,3 +44,10 @@ test('Food Partner settings exposes a read-only connection test', () => {
   assert.match(backend, /def test_snappfood_connection\(\)/)
   assert.match(backend, /max_pages=1/)
 })
+
+test('Food Partner settings makes disabled automatic invoicing explicit', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+
+  assert.match(page, /فاکتور خودکار خاموش/)
+  assert.match(page, /برای ثبت فاکتور native در همان POS/)
+})

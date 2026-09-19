@@ -18,11 +18,15 @@
         <span class="status-pill" :class="status.has_token ? 'is-on' : 'is-off'">{{ status.has_token ? 'توکن ثبت شده' : 'توکن ثبت نشده' }}</span>
         <span class="status-pill" :class="status.vendor_id ? 'is-on' : 'is-warn'">{{ status.vendor_id ? `فروشنده: ${status.vendor_id}` : 'شناسه فروشنده ناقص' }}</span>
         <span class="status-pill" :class="status.enabled ? 'is-on' : 'is-off'">{{ status.enabled ? 'همگام‌سازی فعال' : 'همگام‌سازی خاموش' }}</span>
+        <span class="status-pill" :class="status.auto_sync_invoices ? 'is-on' : 'is-warn'">{{ status.auto_sync_invoices ? 'فاکتور خودکار روشن' : 'فاکتور خودکار خاموش' }}</span>
         <span class="status-pill" :class="status.require_item_mapping ? 'is-warn' : 'is-on'">{{ status.require_item_mapping ? 'نگاشت اجباری' : 'ساخت خودکار کالا' }}</span>
         <span class="status-pill" :class="status.schema_ready ? 'is-on' : 'is-warn'">{{ status.schema_ready ? 'ساختار آماده' : 'ابتدا migrate' }}</span>
       </div>
       <p v-if="!status.schema_ready" class="schema-warning" role="alert">
         فیلدهای اتصال هنوز روی این سایت ساخته نشده‌اند. قبل از نگاشت کالا یا همگام‌سازی سفارش، migration اپ Restaurant را اجرا کنید.
+      </p>
+      <p v-else-if="!status.auto_sync_invoices" class="schema-warning" role="status">
+        ساخت خودکار فاکتور خاموش است؛ برای ثبت فاکتور native در همان POS، گزینهٔ «برای سفارش واردشده فاکتور فروش ساخته شود» را روشن کنید.
       </p>
     </ManagementSurfaceCard>
 
