@@ -46,6 +46,16 @@
 		>
 			<AlertCircle :size="15" :stroke-width="2.4" />
 		</DsButton>
+		<DsButton
+			variant="secondary"
+			size="sm"
+			class="pos-product-card__customize"
+			title="سفارشی‌سازی محصول"
+			aria-label="سفارشی‌سازی محصول"
+			@click.stop="$emit('open-bom')"
+		>
+			<SlidersHorizontal :size="14" :stroke-width="2.3" />
+		</DsButton>
 
 		<div class="pos-product-card__actions">
 			<div class="pos-product-card__counter" aria-label="تعداد محصول">
@@ -71,16 +81,6 @@
 					+
 				</DsButton>
 			</div>
-			<DsButton
-				variant="accent"
-				size="sm"
-				class="pos-product-card__bom"
-				title="BOM و سفارشی‌سازی محصول"
-				@click.stop="$emit('open-bom')"
-			>
-				<template #leading><SlidersHorizontal :size="13" :stroke-width="2.3" /></template>
-				<span>BOM</span>
-			</DsButton>
 		</div>
 	</article>
 </template>
@@ -194,11 +194,24 @@ const displayQuantity = computed(() => {
 	box-shadow: 0 5px 14px rgb(52 38 31 / 0.18);
 }
 
+.pos-product-card__customize {
+	position: absolute;
+	top: 0.35rem;
+	inset-inline-end: 0.35rem;
+	z-index: 2;
+	width: 34px;
+	min-height: 34px;
+	padding: 0;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--mg-bg-surface) 90%, transparent);
+	color: var(--mg-primary);
+	box-shadow: 0 5px 14px rgb(52 38 31 / 0.18);
+}
+
 .pos-product-card__actions { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; padding: 0.3rem 0.6rem 0.55rem; margin-top: auto; flex-wrap: wrap; }
 .pos-product-card__counter { display: inline-flex; align-items: center; gap: 0.15rem; }
 .pos-product-card__counter > span { min-width: 28px; text-align: center; color: var(--mg-text-main); font-size: 0.78rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pos-product-card__counter-button { width: 30px; min-height: 30px; padding: 0; border-radius: 10px; font-size: 1rem; }
-.pos-product-card__bom { min-height: 30px; padding-inline: 0.5rem; border-radius: 10px; font-size: 0.68rem; }
 
 .pos-product-card--list { min-height: 80px; flex-direction: row; align-items: center; }
 .pos-product-card--list .pos-product-card__image-button { width: 64px; height: 64px; margin: 0.35rem; border-radius: 10px; flex-shrink: 0; }
@@ -209,7 +222,6 @@ const displayQuantity = computed(() => {
 .pos-product-card__compact-main { min-width: 0; min-height: 54px; display: grid; align-content: start; gap: 0.22rem; padding: 0; border: 0; background: transparent; text-align: right; cursor: pointer; font: inherit; }
 .pos-product-card--compact .pos-product-card__actions { padding: 0; }
 .pos-product-card__quantity-badge { position: absolute; top: 0.45rem; inset-inline-start: 0.45rem; padding: 0.14rem 0.42rem; border-radius: 999px; background: var(--mg-primary); color: var(--mg-bg-surface); font-size: 0.68rem; font-weight: 700; }
-.pos-product-card--compact .pos-product-card__bom { min-width: 54px; }
 
 @media (max-width: 860px) {
 	.pos-product-card--list { flex-direction: column; align-items: stretch; }
