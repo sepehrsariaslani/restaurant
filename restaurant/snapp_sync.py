@@ -23,6 +23,20 @@ MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
 FALLBACK_GUEST_NAME = "Snapp Guest"
+_EXTERNAL_PRIVATE_KEY_PARTS = (
+    "fullname",
+    "firstname",
+    "lastname",
+    "customername",
+    "phonenumber",
+    "mobileno",
+    "phone",
+    "mobile",
+    "address",
+    "latitude",
+    "longitude",
+    "useragent",
+)
 
 SNAPP_ORDER_TYPE_MAP = {
     "SALON": "dine_in",
@@ -74,6 +88,21 @@ def _set_if_column(payload, doctype, fieldname, value):
 
 def _normalize_mobile(value):
     return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _redact_external_payload(value):
+    """Keep business metadata while avoiding a second raw PII snapshot."""
+    if isinstance(value, dict):
+        safe = {}
+        for key, child in value.items():
+            normalized_key = re.sub(r"[^a-z0-9]", "", str(key or "").lower())
+            if any(part in normalized_key for part in _EXTERNAL_PRIVATE_KEY_PARTS):
+                continue
+            safe[key] = _redact_external_payload(child)
+        return safe
+    if isinstance(value, list):
+        return [_redact_external_payload(child) for child in value]
+    return value
 
 
 def _slugify(value):
@@ -945,7 +974,12 @@ def _apply_sales_order_external_fields(target_payload, order_payload):
     _set_if_column(target_payload, "Sales Order", "restaurant_external_vendor_subdomain", order_payload["vendor_subdomain"])
     _set_if_column(target_payload, "Sales Order", "restaurant_external_customer_id", order_payload.get("external_customer_id") or "")
     _set_if_column(target_payload, "Sales Order", "restaurant_external_order_created_at", order_payload.get("created_at"))
-    _set_if_column(target_payload, "Sales Order", "restaurant_external_payload_json", json.dumps(order_payload["raw"], ensure_ascii=False))
+    _set_if_column(
+        target_payload,
+        "Sales Order",
+        "restaurant_external_payload_json",
+        json.dumps(_redact_external_payload(order_payload["raw"]), ensure_ascii=False),
+    )
 
 
 def _update_existing_sales_order_lines(sales_order_name, order_payload):
@@ -1228,7 +1262,9 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
         "restaurant_external_bill_number": order_payload.get("bill_number"),
         "restaurant_external_state": order_payload.get("external_state"),
         "restaurant_external_payment_method": order_payload.get("payment_method"),
-        "restaurant_external_payload_json": json.dumps(order_payload.get("raw") or {}, ensure_ascii=False),
+        "restaurant_external_payload_json": json.dumps(
+            _redact_external_payload(order_payload.get("raw") or {}), ensure_ascii=False
+        ),
     }
     for fieldname in list(invoice_updates):
         if not _has_column("Sales Invoice", fieldname):
