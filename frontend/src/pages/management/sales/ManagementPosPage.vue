@@ -6243,6 +6243,44 @@ let kitchenPollTimer = null
 let kitchenPollInFlight = false
 let kitchenPollPrimed = false
 
+// Food Partner orders are imported by the server scheduler into the same
+// native Sales Order/Sales Invoice records used by this POS. Keep the shared
+// lists current while the cashier is looking at the screen, without creating
+// a second Food Partner-only order surface.
+const SHARED_POS_REFRESH_MS = 60000
+let sharedPosRefreshTimer = null
+let sharedPosRefreshInFlight = false
+
+async function refreshSharedPOSLists() {
+  if (
+    sharedPosRefreshInFlight ||
+    typeof document === 'undefined' ||
+    document.hidden
+  ) {
+    return
+  }
+
+  sharedPosRefreshInFlight = true
+  try {
+    const requests = [loadOpenInvoices(true)]
+    if (leftPanelTab.value === 'history' || todayTransactions.value.length) {
+      requests.push(loadTodayTransactions(true))
+    }
+    if (leftPanelTab.value === 'recent' || recentOrders.value.length) {
+      requests.push(loadRecentOrders(true))
+    }
+    await Promise.allSettled(requests)
+  } finally {
+    sharedPosRefreshInFlight = false
+  }
+}
+
+function handlePOSVisibilityChange() {
+  if (!document.hidden) {
+    void refreshSharedPOSLists()
+  }
+}
+
 async function pollKitchenReady() {
   if (kitchenPollInFlight || typeof document === 'undefined' || document.hidden) return
   kitchenPollInFlight = true
@@ -6276,6 +6314,7 @@ onMounted(async () => {
   window.addEventListener('resize', syncViewportMode)
   window.addEventListener('online', updateNetworkState)
   window.addEventListener('offline', updateNetworkState)
+  document.addEventListener('visibilitychange', handlePOSVisibilityChange)
   hydrateReceiptSettings()
   await loadPOSBoot()
   loadWaitersOnce()
@@ -6285,6 +6324,7 @@ onMounted(async () => {
   headerBarRef.value?.focusCustomerSearch?.()
   pollKitchenReady()
   kitchenPollTimer = setInterval(pollKitchenReady, 45000)
+  sharedPosRefreshTimer = setInterval(refreshSharedPOSLists, SHARED_POS_REFRESH_MS)
 })
 
 onBeforeUnmount(() => {
@@ -6297,12 +6337,17 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', syncViewportMode)
   window.removeEventListener('online', updateNetworkState)
   window.removeEventListener('offline', updateNetworkState)
+  document.removeEventListener('visibilitychange', handlePOSVisibilityChange)
   if (reminderTimer.value) {
     clearTimeout(reminderTimer.value)
   }
   if (kitchenPollTimer) {
     clearInterval(kitchenPollTimer)
     kitchenPollTimer = null
+  }
+  if (sharedPosRefreshTimer) {
+    clearInterval(sharedPosRefreshTimer)
+    sharedPosRefreshTimer = null
   }
 })
 </script>

@@ -81,6 +81,17 @@ test('POS marks Food Partner orders inside its shared transaction views', () => 
   assert.match(page, /isSnappFoodOrder\(order\)/)
 })
 
+test('POS refreshes the shared native order lists while the cashier screen is visible', () => {
+  const page = read('src/pages/management/sales/ManagementPosPage.vue')
+
+  assert.match(page, /const SHARED_POS_REFRESH_MS = 60000/)
+  assert.match(page, /async function refreshSharedPOSLists\(\)/)
+  assert.match(page, /const requests = \[loadOpenInvoices\(true\)\]/)
+  assert.match(page, /document\.addEventListener\('visibilitychange', handlePOSVisibilityChange\)/)
+  assert.match(page, /sharedPosRefreshTimer = setInterval\(refreshSharedPOSLists, SHARED_POS_REFRESH_MS\)/)
+  assert.match(page, /clearInterval\(sharedPosRefreshTimer\)/)
+})
+
 test('POS financial controls hide unused rows and style nested amount inputs consistently', () => {
   const cart = read('src/components/management/pos/PosCartPanel.vue')
 
