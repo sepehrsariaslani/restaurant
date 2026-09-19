@@ -43,7 +43,7 @@ class TestSnappSync(FrappeTestCase):
             "billNumber": "rop-123",
             "orderHistoryState": "CONFIRMED",
             "orderType": "SALON",
-            "phoneNumber": "+98 912 000 0000",
+            "phoneNumber": "+98 912 123 4567",
             "fullName": "Test Customer",
             "createdAt": "2026-04-04T19:18:54.877",
             "orderItems": [
@@ -63,7 +63,7 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(normalized["bill_number"], "rop-123")
         self.assertEqual(normalized["status"], "confirmed")
         self.assertEqual(normalized["order_type"], "dine_in")
-        self.assertEqual(normalized["mobile"], "989120000000")
+        self.assertEqual(normalized["mobile"], "09121234567")
         self.assertEqual(len(normalized["items"]), 1)
         self.assertEqual(normalized["items"][0]["menu_item_id"], "menu-1")
 

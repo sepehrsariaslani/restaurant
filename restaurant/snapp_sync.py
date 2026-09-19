@@ -114,7 +114,14 @@ def _set_if_column(payload, doctype, fieldname, value):
 
 
 def _normalize_mobile(value):
-    return "".join(ch for ch in str(value or "") if ch.isdigit())
+    mobile = "".join(ch for ch in str(value or "") if ch.isdigit())
+    if mobile.startswith("98") and len(mobile) == 12:
+        mobile = "0" + mobile[2:]
+    if len(mobile) == 10 and mobile.startswith("9"):
+        mobile = "0" + mobile
+    if mobile == "09120000000":
+        return ""
+    return mobile
 
 
 def _redact_external_payload(value):
