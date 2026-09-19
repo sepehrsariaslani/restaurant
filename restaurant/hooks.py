@@ -154,6 +154,7 @@ website_route_rules = [
 	{"from_route": "/management/reports/<report_key>", "to_route": "management/report"},
 	{"from_route": "/management/print-formats", "to_route": "management/print_formats"},
 	{"from_route": "/management/settings", "to_route": "management/settings"},
+	{"from_route": "/management/snappfood", "to_route": "management/snappfood"},
 	{"from_route": "/management/builder-templates", "to_route": "management/builder_templates"},
 	{
 		"from_route": "/management/builder-template/edit/<template_id>",

@@ -22530,6 +22530,78 @@ def get_snapp_sync_status():
 
 
 @frappe.whitelist()
+def get_snappfood_integration_config():
+	"""Return safe Food Partner connection state; never return the bearer token."""
+	_ensure_management_access()
+	from restaurant.snapp_sync import get_sync_status
+
+	return get_sync_status()
+
+
+@frappe.whitelist()
+def save_snappfood_integration_config(payload=None):
+	_ensure_management_access()
+	payload = _parse_json(payload, {})
+	if not isinstance(payload, dict):
+		payload = {}
+	if not frappe.db.exists("DocType", "Restaurant Web Settings"):
+		frappe.throw(_("Restaurant Web Settings is not available."))
+
+	allowed = {
+		"snapp_sync_enabled",
+		"snapp_vendor_id",
+		"snapp_report_url",
+		"snapp_menu_api_base_url",
+		"snapp_origin_url",
+		"snapp_hostdomain",
+		"snapp_page_size",
+		"snapp_lookback_minutes",
+		"snapp_amount_multiplier",
+		"snapp_auto_sync_invoices",
+		"snapp_require_item_mapping",
+		"snapp_default_customer",
+	}
+	doc = frappe.get_doc("Restaurant Web Settings")
+	for fieldname in allowed:
+		if fieldname in payload and _has_column("Restaurant Web Settings", fieldname):
+			doc.set(fieldname, payload.get(fieldname))
+	token = str(payload.get("snapp_bearer_token") or "").strip()
+	if token and _has_column("Restaurant Web Settings", "snapp_bearer_token"):
+		doc.set_password("snapp_bearer_token", token)
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	from restaurant.snapp_sync import get_sync_status
+
+	return get_sync_status()
+
+
+@frappe.whitelist()
+def get_snappfood_mapping_rows(search="", refresh_menu=0):
+	_ensure_management_access()
+	from restaurant.snapp_sync import get_snappfood_mapping_rows as _get_rows
+
+	return _get_rows(search=search, refresh_menu=cint(refresh_menu))
+
+
+@frappe.whitelist()
+def save_snappfood_item_mapping(payload=None):
+	_ensure_management_access()
+	payload = _parse_json(payload, {})
+	if not isinstance(payload, dict):
+		payload = {}
+	from restaurant.snapp_sync import save_snappfood_item_mapping as _save_mapping
+
+	return _save_mapping(
+		item_name=payload.get("item_name") or "",
+		product_id=payload.get("product_id") or "",
+		variation_id=payload.get("variation_id") or "",
+		product_hash_id=payload.get("product_hash_id") or "",
+		variation_hash_id=payload.get("variation_hash_id") or "",
+		menu_item_id=payload.get("menu_item_id") or "",
+	)
+
+
+@frappe.whitelist()
 def organize_catalog_items(enable_for_menu=1):
 	from restaurant.catalog_organizer import organize_imported_items
 

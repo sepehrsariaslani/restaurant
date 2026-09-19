@@ -47,3 +47,4 @@ restaurant.patches.v2_11.ensure_loyalty_org_waiter_fields
 restaurant.patches.v2_12.ensure_pos_reliability_fields
 restaurant.patches.v2_13.link_modifier_options_to_items
 restaurant.patches.v2_14.ensure_pos_offline_mutations
+restaurant.patches.v2_15.ensure_snappfood_integration_fields

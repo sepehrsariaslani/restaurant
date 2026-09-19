@@ -1,6 +1,13 @@
 from frappe.tests.utils import FrappeTestCase
 
-from restaurant.snapp_sync import _extract_orders, _extract_total_pages, _map_order_type, _map_status, normalize_snapp_order
+from restaurant.snapp_sync import (
+    _extract_menu_entries,
+    _extract_orders,
+    _extract_total_pages,
+    _map_order_type,
+    _map_status,
+    normalize_snapp_order,
+)
 
 
 class TestSnappSync(FrappeTestCase):
@@ -48,3 +55,39 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(normalized["mobile"], "989120000000")
         self.assertEqual(len(normalized["items"]), 1)
         self.assertEqual(normalized["items"][0]["menu_item_id"], "menu-1")
+
+    def test_normalize_food_partner_report_order(self):
+        raw = {
+            "orderId": "884984812",
+            "vendorOrderCode": "V-100",
+            "externalStatusCode": 2,
+            "externalStatusLabel": "ACCEPTED",
+            "orderDate": "2026-09-19 12:00:00",
+            "customerName": "گارسون تست",
+            "phone": "09120000000",
+            "paidPrice": 185000,
+            "orderProducts": [
+                {
+                    "orderProductId": "line-10",
+                    "productId": "34788176",
+                    "variationId": "34788176-v1",
+                    "title": "شیر خرما",
+                    "quantity": 1,
+                    "price": 185000,
+                }
+            ],
+        }
+
+        normalized = normalize_snapp_order(raw, amount_multiplier=1)
+
+        self.assertEqual(normalized["order_id"], "884984812")
+        self.assertEqual(normalized["bill_number"], "V-100")
+        self.assertEqual(normalized["status"], "confirmed")
+        self.assertEqual(normalized["items"][0]["product_id"], "34788176")
+        self.assertEqual(normalized["items"][0]["variation_id"], "34788176-v1")
+
+    def test_extract_food_partner_menu_entries(self):
+        payload = {"data": [{"productId": "p1", "title": "شیر خرما", "variations": [{"variationId": "v1", "title": "سایز معمولی"}]}]}
+        entries = _extract_menu_entries(payload)
+
+        self.assertEqual({row.get("productId") or row.get("variationId") for row in entries}, {"p1", "v1"})

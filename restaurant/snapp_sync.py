@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from difflib import SequenceMatcher
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,6 +17,8 @@ DEFAULT_HOST_DOMAIN = ""
 DEFAULT_PAGE_SIZE = 50
 DEFAULT_LOOKBACK_MINUTES = 180
 DEFAULT_AMOUNT_MULTIPLIER = 10
+DEFAULT_REPORT_URL = "https://snappfood.ir/vms/v3/restaurant/report"
+DEFAULT_MENU_API_BASE_URL = "https://apigw.snappfood.ir"
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
@@ -153,6 +156,20 @@ def _get_settings():
         "lookback_minutes": max(5, cint(settings_doc.get("snapp_lookback_minutes") or DEFAULT_LOOKBACK_MINUTES)),
         "amount_multiplier": flt(settings_doc.get("snapp_amount_multiplier") or DEFAULT_AMOUNT_MULTIPLIER),
         "write_debug_json": bool(cint(settings_doc.get("snapp_write_debug_json") or 0)),
+        "vendor_id": (settings_doc.get("snapp_vendor_id") or "").strip()
+        if _has_field("Restaurant Web Settings", "snapp_vendor_id")
+        else "",
+        "report_url": (settings_doc.get("snapp_report_url") or DEFAULT_REPORT_URL).strip(),
+        "menu_api_base_url": (settings_doc.get("snapp_menu_api_base_url") or DEFAULT_MENU_API_BASE_URL).strip().rstrip("/"),
+        "auto_sync_invoices": bool(cint(settings_doc.get("snapp_auto_sync_invoices") or 0))
+        if _has_field("Restaurant Web Settings", "snapp_auto_sync_invoices")
+        else False,
+        "require_item_mapping": bool(cint(settings_doc.get("snapp_require_item_mapping") or 0))
+        if _has_field("Restaurant Web Settings", "snapp_require_item_mapping")
+        else False,
+        "default_customer": (settings_doc.get("snapp_default_customer") or "")
+        if _has_field("Restaurant Web Settings", "snapp_default_customer")
+        else "",
     }
 
 
@@ -165,10 +182,17 @@ def get_sync_status():
         "enabled": settings["enabled"],
         "has_token": bool(settings["token"]),
         "api_base_url": settings["api_base_url"],
-        "host_domain": settings["host_domain"],
-        "page_size": settings["page_size"],
+        "report_url": settings.get("report_url") or DEFAULT_REPORT_URL,
+        "menu_api_base_url": settings.get("menu_api_base_url") or DEFAULT_MENU_API_BASE_URL,
+        "host_domain": settings.get("host_domain") or "",
+        "origin_url": settings.get("origin_url") or "",
+        "page_size": settings.get("page_size") or DEFAULT_PAGE_SIZE,
         "lookback_minutes": settings["lookback_minutes"],
-        "amount_multiplier": settings["amount_multiplier"],
+        "amount_multiplier": settings.get("amount_multiplier") or DEFAULT_AMOUNT_MULTIPLIER,
+        "vendor_id": settings.get("vendor_id") or "",
+        "auto_sync_invoices": settings.get("auto_sync_invoices", False),
+        "require_item_mapping": settings.get("require_item_mapping", False),
+        "default_customer": settings.get("default_customer") or "",
         "last_success_at": frappe.db.get_single_value("Restaurant Web Settings", "snapp_last_success_at")
         if _has_field("Restaurant Web Settings", "snapp_last_success_at")
         else None,
@@ -201,28 +225,29 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
         headers["origin"] = cfg["origin_url"]
         headers["referer"] = f"{cfg['origin_url'].rstrip('/')}/"
 
+    if not cfg.get("vendor_id"):
+        raise frappe.ValidationError("شناسه فروشنده Food Partner تنظیم نشده است؛ مسیر قدیمی سفارش غیرفعال است.")
+
     all_orders = []
-    page_number = 1
+    page_number = 0
     pages_fetched = 0
     total_pages = None
 
     while page_number <= max_pages:
-        params = {
-            "FromDate": _to_snapp_dt(start_dt),
-            "ToDate": _to_snapp_dt(end_dt),
-            "Search": "",
-            "FullName": "",
-            "DeliveryType": "",
-            "OrderType": "",
-            "PaymentMethod": "",
-            "OrderState": "",
-            "PageSize": page_size,
-            "PageNumber": page_number,
+        report_data = {
+            "vendorId": cfg["vendor_id"],
+            "startDate": get_datetime(start_dt).strftime("%Y-%m-%d %H:%M:%S"),
+            "endDate": get_datetime(end_dt).strftime("%Y-%m-%d %H:%M:%S"),
+            "pageSize": str(page_size),
+            "pageNumber": str(page_number),
+            "deviceType": "VTS-PWA-ELECTRON",
+            "source": "order-pwa",
+            "appVersion": "3.14.1",
         }
-        response = requests.get(
-            f"{cfg['api_base_url']}/api/orders",
+        response = requests.post(
+            cfg.get("report_url") or DEFAULT_REPORT_URL,
             headers=headers,
-            params=params,
+            data=report_data,
             timeout=30,
         )
         response.raise_for_status()
@@ -253,6 +278,196 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
     }
 
 
+def _extract_menu_entries(payload):
+    """Flatten the observed Food Partner menu response without assuming one schema."""
+    entries = []
+    seen = set()
+
+    def visit(value):
+        if isinstance(value, list):
+            for child in value:
+                visit(child)
+            return
+        if not isinstance(value, dict):
+            return
+        external_id = str(
+            value.get("variationId")
+            or value.get("variation_id")
+            or value.get("productId")
+            or value.get("product_id")
+            or value.get("id")
+            or ""
+        ).strip()
+        title = str(
+            value.get("title")
+            or value.get("name")
+            or value.get("productName")
+            or value.get("product_name")
+            or value.get("variationTitle")
+            or ""
+        ).strip()
+        if external_id and title:
+            key = f"{external_id}|{title}"
+            if key not in seen:
+                seen.add(key)
+                entries.append(value)
+        for child in value.values():
+            if isinstance(child, (dict, list)):
+                visit(child)
+
+    visit(payload)
+    return entries
+
+
+def _normalize_mapping_text(value):
+    text = str(value or "").strip().lower()
+    replacements = {"ي": "ی", "ك": "ک", "ۀ": "ه", "ة": "ه"}
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return re.sub(r"[\s\-_/]+", "", text)
+
+
+def fetch_snapp_menu(settings=None):
+    cfg = settings or _get_settings()
+    if not cfg.get("token"):
+        raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
+    if not cfg.get("vendor_id"):
+        raise frappe.ValidationError("شناسه فروشنده Food Partner تنظیم نشده است.")
+
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "authorization": f"Bearer {cfg['token']}",
+        "user-agent": "Mozilla/5.0",
+    }
+    if cfg.get("host_domain"):
+        headers["hostdomain"] = cfg["host_domain"]
+    if cfg.get("origin_url"):
+        headers["origin"] = cfg["origin_url"]
+        headers["referer"] = f"{cfg['origin_url'].rstrip('/')}/"
+    response = requests.get(
+        f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendor/{cfg['vendor_id']}/menu",
+        headers=headers,
+        timeout=30,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    rows = []
+    for entry in _extract_menu_entries(payload):
+        rows.append(
+            {
+                "external_id": str(
+                    entry.get("variationId")
+                    or entry.get("variation_id")
+                    or entry.get("productId")
+                    or entry.get("product_id")
+                    or entry.get("id")
+                    or ""
+                ).strip(),
+                "product_id": str(entry.get("productId") or entry.get("product_id") or "").strip(),
+                "variation_id": str(entry.get("variationId") or entry.get("variation_id") or "").strip(),
+                "product_hash_id": str(entry.get("productHashId") or entry.get("product_hash_id") or "").strip(),
+                "variation_hash_id": str(entry.get("variationHashId") or entry.get("variation_hash_id") or "").strip(),
+                "title": str(
+                    entry.get("title")
+                    or entry.get("name")
+                    or entry.get("productName")
+                    or entry.get("product_name")
+                    or entry.get("variationTitle")
+                    or ""
+                ).strip(),
+                "price": flt(entry.get("price") or entry.get("variationPrice") or entry.get("variation_price") or 0),
+                "status": str(entry.get("status") or "").strip(),
+            }
+        )
+    if _has_field("Restaurant Web Settings", "snapp_last_menu_sync_at"):
+        _set_single_if_exists("Restaurant Web Settings", "snapp_last_menu_sync_at", get_datetime_str(now_datetime()))
+    frappe.db.commit()
+    return {"status": "success", "count": len(rows), "items": rows}
+
+
+def _get_local_item_rows(search=""):
+    fields = ["name", "item_code", "item_name", "disabled"]
+    for fieldname in (
+        "custom_snapp_code",
+        "restaurant_external_menu_item_id",
+        "restaurant_external_product_id",
+        "restaurant_external_variation_id",
+        "restaurant_external_mapping_status",
+    ):
+        if _has_column("Item", fieldname):
+            fields.append(fieldname)
+    filters = {"disabled": 0}
+    rows = frappe.get_all("Item", filters=filters, fields=fields, limit_page_length=1000, ignore_permissions=True)
+    needle = _normalize_mapping_text(search)
+    if needle:
+        rows = [row for row in rows if needle in _normalize_mapping_text(row.get("item_name")) or needle in _normalize_mapping_text(row.get("item_code"))]
+    return rows
+
+
+def get_snappfood_mapping_rows(search="", refresh_menu=0):
+    cfg = _get_settings()
+    local_items = _get_local_item_rows(search)
+    menu_rows = []
+    if refresh_menu:
+        menu_rows = fetch_snapp_menu(cfg).get("items") or []
+    local_by_external = {}
+    for item in local_items:
+        for key in ("restaurant_external_variation_id", "restaurant_external_product_id", "restaurant_external_menu_item_id"):
+            value = str(item.get(key) or "").strip()
+            if value:
+                local_by_external[value] = item
+
+    mappings = []
+    for row in menu_rows:
+        exact = local_by_external.get(row["external_id"])
+        if exact:
+            suggested = exact
+            match_score = 1
+        else:
+            suggested = max(
+                local_items,
+                key=lambda item: SequenceMatcher(
+                    None,
+                    _normalize_mapping_text(row.get("title")),
+                    _normalize_mapping_text(item.get("item_name")),
+                ).ratio(),
+                default=None,
+            )
+            match_score = (
+                SequenceMatcher(
+                    None,
+                    _normalize_mapping_text(row.get("title")),
+                    _normalize_mapping_text((suggested or {}).get("item_name")),
+                ).ratio()
+                if suggested
+                else 0
+            )
+        mappings.append({**row, "suggested_item": suggested, "match_score": round(match_score, 3)})
+    return {"status": "success", "settings": get_sync_status(), "menu": mappings, "items": local_items}
+
+
+def save_snappfood_item_mapping(item_name, product_id="", variation_id="", product_hash_id="", variation_hash_id="", menu_item_id=""):
+    if not item_name or not frappe.db.exists("Item", item_name):
+        raise frappe.ValidationError("آیتم داخلی برای نگاشت معتبر نیست.")
+    values = {}
+    for fieldname, value in (
+        ("restaurant_external_product_id", product_id),
+        ("restaurant_external_variation_id", variation_id),
+        ("restaurant_external_product_hash_id", product_hash_id),
+        ("restaurant_external_variation_hash_id", variation_hash_id),
+        ("restaurant_external_menu_item_id", menu_item_id or variation_id or product_id),
+    ):
+        if _has_column("Item", fieldname):
+            values[fieldname] = str(value or "").strip()
+    if _has_column("Item", "restaurant_external_mapping_status"):
+        values["restaurant_external_mapping_status"] = "Mapped"
+    if not values:
+        raise frappe.ValidationError("فیلدهای اتصال اسنپ‌فود هنوز روی Item ساخته نشده‌اند.")
+    frappe.db.set_value("Item", item_name, values, update_modified=True)
+    frappe.db.commit()
+    return {"status": "success", "item": item_name, "values": values}
+
+
 def _map_order_type(order_type, delivery_type):
     candidates = [str(order_type or "").strip().upper(), str(delivery_type or "").strip().upper()]
     for candidate in candidates:
@@ -281,29 +496,65 @@ def _map_status(history_state, last_state):
 
 
 def normalize_snapp_order(raw_order, amount_multiplier=1):
-    order_id = str(raw_order.get("id") or "").strip()
+    order_id = str(raw_order.get("id") or raw_order.get("orderId") or raw_order.get("order_id") or "").strip()
     if not order_id:
         raise frappe.ValidationError("Missing Snapp order id.")
 
-    full_name = (raw_order.get("fullName") or "").strip()
+    full_name = (raw_order.get("fullName") or raw_order.get("customerName") or raw_order.get("customer_name") or "").strip()
     if not full_name:
         full_name = " ".join(
-            part for part in [(raw_order.get("firstName") or "").strip(), (raw_order.get("lastName") or "").strip()] if part
+            part
+            for part in [
+                (raw_order.get("firstName") or "").strip(),
+                (raw_order.get("lastName") or "").strip(),
+            ]
+            if part
         ).strip()
     if not full_name:
         full_name = FALLBACK_GUEST_NAME
 
     items = []
-    for row in raw_order.get("orderItems") or []:
-        qty = max(flt(row.get("count") or row.get("newCount") or 1), 1)
+    raw_items = (
+        raw_order.get("orderItems")
+        or raw_order.get("orderProducts")
+        or raw_order.get("order_products")
+        or raw_order.get("items")
+        or raw_order.get("products")
+        or []
+    )
+    if isinstance(raw_items, dict):
+        raw_items = raw_items.get("items") or raw_items.get("products") or []
+    for row in raw_items:
+        qty = max(flt(row.get("count") or row.get("newCount") or row.get("quantity") or row.get("qty") or 1), 1)
         items.append(
             {
-                "line_id": str(row.get("id") or "").strip(),
-                "menu_item_id": str(row.get("menuItemId") or "").strip(),
-                "title": (row.get("title") or row.get("menuItemTitle") or "").strip() or "Snapp Item",
+                "line_id": str(
+                    row.get("id") or row.get("orderProductId") or row.get("order_product_id") or row.get("orderProductID") or ""
+                ).strip(),
+                "menu_item_id": str(
+                    row.get("menuItemId")
+                    or row.get("variationId")
+                    or row.get("variation_id")
+                    or row.get("productId")
+                    or row.get("product_id")
+                    or ""
+                ).strip(),
+                "product_id": str(row.get("productId") or row.get("product_id") or "").strip(),
+                "variation_id": str(row.get("variationId") or row.get("variation_id") or "").strip(),
+                "product_hash_id": str(row.get("productHashId") or row.get("product_hash_id") or "").strip(),
+                "variation_hash_id": str(row.get("variationHashId") or row.get("variation_hash_id") or "").strip(),
+                "title": (
+                    row.get("title")
+                    or row.get("menuItemTitle")
+                    or row.get("productName")
+                    or row.get("product_name")
+                    or row.get("name")
+                    or ""
+                ).strip()
+                or "Snapp Item",
                 "qty": qty,
-                "unit_price": _scale_amount(row.get("price"), amount_multiplier),
-                "discount": _scale_amount(row.get("discount"), amount_multiplier),
+                "unit_price": _scale_amount(row.get("price") or row.get("unitPrice") or row.get("unit_price"), amount_multiplier),
+                "discount": _scale_amount(row.get("discount") or row.get("discountAmount"), amount_multiplier),
                 "packaging_cost": _scale_amount(row.get("packagingCost"), amount_multiplier),
                 "with_tax": cint(row.get("withTax") or 0),
                 "toppings": row.get("toppings") or [],
@@ -312,34 +563,71 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
 
     return {
         "order_id": order_id,
-        "bill_number": str(raw_order.get("billNumber") or "").strip(),
+        "bill_number": str(
+            raw_order.get("billNumber")
+            or raw_order.get("vendorOrderCode")
+            or raw_order.get("orderCode")
+            or raw_order.get("supportOrderId")
+            or ""
+        ).strip(),
         "offline_bill_number": str(raw_order.get("offlineBillNumber") or "").strip(),
-        "external_state": str(raw_order.get("orderHistoryState") or "").strip(),
-        "last_state": cint(raw_order.get("lastState") or 0),
-        "status": _map_status(raw_order.get("orderHistoryState"), raw_order.get("lastState")),
-        "order_type": _map_order_type(raw_order.get("orderType"), raw_order.get("deliveryType")),
-        "delivery_type": str(raw_order.get("deliveryType") or "").strip(),
-        "payment_method": str(raw_order.get("paymentMethod") or "").strip(),
+        "external_state": str(
+            raw_order.get("orderHistoryState")
+            or raw_order.get("externalStatusLabel")
+            or raw_order.get("status")
+            or ""
+        ).strip(),
+        "last_state": cint(raw_order.get("lastState") or raw_order.get("externalStatusCode") or 0),
+        "status": _map_status(
+            raw_order.get("orderHistoryState") or raw_order.get("externalStatusLabel") or raw_order.get("status"),
+            raw_order.get("lastState") or raw_order.get("externalStatusCode"),
+        ),
+        "order_type": _map_order_type(raw_order.get("orderType"), raw_order.get("deliveryType") or raw_order.get("expeditionType")),
+        "delivery_type": str(raw_order.get("deliveryType") or raw_order.get("expeditionType") or "").strip(),
+        "payment_method": str(raw_order.get("paymentMethod") or raw_order.get("payment_type_raw") or raw_order.get("paymentTypeRaw") or "").strip(),
         "factor_number": cstr(raw_order.get("factorNumber") or "").strip(),
         "customer_name": full_name,
-        "mobile": _normalize_mobile(raw_order.get("phoneNumber")),
-        "external_customer_id": str(raw_order.get("customerId") or "").strip(),
-        "created_at": get_datetime(raw_order.get("createdAt")) if raw_order.get("createdAt") else now_datetime(),
+        "mobile": _normalize_mobile(
+            raw_order.get("phoneNumber") or raw_order.get("phone") or raw_order.get("mobile") or raw_order.get("mobileNo")
+        ),
+        "external_customer_id": str(
+            raw_order.get("customerId") or raw_order.get("customer_id") or raw_order.get("userId") or ""
+        ).strip(),
+        "created_at": get_datetime(
+            raw_order.get("createdAt") or raw_order.get("orderDate") or raw_order.get("newOrderDate")
+        )
+        if (raw_order.get("createdAt") or raw_order.get("orderDate") or raw_order.get("newOrderDate"))
+        else now_datetime(),
         "preparation_time": get_datetime(raw_order.get("preparationTime")) if raw_order.get("preparationTime") else None,
-        "print_time": get_datetime(raw_order.get("printTime")) if raw_order.get("printTime") else None,
-        "address": (raw_order.get("addressDescription") or "").strip(),
+        "print_time": get_datetime(raw_order.get("printTime") or raw_order.get("deliveryTime"))
+        if (raw_order.get("printTime") or raw_order.get("deliveryTime"))
+        else None,
+        "address": (raw_order.get("addressDescription") or raw_order.get("address") or raw_order.get("deliveryAddress") or "").strip(),
         "note": (raw_order.get("note") or raw_order.get("description") or "").strip(),
         "discount_code": cstr(raw_order.get("discountCode") or "").strip(),
         "discount_type": cstr(raw_order.get("discountType") or "").strip(),
         "vendor_name": cstr(raw_order.get("vendorName") or "").strip(),
         "vendor_subdomain": cstr(raw_order.get("vendorSubdomain") or "").strip(),
         "items": items,
-        "final_amount": _scale_amount(raw_order.get("finalAmount") or raw_order.get("finalPrice"), amount_multiplier),
-        "final_price": _scale_amount(raw_order.get("finalPrice"), amount_multiplier),
-        "discount": _scale_amount(raw_order.get("discount"), amount_multiplier),
-        "discount_amount": flt(raw_order.get("discountAmount") or 0),
-        "packaging_cost": _scale_amount(raw_order.get("packagingCost"), amount_multiplier),
-        "delivery_cost": _scale_amount(raw_order.get("deliveryCost"), amount_multiplier),
+        "final_amount": _scale_amount(
+            raw_order.get("finalAmount")
+            or raw_order.get("finalPrice")
+            or raw_order.get("totalPrice")
+            or raw_order.get("total")
+            or raw_order.get("paidPrice")
+            or raw_order.get("price"),
+            amount_multiplier,
+        ),
+        "final_price": _scale_amount(
+            raw_order.get("finalPrice") or raw_order.get("totalPrice") or raw_order.get("paidPrice"), amount_multiplier
+        ),
+        "discount": _scale_amount(
+            raw_order.get("discount") or raw_order.get("discountAmount") or raw_order.get("otherDiscounts"),
+            amount_multiplier,
+        ),
+        "discount_amount": _scale_amount(raw_order.get("discountAmount") or 0, amount_multiplier),
+        "packaging_cost": _scale_amount(raw_order.get("packagingCost") or raw_order.get("packingPrice"), amount_multiplier),
+        "delivery_cost": _scale_amount(raw_order.get("deliveryCost") or raw_order.get("deliveryPrice"), amount_multiplier),
         "tax": _scale_amount(raw_order.get("tax"), amount_multiplier),
         "service_cost": _scale_amount(raw_order.get("serviceCost"), amount_multiplier),
         "service_fee": _scale_amount(raw_order.get("serviceFee"), amount_multiplier),
@@ -378,6 +666,13 @@ def _ensure_customer(customer_name, mobile, external_customer_id):
     if mobile:
         existing = frappe.db.get_value("Customer", {"mobile_no": mobile, "disabled": 0}, "name")
         if existing:
+            updates = {}
+            if external_customer_id and _has_column("Customer", "restaurant_external_customer_id"):
+                updates["restaurant_external_customer_id"] = external_customer_id
+            if _has_column("Customer", "restaurant_external_source"):
+                updates["restaurant_external_source"] = SNAPP_SOURCE
+            if updates:
+                frappe.db.set_value("Customer", existing, updates, update_modified=False)
             return existing
 
     if not mobile:
@@ -409,6 +704,10 @@ def _ensure_customer(customer_name, mobile, external_customer_id):
             "mobile_no": mobile,
         }
     )
+    if _has_column("Customer", "restaurant_external_source"):
+        customer_doc.restaurant_external_source = SNAPP_SOURCE
+    if _has_column("Customer", "restaurant_external_customer_id"):
+        customer_doc.restaurant_external_customer_id = external_customer_id or ""
     customer_doc.insert(ignore_permissions=True)
     return customer_doc.name
 
@@ -463,42 +762,72 @@ def _unique_item_code(preferred):
         counter += 1
 
 
+def _tag_item_mapping(item_name, line):
+    values = {}
+    for fieldname, value in (
+        ("restaurant_external_menu_item_id", line.get("menu_item_id")),
+        ("restaurant_external_product_id", line.get("product_id")),
+        ("restaurant_external_variation_id", line.get("variation_id")),
+        ("restaurant_external_product_hash_id", line.get("product_hash_id")),
+        ("restaurant_external_variation_hash_id", line.get("variation_hash_id")),
+    ):
+        if value and _has_column("Item", fieldname):
+            values[fieldname] = value
+    if values and _has_column("Item", "restaurant_external_mapping_status"):
+        values["restaurant_external_mapping_status"] = "Mapped"
+    if values:
+        frappe.db.set_value("Item", item_name, values, update_modified=False)
+
+
 def _resolve_item_code(line):
     external_menu_item_id = (line.get("menu_item_id") or "").strip()
+    external_product_id = (line.get("product_id") or "").strip()
+    external_variation_id = (line.get("variation_id") or "").strip()
     title = (line.get("title") or "").strip() or "Snapp Item"
     snapp_code = _build_item_code(line)
 
     if _has_column("Item", "custom_snapp_code"):
         by_snapp_code = frappe.db.get_value("Item", {"custom_snapp_code": snapp_code}, "name")
         if by_snapp_code:
-            if external_menu_item_id and _has_column("Item", "restaurant_external_menu_item_id"):
-                frappe.db.set_value(
-                    "Item",
-                    by_snapp_code,
-                    "restaurant_external_menu_item_id",
-                    external_menu_item_id,
-                    update_modified=False,
-                )
+            _tag_item_mapping(by_snapp_code, line)
             return by_snapp_code
 
     if external_menu_item_id and _has_column("Item", "restaurant_external_menu_item_id"):
         by_external = frappe.db.get_value("Item", {"restaurant_external_menu_item_id": external_menu_item_id}, "name")
         if by_external:
+            _tag_item_mapping(by_external, line)
             if _has_column("Item", "custom_snapp_code"):
                 current_snapp_code = frappe.db.get_value("Item", by_external, "custom_snapp_code")
                 if not (current_snapp_code or "").strip():
                     frappe.db.set_value("Item", by_external, "custom_snapp_code", snapp_code, update_modified=False)
             return by_external
 
+    if external_variation_id and _has_column("Item", "restaurant_external_variation_id"):
+        by_variation = frappe.db.get_value("Item", {"restaurant_external_variation_id": external_variation_id}, "name")
+        if by_variation:
+            _tag_item_mapping(by_variation, line)
+            return by_variation
+
+    if external_product_id and _has_column("Item", "restaurant_external_product_id"):
+        by_product = frappe.db.get_value("Item", {"restaurant_external_product_id": external_product_id}, "name")
+        if by_product:
+            _tag_item_mapping(by_product, line)
+            return by_product
+
     by_title = frappe.db.get_value("Item", {"item_name": title}, "name")
     if by_title:
-        if external_menu_item_id and _has_column("Item", "restaurant_external_menu_item_id"):
-            frappe.db.set_value("Item", by_title, "restaurant_external_menu_item_id", external_menu_item_id, update_modified=False)
+        _tag_item_mapping(by_title, line)
         if _has_column("Item", "custom_snapp_code"):
             current_snapp_code = frappe.db.get_value("Item", by_title, "custom_snapp_code")
             if not (current_snapp_code or "").strip():
                 frappe.db.set_value("Item", by_title, "custom_snapp_code", snapp_code, update_modified=False)
         return by_title
+
+    settings = _get_settings()
+    if settings.get("require_item_mapping"):
+        raise frappe.ValidationError(
+            f"کالای Food Partner نگاشت نشده است: {title} ({external_variation_id or external_product_id or external_menu_item_id or 'بدون شناسه'})"
+        )
 
     item_group = _ensure_import_item_group()
     item_code = _unique_item_code(_build_item_code_from_title(title, snapp_code))
@@ -521,6 +850,16 @@ def _resolve_item_code(line):
         item_doc.set("restaurant_enabled", 0)
     if _has_column("Item", "restaurant_external_menu_item_id"):
         item_doc.set("restaurant_external_menu_item_id", external_menu_item_id)
+    if _has_column("Item", "restaurant_external_product_id"):
+        item_doc.set("restaurant_external_product_id", external_product_id)
+    if _has_column("Item", "restaurant_external_variation_id"):
+        item_doc.set("restaurant_external_variation_id", external_variation_id)
+    if _has_column("Item", "restaurant_external_product_hash_id"):
+        item_doc.set("restaurant_external_product_hash_id", line.get("product_hash_id") or "")
+    if _has_column("Item", "restaurant_external_variation_hash_id"):
+        item_doc.set("restaurant_external_variation_hash_id", line.get("variation_hash_id") or "")
+    if _has_column("Item", "restaurant_external_mapping_status"):
+        item_doc.set("restaurant_external_mapping_status", "Mapped")
     if _has_column("Item", "custom_snapp_code"):
         item_doc.set("custom_snapp_code", snapp_code)
     item_doc.insert(ignore_permissions=True)
@@ -564,6 +903,8 @@ def _build_sales_order_items(order_payload):
             line_payload["restaurant_external_line_id"] = line.get("line_id") or ""
         if _has_column("Sales Order Item", "restaurant_external_menu_item_id"):
             line_payload["restaurant_external_menu_item_id"] = line.get("menu_item_id") or ""
+        _set_if_column(line_payload, "Sales Order Item", "restaurant_external_product_id", line.get("product_id") or "")
+        _set_if_column(line_payload, "Sales Order Item", "restaurant_external_variation_id", line.get("variation_id") or "")
         if _has_column("Sales Order Item", "restaurant_external_item_title"):
             line_payload["restaurant_external_item_title"] = line.get("title") or ""
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_discount", flt(line.get("discount") or 0))
@@ -601,6 +942,8 @@ def _apply_sales_order_external_fields(target_payload, order_payload):
     _set_if_column(target_payload, "Sales Order", "restaurant_external_discount_type", order_payload["discount_type"])
     _set_if_column(target_payload, "Sales Order", "restaurant_external_vendor_name", order_payload["vendor_name"])
     _set_if_column(target_payload, "Sales Order", "restaurant_external_vendor_subdomain", order_payload["vendor_subdomain"])
+    _set_if_column(target_payload, "Sales Order", "restaurant_external_customer_id", order_payload.get("external_customer_id") or "")
+    _set_if_column(target_payload, "Sales Order", "restaurant_external_order_created_at", order_payload.get("created_at"))
     _set_if_column(target_payload, "Sales Order", "restaurant_external_payload_json", json.dumps(order_payload["raw"], ensure_ascii=False))
 
 
@@ -716,11 +1059,19 @@ def _create_sales_order(order_payload):
     if not selling_price_list:
         raise frappe.ValidationError("Selling Price List is not configured.")
 
-    customer = _ensure_customer(
+    external_customer = _ensure_customer(
         customer_name=order_payload["customer_name"],
         mobile=order_payload["mobile"],
         external_customer_id=order_payload["external_customer_id"],
     )
+    settings = _get_settings()
+    customer = external_customer
+    secondary_customer = ""
+    configured_customer = settings.get("default_customer") or ""
+    if configured_customer and frappe.db.exists("Customer", configured_customer):
+        customer = configured_customer
+        if external_customer != configured_customer:
+            secondary_customer = frappe.db.get_value("Customer", external_customer, "customer_name") or external_customer
     items = _build_sales_order_items(order_payload)
     if not items:
         raise frappe.ValidationError(f"Order {order_payload['order_id']} has no valid items.")
@@ -749,6 +1100,8 @@ def _create_sales_order(order_payload):
         doc_payload["restaurant_delivery_address"] = order_payload["address"]
     if _has_column("Sales Order", "restaurant_note"):
         doc_payload["restaurant_note"] = order_payload["note"]
+    if secondary_customer and _has_column("Sales Order", "restaurant_secondary_customer"):
+        doc_payload["restaurant_secondary_customer"] = secondary_customer
     if _has_column("Sales Order", "restaurant_status"):
         doc_payload["restaurant_status"] = order_payload["status"]
     _apply_sales_order_external_fields(doc_payload, order_payload)
@@ -774,6 +1127,54 @@ def _create_sales_order(order_payload):
         so_doc.cancel()
         return so_doc.name, "cancelled"
     return so_doc.name, "created"
+
+
+def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
+    """Create the native Sales Invoice for an imported order, idempotently."""
+    if not _has_column("Sales Invoice", "restaurant_external_order_id"):
+        return {"status": "skipped", "reason": "Sales Invoice integration fields are not migrated."}
+
+    existing_invoice = frappe.db.get_value(
+        "Sales Invoice",
+        {"restaurant_external_order_id": order_payload["order_id"]},
+        "name",
+    )
+    if existing_invoice:
+        return {"status": "exists", "sales_invoice": existing_invoice}
+
+    make_si = frappe.get_attr("erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice")
+    si_doc = make_si(sales_order_name)
+    if isinstance(si_doc, dict):
+        si_doc = frappe.get_doc(si_doc)
+    si_doc.flags.ignore_permissions = True
+    if _has_column("Sales Invoice", "is_pos"):
+        si_doc.is_pos = 0
+    if _has_column("Sales Invoice", "update_stock"):
+        si_doc.update_stock = 0
+    if _has_column("Sales Invoice", "restaurant_secondary_customer") and _has_column("Sales Order", "restaurant_secondary_customer"):
+        si_doc.restaurant_secondary_customer = frappe.db.get_value(
+            "Sales Order", sales_order_name, "restaurant_secondary_customer"
+        ) or ""
+    for fieldname, value in (
+        ("restaurant_external_source", SNAPP_SOURCE),
+        ("restaurant_external_order_id", order_payload.get("order_id")),
+        ("restaurant_external_bill_number", order_payload.get("bill_number")),
+        ("restaurant_external_state", order_payload.get("external_state")),
+        ("restaurant_external_payment_method", order_payload.get("payment_method")),
+        ("restaurant_external_payload_json", json.dumps(order_payload.get("raw") or {}, ensure_ascii=False)),
+    ):
+        _set_if_column(si_doc, "Sales Invoice", fieldname, value)
+    for index, row in enumerate(si_doc.get("items") or []):
+        source_line = (order_payload.get("items") or [])[index] if index < len(order_payload.get("items") or []) else {}
+        for fieldname, value in (
+            ("restaurant_external_line_id", source_line.get("line_id")),
+            ("restaurant_external_menu_item_id", source_line.get("menu_item_id")),
+            ("restaurant_external_item_title", source_line.get("title")),
+        ):
+            _set_if_column(row, "Sales Invoice Item", fieldname, value or "")
+    si_doc.insert(ignore_permissions=True)
+    si_doc.submit()
+    return {"status": "created", "sales_invoice": si_doc.name}
 
 
 def _notify_new_order(sales_order_name, order_payload):
@@ -822,6 +1223,7 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
         "only_new": only_new,
         "fetched_count": 0,
         "created_count": 0,
+        "invoices_created_count": 0,
         "updated_count": 0,
         "cancelled_count": 0,
         "skipped_count": 0,
@@ -856,6 +1258,20 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
 
                 if existing:
                     if only_new:
+                        if settings.get("auto_sync_invoices"):
+                            try:
+                                invoice_result = _ensure_sales_invoice_for_order(existing, normalized)
+                                if invoice_result.get("status") == "created":
+                                    result.setdefault("invoices_created_count", 0)
+                                    result["invoices_created_count"] += 1
+                            except Exception:
+                                result["failed_count"] += 1
+                                result["errors"].append(
+                                    {
+                                        "order_id": normalized["order_id"],
+                                        "error": frappe.get_traceback(with_context=False),
+                                    }
+                                )
                         result["skipped_count"] += 1
                     else:
                         action = _sync_existing_sales_order(existing, normalized, reconcile_lines=True)
@@ -866,6 +1282,11 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
                     continue
 
                 sales_order_name, action = _create_sales_order(normalized)
+                if settings.get("auto_sync_invoices") and action != "cancelled":
+                    invoice_result = _ensure_sales_invoice_for_order(sales_order_name, normalized)
+                    if invoice_result.get("status") == "created":
+                        result.setdefault("invoices_created_count", 0)
+                        result["invoices_created_count"] += 1
                 _notify_new_order(sales_order_name, normalized)
                 if action == "cancelled":
                     result["cancelled_count"] += 1

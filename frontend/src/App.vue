@@ -62,6 +62,7 @@
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
       <ManagementSiteSettingsPage v-else-if="page === 'management-settings'" entry-mode="theme-settings" />
       <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
+      <ManagementSnappfoodPage v-else-if="page === 'management-snappfood'" />
       <section v-else-if="page === 'management-login'" class="management-login-placeholder"></section>
       <ManagementDashboardPage v-else />
     </ManagementLayout>
@@ -247,6 +248,7 @@ import ManagementAccountingPage from './pages/management/finance/ManagementAccou
 import ManagementHelpPage from './pages/management/settings/ManagementHelpPage.vue'
 import ManagementPrintFormatsPage from './pages/management/settings/ManagementPrintFormatsPage.vue'
 import ManagementZarinpalSettingsPage from './pages/management/settings/ManagementZarinpalSettingsPage.vue'
+import ManagementSnappfoodPage from './pages/management/settings/ManagementSnappfoodPage.vue'
 import SiteLoaderOverlay from './components/SiteLoaderOverlay.vue'
 import GlobalSearchModal from './components/GlobalSearchModal.vue'
 import { cartState } from './stores/cartStore'
@@ -321,6 +323,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/variant-builder') || pathname.startsWith('/management/variant_builder')) return 'management-variant-builder'
     if (pathname.startsWith('/management/builder-template')) return 'management-builder-templates'
     if (pathname.startsWith('/management/zarinpal-settings') || pathname.startsWith('/management/zarinpal_settings')) return 'management-zarinpal-settings'
+    if (pathname.startsWith('/management/snappfood') || pathname.startsWith('/management/snapp-food')) return 'management-snappfood'
     if (pathname.startsWith('/management/settings')) return 'management-settings'
 
     if (pathname === '/' || pathname === '') return 'landing'

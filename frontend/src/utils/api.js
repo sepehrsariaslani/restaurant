@@ -1399,6 +1399,26 @@ export function getManagementPOSConfig() {
 	return callRestaurantAPI("get_management_pos_config", {});
 }
 
+export function getSnappfoodIntegrationConfig() {
+	return callRestaurantAPI("get_snappfood_integration_config", {});
+}
+
+export function saveSnappfoodIntegrationConfig(payload = {}) {
+	return callRestaurantAPI("save_snappfood_integration_config", { payload });
+}
+
+export function getSnappfoodMappingRows({ search = "", refresh_menu = 0 } = {}) {
+	return callRestaurantAPI("get_snappfood_mapping_rows", { search, refresh_menu });
+}
+
+export function saveSnappfoodItemMapping(payload = {}) {
+	return callRestaurantAPI("save_snappfood_item_mapping", { payload });
+}
+
+export function runSnappfoodSyncToday() {
+	return callRestaurantAPI("run_snapp_sync_now", { only_new: 1 });
+}
+
 export function setManagementPOSConfig(payload = {}) {
 	return callRestaurantAPI("set_management_pos_config", { payload });
 }

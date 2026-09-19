@@ -646,6 +646,15 @@ const navLinks = computed(() => {
 			group: "settings",
 		},
 		{
+			key: "management-snappfood",
+			label: "اتصال Food Partner",
+			shortLabel: "Food Partner",
+			caption: "نگاشت کالا و سفارش‌های اسنپ‌فود",
+			iconComponent: StoreIcon,
+			url: "/management/snappfood",
+			group: "settings",
+		},
+		{
 			key: "management-couriers",
 			label: "پیک‌ها",
 			shortLabel: "پیک",
