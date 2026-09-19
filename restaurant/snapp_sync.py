@@ -1213,6 +1213,11 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
         return {"status": "skipped", "reason": "Snapp sync is disabled in Restaurant Web Settings."}
     if not settings["token"]:
         return {"status": "error", "reason": "Snapp bearer token is missing."}
+    if not settings.get("vendor_id"):
+        return {
+            "status": "skipped",
+            "reason": "Food Partner vendor ID is not configured; the legacy order endpoint is disabled.",
+        }
 
     started_at = now_datetime()
     only_new = cint(only_new)
