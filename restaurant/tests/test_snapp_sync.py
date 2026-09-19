@@ -218,6 +218,23 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(fake_api.place_order.call_args.kwargs["order_type"], "delivery")
         self.assertEqual(fake_api.place_order.call_args.kwargs["items"][0]["item_slug"], "item-1")
 
+    def test_item_mapping_can_resolve_variation_hash_id(self):
+        lookup = Mock(side_effect=lambda doctype, filters, *args, **kwargs: (
+            "ITEM-HASH" if filters == {"restaurant_external_variation_hash_id": "vh-1"} else None
+        ))
+        with patch("restaurant.snapp_sync._has_column", return_value=True), patch.object(
+            snapp_sync.frappe, "db", SimpleNamespace(get_value=lookup)
+        ), patch("restaurant.snapp_sync._tag_item_mapping") as tag_mapping:
+            resolved = snapp_sync._resolve_item_code(
+                {
+                    "variation_hash_id": "vh-1",
+                    "title": "شیر خرما",
+                }
+            )
+
+        self.assertEqual(resolved, "ITEM-HASH")
+        tag_mapping.assert_called_once()
+
     def test_imported_order_uses_native_pos_settlement(self):
         order_payload = {
             "order_id": "884984812",
@@ -272,3 +289,46 @@ class TestSnappSync(FrappeTestCase):
         self.assertFalse(result["schema_ready"])
         self.assertIn("Sales Invoice.restaurant_external_order_id", result["schema_missing"])
         fetch_orders.assert_not_called()
+
+    def test_scheduler_updates_existing_native_order_status_even_when_only_new(self):
+        normalized = {
+            "order_id": "884984812",
+            "status": "delivered",
+            "external_state": "DELIVERED",
+        }
+        fake_db = SimpleNamespace(
+            get_value=Mock(return_value="SO-1"),
+            commit=Mock(),
+        )
+        with patch(
+            "restaurant.snapp_sync._get_settings",
+            return_value={
+                "enabled": True,
+                "token": "secret",
+                "vendor_id": "466275",
+                "page_size": 50,
+                "amount_multiplier": 1,
+                "auto_sync_invoices": False,
+                "write_debug_json": False,
+            },
+        ), patch(
+            "restaurant.snapp_sync._get_schema_status",
+            return_value={"ready": True, "missing": []},
+        ), patch(
+            "restaurant.snapp_sync.fetch_snapp_orders",
+            return_value={"orders_count": 1, "pages_fetched": 1, "orders": [{"id": "884984812"}]},
+        ), patch(
+            "restaurant.snapp_sync.normalize_snapp_order",
+            return_value=normalized,
+        ), patch(
+            "restaurant.snapp_sync._sync_existing_sales_order",
+            return_value="updated",
+        ) as sync_existing, patch.object(snapp_sync.frappe, "db", fake_db), patch(
+            "restaurant.snapp_sync._has_column",
+            return_value=True,
+        ), patch("restaurant.snapp_sync._set_single_if_exists"):
+            result = snapp_sync.sync_snapp_orders(trigger="test", only_new=1, update_status_fields=1)
+
+        sync_existing.assert_called_once_with("SO-1", normalized, reconcile_lines=False)
+        self.assertEqual(result["updated_count"], 1)
+        self.assertEqual(result["skipped_count"], 0)

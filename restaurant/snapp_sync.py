@@ -428,6 +428,10 @@ def fetch_snapp_menu(settings=None):
                     or entry.get("variation_id")
                     or entry.get("productId")
                     or entry.get("product_id")
+                    or entry.get("variationHashId")
+                    or entry.get("variation_hash_id")
+                    or entry.get("productHashId")
+                    or entry.get("product_hash_id")
                     or entry.get("id")
                     or ""
                 ).strip(),
@@ -460,6 +464,8 @@ def _get_local_item_rows(search=""):
         "restaurant_external_menu_item_id",
         "restaurant_external_product_id",
         "restaurant_external_variation_id",
+        "restaurant_external_product_hash_id",
+        "restaurant_external_variation_hash_id",
         "restaurant_external_mapping_status",
     ):
         if _has_column("Item", fieldname):
@@ -480,7 +486,13 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
         menu_rows = fetch_snapp_menu(cfg).get("items") or []
     local_by_external = {}
     for item in local_items:
-        for key in ("restaurant_external_variation_id", "restaurant_external_product_id", "restaurant_external_menu_item_id"):
+        for key in (
+            "restaurant_external_variation_id",
+            "restaurant_external_product_id",
+            "restaurant_external_variation_hash_id",
+            "restaurant_external_product_hash_id",
+            "restaurant_external_menu_item_id",
+        ):
             value = str(item.get(key) or "").strip()
             if value:
                 local_by_external[value] = item
@@ -852,6 +864,8 @@ def _resolve_item_code(line):
     external_menu_item_id = (line.get("menu_item_id") or "").strip()
     external_product_id = (line.get("product_id") or "").strip()
     external_variation_id = (line.get("variation_id") or "").strip()
+    external_product_hash_id = (line.get("product_hash_id") or "").strip()
+    external_variation_hash_id = (line.get("variation_hash_id") or "").strip()
     title = (line.get("title") or "").strip() or "Snapp Item"
     snapp_code = _build_item_code(line)
 
@@ -882,6 +896,26 @@ def _resolve_item_code(line):
         if by_product:
             _tag_item_mapping(by_product, line)
             return by_product
+
+    if external_variation_hash_id and _has_column("Item", "restaurant_external_variation_hash_id"):
+        by_variation_hash = frappe.db.get_value(
+            "Item",
+            {"restaurant_external_variation_hash_id": external_variation_hash_id},
+            "name",
+        )
+        if by_variation_hash:
+            _tag_item_mapping(by_variation_hash, line)
+            return by_variation_hash
+
+    if external_product_hash_id and _has_column("Item", "restaurant_external_product_hash_id"):
+        by_product_hash = frappe.db.get_value(
+            "Item",
+            {"restaurant_external_product_hash_id": external_product_hash_id},
+            "name",
+        )
+        if by_product_hash:
+            _tag_item_mapping(by_product_hash, line)
+            return by_product_hash
 
     by_title = frappe.db.get_value("Item", {"item_name": title}, "name")
     if by_title:
@@ -1516,28 +1550,40 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
                     )
 
                 if existing:
-                    if only_new:
-                        if settings.get("auto_sync_invoices"):
-                            try:
-                                invoice_result = _ensure_sales_invoice_for_order(existing, normalized)
-                                if invoice_result.get("status") == "created":
-                                    result.setdefault("invoices_created_count", 0)
-                                    result["invoices_created_count"] += 1
-                            except Exception:
-                                result["failed_count"] += 1
-                                result["errors"].append(
-                                    {
-                                        "order_id": normalized["order_id"],
-                                        "error": frappe.get_traceback(with_context=False),
-                                    }
-                                )
-                        result["skipped_count"] += 1
-                    else:
-                        action = _sync_existing_sales_order(existing, normalized, reconcile_lines=True)
+                    # ``only_new`` controls line reconciliation/backfill; it
+                    # must not freeze the native order state. The scheduler
+                    # runs with this flag enabled, so status fields on an
+                    # existing Sales Order still need to follow Food Partner
+                    # (including native cancellation) on every poll.
+                    action = "skipped"
+                    if update_status_fields:
+                        action = _sync_existing_sales_order(
+                            existing,
+                            normalized,
+                            reconcile_lines=not bool(only_new),
+                        )
                         if action == "cancelled":
                             result["cancelled_count"] += 1
                         else:
                             result["updated_count"] += 1
+
+                    if settings.get("auto_sync_invoices") and action != "cancelled":
+                        try:
+                            invoice_result = _ensure_sales_invoice_for_order(existing, normalized)
+                            if invoice_result.get("status") == "created":
+                                result.setdefault("invoices_created_count", 0)
+                                result["invoices_created_count"] += 1
+                        except Exception:
+                            result["failed_count"] += 1
+                            result["errors"].append(
+                                {
+                                    "order_id": normalized["order_id"],
+                                    "error": frappe.get_traceback(with_context=False),
+                                }
+                            )
+
+                    if action == "skipped":
+                        result["skipped_count"] += 1
                     continue
 
                 sales_order_name, action = _create_sales_order(normalized)
