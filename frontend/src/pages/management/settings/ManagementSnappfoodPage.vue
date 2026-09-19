@@ -74,7 +74,7 @@
         <p class="muted" v-if="!mappingRows.menu.length">برای دیدن product/variationها روی «دریافت منوی Food Partner» بزنید.</p>
         <div v-else class="mapping-list">
           <div v-for="row in mappingRows.menu" :key="`${row.external_id}-${row.title}`" class="mapping-row">
-            <div><strong>{{ row.title || 'بدون عنوان' }}</strong><small>variation: {{ row.variation_id || '—' }} · product: {{ row.product_id || '—' }}</small></div>
+            <div><strong>{{ row.title || 'بدون عنوان' }}</strong><small>{{ row.category_title ? `دسته: ${row.category_title} · ` : '' }}variation: {{ row.variation_id || '—' }} · product: {{ row.product_id || '—' }}</small></div>
             <select class="input mapping-select" v-model="mappingDrafts[row.external_id]">
               <option value="">انتخاب Item داخلی</option>
               <option v-for="item in mappingRows.items" :key="item.name" :value="item.name">{{ item.item_name }} · {{ item.item_code }}</option>

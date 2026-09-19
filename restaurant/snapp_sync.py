@@ -435,41 +435,134 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
 
 
 def _extract_menu_entries(payload):
-    """Flatten the observed Food Partner menu response without assuming one schema."""
+    """Flatten Food Partner categories into product/variation rows.
+
+    The menu response contains category containers alongside product and
+    variation objects.  Category ``id``/``title`` pairs must not become
+    mappable Items, but their title is useful context for each child row.
+    """
     entries = []
     seen = set()
+    category_child_keys = {
+        "products",
+        "items",
+        "menuitems",
+        "children",
+        "subcategories",
+        "productgroups",
+    }
+    product_marker_keys = {
+        "productid",
+        "variationid",
+        "menuitemid",
+        "producthashid",
+        "variationhashid",
+        "hashid",
+        "price",
+        "status",
+        "canchangestatus",
+        "producttitle",
+        "variationtitle",
+        "productname",
+        "variationname",
+        "description",
+    }
 
-    def visit(value):
+    def first_value(value, keys):
+        for key in keys:
+            candidate = value.get(key)
+            if candidate not in (None, "", []):
+                return candidate
+        return ""
+
+    def visit(value, category_title="", category_id=""):
         if isinstance(value, list):
             for child in value:
-                visit(child)
+                visit(child, category_title, category_id)
             return
         if not isinstance(value, dict):
             return
-        external_id = str(
-            value.get("variationId")
-            or value.get("variation_id")
-            or value.get("productId")
-            or value.get("product_id")
-            or value.get("id")
-            or ""
-        ).strip()
+
+        normalized_keys = {
+            re.sub(r"[^a-z0-9]", "", str(key or "").lower())
+            for key in value
+        }
+        has_category_children = any(
+            key in normalized_keys
+            and isinstance(value.get(raw_key), (dict, list))
+            for raw_key in value
+            for key in {re.sub(r"[^a-z0-9]", "", str(raw_key or "").lower())}
+            if key in category_child_keys
+        )
+        has_product_markers = bool(normalized_keys.intersection(product_marker_keys))
+        is_category = has_category_children and not has_product_markers
+
         title = str(
-            value.get("title")
-            or value.get("name")
-            or value.get("productName")
-            or value.get("product_name")
-            or value.get("variationTitle")
+            first_value(
+                value,
+                (
+                    "title",
+                    "name",
+                    "productName",
+                    "product_name",
+                    "productTitle",
+                    "variationTitle",
+                    "variation_title",
+                    "variationName",
+                    "menuItemName",
+                    "itemName",
+                    "displayName",
+                ),
+            )
             or ""
         ).strip()
-        if external_id and title:
-            key = f"{external_id}|{title}"
+        next_category_title = str(
+            first_value(
+                value,
+                ("categoryTitle", "category_title", "categoryName", "menuCategoryName"),
+            )
+            or category_title
+            or (title if is_category else "")
+        ).strip()
+        next_category_id = str(
+            first_value(value, ("categoryId", "category_id", "menuCategoryId", "menu_category_id"))
+            or category_id
+            or (value.get("id") if is_category else "")
+            or ""
+        ).strip()
+        external_id = str(
+            first_value(
+                value,
+                (
+                    "variationId",
+                    "variation_id",
+                    "productId",
+                    "product_id",
+                    "menuItemId",
+                    "menu_item_id",
+                    "variationHashId",
+                    "variation_hash_id",
+                    "productHashId",
+                    "product_hash_id",
+                    "hashId",
+                ),
+            )
+            or (value.get("id") if not is_category else "")
+            or ""
+        ).strip()
+        if external_id and title and not is_category:
+            row = dict(value)
+            if next_category_title:
+                row["_category_title"] = next_category_title
+            if next_category_id:
+                row["_category_id"] = next_category_id
+            key = f"{external_id}|{title}|{next_category_id}"
             if key not in seen:
                 seen.add(key)
-                entries.append(value)
+                entries.append(row)
         for child in value.values():
             if isinstance(child, (dict, list)):
-                visit(child)
+                visit(child, next_category_title, next_category_id)
 
     visit(payload)
     return entries
@@ -526,30 +619,55 @@ def fetch_snapp_menu(settings=None):
         raise frappe.ValidationError("پاسخ API منوی Food Partner قابل خواندن نیست.") from exc
     rows = []
     for entry in _extract_menu_entries(payload):
+        fallback_id = str(entry.get("id") or "").strip()
+        explicit_product_id = str(entry.get("productId") or entry.get("product_id") or "").strip()
+        explicit_variation_id = str(entry.get("variationId") or entry.get("variation_id") or "").strip()
+        variation_like = bool(
+            explicit_variation_id
+            or entry.get("variationTitle")
+            or entry.get("variation_title")
+            or entry.get("variationName")
+            or ("price" in entry and fallback_id)
+        )
+        product_id = explicit_product_id or (fallback_id if not variation_like else "")
+        variation_id = explicit_variation_id or (fallback_id if variation_like else "")
         rows.append(
             {
                 "external_id": str(
-                    entry.get("variationId")
-                    or entry.get("variation_id")
-                    or entry.get("productId")
-                    or entry.get("product_id")
+                    variation_id
+                    or product_id
                     or entry.get("variationHashId")
                     or entry.get("variation_hash_id")
                     or entry.get("productHashId")
                     or entry.get("product_hash_id")
-                    or entry.get("id")
+                    or fallback_id
                     or ""
                 ).strip(),
-                "product_id": str(entry.get("productId") or entry.get("product_id") or "").strip(),
-                "variation_id": str(entry.get("variationId") or entry.get("variation_id") or "").strip(),
+                "product_id": product_id,
+                "variation_id": variation_id,
                 "product_hash_id": str(entry.get("productHashId") or entry.get("product_hash_id") or "").strip(),
                 "variation_hash_id": str(entry.get("variationHashId") or entry.get("variation_hash_id") or "").strip(),
+                "category_id": str(entry.get("_category_id") or entry.get("categoryId") or entry.get("category_id") or "").strip(),
+                "category_title": str(
+                    entry.get("_category_title")
+                    or entry.get("categoryTitle")
+                    or entry.get("category_title")
+                    or entry.get("categoryName")
+                    or entry.get("menuCategoryName")
+                    or ""
+                ).strip(),
                 "title": str(
                     entry.get("title")
                     or entry.get("name")
                     or entry.get("productName")
                     or entry.get("product_name")
+                    or entry.get("productTitle")
                     or entry.get("variationTitle")
+                    or entry.get("variation_title")
+                    or entry.get("variationName")
+                    or entry.get("menuItemName")
+                    or entry.get("itemName")
+                    or entry.get("displayName")
                     or ""
                 ).strip(),
                 "price": flt(entry.get("price") or entry.get("variationPrice") or entry.get("variation_price") or 0),

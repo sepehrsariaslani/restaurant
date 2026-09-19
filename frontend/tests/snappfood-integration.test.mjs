@@ -76,6 +76,14 @@ test('Food Partner settings lets the server infer vendor ID from a saved token a
   assert.match(sync, /401, 403/)
 })
 
+test('Food Partner mapping renders category context with product and variation IDs', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+
+  assert.match(page, /row\.category_title/)
+  assert.match(page, /row\.variation_id/)
+  assert.match(page, /row\.product_id/)
+})
+
 test('Food Partner settings makes disabled automatic invoicing explicit', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 

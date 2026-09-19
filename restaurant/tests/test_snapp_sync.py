@@ -82,6 +82,34 @@ class TestSnappSync(FrappeTestCase):
 
         self.assertEqual(request.call_args.kwargs["headers"]["vendor-authorization"], "true")
 
+    def test_food_partner_menu_rows_expose_category_and_product_ids(self):
+        response = Mock()
+        response.json.return_value = {
+            "data": [
+                {
+                    "id": "category-1",
+                    "title": "سالادها",
+                    "products": [{"id": "product-1", "title": "سالاد مرغ", "variations": [{"id": "variation-1", "title": "معمولی", "price": 185000}]}],
+                }
+            ]
+        }
+        fake_db = SimpleNamespace(commit=Mock())
+        with patch.object(snapp_sync.frappe, "db", fake_db), patch(
+            "restaurant.snapp_sync.requests.get", return_value=response
+        ):
+            result = fetch_snapp_menu(
+                {
+                    "token": "secret",
+                    "vendor_id": "466275",
+                    "menu_api_base_url": "https://apigw.snappfood.ir",
+                }
+            )
+
+        variation = next(row for row in result["items"] if row["external_id"] == "variation-1")
+        self.assertEqual(variation["category_title"], "سالادها")
+        self.assertEqual(variation["variation_id"], "variation-1")
+        self.assertFalse(any(row["external_id"] == "category-1" for row in result["items"]))
+
     def test_extract_orders_from_nested_payload(self):
         payload = {"data": {"items": [{"id": "ord-1"}, {"id": "ord-2"}], "totalPages": 4}}
         orders = _extract_orders(payload)
@@ -162,6 +190,32 @@ class TestSnappSync(FrappeTestCase):
         entries = _extract_menu_entries(payload)
 
         self.assertEqual({row.get("productId") or row.get("variationId") for row in entries}, {"p1", "v1"})
+
+    def test_extract_menu_entries_keeps_products_under_categories_without_mapping_categories(self):
+        payload = {
+            "data": [
+                {
+                    "id": "category-1",
+                    "title": "سالادها",
+                    "products": [
+                        {
+                            "id": "product-1",
+                            "title": "سالاد مرغ",
+                            "variations": [
+                                {"id": "variation-1", "title": "سایز معمولی", "price": 185000}
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        entries = _extract_menu_entries(payload)
+
+        self.assertFalse(any(row.get("id") == "category-1" for row in entries))
+        self.assertTrue(any(row.get("id") == "variation-1" for row in entries))
+        variation = next(row for row in entries if row.get("id") == "variation-1")
+        self.assertEqual(variation.get("_category_title"), "سالادها")
 
     def test_invoice_keeps_external_financial_snapshot_for_reconciliation(self):
         values = _build_sales_invoice_external_values(
