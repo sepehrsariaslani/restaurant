@@ -307,17 +307,9 @@
 				<span>مالیات</span>
 				<strong>{{ formatMoney(totals.taxAmount || 0, currency) }}</strong>
 			</div>
-			<div class="sum-line" v-if="isNonZero(totals.tipAmount)">
-				<span>انعام</span>
-				<strong>{{ formatMoney(totals.tipAmount || 0, currency) }}</strong>
-			</div>
 			<div class="sum-line" v-if="isNonZero(totals.serviceAmount)">
 				<span>حق سرویس</span>
 				<strong>{{ formatMoney(totals.serviceAmount || 0, currency) }}</strong>
-			</div>
-			<div class="sum-line" v-if="isNonZero(totals.packagingAmount)">
-				<span>بسته‌بندی</span>
-				<strong>{{ formatMoney(totals.packagingAmount || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line payable">
 				<span>مبلغ قابل پرداخت</span>
@@ -1572,29 +1564,36 @@ defineExpose({
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
-.fin-input {
+.fin-control > .fin-input,
+.fin-control :deep(.number-input) {
 	flex: 1;
 	min-width: 0;
 	width: 100%;
+	min-height: 44px;
+	height: 44px;
+	box-sizing: border-box;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 7px;
-	padding: 0.1rem 0.45rem;
-	font-size: 0.74rem;
+	padding: 0.55rem 0.75rem;
+	font-size: 0.88rem;
+	line-height: 1.2;
 	font-family: inherit;
-	height: 22px;
 	outline: none;
 	transition: all 0.15s ease;
 }
 
-.fin-input:focus {
+.fin-control > .fin-input:focus,
+.fin-control :deep(.number-input:focus) {
 	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border-light) 58%);
 	background: var(--mg-bg-surface);
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 6%, transparent);
+	outline: none;
 }
 
-.fin-input:disabled {
+.fin-control > .fin-input:disabled,
+.fin-control :deep(.number-input:disabled) {
 	opacity: 0.68;
 	cursor: not-allowed;
 }
@@ -1991,12 +1990,26 @@ defineExpose({
 	height: 44px;
 }
 
-.pay-amount-input {
+.pay-split-controls :deep(.persian-number-input),
+.pay-split-controls :deep(.persian-number-input .input-wrap) {
+	width: 100%;
+	min-width: 0;
+}
+
+.pay-split-controls :deep(.pay-amount-input) {
 	border-radius: 9px;
 	padding: 0.6rem 0.7rem;
 	font-size: 0.85rem;
 	text-align: left;
 	min-height: 44px;
+	height: 44px;
+	box-sizing: border-box;
+}
+
+.pay-split-controls :deep(.pay-amount-input:focus) {
+	border-color: var(--mg-primary);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 12%, transparent);
+	outline: none;
 }
 
 .pay-split-remove {

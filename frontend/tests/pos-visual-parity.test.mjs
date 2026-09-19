@@ -80,3 +80,21 @@ test('POS marks Food Partner orders inside its shared transaction views', () => 
   assert.match(page, /isSnappFoodOrder\(tx\)/)
   assert.match(page, /isSnappFoodOrder\(order\)/)
 })
+
+test('POS financial controls hide unused rows and style nested amount inputs consistently', () => {
+  const cart = read('src/components/management/pos/PosCartPanel.vue')
+
+  assert.doesNotMatch(cart, /<span>انعام<\/span>/)
+  assert.doesNotMatch(cart, /<span>بسته‌بندی<\/span>/)
+  assert.match(cart, /\.fin-control :deep\(\.number-input\)/)
+  assert.match(cart, /\.fin-control :deep\(\.number-input:focus\)/)
+  assert.match(cart, /min-height:\s*44px/)
+  assert.match(cart, /height:\s*44px/)
+})
+
+test('Persian numeric input keeps zero as an empty editable value', () => {
+  const input = read('src/components/PersianNumberInput.vue')
+
+  assert.match(input, /inputText\.value = clamped \? formatForDisplay\(clamped\) : ''/)
+  assert.match(input, /if \(!numeric\) \{\s*return ''/)
+})
