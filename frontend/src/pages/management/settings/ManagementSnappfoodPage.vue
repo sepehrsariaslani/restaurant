@@ -52,7 +52,7 @@
           <label class="check-row"><input v-model="form.snapp_require_item_mapping" type="checkbox" /> کالای نگاشت‌نشده سفارش را متوقف کند</label>
         </div>
         <p class="security-note">در captureهای فعلی OAuth رسمی دیده نشده است. این دکمه فقط صفحهٔ رسمی Food Partner را باز می‌کند؛ Cookie، localStorage و Header مرورگر جمع‌آوری نمی‌شود.</p>
-        <div class="actions-row"><button class="primary-btn" type="button" @click="saveConfig" :disabled="saving">{{ saving ? 'در حال ذخیره...' : 'ذخیره اتصال' }}</button></div>
+        <div class="actions-row"><button class="primary-btn" type="button" @click="saveConfig" :disabled="saving || !status.schema_ready">{{ saving ? 'در حال ذخیره...' : 'ذخیره اتصال' }}</button></div>
       </ManagementSurfaceCard>
     </template>
 
@@ -142,6 +142,7 @@ async function loadConfig() {
   try { applyStatus(await getSnappfoodIntegrationConfig()) } catch (err) { error.value = err?.message || 'تنظیمات اتصال خوانده نشد.' } finally { loading.value = false }
 }
 async function saveConfig() {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
   saving.value = true; error.value = ''; successMessage.value = ''
   try { applyStatus(await saveSnappfoodIntegrationConfig({ ...form })); form.snapp_bearer_token = ''; successMessage.value = 'تنظیمات اتصال ذخیره شد.' } catch (err) { error.value = err?.message || 'ذخیره تنظیمات ناموفق بود.' } finally { saving.value = false }
 }

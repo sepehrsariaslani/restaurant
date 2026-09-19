@@ -12,6 +12,7 @@ test('Food Partner settings blocks mapping and sync until the native schema is m
   assert.match(page, /schema_ready/)
   assert.match(page, /ابتدا migrate/)
   assert.match(page, /migration اپ Restaurant را روی سایت اجرا کنید/)
+  assert.match(page, /saving \|\| !status\.schema_ready/)
   assert.match(page, /mappingLoading \|\| !status\.schema_ready/)
   assert.match(page, /syncing \|\| !status\.schema_ready/)
 })
