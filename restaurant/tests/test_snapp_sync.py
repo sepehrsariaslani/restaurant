@@ -4,6 +4,7 @@ from restaurant.snapp_sync import (
     _extract_menu_entries,
     _extract_orders,
     _extract_total_pages,
+    _build_sales_invoice_external_values,
     _map_order_type,
     _map_status,
     normalize_snapp_order,
@@ -91,3 +92,34 @@ class TestSnappSync(FrappeTestCase):
         entries = _extract_menu_entries(payload)
 
         self.assertEqual({row.get("productId") or row.get("variationId") for row in entries}, {"p1", "v1"})
+
+    def test_invoice_keeps_external_financial_snapshot_for_reconciliation(self):
+        values = _build_sales_invoice_external_values(
+            {
+                "order_id": "884984812",
+                "bill_number": "V-100",
+                "external_state": "ACCEPTED",
+                "payment_method": "ONLINE",
+                "external_customer_id": "customer-7",
+                "delivery_type": "DELIVERY",
+                "factor_number": "F-9",
+                "discount": 120,
+                "delivery_cost": 300,
+                "packaging_cost": 40,
+                "tax": 18,
+                "service_cost": 25,
+                "service_fee": 5,
+                "tip": 10,
+                "refund_amount": 2,
+                "final_price": 1250,
+                "paid_price": 1250,
+                "discount_amount": 120,
+                "raw": {"customerName": "نباید ذخیره شود", "orderId": "884984812"},
+            }
+        )
+
+        self.assertEqual(values["restaurant_external_order_id"], "884984812")
+        self.assertEqual(values["restaurant_external_customer_id"], "customer-7")
+        self.assertEqual(values["restaurant_external_delivery_cost"], 300)
+        self.assertEqual(values["restaurant_external_final_price"], 1250)
+        self.assertNotIn("نباید ذخیره شود", values["restaurant_external_payload_json"])

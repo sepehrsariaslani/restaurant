@@ -935,6 +935,8 @@ def _build_sales_order_items(order_payload):
             line_payload["restaurant_external_menu_item_id"] = line.get("menu_item_id") or ""
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_product_id", line.get("product_id") or "")
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_variation_id", line.get("variation_id") or "")
+        _set_if_column(line_payload, "Sales Order Item", "restaurant_external_product_hash_id", line.get("product_hash_id") or "")
+        _set_if_column(line_payload, "Sales Order Item", "restaurant_external_variation_hash_id", line.get("variation_hash_id") or "")
         if _has_column("Sales Order Item", "restaurant_external_item_title"):
             line_payload["restaurant_external_item_title"] = line.get("title") or ""
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_discount", flt(line.get("discount") or 0))
@@ -980,6 +982,39 @@ def _apply_sales_order_external_fields(target_payload, order_payload):
         "restaurant_external_payload_json",
         json.dumps(_redact_external_payload(order_payload["raw"]), ensure_ascii=False),
     )
+
+
+def _build_sales_invoice_external_values(order_payload):
+    """Build the Food Partner snapshot kept on the native Sales Invoice.
+
+    POS/ERPNext totals remain authoritative for the invoice itself. These
+    values are a reconciliation snapshot of the external report so an
+    accountant can compare the imported amount, fees and discounts later.
+    """
+    return {
+        "restaurant_external_source": SNAPP_SOURCE,
+        "restaurant_external_order_id": order_payload.get("order_id"),
+        "restaurant_external_bill_number": order_payload.get("bill_number"),
+        "restaurant_external_state": order_payload.get("external_state"),
+        "restaurant_external_payment_method": order_payload.get("payment_method"),
+        "restaurant_external_customer_id": order_payload.get("external_customer_id") or "",
+        "restaurant_external_delivery_type": order_payload.get("delivery_type") or "",
+        "restaurant_external_factor_number": order_payload.get("factor_number") or "",
+        "restaurant_external_discount": flt(order_payload.get("discount") or 0),
+        "restaurant_external_discount_amount": flt(order_payload.get("discount_amount") or 0),
+        "restaurant_external_delivery_cost": flt(order_payload.get("delivery_cost") or 0),
+        "restaurant_external_packaging_cost": flt(order_payload.get("packaging_cost") or 0),
+        "restaurant_external_tax": flt(order_payload.get("tax") or 0),
+        "restaurant_external_service_cost": flt(order_payload.get("service_cost") or 0),
+        "restaurant_external_service_fee": flt(order_payload.get("service_fee") or 0),
+        "restaurant_external_tip": flt(order_payload.get("tip") or 0),
+        "restaurant_external_refund_amount": flt(order_payload.get("refund_amount") or 0),
+        "restaurant_external_final_price": flt(order_payload.get("final_price") or 0),
+        "restaurant_external_paid_price": flt(order_payload.get("paid_price") or 0),
+        "restaurant_external_payload_json": json.dumps(
+            _redact_external_payload(order_payload.get("raw") or {}), ensure_ascii=False
+        ),
+    }
 
 
 def _update_existing_sales_order_lines(sales_order_name, order_payload):
@@ -1201,6 +1236,17 @@ def _create_sales_order(order_payload):
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_item_title", line.get("title") or "")
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_product_id", line.get("product_id") or "")
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_variation_id", line.get("variation_id") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_product_hash_id", line.get("product_hash_id") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_variation_hash_id", line.get("variation_hash_id") or "")
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_discount", flt(line.get("discount") or 0))
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_packaging_cost", flt(line.get("packaging_cost") or 0))
+        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_with_tax", cint(line.get("with_tax") or 0))
+        _set_if_column(
+            line_updates,
+            "Sales Order Item",
+            "restaurant_external_toppings_json",
+            json.dumps(line.get("toppings") or [], ensure_ascii=False),
+        )
         if line_updates:
             frappe.db.set_value("Sales Order Item", target.name, line_updates, update_modified=False)
 
@@ -1256,16 +1302,7 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     if not invoice_name:
         raise frappe.ValidationError(f"فاکتور سفارش Food Partner {order_payload['order_id']} ساخته نشد.")
 
-    invoice_updates = {
-        "restaurant_external_source": SNAPP_SOURCE,
-        "restaurant_external_order_id": order_payload.get("order_id"),
-        "restaurant_external_bill_number": order_payload.get("bill_number"),
-        "restaurant_external_state": order_payload.get("external_state"),
-        "restaurant_external_payment_method": order_payload.get("payment_method"),
-        "restaurant_external_payload_json": json.dumps(
-            _redact_external_payload(order_payload.get("raw") or {}), ensure_ascii=False
-        ),
-    }
+    invoice_updates = _build_sales_invoice_external_values(order_payload)
     for fieldname in list(invoice_updates):
         if not _has_column("Sales Invoice", fieldname):
             invoice_updates.pop(fieldname, None)
@@ -1314,6 +1351,12 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
                     "restaurant_external_item_title",
                     "restaurant_external_product_id",
                     "restaurant_external_variation_id",
+                    "restaurant_external_product_hash_id",
+                    "restaurant_external_variation_hash_id",
+                    "restaurant_external_discount",
+                    "restaurant_external_packaging_cost",
+                    "restaurant_external_with_tax",
+                    "restaurant_external_toppings_json",
                 )
                 if _has_column("Sales Order Item", field)
             ],
@@ -1326,6 +1369,12 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
             "restaurant_external_item_title",
             "restaurant_external_product_id",
             "restaurant_external_variation_id",
+            "restaurant_external_product_hash_id",
+            "restaurant_external_variation_hash_id",
+            "restaurant_external_discount",
+            "restaurant_external_packaging_cost",
+            "restaurant_external_with_tax",
+            "restaurant_external_toppings_json",
         ):
             if _has_column("Sales Invoice Item", fieldname) and fieldname in source_values:
                 invoice_values[fieldname] = source_values.get(fieldname) or ""
