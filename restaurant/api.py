@@ -12890,6 +12890,9 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	has_restaurant_table = _has_column("Sales Order", "restaurant_table")
 	has_external_source = _has_column("Sales Order", "restaurant_external_source")
 	has_external_order_id = _has_column("Sales Order", "restaurant_external_order_id")
+	has_external_bill_number = _has_column("Sales Order", "restaurant_external_bill_number")
+	has_external_state = _has_column("Sales Order", "restaurant_external_state")
+	has_external_payment_method = _has_column("Sales Order", "restaurant_external_payment_method")
 
 	fields = [
 		"name",
@@ -12923,6 +12926,12 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_external_source")
 	if has_external_order_id:
 		fields.append("restaurant_external_order_id")
+	if has_external_bill_number:
+		fields.append("restaurant_external_bill_number")
+	if has_external_state:
+		fields.append("restaurant_external_state")
+	if has_external_payment_method:
+		fields.append("restaurant_external_payment_method")
 	if _has_column("Sales Order", "restaurant_status"):
 		fields.append("restaurant_status")
 	if _has_column("Sales Order", "restaurant_secondary_customer"):
@@ -13078,6 +13087,9 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"payment_provider": row.restaurant_payment_provider if has_payment_provider else "",
 				"external_source": row.restaurant_external_source if has_external_source else "",
 				"external_order_id": row.restaurant_external_order_id if has_external_order_id else "",
+				"external_bill_number": row.restaurant_external_bill_number if has_external_bill_number else "",
+				"external_state": row.restaurant_external_state if has_external_state else "",
+				"external_payment_method": row.restaurant_external_payment_method if has_external_payment_method else "",
 				"table": (row.restaurant_table or "") if has_restaurant_table else "",
 				"items": items_by_parent.get(row.name, []),
 			}
@@ -16348,6 +16360,9 @@ def get_management_order_detail(order_name, source=None):
 					"payment_provider": doc.get("restaurant_payment_provider") or "",
 					"external_source": doc.get("restaurant_external_source") or "",
 					"external_order_id": doc.get("restaurant_external_order_id") or "",
+					"external_bill_number": doc.get("restaurant_external_bill_number") or "",
+					"external_state": doc.get("restaurant_external_state") or "",
+					"external_payment_method": doc.get("restaurant_external_payment_method") or "",
 					"payment_reference": doc.get("restaurant_payment_reference") or "",
 					"courier": doc.get("restaurant_courier") or "",
 					"payment_rrn": doc.get("restaurant_payment_rrn") or "",

@@ -698,7 +698,12 @@
             </span>
           </div>
           <button class="od-close" @click="closeOrderDetailModal">✕</button>
-        </div>
+          </div>
+          <div v-if="isSnappFoodOrder(orderDetailModal.order)" class="od-external-meta">
+            <span v-if="orderDetailModal.order.external_bill_number">شماره Food Partner: {{ orderDetailModal.order.external_bill_number }}</span>
+            <span v-if="orderDetailModal.order.external_order_id">شناسه: {{ orderDetailModal.order.external_order_id }}</span>
+            <span v-if="orderDetailModal.order.external_state">وضعیت خارجی: {{ orderDetailModal.order.external_state }}</span>
+          </div>
 
         <p class="od-بارگذاری" v-if="orderDetailModal.بارگذاری">در حال دریافت...</p>
         <p class="od-error" v-else-if="orderDetailModal.loadError">{{ orderDetailModal.loadError }}</p>
@@ -8429,6 +8434,7 @@ kbd {
   padding: 1rem 1.25rem 0.5rem; gap: 1rem;
 }
 .od-header-info { display: flex; flex-direction: column; gap: 0.25rem; }
+.od-external-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; padding: 0.55rem 1.25rem; border-bottom: 1px solid var(--mg-border); color: var(--mg-text-muted); font-size: 0.68rem; }
 .od-header-info h3 { margin: 0; font-size: 1rem; font-weight: 700; }
 .od-badge {
   display: inline-flex; align-items: center;

@@ -92,6 +92,15 @@ test('POS refreshes the shared native order lists while the cashier screen is vi
   assert.match(page, /clearInterval\(sharedPosRefreshTimer\)/)
 })
 
+test('POS keeps Food Partner traceability inline in the native order detail', () => {
+  const page = read('src/pages/management/sales/ManagementPosPage.vue')
+
+  assert.match(page, /od-external-meta/)
+  assert.match(page, /external_bill_number/)
+  assert.match(page, /external_order_id/)
+  assert.match(page, /external_state/)
+})
+
 test('POS financial controls hide unused rows and style nested amount inputs consistently', () => {
   const cart = read('src/components/management/pos/PosCartPanel.vue')
 
