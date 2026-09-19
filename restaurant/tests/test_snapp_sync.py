@@ -217,6 +217,38 @@ class TestSnappSync(FrappeTestCase):
         variation = next(row for row in entries if row.get("id") == "variation-1")
         self.assertEqual(variation.get("_category_title"), "سالادها")
 
+    def test_extract_menu_entries_does_not_map_category_with_product_id_marker(self):
+        payload = {
+            "data": [
+                {
+                    "id": "2642322",
+                    "productId": "2642322",
+                    "title": "کلاب و ساندویچ",
+                    "menuItems": [
+                        {
+                            "productId": "product-1",
+                            "productTitle": "کلاب بوقلمون دودی",
+                            "variations": [
+                                {
+                                    "variationId": "variation-1",
+                                    "variationTitle": "سایز معمولی",
+                                    "price": 185000,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        entries = _extract_menu_entries(payload)
+
+        self.assertFalse(any(row.get("productId") == "2642322" for row in entries))
+        product = next(row for row in entries if row.get("productId") == "product-1")
+        self.assertEqual(product.get("_category_title"), "کلاب و ساندویچ")
+        variation = next(row for row in entries if row.get("variationId") == "variation-1")
+        self.assertEqual(variation.get("_category_title"), "کلاب و ساندویچ")
+
     def test_invoice_keeps_external_financial_snapshot_for_reconciliation(self):
         values = _build_sales_invoice_external_values(
             {

@@ -450,7 +450,29 @@ def _extract_menu_entries(payload):
         "children",
         "subcategories",
         "productgroups",
+        "categories",
+        "menucategories",
+        "categoryproducts",
+        "productlist",
+        "submenus",
+        "submenu",
+        "menus",
+        "menu",
+        "groups",
+        "entries",
+        "data",
     }
+    category_parent_keys = {
+        "category",
+        "categories",
+        "menucategory",
+        "menucategories",
+        "productgroup",
+        "productgroups",
+        "group",
+        "groups",
+    }
+    variation_child_keys = {"variations", "variation", "productvariations"}
     product_marker_keys = {
         "productid",
         "variationid",
@@ -468,34 +490,108 @@ def _extract_menu_entries(payload):
         "description",
     }
 
+    def normalize_key(key):
+        return re.sub(r"[^a-z0-9]", "", str(key or "").lower())
+
     def first_value(value, keys):
-        for key in keys:
-            candidate = value.get(key)
-            if candidate not in (None, "", []):
+        wanted = {normalize_key(key) for key in keys}
+        for raw_key, candidate in value.items():
+            if normalize_key(raw_key) in wanted and candidate not in (None, "", []):
                 return candidate
         return ""
 
-    def visit(value, category_title="", category_id=""):
+    def visit(value, category_title="", category_id="", parent_key=""):
         if isinstance(value, list):
             for child in value:
-                visit(child, category_title, category_id)
+                visit(child, category_title, category_id, parent_key)
             return
         if not isinstance(value, dict):
             return
 
-        normalized_keys = {
-            re.sub(r"[^a-z0-9]", "", str(key or "").lower())
-            for key in value
-        }
+        normalized_keys = {normalize_key(key) for key in value}
+        nested_children = [
+            (raw_key, child)
+            for raw_key, child in value.items()
+            if isinstance(child, (dict, list))
+        ]
         has_category_children = any(
-            key in normalized_keys
-            and isinstance(value.get(raw_key), (dict, list))
-            for raw_key in value
-            for key in {re.sub(r"[^a-z0-9]", "", str(raw_key or "").lower())}
-            if key in category_child_keys
+            normalize_key(raw_key) in category_child_keys
+            for raw_key, _child in nested_children
+        )
+        has_nested_values = bool(nested_children)
+        has_variation_children = any(
+            normalize_key(raw_key) in variation_child_keys
+            for raw_key, _child in nested_children
         )
         has_product_markers = bool(normalized_keys.intersection(product_marker_keys))
-        is_category = has_category_children and not has_product_markers
+        explicit_product_id = first_value(
+            value,
+            (
+                "productId",
+                "product_id",
+                "productHashId",
+                "product_hash_id",
+                "menuItemId",
+                "menu_item_id",
+            ),
+        )
+        explicit_variation_id = first_value(
+            value,
+            ("variationId", "variation_id", "variationHashId", "variation_hash_id"),
+        )
+        explicit_category_id = first_value(
+            value,
+            ("categoryId", "category_id", "menuCategoryId", "menu_category_id"),
+        )
+        explicit_category_title = first_value(
+            value,
+            ("categoryTitle", "category_title", "categoryName", "menuCategoryName"),
+        )
+        generic_title = first_value(value, ("title", "name"))
+        product_title = first_value(
+            value,
+            ("productTitle", "product_title", "productName", "product_name"),
+        )
+        variation_title = first_value(
+            value,
+            ("variationTitle", "variation_title", "variationName", "variation_name"),
+        )
+        category_identity_matches_product = bool(
+            explicit_category_id
+            and explicit_product_id
+            and str(explicit_category_id) == str(explicit_product_id)
+        )
+        category_identity_matches_id = bool(
+            explicit_category_id
+            and value.get("id") not in (None, "")
+            and str(explicit_category_id) == str(value.get("id"))
+        )
+        is_category = bool(
+            has_nested_values
+            and not explicit_variation_id
+            and not has_variation_children
+            and (
+                (has_category_children and not has_product_markers)
+                or explicit_category_title
+                or category_identity_matches_product
+                or category_identity_matches_id
+                or (
+                    generic_title
+                    and not product_title
+                    and not variation_title
+                    and not first_value(value, ("price", "status"))
+                    and not has_variation_children
+                    and (has_category_children or explicit_product_id)
+                )
+                or (
+                    generic_title
+                    and not product_title
+                    and not variation_title
+                    and not first_value(value, ("price", "status"))
+                    and normalize_key(parent_key) in category_parent_keys
+                )
+            )
+        )
 
         title = str(
             first_value(
@@ -528,6 +624,7 @@ def _extract_menu_entries(payload):
             first_value(value, ("categoryId", "category_id", "menuCategoryId", "menu_category_id"))
             or category_id
             or (value.get("id") if is_category else "")
+            or (explicit_product_id if is_category else "")
             or ""
         ).strip()
         external_id = str(
@@ -560,9 +657,9 @@ def _extract_menu_entries(payload):
             if key not in seen:
                 seen.add(key)
                 entries.append(row)
-        for child in value.values():
+        for raw_key, child in value.items():
             if isinstance(child, (dict, list)):
-                visit(child, next_category_title, next_category_id)
+                visit(child, next_category_title, next_category_id, raw_key)
 
     visit(payload)
     return entries
