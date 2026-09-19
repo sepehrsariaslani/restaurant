@@ -23,6 +23,23 @@ MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
 FALLBACK_GUEST_NAME = "Snapp Guest"
+_REQUIRED_SCHEMA_FIELDS = {
+    "Restaurant Web Settings": (
+        "snapp_bearer_token",
+        "snapp_vendor_id",
+        "snapp_report_url",
+        "snapp_menu_api_base_url",
+        "snapp_auto_sync_invoices",
+        "snapp_require_item_mapping",
+        "snapp_default_customer",
+    ),
+    "Sales Order": ("restaurant_external_source", "restaurant_external_order_id"),
+    "Sales Invoice": ("restaurant_external_source", "restaurant_external_order_id"),
+    "Sales Order Item": ("restaurant_external_product_id",),
+    "Sales Invoice Item": ("restaurant_external_product_id",),
+    "Customer": ("restaurant_external_customer_id",),
+    "Item": ("restaurant_external_product_id", "restaurant_external_variation_id"),
+}
 _EXTERNAL_PRIVATE_KEY_PARTS = (
     "fullname",
     "firstname",
@@ -69,6 +86,16 @@ def _has_field(doctype, fieldname):
         return bool(frappe.get_meta(doctype).has_field(fieldname))
     except Exception:
         return False
+
+
+def _get_schema_status():
+    missing = [
+        f"{doctype}.{fieldname}"
+        for doctype, fieldnames in _REQUIRED_SCHEMA_FIELDS.items()
+        for fieldname in fieldnames
+        if not _has_field(doctype, fieldname)
+    ]
+    return {"ready": not missing, "missing": missing}
 
 
 def _set_single_if_exists(doctype, fieldname, value):
@@ -205,7 +232,9 @@ def _get_settings():
 def get_sync_status():
     settings = _get_settings()
     if settings.get("reason"):
-        return settings
+        return {**settings, "schema_ready": False, "schema_missing": []}
+
+    schema_status = _get_schema_status()
 
     return {
         "enabled": settings["enabled"],
@@ -222,6 +251,8 @@ def get_sync_status():
         "auto_sync_invoices": settings.get("auto_sync_invoices", False),
         "require_item_mapping": settings.get("require_item_mapping", False),
         "default_customer": settings.get("default_customer") or "",
+        "schema_ready": schema_status["ready"],
+        "schema_missing": schema_status["missing"],
         "last_success_at": frappe.db.get_single_value("Restaurant Web Settings", "snapp_last_success_at")
         if _has_field("Restaurant Web Settings", "snapp_last_success_at")
         else None,

@@ -13,6 +13,7 @@ from restaurant.snapp_sync import (
     _build_sales_invoice_external_values,
     _create_sales_order,
     _ensure_sales_invoice_for_order,
+    _get_schema_status,
     fetch_snapp_orders,
     _map_order_type,
     _map_status,
@@ -220,3 +221,18 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["order_name"], "SO-1")
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["payment"]["method"], "card")
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["commit"], False)
+
+    def test_schema_status_exposes_fields_missing_before_migration(self):
+        with patch(
+            "restaurant.snapp_sync._has_field",
+            side_effect=lambda doctype, fieldname: (doctype, fieldname)
+            in {
+                ("Restaurant Web Settings", "snapp_bearer_token"),
+                ("Sales Order", "restaurant_external_order_id"),
+            },
+        ):
+            status = _get_schema_status()
+
+        self.assertFalse(status["ready"])
+        self.assertIn("Sales Invoice.restaurant_external_order_id", status["missing"])
+        self.assertIn("Item.restaurant_external_product_id", status["missing"])
