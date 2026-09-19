@@ -1,12 +1,18 @@
+import sys
+import types
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from frappe.tests.utils import FrappeTestCase
+import restaurant.snapp_sync as snapp_sync
 
 from restaurant.snapp_sync import (
     _extract_menu_entries,
     _extract_orders,
     _extract_total_pages,
     _build_sales_invoice_external_values,
+    _create_sales_order,
+    _ensure_sales_invoice_for_order,
     fetch_snapp_orders,
     _map_order_type,
     _map_status,
@@ -147,3 +153,70 @@ class TestSnappSync(FrappeTestCase):
         self.assertNotIn("data", kwargs)
         self.assertEqual(kwargs["files"]["vendorId"], (None, "466275"))
         self.assertEqual(kwargs["files"]["pageNumber"], (None, "0"))
+
+    def test_imported_order_uses_native_pos_order_builder(self):
+        order_payload = {
+            "order_id": "884984812",
+            "customer_name": "مشتری تست",
+            "mobile": "989120000000",
+            "external_customer_id": "customer-7",
+            "order_type": "delivery",
+            "address": "نشانی تست",
+            "note": "یادداشت تست",
+            "status": "confirmed",
+            "discount_amount": 0,
+            "tax": 0,
+            "service_cost": 0,
+            "service_fee": 0,
+            "packaging_cost": 0,
+            "tip": 0,
+            "items": [{"title": "شیر خرما", "qty": 1, "unit_price": 185000}],
+        }
+        fake_api = types.ModuleType("restaurant.api")
+        fake_api.place_order = Mock(return_value={"order_id": "SO-1"})
+        fake_api._set_restaurant_order_status = Mock()
+        fake_api._append_sales_order_note = Mock()
+        fake_db = SimpleNamespace(
+            get_value=lambda doctype, *args, **kwargs: "item-1" if doctype == "Item" else "مشتری تست"
+        )
+        with patch("restaurant.snapp_sync._ensure_customer", return_value="CUST-7"), patch(
+            "restaurant.snapp_sync._get_settings", return_value={"default_customer": ""}
+        ), patch("restaurant.snapp_sync._resolve_item_code", return_value="ITEM-1"), patch(
+            "restaurant.snapp_sync._apply_sales_order_external_fields"
+        ), patch("restaurant.snapp_sync._has_column", return_value=False), patch.object(
+            snapp_sync.frappe, "db", fake_db
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
+            sys.modules, {"restaurant.api": fake_api}
+        ):
+            result = _create_sales_order(order_payload)
+
+        self.assertEqual(result, ("SO-1", "created"))
+        fake_api.place_order.assert_called_once()
+        self.assertEqual(fake_api.place_order.call_args.kwargs["commit"], False)
+        self.assertEqual(fake_api.place_order.call_args.kwargs["order_type"], "delivery")
+        self.assertEqual(fake_api.place_order.call_args.kwargs["items"][0]["item_slug"], "item-1")
+
+    def test_imported_order_uses_native_pos_settlement(self):
+        order_payload = {
+            "order_id": "884984812",
+            "bill_number": "V-100",
+            "payment_method": "ONLINE",
+            "external_state": "ACCEPTED",
+            "external_customer_id": "customer-7",
+            "raw": {"orderId": "884984812"},
+        }
+        fake_api = types.ModuleType("restaurant.api")
+        fake_api.settle_pos_order = Mock(return_value={"sales_invoice": "SI-1"})
+        fake_db = SimpleNamespace(get_value=lambda *args, **kwargs: None, set_value=Mock())
+        with patch("restaurant.snapp_sync._has_column", return_value=True), patch.object(
+            snapp_sync.frappe, "db", fake_db
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
+            sys.modules, {"restaurant.api": fake_api}
+        ):
+            result = _ensure_sales_invoice_for_order("SO-1", order_payload)
+
+        self.assertEqual(result["sales_invoice"], "SI-1")
+        fake_api.settle_pos_order.assert_called_once()
+        self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["order_name"], "SO-1")
+        self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["payment"]["method"], "card")
+        self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["commit"], False)

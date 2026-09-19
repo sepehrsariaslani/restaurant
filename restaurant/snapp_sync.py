@@ -1171,7 +1171,7 @@ def _create_sales_order(order_payload):
         "order_type": order_payload["order_type"],
     }
     # Import lazily to avoid loading the API module while Frappe imports this module.
-    from restaurant.api import place_order
+    from restaurant.api import _append_sales_order_note, _set_restaurant_order_status, place_order
 
     result = place_order(
         customer_info={
