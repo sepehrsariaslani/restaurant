@@ -293,7 +293,7 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
     pages_fetched = 0
     total_pages = None
 
-    while page_number <= max_pages:
+    while page_number < max_pages:
         report_data = {
             "vendorId": cfg["vendor_id"],
             "startDate": get_datetime(start_dt).strftime("%Y-%m-%d %H:%M:%S"),

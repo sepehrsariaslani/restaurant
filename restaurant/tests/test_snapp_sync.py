@@ -155,6 +155,27 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(kwargs["files"]["vendorId"], (None, "466275"))
         self.assertEqual(kwargs["files"]["pageNumber"], (None, "0"))
 
+    def test_food_partner_report_respects_max_page_limit(self):
+        response = Mock()
+        response.json.return_value = {"data": {"items": [{"orderId": "order-1"}]}}
+        with patch("restaurant.snapp_sync.requests.post", return_value=response) as request:
+            result = fetch_snapp_orders(
+                from_datetime="2026-09-19 00:00:00",
+                to_datetime="2026-09-19 23:59:59",
+                page_size=1,
+                max_pages=2,
+                settings={
+                    "token": "secret",
+                    "vendor_id": "466275",
+                    "page_size": 1,
+                    "lookback_minutes": 180,
+                    "report_url": "https://snappfood.ir/vms/v3/restaurant/report",
+                },
+            )
+
+        self.assertEqual(result["pages_fetched"], 2)
+        self.assertEqual(request.call_count, 2)
+
     def test_imported_order_uses_native_pos_order_builder(self):
         order_payload = {
             "order_id": "884984812",
