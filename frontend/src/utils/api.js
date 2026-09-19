@@ -1403,6 +1403,10 @@ export function getSnappfoodIntegrationConfig() {
 	return callRestaurantAPI("get_snappfood_integration_config", {});
 }
 
+export function testSnappfoodConnection() {
+	return callRestaurantAPI("test_snappfood_connection", {});
+}
+
 export function saveSnappfoodIntegrationConfig(payload = {}) {
 	return callRestaurantAPI("save_snappfood_integration_config", { payload });
 }

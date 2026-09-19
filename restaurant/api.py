@@ -22578,6 +22578,20 @@ def get_snappfood_integration_config():
 
 
 @frappe.whitelist()
+def test_snappfood_connection():
+	"""Read one Food Partner report page without creating or changing ERP docs."""
+	_ensure_management_access()
+	from restaurant.snapp_sync import fetch_snapp_orders
+
+	result = fetch_snapp_orders(page_size=1, max_pages=1)
+	return {
+		"status": "success",
+		"orders_count": cint(result.get("orders_count") or 0),
+		"pages_fetched": cint(result.get("pages_fetched") or 0),
+	}
+
+
+@frappe.whitelist()
 def save_snappfood_integration_config(payload=None):
 	_ensure_management_access()
 	payload = _parse_json(payload, {})

@@ -5,7 +5,8 @@
     subtitle="نگاشت منوی اسنپ‌فود و ورود سفارش‌ها به همان سفارش فروش و فاکتور POS"
   >
     <template #actions>
-      <button class="secondary-btn" type="button" @click="loadConfig" :disabled="loading">تازه‌سازی</button>
+      <button class="secondary-btn" type="button" @click="loadConfig" :disabled="loading || testingConnection">تازه‌سازی</button>
+      <button class="secondary-btn" type="button" @click="testConnection" :disabled="testingConnection || !status.schema_ready">{{ testingConnection ? 'در حال تست...' : 'تست اتصال' }}</button>
       <a class="secondary-btn" href="https://vendors.snappfood.ir/installation-foodpartner/" target="_blank" rel="noreferrer">باز کردن Food Partner</a>
     </template>
 
@@ -94,6 +95,7 @@ import {
   runSnappfoodSyncToday,
   saveSnappfoodIntegrationConfig,
   saveSnappfoodItemMapping,
+  testSnappfoodConnection,
 } from '@/utils/api'
 
 const tabs = [
@@ -104,6 +106,7 @@ const tabs = [
 const breadcrumbItems = [{ label: 'مدیریت', href: '/management' }, { label: 'اتصال Food Partner' }]
 const activeTab = ref('connection')
 const loading = ref(false)
+const testingConnection = ref(false)
 const saving = ref(false)
 const mappingLoading = ref(false)
 const mappingSaving = ref('')
@@ -140,6 +143,14 @@ function applyStatus(data = {}) {
 async function loadConfig() {
   loading.value = true; error.value = ''; successMessage.value = ''
   try { applyStatus(await getSnappfoodIntegrationConfig()) } catch (err) { error.value = err?.message || 'تنظیمات اتصال خوانده نشد.' } finally { loading.value = false }
+}
+async function testConnection() {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
+  testingConnection.value = true; error.value = ''; successMessage.value = ''
+  try {
+    const result = await testSnappfoodConnection()
+    successMessage.value = `اتصال موفق بود؛ ${result?.orders_count || 0} سفارش در صفحهٔ آزمایشی خوانده شد.`
+  } catch (err) { error.value = err?.message || 'تست اتصال ناموفق بود.' } finally { testingConnection.value = false }
 }
 async function saveConfig() {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }

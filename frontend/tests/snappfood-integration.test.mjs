@@ -32,3 +32,15 @@ test('Food Partner settings keeps orders and invoices on the shared POS flow', (
   assert.match(page, /همان سفارش فروش و فاکتور POS/)
   assert.match(page, /همان سفارش‌های فروش و فاکتورهای POS ثبت می‌شوند/)
 })
+
+test('Food Partner settings exposes a read-only connection test', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const api = read('src/utils/api.js')
+  const backend = read('../restaurant/api.py')
+
+  assert.match(page, /تست اتصال/)
+  assert.match(page, /testSnappfoodConnection/)
+  assert.match(api, /test_snappfood_connection/)
+  assert.match(backend, /def test_snappfood_connection\(\)/)
+  assert.match(backend, /max_pages=1/)
+})
