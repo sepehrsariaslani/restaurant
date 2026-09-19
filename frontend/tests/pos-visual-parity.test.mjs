@@ -54,3 +54,17 @@ test('POS desktop workspace keeps products on the left and cart on the right', (
   assert.match(page, /\.products-col\s*\{[\s\S]*direction:\s*rtl/)
   assert.match(page, /\.cart-desktop-col\s*\{[\s\S]*direction:\s*rtl/)
 })
+
+test('POS keeps order metadata in the cart panel instead of the product surface', () => {
+  const panel = read('src/components/management/pos/PosProductPanel.vue')
+  const cart = read('src/components/management/pos/PosCartPanel.vue')
+  const page = read('src/pages/management/sales/ManagementPosPage.vue')
+
+  assert.doesNotMatch(panel, /secondary-customer-field|secondaryCustomerVisible/)
+  assert.match(cart, /مشتری ثانویه \/ تحویل‌گیرنده/)
+  assert.match(cart, /<SearchableDropdown[\s\S]*fixed-panel/)
+  assert.match(cart, /<PersianNumberInput[\s\S]*aria-label="تعداد نفرات"/)
+  assert.match(page, /:secondary-customer="form\.secondary_customer"/)
+  assert.match(page, /:guest-count="form\.guest_count"/)
+  assert.match(page, /:waiter-options="waiterOptions"/)
+})

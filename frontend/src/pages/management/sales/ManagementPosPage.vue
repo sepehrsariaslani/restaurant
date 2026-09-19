@@ -54,11 +54,7 @@
           :currency="currency"
           :customer-query="form.customer_query"
           :customer-options="customerOptions"
-          :secondary-customer="form.secondary_customer"
-          :secondary-customer-visible="isSecondaryCustomerFieldVisible"
           @update:customer-query="setCustomerQuery"
-          @update:secondary-customer="form.secondary_customer = $event"
-          @secondary-query="onSecondaryCustomerQuery"
           @select-customer="selectCustomerFromHistory"
           @create-customer="createCustomerFromQuery"
           @add-customer="addQuickCustomer"
@@ -81,6 +77,15 @@
             :order-mode="form.order_mode"
             :place="form.place"
             :place-options="placeOptions"
+            :customer-options="customerOptions"
+            :customer-search-fn="searchCustomers"
+            :secondary-customer="form.secondary_customer"
+            :secondary-customer-visible="isSecondaryCustomerFieldVisible"
+            :mobile="form.mobile"
+            :guest-count="form.guest_count"
+            :waiter="form.waiter"
+            :waiter-options="waiterOptions"
+            :waiter-loading="waiterبارگذاری"
             :table-orders="selectedDineInOrders"
             :table-preview-loading="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
@@ -98,6 +103,10 @@
             @update:selected-line-id="selectedCartLineId = $event"
             @update:order-mode="setOrderMode"
             @update:place="form.place = $event"
+            @update:mobile="form.mobile = $event"
+            @update:secondary-customer="form.secondary_customer = $event"
+            @update:guest-count="form.guest_count = Math.max(Number($event || 1), 1)"
+            @update:waiter="onCartWaiterChange"
             @update:note="form.note = $event"
             @update:payment-method="payment.method = $event"
             @update:payment-reference="payment.reference_no = $event"
@@ -507,6 +516,15 @@
             :order-mode="form.order_mode"
             :place="form.place"
             :place-options="placeOptions"
+            :customer-options="customerOptions"
+            :customer-search-fn="searchCustomers"
+            :secondary-customer="form.secondary_customer"
+            :secondary-customer-visible="isSecondaryCustomerFieldVisible"
+            :mobile="form.mobile"
+            :guest-count="form.guest_count"
+            :waiter="form.waiter"
+            :waiter-options="waiterOptions"
+            :waiter-loading="waiterبارگذاری"
             :table-orders="selectedDineInOrders"
             :table-preview-loading="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
@@ -523,6 +541,10 @@
             @update:selected-line-id="selectedCartLineId = $event"
             @update:order-mode="setOrderMode"
             @update:place="form.place = $event"
+            @update:mobile="form.mobile = $event"
+            @update:secondary-customer="form.secondary_customer = $event"
+            @update:guest-count="form.guest_count = Math.max(Number($event || 1), 1)"
+            @update:waiter="onCartWaiterChange"
             @update:note="form.note = $event"
             @update:payment-method="payment.method = $event"
             @update:payment-reference="payment.reference_no = $event"
@@ -2506,6 +2528,11 @@ async function loadWaitersOnce() {
 
 function onWaiterChange(event) {
   const userName = String(event?.target?.value || '').trim()
+  onCartWaiterChange(userName)
+}
+
+function onCartWaiterChange(value) {
+  const userName = String(value || '').trim()
   const found = waiterOptions.value.find((row) => row.name === userName)
   form.waiter = userName
   form.waiter_name = found ? found.label : ''
@@ -2844,17 +2871,9 @@ async function loadCustomers(search = '') {
   }
 }
 
-// جستجوی مشتری‌ها از داخل فیلد «مشتری ثانویه» — تا لیست کشویی آن هم از مشتری‌های موجود پر شود
-let secondaryCustomerSearchTimeout = null
-function onSecondaryCustomerQuery(value) {
-  const text = String(value || '').trim()
-  if (!text || text.length < 2) {
-    return
-  }
-  if (secondaryCustomerSearchTimeout) clearTimeout(secondaryCustomerSearchTimeout)
-  secondaryCustomerSearchTimeout = setTimeout(() => {
-    loadCustomers(text)
-  }, 350)
+async function searchCustomers(search = '') {
+  await loadCustomers(search)
+  return customerOptions.value
 }
 
 function buildCustomerOptions(orders = []) {
