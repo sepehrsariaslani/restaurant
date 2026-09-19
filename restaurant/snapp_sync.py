@@ -231,6 +231,14 @@ def _extract_vendor_id_from_token(value):
         if isinstance(node, dict):
             for key, value in node.items():
                 normalized = re.sub(r"[^a-z0-9_]", "", str(key or "").lower())
+                if normalized in {"username", "sub"}:
+                    identity_match = re.search(
+                        r"(?:^|[^a-z0-9])vmo([0-9]+)(?:$|[^a-z0-9])",
+                        str(value or ""),
+                        flags=re.IGNORECASE,
+                    )
+                    if identity_match:
+                        return identity_match.group(1)
                 if normalized in id_keys:
                     found = candidate(value)
                     if found:
@@ -485,6 +493,7 @@ def fetch_snapp_menu(settings=None):
     headers = {
         "accept": "application/json, text/plain, */*",
         "authorization": f"Bearer {cfg['token']}",
+        "vendor-authorization": "true",
         "user-agent": "Mozilla/5.0",
     }
     if cfg.get("host_domain"):

@@ -43,6 +43,14 @@ class TestSnappSync(FrappeTestCase):
             "466275",
         )
 
+        username_payload = base64.urlsafe_b64encode(
+            json.dumps({"username": "vmo466275", "sub": "vmo466275:opaque"}).encode("utf-8")
+        ).decode("ascii").rstrip("=")
+        self.assertEqual(
+            _extract_vendor_id_from_token(f"header.{username_payload}.signature"),
+            "466275",
+        )
+
     def test_menu_auth_failure_becomes_user_facing_validation_error(self):
         response = Mock(status_code=401, reason="Unauthorized")
         response.raise_for_status.side_effect = requests.HTTPError(
@@ -59,6 +67,20 @@ class TestSnappSync(FrappeTestCase):
                 )
 
         self.assertIn("توکن Food Partner", str(context.exception))
+
+    def test_food_partner_menu_sends_vendor_authorization_header(self):
+        response = Mock()
+        response.json.return_value = {"data": []}
+        with patch("restaurant.snapp_sync.requests.get", return_value=response) as request:
+            fetch_snapp_menu(
+                {
+                    "token": "secret",
+                    "vendor_id": "466275",
+                    "menu_api_base_url": "https://apigw.snappfood.ir",
+                }
+            )
+
+        self.assertEqual(request.call_args.kwargs["headers"]["vendor-authorization"], "true")
 
     def test_extract_orders_from_nested_payload(self):
         payload = {"data": {"items": [{"id": "ord-1"}, {"id": "ord-2"}], "totalPages": 4}}
