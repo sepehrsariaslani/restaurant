@@ -273,10 +273,11 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
             "source": "order-pwa",
             "appVersion": "3.14.1",
         }
+        report_files = {key: (None, value) for key, value in report_data.items()}
         response = requests.post(
             cfg.get("report_url") or DEFAULT_REPORT_URL,
             headers=headers,
-            data=report_data,
+            files=report_files,
             timeout=30,
         )
         response.raise_for_status()
@@ -291,7 +292,7 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
 
         if total_pages is None:
             total_pages = _extract_total_pages(payload)
-        if total_pages and page_number >= total_pages:
+        if total_pages and page_number + 1 >= total_pages:
             break
         if not total_pages and len(page_orders) < page_size:
             break

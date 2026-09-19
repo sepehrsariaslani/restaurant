@@ -1,3 +1,5 @@
+from unittest.mock import Mock, patch
+
 from frappe.tests.utils import FrappeTestCase
 
 from restaurant.snapp_sync import (
@@ -5,6 +7,7 @@ from restaurant.snapp_sync import (
     _extract_orders,
     _extract_total_pages,
     _build_sales_invoice_external_values,
+    fetch_snapp_orders,
     _map_order_type,
     _map_status,
     normalize_snapp_order,
@@ -123,3 +126,24 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(values["restaurant_external_delivery_cost"], 300)
         self.assertEqual(values["restaurant_external_final_price"], 1250)
         self.assertNotIn("نباید ذخیره شود", values["restaurant_external_payload_json"])
+
+    def test_food_partner_report_uses_multipart_form_fields(self):
+        response = Mock()
+        response.json.return_value = {"data": {"items": [{"orderId": "order-1"}], "totalPages": 1}}
+        with patch("restaurant.snapp_sync.requests.post", return_value=response) as request:
+            fetch_snapp_orders(
+                from_datetime="2026-09-19 00:00:00",
+                to_datetime="2026-09-19 23:59:59",
+                settings={
+                    "token": "secret",
+                    "vendor_id": "466275",
+                    "page_size": 50,
+                    "lookback_minutes": 180,
+                    "report_url": "https://snappfood.ir/vms/v3/restaurant/report",
+                },
+            )
+
+        kwargs = request.call_args.kwargs
+        self.assertNotIn("data", kwargs)
+        self.assertEqual(kwargs["files"]["vendorId"], (None, "466275"))
+        self.assertEqual(kwargs["files"]["pageNumber"], (None, "0"))
