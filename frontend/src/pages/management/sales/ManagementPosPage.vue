@@ -6906,12 +6906,14 @@ onBeforeUnmount(() => {
 	min-height: 0;
 	flex: 1;
 	overflow: hidden;
+	direction: ltr;
 }
 
 .cart-desktop-col {
   min-height: 0;
   display: flex;
   overflow: hidden;
+	direction: rtl;
 }
 
 .cart-desktop-col :deep(.cart-panel) {
@@ -7424,6 +7426,7 @@ kbd {
 .products-col {
   min-height: 0;
   overflow: hidden;
+	direction: rtl;
 }
 
 .tbl-btn {

@@ -50,14 +50,16 @@
 					<div class="cust-empty">مشتری‌ای پیدا نشد.</div>
 				</div>
 			</div>
-			<button
-				type="button"
+			<DsButton
+				variant="primary"
+				size="sm"
 				class="cust-add-btn"
 				@click="$emit('add-customer')"
 				title="مشتری جدید"
+				aria-label="مشتری جدید"
 			>
 				<Plus :size="15" :stroke-width="2.4" />
-			</button>
+			</DsButton>
 
 			<div
 				v-if="secondaryCustomerVisible"
@@ -171,9 +173,9 @@
 					@keyup.enter="$emit('scan-scale')"
 					placeholder="بارکد وزنی ترازو"
 				/>
-				<button type="button" class="scan-btn" @click="$emit('scan-scale')">
+				<DsButton variant="primary" size="sm" class="scan-btn" @click="$emit('scan-scale')">
 					تحلیل بارکد
-				</button>
+				</DsButton>
 			</div>
 			<p class="scan-feedback" v-if="scannerFeedback">{{ scannerFeedback }}</p>
 
@@ -230,128 +232,19 @@
 						</header>
 
 						<div class="products-grid" :class="`mode-${productView}`">
-							<template v-if="productView === 'compact'">
-								<article
-									v-for="item in group.items"
-									:key="item.slug || item.name"
-									class="compact-card"
-									:class="{ 'has-qty': quantityValue(item.slug) > 0 }"
-								>
-									<button
-										type="button"
-										class="compact-main-btn"
-										@click="$emit('increment-product', item)"
-										:title="`افزودن سریع ${item.title || item.name}`"
-									>
-										<span class="compact-name">{{ item.title || item.name }}</span>
-										<span class="compact-price">{{
-											formatMoney(item.base_price || item.standard_rate || 0, currency)
-										}}</span>
-										<span class="compact-qty" v-if="quantityValue(item.slug) > 0"
-											>× {{ displayQty(item.slug) }}</span
-										>
-									</button>
-									<div class="compact-actions">
-										<button
-											type="button"
-											class="compact-action-btn compact-action-btn--primary"
-											:title="`افزودن سریع ${item.title || item.name}`"
-											@click="$emit('increment-product', item)"
-										>
-											<Plus :size="14" :stroke-width="2.4" />
-										</button>
-										<button
-											type="button"
-											class="compact-action-btn compact-action-btn--bom"
-											title="`BOM و سفارشی سازی ${item.title || item.name}`"
-											aria-label="BOM و سفارشی سازی"
-											@click="$emit('open-bom', item)"
-										>
-											<SlidersHorizontal :size="14" :stroke-width="2.3" />
-											<span class="compact-bom-label">BOM</span>
-										</button>
-										<button
-											type="button"
-											class="compact-action-btn compact-action-btn--edit"
-											title="ویرایش سریع محصول"
-											aria-label="ویرایش سریع محصول"
-											@click.stop="$emit('quick-edit', item)"
-										>
-											<AlertCircle :size="14" :stroke-width="2.4" />
-										</button>
-									</div>
-								</article>
-							</template>
-
-							<template v-else>
-								<article
-									class="product-card"
-									:class="{
-										'out-of-stock': Number(item.out_of_stock) === 1,
-										'has-qty': quantityValue(item.slug) > 0,
-									}"
-									v-for="item in group.items"
-									:key="item.slug || item.name"
-								>
-									<button
-										type="button"
-										class="image-btn"
-										:disabled="Number(item.out_of_stock) === 1"
-										@click="$emit('increment-product', item)"
-									>
-										<img
-											class="product-image"
-											:src="item.image || fallbackImage"
-											:alt="item.title || item.name"
-										/>
-									</button>
-
-									<!-- دکمه ویرایش سریع — روی عکس، بالا سمت چپ، fixed -->
-									<button
-										type="button"
-										class="pos-quick-edit-btn"
-										title="ویرایش سریع محصول"
-										aria-label="ویرایش سریع محصول"
-										@click.stop="$emit('quick-edit', item)"
-									>
-										<AlertCircle :size="15" :stroke-width="2.4" />
-									</button>
-
-									<div class="product-body">
-										<h4>{{ item.title || item.name }}</h4>
-										<strong>{{
-											formatMoney(item.base_price || item.standard_rate || 0, currency)
-										}}</strong>
-										<small v-if="Number(item.out_of_stock) === 1" class="oos-badge">ناموجود</small>
-									</div>
-
-									<div class="product-actions">
-										<div class="counter">
-											<button type="button" @click="$emit('decrement-product', item)">
-												-
-											</button>
-											<span>{{ displayQty(item.slug) }}</span>
-											<button
-												type="button"
-												:disabled="Number(item.out_of_stock) === 1"
-												@click="$emit('increment-product', item)"
-											>
-												+
-											</button>
-										</div>
-										<button
-											type="button"
-											class="bom-btn"
-											title="BOM و سفارشی سازی محصول"
-											aria-label="BOM و سفارشی سازی محصول"
-											@click.stop="$emit('open-bom', item)"
-										>
-											<SlidersHorizontal :size="13" :stroke-width="2.3" aria-hidden="true" />
-											<span>BOM</span>
-										</button>
-									</div>
-								</article>
-							</template>
+							<ManagementPosProductCard
+								v-for="item in group.items"
+								:key="item.slug || item.name"
+								:item="item"
+								:view="productView"
+								:quantity="quantityValue(item.slug)"
+								:currency="currency"
+								:fallback-image="fallbackImage"
+								@increment="$emit('increment-product', item)"
+								@decrement="$emit('decrement-product', item)"
+								@open-bom="$emit('open-bom', item)"
+								@quick-edit="$emit('quick-edit', item)"
+							/>
 						</div>
 					</section>
 				</div>
@@ -362,8 +255,9 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import { AlertCircle, Grid2x2, List, Plus, Rows3, Search, SlidersHorizontal, UserRound } from "lucide-vue-next";
-import { formatMoney } from "@/utils/format";
+import { Grid2x2, List, Plus, Rows3, Search, UserRound } from "lucide-vue-next";
+import DsButton from "@/components/design/DsButton.vue";
+import ManagementPosProductCard from "@/components/management/pos/ManagementPosProductCard.vue";
 
 const props = defineProps({
 	products: { type: Array, default: () => [] },
@@ -919,29 +813,11 @@ function quantityValue(slug) {
 	justify-content: center;
 }
 
-.compact-action-btn--edit,
-.quick-edit-btn {
-  color: var(--mg-primary, #c97852);
-  border-color: color-mix(in srgb, var(--mg-primary, #c97852) 45%, var(--mg-border-light));
-}
-
-.compact-action-btn--edit:hover,
-.quick-edit-btn:hover {
-  background: color-mix(in srgb, var(--mg-primary, #c97852) 12%, transparent);
-}
-
 .cust-add-btn {
-	width: 36px;
-	height: 36px;
+	width: 40px;
+	min-height: 40px;
+	padding: 0;
 	border-radius: 12px;
-	border: 1px solid var(--mg-primary);
-	background: var(--mg-primary);
-	color: var(--mg-bg-surface);
-	font-size: 1.2rem;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	flex-shrink: 0;
 }
 
@@ -1199,233 +1075,6 @@ function quantityValue(slug) {
 	gap: 0.45rem;
 }
 
-.pos-quick-edit-btn {
-  position: absolute;
-  top: 0.45rem;
-  inset-inline-start: 0.45rem;
-  z-index: 6;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--mg-primary) 40%, var(--mg-border-light));
-  background: var(--mg-bg-surface);
-  color: var(--mg-primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 5px 14px rgb(52 38 31 / 0.18);
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-
-.pos-quick-edit-btn:hover {
-  transform: scale(1.1);
-  background: color-mix(in srgb, var(--mg-primary) 12%, var(--mg-bg-surface) 88%);
-}
-
-.product-card {
-	position: relative;
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
-	border-radius: 16px;
-	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
-	display: flex;
-	flex-direction: column;
-	box-shadow: 0 14px 30px rgb(52 38 31 / 0.07);
-	cursor: pointer;
-	transition:
-		transform 0.15s ease,
-		box-shadow 0.15s ease,
-		border-color 0.15s ease;
-}
-
-	.product-card.out-of-stock {
-		opacity: 0.55;
-	}
-
-	.product-card.has-qty {
-		border-color: color-mix(in srgb, var(--mg-primary) 72%, var(--mg-border-light) 28%);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 12%, transparent), 0 16px 32px color-mix(in srgb, var(--mg-primary) 12%, transparent);
-	}
-
-	.product-card.has-qty .counter {
-		background: color-mix(in srgb, var(--mg-primary) 10%, var(--mg-bg-surface) 90%);
-	}
-
-	.product-card.out-of-stock .product-image {
-	filter: grayscale(0.9);
-}
-
-.product-card .oos-badge {
-	display: inline-block;
-	margin-top: 2px;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: rgba(184, 79, 79, 0.14);
-	color: #b84f4f;
-	font-size: 10px;
-	font-weight: 600;
-}
-
-.product-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 20px 40px rgb(52 38 31 / 0.12);
-	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--mg-border-light) 56%);
-}
-
-.product-card:active {
-	transform: translateY(0);
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
-}
-
-.products-grid.mode-list .product-card {
-	flex-direction: row;
-	align-items: center;
-}
-
-.image-btn {
-	border: 0;
-	background: color-mix(in srgb, var(--mg-bg-page) 60%, var(--mg-bg-surface) 40%);
-	padding: 0;
-	cursor: pointer;
-	width: 100%;
-	display: block;
-	aspect-ratio: 4 / 3;
-	overflow: hidden;
-	flex-shrink: 0;
-}
-
-.products-grid.mode-list .image-btn {
-	width: 56px;
-	height: 56px;
-	aspect-ratio: 1 / 1;
-	border-radius: 8px;
-	margin: 0.3rem;
-}
-
-.product-image {
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
-	object-position: center;
-	display: block;
-}
-
-.product-body {
-	padding: 0.55rem 0.65rem 0.25rem;
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.15rem;
-	flex: 1;
-	min-width: 0;
-}
-
-.products-grid.mode-list .product-body {
-	flex-direction: row;
-	align-items: center;
-	justify-content: space-between;
-	flex: 1;
-	padding: 0.35rem 0.55rem;
-	gap: 0.4rem;
-}
-
-.product-body h4 {
-	margin: 0;
-	font-size: 0.82rem;
-	line-height: 1.3;
-	font-weight: 600;
-	color: var(--mg-text-main);
-	word-break: break-word;
-}
-
-.products-grid.mode-list .product-body h4 {
-	font-size: 0.8rem;
-}
-
-.product-body strong {
-	font-size: 0.8rem;
-	font-weight: 700;
-	color: var(--mg-primary);
-	flex-shrink: 0;
-	font-variant-numeric: tabular-nums;
-}
-
-	.product-actions {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.35rem;
-		padding: 0.3rem 0.6rem 0.55rem;
-		margin-top: auto;
-		flex-wrap: wrap;
-	}
-
-.products-grid.mode-list .product-actions {
-	padding: 0.3rem 0.55rem;
-	margin-top: 0;
-	flex-shrink: 0;
-}
-
-.counter {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.15rem;
-}
-
-.counter button {
-	width: 30px;
-	height: 30px;
-	border-radius: 10px;
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
-	background: var(--mg-bg-surface);
-	color: var(--mg-primary);
-	cursor: pointer;
-	font-size: 0.95rem;
-	font-weight: 600;
-	transition: background 0.12s ease;
-}
-
-.counter button:hover {
-	background: var(--mg-bg-page);
-}
-
-.counter span {
-	min-width: 28px;
-	text-align: center;
-	font-size: 0.78rem;
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-}
-
-	.bom-btn {
-		border: 1px solid color-mix(in srgb, var(--mg-primary) 84%, #000 16%);
-		background: var(--mg-primary);
-		color: #fff;
-		border-radius: 10px;
-		padding: 0.32rem 0.48rem;
-		cursor: pointer;
-		font-size: 0.68rem;
-		font-weight: 700;
-		min-height: 30px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.2rem;
-		white-space: nowrap;
-		transition: opacity 0.12s ease, transform 0.12s ease;
-	}
-
-	.bom-btn:hover,
-	.bom-btn:focus-visible {
-		opacity: 0.92;
-		transform: translateY(-1px);
-	}
-
-	.bom-btn:focus-visible {
-		outline: 2px solid color-mix(in srgb, var(--mg-primary) 46%, transparent);
-		outline-offset: 2px;
-	}
-
 .dark-input {
 	border: 1px solid var(--mg-border-light);
 	background: var(--mg-bg-surface);
@@ -1434,118 +1083,6 @@ function quantityValue(slug) {
 
 .dark-input::placeholder {
 	color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.55);
-}
-
-.compact-card {
-	border: 1px solid color-mix(in srgb, var(--mg-border-light) 96%, transparent);
-	border-radius: 16px;
-	background: linear-gradient(180deg, var(--mg-bg-surface) 0%, color-mix(in srgb, var(--mg-bg-surface) 92%, var(--mg-bg-surface) 8%) 100%);
-	display: grid;
-	gap: 0.4rem;
-	transition: all 0.12s;
-	position: relative;
-	padding: 0.7rem;
-	min-height: 128px;
-}
-
-.compact-card:hover {
-	border-color: color-mix(in srgb, var(--mg-primary) 44%, var(--mg-border-light) 56%);
-	background: color-mix(in srgb, var(--mg-bg-page) 70%, var(--mg-bg-surface) 30%);
-}
-
-.compact-card.has-qty {
-	border-color: var(--mg-primary);
-	background: color-mix(in srgb, var(--mg-primary) 7%, var(--mg-bg-surface) 93%);
-}
-
-.compact-name {
-	font-size: 0.88rem;
-	font-weight: 700;
-	color: var(--mg-primary);
-	line-height: 1.45;
-	display: block;
-}
-
-.compact-price {
-	font-size: 0.78rem;
-	color: var(--mg-primary);
-	display: block;
-	font-weight: 700;
-}
-
-.compact-qty {
-	position: absolute;
-	top: 0.45rem;
-	left: 0.45rem;
-	background: var(--mg-primary);
-	color: var(--mg-bg-surface);
-	border-radius: 999px;
-	font-size: 0.68rem;
-	padding: 0.14rem 0.42rem;
-	font-weight: 700;
-}
-
-.compact-main-btn {
-	border: 0;
-	background: transparent;
-	padding: 0;
-	text-align: right;
-	cursor: pointer;
-	font-family: inherit;
-	display: grid;
-	gap: 0.22rem;
-	align-content: start;
-	min-height: 62px;
-}
-
-.compact-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.35rem;
-	margin-top: auto;
-}
-
-.compact-action-btn {
-	width: 34px;
-	height: 34px;
-	border-radius: 9px;
-	border: 1px solid var(--mg-border-light);
-	background: color-mix(in srgb, var(--mg-bg-surface) 92%, transparent);
-	color: var(--mg-primary);
-	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	transition: all 0.15s ease;
-}
-
-.compact-action-btn:hover {
-	background: var(--mg-bg-page);
-	border-color: rgb(var(--mg-primary-rgb, 1 90 114) / 0.25);
-}
-
-.compact-action-btn--primary {
-	background: var(--mg-primary);
-	color: var(--mg-bg-surface);
-	border-color: var(--mg-primary);
-}
-
-.compact-action-btn--bom {
-	width: auto;
-	min-width: 48px;
-	padding: 0 0.38rem;
-	gap: 0.18rem;
-	font-size: 0.62rem;
-	font-weight: 800;
-}
-
-.compact-bom-label {
-	line-height: 1;
-}
-
-.compact-action-btn--primary:hover {
-	filter: brightness(0.96);
-	background: var(--mg-primary);
 }
 
 @media (max-width: 1200px) {
@@ -1557,16 +1094,6 @@ function quantityValue(slug) {
 @media (max-width: 860px) {
 	.products-grid.mode-grid {
 		grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
-	}
-	.products-grid.mode-list .product-card {
-		flex-direction: column;
-		align-items: stretch;
-	}
-	.products-grid.mode-list .image-btn {
-		width: 100%;
-		height: auto;
-		margin: 0;
-		border-radius: 0;
 	}
 }
 </style>

@@ -51,6 +51,7 @@ export const iconCatalog = Object.freeze([
 export const designSystemCatalog = Object.freeze({
   components: Object.freeze([
     { id: 'button', title: 'دکمه‌ها', description: 'عمل اصلی، ثانویه، کم‌اهمیت و خطرناک با حالت‌های focus و loading.', kind: 'primitive' },
+    { id: 'management-pos-product-card', title: 'کارت محصول POS', description: 'کارت محصول مرجع برای نماهای شبکه‌ای، فشرده و لیستی با عکس، قیمت، تعداد و BOM.', source: 'components/management/pos/ManagementPosProductCard.vue', kind: 'reference' },
     { id: 'surface', title: 'سطح و کارت', description: 'سطوح مدیریت با hierarchy مشخص و بدون تزئین اضافه.', kind: 'primitive' },
     { id: 'status', title: 'Badge و وضعیت', description: 'وضعیت موجودی، انتشار، خطا و موفقیت با متن و رنگ معنایی.', kind: 'primitive' },
     { id: 'product-card', title: 'کارت محصول', description: 'مرجع نمایش محصول در منوی مشتری با image، قیمت و اقدام.', source: 'components/MenuProductCard.vue', kind: 'reference' },
@@ -74,6 +75,7 @@ export const designSystemCatalog = Object.freeze({
   ]),
   patterns: Object.freeze([
     { id: 'product-search', title: 'جستجو و ایجاد محصول', description: 'جستجوی سروری، فیلتر سریع، نماهای ذخیره‌شده و اقدام ایجاد.' },
+    { id: 'pos-workspace', title: 'میزکار فروش POS', description: 'پنل محصولات در سمت چپ، سبد سفارش در سمت راست و کنترل‌های مشترک برای عملیات سریع فروش.' },
     { id: 'product-collection', title: 'مجموعه محصولات', description: 'لیست، گالری، کانبان، شیت، تقویم، درخت و بارگذاری صفحه‌ای.' },
     { id: 'product-collection-shell', title: 'قالب قاب مجموعه محصول', description: 'استفاده از shell مشترک برای جستجو، toolbar، وضعیت بارگذاری و بدنه‌ی نماها.' },
     { id: 'product-availability', title: 'وضعیت فروش', description: 'فعال، به‌زودی، ناموجود و اتمام با مسیر اصلاح واضح.' },
@@ -101,6 +103,7 @@ export const designSystemCatalog = Object.freeze({
   ]),
   templates: Object.freeze([
     { id: 'products-list', title: 'تمپلیت مدیریت محصولات', description: 'صفحه مرجع برای جستجو، نماها و مدیریت جمعی.', source: 'pages/management/catalog/ManagementProductsPage.vue', href: '/management/products' },
+    { id: 'management-pos', title: 'تمپلیت صندوق فروش POS', description: 'محصولات، مشتری، سبد سفارش و عملیات فروش با همان کارت‌ها و دکمه‌های Design System.', source: 'pages/management/sales/ManagementPosPage.vue', href: '/management/pos' },
     { id: 'products-collection-shell', title: 'تمپلیت مجموعه محصول قابل استفاده مجدد', description: 'قاب مشترک صفحه‌ی لیست محصولات برای انتقال به مجموعه‌های مدیریتی دیگر.', source: 'components/management/catalog/ManagementProductCollectionShell.vue', href: '/management/products' },
     { id: 'product-detail-editor', title: 'تمپلیت ویرایش محصول', description: 'جزئیات کامل یک محصول با تب‌های native، فرمول، مدل‌ها، موجودی، اتصالات و گزارش.', source: 'pages/management/catalog/ManagementProductDetailPage.vue', href: '/management/product' },
     { id: 'product-stock-ledger', title: 'تمپلیت دفتر گردش کالا', description: 'دفتر مستقل گردش کالا با جدول هوشمند، فیلتر و صفحه‌بندی.', source: 'pages/management/inventory/ManagementProductStockLedgerPage.vue', href: '/management/inventory/ledger' },

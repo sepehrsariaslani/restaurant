@@ -7,7 +7,9 @@
     :aria-busy="loading ? 'true' : 'false'"
   >
     <LoaderCircle v-if="loading" class="ds-button__loader" :size="16" aria-hidden="true" />
+    <slot name="leading" />
     <slot />
+    <slot name="trailing" />
   </button>
 </template>
 

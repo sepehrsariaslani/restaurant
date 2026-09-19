@@ -61,12 +61,14 @@
       <span>تعداد مهمان</span>
       <div class="counter-row">
         <button type="button" @click="setGuests(guestCount - 1)">-</button>
-        <input
+        <PersianNumberInput
           class="guest-input"
-          type="number"
-          min="1"
-          :value="guestCount"
-          @input="setGuests($event.target.value)"
+          :model-value="guestCount"
+          :min="1"
+          :allow-float="false"
+          input-class="guest-input__field"
+          aria-label="تعداد مهمان"
+          @update:model-value="setGuests"
         />
         <button type="button" @click="setGuests(guestCount + 1)">+</button>
       </div>
@@ -92,6 +94,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import PersianNumberInput from '@/components/PersianNumberInput.vue'
 
 const props = defineProps({
   customerQuery: {

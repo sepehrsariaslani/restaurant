@@ -10,6 +10,7 @@
         dir="ltr"
         :placeholder="placeholder"
         :disabled="disabled"
+        :aria-label="ariaLabel || undefined"
         @focus="onFocus"
         @blur="onBlur"
         @input="onInput"
@@ -64,6 +65,10 @@ const props = defineProps({
   },
   inputClass: {
     type: [String, Array, Object],
+    default: '',
+  },
+  ariaLabel: {
+    type: String,
     default: '',
   },
 })
