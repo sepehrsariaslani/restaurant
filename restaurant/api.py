@@ -17,6 +17,7 @@ import frappe
 from frappe import _
 from frappe.model.rename_doc import rename_doc
 from frappe.twofactor import get_qr_svg_code
+from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
 	add_days,
 	cint,
@@ -22614,14 +22615,21 @@ def save_snappfood_integration_config(payload=None):
 		"snapp_require_item_mapping",
 		"snapp_default_customer",
 	}
-	doc = frappe.get_doc("Restaurant Web Settings")
+	# Update only the integration fields.  Calling ``doc.save()`` here would
+	# validate unrelated legacy links on this Single DocType (for example an
+	# old default currency) and prevent the Food Partner connection from being
+	# saved even though its own fields are valid.
 	for fieldname in allowed:
-		if fieldname in payload and _has_column("Restaurant Web Settings", fieldname):
-			doc.set(fieldname, payload.get(fieldname))
+		if fieldname in payload and _has_doctype_field("Restaurant Web Settings", fieldname):
+			frappe.db.set_single_value("Restaurant Web Settings", fieldname, payload.get(fieldname))
 	token = str(payload.get("snapp_bearer_token") or "").strip()
-	if token and _has_column("Restaurant Web Settings", "snapp_bearer_token"):
-		doc.set_password("snapp_bearer_token", token)
-	doc.save(ignore_permissions=True)
+	if token and _has_doctype_field("Restaurant Web Settings", "snapp_bearer_token"):
+		set_encrypted_password(
+			"Restaurant Web Settings",
+			"Restaurant Web Settings",
+			token,
+			"snapp_bearer_token",
+		)
 	frappe.db.commit()
 	from restaurant.snapp_sync import get_sync_status
 
