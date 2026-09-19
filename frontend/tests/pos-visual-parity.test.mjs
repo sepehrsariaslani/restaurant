@@ -70,3 +70,13 @@ test('POS keeps order metadata in the cart panel instead of the product surface'
   assert.match(page, /:guest-count="form\.guest_count"/)
   assert.match(page, /:waiter-options="waiterOptions"/)
 })
+
+test('POS marks Food Partner orders inside its shared transaction views', () => {
+  const page = read('src/pages/management/sales/ManagementPosPage.vue')
+
+  assert.match(page, /function isSnappFoodOrder\(order = \{\}\)/)
+  assert.match(page, /external_source/)
+  assert.match(page, /اسنپ‌فود/)
+  assert.match(page, /isSnappFoodOrder\(tx\)/)
+  assert.match(page, /isSnappFoodOrder\(order\)/)
+})

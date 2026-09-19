@@ -333,6 +333,7 @@
                     <span>{{ tx.customer_name || 'مشتری POS' }}</span>
                     <span class="history-amount">{{ formatMoney(tx.grand_total || 0, currency) }}</span>
                   </div>
+                  <span v-if="isSnappFoodOrder(tx)" class="history-source-badge">اسنپ‌فود</span>
                   <span class="history-method-badge" v-if="tx.payment_method">
                     {{ paymentMethodDisplayLabel(tx.payment_method) }}
                   </span>
@@ -376,6 +377,7 @@
                       <small v-if="invoice.secondary_customer" class="accordion-secondary" :title="'سفارش‌دهنده: ' + invoice.secondary_customer">
                         ← {{ invoice.secondary_customer }}
                       </small>
+                      <small v-if="isSnappFoodOrder(invoice)" class="accordion-source">اسنپ‌فود</small>
                       <small class="accordion-amount">{{ formatMoney(invoice.grand_total || 0, currency) }}</small>
                       <small class="accordion-time">{{ formatInvoiceDateTime(invoice.created_at) }}</small>
                       <span class="accordion-chevron">{{ expandedInvoiceKey === invoice.invoice_key ? '▲' : '▼' }}</span>
@@ -459,6 +461,7 @@
                     <span class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</span>
                   </div>
                   <div class="history-card-footer">
+                    <span v-if="isSnappFoodOrder(order)" class="history-source-badge">اسنپ‌فود</span>
                     <span class="history-method-badge" v-if="order.payment_method">
                       {{ paymentMethodDisplayLabel(order.payment_method) }}
                     </span>
@@ -688,6 +691,7 @@
             <span class="od-badge" :class="`od-badge-${orderDetailModal.order?.status || ''}`">
               {{ formatStatus(orderDetailModal.order?.status || '') }}
             </span>
+            <span v-if="isSnappFoodOrder(orderDetailModal.order)" class="od-source-badge">اسنپ‌فود</span>
             <h3>{{ orderDetailModal.order?.order_code || 'جزئیات سفارش' }}</h3>
             <span class="od-time" v-if="orderDetailModal.order?.created_at">
               {{ formatInvoiceDateTime(orderDetailModal.order.created_at) }}
@@ -1948,6 +1952,10 @@ function isManagementPOSTransaction(order = {}) {
     paymentStatus === 'paid' ||
     Boolean(order.has_sales_invoice)
   )
+}
+
+function isSnappFoodOrder(order = {}) {
+  return String(order?.external_source || '').trim().toLowerCase() === 'snapp_food'
 }
 
 const productQtyMap = computed(() => {
@@ -7145,6 +7153,29 @@ onBeforeUnmount(() => {
   padding: 0.1rem 0.4rem;
   display: inline-block;
   width: fit-content;
+}
+
+.history-source-badge,
+.accordion-source,
+.od-source-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--mg-primary);
+  background: color-mix(in srgb, var(--mg-primary) 10%, var(--mg-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mg-primary) 22%, transparent);
+  border-radius: 999px;
+  padding: 0.1rem 0.42rem;
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+}
+
+.accordion-source {
+  flex: 0 0 auto;
+}
+
+.od-source-badge {
+  align-self: flex-start;
 }
 
 .kbd-help-btn {
