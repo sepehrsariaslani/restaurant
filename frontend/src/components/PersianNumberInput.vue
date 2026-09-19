@@ -71,6 +71,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  emptyAsNull: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'change', 'blur', 'enter', 'esc'])
@@ -113,8 +117,9 @@ function onInput(event) {
   const parsed = parseNumeric(normalized)
   const clamped = clampValue(parsed)
   inputText.value = clamped ? formatForDisplay(clamped) : ''
-  emit('update:modelValue', clamped)
-  emit('change', clamped)
+  const nextValue = props.emptyAsNull && !clamped ? null : clamped
+  emit('update:modelValue', nextValue)
+  emit('change', nextValue)
 }
 
 function normalizeRawValue(value) {

@@ -213,7 +213,8 @@
 						/>
 						<PersianNumberInput
 							:model-value="financial.targetAmount != null ? totals.discountAmount : financial.discountValue"
-							input-class="fin-input"
+							input-class="pos-amount-input"
+							empty-as-null
 							:placeholder="discountPlaceholder"
 							:min="0"
 							:disabled="financial.targetAmount != null"
@@ -255,7 +256,8 @@
 						/>
 						<PersianNumberInput
 							:model-value="financial.serviceValue"
-							input-class="fin-input"
+							input-class="pos-amount-input"
+							empty-as-null
 							:placeholder="servicePlaceholder"
 							:min="0"
 							@update:model-value="patchFinancial({ serviceValue: $event })"
@@ -281,7 +283,8 @@
 						/>
 						<PersianNumberInput
 							:model-value="financial.taxValue"
-							input-class="fin-input"
+							input-class="pos-amount-input"
+							empty-as-null
 							:placeholder="taxPlaceholder"
 							:min="0"
 							:disabled="Boolean(financial.taxExempt)"
@@ -433,7 +436,8 @@
 							</select>
 							<PersianNumberInput
 								:model-value="split.amount"
-								input-class="pay-amount-input"
+								input-class="pos-amount-input"
+								empty-as-null
 								placeholder="مبلغ"
 								:min="0"
 								:max="Math.max(Number(totals.payableAmount || 0), 0)"
@@ -1584,6 +1588,18 @@ defineExpose({
 	transition: all 0.15s ease;
 }
 
+.fin-control :deep(.pos-amount-input),
+.pay-split-controls :deep(.pos-amount-input) {
+	min-height: 56px;
+	height: 56px;
+	border-radius: 12px;
+	padding: 0.75rem 1rem;
+	font-size: 1.12rem;
+	font-weight: 800;
+	line-height: 1.25;
+	text-align: right;
+}
+
 .fin-control > .fin-input:focus,
 .fin-control :deep(.number-input:focus) {
 	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border-light) 58%);
@@ -1996,17 +2012,7 @@ defineExpose({
 	min-width: 0;
 }
 
-.pay-split-controls :deep(.pay-amount-input) {
-	border-radius: 9px;
-	padding: 0.6rem 0.7rem;
-	font-size: 0.85rem;
-	text-align: left;
-	min-height: 44px;
-	height: 44px;
-	box-sizing: border-box;
-}
-
-.pay-split-controls :deep(.pay-amount-input:focus) {
+.pay-split-controls :deep(.pos-amount-input:focus) {
 	border-color: var(--mg-primary);
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 12%, transparent);
 	outline: none;

@@ -98,3 +98,15 @@ test('Persian numeric input keeps zero as an empty editable value', () => {
   assert.match(input, /inputText\.value = clamped \? formatForDisplay\(clamped\) : ''/)
   assert.match(input, /if \(!numeric\) \{\s*return ''/)
 })
+
+test('POS uses the Accounts-style empty numeric contract and removes tip and packaging surfaces', () => {
+  const cart = read('src/components/management/pos/PosCartPanel.vue')
+  const page = read('src/pages/management/sales/ManagementPosPage.vue')
+
+  assert.match(cart, /empty-as-null/)
+  assert.match(cart, /input-class="pos-amount-input"/)
+  assert.doesNotMatch(page, /tipAmount/)
+  assert.doesNotMatch(page, /packagingAmount/)
+  assert.doesNotMatch(page, /انعام/)
+  assert.doesNotMatch(page, /بسته‌بندی/)
+})
