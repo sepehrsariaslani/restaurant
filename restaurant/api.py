@@ -12888,6 +12888,8 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	has_payment_status = _has_column("Sales Order", "restaurant_payment_status")
 	has_payment_provider = _has_column("Sales Order", "restaurant_payment_provider")
 	has_restaurant_table = _has_column("Sales Order", "restaurant_table")
+	has_external_source = _has_column("Sales Order", "restaurant_external_source")
+	has_external_order_id = _has_column("Sales Order", "restaurant_external_order_id")
 
 	fields = [
 		"name",
@@ -12917,6 +12919,10 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_payment_provider")
 	if has_restaurant_table:
 		fields.append("restaurant_table")
+	if has_external_source:
+		fields.append("restaurant_external_source")
+	if has_external_order_id:
+		fields.append("restaurant_external_order_id")
 	if _has_column("Sales Order", "restaurant_status"):
 		fields.append("restaurant_status")
 	if _has_column("Sales Order", "restaurant_secondary_customer"):
@@ -13070,6 +13076,8 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"payment_method": row.restaurant_payment_method if has_payment_method else "",
 				"payment_status": row.restaurant_payment_status if has_payment_status else "",
 				"payment_provider": row.restaurant_payment_provider if has_payment_provider else "",
+				"external_source": row.restaurant_external_source if has_external_source else "",
+				"external_order_id": row.restaurant_external_order_id if has_external_order_id else "",
 				"table": (row.restaurant_table or "") if has_restaurant_table else "",
 				"items": items_by_parent.get(row.name, []),
 			}
@@ -16338,6 +16346,8 @@ def get_management_order_detail(order_name, source=None):
 					"payment_method": doc.get("restaurant_payment_method") or "",
 					"payment_status": doc.get("restaurant_payment_status") or "",
 					"payment_provider": doc.get("restaurant_payment_provider") or "",
+					"external_source": doc.get("restaurant_external_source") or "",
+					"external_order_id": doc.get("restaurant_external_order_id") or "",
 					"payment_reference": doc.get("restaurant_payment_reference") or "",
 					"courier": doc.get("restaurant_courier") or "",
 					"payment_rrn": doc.get("restaurant_payment_rrn") or "",

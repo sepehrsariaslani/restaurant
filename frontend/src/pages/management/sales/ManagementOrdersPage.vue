@@ -105,6 +105,7 @@
               <div class="order-identity">
                 <strong>{{ row.order_code || row.name }}</strong>
                 <span class="customer-name">{{ row.customer_name || 'مشتری ناشناس' }}</span>
+                <span v-if="row.external_source === 'snapp_food'" class="external-source-badge">اسنپ‌فود</span>
               </div>
             </template>
             <template #cell-channel="{ row }">{{ row.channel || '—' }}</template>
@@ -152,6 +153,7 @@
                 </div>
                 <div class="head-badges">
                   <span class="status-badge" :class="`status-${(selectedOrder.order.status || '').toLowerCase()}`">{{ formatStatus(selectedOrder.order.status) }}</span>
+                  <span v-if="selectedOrder.order.external_source === 'snapp_food'" class="external-source-badge">اسنپ‌فود</span>
                 </div>
               </header>
 
@@ -932,6 +934,17 @@ if (isOrderDetailView.value) {
   font-size: 0.9rem;
   color: var(--mg-text-muted);
   font-weight: 600;
+}
+.external-source-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: #fff1df;
+  color: #9a5a14;
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
 .order-metrics {
