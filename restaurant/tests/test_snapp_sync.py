@@ -22,6 +22,9 @@ from restaurant.snapp_sync import (
     _ensure_sales_invoice_for_order,
     _get_schema_status,
     _extract_vendor_id_from_token,
+    _build_snapp_order_preview,
+    _resolve_snapp_order_window,
+    _select_snapp_orders_for_import,
     fetch_snapp_menu,
     fetch_snapp_menu_categories,
     _normalize_bearer_token,
@@ -406,6 +409,46 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(kwargs["files"]["vendorId"], (None, "466275"))
         self.assertEqual(kwargs["files"]["pageNumber"], (None, "0"))
 
+    def test_snapp_order_window_defaults_to_yesterday(self):
+        start_dt, end_dt = _resolve_snapp_order_window()
+
+        self.assertEqual(start_dt.strftime("%H:%M:%S"), "00:00:00")
+        self.assertEqual(end_dt.strftime("%H:%M:%S"), "23:59:59")
+        self.assertEqual((end_dt.date() - start_dt.date()).days, 0)
+
+    def test_snapp_order_preview_keeps_import_and_customer_context(self):
+        preview = _build_snapp_order_preview(
+            {
+                "order_id": "order-1",
+                "bill_number": "V-1",
+                "customer_name": "مشتری تست",
+                "mobile": "09120000000",
+                "external_customer_id": "customer-1",
+                "created_at": "2026-09-19 12:00:00",
+                "status": "confirmed",
+                "order_type": "delivery",
+                "final_amount": 185000,
+                "items": [{"title": "کلاب مرغ", "qty": 1}],
+            },
+            existing_order="SO-1",
+            existing_invoice="SINV-1",
+        )
+
+        self.assertEqual(preview["order_id"], "order-1")
+        self.assertEqual(preview["customer_name"], "مشتری تست")
+        self.assertEqual(preview["items_count"], 1)
+        self.assertTrue(preview["already_imported"])
+        self.assertEqual(preview["sales_order"], "SO-1")
+        self.assertEqual(preview["sales_invoice"], "SINV-1")
+
+    def test_selected_snapp_orders_are_limited_to_requested_test_rows(self):
+        rows = [{"id": str(value)} for value in range(1, 6)]
+
+        selected, missing = _select_snapp_orders_for_import(rows, ["2", "4", "5"], max_import=2)
+
+        self.assertEqual([row["id"] for row in selected], ["2", "4"])
+        self.assertEqual(missing, [])
+
     def test_food_partner_report_respects_max_page_limit(self):
         response = Mock()
         response.json.return_value = {"data": {"items": [{"orderId": "order-1"}]}}
@@ -516,6 +559,53 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(payload["items"][0]["item_slug"], "item-2")
         self.assertEqual(payload["totals"]["discountAmount"], 120)
         self.assertFalse(fake_api._create_pos_order_payload.call_args.kwargs["commit"])
+
+    def test_imported_order_uses_configured_primary_and_external_secondary_customer(self):
+        order_payload = {
+            "order_id": "884984814",
+            "customer_name": "مشتری Food Partner",
+            "mobile": "09120000001",
+            "external_customer_id": "customer-9",
+            "order_type": "delivery",
+            "address": "آدرس تست",
+            "note": "یادداشت تست",
+            "status": "confirmed",
+            "items": [{"title": "کلاب مرغ", "qty": 1, "unit_price": 185000}],
+        }
+        fake_api = types.ModuleType("restaurant.api")
+        fake_api._create_pos_order_payload = Mock(return_value={"order_id": "SO-3"})
+        fake_api._set_restaurant_order_status = Mock()
+        fake_api._append_sales_order_note = Mock()
+        fake_db = SimpleNamespace(
+            exists=Mock(return_value=True),
+            get_value=Mock(
+                side_effect=lambda doctype, value, *args, **kwargs: (
+                    "item-2"
+                    if doctype == "Item"
+                    else "Snappfood"
+                    if doctype == "Customer" and value == "CUST-SNAPP"
+                    else "مشتری Food Partner"
+                )
+            ),
+        )
+        with patch.object(snapp_sync.frappe, "db", fake_db), patch(
+            "restaurant.snapp_sync._ensure_customer", return_value="CUST-9"
+        ), patch(
+            "restaurant.snapp_sync._get_settings", return_value={"default_customer": "CUST-SNAPP"}
+        ), patch(
+            "restaurant.snapp_sync._resolve_item_code", return_value="ITEM-2"
+        ), patch("restaurant.snapp_sync._apply_sales_order_external_fields"), patch(
+            "restaurant.snapp_sync._has_column", return_value=False
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
+            sys.modules, {"restaurant.api": fake_api}
+        ):
+            result = _create_sales_order(order_payload)
+
+        self.assertEqual(result, ("SO-3", "created"))
+        payload = fake_api._create_pos_order_payload.call_args.args[0]
+        self.assertEqual(payload["customer_name"], "Snappfood")
+        self.assertEqual(payload["mobile"], "")
+        self.assertEqual(payload["secondary_customer"], "مشتری Food Partner")
 
     def test_item_mapping_can_resolve_variation_hash_id(self):
         lookup = Mock(side_effect=lambda doctype, filters, *args, **kwargs: (

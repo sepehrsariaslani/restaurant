@@ -1427,6 +1427,14 @@ export function runSnappfoodSyncToday() {
 	return callRestaurantAPI("run_snapp_sync_today", { only_new: 1 });
 }
 
+export function previewSnappfoodOrders({ from_date = "", to_date = "" } = {}) {
+	return callRestaurantAPI("preview_snappfood_orders", { from_date, to_date });
+}
+
+export function importSnappfoodOrders({ order_ids = [], from_date = "", to_date = "" } = {}) {
+	return callRestaurantAPI("import_snappfood_orders", { order_ids, from_date, to_date });
+}
+
 export function setManagementPOSConfig(payload = {}) {
 	return callRestaurantAPI("set_management_pos_config", { payload });
 }

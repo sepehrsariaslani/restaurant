@@ -103,3 +103,33 @@ test('Food Partner settings makes disabled automatic invoicing explicit', () => 
   assert.match(page, /فاکتور خودکار خاموش/)
   assert.match(page, /برای ثبت فاکتور native در همان POS/)
 })
+
+test('Food Partner mapping groups products in an accordion and keeps each row mappable', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+
+  assert.match(page, /category-accordion/)
+  assert.match(page, /toggleCategory/)
+  assert.match(page, /categorySections/)
+  assert.match(page, /row\.product_id/)
+  assert.match(page, /ثبت نگاشت/)
+})
+
+test('Food Partner exposes a date-range preview and capped selected-order import flow', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const api = read('src/utils/api.js')
+  const backend = read('../restaurant/api.py')
+  const sync = read('../restaurant/snapp_sync.py')
+
+  assert.match(page, /سفارش‌های دیروز|سفارش‌های بازهٔ تاریخی/)
+  assert.match(page, /previewSnappfoodOrders/)
+  assert.match(page, /importSnappfoodOrders/)
+  assert.match(page, /حداکثر ۳ سفارش/)
+  assert.match(page, /orderWindow\.from_date/)
+  assert.match(page, /مشتری Food Partner در مشتری ثانویه ثبت می‌شود/)
+  assert.match(sync, /secondary_customer/)
+  assert.match(api, /preview_snappfood_orders/)
+  assert.match(api, /import_snappfood_orders/)
+  assert.match(backend, /def preview_snappfood_orders\(/)
+  assert.match(backend, /def import_snappfood_orders\(/)
+  assert.match(sync, /_select_snapp_orders_for_import/)
+})

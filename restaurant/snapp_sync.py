@@ -434,6 +434,162 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
     }
 
 
+def _resolve_snapp_order_window(from_date=None, to_date=None):
+    """Resolve a user-facing date range to a closed local-day datetime range."""
+    start_text = str(from_date or "").strip()[:10]
+    end_text = str(to_date or "").strip()[:10]
+    if not start_text and not end_text:
+        yesterday = get_datetime(today()) - timedelta(days=1)
+        start_text = end_text = yesterday.strftime("%Y-%m-%d")
+    elif not start_text:
+        start_text = end_text
+    elif not end_text:
+        end_text = start_text
+
+    try:
+        start_dt = get_datetime(f"{start_text} 00:00:00")
+        end_dt = get_datetime(f"{end_text} 23:59:59")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise frappe.ValidationError("تاریخ شروع یا پایان سفارش معتبر نیست.") from exc
+
+    if start_dt > end_dt:
+        raise frappe.ValidationError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.")
+    return start_dt, end_dt
+
+
+def _raw_snapp_order_id(raw_order):
+    return str(
+        raw_order.get("id")
+        or raw_order.get("orderId")
+        or raw_order.get("order_id")
+        or ""
+    ).strip()
+
+
+def _build_snapp_order_preview(order_payload, existing_order="", existing_invoice=""):
+    """Return a safe, read-only summary suitable for selecting an import."""
+    created_at = order_payload.get("created_at")
+    if created_at:
+        try:
+            created_at = get_datetime_str(created_at)
+        except (TypeError, ValueError):
+            created_at = str(created_at)
+    item_rows = order_payload.get("items") or []
+    return {
+        "order_id": str(order_payload.get("order_id") or "").strip(),
+        "bill_number": str(order_payload.get("bill_number") or "").strip(),
+        "created_at": created_at or "",
+        "customer_name": str(order_payload.get("customer_name") or FALLBACK_GUEST_NAME).strip(),
+        "mobile": str(order_payload.get("mobile") or "").strip(),
+        "external_customer_id": str(order_payload.get("external_customer_id") or "").strip(),
+        "status": str(order_payload.get("status") or "").strip(),
+        "order_type": str(order_payload.get("order_type") or "").strip(),
+        "final_amount": flt(order_payload.get("final_amount") or 0),
+        "items_count": len(item_rows),
+        "items": [
+            {
+                "title": str(row.get("title") or "Snapp Item").strip(),
+                "qty": flt(row.get("qty") or 0),
+                "unit_price": flt(row.get("unit_price") or 0),
+            }
+            for row in item_rows
+        ],
+        "already_imported": bool(existing_order),
+        "sales_order": existing_order or "",
+        "sales_invoice": existing_invoice or "",
+    }
+
+
+def _select_snapp_orders_for_import(raw_orders, order_ids, max_import=3):
+    requested = []
+    for value in order_ids or []:
+        order_id = str(value or "").strip()
+        if order_id and order_id not in requested:
+            requested.append(order_id)
+    limit = max(1, min(cint(max_import or 3), 3))
+    requested_set = set(requested)
+    available = set()
+    selected = []
+    for raw_order in raw_orders or []:
+        order_id = _raw_snapp_order_id(raw_order)
+        if order_id:
+            available.add(order_id)
+        if order_id in requested_set and len(selected) < limit:
+            selected.append(raw_order)
+    missing = [order_id for order_id in requested if order_id not in available]
+    return selected, missing
+
+
+def preview_snapp_orders(from_date=None, to_date=None, settings=None):
+    """Fetch a date range without writing orders, invoices, customers or items."""
+    cfg = settings if settings is not None else _get_settings()
+    start_dt, end_dt = _resolve_snapp_order_window(from_date, to_date)
+    fetched = fetch_snapp_orders(
+        from_datetime=start_dt,
+        to_datetime=end_dt,
+        page_size=cfg.get("page_size") or DEFAULT_PAGE_SIZE,
+        max_pages=MAX_PAGES,
+        settings=cfg,
+    )
+    previews = []
+    errors = []
+    for raw_order in fetched.get("orders") or []:
+        try:
+            normalized = normalize_snapp_order(
+                raw_order,
+                amount_multiplier=cfg.get("amount_multiplier") or 1,
+            )
+            existing_order = ""
+            existing_invoice = ""
+            if _has_column("Sales Order", "restaurant_external_order_id"):
+                existing_order = frappe.db.get_value(
+                    "Sales Order",
+                    {"restaurant_external_order_id": normalized["order_id"]},
+                    "name",
+                ) or ""
+            if _has_column("Sales Invoice", "restaurant_external_order_id"):
+                existing_invoice = frappe.db.get_value(
+                    "Sales Invoice",
+                    {"restaurant_external_order_id": normalized["order_id"]},
+                    "name",
+                ) or ""
+            previews.append(_build_snapp_order_preview(normalized, existing_order, existing_invoice))
+        except Exception:
+            errors.append({"order_id": _raw_snapp_order_id(raw_order), "error": frappe.get_traceback(with_context=False)})
+    return {
+        "status": "success",
+        "from_date": start_dt.strftime("%Y-%m-%d"),
+        "to_date": end_dt.strftime("%Y-%m-%d"),
+        "fetched_count": cint(fetched.get("orders_count") or 0),
+        "pages_fetched": cint(fetched.get("pages_fetched") or 0),
+        "orders": previews,
+        "errors": errors,
+    }
+
+
+def import_snapp_orders_for_window(from_date=None, to_date=None, order_ids=None, max_import=3, settings=None):
+    """Import only selected orders from a bounded date range."""
+    requested = []
+    for value in order_ids or []:
+        order_id = str(value or "").strip()
+        if order_id and order_id not in requested:
+            requested.append(order_id)
+    if not requested:
+        raise frappe.ValidationError("حداقل یک سفارش برای واردکردن انتخاب کنید.")
+    if len(requested) > 3 or cint(max_import or 3) > 3:
+        raise frappe.ValidationError("برای واردکردن تستی حداکثر ۳ سفارش را انتخاب کنید.")
+    start_dt, end_dt = _resolve_snapp_order_window(from_date, to_date)
+    return sync_snapp_orders(
+        trigger="manual_selected",
+        from_datetime=start_dt,
+        to_datetime=end_dt,
+        only_new=1,
+        selected_order_ids=requested,
+        max_import=max_import,
+        settings=settings,
+    )
+
+
 def _extract_menu_entries(payload):
     """Flatten Food Partner categories into product/variation rows.
 
@@ -1703,6 +1859,12 @@ def _create_sales_order(order_payload):
     secondary_customer = ""
     customer_mobile_for_pos = order_payload["mobile"]
     configured_customer = settings.get("default_customer") or ""
+    if configured_customer and not frappe.db.exists("Customer", configured_customer):
+        configured_customer = frappe.db.get_value(
+            "Customer",
+            {"customer_name": configured_customer, "disabled": 0},
+            "name",
+        ) or ""
     if configured_customer and frappe.db.exists("Customer", configured_customer):
         customer = configured_customer
         customer_mobile_for_pos = ""
@@ -1984,8 +2146,17 @@ def _write_debug_json(payload):
         json.dump(payload, handle, ensure_ascii=False, indent=4)
 
 
-def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None, only_new=1, update_status_fields=1):
-    settings = _get_settings()
+def sync_snapp_orders(
+    trigger="scheduler",
+    from_datetime=None,
+    to_datetime=None,
+    only_new=1,
+    update_status_fields=1,
+    selected_order_ids=None,
+    max_import=None,
+    settings=None,
+):
+    settings = settings if settings is not None else _get_settings()
     if settings.get("reason"):
         return {"status": "skipped", "reason": settings["reason"]}
     if not settings["enabled"]:
@@ -2034,8 +2205,26 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
         )
         result["fetched_count"] = cint(fetched_payload.get("orders_count") or 0)
         result["pages_fetched"] = cint(fetched_payload.get("pages_fetched") or 0)
-        rows = fetched_payload.get("orders") or []
-        rows = sorted(rows, key=lambda row: str(row.get("createdAt") or ""))
+        all_rows = fetched_payload.get("orders") or []
+        all_rows = sorted(
+            all_rows,
+            key=lambda row: str(row.get("createdAt") or row.get("orderDate") or ""),
+        )
+        rows = all_rows
+        requested_order_ids = [
+            str(value or "").strip()
+            for value in (selected_order_ids or [])
+            if str(value or "").strip()
+        ]
+        if requested_order_ids:
+            rows, missing_order_ids = _select_snapp_orders_for_import(
+                all_rows,
+                requested_order_ids,
+                max_import=max_import or 3,
+            )
+            result["requested_count"] = len(requested_order_ids)
+            result["selected_count"] = len(rows)
+            result["missing_order_ids"] = missing_order_ids
 
         for raw_order in rows:
             try:
@@ -2112,8 +2301,12 @@ def sync_snapp_orders(trigger="scheduler", from_datetime=None, to_datetime=None,
             _set_single_if_exists("Restaurant Web Settings", "snapp_last_success_at", get_datetime_str(now_datetime()))
             _set_single_if_exists("Restaurant Web Settings", "snapp_last_error_at", None)
             _set_single_if_exists("Restaurant Web Settings", "snapp_last_error_message", "")
-            if _has_field("Restaurant Web Settings", "snapp_last_seen_created_at") and rows:
-                _set_single_if_exists("Restaurant Web Settings", "snapp_last_seen_created_at", rows[-1].get("createdAt"))
+            if _has_field("Restaurant Web Settings", "snapp_last_seen_created_at") and all_rows:
+                _set_single_if_exists(
+                    "Restaurant Web Settings",
+                    "snapp_last_seen_created_at",
+                    all_rows[-1].get("createdAt") or all_rows[-1].get("orderDate"),
+                )
 
         result["duration_seconds"] = flt((now_datetime() - started_at).total_seconds())
         frappe.db.commit()

@@ -22563,6 +22563,40 @@ def run_snapp_sync_today(only_new=1):
 
 
 @frappe.whitelist()
+def preview_snappfood_orders(from_date=None, to_date=None):
+	"""Preview a selected date range without creating any ERP documents."""
+	_ensure_management_access()
+	from restaurant.snapp_sync import preview_snapp_orders
+
+	try:
+		return preview_snapp_orders(from_date=from_date, to_date=to_date)
+	except frappe.ValidationError as exc:
+		return {"status": "error", "error": str(exc), "orders": []}
+
+
+@frappe.whitelist()
+def import_snappfood_orders(order_ids=None, from_date=None, to_date=None):
+	"""Import at most three user-selected orders from a bounded date range."""
+	_ensure_management_access()
+	parsed_ids = _parse_json(order_ids, [])
+	if isinstance(parsed_ids, str):
+		parsed_ids = [parsed_ids]
+	if not isinstance(parsed_ids, list):
+		parsed_ids = []
+	from restaurant.snapp_sync import import_snapp_orders_for_window
+
+	try:
+		return import_snapp_orders_for_window(
+			from_date=from_date,
+			to_date=to_date,
+			order_ids=parsed_ids,
+			max_import=3,
+		)
+	except frappe.ValidationError as exc:
+		return {"status": "error", "error": str(exc), "orders": [], "errors": []}
+
+
+@frappe.whitelist()
 def get_snapp_sync_status():
 	from restaurant.snapp_sync import get_sync_status
 

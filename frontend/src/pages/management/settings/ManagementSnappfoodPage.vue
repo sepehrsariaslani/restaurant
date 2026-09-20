@@ -56,7 +56,7 @@
           <label>Host domain (اختیاری)<input v-model.trim="form.snapp_hostdomain" class="input" /></label>
           <label>اندازه صفحه گزارش<input v-model.number="form.snapp_page_size" class="input" type="number" min="1" max="100" /></label>
           <label>ضریب مبلغ<input v-model.number="form.snapp_amount_multiplier" class="input" type="number" min="0.01" step="0.01" /></label>
-          <label>Customer اصلی داخلی (اختیاری)<input v-model.trim="form.snapp_default_customer" class="input" placeholder="نام رکورد Customer؛ مثلاً Snappfood" /></label>
+          <label>Customer اصلی داخلی (اختیاری)<input v-model.trim="form.snapp_default_customer" class="input" placeholder="نام یا شناسه Customer؛ مثلاً Snappfood" /></label>
         </div>
         <div class="switch-grid">
           <label class="check-row"><input v-model="form.snapp_sync_enabled" type="checkbox" /> همگام‌سازی خودکار فعال باشد</label>
@@ -71,24 +71,49 @@
     <template v-else-if="activeTab === 'mapping'">
       <ManagementSurfaceCard title="نگاشت محصولات و variationها" subtitle="ابتدا منوی Food Partner را دریافت کنید، سپس هر ردیف را به Item داخلی وصل کنید.">
         <div class="mapping-toolbar"><button class="secondary-btn" type="button" @click="loadMappings(true)" :disabled="mappingLoading || !status.schema_ready">{{ mappingLoading ? 'در حال دریافت منو...' : 'دریافت منوی Food Partner' }}</button><button class="secondary-btn" type="button" @click="loadCategories" :disabled="categoryLoading || !status.schema_ready">{{ categoryLoading ? 'در حال دریافت گروه‌ها...' : 'دریافت گروه‌های کالا' }}</button><input v-model.trim="mappingSearch" class="input mapping-search" placeholder="جستجوی Item داخلی" @keyup.enter="loadMappings(false)" /></div>
-        <div v-if="categories.length" class="category-list"><span v-for="category in categories" :key="category.external_id" class="category-pill">{{ category.title }}<small>{{ category.category_id }}</small></span></div>
-        <p class="muted" v-if="!mappingRows.menu.length">برای دیدن product/variationها روی «دریافت منوی Food Partner» بزنید.</p>
-        <div v-else class="mapping-list">
-          <div v-for="row in mappingRows.menu" :key="`${row.external_id}-${row.title}`" class="mapping-row">
-            <div><strong>{{ row.title || 'بدون عنوان' }}</strong><small>{{ row.category_title ? `دسته: ${row.category_title} · ` : '' }}variation: {{ row.variation_id || '—' }} · product: {{ row.product_id || '—' }}</small></div>
-            <select class="input mapping-select" v-model="mappingDrafts[row.external_id]">
-              <option value="">انتخاب Item داخلی</option>
-              <option v-for="item in mappingRows.items" :key="item.name" :value="item.name">{{ item.item_name }} · {{ item.item_code }}</option>
-            </select>
-            <button class="secondary-btn" type="button" @click="saveMapping(row)" :disabled="mappingSaving === row.external_id">{{ mappingSaving === row.external_id ? '...' : 'ثبت نگاشت' }}</button>
-          </div>
+        <div v-if="categorySections.length" class="category-accordion">
+          <section v-for="category in categorySections" :key="category.key" class="category-panel">
+            <button class="category-trigger" type="button" @click="toggleCategory(category.key)" :aria-expanded="openCategories.has(category.key)">
+              <span><strong>{{ category.title }}</strong><small>{{ category.category_id ? `شناسه: ${category.category_id}` : 'بدون گروه مشخص' }}</small></span>
+              <span>{{ category.rows.length }} کالا · {{ openCategories.has(category.key) ? 'بستن' : 'بازکردن' }}</span>
+            </button>
+            <div v-if="openCategories.has(category.key)" class="category-panel-body">
+              <p v-if="!category.rows.length" class="muted">برای این گروه هنوز محصولی از منوی Food Partner دریافت نشده است.</p>
+              <div v-else class="mapping-list">
+                <div v-for="row in category.rows" :key="`${row.external_id}-${row.title}`" class="mapping-row">
+                  <div><strong>{{ row.title || 'بدون عنوان' }}</strong><small>variation: {{ row.variation_id || '—' }} · product: {{ row.product_id || '—' }} · قیمت: {{ row.price || '—' }}</small></div>
+                  <select class="input mapping-select" v-model="mappingDrafts[row.external_id]">
+                    <option value="">انتخاب Item داخلی</option>
+                    <option v-for="item in mappingRows.items" :key="item.name" :value="item.name">{{ item.item_name }} · {{ item.item_code }}</option>
+                  </select>
+                  <button class="secondary-btn" type="button" @click="saveMapping(row)" :disabled="mappingSaving === row.external_id">{{ mappingSaving === row.external_id ? '...' : 'ثبت نگاشت' }}</button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
+        <p class="muted" v-else>برای دیدن گروه‌ها و کالاها روی «دریافت گروه‌های کالا» بزنید.</p>
       </ManagementSurfaceCard>
     </template>
 
     <template v-else>
-      <ManagementSurfaceCard title="همگام‌سازی سفارش‌های امروز" subtitle="پس از تکمیل توکن و نگاشت کالاها، سفارش‌ها در همان سفارش‌های فروش و فاکتورهای POS ثبت می‌شوند.">
-        <div class="sync-card"><button class="primary-btn" type="button" @click="syncToday" :disabled="syncing || !status.schema_ready">{{ syncing ? 'در حال همگام‌سازی...' : 'همگام‌سازی امروز' }}</button><span v-if="syncResult" class="sync-result">{{ syncSummary }}</span></div>
+      <ManagementSurfaceCard title="آزمایش سفارش‌های دیروز و بازه‌های تاریخی" subtitle="ابتدا یک بازه را فقط preview کنید، سپس حداکثر سه سفارش را برای ورود تستی انتخاب کنید. همان سفارش‌های فروش و فاکتورهای POS ثبت می‌شوند.">
+        <div class="date-range-toolbar">
+          <label>از تاریخ<input v-model="orderWindow.from_date" class="input" type="date" /></label>
+          <label>تا تاریخ<input v-model="orderWindow.to_date" class="input" type="date" /></label>
+          <button class="secondary-btn" type="button" @click="setYesterday">دیروز</button>
+          <button class="primary-btn" type="button" @click="previewOrders" :disabled="previewLoading || !status.schema_ready">{{ previewLoading ? 'در حال دریافت...' : 'پیش‌نمایش بازه' }}</button>
+        </div>
+        <p class="muted">مشتری اصلی فاکتور: <strong>{{ form.snapp_default_customer || 'هنوز تنظیم نشده' }}</strong> · مشتری Food Partner در مشتری ثانویه ثبت می‌شود · حداکثر ۳ سفارش تستی.</p>
+        <div v-if="orderPreview.length" class="order-preview-list">
+          <label v-for="order in orderPreview" :key="order.order_id" class="order-preview-row" :class="{ 'is-imported': order.already_imported }">
+            <input type="checkbox" :checked="selectedOrderIds.has(order.order_id)" :disabled="order.already_imported || (!selectedOrderIds.has(order.order_id) && selectedOrderIds.size >= 3)" @change="toggleOrderSelection(order.order_id)" />
+            <span class="order-preview-main"><strong>{{ order.bill_number || order.order_id }}</strong><small>{{ order.customer_name }} · {{ order.created_at }} · {{ order.items_count }} قلم · {{ order.final_amount }}</small><em v-if="order.already_imported">قبلاً وارد شده: {{ order.sales_order }}{{ order.sales_invoice ? ` · فاکتور: ${order.sales_invoice}` : '' }}</em><em v-else>{{ order.items.slice(0, 3).map((item) => `${item.title} × ${item.qty}`).join('، ') }}</em></span>
+          </label>
+        </div>
+        <p v-else class="muted">هنوز سفارشی برای این بازه دریافت نشده است.</p>
+        <div class="sync-card"><button class="primary-btn" type="button" @click="importSelectedOrders" :disabled="importing || !selectedOrderIds.size || !status.schema_ready">{{ importing ? 'در حال واردکردن...' : `واردکردن تستی (${selectedOrderIds.size}/۳)` }}</button><span v-if="syncResult" class="sync-result">{{ syncSummary }}</span></div>
+        <div class="sync-card"><button class="secondary-btn" type="button" @click="syncToday" :disabled="syncing || !status.schema_ready">{{ syncing ? 'در حال همگام‌سازی...' : 'همگام‌سازی همه سفارش‌های امروز' }}</button></div>
         <ul v-if="syncResult?.errors?.length" class="error-list"><li v-for="(item, index) in syncResult.errors.slice(0, 5)" :key="index">{{ item.order_id || '—' }}: {{ shortError(item.error) }}</li></ul>
         <p class="muted">این عملیات idempotent است و orderId را برای جلوگیری از ثبت تکراری استفاده می‌کند.</p>
       </ManagementSurfaceCard>
@@ -105,6 +130,8 @@ import {
   getSnappfoodIntegrationConfig,
   getSnappfoodCategories,
   getSnappfoodMappingRows,
+  importSnappfoodOrders,
+  previewSnappfoodOrders,
   runSnappfoodSyncToday,
   saveSnappfoodIntegrationConfig,
   saveSnappfoodItemMapping,
@@ -125,16 +152,42 @@ const mappingLoading = ref(false)
 const categoryLoading = ref(false)
 const mappingSaving = ref('')
 const syncing = ref(false)
+const previewLoading = ref(false)
+const importing = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const mappingSearch = ref('')
 const syncResult = ref(null)
 const mappingRows = reactive({ menu: [], items: [] })
 const categories = ref([])
+const openCategories = ref(new Set())
+const orderPreview = ref([])
+const selectedOrderIds = ref(new Set())
+const orderWindow = reactive({ from_date: '', to_date: '' })
 const mappingDrafts = reactive({})
 const tokenVisible = ref(false)
 const status = reactive({ has_token: false, vendor_id: '', enabled: false, require_item_mapping: true, auto_sync_invoices: true, schema_ready: false, schema_missing: [] })
 const form = reactive({ snapp_vendor_id: '', snapp_bearer_token: '', snapp_report_url: 'https://snappfood.ir/vms/v3/restaurant/report', snapp_menu_api_base_url: 'https://apigw.snappfood.ir', snapp_origin_url: '', snapp_hostdomain: '', snapp_page_size: 50, snapp_amount_multiplier: 10, snapp_default_customer: '', snapp_sync_enabled: false, snapp_auto_sync_invoices: true, snapp_require_item_mapping: true })
+
+const categorySections = computed(() => {
+  const sections = []
+  const byKey = new Map()
+  const addSection = (key, title, categoryId = '') => {
+    const normalizedKey = String(key || '').trim() || '__uncategorized__'
+    if (!byKey.has(normalizedKey)) {
+      const section = { key: normalizedKey, title: title || 'بدون گروه مشخص', category_id: categoryId || '', rows: [] }
+      byKey.set(normalizedKey, section); sections.push(section)
+    }
+    return byKey.get(normalizedKey)
+  }
+  categories.value.forEach((category) => addSection(category.external_id || category.category_id, category.title, category.category_id || category.external_id))
+  mappingRows.menu.forEach((row) => {
+    const key = row.category_id || (row.category_title ? `title:${row.category_title}` : '__uncategorized__')
+    const section = addSection(key, row.category_title || 'بدون گروه مشخص', row.category_id || '')
+    section.rows.push(row)
+  })
+  return sections
+})
 
 const syncSummary = computed(() => {
   const row = syncResult.value || {}
@@ -212,10 +265,16 @@ async function loadMappings(refreshMenu = false) {
     mappingRows.menu.forEach((row) => { mappingDrafts[row.external_id] = row.suggested_item?.name || '' })
   } catch (err) { error.value = err?.message || 'منوی Food Partner خوانده نشد.' } finally { mappingLoading.value = false }
 }
+function toggleCategory(key) {
+  const next = new Set(openCategories.value)
+  if (next.has(key)) next.delete(key); else next.add(key)
+  openCategories.value = next
+}
 async function loadCategories() {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
   categoryLoading.value = true; error.value = ''
   try {
+    if (!mappingRows.menu.length) await loadMappings(true)
     const data = await getSnappfoodCategories()
     categories.value = data?.items || []
     if (data?.status === 'error' || data?.error) error.value = data.error || 'گروه‌های کالا خوانده نشدند.'
@@ -232,10 +291,57 @@ async function syncToday() {
   syncing.value = true; error.value = ''; syncResult.value = null
   try { syncResult.value = await runSnappfoodSyncToday(); successMessage.value = 'همگام‌سازی امروز تمام شد.' } catch (err) { error.value = err?.message || 'همگام‌سازی ناموفق بود.' } finally { syncing.value = false }
 }
+function formatDateInput(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+function setYesterday() {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const value = formatDateInput(yesterday)
+  orderWindow.from_date = value; orderWindow.to_date = value
+  orderPreview.value = []; selectedOrderIds.value = new Set()
+}
+async function previewOrders(preserveSyncResult = false) {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
+  previewLoading.value = true; error.value = ''; successMessage.value = ''
+  if (!preserveSyncResult) syncResult.value = null
+  try {
+    const data = await previewSnappfoodOrders({ ...orderWindow })
+    orderPreview.value = data?.orders || []
+    selectedOrderIds.value = new Set()
+    if (data?.status === 'error' || data?.error) error.value = data.error || 'پیش‌نمایش سفارش‌ها ناموفق بود.'
+    else successMessage.value = `${data?.orders?.length || 0} سفارش برای بازهٔ انتخابی پیدا شد.`
+  } catch (err) { error.value = err?.message || 'پیش‌نمایش سفارش‌ها ناموفق بود.' } finally { previewLoading.value = false }
+}
+function toggleOrderSelection(orderId) {
+  const next = new Set(selectedOrderIds.value)
+  if (next.has(orderId)) next.delete(orderId)
+  else if (next.size < 3) next.add(orderId)
+  selectedOrderIds.value = next
+}
+async function importSelectedOrders() {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
+  const orderIds = Array.from(selectedOrderIds.value).slice(0, 3)
+  if (!orderIds.length) { error.value = 'حداقل یک سفارش را انتخاب کنید.'; return }
+  importing.value = true; error.value = ''; successMessage.value = ''
+  try {
+    syncResult.value = await importSnappfoodOrders({ order_ids: orderIds, ...orderWindow })
+    if (syncResult.value?.status === 'error' || syncResult.value?.error) error.value = syncResult.value.error || 'واردکردن سفارش‌ها ناموفق بود.'
+    else {
+      await previewOrders(true)
+      successMessage.value = 'واردکردن تستی انجام شد و وضعیت سفارش‌ها تازه شد.'
+    }
+  } catch (err) { error.value = err?.message || 'واردکردن سفارش‌ها ناموفق بود.' } finally { importing.value = false }
+}
 function shortError(value) { return String(value || '').split('\n').filter(Boolean).slice(-1)[0] || 'خطای نامشخص' }
+setYesterday()
 onMounted(loadConfig)
 </script>
 
 <style scoped>
+.category-accordion{display:grid;gap:10px;margin-top:16px}.category-panel{border:1px solid var(--border-color,#e5e7eb);border-radius:14px;overflow:hidden;background:var(--surface,#fff)}.category-trigger{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border:0;background:var(--surface-soft,#f6f7fb);color:inherit;text-align:right;cursor:pointer}.category-trigger span:first-child{display:grid;gap:4px}.category-trigger small{color:#6b7280;font-size:11px}.category-panel-body{padding:0 12px 12px}.date-range-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:10px;margin-top:18px}.date-range-toolbar label{display:grid;gap:6px;min-width:160px;font-size:12px}.order-preview-list{display:grid;gap:8px;margin-top:16px}.order-preview-row{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:12px;cursor:pointer}.order-preview-row.is-imported{opacity:.62;cursor:not-allowed}.order-preview-main{display:grid;gap:4px}.order-preview-main small,.order-preview-main em{color:#6b7280;font-size:11px;font-style:normal}.order-preview-main em{color:#166534}
 .status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card,.token-actions{display:flex;gap:10px;align-items:center;margin-top:20px}.token-field{min-width:0}.token-actions{margin-top:8px}.mapping-search{max-width:300px}.category-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.category-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-color,#e5e7eb);border-radius:999px;padding:7px 10px;background:var(--surface-soft,#f6f7fb);font-size:12px}.category-pill small{color:#6b7280}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
 </style>
