@@ -953,10 +953,42 @@ def fetch_snapp_menu_categories(settings=None):
 
 def _normalize_mapping_text(value):
     text = str(value or "").strip().lower()
-    replacements = {"ي": "ی", "ك": "ک", "ۀ": "ه", "ة": "ه"}
+    replacements = {
+        "ي": "ی",
+        "ى": "ی",
+        "ك": "ک",
+        "ۀ": "ه",
+        "ة": "ه",
+        "ـ": "",
+        "\u200c": "",
+        "\u200d": "",
+        "\u200e": "",
+        "\u200f": "",
+        "\ufeff": "",
+    }
     for old, new in replacements.items():
         text = text.replace(old, new)
     return re.sub(r"[\s\-_/]+", "", text)
+
+
+def _match_local_item_by_title(title, local_items):
+    """Return one unambiguous local Item matching a Food Partner title.
+
+    Order payloads can contain invisible Persian direction/joiner characters or
+    Arabic variants of ی/ک, so a database equality query is not sufficient.
+    This helper intentionally accepts only one normalized exact match; it
+    never guesses between duplicate local products.
+    """
+    needle = _normalize_mapping_text(title)
+    if not needle:
+        return None
+
+    matches = [
+        item
+        for item in local_items or []
+        if _normalize_mapping_text(item.get("item_name")) == needle
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def fetch_snapp_menu(settings=None):
@@ -1117,6 +1149,48 @@ def _build_known_menu_rows(local_items):
     return rows
 
 
+def _build_order_menu_rows(raw_orders, amount_multiplier=1):
+    """Expose order-line products when Food Partner's menu endpoint is empty."""
+    rows = []
+    seen = set()
+    for raw_order in raw_orders or []:
+        try:
+            normalized = normalize_snapp_order(raw_order, amount_multiplier=amount_multiplier)
+        except Exception:
+            continue
+        for line in normalized.get("items") or []:
+            external_id = str(
+                line.get("menu_item_id")
+                or line.get("variation_id")
+                or line.get("product_id")
+                or line.get("variation_hash_id")
+                or line.get("product_hash_id")
+                or ""
+            ).strip()
+            title = str(line.get("title") or "").strip()
+            if not external_id or not title:
+                continue
+            key = f"{external_id}|{_normalize_mapping_text(title)}"
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(
+                {
+                    "external_id": external_id,
+                    "product_id": str(line.get("product_id") or "").strip(),
+                    "variation_id": str(line.get("variation_id") or "").strip(),
+                    "product_hash_id": str(line.get("product_hash_id") or "").strip(),
+                    "variation_hash_id": str(line.get("variation_hash_id") or "").strip(),
+                    "category_id": "",
+                    "category_title": "",
+                    "title": title,
+                    "price": flt(line.get("unit_price") or 0),
+                    "status": "KNOWN_FROM_ORDER",
+                }
+            )
+    return rows
+
+
 def get_snappfood_mapping_rows(search="", refresh_menu=0):
     cfg = _get_settings()
     local_items = _get_local_item_rows(search)
@@ -1137,6 +1211,28 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
         ]
         if not menu_rows:
             menu_rows = _build_known_menu_rows(local_items)
+        try:
+            start_dt, end_dt = _resolve_snapp_order_window()
+            fetched_orders = fetch_snapp_orders(
+                from_datetime=start_dt,
+                to_datetime=end_dt,
+                page_size=cfg.get("page_size") or DEFAULT_PAGE_SIZE,
+                max_pages=MAX_PAGES,
+                settings=cfg,
+            )
+            existing_ids = {str(row.get("external_id") or "").strip() for row in menu_rows}
+            menu_rows.extend(
+                row
+                for row in _build_order_menu_rows(
+                    fetched_orders.get("orders") or [],
+                    amount_multiplier=cfg.get("amount_multiplier") or 1,
+                )
+                if row.get("external_id") not in existing_ids
+            )
+        except Exception:
+            # Menu refresh remains useful even when the report endpoint is
+            # temporarily unavailable; the existing local fallback is enough.
+            pass
     elif not menu_rows:
         menu_rows = _build_known_menu_rows(local_items)
     local_by_external = {}
@@ -1177,6 +1273,8 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
                 if suggested
                 else 0
             )
+            if match_score < 0.9:
+                suggested = None
         mappings.append({**row, "suggested_item": suggested, "match_score": round(match_score, 3)})
     return {"status": "success", "settings": get_sync_status(), "menu": mappings, "items": local_items}
 
@@ -1264,10 +1362,15 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
         items.append(
             {
                 "line_id": str(
-                    row.get("id") or row.get("orderProductId") or row.get("order_product_id") or row.get("orderProductID") or ""
+                    row.get("orderProductId")
+                    or row.get("order_product_id")
+                    or row.get("orderProductID")
+                    or row.get("id")
+                    or ""
                 ).strip(),
                 "menu_item_id": str(
                     row.get("menuItemId")
+                    or row.get("id")
                     or row.get("variationId")
                     or row.get("variation_id")
                     or row.get("productId")
@@ -1581,6 +1684,16 @@ def _resolve_item_code(line):
                 frappe.db.set_value("Item", by_title, "custom_snapp_code", snapp_code, update_modified=False)
         return by_title
 
+    normalized_title_match = _match_local_item_by_title(title, _get_local_item_rows())
+    if normalized_title_match:
+        item_name = normalized_title_match.get("name")
+        _tag_item_mapping(item_name, line)
+        if _has_column("Item", "custom_snapp_code"):
+            current_snapp_code = frappe.db.get_value("Item", item_name, "custom_snapp_code")
+            if not (current_snapp_code or "").strip():
+                frappe.db.set_value("Item", item_name, "custom_snapp_code", snapp_code, update_modified=False)
+        return item_name
+
     settings = _get_settings()
     if settings.get("require_item_mapping"):
         raise frappe.ValidationError(
@@ -1743,6 +1856,20 @@ def _build_sales_invoice_external_values(order_payload):
             _redact_external_payload(order_payload.get("raw") or {}), ensure_ascii=False
         ),
     }
+
+
+_SALES_INVOICE_NUMERIC_LINE_FIELDS = {
+    "restaurant_external_discount",
+    "restaurant_external_packaging_cost",
+    "restaurant_external_with_tax",
+}
+
+
+def _normalize_sales_invoice_line_value(fieldname, value):
+    """Keep empty external numeric snapshots valid for MariaDB decimal fields."""
+    if fieldname in _SALES_INVOICE_NUMERIC_LINE_FIELDS:
+        return flt(value or 0)
+    return value or ""
 
 
 def _update_existing_sales_order_lines(sales_order_name, order_payload):
@@ -2111,7 +2238,10 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
             "restaurant_external_toppings_json",
         ):
             if _has_column("Sales Invoice Item", fieldname) and fieldname in source_values:
-                invoice_values[fieldname] = source_values.get(fieldname) or ""
+                invoice_values[fieldname] = _normalize_sales_invoice_line_value(
+                    fieldname,
+                    source_values.get(fieldname),
+                )
         if invoice_values:
             frappe.db.set_value("Sales Invoice Item", invoice_row.name, invoice_values, update_modified=False)
 
@@ -2289,7 +2419,7 @@ def sync_snapp_orders(
                 result["failed_count"] += 1
                 result["errors"].append(
                     {
-                        "order_id": raw_order.get("id"),
+                        "order_id": _raw_snapp_order_id(raw_order),
                         "error": frappe.get_traceback(with_context=False),
                     }
                 )
