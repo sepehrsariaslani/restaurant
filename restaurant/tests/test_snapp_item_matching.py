@@ -5,6 +5,8 @@ from restaurant.snapp_sync import (
     _build_snapp_item_creation_values,
     _build_order_menu_rows,
     _find_mapped_local_item,
+    _plan_snappfood_auto_mapping,
+    search_snappfood_items,
     _match_local_item_by_title,
     _normalize_sales_invoice_line_value,
     normalize_snapp_order,
@@ -12,6 +14,56 @@ from restaurant.snapp_sync import (
 
 
 class TestSnappItemMatching(unittest.TestCase):
+    def test_item_search_is_empty_and_side_effect_free_without_query(self):
+        self.assertEqual(search_snappfood_items(""), {"status": "success", "items": []})
+
+    def test_auto_mapping_plans_exact_ids_before_exact_names(self):
+        plan = _plan_snappfood_auto_mapping(
+            [
+                {
+                    "external_id": "menu-1",
+                    "title": "محصول اول",
+                    "menu_item_id": "menu-1",
+                },
+                {
+                    "external_id": "menu-2",
+                    "title": "محصول دوم",
+                    "menu_item_id": "menu-2",
+                },
+                {
+                    "external_id": "menu-3",
+                    "title": "محصول سوم",
+                    "menu_item_id": "menu-3",
+                },
+            ],
+            [
+                {
+                    "name": "ITEM-1",
+                    "item_name": "محصول اول",
+                    "restaurant_external_menu_item_id": "menu-1",
+                },
+                {
+                    "name": "ITEM-2",
+                    "item_name": "محصول دوم",
+                },
+            ],
+        )
+
+        self.assertEqual([row["action"] for row in plan], ["already_mapped", "map", "unmatched"])
+        self.assertEqual(plan[1]["item_name"], "ITEM-2")
+
+    def test_auto_mapping_can_plan_missing_item_creation_without_orders(self):
+        plan = _plan_snappfood_auto_mapping(
+            [{"external_id": "menu-1", "title": "محصول جدید", "menu_item_id": "menu-1"}],
+            [],
+            create_missing=True,
+        )
+
+        self.assertEqual(plan[0]["action"], "create")
+        self.assertEqual(plan[0]["title"], "محصول جدید")
+        self.assertNotIn("Sales Order", plan[0])
+        self.assertNotIn("Sales Invoice", plan[0])
+
     def test_mapping_match_requires_an_external_id_match_not_a_similar_title(self):
         rows = [
             {

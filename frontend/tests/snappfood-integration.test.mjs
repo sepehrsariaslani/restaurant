@@ -151,6 +151,25 @@ test('Products list exposes the same exact Food Partner mapping status', () => {
   assert.match(viewSystem, /restaurant_external_mapping_status/)
 })
 
+test('Food Partner mapping has an independent Item search and controlled automatic mapping actions', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const api = read('src/utils/api.js')
+  const backend = read('../restaurant/api.py')
+  const sync = read('../restaurant/snapp_sync.py')
+
+  assert.match(page, /جستجوی Item داخلی/)
+  assert.match(page, /searchSnappfoodItems/)
+  assert.match(page, /نگاشت خودکار موارد قطعی/)
+  assert.match(page, /ساخت و نگاشت کالاهای غایب/)
+  assert.match(api, /search_snappfood_items/)
+  assert.match(api, /auto_map_snappfood_items/)
+  assert.match(backend, /def search_snappfood_items\(/)
+  assert.match(backend, /def auto_map_snappfood_items\(/)
+  assert.match(sync, /def _plan_snappfood_auto_mapping\(/)
+  const autoMappingFunction = page.slice(page.indexOf('async function runAutoMapping'), page.indexOf('async function syncToday'))
+  assert.doesNotMatch(autoMappingFunction, /importSnappfoodOrders/)
+})
+
 test('Food Partner exposes a date-range preview and capped selected-order import flow', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
   const api = read('src/utils/api.js')

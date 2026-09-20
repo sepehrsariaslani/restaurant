@@ -1095,7 +1095,7 @@ def fetch_snapp_menu(settings=None):
     return {"status": "success", "count": len(rows), "items": rows}
 
 
-def _get_local_item_rows(search=""):
+def _local_item_fields():
     fields = ["name", "item_code", "item_name", "disabled"]
     for fieldname in (
         "custom_snapp_code",
@@ -1108,12 +1108,75 @@ def _get_local_item_rows(search=""):
     ):
         if _has_column("Item", fieldname):
             fields.append(fieldname)
+    return fields
+
+
+def _get_local_item_rows(search="", limit_page_length=5000):
+    fields = _local_item_fields()
     filters = {"disabled": 0}
-    rows = frappe.get_all("Item", filters=filters, fields=fields, limit_page_length=1000, ignore_permissions=True)
+    rows = frappe.get_all(
+        "Item",
+        filters=filters,
+        fields=fields,
+        limit_page_length=min(max(cint(limit_page_length or 5000), 1), 5000),
+        ignore_permissions=True,
+    )
     needle = _normalize_mapping_text(search)
     if needle:
-        rows = [row for row in rows if needle in _normalize_mapping_text(row.get("item_name")) or needle in _normalize_mapping_text(row.get("item_code"))]
+        searchable_fields = (
+            "item_name",
+            "item_code",
+            "name",
+            "custom_snapp_code",
+            "restaurant_external_menu_item_id",
+            "restaurant_external_product_id",
+            "restaurant_external_variation_id",
+            "restaurant_external_product_hash_id",
+            "restaurant_external_variation_hash_id",
+        )
+        rows = [
+            row
+            for row in rows
+            if any(needle in _normalize_mapping_text(row.get(fieldname)) for fieldname in searchable_fields)
+        ]
     return rows
+
+
+def search_snappfood_items(search="", limit=50):
+    """Search native Items for the mapping dropdown without a 1,000-row cap."""
+    search = str(search or "").strip()
+    if not search:
+        return {"status": "success", "items": []}
+
+    like = f"%{search}%"
+    or_filters = []
+    for fieldname in (
+        "name",
+        "item_code",
+        "item_name",
+        "custom_snapp_code",
+        "restaurant_external_menu_item_id",
+        "restaurant_external_product_id",
+        "restaurant_external_variation_id",
+        "restaurant_external_product_hash_id",
+        "restaurant_external_variation_hash_id",
+    ):
+        if _has_column("Item", fieldname):
+            or_filters.append([fieldname, "like", like])
+
+    if not or_filters:
+        return {"status": "success", "items": []}
+
+    rows = frappe.get_all(
+        "Item",
+        filters={"disabled": 0},
+        or_filters=or_filters,
+        fields=_local_item_fields(),
+        order_by="modified desc",
+        limit_page_length=min(max(cint(limit or 50), 1), 100),
+        ignore_permissions=True,
+    )
+    return {"status": "success", "items": rows}
 
 
 def _build_known_menu_rows(local_items):
@@ -1239,6 +1302,73 @@ def _find_mapped_local_item(row, local_items):
     return matches[0] if len(matches) == 1 else None
 
 
+def _local_item_external_ids(item):
+    return {
+        str(item.get(key) or "").strip()
+        for key in (
+            "restaurant_external_menu_item_id",
+            "restaurant_external_product_id",
+            "restaurant_external_variation_id",
+            "restaurant_external_product_hash_id",
+            "restaurant_external_variation_hash_id",
+        )
+        if str(item.get(key) or "").strip()
+    }
+
+
+def _plan_snappfood_auto_mapping(menu_rows, local_items, create_missing=False):
+    """Plan safe automatic mapping without mutating ERPNext documents."""
+    plan = []
+    for row in menu_rows or []:
+        title = str(row.get("title") or "").strip()
+        external_id = str(
+            row.get("external_id")
+            or row.get("menu_item_id")
+            or row.get("variation_id")
+            or row.get("product_id")
+            or ""
+        ).strip()
+        base = {**row, "title": title, "external_id": external_id}
+        if not title or not external_id:
+            plan.append({**base, "action": "unmatched", "reason": "missing_identity"})
+            continue
+
+        exact = _find_mapped_local_item(row, local_items)
+        if exact:
+            plan.append({**base, "action": "already_mapped", "item_name": exact.get("name") or ""})
+            continue
+
+        title_matches = [
+            item
+            for item in (local_items or [])
+            if _normalize_mapping_text(item.get("item_name"))
+            == _normalize_mapping_text(title)
+        ]
+        if len(title_matches) == 1:
+            title_match = title_matches[0]
+            existing_ids = _local_item_external_ids(title_match)
+            if existing_ids:
+                plan.append(
+                    {
+                        **base,
+                        "action": "conflict",
+                        "item_name": title_match.get("name") or "",
+                        "reason": "title_item_has_other_external_id",
+                    }
+                )
+            else:
+                plan.append({**base, "action": "map", "item_name": title_match.get("name") or ""})
+            continue
+
+        if len(title_matches) > 1:
+            plan.append({**base, "action": "unmatched", "reason": "ambiguous_title"})
+        elif create_missing:
+            plan.append({**base, "action": "create"})
+        else:
+            plan.append({**base, "action": "unmatched", "reason": "item_not_found"})
+    return plan
+
+
 def get_snappfood_mapping_rows(search="", refresh_menu=0):
     cfg = _get_settings()
     local_items = _get_local_item_rows(search)
@@ -1322,7 +1452,15 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
     return {"status": "success", "settings": get_sync_status(), "menu": mappings, "items": local_items}
 
 
-def save_snappfood_item_mapping(item_name, product_id="", variation_id="", product_hash_id="", variation_hash_id="", menu_item_id=""):
+def save_snappfood_item_mapping(
+    item_name,
+    product_id="",
+    variation_id="",
+    product_hash_id="",
+    variation_hash_id="",
+    menu_item_id="",
+    commit=True,
+):
     if not item_name or not frappe.db.exists("Item", item_name):
         raise frappe.ValidationError("آیتم داخلی برای نگاشت معتبر نیست.")
     values = {}
@@ -1340,8 +1478,89 @@ def save_snappfood_item_mapping(item_name, product_id="", variation_id="", produ
     if not values:
         raise frappe.ValidationError("فیلدهای اتصال اسنپ‌فود هنوز روی Item ساخته نشده‌اند.")
     frappe.db.set_value("Item", item_name, values, update_modified=True)
-    frappe.db.commit()
+    if commit:
+        frappe.db.commit()
     return {"status": "success", "item": item_name, "values": values}
+
+
+def auto_map_snappfood_items(create_missing=False, refresh_menu=1):
+    """Map exact Food Partner rows, optionally creating missing native Items."""
+    mapping_rows = get_snappfood_mapping_rows(search="", refresh_menu=cint(refresh_menu))
+    if mapping_rows.get("status") == "error":
+        return mapping_rows
+
+    menu_rows = mapping_rows.get("menu") or []
+    local_items = mapping_rows.get("items") or []
+    plan = _plan_snappfood_auto_mapping(
+        menu_rows,
+        local_items,
+        create_missing=bool(cint(create_missing)),
+    )
+    result = {
+        "status": "success",
+        "menu_count": len(menu_rows),
+        "already_mapped_count": 0,
+        "mapped_count": 0,
+        "created_count": 0,
+        "unmatched_count": 0,
+        "conflict_count": 0,
+        "unmatched": [],
+        "conflicts": [],
+        "errors": [],
+    }
+    changed = False
+    for row in plan:
+        action = row.get("action")
+        if action == "already_mapped":
+            result["already_mapped_count"] += 1
+            continue
+        if action == "map":
+            try:
+                save_snappfood_item_mapping(
+                    item_name=row.get("item_name") or "",
+                    product_id=row.get("product_id") or "",
+                    variation_id=row.get("variation_id") or "",
+                    product_hash_id=row.get("product_hash_id") or "",
+                    variation_hash_id=row.get("variation_hash_id") or "",
+                    menu_item_id=row.get("menu_item_id") or row.get("external_id") or "",
+                    commit=False,
+                )
+                result["mapped_count"] += 1
+                changed = True
+            except Exception as exc:
+                result["errors"].append({"external_id": row.get("external_id") or "", "title": row.get("title") or "", "error": str(exc)})
+            continue
+        if action == "create":
+            try:
+                created = create_snappfood_item_from_mapping(
+                    title=row.get("title") or "",
+                    price=row.get("price") or 0,
+                    product_id=row.get("product_id") or "",
+                    variation_id=row.get("variation_id") or "",
+                    product_hash_id=row.get("product_hash_id") or "",
+                    variation_hash_id=row.get("variation_hash_id") or "",
+                    menu_item_id=row.get("menu_item_id") or row.get("external_id") or "",
+                    commit=False,
+                )
+                if created.get("created"):
+                    result["created_count"] += 1
+                else:
+                    result["mapped_count"] += 1
+                changed = True
+            except Exception as exc:
+                result["errors"].append({"external_id": row.get("external_id") or "", "title": row.get("title") or "", "error": str(exc)})
+            continue
+        if action == "conflict":
+            result["conflict_count"] += 1
+            result["conflicts"].append({"external_id": row.get("external_id") or "", "title": row.get("title") or "", "item_name": row.get("item_name") or "", "reason": row.get("reason") or ""})
+            continue
+        result["unmatched_count"] += 1
+        result["unmatched"].append({"external_id": row.get("external_id") or "", "title": row.get("title") or "", "reason": row.get("reason") or ""})
+
+    if changed:
+        frappe.db.commit()
+    result["processed_count"] = len(plan)
+    return result
 
 
 def _map_order_type(order_type, delivery_type):

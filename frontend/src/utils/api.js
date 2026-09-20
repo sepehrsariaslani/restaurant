@@ -1415,12 +1415,20 @@ export function getSnappfoodMappingRows({ search = "", refresh_menu = 0 } = {}) 
 	return callRestaurantAPI("get_snappfood_mapping_rows", { search, refresh_menu });
 }
 
+export function searchSnappfoodItems({ search = "", limit = 50 } = {}) {
+	return callRestaurantAPI("search_snappfood_items", { search, limit });
+}
+
 export function getSnappfoodCategories() {
 	return callRestaurantAPI("get_snappfood_categories", {});
 }
 
 export function saveSnappfoodItemMapping(payload = {}) {
 	return callRestaurantAPI("save_snappfood_item_mapping", { payload });
+}
+
+export function autoMapSnappfoodItems({ create_missing = 0, refresh_menu = 1 } = {}) {
+	return callRestaurantAPI("auto_map_snappfood_items", { create_missing, refresh_menu });
 }
 
 export function createSnappfoodItemFromMapping(payload = {}) {

@@ -70,7 +70,16 @@
 
     <template v-else-if="activeTab === 'mapping'">
       <ManagementSurfaceCard title="نگاشت محصولات و variationها" subtitle="ابتدا منوی Food Partner را دریافت کنید، سپس هر ردیف را به Item داخلی وصل کنید.">
-        <div class="mapping-toolbar"><button class="secondary-btn" type="button" @click="loadMappings(true)" :disabled="mappingLoading || !status.schema_ready">{{ mappingLoading ? 'در حال دریافت منو...' : 'دریافت منوی Food Partner' }}</button><button class="secondary-btn" type="button" @click="loadCategories" :disabled="categoryLoading || !status.schema_ready">{{ categoryLoading ? 'در حال دریافت گروه‌ها...' : 'دریافت گروه‌های کالا' }}</button><input v-model.trim="mappingSearch" class="input mapping-search" placeholder="جستجوی Item داخلی" @keyup.enter="loadMappings(false)" /></div>
+        <div class="mapping-toolbar">
+          <button class="secondary-btn" type="button" @click="loadMappings(true)" :disabled="mappingLoading || !status.schema_ready">{{ mappingLoading ? 'در حال دریافت منو...' : 'دریافت منوی Food Partner' }}</button>
+          <button class="secondary-btn" type="button" @click="loadCategories" :disabled="categoryLoading || !status.schema_ready">{{ categoryLoading ? 'در حال دریافت گروه‌ها...' : 'دریافت گروه‌های کالا' }}</button>
+          <input v-model.trim="mappingSearch" class="input mapping-search" placeholder="جستجوی Item داخلی" @keyup.enter="searchMappingItems" />
+          <button class="secondary-btn" type="button" @click="searchMappingItems" :disabled="itemSearchLoading || !status.schema_ready">{{ itemSearchLoading ? 'در حال جستجو...' : 'جستجوی Item' }}</button>
+          <button class="secondary-btn" type="button" @click="runAutoMapping(false)" :disabled="autoMapping || !status.schema_ready">{{ autoMapping ? 'در حال نگاشت...' : 'نگاشت خودکار موارد قطعی' }}</button>
+          <button class="secondary-btn" type="button" @click="runAutoMapping(true)" :disabled="autoMapping || !status.schema_ready">ساخت و نگاشت کالاهای غایب</button>
+        </div>
+        <p v-if="autoMapResult" class="sync-result">بررسی {{ autoMapResult.menu_count || 0 }} ردیف: {{ autoMapResult.already_mapped_count || 0 }} قبلاً نگاشت‌شده، {{ autoMapResult.mapped_count || 0 }} نگاشت جدید، {{ autoMapResult.created_count || 0 }} Item ساخته‌شده، {{ autoMapResult.unmatched_count || 0 }} بدون تطبیق، {{ autoMapResult.conflict_count || 0 }} مورد متعارض.</p>
+        <ul v-if="autoMapResult?.unmatched?.length || autoMapResult?.conflicts?.length || autoMapResult?.errors?.length" class="error-list"><li v-for="(item, index) in [...(autoMapResult.unmatched || []), ...(autoMapResult.conflicts || []), ...(autoMapResult.errors || [])].slice(0, 8)" :key="index">{{ item.title || item.external_id || '—' }}: {{ item.reason || item.error || 'نیازمند بررسی دستی' }}</li></ul>
         <div v-if="categorySections.length" class="category-accordion">
           <section v-for="category in categorySections" :key="category.key" class="category-panel">
             <button class="category-trigger" type="button" @click="toggleCategory(category.key)" :aria-expanded="openCategories.has(category.key)">
@@ -131,6 +140,8 @@ import {
   getSnappfoodIntegrationConfig,
   getSnappfoodCategories,
   getSnappfoodMappingRows,
+  searchSnappfoodItems,
+  autoMapSnappfoodItems,
   createSnappfoodItemFromMapping,
   importSnappfoodOrders,
   previewSnappfoodOrders,
@@ -152,8 +163,10 @@ const testingConnection = ref(false)
 const saving = ref(false)
 const mappingLoading = ref(false)
 const categoryLoading = ref(false)
+const itemSearchLoading = ref(false)
 const mappingSaving = ref('')
 const mappingCreating = ref('')
+const autoMapping = ref(false)
 const syncing = ref(false)
 const previewLoading = ref(false)
 const importing = ref(false)
@@ -161,6 +174,7 @@ const error = ref('')
 const successMessage = ref('')
 const mappingSearch = ref('')
 const syncResult = ref(null)
+const autoMapResult = ref(null)
 const mappingRows = reactive({ menu: [], items: [] })
 const categories = ref([])
 const openCategories = ref(new Set())
@@ -259,7 +273,7 @@ async function loadMappings(refreshMenu = false) {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
   mappingLoading.value = true; error.value = ''
   try {
-    const data = await getSnappfoodMappingRows({ search: mappingSearch.value, refresh_menu: refreshMenu ? 1 : 0 })
+    const data = await getSnappfoodMappingRows({ search: refreshMenu ? '' : mappingSearch.value, refresh_menu: refreshMenu ? 1 : 0 })
     mappingRows.menu = data?.menu || []; mappingRows.items = data?.items || []
     if (data?.status === 'error' || data?.error) {
       error.value = data.error || 'منوی Food Partner خوانده نشد.'
@@ -283,11 +297,32 @@ async function loadCategories() {
     if (data?.status === 'error' || data?.error) error.value = data.error || 'گروه‌های کالا خوانده نشدند.'
   } catch (err) { error.value = err?.message || 'گروه‌های کالا خوانده نشدند.' } finally { categoryLoading.value = false }
 }
+async function searchMappingItems() {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
+  const search = mappingSearch.value.trim()
+  if (!search) { error.value = 'برای جستجوی Item، نام یا شناسه را وارد کنید.'; return }
+  itemSearchLoading.value = true; error.value = ''; successMessage.value = ''
+  try {
+    const data = await searchSnappfoodItems({ search, limit: 50 })
+    mappingRows.items = data?.items || []
+    if (data?.status === 'error' || data?.error) error.value = data.error || 'جستجوی Item ناموفق بود.'
+    else successMessage.value = `${mappingRows.items.length} Item برای «${search}» پیدا شد.`
+  } catch (err) { error.value = err?.message || 'جستجوی Item ناموفق بود.' } finally { itemSearchLoading.value = false }
+}
 async function saveMapping(row) {
   const itemName = mappingDrafts[row.external_id]
   if (!itemName) { error.value = 'برای ثبت نگاشت، ابتدا Item داخلی را انتخاب کنید.'; return }
   mappingSaving.value = row.external_id; error.value = ''
-  try { await saveSnappfoodItemMapping({ item_name: itemName, product_id: row.product_id, variation_id: row.variation_id, product_hash_id: row.product_hash_id, variation_hash_id: row.variation_hash_id, menu_item_id: row.external_id }); successMessage.value = `نگاشت «${row.title}» ثبت شد.` } catch (err) { error.value = err?.message || 'ثبت نگاشت ناموفق بود.' } finally { mappingSaving.value = '' }
+  try {
+    const result = await saveSnappfoodItemMapping({ item_name: itemName, product_id: row.product_id, variation_id: row.variation_id, product_hash_id: row.product_hash_id, variation_hash_id: row.variation_hash_id, menu_item_id: row.menu_item_id || row.external_id })
+    if (result?.status !== 'success') throw new Error(result?.message || 'سرور نگاشت را تأیید نکرد.')
+    const selectedItem = mappingRows.items.find((item) => item.name === itemName)
+    row.mapping_status = 'Mapped'
+    row.mapped_item = selectedItem || { name: itemName, item_name: itemName }
+    row.suggested_item = null
+    mappingDrafts[row.external_id] = itemName
+    successMessage.value = `نگاشت «${row.title}» ثبت شد.`
+  } catch (err) { error.value = err?.message || 'ثبت نگاشت ناموفق بود.' } finally { mappingSaving.value = '' }
 }
 async function createItemFromMapping(row) {
   if (!row?.title || !row?.external_id) { error.value = 'عنوان و شناسهٔ Food Partner برای ساخت Item لازم است.'; return }
@@ -298,6 +333,22 @@ async function createItemFromMapping(row) {
     successMessage.value = result?.created ? `Item «${row.title}» ساخته و نگاشت شد.` : `Item «${row.title}» قبلاً وجود داشت و نگاشت شد.`
     await loadMappings(true)
   } catch (err) { error.value = err?.message || 'ساخت Item و ثبت نگاشت ناموفق بود.' } finally { mappingCreating.value = '' }
+}
+async function runAutoMapping(createMissing = false) {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
+  if (createMissing && !window.confirm('برای کالاهایی که Item داخلی ندارند، Item native ساخته و به Food Partner متصل شود؟ سفارش یا فاکتوری ساخته نمی‌شود.')) return
+  autoMapping.value = true; error.value = ''; successMessage.value = ''; autoMapResult.value = null
+  try {
+    const result = await autoMapSnappfoodItems({ create_missing: createMissing ? 1 : 0, refresh_menu: 1 })
+    autoMapResult.value = result
+    if (result?.status === 'error' || result?.error) error.value = result.error || 'نگاشت خودکار ناموفق بود.'
+    else {
+      successMessage.value = createMissing
+        ? 'نگاشت خودکار و ساخت Itemهای غایب تمام شد.'
+        : 'نگاشت خودکار موارد قطعی تمام شد.'
+      await loadMappings(true)
+    }
+  } catch (err) { error.value = err?.message || 'نگاشت خودکار ناموفق بود.' } finally { autoMapping.value = false }
 }
 async function syncToday() {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
@@ -358,4 +409,5 @@ onMounted(loadConfig)
 .category-accordion{display:grid;gap:10px;margin-top:16px}.category-panel{border:1px solid var(--border-color,#e5e7eb);border-radius:14px;overflow:hidden;background:var(--surface,#fff)}.category-trigger{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border:0;background:var(--surface-soft,#f6f7fb);color:inherit;text-align:right;cursor:pointer}.category-trigger span:first-child{display:grid;gap:4px}.category-trigger small{color:#6b7280;font-size:11px}.category-panel-body{padding:0 12px 12px}.date-range-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:10px;margin-top:18px}.date-range-toolbar label{display:grid;gap:6px;min-width:160px;font-size:12px}.order-preview-list{display:grid;gap:8px;margin-top:16px}.order-preview-row{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:12px;cursor:pointer}.order-preview-row.is-imported{opacity:.62;cursor:not-allowed}.order-preview-main{display:grid;gap:4px}.order-preview-main small,.order-preview-main em{color:#6b7280;font-size:11px;font-style:normal}.order-preview-main em{color:#166534}
 .status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card,.token-actions{display:flex;gap:10px;align-items:center;margin-top:20px}.token-field{min-width:0}.token-actions{margin-top:8px}.mapping-search{max-width:300px}.category-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.category-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-color,#e5e7eb);border-radius:999px;padding:7px 10px;background:var(--surface-soft,#f6f7fb);font-size:12px}.category-pill small{color:#6b7280}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
 .mapping-state.is-mapped{color:#166534}.mapping-state.is-unmapped{color:#b45309}
+.mapping-toolbar{flex-wrap:wrap}.mapping-toolbar .mapping-search{flex:1 1 240px}
 </style>

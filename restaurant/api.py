@@ -22715,6 +22715,14 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
 
 
 @frappe.whitelist()
+def search_snappfood_items(search="", limit=50):
+	_ensure_management_access()
+	from restaurant.snapp_sync import search_snappfood_items as _search_items
+
+	return _search_items(search=search, limit=cint(limit))
+
+
+@frappe.whitelist()
 def get_snappfood_categories():
 	_ensure_management_access()
 	from restaurant.snapp_sync import fetch_snapp_menu_categories
@@ -22740,6 +22748,17 @@ def save_snappfood_item_mapping(payload=None):
 		product_hash_id=payload.get("product_hash_id") or "",
 		variation_hash_id=payload.get("variation_hash_id") or "",
 		menu_item_id=payload.get("menu_item_id") or "",
+	)
+
+
+@frappe.whitelist()
+def auto_map_snappfood_items(create_missing=0, refresh_menu=1):
+	_ensure_management_access()
+	from restaurant.snapp_sync import auto_map_snappfood_items as _auto_map
+
+	return _auto_map(
+		create_missing=cint(create_missing),
+		refresh_menu=cint(refresh_menu),
 	)
 
 
