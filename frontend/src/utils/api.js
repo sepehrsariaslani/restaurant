@@ -1423,6 +1423,10 @@ export function saveSnappfoodItemMapping(payload = {}) {
 	return callRestaurantAPI("save_snappfood_item_mapping", { payload });
 }
 
+export function createSnappfoodItemFromMapping(payload = {}) {
+	return callRestaurantAPI("create_snappfood_item_from_mapping", { payload });
+}
+
 export function runSnappfoodSyncToday() {
 	return callRestaurantAPI("run_snapp_sync_today", { only_new: 1 });
 }

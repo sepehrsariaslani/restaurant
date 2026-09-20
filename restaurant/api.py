@@ -22728,6 +22728,25 @@ def save_snappfood_item_mapping(payload=None):
 
 
 @frappe.whitelist()
+def create_snappfood_item_from_mapping(payload=None):
+	_ensure_management_access()
+	payload = _parse_json(payload, {})
+	if not isinstance(payload, dict):
+		payload = {}
+	from restaurant.snapp_sync import create_snappfood_item_from_mapping as _create_item
+
+	return _create_item(
+		title=payload.get("title") or "",
+		price=payload.get("price") or 0,
+		product_id=payload.get("product_id") or "",
+		variation_id=payload.get("variation_id") or "",
+		product_hash_id=payload.get("product_hash_id") or "",
+		variation_hash_id=payload.get("variation_hash_id") or "",
+		menu_item_id=payload.get("menu_item_id") or "",
+	)
+
+
+@frappe.whitelist()
 def organize_catalog_items(enable_for_menu=1):
 	from restaurant.catalog_organizer import organize_imported_items
 

@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import patch
 
 from restaurant.snapp_sync import (
+    _build_snapp_item_creation_values,
     _build_order_menu_rows,
     _match_local_item_by_title,
     _normalize_sales_invoice_line_value,
@@ -85,6 +87,25 @@ class TestSnappItemMatching(unittest.TestCase):
 
         self.assertEqual(rows[0]["external_id"], "34935662")
         self.assertEqual(rows[0]["title"], "کاسه برنجین مرغ پلو میکس مکزیکی")
+
+    def test_mapping_item_creation_payload_is_a_native_sales_item_only(self):
+        with patch("restaurant.snapp_sync._default_uom", return_value="Nos"):
+            values = _build_snapp_item_creation_values(
+                {
+                    "title": "آیس هانی لته 70 درصد روبوستا، 30 درصد عربیکا",
+                    "unit_price": 2660000,
+                    "menu_item_id": "34837339",
+                },
+                item_group="Snapp Imported Items",
+                item_code="آیس هانی لته 70 درصد روبوستا، 30 درصد عربیکا",
+            )
+
+        self.assertEqual(values["doctype"], "Item")
+        self.assertEqual(values["item_group"], "Snapp Imported Items")
+        self.assertEqual(values["is_stock_item"], 0)
+        self.assertEqual(values["is_sales_item"], 1)
+        self.assertNotIn("Sales Order", values)
+        self.assertNotIn("Sales Invoice", values)
 
 
 if __name__ == "__main__":

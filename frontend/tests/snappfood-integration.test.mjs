@@ -114,6 +114,20 @@ test('Food Partner mapping groups products in an accordion and keeps each row ma
   assert.match(page, /ثبت نگاشت/)
 })
 
+test('Food Partner mapping can create a native Item without importing an order', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const api = read('src/utils/api.js')
+  const backend = read('../restaurant/api.py')
+  const sync = read('../restaurant/snapp_sync.py')
+
+  assert.match(page, /ساخت Item و ثبت نگاشت/)
+  assert.match(page, /createItemFromMapping/)
+  assert.match(api, /createSnappfoodItemFromMapping/)
+  assert.match(backend, /def create_snappfood_item_from_mapping\(/)
+  assert.match(sync, /def create_snappfood_item_from_mapping\(/)
+  assert.doesNotMatch(page, /createItemFromMapping[\s\S]{0,500}importSnappfoodOrders/)
+})
+
 test('Food Partner exposes a date-range preview and capped selected-order import flow', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
   const api = read('src/utils/api.js')

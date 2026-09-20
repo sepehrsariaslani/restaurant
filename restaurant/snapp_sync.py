@@ -1618,6 +1618,118 @@ def _tag_item_mapping(item_name, line):
         frappe.db.set_value("Item", item_name, values, update_modified=False)
 
 
+def _build_snapp_item_creation_values(line, item_group, item_code):
+    """Build only the native Item payload used by the mapping action."""
+    title = str(line.get("title") or "").strip()
+    return {
+        "doctype": "Item",
+        "item_code": item_code,
+        "item_name": title,
+        "item_group": item_group,
+        "stock_uom": _default_uom(),
+        "is_stock_item": 0,
+        "is_sales_item": 1,
+        "is_purchase_item": 0,
+        "standard_rate": flt(line.get("unit_price") or 0),
+        "description": title,
+    }
+
+
+def create_snappfood_item_from_mapping(
+    title,
+    price=0,
+    product_id="",
+    variation_id="",
+    product_hash_id="",
+    variation_hash_id="",
+    menu_item_id="",
+    commit=True,
+):
+    """Create or map one native Item without creating an order or invoice."""
+    line = {
+        "title": str(title or "").strip(),
+        "unit_price": flt(price or 0),
+        "product_id": str(product_id or "").strip(),
+        "variation_id": str(variation_id or "").strip(),
+        "product_hash_id": str(product_hash_id or "").strip(),
+        "variation_hash_id": str(variation_hash_id or "").strip(),
+        "menu_item_id": str(menu_item_id or variation_id or product_id or "").strip(),
+    }
+    if not line["title"]:
+        raise frappe.ValidationError("عنوان کالای Food Partner برای ساخت Item خالی است.")
+    if not any(
+        line.get(key)
+        for key in (
+            "menu_item_id",
+            "product_id",
+            "variation_id",
+            "product_hash_id",
+            "variation_hash_id",
+        )
+    ):
+        raise frappe.ValidationError("برای ساخت Item، شناسهٔ کالای Food Partner لازم است.")
+
+    external_fields = (
+        ("restaurant_external_menu_item_id", line.get("menu_item_id")),
+        ("restaurant_external_product_id", line.get("product_id")),
+        ("restaurant_external_variation_id", line.get("variation_id")),
+        ("restaurant_external_product_hash_id", line.get("product_hash_id")),
+        ("restaurant_external_variation_hash_id", line.get("variation_hash_id")),
+    )
+    existing_item = ""
+    for fieldname, value in external_fields:
+        if value and _has_column("Item", fieldname):
+            existing_item = frappe.db.get_value("Item", {fieldname: value}, "name") or ""
+            if existing_item:
+                break
+    if not existing_item:
+        existing_item = frappe.db.get_value(
+            "Item",
+            {"item_name": line["title"], "disabled": 0},
+            "name",
+        ) or ""
+
+    if existing_item:
+        _tag_item_mapping(existing_item, line)
+        if _has_column("Item", "custom_snapp_code"):
+            current_code = frappe.db.get_value("Item", existing_item, "custom_snapp_code")
+            if not (current_code or "").strip():
+                frappe.db.set_value(
+                    "Item",
+                    existing_item,
+                    "custom_snapp_code",
+                    _build_item_code(line),
+                    update_modified=False,
+                )
+        if commit:
+            frappe.db.commit()
+        return {"status": "mapped", "created": False, "item": existing_item}
+
+    item_group = _ensure_import_item_group()
+    item_code = _unique_item_code(_build_item_code_from_title(line["title"], _build_item_code(line)))
+    item_doc = frappe.get_doc(_build_snapp_item_creation_values(line, item_group, item_code))
+    if _has_column("Item", "restaurant_enabled"):
+        item_doc.set("restaurant_enabled", 0)
+    if _has_column("Item", "restaurant_external_menu_item_id"):
+        item_doc.set("restaurant_external_menu_item_id", line["menu_item_id"])
+    if _has_column("Item", "restaurant_external_product_id"):
+        item_doc.set("restaurant_external_product_id", line["product_id"])
+    if _has_column("Item", "restaurant_external_variation_id"):
+        item_doc.set("restaurant_external_variation_id", line["variation_id"])
+    if _has_column("Item", "restaurant_external_product_hash_id"):
+        item_doc.set("restaurant_external_product_hash_id", line["product_hash_id"])
+    if _has_column("Item", "restaurant_external_variation_hash_id"):
+        item_doc.set("restaurant_external_variation_hash_id", line["variation_hash_id"])
+    if _has_column("Item", "restaurant_external_mapping_status"):
+        item_doc.set("restaurant_external_mapping_status", "Mapped")
+    if _has_column("Item", "custom_snapp_code"):
+        item_doc.set("custom_snapp_code", _build_item_code(line))
+    item_doc.insert(ignore_permissions=True)
+    if commit:
+        frappe.db.commit()
+    return {"status": "created", "created": True, "item": item_doc.name}
+
+
 def _resolve_item_code(line):
     external_menu_item_id = (line.get("menu_item_id") or "").strip()
     external_product_id = (line.get("product_id") or "").strip()
@@ -1700,41 +1812,16 @@ def _resolve_item_code(line):
             f"کالای Food Partner نگاشت نشده است: {title} ({external_variation_id or external_product_id or external_menu_item_id or 'بدون شناسه'})"
         )
 
-    item_group = _ensure_import_item_group()
-    item_code = _unique_item_code(_build_item_code_from_title(title, snapp_code))
-
-    item_doc = frappe.get_doc(
-        {
-            "doctype": "Item",
-            "item_code": item_code,
-            "item_name": title,
-            "item_group": item_group,
-            "stock_uom": _default_uom(),
-            "is_stock_item": 0,
-            "is_sales_item": 1,
-            "is_purchase_item": 0,
-            "standard_rate": flt(line.get("unit_price") or 0),
-            "description": title,
-        }
-    )
-    if _has_column("Item", "restaurant_enabled"):
-        item_doc.set("restaurant_enabled", 0)
-    if _has_column("Item", "restaurant_external_menu_item_id"):
-        item_doc.set("restaurant_external_menu_item_id", external_menu_item_id)
-    if _has_column("Item", "restaurant_external_product_id"):
-        item_doc.set("restaurant_external_product_id", external_product_id)
-    if _has_column("Item", "restaurant_external_variation_id"):
-        item_doc.set("restaurant_external_variation_id", external_variation_id)
-    if _has_column("Item", "restaurant_external_product_hash_id"):
-        item_doc.set("restaurant_external_product_hash_id", line.get("product_hash_id") or "")
-    if _has_column("Item", "restaurant_external_variation_hash_id"):
-        item_doc.set("restaurant_external_variation_hash_id", line.get("variation_hash_id") or "")
-    if _has_column("Item", "restaurant_external_mapping_status"):
-        item_doc.set("restaurant_external_mapping_status", "Mapped")
-    if _has_column("Item", "custom_snapp_code"):
-        item_doc.set("custom_snapp_code", snapp_code)
-    item_doc.insert(ignore_permissions=True)
-    return item_doc.name
+    return create_snappfood_item_from_mapping(
+        title=title,
+        price=line.get("unit_price") or 0,
+        product_id=external_product_id,
+        variation_id=external_variation_id,
+        product_hash_id=external_product_hash_id,
+        variation_hash_id=external_variation_hash_id,
+        menu_item_id=external_menu_item_id,
+        commit=False,
+    )["item"]
 
 
 def _unique_restaurant_order_code(preferred):

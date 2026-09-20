@@ -87,6 +87,7 @@
                     <option v-for="item in mappingRows.items" :key="item.name" :value="item.name">{{ item.item_name }} · {{ item.item_code }}</option>
                   </select>
                   <button class="secondary-btn" type="button" @click="saveMapping(row)" :disabled="mappingSaving === row.external_id">{{ mappingSaving === row.external_id ? '...' : 'ثبت نگاشت' }}</button>
+                  <button v-if="!mappingDrafts[row.external_id]" class="secondary-btn" type="button" @click="createItemFromMapping(row)" :disabled="mappingCreating === row.external_id">{{ mappingCreating === row.external_id ? 'در حال ساخت...' : 'ساخت Item و ثبت نگاشت' }}</button>
                 </div>
               </div>
             </div>
@@ -130,6 +131,7 @@ import {
   getSnappfoodIntegrationConfig,
   getSnappfoodCategories,
   getSnappfoodMappingRows,
+  createSnappfoodItemFromMapping,
   importSnappfoodOrders,
   previewSnappfoodOrders,
   runSnappfoodSyncToday,
@@ -151,6 +153,7 @@ const saving = ref(false)
 const mappingLoading = ref(false)
 const categoryLoading = ref(false)
 const mappingSaving = ref('')
+const mappingCreating = ref('')
 const syncing = ref(false)
 const previewLoading = ref(false)
 const importing = ref(false)
@@ -285,6 +288,16 @@ async function saveMapping(row) {
   if (!itemName) { error.value = 'برای ثبت نگاشت، ابتدا Item داخلی را انتخاب کنید.'; return }
   mappingSaving.value = row.external_id; error.value = ''
   try { await saveSnappfoodItemMapping({ item_name: itemName, product_id: row.product_id, variation_id: row.variation_id, product_hash_id: row.product_hash_id, variation_hash_id: row.variation_hash_id, menu_item_id: row.external_id }); successMessage.value = `نگاشت «${row.title}» ثبت شد.` } catch (err) { error.value = err?.message || 'ثبت نگاشت ناموفق بود.' } finally { mappingSaving.value = '' }
+}
+async function createItemFromMapping(row) {
+  if (!row?.title || !row?.external_id) { error.value = 'عنوان و شناسهٔ Food Partner برای ساخت Item لازم است.'; return }
+  mappingCreating.value = row.external_id; error.value = ''; successMessage.value = ''
+  try {
+    const result = await createSnappfoodItemFromMapping({ title: row.title, price: row.price, product_id: row.product_id, variation_id: row.variation_id, product_hash_id: row.product_hash_id, variation_hash_id: row.variation_hash_id, menu_item_id: row.external_id })
+    mappingDrafts[row.external_id] = result?.item || ''
+    successMessage.value = result?.created ? `Item «${row.title}» ساخته و نگاشت شد.` : `Item «${row.title}» قبلاً وجود داشت و نگاشت شد.`
+    await loadMappings(true)
+  } catch (err) { error.value = err?.message || 'ساخت Item و ثبت نگاشت ناموفق بود.' } finally { mappingCreating.value = '' }
 }
 async function syncToday() {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
