@@ -224,6 +224,8 @@ class TestSnappSync(FrappeTestCase):
                     "id": "2642322",
                     "productId": "2642322",
                     "title": "کلاب و ساندویچ",
+                    "status": "ACTIVE",
+                    "canChangeStatus": True,
                     "menuItems": [
                         {
                             "productId": "product-1",

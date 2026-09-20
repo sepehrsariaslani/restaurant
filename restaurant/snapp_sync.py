@@ -566,6 +566,11 @@ def _extract_menu_entries(payload):
             and value.get("id") not in (None, "")
             and str(explicit_category_id) == str(value.get("id"))
         )
+        category_identity_matches_id_product = bool(
+            explicit_product_id
+            and value.get("id") not in (None, "")
+            and str(explicit_product_id) == str(value.get("id"))
+        )
         is_category = bool(
             has_nested_values
             and not explicit_variation_id
@@ -575,20 +580,16 @@ def _extract_menu_entries(payload):
                 or explicit_category_title
                 or category_identity_matches_product
                 or category_identity_matches_id
+                or category_identity_matches_id_product
                 or (
                     generic_title
                     and not product_title
                     and not variation_title
-                    and not first_value(value, ("price", "status"))
                     and not has_variation_children
-                    and (has_category_children or explicit_product_id)
-                )
-                or (
-                    generic_title
-                    and not product_title
-                    and not variation_title
-                    and not first_value(value, ("price", "status"))
-                    and normalize_key(parent_key) in category_parent_keys
+                    and (
+                        has_category_children
+                        or normalize_key(parent_key) in category_parent_keys
+                    )
                 )
             )
         )
