@@ -5436,6 +5436,25 @@ def _create_sales_order(
 		line_calc = _recalculate_line(
 			menu_doc, cart_line.get("qty"), customization, branch_markup_percent=markup_percent
 		)
+		# Food Partner sends both the net selling price and the original price.
+		# Keep the original unit price on the native line and let the imported
+		# order-level discount produce the net total. This is restricted to the
+		# server-side Food Partner context and cannot override normal POS pricing.
+		external_unit_price = cart_line.get("external_unit_price")
+		if order_context.get("source") == "snapp_food" and external_unit_price not in (None, ""):
+			external_unit_price = max(flt(external_unit_price), 0)
+			if external_unit_price > 0:
+				line_calc = dict(line_calc)
+				line_calc["unit_price"] = external_unit_price
+				line_calc["line_total"] = external_unit_price * flt(line_calc.get("qty") or 1)
+				pricing_breakdown = dict(line_calc.get("pricing_breakdown") or {})
+				pricing_breakdown.update(
+					{
+						"unit_price": line_calc["unit_price"],
+						"line_total": line_calc["line_total"],
+					}
+				)
+				line_calc["pricing_breakdown"] = pricing_breakdown
 		cfg = _menu_doc_config(menu_doc)
 		line_requires_production = _item_requires_production(menu_doc)
 

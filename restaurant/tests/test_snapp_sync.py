@@ -23,6 +23,7 @@ from restaurant.snapp_sync import (
     _get_schema_status,
     _extract_vendor_id_from_token,
     _build_snapp_order_preview,
+    _resolve_snapp_primary_customer,
     _resolve_snapp_order_window,
     _select_snapp_orders_for_import,
     fetch_snapp_menu,
@@ -234,6 +235,40 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(normalized["status"], "confirmed")
         self.assertEqual(normalized["items"][0]["product_id"], "34788176")
         self.assertEqual(normalized["items"][0]["variation_id"], "34788176-v1")
+
+    def test_normalize_food_partner_line_discount_into_gross_price_and_order_discount(self):
+        normalized = normalize_snapp_order(
+            {
+                "orderId": "884984813",
+                "orderDate": "2026-09-19 12:00:00",
+                "orderProducts": [
+                    {
+                        "id": 36485633,
+                        "quantity": 2,
+                        "price": 218500,
+                        "originPrice": 230000,
+                        "discount": 11500,
+                        "title": "کلاب بادام شکلاتی و توت فرنگی",
+                    }
+                ],
+            },
+            amount_multiplier=10,
+        )
+
+        self.assertEqual(normalized["items"][0]["gross_unit_price"], 2300000)
+        self.assertEqual(normalized["items"][0]["discount_total"], 230000)
+        self.assertEqual(normalized["discount_amount"], 230000)
+
+    def test_blank_default_customer_resolves_existing_food_partner_customer(self):
+        with patch.object(
+            snapp_sync.frappe,
+            "get_all",
+            return_value=[{"name": "اسنپ فود", "customer_name": "اسنپ فود"}],
+        ):
+            self.assertEqual(
+                _resolve_snapp_primary_customer({"default_customer": ""}),
+                "اسنپ فود",
+            )
 
     def test_extract_food_partner_menu_entries(self):
         payload = {"data": [{"productId": "p1", "title": "شیر خرما", "variations": [{"variationId": "v1", "title": "سایز معمولی"}]}]}
@@ -529,7 +564,15 @@ class TestSnappSync(FrappeTestCase):
             "service_fee": 0,
             "packaging_cost": 0,
             "tip": 0,
-            "items": [{"title": "شیر خرما", "qty": 2, "unit_price": 185000}],
+            "items": [
+                {
+                    "title": "شیر خرما",
+                    "qty": 2,
+                    "unit_price": 185000,
+                    "gross_unit_price": 200000,
+                    "discount_total": 30000,
+                }
+            ],
         }
         fake_api = types.ModuleType("restaurant.api")
         fake_api._create_pos_order_payload = Mock(return_value={"order_id": "SO-2"})
@@ -557,6 +600,7 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(payload["order_type"], "takeaway")
         self.assertEqual(payload["secondary_customer"], "")
         self.assertEqual(payload["items"][0]["item_slug"], "item-2")
+        self.assertEqual(payload["items"][0]["external_unit_price"], 200000)
         self.assertEqual(payload["totals"]["discountAmount"], 120)
         self.assertFalse(fake_api._create_pos_order_payload.call_args.kwargs["commit"])
 

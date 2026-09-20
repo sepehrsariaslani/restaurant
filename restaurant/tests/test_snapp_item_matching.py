@@ -10,6 +10,7 @@ from restaurant.snapp_sync import (
     _match_local_item_by_title,
     _normalize_sales_invoice_line_value,
     normalize_snapp_order,
+    _resolve_snapp_primary_customer,
 )
 
 
@@ -148,6 +149,39 @@ class TestSnappItemMatching(unittest.TestCase):
 
         self.assertEqual(result["items"][0]["menu_item_id"], "34935662")
         self.assertEqual(result["items"][0]["line_id"], "2035835693")
+
+    def test_normalizes_food_partner_line_discount_for_native_totals(self):
+        result = normalize_snapp_order(
+            {
+                "orderId": "884984813",
+                "orderDate": "2026-09-19 12:00:00",
+                "orderProducts": [
+                    {
+                        "id": 36485633,
+                        "quantity": 2,
+                        "price": 218500,
+                        "originPrice": 230000,
+                        "discount": 11500,
+                        "title": "کلاب بادام شکلاتی و توت فرنگی",
+                    }
+                ],
+            },
+            amount_multiplier=10,
+        )
+
+        self.assertEqual(result["items"][0]["gross_unit_price"], 2300000)
+        self.assertEqual(result["items"][0]["discount_total"], 230000)
+        self.assertEqual(result["discount_amount"], 230000)
+
+    def test_resolves_known_food_partner_customer_when_default_is_blank(self):
+        with patch(
+            "restaurant.snapp_sync.frappe.get_all",
+            return_value=[{"name": "اسنپ فود", "customer_name": "اسنپ فود"}],
+        ):
+            self.assertEqual(
+                _resolve_snapp_primary_customer({"default_customer": ""}),
+                "اسنپ فود",
+            )
 
     def test_empty_numeric_invoice_snapshot_becomes_zero(self):
         self.assertEqual(

@@ -1621,6 +1621,22 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
         raw_items = raw_items.get("items") or raw_items.get("products") or []
     for row in raw_items:
         qty = max(flt(row.get("count") or row.get("newCount") or row.get("quantity") or row.get("qty") or 1), 1)
+        unit_price = _scale_amount(
+            row.get("price") or row.get("unitPrice") or row.get("unit_price"),
+            amount_multiplier,
+        )
+        explicit_discount = _scale_amount(
+            row.get("discount") or row.get("discountAmount") or row.get("discountPerUnit"),
+            amount_multiplier,
+        )
+        gross_unit_price = _scale_amount(
+            row.get("originPrice") or row.get("origin_price") or row.get("originalPrice"),
+            amount_multiplier,
+        )
+        if gross_unit_price <= 0:
+            gross_unit_price = unit_price + explicit_discount
+        gross_unit_price = max(gross_unit_price, unit_price)
+        discount_per_unit = max(explicit_discount, gross_unit_price - unit_price, 0)
         items.append(
             {
                 "line_id": str(
@@ -1653,13 +1669,34 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
                 ).strip()
                 or "Snapp Item",
                 "qty": qty,
-                "unit_price": _scale_amount(row.get("price") or row.get("unitPrice") or row.get("unit_price"), amount_multiplier),
-                "discount": _scale_amount(row.get("discount") or row.get("discountAmount"), amount_multiplier),
+                "unit_price": unit_price,
+                "gross_unit_price": gross_unit_price,
+                "discount": explicit_discount,
+                "discount_total": discount_per_unit * qty,
                 "packaging_cost": _scale_amount(row.get("packagingCost"), amount_multiplier),
                 "with_tax": cint(row.get("withTax") or 0),
                 "toppings": row.get("toppings") or [],
             }
         )
+
+    line_discount_total = sum(flt(item.get("discount_total") or 0) for item in items)
+    reported_discount = max(
+        _scale_amount(
+            raw_order.get("discountAmount")
+            or raw_order.get("discount")
+            or raw_order.get("otherDiscounts"),
+            amount_multiplier,
+        ),
+        _scale_amount(raw_order.get("couponDiscountSfShareAmount"), amount_multiplier)
+        + _scale_amount(raw_order.get("couponDiscountVendorShareAmount"), amount_multiplier),
+    )
+    gross_items_total = sum(
+        flt(item.get("gross_unit_price") or item.get("unit_price") or 0) * flt(item.get("qty") or 0)
+        for item in items
+    )
+    reported_net_items_total = _scale_amount(raw_order.get("price"), amount_multiplier)
+    discount_from_item_total = max(gross_items_total - reported_net_items_total, 0) if reported_net_items_total else 0
+    resolved_discount_amount = max(line_discount_total, reported_discount, discount_from_item_total)
 
     return {
         "order_id": order_id,
@@ -1722,11 +1759,8 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
             raw_order.get("finalPrice") or raw_order.get("totalPrice") or raw_order.get("paidPrice"), amount_multiplier
         ),
         "paid_price": _scale_amount(raw_order.get("paidPrice") or raw_order.get("paid_price"), amount_multiplier),
-        "discount": _scale_amount(
-            raw_order.get("discount") or raw_order.get("discountAmount") or raw_order.get("otherDiscounts"),
-            amount_multiplier,
-        ),
-        "discount_amount": _scale_amount(raw_order.get("discountAmount") or 0, amount_multiplier),
+        "discount": resolved_discount_amount,
+        "discount_amount": resolved_discount_amount,
         "packaging_cost": _scale_amount(raw_order.get("packagingCost") or raw_order.get("packingPrice"), amount_multiplier),
         "delivery_cost": _scale_amount(raw_order.get("deliveryCost") or raw_order.get("deliveryPrice"), amount_multiplier),
         "tax": _scale_amount(raw_order.get("tax"), amount_multiplier),
@@ -1761,6 +1795,43 @@ def _default_uom():
     if _has_column("UOM", "enabled"):
         return frappe.db.get_value("UOM", {"enabled": 1}, "name") or frappe.db.get_value("UOM", {}, "name") or "Nos"
     return frappe.db.get_value("UOM", {}, "name") or "Nos"
+
+
+def _resolve_snapp_primary_customer(settings=None):
+    """Resolve the native customer used as the primary party for imported orders.
+
+    Existing installations often have a customer named ``اسنپ فود`` but leave
+    the optional integration setting empty. Prefer an explicit configured
+    customer, then safely discover that known native customer without ever
+    selecting an arbitrary Customer record.
+    """
+    settings = settings or {}
+    configured = str(settings.get("default_customer") or "").strip()
+    if configured:
+        if frappe.db.exists("Customer", configured):
+            return configured
+        resolved = frappe.db.get_value(
+            "Customer",
+            {"customer_name": configured, "disabled": 0},
+            "name",
+        )
+        if resolved:
+            return resolved
+
+    for candidate in ("اسنپ فود", "اسنپ‌فود", "Snappfood", "Snapp Food"):
+        try:
+            rows = frappe.get_all(
+                "Customer",
+                filters={"customer_name": candidate, "disabled": 0},
+                fields=["name"],
+                limit_page_length=1,
+                ignore_permissions=True,
+            )
+        except Exception:
+            rows = []
+        if rows:
+            return rows[0].get("name") or ""
+    return ""
 
 
 def _ensure_customer(customer_name, mobile, external_customer_id):
@@ -2129,7 +2200,12 @@ def _build_sales_order_items(order_payload):
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_variation_hash_id", line.get("variation_hash_id") or "")
         if _has_column("Sales Order Item", "restaurant_external_item_title"):
             line_payload["restaurant_external_item_title"] = line.get("title") or ""
-        _set_if_column(line_payload, "Sales Order Item", "restaurant_external_discount", flt(line.get("discount") or 0))
+        _set_if_column(
+            line_payload,
+            "Sales Order Item",
+            "restaurant_external_discount",
+            flt(line.get("discount_total") or line.get("discount") or 0),
+        )
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_packaging_cost", flt(line.get("packaging_cost") or 0))
         _set_if_column(line_payload, "Sales Order Item", "restaurant_external_with_tax", cint(line.get("with_tax") or 0))
         _set_if_column(
@@ -2262,7 +2338,12 @@ def _update_existing_sales_order_lines(sales_order_name, order_payload):
             "base_rate": rate,
             "base_amount": amount,
         }
-        _set_if_column(updates, "Sales Order Item", "restaurant_external_discount", flt(source_line.get("discount") or 0))
+        _set_if_column(
+            updates,
+            "Sales Order Item",
+            "restaurant_external_discount",
+            flt(source_line.get("discount_total") or source_line.get("discount") or 0),
+        )
         _set_if_column(
             updates,
             "Sales Order Item",
@@ -2334,14 +2415,8 @@ def _create_sales_order(order_payload):
     customer = external_customer
     secondary_customer = ""
     customer_mobile_for_pos = order_payload["mobile"]
-    configured_customer = settings.get("default_customer") or ""
-    if configured_customer and not frappe.db.exists("Customer", configured_customer):
-        configured_customer = frappe.db.get_value(
-            "Customer",
-            {"customer_name": configured_customer, "disabled": 0},
-            "name",
-        ) or ""
-    if configured_customer and frappe.db.exists("Customer", configured_customer):
+    configured_customer = _resolve_snapp_primary_customer(settings)
+    if configured_customer:
         customer = configured_customer
         customer_mobile_for_pos = ""
         if external_customer != configured_customer:
@@ -2358,13 +2433,14 @@ def _create_sales_order(order_payload):
         item_slug = (frappe.db.get_value("Item", item_code, "restaurant_slug") or item_code or "").strip()
         if not item_slug:
             raise frappe.ValidationError(f"کد Item برای ردیف سفارش {order_payload['order_id']} خالی است.")
-        cart_items.append(
-            {
-                "item_slug": item_slug,
-                "qty": max(flt(line.get("qty") or 1), 1),
-                "note": line.get("title") or "",
-            }
-        )
+        cart_item = {
+            "item_slug": item_slug,
+            "qty": max(flt(line.get("qty") or 1), 1),
+            "note": line.get("title") or "",
+        }
+        if flt(line.get("gross_unit_price") or 0) > 0:
+            cart_item["external_unit_price"] = flt(line.get("gross_unit_price"))
+        cart_items.append(cart_item)
         resolved_lines.append({**line, "item_code": item_code, "item_slug": item_slug})
 
     totals = {
@@ -2448,7 +2524,12 @@ def _create_sales_order(order_payload):
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_variation_id", line.get("variation_id") or "")
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_product_hash_id", line.get("product_hash_id") or "")
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_variation_hash_id", line.get("variation_hash_id") or "")
-        _set_if_column(line_updates, "Sales Order Item", "restaurant_external_discount", flt(line.get("discount") or 0))
+        _set_if_column(
+            line_updates,
+            "Sales Order Item",
+            "restaurant_external_discount",
+            flt(line.get("discount_total") or line.get("discount") or 0),
+        )
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_packaging_cost", flt(line.get("packaging_cost") or 0))
         _set_if_column(line_updates, "Sales Order Item", "restaurant_external_with_tax", cint(line.get("with_tax") or 0))
         _set_if_column(
