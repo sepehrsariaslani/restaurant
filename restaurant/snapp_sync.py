@@ -852,6 +852,8 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
         ]
         if not menu_rows:
             menu_rows = _build_known_menu_rows(local_items)
+    elif not menu_rows:
+        menu_rows = _build_known_menu_rows(local_items)
     local_by_external = {}
     for item in local_items:
         for key in (
