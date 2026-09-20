@@ -799,12 +799,59 @@ def _get_local_item_rows(search=""):
     return rows
 
 
+def _build_known_menu_rows(local_items):
+    """Build mappable menu rows from menuItemIds learned from prior orders.
+
+    Food Partner's menu endpoint has returned category-only payloads for some
+    sessions.  Existing imported order lines still contain the real
+    ``menuItemId`` and the exact title, so they are a safe read-only fallback
+    until the remote menu response is available again.
+    """
+    rows = []
+    seen = set()
+    for item in local_items or []:
+        external_id = str(item.get("restaurant_external_menu_item_id") or "").strip()
+        title = str(item.get("item_name") or item.get("name") or "").strip()
+        if not external_id or not title or external_id in seen:
+            continue
+        seen.add(external_id)
+        rows.append(
+            {
+                "external_id": external_id,
+                "product_id": str(item.get("restaurant_external_product_id") or "").strip(),
+                "variation_id": str(item.get("restaurant_external_variation_id") or "").strip(),
+                "product_hash_id": str(item.get("restaurant_external_product_hash_id") or "").strip(),
+                "variation_hash_id": str(item.get("restaurant_external_variation_hash_id") or "").strip(),
+                "category_id": "",
+                "category_title": "",
+                "title": title,
+                "price": 0,
+                "status": "KNOWN_FROM_ORDER",
+            }
+        )
+    return rows
+
+
 def get_snappfood_mapping_rows(search="", refresh_menu=0):
     cfg = _get_settings()
     local_items = _get_local_item_rows(search)
     menu_rows = []
     if refresh_menu:
         menu_rows = fetch_snapp_menu(cfg).get("items") or []
+        menu_rows = [
+            row
+            for row in menu_rows
+            if row.get("title")
+            and row.get("external_id")
+            and not (
+                row.get("category_title")
+                and _normalize_mapping_text(row.get("title"))
+                == _normalize_mapping_text(row.get("category_title"))
+                and not row.get("variation_id")
+            )
+        ]
+        if not menu_rows:
+            menu_rows = _build_known_menu_rows(local_items)
     local_by_external = {}
     for item in local_items:
         for key in (

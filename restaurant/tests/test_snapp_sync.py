@@ -13,6 +13,7 @@ import restaurant.snapp_sync as snapp_sync
 
 from restaurant.snapp_sync import (
     _extract_menu_entries,
+    _build_known_menu_rows,
     _extract_orders,
     _extract_total_pages,
     _build_sales_invoice_external_values,
@@ -23,6 +24,7 @@ from restaurant.snapp_sync import (
     fetch_snapp_menu,
     _normalize_bearer_token,
     fetch_snapp_orders,
+    get_snappfood_mapping_rows,
     _map_order_type,
     _map_status,
     normalize_snapp_order,
@@ -250,6 +252,62 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(product.get("_category_title"), "کلاب و ساندویچ")
         variation = next(row for row in entries if row.get("variationId") == "variation-1")
         self.assertEqual(variation.get("_category_title"), "کلاب و ساندویچ")
+
+    def test_build_known_menu_rows_uses_previous_order_menu_ids(self):
+        rows = _build_known_menu_rows(
+            [
+                {
+                    "name": "کلاب مرغ و شوید",
+                    "item_name": "کلاب مرغ و شوید",
+                    "restaurant_external_menu_item_id": "1c77f176-02b0-4cc1-bb84-b6860ede23ff",
+                    "restaurant_external_mapping_status": "Unmapped",
+                },
+                {
+                    "name": "بدون شناسه",
+                    "item_name": "بدون شناسه",
+                    "restaurant_external_menu_item_id": "",
+                },
+            ]
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["external_id"], "1c77f176-02b0-4cc1-bb84-b6860ede23ff")
+        self.assertEqual(rows[0]["title"], "کلاب مرغ و شوید")
+
+    def test_mapping_rows_fall_back_to_known_products_when_remote_returns_categories(self):
+        local_items = [
+            {
+                "name": "کلاب مرغ و شوید",
+                "item_name": "کلاب مرغ و شوید",
+                "restaurant_external_menu_item_id": "1c77f176-02b0-4cc1-bb84-b6860ede23ff",
+                "restaurant_external_product_id": "",
+                "restaurant_external_variation_id": "",
+            }
+        ]
+        category_only = {
+            "items": [
+                {
+                    "external_id": "2642322",
+                    "title": "کلاب و ساندویچ",
+                    "category_title": "کلاب و ساندویچ",
+                    "product_id": "2642322",
+                    "variation_id": "",
+                }
+            ]
+        }
+        with patch.object(snapp_sync, "_get_settings", return_value={}), patch.object(
+            snapp_sync, "_get_local_item_rows", return_value=local_items
+        ), patch.object(snapp_sync, "fetch_snapp_menu", return_value=category_only), patch.object(
+            snapp_sync, "get_sync_status", return_value={}
+        ):
+            result = get_snappfood_mapping_rows(refresh_menu=1)
+
+        self.assertEqual(len(result["menu"]), 1)
+        self.assertEqual(result["menu"][0]["title"], "کلاب مرغ و شوید")
+        self.assertEqual(
+            result["menu"][0]["external_id"],
+            "1c77f176-02b0-4cc1-bb84-b6860ede23ff",
+        )
 
     def test_invoice_keeps_external_financial_snapshot_for_reconciliation(self):
         values = _build_sales_invoice_external_values(
