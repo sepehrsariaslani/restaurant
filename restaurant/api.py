@@ -22665,6 +22665,17 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
 
 
 @frappe.whitelist()
+def get_snappfood_categories():
+	_ensure_management_access()
+	from restaurant.snapp_sync import fetch_snapp_menu_categories
+
+	try:
+		return fetch_snapp_menu_categories()
+	except frappe.ValidationError as exc:
+		return {"status": "error", "error": str(exc), "items": []}
+
+
+@frappe.whitelist()
 def save_snappfood_item_mapping(payload=None):
 	_ensure_management_access()
 	payload = _parse_json(payload, {})

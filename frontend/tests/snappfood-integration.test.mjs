@@ -84,6 +84,19 @@ test('Food Partner mapping renders category context with product and variation I
   assert.match(page, /row\.product_id/)
 })
 
+test('Food Partner mapping can load and display menu categories', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const api = read('src/utils/api.js')
+  const backend = read('../restaurant/api.py')
+  const sync = read('../restaurant/snapp_sync.py')
+
+  assert.match(page, /دریافت گروه‌های کالا/)
+  assert.match(page, /category\.title/)
+  assert.match(api, /getSnappfoodCategories/)
+  assert.match(backend, /def get_snappfood_categories\(/)
+  assert.match(sync, /menu-category/)
+})
+
 test('Food Partner settings makes disabled automatic invoicing explicit', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 

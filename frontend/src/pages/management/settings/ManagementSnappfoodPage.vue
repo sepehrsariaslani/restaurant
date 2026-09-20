@@ -70,7 +70,8 @@
 
     <template v-else-if="activeTab === 'mapping'">
       <ManagementSurfaceCard title="نگاشت محصولات و variationها" subtitle="ابتدا منوی Food Partner را دریافت کنید، سپس هر ردیف را به Item داخلی وصل کنید.">
-        <div class="mapping-toolbar"><button class="secondary-btn" type="button" @click="loadMappings(true)" :disabled="mappingLoading || !status.schema_ready">{{ mappingLoading ? 'در حال دریافت منو...' : 'دریافت منوی Food Partner' }}</button><input v-model.trim="mappingSearch" class="input mapping-search" placeholder="جستجوی Item داخلی" @keyup.enter="loadMappings(false)" /></div>
+        <div class="mapping-toolbar"><button class="secondary-btn" type="button" @click="loadMappings(true)" :disabled="mappingLoading || !status.schema_ready">{{ mappingLoading ? 'در حال دریافت منو...' : 'دریافت منوی Food Partner' }}</button><button class="secondary-btn" type="button" @click="loadCategories" :disabled="categoryLoading || !status.schema_ready">{{ categoryLoading ? 'در حال دریافت گروه‌ها...' : 'دریافت گروه‌های کالا' }}</button><input v-model.trim="mappingSearch" class="input mapping-search" placeholder="جستجوی Item داخلی" @keyup.enter="loadMappings(false)" /></div>
+        <div v-if="categories.length" class="category-list"><span v-for="category in categories" :key="category.external_id" class="category-pill">{{ category.title }}<small>{{ category.category_id }}</small></span></div>
         <p class="muted" v-if="!mappingRows.menu.length">برای دیدن product/variationها روی «دریافت منوی Food Partner» بزنید.</p>
         <div v-else class="mapping-list">
           <div v-for="row in mappingRows.menu" :key="`${row.external_id}-${row.title}`" class="mapping-row">
@@ -102,6 +103,7 @@ import ManagementPageScaffold from '@/components/management/ManagementPageScaffo
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getSnappfoodIntegrationConfig,
+  getSnappfoodCategories,
   getSnappfoodMappingRows,
   runSnappfoodSyncToday,
   saveSnappfoodIntegrationConfig,
@@ -120,6 +122,7 @@ const loading = ref(false)
 const testingConnection = ref(false)
 const saving = ref(false)
 const mappingLoading = ref(false)
+const categoryLoading = ref(false)
 const mappingSaving = ref('')
 const syncing = ref(false)
 const error = ref('')
@@ -127,6 +130,7 @@ const successMessage = ref('')
 const mappingSearch = ref('')
 const syncResult = ref(null)
 const mappingRows = reactive({ menu: [], items: [] })
+const categories = ref([])
 const mappingDrafts = reactive({})
 const tokenVisible = ref(false)
 const status = reactive({ has_token: false, vendor_id: '', enabled: false, require_item_mapping: true, auto_sync_invoices: true, schema_ready: false, schema_missing: [] })
@@ -208,6 +212,15 @@ async function loadMappings(refreshMenu = false) {
     mappingRows.menu.forEach((row) => { mappingDrafts[row.external_id] = row.suggested_item?.name || '' })
   } catch (err) { error.value = err?.message || 'منوی Food Partner خوانده نشد.' } finally { mappingLoading.value = false }
 }
+async function loadCategories() {
+  if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
+  categoryLoading.value = true; error.value = ''
+  try {
+    const data = await getSnappfoodCategories()
+    categories.value = data?.items || []
+    if (data?.status === 'error' || data?.error) error.value = data.error || 'گروه‌های کالا خوانده نشدند.'
+  } catch (err) { error.value = err?.message || 'گروه‌های کالا خوانده نشدند.' } finally { categoryLoading.value = false }
+}
 async function saveMapping(row) {
   const itemName = mappingDrafts[row.external_id]
   if (!itemName) { error.value = 'برای ثبت نگاشت، ابتدا Item داخلی را انتخاب کنید.'; return }
@@ -224,5 +237,5 @@ onMounted(loadConfig)
 </script>
 
 <style scoped>
-.status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card,.token-actions{display:flex;gap:10px;align-items:center;margin-top:20px}.token-field{min-width:0}.token-actions{margin-top:8px}.mapping-search{max-width:300px}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
+.status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card,.token-actions{display:flex;gap:10px;align-items:center;margin-top:20px}.token-field{min-width:0}.token-actions{margin-top:8px}.mapping-search{max-width:300px}.category-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.category-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-color,#e5e7eb);border-radius:999px;padding:7px 10px;background:var(--surface-soft,#f6f7fb);font-size:12px}.category-pill small{color:#6b7280}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
 </style>

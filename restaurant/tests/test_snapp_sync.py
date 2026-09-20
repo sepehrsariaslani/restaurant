@@ -13,6 +13,7 @@ import restaurant.snapp_sync as snapp_sync
 
 from restaurant.snapp_sync import (
     _extract_menu_entries,
+    _extract_menu_categories,
     _build_known_menu_rows,
     _extract_orders,
     _extract_total_pages,
@@ -22,6 +23,7 @@ from restaurant.snapp_sync import (
     _get_schema_status,
     _extract_vendor_id_from_token,
     fetch_snapp_menu,
+    fetch_snapp_menu_categories,
     _normalize_bearer_token,
     fetch_snapp_orders,
     get_snappfood_mapping_rows,
@@ -82,6 +84,49 @@ class TestSnappSync(FrappeTestCase):
                 }
             )
 
+        self.assertEqual(request.call_args.kwargs["headers"]["vendor-authorization"], "true")
+
+    def test_extract_menu_categories_from_nested_response(self):
+        payload = {
+            "data": {
+                "categories": [
+                    {
+                        "id": 2642322,
+                        "title": "کلاب و ساندویچ",
+                        "children": [
+                            {"categoryId": 2649358, "categoryName": "کاسه سالاد"}
+                        ],
+                    }
+                ]
+            }
+        }
+
+        categories = _extract_menu_categories(payload)
+
+        self.assertEqual(
+            [(row["category_id"], row["title"]) for row in categories],
+            [("2642322", "کلاب و ساندویچ"), ("2649358", "کاسه سالاد")],
+        )
+
+    def test_food_partner_categories_use_menu_category_endpoint(self):
+        response = Mock()
+        response.json.return_value = {
+            "data": [{"id": 2642322, "title": "کلاب و ساندویچ"}]
+        }
+        with patch("restaurant.snapp_sync.requests.get", return_value=response) as request:
+            result = fetch_snapp_menu_categories(
+                {
+                    "token": "secret",
+                    "vendor_id": "466275",
+                    "menu_api_base_url": "https://apigw.snappfood.ir",
+                }
+            )
+
+        self.assertEqual(result["items"][0]["title"], "کلاب و ساندویچ")
+        self.assertEqual(
+            request.call_args.args[0],
+            "https://apigw.snappfood.ir/vendor-menu/v1/vendor/466275/menu-category",
+        )
         self.assertEqual(request.call_args.kwargs["headers"]["vendor-authorization"], "true")
 
     def test_food_partner_menu_rows_expose_category_and_product_ids(self):

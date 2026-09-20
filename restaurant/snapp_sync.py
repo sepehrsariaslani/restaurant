@@ -666,6 +666,135 @@ def _extract_menu_entries(payload):
     return entries
 
 
+def _extract_menu_categories(payload):
+    """Extract Food Partner menu groups without treating products as groups."""
+    categories = []
+    seen = set()
+    category_parent_keys = {
+        "categories",
+        "menucategories",
+        "category",
+        "menucategory",
+        "subcategories",
+        "groups",
+        "data",
+        "children",
+    }
+    product_marker_keys = {
+        "productid",
+        "variationid",
+        "menuitemid",
+        "producttitle",
+        "productname",
+        "variationtitle",
+        "variationname",
+        "price",
+    }
+
+    def normalize_key(key):
+        return re.sub(r"[^a-z0-9]", "", str(key or "").lower())
+
+    def first_value(value, keys):
+        wanted = {normalize_key(key) for key in keys}
+        for raw_key, candidate in value.items():
+            if normalize_key(raw_key) in wanted and candidate not in (None, "", []):
+                return candidate
+        return ""
+
+    def visit(value, parent_key=""):
+        if isinstance(value, list):
+            for child in value:
+                visit(child, parent_key)
+            return
+        if not isinstance(value, dict):
+            return
+
+        category_id = first_value(
+            value,
+            ("categoryId", "category_id", "menuCategoryId", "menu_category_id", "id"),
+        )
+        title = first_value(
+            value,
+            ("categoryTitle", "category_title", "categoryName", "menuCategoryName", "title", "name"),
+        )
+        normalized_keys = {normalize_key(key) for key in value}
+        has_product_markers = bool(normalized_keys.intersection(product_marker_keys))
+        has_category_hint = bool(
+            normalized_keys.intersection(
+                {"categorytitle", "categoryname", "menucategoryname", "categoryid", "menucategoryid"}
+            )
+            or normalize_key(parent_key) in category_parent_keys
+        )
+        if category_id and title and (not has_product_markers or has_category_hint):
+            category_id = str(category_id).strip()
+            title = str(title).strip()
+            if category_id and title and category_id not in seen:
+                seen.add(category_id)
+                categories.append(
+                    {
+                        "external_id": category_id,
+                        "category_id": category_id,
+                        "parent_id": str(
+                            first_value(value, ("parentId", "parent_id", "parentCategoryId", "parent_category_id"))
+                            or ""
+                        ).strip(),
+                        "title": title,
+                    }
+                )
+
+        for raw_key, child in value.items():
+            if isinstance(child, (dict, list)):
+                visit(child, raw_key)
+
+    visit(payload)
+    return categories
+
+
+def fetch_snapp_menu_categories(settings=None):
+    cfg = settings or _get_settings()
+    if not cfg.get("token"):
+        raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
+    if not cfg.get("vendor_id"):
+        raise frappe.ValidationError("شناسه فروشنده Food Partner تنظیم نشده است.")
+
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "authorization": f"Bearer {cfg['token']}",
+        "vendor-authorization": "true",
+        "user-agent": "Mozilla/5.0",
+    }
+    if cfg.get("host_domain"):
+        headers["hostdomain"] = cfg["host_domain"]
+    if cfg.get("origin_url"):
+        headers["origin"] = cfg["origin_url"]
+        headers["referer"] = f"{cfg['origin_url'].rstrip('/')}/"
+
+    try:
+        response = requests.get(
+            f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v1/vendor/{cfg['vendor_id']}/menu-category",
+            headers=headers,
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.HTTPError as exc:
+        status_code = getattr(exc.response, "status_code", None)
+        if status_code in (401, 403):
+            raise frappe.ValidationError(
+                "توکن Food Partner معتبر نیست یا دسترسی گروه‌های کالا رد شد."
+            ) from exc
+        raise frappe.ValidationError(
+            f"دریافت گروه‌های کالای Food Partner با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+        ) from exc
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با API گروه‌های کالای Food Partner برقرار نشد.") from exc
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("پاسخ API گروه‌های کالای Food Partner قابل خواندن نیست.") from exc
+
+    items = _extract_menu_categories(payload)
+    return {"status": "success", "count": len(items), "items": items}
+
+
 def _normalize_mapping_text(value):
     text = str(value or "").strip().lower()
     replacements = {"ي": "ی", "ك": "ک", "ۀ": "ه", "ة": "ه"}

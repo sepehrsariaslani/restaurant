@@ -1415,6 +1415,10 @@ export function getSnappfoodMappingRows({ search = "", refresh_menu = 0 } = {}) 
 	return callRestaurantAPI("get_snappfood_mapping_rows", { search, refresh_menu });
 }
 
+export function getSnappfoodCategories() {
+	return callRestaurantAPI("get_snappfood_categories", {});
+}
+
 export function saveSnappfoodItemMapping(payload = {}) {
 	return callRestaurantAPI("save_snappfood_item_mapping", { payload });
 }
