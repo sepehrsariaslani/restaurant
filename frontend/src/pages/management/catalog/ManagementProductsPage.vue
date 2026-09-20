@@ -779,6 +779,10 @@ const chipRenderers = {
   title: (row) => (row.title ? { text: row.title } : null),
   short_desc: (row) => (row.short_desc ? { text: row.short_desc } : null),
   custom_snapp_code: (row) => (row.custom_snapp_code ? { text: `اسنپ: ${row.custom_snapp_code}`, cls: 'notion-chip--code' } : null),
+  restaurant_external_mapping_status: (row) => {
+    const mapped = String(row.restaurant_external_mapping_status || '').trim() === 'Mapped'
+    return { text: mapped ? 'Food Partner: نگاشت واقعی' : 'Food Partner: نگاشت نشده', cls: mapped ? 'notion-chip--on' : 'notion-chip--warn' }
+  },
   restaurant_builder_template: (row) => (row.restaurant_builder_template ? { text: row.restaurant_builder_template, cls: 'notion-chip--soft' } : null),
   restaurant_customize_button_label: (row) => (row.restaurant_customize_button_label ? { text: row.restaurant_customize_button_label } : null),
   // فیلدهای گزینه‌ای

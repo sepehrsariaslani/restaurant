@@ -27,6 +27,7 @@ export const PRODUCT_PROPERTIES = [
   { key: "sort_order", label: "ترتیب نمایش", type: "number" },
   { key: "packaging_price", label: "قیمت بسته‌بندی", type: "number" },
   { key: "custom_snapp_code", label: "کد اسنپ‌فود", type: "text" },
+  { key: "restaurant_external_mapping_status", label: "نگاشت Food Partner", type: "select" },
   { key: "restaurant_builder_template", label: "قالب سازنده", type: "text" },
   { key: "restaurant_customize_button_label", label: "برچسب دکمه سفارشی‌سازی", type: "text" },
 ];
@@ -77,6 +78,7 @@ const DEFAULT_PROPERTY_ORDER = [
   "base_price",
   "stock_qty",
   "is_active",
+  "restaurant_external_mapping_status",
   "tags",
   "item_code",
 ];
@@ -102,6 +104,7 @@ export function createDefaultView(overrides = {}) {
       base_price: true,
       stock_qty: true,
       is_active: true,
+      restaurant_external_mapping_status: true,
       tags: true,
     },
     propertyOrder: [...DEFAULT_PROPERTY_ORDER],

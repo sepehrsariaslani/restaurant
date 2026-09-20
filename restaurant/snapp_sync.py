@@ -1191,6 +1191,54 @@ def _build_order_menu_rows(raw_orders, amount_multiplier=1):
     return rows
 
 
+def _find_mapped_local_item(row, local_items):
+    """Return the local Item bound to an exact Food Partner identifier.
+
+    A title similarity is only a suggestion.  Importing must be based on one
+    of the external IDs, otherwise a product such as ``کره ...`` can be shown
+    as mapped for a different order line such as ``کلاب ...``.
+    """
+    external_keys = (
+        "external_id",
+        "menu_item_id",
+        "product_id",
+        "variation_id",
+        "product_hash_id",
+        "variation_hash_id",
+    )
+    item_keys = (
+        "restaurant_external_menu_item_id",
+        "restaurant_external_product_id",
+        "restaurant_external_variation_id",
+        "restaurant_external_product_hash_id",
+        "restaurant_external_variation_hash_id",
+    )
+    wanted = {
+        str(row.get(key) or "").strip()
+        for key in external_keys
+        if str(row.get(key) or "").strip()
+    }
+    if not wanted:
+        return None
+
+    matches = []
+    seen = set()
+    for item in local_items or []:
+        item_ids = {
+            str(item.get(key) or "").strip()
+            for key in item_keys
+            if str(item.get(key) or "").strip()
+        }
+        if not wanted.intersection(item_ids):
+            continue
+        item_name = str(item.get("name") or "").strip()
+        if item_name and item_name not in seen:
+            seen.add(item_name)
+            matches.append(item)
+
+    return matches[0] if len(matches) == 1 else None
+
+
 def get_snappfood_mapping_rows(search="", refresh_menu=0):
     cfg = _get_settings()
     local_items = _get_local_item_rows(search)
@@ -1235,22 +1283,9 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
             pass
     elif not menu_rows:
         menu_rows = _build_known_menu_rows(local_items)
-    local_by_external = {}
-    for item in local_items:
-        for key in (
-            "restaurant_external_variation_id",
-            "restaurant_external_product_id",
-            "restaurant_external_variation_hash_id",
-            "restaurant_external_product_hash_id",
-            "restaurant_external_menu_item_id",
-        ):
-            value = str(item.get(key) or "").strip()
-            if value:
-                local_by_external[value] = item
-
     mappings = []
     for row in menu_rows:
-        exact = local_by_external.get(row["external_id"])
+        exact = _find_mapped_local_item(row, local_items)
         if exact:
             suggested = exact
             match_score = 1
@@ -1275,7 +1310,15 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
             )
             if match_score < 0.9:
                 suggested = None
-        mappings.append({**row, "suggested_item": suggested, "match_score": round(match_score, 3)})
+        mappings.append(
+            {
+                **row,
+                "mapped_item": exact,
+                "mapping_status": "Mapped" if exact else "Unmapped",
+                "suggested_item": suggested,
+                "match_score": round(match_score, 3),
+            }
+        )
     return {"status": "success", "settings": get_sync_status(), "menu": mappings, "items": local_items}
 
 

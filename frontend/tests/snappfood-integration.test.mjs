@@ -128,6 +128,29 @@ test('Food Partner mapping can create a native Item without importing an order',
   assert.doesNotMatch(page, /createItemFromMapping[\s\S]{0,500}importSnappfoodOrders/)
 })
 
+test('Food Partner mapping distinguishes an exact ID mapping from a name suggestion', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const sync = read('../restaurant/snapp_sync.py')
+
+  assert.match(page, /row\.mapping_status === 'Mapped'/)
+  assert.match(page, /row\.mapped_item/)
+  assert.match(page, /mappingDrafts\[row\.external_id\] = row\.mapped_item\?\.name/)
+  assert.match(page, /پیشنهاد بر اساس نام.*هنوز ثبت نشده/)
+  assert.match(sync, /def _find_mapped_local_item\(/)
+  assert.match(sync, /"mapping_status": "Mapped" if exact else "Unmapped"/)
+})
+
+test('Products list exposes the same exact Food Partner mapping status', () => {
+  const productsApi = read('../restaurant/api.py')
+  const productsPage = read('src/pages/management/catalog/ManagementProductsPage.vue')
+  const viewSystem = read('src/utils/viewSystem.js')
+
+  assert.match(productsApi, /"restaurant_external_mapping_status"/)
+  assert.match(productsApi, /"restaurant_external_menu_item_id"/)
+  assert.match(productsPage, /Food Partner: نگاشت واقعی/)
+  assert.match(viewSystem, /restaurant_external_mapping_status/)
+})
+
 test('Food Partner exposes a date-range preview and capped selected-order import flow', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
   const api = read('src/utils/api.js')

@@ -4,6 +4,7 @@ from unittest.mock import patch
 from restaurant.snapp_sync import (
     _build_snapp_item_creation_values,
     _build_order_menu_rows,
+    _find_mapped_local_item,
     _match_local_item_by_title,
     _normalize_sales_invoice_line_value,
     normalize_snapp_order,
@@ -11,6 +12,47 @@ from restaurant.snapp_sync import (
 
 
 class TestSnappItemMatching(unittest.TestCase):
+    def test_mapping_match_requires_an_external_id_match_not_a_similar_title(self):
+        rows = [
+            {
+                "name": "ITEM-1",
+                "item_name": "کره بادام شکلاتی و توت فرنگی",
+                "restaurant_external_menu_item_id": "other-id",
+            }
+        ]
+
+        self.assertIsNone(
+            _find_mapped_local_item(
+                {
+                    "external_id": "36485633",
+                    "title": "کلاب بادام شکلاتی و توت فرنگی",
+                    "menu_item_id": "36485633",
+                },
+                rows,
+            )
+        )
+
+    def test_mapping_match_accepts_any_exact_food_partner_identifier(self):
+        rows = [
+            {
+                "name": "ITEM-1",
+                "item_name": "کلاب بادام شکلاتی و توت فرنگی",
+                "restaurant_external_menu_item_id": "menu-1",
+                "restaurant_external_variation_id": "36485633",
+            }
+        ]
+
+        result = _find_mapped_local_item(
+            {
+                "external_id": "36485633",
+                "title": "کلاب بادام شکلاتی و توت فرنگی",
+                "variation_id": "36485633",
+            },
+            rows,
+        )
+
+        self.assertEqual(result["name"], "ITEM-1")
+
     def test_matches_persian_title_after_spacing_and_arabic_character_normalization(self):
         rows = [
             {

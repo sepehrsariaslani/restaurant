@@ -20079,6 +20079,16 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 	item_fields.extend(_core_item_image_select_fields())
 	if _has_column("Item", "custom_snapp_code"):
 		item_fields.append("custom_snapp_code")
+	for fieldname in (
+		"restaurant_external_mapping_status",
+		"restaurant_external_menu_item_id",
+		"restaurant_external_product_id",
+		"restaurant_external_variation_id",
+		"restaurant_external_product_hash_id",
+		"restaurant_external_variation_hash_id",
+	):
+		if _has_column("Item", fieldname):
+			item_fields.append(fieldname)
 	if _has_column("Item", "restaurant_item_tags"):
 		item_fields.append("restaurant_item_tags")
 	if _has_column("Item", "restaurant_coming_soon"):
@@ -20181,6 +20191,12 @@ def list_management_products(search=None, category=None, active_only=0, branch=N
 				"name": row.name,
 				"item_code": row.item_code or row.name,
 				"custom_snapp_code": row.get("custom_snapp_code") or "",
+				"restaurant_external_mapping_status": row.get("restaurant_external_mapping_status") or "Unmapped",
+				"restaurant_external_menu_item_id": row.get("restaurant_external_menu_item_id") or "",
+				"restaurant_external_product_id": row.get("restaurant_external_product_id") or "",
+				"restaurant_external_variation_id": row.get("restaurant_external_variation_id") or "",
+				"restaurant_external_product_hash_id": row.get("restaurant_external_product_hash_id") or "",
+				"restaurant_external_variation_hash_id": row.get("restaurant_external_variation_hash_id") or "",
 				"is_active": cint(row.restaurant_enabled),
 				"is_disabled": cint(row.disabled),
 				"out_of_stock": cint(row.get("restaurant_out_of_stock") or 0),
