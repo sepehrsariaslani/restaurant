@@ -900,6 +900,7 @@
         title="منابع محتوای صفحه اصلی"
         subtitle="اسلایدر هیرو و تنظیمات هدر/فوتر هنوز از تنظیمات سراسری مدیریت می‌شوند."
       >
+        <p v-if="builderMenuError" class="muted builder-data-warning">{{ builderMenuError }}</p>
         <div class="context-actions">
           <button class="secondary-btn" type="button" @click="activeLayoutPanel = 'visual'; activeDesignPage = 'home'; activeDesignComponent = 'homeHero'">
             ویرایش هیرو و اسلایدر
@@ -1470,6 +1471,7 @@ import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard
 import ManagementThemeStudio from '@/components/management/ManagementThemeStudio.vue'
 import MenuItemCard from '@/components/MenuItemCard.vue'
 import {
+  getMenuBoot,
   getManagementSiteSettings,
   getManagementThemeSettings,
   setManagementSiteSettings,
@@ -1495,6 +1497,7 @@ import {
   sanitizeThemeSettings,
   saveThemeSettingsToServer,
 } from '@/utils/themeSettings'
+import { mergeBuilderBoot } from '@/utils/homeBuilder'
 
 const props = defineProps({
   entryMode: {
@@ -1597,6 +1600,8 @@ const webSettings = reactive({
 const heroSlides = ref([])
 const aboutSections = ref([])
 const faqItems = ref([])
+const builderMenuBoot = ref({})
+const builderMenuError = ref('')
 
 const aboutEditorOpen = ref(false)
 const aboutEditorIndex = ref(-1)
@@ -2776,21 +2781,14 @@ const previewBranding = computed(() => ({
 
 const builderBoot = computed(() => {
   const baseBoot = typeof window !== 'undefined' && window._BOOT ? window._BOOT : {}
-  return {
-    ...baseBoot,
-    web_settings: {
-      ...(baseBoot.web_settings || {}),
-      ...deepCopy(webSettings),
-    },
-    branding: previewBranding.value,
-    hero_slides: deepCopy(heroSlides.value),
-    about_us_sections: deepCopy(aboutSections.value),
-    faq_items: deepCopy(faqItems.value),
-    currency: String(webSettings.default_currency || baseBoot.currency || 'IRR').trim() || 'IRR',
-    page_layout: {
-      ...(baseBoot.page_layout || {}),
-    },
-  }
+  return mergeBuilderBoot({
+    baseBoot,
+    settings: deepCopy(webSettings),
+    heroSlides: deepCopy(heroSlides.value),
+    aboutSections: deepCopy(aboutSections.value),
+    faqItems: deepCopy(faqItems.value),
+    menuBoot: builderMenuBoot.value,
+  })
 })
 
 const builderGroupsCount = computed(() => {
@@ -2976,9 +2974,23 @@ async function loadSettings() {
   loading.value = true
   error.value = ''
   statusText.value = ''
+  builderMenuError.value = ''
 
   try {
-    const payload = await getManagementSiteSettings()
+    const [settingsResult, menuResult] = await Promise.allSettled([
+      getManagementSiteSettings(),
+      getMenuBoot(),
+    ])
+    if (settingsResult.status === 'rejected') {
+      throw settingsResult.reason || new Error('بارگذاری تنظیمات سایت ناموفق بود.')
+    }
+    const payload = settingsResult.value
+    if (menuResult.status === 'fulfilled') {
+      builderMenuBoot.value = menuResult.value && typeof menuResult.value === 'object' ? menuResult.value : {}
+    } else {
+      builderMenuBoot.value = {}
+      builderMenuError.value = 'دسته‌بندی‌های منو در پیش‌نمایش بارگذاری نشدند؛ تنظیمات صفحه همچنان قابل ویرایش است.'
+    }
     liveSiteSettingsPayload.value = deepCopy(payload)
     const nextWeb = payload?.web_settings || {}
     webSettings.brand_name = String(nextWeb.brand_name || '').trim()
