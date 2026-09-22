@@ -81,6 +81,7 @@ test('uses the canonical management image dropzone for authoring images', () => 
   assert.match(blockFormSource, /ManagementImageDropzone/)
   assert.match(settingsSource, /ManagementImageDropzone/)
   assert.doesNotMatch(settingsSource, /new FileReader\(\)/)
+  assert.doesNotMatch(settingsSource, /v-model\.trim="webSettings\.hero_image"/)
 })
 
 test('renders feature editing through the shared icon selector and normalizer', () => {
@@ -97,6 +98,20 @@ test('renders feature editing through the shared icon selector and normalizer', 
 
 test('opens category products in the same page through the interactive grid', () => {
   const categoriesSource = fs.readFileSync(path.join(sourceRoot, 'src/components/blocks/CategoriesBlock.vue'), 'utf8')
+  const gridSource = fs.readFileSync(path.join(sourceRoot, 'src/components/CategoryExpandableGrid.vue'), 'utf8')
   assert.match(categoriesSource, /CategoryExpandableGrid/)
   assert.match(categoriesSource, /@quick-add/)
+  assert.match(gridSource, /getMenuItems/)
+  assert.match(gridSource, /category_slug:\s*cat\.slug/)
+  assert.match(gridSource, /v-if="selectedCategory"/)
+})
+
+test('keeps the Builder preview usable at a phone viewport', () => {
+  const workspaceSource = fs.readFileSync(path.join(sourceRoot, 'src/components/management/ManagementPageBuilderWorkspace.vue'), 'utf8')
+  const settingsSource = fs.readFileSync(path.join(sourceRoot, 'src/pages/management/ManagementSiteSettingsPage.vue'), 'utf8')
+  assert.match(workspaceSource, /device === 'mobile'/)
+  assert.match(workspaceSource, /width: min\(390px/)
+  assert.match(workspaceSource, /\.cat-expand \.cat-card[\s\S]*pointer-events: auto/)
+  assert.match(settingsSource, /previewDeviceOptions/)
+  assert.match(settingsSource, /preview-viewport--mobile/)
 })

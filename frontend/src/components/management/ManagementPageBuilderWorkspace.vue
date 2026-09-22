@@ -676,6 +676,12 @@ watch(
   pointer-events: none;
 }
 
+.pbw__viewport :deep(.cat-expand .cat-card),
+.pbw__viewport :deep(.cat-expand .close-panel-btn),
+.pbw__viewport :deep(.cat-expand .cat-item-add) {
+  pointer-events: auto;
+}
+
 .pbw__viewport :deep(.scroll-reveal) {
   opacity: 1;
   transform: none;

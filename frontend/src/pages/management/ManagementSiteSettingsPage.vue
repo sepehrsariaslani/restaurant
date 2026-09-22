@@ -78,13 +78,7 @@
           </label>
           <label class="span-2">
             تصویر هدر سایت
-            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
-            <img
-              v-if="String(webSettings.hero_image || '').trim()"
-              class="image-preview image-preview-wide"
-              :src="webSettings.hero_image"
-              alt="Hero preview"
-            />
+            <ManagementImageDropzone v-model="webSettings.hero_image" :compact="true" alt-text="تصویر هدر سایت" />
           </label>
           <label class="check span-2">
             <input type="checkbox" v-model="webSettings.restaurant_menu_highlight_enabled" :true-value="1" :false-value="0" />
