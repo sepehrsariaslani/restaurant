@@ -45,7 +45,7 @@ POS_PAYMENT_SUCCESS_TOKENS = {"success", "successful", "paid", "approved", "ok",
 POS_PAYMENT_PENDING_TOKENS = {"pending", "processing", "queued", "in_progress", "waiting"}
 POS_HARDWARE_EVENT_SEVERITIES = {"info", "warn", "error"}
 DEFAULT_SELLING_PRICE_LIST_FIELD = "restaurant_is_default_selling"
-RESTAURANT_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "delivered"]
+RESTAURANT_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "courier_handoff", "on_the_way", "delivered"]
 CORE_ORDER_STATUS_MAP = {
 	"draft": "new",
 	"to deliver and bill": "confirmed",
@@ -1554,6 +1554,7 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 		frappe.db.set_value(
 			"Sales Order", order_name, "restaurant_status", normalized_next, update_modified=False
 		)
+		_notify_sms_order_status(order_name, normalized_next)
 		return normalized_next
 
 	if current == normalized_next:
@@ -1568,12 +1569,22 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 	frappe.db.set_value(
 		"Sales Order", order_name, "restaurant_status", normalized_next, update_modified=False
 	)
+	_notify_sms_order_status(order_name, normalized_next)
 	if normalized_next == "delivered":
 		try:
 			club_apply_fulfillment_effects(order_name)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "Restaurant delivered club effects failed")
 	return normalized_next
+
+
+def _notify_sms_order_status(order_name, status):
+	try:
+		from accounts.sms_ir_events import enqueue_order_status_event
+
+		enqueue_order_status_event(order_name, status)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Restaurant SMS status event failed")
 
 
 def _get_sales_order_payment_status(order_name):
@@ -5693,6 +5704,7 @@ def _create_sales_order(
 	so_doc.db_set("customer_name", customer_name, update_modified=False)
 	if _has_column("Sales Order", "restaurant_status"):
 		so_doc.db_set("restaurant_status", "confirmed", update_modified=False)
+		_notify_sms_order_status(so_doc.name, "confirmed")
 
 	if commit:
 		frappe.db.commit()
