@@ -6,6 +6,7 @@
     <section class="about-page" dir="rtl">
       <section class="about-wrap">
         <header class="hero-panel glass-card" data-reveal>
+          <img v-if="heroResolved.image" class="about-section-image about-section-image--hero" :src="heroResolved.image" :alt="heroResolved.title || branding.name" />
           <div class="hero-top-row">
             <span class="hero-badge">{{ heroResolved.badge || 'ABOUT US' }}</span>
             <span class="hero-year">{{ toPersianDigits(heroResolved.founded_year || '1400') }}</span>
@@ -21,11 +22,13 @@
 
         <section class="mission-vision-grid">
           <article class="glass-card info-card" data-reveal v-if="mission">
+            <img v-if="mission.image" class="about-section-image" :src="mission.image" :alt="mission.title" />
             <span class="card-kicker">ماموریت</span>
             <h2>{{ mission.title }}</h2>
             <p>{{ mission.body_text }}</p>
           </article>
           <article class="glass-card info-card" data-reveal v-if="vision">
+            <img v-if="vision.image" class="about-section-image" :src="vision.image" :alt="vision.title" />
             <span class="card-kicker">چشم انداز</span>
             <h2>{{ vision.title }}</h2>
             <p>{{ vision.body_text }}</p>
@@ -43,6 +46,7 @@
               :key="`${item.title}-${idx}`"
               class="glass-card value-card"
             >
+              <img v-if="item.image" class="about-section-image" :src="item.image" :alt="item.title" />
               <span class="value-icon">{{ item.icon || '✦' }}</span>
               <h3>{{ item.title }}</h3>
               <p>{{ item.body_text }}</p>
@@ -52,6 +56,7 @@
 
         <section class="history-section" data-reveal v-if="history">
           <article class="glass-card history-overview">
+            <img v-if="history.image" class="about-section-image" :src="history.image" :alt="history.title" />
             <span class="kicker">تاریخچه</span>
             <h2>{{ history.title }}</h2>
             <p class="history-intro">{{ history.subtitle }}</p>
@@ -73,6 +78,7 @@
             >
               <span class="timeline-center-dot" aria-hidden="true"></span>
               <article class="glass-card timeline-content">
+                <img v-if="event.image" class="about-section-image" :src="event.image" :alt="event.title" />
                 <span class="timeline-step">{{ toPersianDigits(event.year_label || '') }}</span>
                 <h3>{{ event.title }}</h3>
                 <p>{{ event.body_text }}</p>
@@ -147,6 +153,7 @@ const heroResolved = computed(() => {
     title: String(row.title || '').trim(),
     subtitle: String(row.subtitle || '').trim(),
     body_text: String(row.body_text || '').trim(),
+    image: String(row.image || '').trim(),
   }
 })
 
@@ -180,6 +187,21 @@ function toPersianDigits(value) {
   margin-top: 0.4rem;
   border-radius: 28px;
   padding: 2rem 1.5rem;
+}
+
+.about-section-image {
+  display: block;
+  width: 100%;
+  max-height: 190px;
+  object-fit: cover;
+  border-radius: 16px;
+  margin-bottom: 0.85rem;
+  background: var(--bg-soft, #f7f5f2);
+}
+
+.about-section-image--hero {
+  max-height: 300px;
+  margin-bottom: 1.1rem;
 }
 
 .hero-top-row {

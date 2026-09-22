@@ -219,7 +219,7 @@ async function saveSettings() {
   const payload = normalizedForm.value
   if (props.saveMode === 'draft') {
     emit('save-draft', payload)
-    saveState.value = 'پیش‌نویس تم ذخیره شد.'
+    saveState.value = 'درخواست ذخیره تم روی سایت ارسال شد.'
     return
   }
 

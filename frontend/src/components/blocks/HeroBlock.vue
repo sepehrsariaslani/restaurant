@@ -147,7 +147,7 @@ const normalizedSlides = computed(() =>
 }
 
 .hero-cover--fullscreen {
-  min-height: min(100svh, 780px);
+  min-height: 100svh;
   border-radius: 0;
 }
 

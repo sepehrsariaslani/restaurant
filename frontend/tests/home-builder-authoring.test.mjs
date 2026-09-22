@@ -82,7 +82,7 @@ test('merges menu boot data while preserving management draft content', () => {
 test('declares the full-screen hero as a viewport-width block', () => {
   const heroSource = fs.readFileSync(path.join(sourceRoot, 'src/components/blocks/HeroBlock.vue'), 'utf8')
   assert.match(heroSource, /\.hero\.hero--fullscreen\s*\{[\s\S]*?width:\s*100%/)
-  assert.match(heroSource, /\.hero-cover--fullscreen\s*\{[\s\S]*?min-height:\s*min\(100svh/)
+  assert.match(heroSource, /\.hero-cover--fullscreen\s*\{[\s\S]*?min-height:\s*100svh/)
 })
 
 test('uses the canonical management image dropzone for authoring images', () => {
@@ -129,4 +129,34 @@ test('keeps the Builder preview usable at a phone viewport', () => {
   assert.match(workspaceSource, /\.cat-expand \.cat-card[\s\S]*pointer-events: auto/)
   assert.match(settingsSource, /previewDeviceOptions/)
   assert.match(settingsSource, /preview-viewport--mobile/)
+})
+
+test('uses the real public components for every live management preview page', () => {
+  const previewSource = fs.readFileSync(path.join(sourceRoot, 'src/components/management/ManagementLivePagePreview.vue'), 'utf8')
+  const settingsSource = fs.readFileSync(path.join(sourceRoot, 'src/pages/management/ManagementSiteSettingsPage.vue'), 'utf8')
+  assert.match(previewSource, /PublicHeader/)
+  assert.match(previewSource, /HomePageRenderer/)
+  assert.match(previewSource, /AboutUsPage/)
+  assert.match(previewSource, /FaqPage/)
+  assert.match(previewSource, /ProductGroupsPage/)
+  assert.match(previewSource, /MenuItemCard/)
+  assert.match(previewSource, /SiteFooter/)
+  assert.match(settingsSource, /ManagementLivePagePreview/)
+  assert.match(settingsSource, /livePreviewPage/)
+  assert.match(settingsSource, /components: \['aboutShell', 'aboutSections'\]/)
+  assert.match(settingsSource, /components: \['faqShell', 'faqItems'\]/)
+})
+
+test('keeps about section images visible and saves authoring changes directly', () => {
+  const aboutSource = fs.readFileSync(path.join(sourceRoot, 'src/pages/AboutUsPage.vue'), 'utf8')
+  const settingsSource = fs.readFileSync(path.join(sourceRoot, 'src/pages/management/ManagementSiteSettingsPage.vue'), 'utf8')
+  assert.match(aboutSource, /heroResolved\.image/)
+  assert.match(aboutSource, /mission\.image/)
+  assert.match(aboutSource, /vision\.image/)
+  assert.match(aboutSource, /item\.image/)
+  assert.match(aboutSource, /history\.image/)
+  assert.match(aboutSource, /event\.image/)
+  assert.match(settingsSource, /async function saveSiteSettingsDirect[\s\S]*setManagementSiteSettings\(payload\)/)
+  assert.match(settingsSource, /async function saveThemeDraft[\s\S]*saveThemeSettingsToServer/)
+  assert.match(settingsSource, /focusAboutEditor[\s\S]*scrollIntoView/)
 })

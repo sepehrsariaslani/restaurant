@@ -112,7 +112,7 @@
       <ManagementThemeStudio
         :initial-settings="themeDraft"
         save-mode="draft"
-        save-button-label="ذخیره پیش‌نویس تم"
+        save-button-label="ذخیره تم روی سایت"
         @save-draft="saveThemeDraft"
         @reset-draft="resetThemeDraft"
       />
@@ -171,147 +171,10 @@
 
             <div class="preview-stage" :class="`preview-stage--${previewDevice}`">
               <div class="preview-viewport" :class="`preview-viewport--${previewDevice}`">
-                <div class="site-preview-shell compact-preview">
-              <PublicHeader
-                v-if="activeDesignPage !== 'product' || activeDesignComponent !== 'productCard'"
-                :key="`preview-header-${webSettings.header_variant}-${activeDesignPage}`"
-                :branding="previewBranding"
-                :page="'preview'"
-                :cart-count="3"
-                :has-last-order="false"
-                :last-order-url="'/menu'"
-                :header-variant="webSettings.header_variant"
-                :preview="true"
-              />
-
-              <template v-if="activeDesignPage === 'home'">
-                <MenuHeroHeader
-                  v-if="webSettings.menu_search_variant === 'search-card'"
-                  :key="`menu-search-${webSettings.menu_search_variant}`"
-                  :branding="previewBranding"
-                  :search="'جستجو در منو...'"
-                  :cart-count="3"
-                />
-
-                <div v-if="webSettings.hero_section_variant === 'slider'" class="slider-hero-preview site-preview-hero">
-                  <div class="slider-hero-copy">
-                    <span>اسلایدر هیرو</span>
-                    <h2>{{ previewHeroTitle || 'اسلایدر پیشنهادهای ویژه' }}</h2>
-                    <p>{{ previewHeroDescription || 'اسلایدهای تصویری برای معرفی محصولات و کمپین‌های روزانه.' }}</p>
-                  </div>
-                  <div class="slider-hero-card">
-                    <img :src="heroSlidesPreviewImage" alt="Hero slide preview" />
-                    <strong>{{ heroSlidesPreviewTitle }}</strong>
-                  </div>
-                </div>
-                <SiteHeaderHero
-                  v-else-if="webSettings.hero_section_variant === 'cover'"
-                  :key="`cover-${previewDevice}-${webSettings.hero_image}`"
-                  :branding="previewBranding"
-                  :cart-count="3"
-                  :page="'landing'"
-                  :preview="true"
-                  class="site-preview-hero"
-                />
-                <div
-                  v-else-if="webSettings.hero_section_variant === 'foodbar'"
-                  class="healthy-cover-preview site-preview-hero"
-                  :style="previewHeroImage ? { '--hero-img': `url('${previewHeroImage}')` } : {}"
-                >
-                  <div class="hcp-media"></div>
-                  <div class="hcp-content">
-                    <span class="hcp-badge">تازه، سالم، روزانه</span>
-                    <h2>{{ previewHeroTitle || 'سبک زندگی سالم، انتخاب هر روز ما' }}</h2>
-                    <p>{{ previewHeroDescription || 'غذاهای سالم و متنوع با بهترین مواد اولیه تازه برای یک زندگی پرانرژی و متعادل.' }}</p>
-                    <div class="hcp-actions">
-                      <span>{{ previewHeroCta || 'سفارش آنلاین' }}</span>
-                      <span class="ghost">مشاهده منو</span>
-                    </div>
-                    <div class="hcp-features">
-                      <span>مواد اولیه تازه</span>
-                      <span>ارسال سریع</span>
-                    </div>
-                  </div>
-                </div>
-                <component
-                  :is="heroPreviewComponent"
-                  v-else-if="heroPreviewComponent"
-                  :key="`hero-${webSettings.hero_section_variant}`"
-                  v-bind="heroPreviewProps"
-                  class="site-preview-hero"
-                />
-                <div v-else class="site-preview-empty">
-                  <strong>هیرو خاموش است</strong>
-                </div>
-
-                <div class="mini-section" v-if="Number(webSettings.restaurant_menu_highlight_enabled || 0) === 1">
-                  <strong>{{ webSettings.restaurant_menu_highlight_title || 'ویژه و پرفروش' }}</strong>
-                  <div class="mini-products">
-                    <span></span><span></span><span></span>
-                  </div>
-                </div>
-              </template>
-
-              <template v-else-if="activeDesignPage === 'about'">
-                <div class="about-preview-card">
-                  <small>درباره ما</small>
-                  <strong>{{ aboutPreviewTitle }}</strong>
-                  <p>{{ aboutPreviewText }}</p>
-                </div>
-                <div class="faq-preview-card" v-if="faqItems.length">
-                  <span>{{ faqItems.length }} سوال متداول</span>
-                </div>
-              </template>
-
-              <template v-else-if="activeDesignPage === 'faq'">
-                <div class="faq-preview-card">
-                  <strong>سوالات متداول</strong>
-                  <span>{{ faqItems.length }} سوال در منبع داده فعلی</span>
-                </div>
-              </template>
-
-              <template v-else-if="activeDesignPage === 'product_groups'">
-                <div class="about-preview-card">
-                  <small>گروه‌های محصول</small>
-                  <strong>{{ builderGroupsCount }} گروه آماده نمایش</strong>
-                  <p>چیدمان و نحوه ارائه این گروه‌ها از theme و layout همین صفحه تبعیت می‌کند.</p>
-                </div>
-              </template>
-
-              <template v-else-if="activeDesignPage === 'product'">
-                <div class="card-preview-row compact-card-preview">
-                  <div class="card-preview-item">
-                    <MenuItemCard
-                      :key="`product-preview-${webSettings.card_variant}`"
-                      :item="previewCardItem"
-                      :card-variant="webSettings.card_variant"
-                      :currency="'TOMAN'"
-                    />
-                  </div>
-                </div>
-              </template>
-
-              <template v-else>
-                <div class="mini-section">
-                  <strong>محتوای نمونه</strong>
-                  <p>کامپوننت‌های عمومی روی صفحات سایت اعمال می‌شوند.</p>
-                </div>
-              </template>
-
-              <component
-                :is="footerPreviewComponent"
-                v-if="footerPreviewComponent && activeDesignPage !== 'product'"
-                :key="`footer-${webSettings.footer_variant}`"
-                v-bind="footerPreviewProps"
-                class="site-preview-footer"
-              />
-              <div v-else-if="activeDesignPage !== 'product'" class="site-preview-empty site-preview-empty--footer">
-                <strong>فوتر خاموش است</strong>
-              </div>
+                <ManagementLivePagePreview :page="livePreviewPage" :boot="builderBoot" />
                 </div>
               </div>
             </div>
-          </div>
         </aside>
 
         <section class="designer-panel">
@@ -657,7 +520,7 @@
                 </template>
               </ManagementListView>
 
-              <div v-if="aboutEditorOpen" class="inline-editor">
+          <div v-if="aboutEditorOpen" ref="aboutEditorRef" class="inline-editor">
                 <div class="editor-grid">
                   <label>
                     نوع بخش
@@ -1128,7 +991,7 @@
           </template>
         </ManagementListView>
 
-        <div v-if="aboutEditorOpen" class="inline-editor">
+        <div v-if="aboutEditorOpen" ref="aboutEditorRef" class="inline-editor">
           <div class="editor-grid">
             <label>
               نوع بخش
@@ -1417,7 +1280,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import MenuHeroHeader from '@/components/MenuHeroHeader.vue'
 import PublicHeader from '@/components/PublicHeader.vue'
@@ -1430,6 +1293,7 @@ import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import HeroBlock from '@/components/blocks/HeroBlock.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementImageDropzone from '@/components/management/ManagementImageDropzone.vue'
+import ManagementLivePagePreview from '@/components/management/ManagementLivePagePreview.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageBuilderWorkspace from '@/components/management/ManagementPageBuilderWorkspace.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
@@ -1571,6 +1435,7 @@ const builderMenuError = ref('')
 
 const aboutEditorOpen = ref(false)
 const aboutEditorIndex = ref(-1)
+const aboutEditorRef = ref(null)
 const aboutDraft = reactive(createEmptyAboutSection())
 
 const faqEditorOpen = ref(false)
@@ -1698,7 +1563,7 @@ const primaryActionLabel = computed(() => {
   if (activeStage.value === 'review') {
     return 'انتشار روی سایت'
   }
-  return 'ذخیره پیش‌نویس'
+  return 'ذخیره روی سایت'
 })
 const secondaryActionLabel = computed(() => {
   if (activeStage.value === 'review') {
@@ -1727,7 +1592,7 @@ const secondaryActionDisabled = computed(() => {
 
 const stageSaveHint = computed(() => {
   if (activeStage.value === 'theme') {
-    return 'ذخیره این مرحله به‌صورت draft تم انجام می‌شود.'
+    return 'ذخیره تم مستقیماً روی سایت انجام می‌شود.'
   }
   if (activeStage.value === 'layout') {
     return 'ذخیره ساختار صفحه از داخل workspace انجام می‌شود.'
@@ -1735,7 +1600,7 @@ const stageSaveHint = computed(() => {
   if (activeStage.value === 'review') {
     return 'در این مرحله draftهای ذخیره‌شده را منتشر می‌کنی.'
   }
-  return ''
+  return 'تغییرات این مرحله مستقیماً روی سایت ذخیره می‌شوند.'
 })
 
 function normalizeStage(value = '') {
@@ -2005,13 +1870,14 @@ const componentRegistry = {
 const designPages = [
   { value: 'global', label: 'عمومی', components: ['header', 'footer'] },
   { value: 'home', label: 'صفحه اصلی', components: ['homeHero', 'menuSearch', 'featuredBlock', 'categoryRail', 'productCard'] },
-  { value: 'about', label: 'درباره ما', components: ['aboutShell'] },
-  { value: 'faq', label: 'سوالات متداول', components: ['faqShell'] },
+  { value: 'about', label: 'درباره ما', components: ['aboutShell', 'aboutSections'] },
+  { value: 'faq', label: 'سوالات متداول', components: ['faqShell', 'faqItems'] },
   { value: 'product_groups', label: 'گروه‌های محصول', components: ['groupsShell'] },
   { value: 'product', label: 'جزئیات محصول', components: ['productCard'] },
 ].map((pageItem) => ({ ...pageItem, count: pageItem.components.length }))
 
 const currentDesignPage = computed(() => designPages.find((pageItem) => pageItem.value === activeDesignPage.value) || designPages[0])
+const livePreviewPage = computed(() => (activeDesignPage.value === 'global' ? 'home' : activeDesignPage.value))
 const currentDesignComponents = computed(() => {
   const globalComponents = designPages.find((pageItem) => pageItem.value === 'global')?.components || []
   const pageComponents = currentDesignPage.value.value === 'global' ? [] : currentDesignPage.value.components
@@ -2485,12 +2351,22 @@ function applyDraftOverlay() {
   applyThemeSettings(themeDraft.value)
 }
 
-function saveThemeDraft(settings) {
-  themeDraft.value = sanitizeThemeSettings(settings)
-  writeDraftThemeSettings(themeDraft.value)
-  bumpDraftRevision()
-  applyThemeSettings(themeDraft.value)
-  statusText.value = 'پیش‌نویس تم ذخیره شد.'
+async function saveThemeDraft(settings) {
+  saving.value = true
+  error.value = ''
+  try {
+    const saved = await saveThemeSettingsToServer(sanitizeThemeSettings(settings))
+    themeDraft.value = sanitizeThemeSettings(saved)
+    liveThemeSettings.value = sanitizeThemeSettings(saved)
+    writeDraftThemeSettings(themeDraft.value)
+    bumpDraftRevision()
+    applyThemeSettings(themeDraft.value)
+    statusText.value = 'تم مستقیماً روی سایت ذخیره شد.'
+  } catch (saveError) {
+    error.value = saveError.message || 'ذخیره تم روی سایت ناموفق بود.'
+  } finally {
+    saving.value = false
+  }
 }
 
 function resetThemeDraft(settings) {
@@ -2501,12 +2377,26 @@ function resetThemeDraft(settings) {
   statusText.value = 'پیش‌نویس تم به پیش‌فرض برگشت.'
 }
 
-function saveSiteDraft() {
+async function saveSiteSettingsDirect() {
+  validateSiteDraft()
   const payload = currentSiteDraft.value
-  writeDraftSiteSettings(payload)
+  const saved = await setManagementSiteSettings(payload)
+  const livePayload = saved && typeof saved === 'object' ? saved : payload
+  writeDraftSiteSettings(livePayload)
+  liveSiteSettingsPayload.value = deepCopy(livePayload)
   bumpDraftRevision()
-  statusText.value = 'پیش‌نویس این مرحله ذخیره شد.'
-  syncBootFromWebSettings(payload)
+  syncBootFromWebSettings(livePayload)
+  if (Array.isArray(livePayload.hero_slides)) {
+    heroSlides.value = livePayload.hero_slides.map((row) => normalizeHeroSlide(row))
+  }
+  if (Array.isArray(livePayload.about_sections)) {
+    aboutSections.value = livePayload.about_sections.map((row) => normalizeAboutSection(row))
+  }
+  if (Array.isArray(livePayload.faq_items)) {
+    faqItems.value = livePayload.faq_items.map((row) => normalizeFaqItem(row))
+  }
+  statusText.value = 'تغییرات محتوا مستقیماً روی سایت ذخیره شد.'
+  return livePayload
 }
 
 async function loadDraftPageLayout(page, { forceServer = false } = {}) {
@@ -2734,7 +2624,7 @@ const previewBranding = computed(() => ({
 
 const builderBoot = computed(() => {
   const baseBoot = typeof window !== 'undefined' && window._BOOT ? window._BOOT : {}
-  return mergeBuilderBoot({
+  const merged = mergeBuilderBoot({
     baseBoot,
     settings: deepCopy(webSettings),
     heroSlides: deepCopy(heroSlides.value),
@@ -2742,6 +2632,14 @@ const builderBoot = computed(() => {
     faqItems: deepCopy(faqItems.value),
     menuBoot: builderMenuBoot.value,
   })
+  return {
+    ...merged,
+    page_layout: {
+      ...(baseBoot.page_layout || {}),
+      ...(livePageLayouts.value || {}),
+      ...draftPageLayouts.value,
+    },
+  }
 })
 
 const builderGroupsCount = computed(() => {
@@ -2856,16 +2754,24 @@ function findRowIndex(rows, row) {
   return -1
 }
 
+function focusAboutEditor() {
+  nextTick(() => {
+    aboutEditorRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
+}
+
 function openAboutAdd() {
   aboutEditorIndex.value = -1
   writeReactive(aboutDraft, createEmptyAboutSection())
   aboutEditorOpen.value = true
+  focusAboutEditor()
 }
 
 function openAboutEdit(row) {
   aboutEditorIndex.value = findRowIndex(aboutSections.value, row)
   writeReactive(aboutDraft, normalizeAboutSection(row))
   aboutEditorOpen.value = true
+  focusAboutEditor()
 }
 
 function closeAboutEditor() {
@@ -3051,8 +2957,7 @@ async function saveSettings() {
       return
     }
     saving.value = true
-    validateSiteDraft()
-    saveSiteDraft()
+    await saveSiteSettingsDirect()
   } catch (saveError) {
     error.value = saveError.message || 'ذخیره تنظیمات سایت ناموفق بود.'
   } finally {
