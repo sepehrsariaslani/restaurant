@@ -10,9 +10,13 @@
       <div
         v-for="(f, idx) in resolvedItems"
         :key="idx"
-        :class="variant === 'inline' ? 'feat-inline__item' : 'feat-card'"
+        :class="[
+          variant === 'inline' ? 'feat-inline__item' : 'feat-card',
+          { 'feat-item--image': f.image },
+        ]"
+        :style="featureStyle(f)"
       >
-        <span class="feat-icon">
+        <span v-if="f.icon" class="feat-icon">
           <component :is="iconFor(f.icon)" :size="22" stroke-width="2" />
         </span>
         <div class="feat-body">
@@ -55,6 +59,13 @@ const iconMap = {
 function iconFor(name) {
   return iconMap[String(name || '').trim().toLowerCase()] || Sparkles
 }
+
+function featureStyle(feature) {
+  if (!feature?.image) return {}
+  return {
+    '--feat-image': `url("${feature.image}")`,
+  }
+}
 </script>
 
 <style scoped>
@@ -78,6 +89,14 @@ function iconFor(name) {
 .feat-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 18px 40px rgb(0 0 0 / 0.07);
+}
+
+.feat-item--image {
+  color: #fff;
+  background-image: linear-gradient(135deg, rgb(15 23 42 / 0.78), rgb(15 23 42 / 0.42)), var(--feat-image);
+  background-position: center;
+  background-size: cover;
+  border-color: transparent;
 }
 
 .feat-inline {
@@ -107,6 +126,11 @@ function iconFor(name) {
   background: color-mix(in srgb, var(--blk-accent) 12%, transparent);
 }
 
+.feat-item--image .feat-icon {
+  color: #fff;
+  background: rgb(255 255 255 / 0.18);
+}
+
 .feat-body h3 {
   margin: 0;
   font-size: 1.02rem;
@@ -118,5 +142,9 @@ function iconFor(name) {
   font-size: 0.88rem;
   line-height: 1.8;
   color: var(--blk-ink-soft);
+}
+
+.feat-item--image .feat-body p {
+  color: rgb(255 255 255 / 0.88);
 }
 </style>

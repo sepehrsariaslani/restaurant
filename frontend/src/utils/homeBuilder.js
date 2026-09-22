@@ -24,14 +24,19 @@ export function decodeEscapedUnicode(value) {
   )
 }
 
-export function normalizeFeatureItems(items) {
+export function normalizeFeatureItems(items, { preserveWhitespace = false } = {}) {
   return asArray(items).map((row) => {
     const source = asObject(row)
-    const icon = decodeEscapedUnicode(source.icon).trim().toLowerCase()
+    const text = (value) => {
+      const decoded = decodeEscapedUnicode(value)
+      return preserveWhitespace ? decoded : decoded.trim()
+    }
+    const icon = text(source.icon).trim().toLowerCase()
     return {
-      icon: FEATURE_ICON_KEYS.has(icon) ? icon : 'sparkles',
-      title: decodeEscapedUnicode(source.title).trim(),
-      description: decodeEscapedUnicode(source.description).trim(),
+      icon: icon ? (FEATURE_ICON_KEYS.has(icon) ? icon : 'sparkles') : '',
+      image: String(source.image || source.image_url || '').trim(),
+      title: text(source.title),
+      description: text(source.description),
     }
   })
 }

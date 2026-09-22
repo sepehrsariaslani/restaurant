@@ -66,6 +66,7 @@
             class="bpf__icon-picker"
             :model-value="row.icon"
             :options="featureIconOptions"
+            :clearable="true"
             placeholder="انتخاب آیکن"
             search-placeholder="جستجوی آیکن..."
             @update:model-value="updateFeature(field, idx, 'icon', $event)"
@@ -82,6 +83,14 @@
             :value="row.description"
             @input="updateFeature(field, idx, 'description', $event.target.value)"
           />
+          <div class="bpf__feature-image">
+            <ManagementImageDropzone
+              :model-value="row.image"
+              :compact="true"
+              alt-text="تصویر مزیت"
+              @update:model-value="updateFeature(field, idx, 'image', $event)"
+            />
+          </div>
           <button type="button" class="bpf__icon-btn" @click="removeFeature(field, idx)">×</button>
         </div>
         <button type="button" class="bpf__add" @click="addFeature(field)">+ افزودن مورد</button>
@@ -115,6 +124,7 @@ const emit = defineEmits(['update'])
 const def = computed(() => getBlockType(props.block?.type))
 const fields = computed(() => (def.value?.props || []))
 const featureIconOptions = [
+  { value: '', label: 'بدون آیکن' },
   { value: 'leaf', label: 'برگ — سالم' },
   { value: 'sliders', label: 'تنظیمات — شخصی‌سازی' },
   { value: 'zap', label: 'صاعقه — سریع' },
@@ -137,11 +147,11 @@ function set(field, val) {
 }
 
 function featureRows(field) {
-  return normalizeFeatureItems(value(field))
+  return normalizeFeatureItems(value(field), { preserveWhitespace: true })
 }
 
 function addFeature(field) {
-  const rows = [...featureRows(field), { icon: 'sparkles', title: '', description: '' }]
+  const rows = [...featureRows(field), { icon: 'sparkles', image: '', title: '', description: '' }]
   set(field, rows)
 }
 
@@ -230,13 +240,21 @@ function updateFeature(field, idx, key, val) {
 
 .bpf__feature-row {
   display: grid;
-  grid-template-columns: minmax(132px, 0.9fr) 1fr 1.4fr auto;
+  grid-template-columns: minmax(132px, 0.9fr) 1fr 1.4fr minmax(180px, 0.9fr) auto;
   gap: 0.4rem;
   align-items: center;
 }
 
 .bpf__feature-row :deep(.searchable-dropdown) {
   min-width: 0;
+}
+
+.bpf__feature-image {
+  min-width: 0;
+}
+
+.bpf__feature-image :deep(.image-dropzone) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .bpf__icon-btn {
@@ -270,6 +288,10 @@ function updateFeature(field, idx, key, val) {
   }
 
   .bpf__feature-row :deep(.searchable-dropdown) {
+    grid-column: 1 / -1;
+  }
+
+  .bpf__feature-image {
     grid-column: 1 / -1;
   }
 }

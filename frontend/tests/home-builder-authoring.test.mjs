@@ -25,9 +25,19 @@ test('normalizes feature rows without losing valid icon keys', () => {
       { icon: 'unknown-icon', title: 'سریع', description: '' },
     ]),
     [
-      { icon: 'leaf', title: 'سالم', description: 'تازه' },
-      { icon: 'sparkles', title: 'سریع', description: '' },
+      { icon: 'leaf', image: '', title: 'سالم', description: 'تازه' },
+      { icon: 'sparkles', image: '', title: 'سریع', description: '' },
     ],
+  )
+})
+
+test('preserves feature images, empty icons, and authoring whitespace', () => {
+  assert.deepEqual(
+    normalizeFeatureItems(
+      [{ icon: '', image: '/files/fresh.jpg', title: ' عنوان ', description: 'توضیح ' }],
+      { preserveWhitespace: true },
+    ),
+    [{ icon: '', image: '/files/fresh.jpg', title: ' عنوان ', description: 'توضیح ' }],
   )
 })
 
@@ -94,6 +104,11 @@ test('renders feature editing through the shared icon selector and normalizer', 
   assert.match(registrySource, /title: "\\u0633\\u0627\\u0644\\u0645"/)
   assert.match(registrySource, /title: "\\u0633\\u0628\\u06a9"/)
   assert.match(registrySource, /title: "\\u0633\\u0631\\u06cc\\u0639"/)
+  assert.match(blockFormSource, /ManagementImageDropzone[\s\S]*updateFeature\(field, idx, 'image'/)
+  assert.match(blockFormSource, /value: '', label: 'بدون آیکن'/)
+  assert.match(featureBlockSource, /v-if="f\.icon"/)
+  assert.match(featureBlockSource, /background-image/)
+  assert.match(registrySource, /function optionalStr[\s\S]*value === undefined/)
 })
 
 test('opens category products in the same page through the interactive grid', () => {

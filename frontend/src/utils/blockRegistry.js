@@ -43,6 +43,10 @@ function str(value, fallback = "") {
 	return out || fallback;
 }
 
+function optionalStr(value, fallback = "") {
+	return value === undefined ? fallback : String(value ?? "").trim();
+}
+
 function num(value, fallback = 0) {
 	const out = Number(value);
 	return Number.isFinite(out) ? out : fallback;
@@ -245,8 +249,8 @@ export const BLOCK_TYPES = {
 			const categories = boot.categories || [];
 			return {
 				variant: str(block.variant, "grid"),
-				eyebrow: str(p.eyebrow, "\u062f\u0633\u062a\u0647\u200c\u0628\u0646\u062f\u06cc"),
-				title: str(p.title, "\u0627\u0632 \u06a9\u062f\u0627\u0645 \u062f\u0633\u062a\u0647 \u0634\u0631\u0648\u0639 \u0645\u06cc\u200c\u06a9\u0646\u06cc\u062f\u061f"),
+				eyebrow: optionalStr(p.eyebrow, "\u062f\u0633\u062a\u0647\u200c\u0628\u0646\u062f\u06cc"),
+				title: optionalStr(p.title, "\u0627\u0632 \u06a9\u062f\u0627\u0645 \u062f\u0633\u062a\u0647 \u0634\u0631\u0648\u0639 \u0645\u06cc\u200c\u06a9\u0646\u06cc\u062f\u061f"),
 				subtitle: str(p.subtitle),
 				categories: limit > 0 ? categories.slice(0, limit) : categories,
 				currency: str(boot.currency, "IRR"),
