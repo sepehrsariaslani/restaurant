@@ -47,14 +47,12 @@
 
       <!-- image -->
       <div v-else-if="field.type === 'image'" class="bpf__image">
-        <input
-          class="bpf__input"
-          type="text"
-          placeholder="/files/image.jpg"
-          :value="value(field)"
-          @input="set(field, $event.target.value)"
+        <ManagementImageDropzone
+          :model-value="value(field)"
+          :compact="true"
+          :alt-text="field.label"
+          @update:model-value="set(field, $event)"
         />
-        <img v-if="value(field)" class="bpf__preview" :src="value(field)" alt="" />
       </div>
 
       <!-- features (repeatable icon/title/description) -->
@@ -64,27 +62,29 @@
           :key="idx"
           class="bpf__feature-row"
         >
-          <input
-            class="bpf__input bpf__input--icon"
-            placeholder="icon (zap)"
-            :value="row.icon"
-            @input="updateFeature(field, idx, 'icon', $event.target.value)"
+          <SearchableDropdown
+            class="bpf__icon-picker"
+            :model-value="row.icon"
+            :options="featureIconOptions"
+            placeholder="انتخاب آیکن"
+            search-placeholder="جستجوی آیکن..."
+            @update:model-value="updateFeature(field, idx, 'icon', $event)"
           />
           <input
             class="bpf__input"
-            placeholder="\u0639\u0646\u0648\u0627\u0646"
+            placeholder="عنوان"
             :value="row.title"
             @input="updateFeature(field, idx, 'title', $event.target.value)"
           />
           <input
             class="bpf__input"
-            placeholder="\u062a\u0648\u0636\u06cc\u062d"
+            placeholder="توضیح"
             :value="row.description"
             @input="updateFeature(field, idx, 'description', $event.target.value)"
           />
-          <button type="button" class="bpf__icon-btn" @click="removeFeature(field, idx)">\u00d7</button>
+          <button type="button" class="bpf__icon-btn" @click="removeFeature(field, idx)">×</button>
         </div>
-        <button type="button" class="bpf__add" @click="addFeature(field)">+ \u0627\u0641\u0632\u0648\u062f\u0646 \u0645\u0648\u0631\u062f</button>
+        <button type="button" class="bpf__add" @click="addFeature(field)">+ افزودن مورد</button>
       </div>
 
       <!-- text / link (default) -->
@@ -101,7 +101,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import ManagementImageDropzone from '@/components/management/ManagementImageDropzone.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { getBlockType } from '@/utils/blockRegistry'
+import { normalizeFeatureItems } from '@/utils/homeBuilder'
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -111,6 +114,17 @@ const emit = defineEmits(['update'])
 
 const def = computed(() => getBlockType(props.block?.type))
 const fields = computed(() => (def.value?.props || []))
+const featureIconOptions = [
+  { value: 'leaf', label: 'برگ — سالم' },
+  { value: 'sliders', label: 'تنظیمات — شخصی‌سازی' },
+  { value: 'zap', label: 'صاعقه — سریع' },
+  { value: 'clock', label: 'ساعت — زمان' },
+  { value: 'truck', label: 'ارسال' },
+  { value: 'heart', label: 'قلب — محبوب' },
+  { value: 'star', label: 'ستاره' },
+  { value: 'shield', label: 'سپر — اطمینان' },
+  { value: 'sparkles', label: 'درخشش' },
+]
 
 function value(field) {
   const p = props.block?.props || {}
@@ -123,8 +137,7 @@ function set(field, val) {
 }
 
 function featureRows(field) {
-  const rows = value(field)
-  return Array.isArray(rows) ? rows : []
+  return normalizeFeatureItems(value(field))
 }
 
 function addFeature(field) {
@@ -217,13 +230,13 @@ function updateFeature(field, idx, key, val) {
 
 .bpf__feature-row {
   display: grid;
-  grid-template-columns: 90px 1fr 1.4fr auto;
+  grid-template-columns: minmax(132px, 0.9fr) 1fr 1.4fr auto;
   gap: 0.4rem;
   align-items: center;
 }
 
-.bpf__input--icon {
-  text-align: center;
+.bpf__feature-row :deep(.searchable-dropdown) {
+  min-width: 0;
 }
 
 .bpf__icon-btn {
@@ -249,5 +262,15 @@ function updateFeature(field, idx, key, val) {
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-primary, #2a211b);
+}
+
+@media (max-width: 720px) {
+  .bpf__feature-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .bpf__feature-row :deep(.searchable-dropdown) {
+    grid-column: 1 / -1;
+  }
 }
 </style>

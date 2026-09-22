@@ -464,21 +464,9 @@
                     متن دکمه اصلی
                     <input class="input" v-model.trim="webSettings.hero_section_cta" :placeholder="activeHeroContentMeta.ctaPlaceholder" />
                   </label>
-                  <label v-if="activeHeroContentMeta.fields.includes('image')">
+                  <label class="span-2" v-if="activeHeroContentMeta.fields.includes('image')">
                     {{ activeHeroContentMeta.imageLabel }}
-                    <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
-                    <div class="image-upload-row">
-                      <button type="button" class="secondary-btn mini" @click="heroImageInput.click()">انتخاب عکس</button>
-                      <button type="button" class="secondary-btn mini danger" v-if="webSettings.hero_image" @click="webSettings.hero_image = ''">حذف</button>
-                    </div>
-                    <input
-                      ref="heroImageInput"
-                      type="file"
-                      accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-                      style="display:none"
-                      @change="handleHeroImageUpload"
-                    />
-                    <img v-if="String(webSettings.hero_image || '').trim()" class="image-preview" :src="webSettings.hero_image" alt="Hero bg" />
+                    <ManagementImageDropzone v-model="webSettings.hero_image" :compact="true" alt-text="تصویر هیرو" />
                   </label>
                   <label v-if="activeHeroContentMeta.fields.includes('imagePosition')">
                     موقعیت تصویر
@@ -519,10 +507,9 @@
                         زیرعنوان
                         <textarea class="textarea" v-model.trim="draft.subtitle" />
                       </label>
-                      <label>
+                      <label class="span-2">
                         تصویر
-                        <input class="input" v-model.trim="draft.image" placeholder="/files/slide.jpg" />
-                        <img v-if="String(draft.image || '').trim()" class="image-preview" :src="draft.image" alt="Slide preview" />
+                        <ManagementImageDropzone v-model="draft.image" :compact="true" alt-text="تصویر اسلاید" />
                       </label>
                       <label>
                         لینک محصول
@@ -718,10 +705,9 @@
                     <input type="checkbox" v-model="aboutDraft.highlight" :true-value="1" :false-value="0" />
                     هایلایت
                   </label>
-                  <label>
+                  <label class="span-2">
                     تصویر
-                    <input class="input" v-model.trim="aboutDraft.image" />
-                    <img v-if="String(aboutDraft.image || '').trim()" class="image-preview" :src="aboutDraft.image" alt="About preview" />
+                    <ManagementImageDropzone v-model="aboutDraft.image" :compact="true" alt-text="تصویر درباره ما" />
                   </label>
                   <label>
                     برچسب آمار
@@ -775,8 +761,7 @@
                   </label>
                   <label class="span-2">
                     تصویر
-                    <input class="input" v-model.trim="faqDraft.image" />
-                    <img v-if="String(faqDraft.image || '').trim()" class="image-preview image-preview-wide" :src="faqDraft.image" alt="FAQ preview" />
+                    <ManagementImageDropzone v-model="faqDraft.image" :compact="true" alt-text="تصویر سوال متداول" />
                   </label>
                   <label class="span-2">
                     توضیح کوتاه
@@ -1022,21 +1007,9 @@
             متن دکمه اصلی
             <input class="input" v-model.trim="webSettings.hero_section_cta" :placeholder="activeHeroContentMeta.ctaPlaceholder" />
           </label>
-          <label v-if="activeHeroContentMeta.fields.includes('image')">
+          <label class="span-2" v-if="activeHeroContentMeta.fields.includes('image')">
             {{ activeHeroContentMeta.imageLabel }}
-            <input class="input" v-model.trim="webSettings.hero_image" placeholder="/files/hero.jpg" />
-            <div class="image-upload-row">
-              <button type="button" class="secondary-btn mini" @click="heroImageInput.click()">انتخاب عکس</button>
-              <button type="button" class="secondary-btn mini danger" v-if="webSettings.hero_image" @click="webSettings.hero_image = ''">حذف</button>
-            </div>
-            <input
-              ref="heroImageInput"
-              type="file"
-              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-              style="display:none"
-              @change="handleHeroImageUpload"
-            />
-            <img v-if="String(webSettings.hero_image || '').trim()" class="image-preview" :src="webSettings.hero_image" alt="Hero bg" />
+            <ManagementImageDropzone v-model="webSettings.hero_image" :compact="true" alt-text="تصویر هیرو" />
           </label>
           <label v-if="activeHeroContentMeta.fields.includes('imagePosition')">
             موقعیت تصویر
@@ -1076,10 +1049,9 @@
                   زیرعنوان
                   <textarea class="textarea" v-model.trim="draft.subtitle" />
                 </label>
-                <label>
+                <label class="span-2">
                   تصویر
-                  <input class="input" v-model.trim="draft.image" placeholder="/files/slide.jpg" />
-                  <img v-if="String(draft.image || '').trim()" class="image-preview" :src="draft.image" alt="Slide preview" />
+                  <ManagementImageDropzone v-model="draft.image" :compact="true" alt-text="تصویر اسلاید" />
                 </label>
                 <label>
                   لینک محصول
@@ -1204,10 +1176,9 @@
               <input type="checkbox" v-model="aboutDraft.highlight" :true-value="1" :false-value="0" />
               هایلایت
             </label>
-            <label>
+            <label class="span-2">
               تصویر
-              <input class="input" v-model.trim="aboutDraft.image" />
-              <img v-if="String(aboutDraft.image || '').trim()" class="image-preview" :src="aboutDraft.image" alt="About preview" />
+              <ManagementImageDropzone v-model="aboutDraft.image" :compact="true" alt-text="تصویر درباره ما" />
             </label>
             <label>
               برچسب آمار
@@ -1265,8 +1236,7 @@
             </label>
             <label class="span-2">
               تصویر
-              <input class="input" v-model.trim="faqDraft.image" />
-              <img v-if="String(faqDraft.image || '').trim()" class="image-preview image-preview-wide" :src="faqDraft.image" alt="FAQ preview" />
+              <ManagementImageDropzone v-model="faqDraft.image" :compact="true" alt-text="تصویر سوال متداول" />
             </label>
             <label class="span-2">
               توضیح کوتاه
@@ -1465,6 +1435,7 @@ import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
 import HeroBlock from '@/components/blocks/HeroBlock.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
+import ManagementImageDropzone from '@/components/management/ManagementImageDropzone.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageBuilderWorkspace from '@/components/management/ManagementPageBuilderWorkspace.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
@@ -1611,8 +1582,6 @@ const aboutDraft = reactive(createEmptyAboutSection())
 const faqEditorOpen = ref(false)
 const faqEditorIndex = ref(-1)
 const faqDraft = reactive(createEmptyFaqItem())
-
-const heroImageInput = ref(null)
 
 const activeDesignPage = ref('global')
 const activeDesignComponent = ref('header')
@@ -2132,17 +2101,6 @@ watch(
   },
   { immediate: true },
 )
-
-function handleHeroImageUpload(event) {
-  const file = event?.target?.files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    webSettings.hero_image = String(e.target?.result || '').trim()
-  }
-  reader.readAsDataURL(file)
-  event.target.value = ''
-}
 
 const currencyOptions = [
   { value: 'IRR', label: 'IRR' },
@@ -4064,13 +4022,6 @@ loadSettings()
   width: 48%;
   margin: auto;
   border-radius: 10px;
-}
-
-.image-upload-row {
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 0.4rem;
-  flex-wrap: wrap;
 }
 
 .secondary-btn.mini {

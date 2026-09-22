@@ -74,3 +74,29 @@ test('declares the full-screen hero as a viewport-width block', () => {
   assert.match(heroSource, /\.hero\.hero--fullscreen\s*\{[\s\S]*?width:\s*100%/)
   assert.match(heroSource, /\.hero-cover--fullscreen\s*\{[\s\S]*?min-height:\s*min\(100svh/)
 })
+
+test('uses the canonical management image dropzone for authoring images', () => {
+  const blockFormSource = fs.readFileSync(path.join(sourceRoot, 'src/components/management/builder/BlockPropsForm.vue'), 'utf8')
+  const settingsSource = fs.readFileSync(path.join(sourceRoot, 'src/pages/management/ManagementSiteSettingsPage.vue'), 'utf8')
+  assert.match(blockFormSource, /ManagementImageDropzone/)
+  assert.match(settingsSource, /ManagementImageDropzone/)
+  assert.doesNotMatch(settingsSource, /new FileReader\(\)/)
+})
+
+test('renders feature editing through the shared icon selector and normalizer', () => {
+  const blockFormSource = fs.readFileSync(path.join(sourceRoot, 'src/components/management/builder/BlockPropsForm.vue'), 'utf8')
+  const featureBlockSource = fs.readFileSync(path.join(sourceRoot, 'src/components/blocks/FeaturesBlock.vue'), 'utf8')
+  const registrySource = fs.readFileSync(path.join(sourceRoot, 'src/utils/blockRegistry.js'), 'utf8')
+  assert.match(blockFormSource, /SearchableDropdown/)
+  assert.doesNotMatch(blockFormSource, /placeholder="\\u[0-9a-fA-F]{4}/)
+  assert.match(featureBlockSource, /normalizeFeatureItems/)
+  assert.match(registrySource, /title: "\\u0633\\u0627\\u0644\\u0645"/)
+  assert.match(registrySource, /title: "\\u0633\\u0628\\u06a9"/)
+  assert.match(registrySource, /title: "\\u0633\\u0631\\u06cc\\u0639"/)
+})
+
+test('opens category products in the same page through the interactive grid', () => {
+  const categoriesSource = fs.readFileSync(path.join(sourceRoot, 'src/components/blocks/CategoriesBlock.vue'), 'utf8')
+  assert.match(categoriesSource, /CategoryExpandableGrid/)
+  assert.match(categoriesSource, /@quick-add/)
+})

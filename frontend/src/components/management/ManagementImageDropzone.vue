@@ -1,5 +1,5 @@
 <template>
-  <section class="image-dropzone" :class="{ dragging: isDragging, busy: uploading }">
+  <section class="image-dropzone" :class="{ dragging: isDragging, busy: uploading, compact }">
     <input ref="fileInputRef" class="hidden-input" type="file" accept="image/*" @change="onFileChange" />
 
     <div class="preview-panel" :class="{ empty: !modelValue }">
@@ -43,6 +43,7 @@
       <button type="button" class="secondary-btn mini" @click="openFilePicker" :disabled="uploading">تعویض تصویر</button>
       <button type="button" class="secondary-btn mini danger" @click="clearImage" :disabled="uploading">حذف تصویر</button>
     </div>
+    <p v-if="uploadError" class="upload-error" role="alert">{{ uploadError }}</p>
   </section>
 </template>
 
@@ -76,6 +77,10 @@ const props = defineProps({
     type: Number,
     default: 5,
   },
+  compact: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'error', 'uploaded'])
@@ -83,6 +88,7 @@ const emit = defineEmits(['update:modelValue', 'error', 'uploaded'])
 const fileInputRef = ref(null)
 const isDragging = ref(false)
 const uploading = ref(false)
+const uploadError = ref('')
 
 function openFilePicker() {
   if (uploading.value) return
@@ -90,6 +96,7 @@ function openFilePicker() {
 }
 
 function updateValue(value = '') {
+  uploadError.value = ''
   emit('update:modelValue', String(value || '').trim())
 }
 
@@ -115,13 +122,13 @@ function onDropFiles(event) {
 
 async function uploadImage(file) {
   if (!String(file?.type || '').startsWith('image/')) {
-    emit('error', 'لطفاً فقط فایل تصویر انتخاب کنید.')
+    reportError('لطفاً فقط فایل تصویر انتخاب کنید.')
     return
   }
 
   const maxBytes = Number(props.maxSizeMb || 5) * 1024 * 1024
   if (file.size > maxBytes) {
-    emit('error', `حجم تصویر نباید بیشتر از ${props.maxSizeMb} مگابایت باشد.`)
+    reportError(`حجم تصویر نباید بیشتر از ${props.maxSizeMb} مگابایت باشد.`)
     return
   }
 
@@ -139,10 +146,15 @@ async function uploadImage(file) {
     updateValue(uploaded.file_url)
     emit('uploaded', uploaded)
   } catch (error) {
-    emit('error', error.message || 'آپلود تصویر ناموفق بود.')
+    reportError(error.message || 'آپلود تصویر ناموفق بود.')
   } finally {
     uploading.value = false
   }
+}
+
+function reportError(message) {
+  uploadError.value = String(message || 'آپلود تصویر ناموفق بود.')
+  emit('error', uploadError.value)
 }
 </script>
 
@@ -264,6 +276,36 @@ async function uploadImage(file) {
   display: flex;
   gap: 0.45rem;
   flex-wrap: wrap;
+}
+
+.upload-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger, var(--mg-danger));
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+.image-dropzone.compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+.image-dropzone.compact .preview-panel {
+  min-height: 130px;
+}
+
+.image-dropzone.compact .preview-image {
+  min-height: 130px;
+}
+
+.image-dropzone.compact .drop-panel {
+  min-height: 110px;
+}
+
+.image-dropzone.compact .url-field,
+.image-dropzone.compact .drop-actions {
+  grid-column: auto;
 }
 
 .mini {

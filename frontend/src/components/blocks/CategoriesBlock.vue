@@ -6,21 +6,13 @@
       <p v-if="subtitle" class="blk__subtitle">{{ subtitle }}</p>
     </div>
 
-    <!-- GRID -->
-    <div v-if="variant === 'grid'" class="cat-grid">
-      <a
-        v-for="(cat, idx) in normalized"
-        :key="cat.key || idx"
-        class="cat-card"
-        :href="cat.href"
-      >
-        <div class="cat-card__media" :style="cat.image ? { backgroundImage: `url('${cat.image}')` } : {}">
-          <span v-if="!cat.image" class="cat-card__ph">{{ cat.title.slice(0, 1) }}</span>
-        </div>
-        <span class="cat-card__label">{{ cat.title }}</span>
-        <small v-if="cat.count" class="cat-card__count">{{ cat.count }} \u0622\u06cc\u062a\u0645</small>
-      </a>
-    </div>
+    <!-- GRID: expand products below the selected category without leaving the home page -->
+    <CategoryExpandableGrid
+      v-if="variant === 'grid'"
+      :categories="normalized"
+      :currency="currency"
+      @quick-add="emit('quick-add', $event)"
+    />
 
     <!-- PILLS -->
     <div v-else-if="variant === 'pills'" class="cat-pills">
@@ -47,6 +39,9 @@
 <script setup>
 import { computed } from 'vue'
 import '@/components/blocks/blocks.css'
+import CategoryExpandableGrid from '@/components/CategoryExpandableGrid.vue'
+
+const emit = defineEmits(['quick-add'])
 
 const props = defineProps({
   variant: { type: String, default: 'grid' },
@@ -72,51 +67,6 @@ const normalized = computed(() =>
 </script>
 
 <style scoped>
-.cat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--blk-gap);
-}
-
-.cat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  text-decoration: none;
-  color: inherit;
-}
-
-.cat-card__media {
-  aspect-ratio: 1 / 1;
-  border-radius: var(--blk-radius-sm);
-  background: var(--blk-surface-soft) center / cover no-repeat;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.18s ease;
-}
-
-.cat-card:hover .cat-card__media {
-  transform: translateY(-3px);
-}
-
-.cat-card__ph {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--blk-accent);
-  opacity: 0.6;
-}
-
-.cat-card__label {
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.cat-card__count {
-  font-size: 0.75rem;
-  color: var(--blk-ink-soft);
-}
-
 /* Pills */
 .cat-pills {
   display: flex;

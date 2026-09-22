@@ -8,7 +8,7 @@
 
     <div :class="variant === 'inline' ? 'feat-inline' : 'feat-cards'">
       <div
-        v-for="(f, idx) in items"
+        v-for="(f, idx) in resolvedItems"
         :key="idx"
         :class="variant === 'inline' ? 'feat-inline__item' : 'feat-card'"
       >
@@ -25,16 +25,20 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { Zap, Sliders, Leaf, Clock, Truck, Star, Heart, ShieldCheck, Sparkles } from 'lucide-vue-next'
 import '@/components/blocks/blocks.css'
+import { normalizeFeatureItems } from '@/utils/homeBuilder'
 
-defineProps({
+const props = defineProps({
   variant: { type: String, default: 'cards' },
   eyebrow: { type: String, default: '' },
   title: { type: String, default: '' },
   subtitle: { type: String, default: '' },
   items: { type: Array, default: () => [] },
 })
+
+const resolvedItems = computed(() => normalizeFeatureItems(props.items))
 
 const iconMap = {
   zap: Zap,

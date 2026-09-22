@@ -118,7 +118,7 @@ const resolvedCategories = computed(() =>
     title: cat.title || 'دسته بندی',
     slug: cat.slug || '',
     image: cat.image || '',
-    count: cat.items_count || null,
+    count: cat.count ?? cat.items_count ?? cat.item_count ?? null,
   })),
 )
 
