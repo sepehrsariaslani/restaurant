@@ -26,6 +26,7 @@ from restaurant.api import (
 	_has_column,
 	_table_columns_from_rows,
 )
+from restaurant.survey_tokens import resolve_token
 
 __all__ = [
 	"CLUB_REPORT_KEYS",
@@ -106,6 +107,7 @@ CLUB_DOCTYPES = {
 	"campaign": "Restaurant Campaign",
 	"survey_question": "Restaurant Survey Question",
 	"survey_response": "Restaurant Survey Response",
+	"survey_token": "Restaurant Survey Token",
 	"voice": "Restaurant Customer Voice",
 	"point_entry": "Restaurant Loyalty Point Entry",
 }
@@ -2360,15 +2362,78 @@ def _club_verify_survey_order(order_code, mobile):
 	return None
 
 
+def _club_verify_survey_token(token):
+	"""Resolve an opaque survey token and re-check its order server-side."""
+	match = resolve_token(token)
+	if not match or not match.get("sales_order"):
+		return None
+	so_name = match["sales_order"]
+	if not frappe.db.exists("Sales Order", so_name):
+		return None
+	if cint(frappe.db.get_value("Sales Order", so_name, "docstatus")) != 1:
+		return None
+	order_customer = frappe.db.get_value("Sales Order", so_name, "customer") or ""
+	if match.get("customer") and order_customer and match["customer"] != order_customer:
+		return None
+	return {
+		"sales_order": so_name,
+		"customer": order_customer or match.get("customer") or "",
+		"mobile": match.get("mobile") or "",
+	}
+
+
+def _club_survey_order_summary(sales_order):
+	"""Return only the order details needed by the public survey page."""
+	row = frappe.db.get_value(
+		"Sales Order",
+		sales_order,
+		["customer", "transaction_date", "grand_total"],
+		as_dict=True,
+	) or {}
+	customer_name = frappe.db.get_value("Customer", row.get("customer"), "customer_name") if row.get("customer") else ""
+	items = []
+	if frappe.db.exists("DocType", "Sales Order Item"):
+		for item in frappe.get_all(
+			"Sales Order Item",
+			filters={"parent": sales_order, "parenttype": "Sales Order"},
+			fields=["item_code", "item_name", "qty", "uom", "amount"],
+			order_by="idx asc",
+			limit_page_length=100,
+			ignore_permissions=True,
+		):
+			items.append(
+				{
+					"item_code": item.get("item_code") or "",
+					"item_name": item.get("item_name") or item.get("item_code") or "",
+					"qty": flt(item.get("qty")),
+					"uom": item.get("uom") or "",
+					"amount": flt(item.get("amount")),
+				}
+			)
+	return {
+		"sales_order": sales_order,
+		"customer_name": customer_name or "",
+		"transaction_date": str(row.get("transaction_date") or "")[:10],
+		"grand_total": flt(row.get("grand_total")),
+		"items": items,
+	}
+
+
 @frappe.whitelist(allow_guest=True)
-def get_public_survey(order_code="", mobile=""):
+def get_public_survey(token="", order_code="", mobile=""):
 	"""Public per-order survey form context (guest)."""
-	match = _club_verify_survey_order(order_code, mobile)
+	token = (token or "").strip()
+	if token:
+		match = _club_verify_survey_token(token)
+		verified_mobile = (match or {}).get("mobile") or ""
+	else:
+		match = _club_verify_survey_order(order_code, mobile)
+		verified_mobile = (mobile or "").strip()
 	if not match:
-		return {"valid": 0, "message": _("سفارش با این کد و شماره موبایل یافت نشد.")}
+		return {"valid": 0, "message": _("لینک نظرسنجی معتبر نیست یا سفارش یافت نشد.") if token else _("سفارش با این کد و شماره موبایل یافت نشد.")}
 	answered = frappe.db.exists(
 		CLUB_DOCTYPES["survey_response"],
-		{"sales_order": match["sales_order"], "mobile": mobile},
+		{"sales_order": match["sales_order"], "mobile": verified_mobile},
 	)
 	questions = frappe.get_all(
 		CLUB_DOCTYPES["survey_question"],
@@ -2382,6 +2447,7 @@ def get_public_survey(order_code="", mobile=""):
 		"answered": 1 if answered else 0,
 		"sales_order": match["sales_order"],
 		"customer_name": frappe.db.get_value("Customer", match["customer"], "customer_name") if match["customer"] else "",
+		"order_summary": _club_survey_order_summary(match["sales_order"]),
 		"questions": questions,
 	}
 
@@ -2390,11 +2456,17 @@ def get_public_survey(order_code="", mobile=""):
 def submit_public_survey(payload=None):
 	"""Submit a guest survey per order; instant-alert managers on dissatisfaction."""
 	payload = _club_parse_json(payload, {}) if isinstance(payload, str) else _club_parse_payload(payload)
-	order_code = (payload.get("order_code") or "").strip()
-	mobile = (payload.get("mobile") or "").strip()
-	match = _club_verify_survey_order(order_code, mobile)
+	token = (payload.get("token") or "").strip()
+	if token:
+		match = _club_verify_survey_token(token)
+		order_code = (match or {}).get("sales_order") or ""
+		mobile = (match or {}).get("mobile") or ""
+	else:
+		order_code = (payload.get("order_code") or "").strip()
+		mobile = (payload.get("mobile") or "").strip()
+		match = _club_verify_survey_order(order_code, mobile)
 	if not match:
-		frappe.throw(_("سفارش با این کد و شماره موبایل یافت نشد."))
+		frappe.throw(_("لینک نظرسنجی معتبر نیست یا سفارش یافت نشد.") if token else _("سفارش با این کد و شماره موبایل یافت نشد."))
 	so_name = match["sales_order"]
 	if frappe.db.exists(CLUB_DOCTYPES["survey_response"], {"sales_order": so_name, "mobile": mobile}):
 		frappe.throw(_("برای این سفارش قبلاً نظرسنجی ثبت شده است. متشکریم!"))
