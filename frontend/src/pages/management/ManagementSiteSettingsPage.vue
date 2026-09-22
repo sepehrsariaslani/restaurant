@@ -1463,6 +1463,7 @@ import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import SiteHeroBanner from '@/components/SiteHeroBanner.vue'
 import SiteHeroSection from '@/components/SiteHeroSection.vue'
 import SiteHeaderHero from '@/components/SiteHeaderHero.vue'
+import HeroBlock from '@/components/blocks/HeroBlock.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageBuilderWorkspace from '@/components/management/ManagementPageBuilderWorkspace.vue'
@@ -2823,7 +2824,7 @@ const heroSlidesPreviewImage = computed(() => String(heroSlidesPreviewItem.value
 
 const heroPreviewComponent = computed(() => {
   if (String(webSettings.hero_section_variant || 'off').trim() === 'fullscreen') {
-    return SiteHeroSection
+    return HeroBlock
   }
   if (String(webSettings.hero_section_variant || 'off').trim() === 'banner') {
     return SiteHeroBanner
@@ -2838,6 +2839,19 @@ const heroPreviewProps = computed(() => {
     description: previewHeroDescription.value,
     cta: previewHeroCta.value,
     heroImage: previewHeroImage.value,
+  }
+  if (heroPreviewComponent.value === HeroBlock) {
+    return {
+      variant: 'fullscreen',
+      eyebrow: previewBranding.value.tagline,
+      title: previewHeroTitle.value || 'هیروی تمام‌صفحه',
+      description: previewHeroDescription.value,
+      image: previewHeroImage.value,
+      ctaLabel: previewHeroCta.value,
+      ctaHref: '/menu',
+      secondaryLabel: 'مشاهده منو',
+      secondaryHref: '/menu',
+    }
   }
   if (heroPreviewComponent.value === SiteHeroSection) {
     return {

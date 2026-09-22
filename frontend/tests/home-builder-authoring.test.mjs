@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   decodeEscapedUnicode,
@@ -7,6 +10,8 @@ import {
   normalizeBuilderCategories,
   normalizeFeatureItems,
 } from '../src/utils/homeBuilder.js'
+
+const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 test('decodes legacy escaped Persian labels before rendering', () => {
   assert.equal(decodeEscapedUnicode('\\u0633\\u0627\\u0644\\u0645'), 'سالم')
@@ -62,4 +67,10 @@ test('merges menu boot data while preserving management draft content', () => {
   assert.deepEqual(merged.hero_slides, [{ title: 'اسلاید' }])
   assert.deepEqual(merged.about_us_sections, [{ title: 'داستان' }])
   assert.deepEqual(merged.faq_items, [{ question: 'سوال' }])
+})
+
+test('declares the full-screen hero as a viewport-width block', () => {
+  const heroSource = fs.readFileSync(path.join(sourceRoot, 'src/components/blocks/HeroBlock.vue'), 'utf8')
+  assert.match(heroSource, /\.hero\.hero--fullscreen\s*\{[\s\S]*?width:\s*100%/)
+  assert.match(heroSource, /\.hero-cover--fullscreen\s*\{[\s\S]*?min-height:\s*min\(100svh/)
 })

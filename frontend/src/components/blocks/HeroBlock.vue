@@ -121,6 +121,12 @@ const normalizedSlides = computed(() =>
   width: min(1200px, calc(100% - 2rem));
 }
 
+.hero.hero--fullscreen {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
@@ -141,7 +147,8 @@ const normalizedSlides = computed(() =>
 }
 
 .hero-cover--fullscreen {
-  min-height: clamp(420px, 72vh, 680px);
+  min-height: min(100svh, 780px);
+  border-radius: 0;
 }
 
 .hero-cover--banner {
@@ -316,6 +323,14 @@ const normalizedSlides = computed(() =>
 }
 
 @media (max-width: 860px) {
+  .hero.hero--fullscreen .hero-cover__inner {
+    padding: clamp(1.25rem, 7vw, 2rem);
+  }
+
+  .hero-cover--fullscreen {
+    min-height: max(540px, calc(100svh - 3.5rem));
+  }
+
   .hero-split {
     grid-template-columns: 1fr;
   }

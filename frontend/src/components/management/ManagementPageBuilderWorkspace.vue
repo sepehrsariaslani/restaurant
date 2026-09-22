@@ -687,10 +687,16 @@ watch(
 }
 
 .pbw__stage--mobile .pbw__viewport {
+  width: min(390px, calc(100vw - 3rem));
   max-width: 390px;
+  min-height: 720px;
   border: 8px solid var(--mg-text-main);
   border-radius: 28px;
   overflow: hidden;
+}
+
+.pbw__stage--mobile .pbw__viewport :deep(.home-content) {
+  padding-inline: 0;
 }
 
 .pbw__variants {
