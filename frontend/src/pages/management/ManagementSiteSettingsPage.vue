@@ -731,7 +731,7 @@
             :page="activeBuilderPage"
             :boot="builderBoot"
             :load-layout-fn="loadDraftPageLayout"
-            :save-layout-fn="saveDraftPageLayout"
+            :save-layout-fn="savePageLayoutDirect"
             :refresh-key="builderWorkspaceRevision"
           />
         </KeepAlive>
@@ -1595,7 +1595,7 @@ const stageSaveHint = computed(() => {
     return 'ذخیره تم مستقیماً روی سایت انجام می‌شود.'
   }
   if (activeStage.value === 'layout') {
-    return 'ذخیره ساختار صفحه از داخل workspace انجام می‌شود.'
+    return 'ذخیره ساختار صفحه از داخل workspace مستقیماً روی سایت انجام می‌شود.'
   }
   if (activeStage.value === 'review') {
     return 'در این مرحله draftهای ذخیره‌شده را منتشر می‌کنی.'
@@ -2414,16 +2414,22 @@ async function loadDraftPageLayout(page, { forceServer = false } = {}) {
   return getManagementPageLayout(pageKey)
 }
 
-async function saveDraftPageLayout(page, blocks) {
+async function savePageLayoutDirect(page, blocks) {
   const pageKey = String(page || 'home').trim() || 'home'
-  const result = {
+  const payload = {
     page: pageKey,
     blocks,
     company: String(livePageLayouts.value?.[pageKey]?.company || '').trim(),
   }
+  const saved = await setManagementPageLayout({ page: pageKey, blocks })
+  const result = saved && typeof saved === 'object' ? saved : payload
+  livePageLayouts.value = {
+    ...livePageLayouts.value,
+    [pageKey]: result,
+  }
   writeDraftPageLayout(pageKey, result)
   bumpDraftRevision()
-  statusText.value = 'پیش‌نویس چیدمان ذخیره شد.'
+  statusText.value = 'چیدمان صفحه مستقیماً روی سایت ذخیره شد.'
   return result
 }
 

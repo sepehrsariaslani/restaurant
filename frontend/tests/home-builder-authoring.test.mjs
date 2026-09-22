@@ -158,5 +158,6 @@ test('keeps about section images visible and saves authoring changes directly', 
   assert.match(aboutSource, /event\.image/)
   assert.match(settingsSource, /async function saveSiteSettingsDirect[\s\S]*setManagementSiteSettings\(payload\)/)
   assert.match(settingsSource, /async function saveThemeDraft[\s\S]*saveThemeSettingsToServer/)
+  assert.match(settingsSource, /async function savePageLayoutDirect[\s\S]*setManagementPageLayout\(\{ page: pageKey, blocks \}\)/)
   assert.match(settingsSource, /focusAboutEditor[\s\S]*scrollIntoView/)
 })
