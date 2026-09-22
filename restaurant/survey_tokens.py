@@ -74,3 +74,18 @@ def resolve_token(token: str, now=None):
 		"customer": row.get("customer") or "",
 		"mobile": row.get("mobile") or "",
 	}
+
+
+def revoke_token(token: str) -> bool:
+	"""Invalidate a token that was created for a failed SMS attempt."""
+	import frappe
+	from frappe.utils import now_datetime
+
+	token = str(token or "").strip()
+	if not token_is_valid(token) or not frappe.db.exists("DocType", "Restaurant Survey Token"):
+		return False
+	name = frappe.db.get_value("Restaurant Survey Token", {"token_hash": token_digest(token)}, "name")
+	if not name:
+		return False
+	frappe.db.set_value("Restaurant Survey Token", name, "revoked_at", now_datetime(), update_modified=False)
+	return True

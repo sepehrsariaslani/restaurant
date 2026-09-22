@@ -22,6 +22,7 @@ class TestSurveyTokens(unittest.TestCase):
 		source = Path(__file__).resolve().parents[1].joinpath("survey_tokens.py").read_text()
 		self.assertIn("def issue_token", source)
 		self.assertIn("def resolve_token", source)
+		self.assertIn("def revoke_token", source)
 		self.assertIn("token_hash", source)
 
 	def test_public_survey_token_and_order_summary_contract_is_present(self):
