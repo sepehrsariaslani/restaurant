@@ -557,6 +557,29 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(kwargs["files"]["vendorId"], (None, "466275"))
         self.assertEqual(kwargs["files"]["pageNumber"], (None, "0"))
 
+    def test_food_partner_report_forbidden_becomes_safe_user_facing_error(self):
+        response = Mock(status_code=403)
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error", response=response
+        )
+        with patch("restaurant.snapp_sync.requests.post", return_value=response):
+            with self.assertRaises(frappe.ValidationError) as context:
+                fetch_snapp_orders(
+                    from_datetime="2026-09-22 00:00:00",
+                    to_datetime="2026-09-22 23:59:59",
+                    settings={
+                        "token": "secret-token",
+                        "vendor_id": "466275",
+                        "page_size": 50,
+                        "lookback_minutes": 180,
+                        "report_url": "https://snappfood.ir/vms/v3/restaurant/report",
+                    },
+                )
+
+        self.assertIn("HTTP 403", str(context.exception))
+        self.assertIn("آدرس یا مجوز endpoint گزارش", str(context.exception))
+        self.assertNotIn("secret-token", str(context.exception))
+
     def test_snapp_order_window_defaults_to_yesterday(self):
         start_dt, end_dt = _resolve_snapp_order_window()
 

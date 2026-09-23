@@ -400,16 +400,40 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
             "appVersion": "3.14.1",
         }
         report_files = {key: (None, value) for key, value in report_data.items()}
-        response = requests.post(
-            cfg.get("report_url") or DEFAULT_REPORT_URL,
-            headers=headers,
-            files=report_files,
-            timeout=30,
-        )
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                cfg.get("report_url") or DEFAULT_REPORT_URL,
+                headers=headers,
+                files=report_files,
+                timeout=30,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            status_code = getattr(exc.response, "status_code", None)
+            if status_code == 401:
+                message = "توکن Food Partner برای دریافت سفارش‌ها پذیرفته نشد (HTTP 401)."
+            elif status_code == 403:
+                message = (
+                    "دسترسی سرویس گزارش سفارش‌های Food Partner رد شد (HTTP 403). "
+                    "این پاسخ به‌تنهایی نامعتبر بودن توکن را ثابت نمی‌کند؛ آدرس یا مجوز endpoint گزارش را بررسی کنید."
+                )
+            else:
+                message = (
+                    f"دریافت سفارش‌های Food Partner با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+                )
+            raise frappe.ValidationError(message) from exc
+        except requests.RequestException as exc:
+            raise frappe.ValidationError(
+                "ارتباط با سرویس گزارش سفارش‌های Food Partner برقرار نشد؛ اتصال شبکه و آدرس گزارش را بررسی کنید."
+            ) from exc
         pages_fetched += 1
 
-        payload = response.json()
+        try:
+            payload = response.json()
+        except (TypeError, ValueError) as exc:
+            raise frappe.ValidationError(
+                "پاسخ سرویس گزارش سفارش‌های Food Partner قابل خواندن نیست."
+            ) from exc
         page_orders = _extract_orders(payload)
         if not page_orders:
             break
