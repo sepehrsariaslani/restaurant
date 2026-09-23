@@ -590,6 +590,70 @@ def import_snapp_orders_for_window(from_date=None, to_date=None, order_ids=None,
     )
 
 
+def _food_partner_field_value(record, fieldname):
+    """Read a current Food Partner menu field's approved value."""
+    fields = record.get("fields") if isinstance(record, dict) else None
+    value = fields.get(fieldname) if isinstance(fields, dict) else None
+    if isinstance(value, dict):
+        if value.get("value") is not None:
+            return value.get("value")
+        return value.get("pendingValue")
+    return value
+
+
+def _extract_current_food_partner_menu_entries(payload):
+    """Normalize the current category -> product -> variation menu response."""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list) or not any(
+        isinstance(category, dict)
+        and str(category.get("type") or "").strip().lower() == "category"
+        for category in data
+    ):
+        return None
+
+    entries = []
+    for category in data:
+        if not isinstance(category, dict) or str(category.get("type") or "").strip().lower() != "category":
+            continue
+        category_id = str(category.get("id") or "").strip()
+        category_title = str(category.get("title") or "").strip()
+        for product in category.get("products") or []:
+            if not isinstance(product, dict):
+                continue
+            variations = product.get("variations")
+            variations = variations if isinstance(variations, list) else []
+            product_id = str(product.get("id") or "").strip()
+            product_hash_id = str(product.get("hashId") or "").strip()
+            if variations:
+                variants = [(variation, True) for variation in variations if isinstance(variation, dict)]
+            else:
+                variants = [(product, False)]
+
+            for variation, is_variation in variants:
+                variation_id = str(variation.get("id") or "").strip() if is_variation else ""
+                variation_hash_id = str(variation.get("hashId") or "").strip() if is_variation else ""
+                entries.append(
+                    {
+                        "id": variation_id or product_id,
+                        "productId": product_id,
+                        "variationId": variation_id,
+                        "productHashId": product_hash_id,
+                        "variationHashId": variation_hash_id,
+                        "title": _food_partner_field_value(variation, "title")
+                        or _food_partner_field_value(product, "title")
+                        or "",
+                        "price": _food_partner_field_value(variation, "price")
+                        if _food_partner_field_value(variation, "price") is not None
+                        else (_food_partner_field_value(product, "price") or 0),
+                        "status": variation.get("status") or product.get("status") or "",
+                        "_category_id": category_id,
+                        "_category_title": category_title,
+                        "_food_partner_menu_v2": 1,
+                    }
+                )
+    return entries
+
+
 def _extract_menu_entries(payload):
     """Flatten Food Partner categories into product/variation rows.
 
@@ -597,6 +661,10 @@ def _extract_menu_entries(payload):
     variation objects.  Category ``id``/``title`` pairs must not become
     mappable Items, but their title is useful context for each child row.
     """
+    current_entries = _extract_current_food_partner_menu_entries(payload)
+    if current_entries is not None:
+        return current_entries
+
     entries = []
     seen = set()
     category_child_keys = {
@@ -1042,7 +1110,7 @@ def fetch_snapp_menu(settings=None):
             or entry.get("variationTitle")
             or entry.get("variation_title")
             or entry.get("variationName")
-            or ("price" in entry and fallback_id)
+            or ("price" in entry and fallback_id and not entry.get("_food_partner_menu_v2"))
         )
         product_id = explicit_product_id or (fallback_id if not variation_like else "")
         variation_id = explicit_variation_id or (fallback_id if variation_like else "")

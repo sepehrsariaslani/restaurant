@@ -145,7 +145,9 @@ class TestSnappSync(FrappeTestCase):
             ]
         }
         fake_db = SimpleNamespace(commit=Mock())
-        with patch.object(snapp_sync.frappe, "db", fake_db), patch(
+        with patch.object(snapp_sync.frappe, "db", fake_db), patch.object(
+            snapp_sync, "_has_field", return_value=False
+        ), patch(
             "restaurant.snapp_sync.requests.get", return_value=response
         ):
             result = fetch_snapp_menu(
@@ -160,6 +162,62 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(variation["category_title"], "سالادها")
         self.assertEqual(variation["variation_id"], "variation-1")
         self.assertFalse(any(row["external_id"] == "category-1" for row in result["items"]))
+
+    def test_food_partner_current_menu_rows_keep_product_and_variation_ids(self):
+        response = Mock()
+        response.json.return_value = {
+            "data": [
+                {
+                    "id": 2642322,
+                    "type": "category",
+                    "title": "کلاب و ساندویچ",
+                    "products": [
+                        {
+                            "id": 37382933,
+                            "fields": {"title": {"value": "کاسه نودل آسیایی"}, "price": {"value": 410000}},
+                            "variations": [],
+                        },
+                        {
+                            "id": 36485633,
+                            "hashId": "p_club",
+                            "fields": {"title": {"value": "کلاب بوقلمون دودی"}},
+                            "variations": [
+                                {
+                                    "id": 36485634,
+                                    "hashId": "v_club_regular",
+                                    "fields": {
+                                        "title": {"value": "کلاب بوقلمون دودی تست جو"},
+                                        "price": {"value": 310000},
+                                    },
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+        fake_db = SimpleNamespace(commit=Mock())
+        settings = {
+            "token": "secret",
+            "vendor_id": "466275",
+            "menu_api_base_url": "https://apigw.snappfood.ir",
+        }
+
+        with patch.object(snapp_sync.frappe, "db", fake_db), patch.object(
+            snapp_sync, "_has_field", return_value=False
+        ), patch("restaurant.snapp_sync.requests.get", return_value=response):
+            result = fetch_snapp_menu(settings)
+
+        simple = next(row for row in result["items"] if row["title"] == "کاسه نودل آسیایی")
+        self.assertEqual(simple["product_id"], "37382933")
+        self.assertEqual(simple["variation_id"], "")
+        self.assertEqual(simple["category_id"], "2642322")
+        variation = next(row for row in result["items"] if row["variation_id"] == "36485634")
+        self.assertEqual(variation["external_id"], "36485634")
+        self.assertEqual(variation["product_id"], "36485633")
+        self.assertEqual(variation["product_hash_id"], "p_club")
+        self.assertEqual(variation["variation_hash_id"], "v_club_regular")
+        fake_db.commit.assert_called_once()
 
     def test_extract_orders_from_nested_payload(self):
         payload = {"data": {"items": [{"id": "ord-1"}, {"id": "ord-2"}], "totalPages": 4}}
@@ -301,6 +359,61 @@ class TestSnappSync(FrappeTestCase):
         self.assertTrue(any(row.get("id") == "variation-1" for row in entries))
         variation = next(row for row in entries if row.get("id") == "variation-1")
         self.assertEqual(variation.get("_category_title"), "سالادها")
+
+    def test_extract_menu_entries_reads_current_food_partner_category_product_fields(self):
+        payload = {
+            "status": "success",
+            "data": [
+                {
+                    "id": 2642322,
+                    "hashId": "c_category",
+                    "type": "category",
+                    "title": "کلاب و ساندویچ",
+                    "products": [
+                        {
+                            "id": 37382933,
+                            "hashId": "p_simple",
+                            "fields": {
+                                "title": {"value": "کاسه نودل آسیایی"},
+                                "price": {"value": 410000},
+                            },
+                            "variations": [],
+                        },
+                        {
+                            "id": 36485633,
+                            "hashId": "p_club",
+                            "fields": {"title": {"value": "کلاب بوقلمون دودی"}},
+                            "variations": [
+                                {
+                                    "id": 36485634,
+                                    "hashId": "v_club_regular",
+                                    "fields": {
+                                        "title": {"value": "کلاب بوقلمون دودی تست جو"},
+                                        "price": {"value": 310000},
+                                    },
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+
+        entries = _extract_menu_entries(payload)
+
+        self.assertEqual(len(entries), 2)
+        self.assertFalse(any(row.get("id") == 2642322 for row in entries))
+        simple = next(row for row in entries if row.get("productId") == "37382933")
+        self.assertEqual(simple.get("title"), "کاسه نودل آسیایی")
+        self.assertEqual(simple.get("price"), 410000)
+        self.assertEqual(simple.get("_category_id"), "2642322")
+        variation = next(row for row in entries if row.get("variationId") == "36485634")
+        self.assertEqual(variation.get("productId"), "36485633")
+        self.assertEqual(variation.get("productHashId"), "p_club")
+        self.assertEqual(variation.get("variationHashId"), "v_club_regular")
+        self.assertEqual(variation.get("title"), "کلاب بوقلمون دودی تست جو")
+        self.assertEqual(variation.get("price"), 310000)
+        self.assertEqual(variation.get("_category_title"), "کلاب و ساندویچ")
 
     def test_extract_menu_entries_does_not_map_category_with_product_id_marker(self):
         payload = {
