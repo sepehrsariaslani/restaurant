@@ -836,11 +836,14 @@ class TestSnappSync(FrappeTestCase):
             "payment_method": "ONLINE",
             "external_state": "ACCEPTED",
             "external_customer_id": "customer-7",
+            "posting_date": "2026-09-19",
+            "posting_time": "20:34:39",
+            "due_date": "2026-09-19",
             "raw": {"orderId": "884984812"},
         }
         fake_api = types.ModuleType("restaurant.api")
         fake_api.settle_pos_order = Mock(return_value={"sales_invoice": "SI-1"})
-        fake_db = SimpleNamespace(get_value=lambda *args, **kwargs: None, set_value=Mock())
+        fake_db = SimpleNamespace(get_value=Mock(return_value=None), set_value=Mock())
         with patch("restaurant.snapp_sync._has_column", return_value=True), patch.object(
             snapp_sync.frappe, "db", fake_db
         ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
@@ -850,9 +853,21 @@ class TestSnappSync(FrappeTestCase):
 
         self.assertEqual(result["sales_invoice"], "SI-1")
         self.assertEqual(result["payment_method"], "credit")
+        self.assertEqual(
+            fake_db.get_value.call_args.args[1],
+            {
+                "restaurant_external_order_id": "884984812",
+                "docstatus": 1,
+                "restaurant_external_source": "snapp_food",
+            },
+        )
         fake_api.settle_pos_order.assert_called_once()
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["order_name"], "SO-1")
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["payment"]["method"], "credit")
+        self.assertEqual(
+            fake_api.settle_pos_order.call_args.kwargs["payment"]["posting_date"],
+            "2026-09-19",
+        )
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["commit"], False)
 
     def test_schema_status_exposes_fields_missing_before_migration(self):

@@ -2683,11 +2683,13 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     if not _has_column("Sales Invoice", "restaurant_external_order_id"):
         return {"status": "skipped", "reason": "Sales Invoice integration fields are not migrated."}
 
-    existing_invoice = frappe.db.get_value(
-        "Sales Invoice",
-        {"restaurant_external_order_id": order_payload["order_id"]},
-        "name",
-    )
+    invoice_filters = {
+        "restaurant_external_order_id": order_payload["order_id"],
+        "docstatus": 1,
+    }
+    if _has_column("Sales Invoice", "restaurant_external_source"):
+        invoice_filters["restaurant_external_source"] = SNAPP_SOURCE
+    existing_invoice = frappe.db.get_value("Sales Invoice", invoice_filters, "name")
     if existing_invoice:
         return {"status": "exists", "sales_invoice": existing_invoice}
 
@@ -2701,12 +2703,16 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     # the SI, payments, payment method, status and audit note consistently.
     from restaurant.api import settle_pos_order
 
+    payment_details = {
+        "method": payment_method,
+        "reference_no": order_payload.get("bill_number") or order_payload.get("order_id") or "",
+    }
+    for fieldname in ("posting_date", "posting_time", "due_date"):
+        if order_payload.get(fieldname):
+            payment_details[fieldname] = order_payload[fieldname]
     settlement = settle_pos_order(
         order_name=sales_order_name,
-        payment={
-            "method": payment_method,
-            "reference_no": order_payload.get("bill_number") or order_payload.get("order_id") or "",
-        },
+        payment=payment_details,
         commit=False,
     )
     invoice_name = settlement.get("sales_invoice") if isinstance(settlement, dict) else ""

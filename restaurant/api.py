@@ -15405,7 +15405,13 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
         
     # Check if order is already invoiced
     _ensure_sales_invoice_secondary_customer_field()
-    si = frappe.db.get_value("Sales Invoice Item", {"sales_order": so_name}, "parent")
+    # Cancelled invoices keep their child rows and must not block a corrected
+    # invoice from being created against the same Sales Order.
+    si = frappe.db.get_value(
+        "Sales Invoice Item",
+        {"sales_order": so_name, "docstatus": 1},
+        "parent",
+    )
     si_doc = None
     if si:
         si_doc = frappe.get_doc("Sales Invoice", si)
@@ -15455,6 +15461,15 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
             else:
                 si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
                 si_doc.is_pos = 0 if credit_only else 1
+
+            # Allow Food Partner credit corrections to retain the original
+            # invoice accounting date/time when replacing a wrongly paid POS SI.
+            if credit_only:
+                for fieldname in ("posting_date", "posting_time", "due_date"):
+                    if payment.get(fieldname):
+                        setattr(si_doc, fieldname, payment[fieldname])
+                if payment.get("posting_time"):
+                    si_doc.set_posting_time = 1
     
             grand_total = flt(getattr(si_doc, "grand_total", 0) or getattr(si_doc, "total", 0) or 0)
     
