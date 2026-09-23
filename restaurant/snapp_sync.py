@@ -1926,6 +1926,24 @@ def _resolve_snapp_primary_customer(settings=None):
     return ""
 
 
+def _is_generic_snapp_customer_name(value):
+    normalized = re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+    return (
+        not normalized
+        or normalized in {"guest", "snapp guest"}
+        or normalized.startswith("snapp guest ")
+    )
+
+
+def _food_partner_customer_name(customer_name, external_customer_id):
+    supplied_name = re.sub(r"\s+", " ", str(customer_name or "").strip())
+    if supplied_name and not _is_generic_snapp_customer_name(supplied_name):
+        return supplied_name
+
+    customer_key = str(external_customer_id or "").strip() or _slugify(supplied_name) or "guest"
+    return f"{FALLBACK_GUEST_NAME} ID {customer_key[:12]}"
+
+
 def _ensure_customer(customer_name, mobile, external_customer_id):
     if mobile:
         existing = frappe.db.get_value("Customer", {"mobile_no": mobile, "disabled": 0}, "name")
@@ -1939,13 +1957,29 @@ def _ensure_customer(customer_name, mobile, external_customer_id):
                 frappe.db.set_value("Customer", existing, updates, update_modified=False)
             return existing
 
-    if not mobile:
-        customer_key = external_customer_id or _slugify(customer_name) or "guest"
-        candidate_name = f"{FALLBACK_GUEST_NAME} {customer_key[:12]}".strip()
-        existing = frappe.db.get_value("Customer", {"customer_name": candidate_name, "disabled": 0}, "name")
+    external_id = str(external_customer_id or "").strip()
+    if external_id and _has_column("Customer", "restaurant_external_customer_id"):
+        external_filters = {"restaurant_external_customer_id": external_id, "disabled": 0}
+        if _has_column("Customer", "restaurant_external_source"):
+            external_filters["restaurant_external_source"] = SNAPP_SOURCE
+        existing = frappe.db.get_value("Customer", external_filters, "name")
         if existing:
+            display_name = _food_partner_customer_name(customer_name, external_id)
+            current_name = str(frappe.db.get_value("Customer", existing, "customer_name") or "").strip()
+            if (
+                display_name != current_name
+                and _is_generic_snapp_customer_name(current_name)
+                and not _is_generic_snapp_customer_name(display_name)
+            ):
+                frappe.db.set_value("Customer", existing, "customer_name", display_name, update_modified=False)
             return existing
-        customer_name = candidate_name
+
+    if not mobile:
+        customer_name = _food_partner_customer_name(customer_name, external_id)
+        if _is_generic_snapp_customer_name(customer_name) or not external_id:
+            existing = frappe.db.get_value("Customer", {"customer_name": customer_name, "disabled": 0}, "name")
+            if existing:
+                return existing
 
     customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or frappe.db.get_value(
         "Customer Group", {}, "name"
@@ -2657,17 +2691,11 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     if existing_invoice:
         return {"status": "exists", "sales_invoice": existing_invoice}
 
-    payment_text = str(order_payload.get("payment_method") or "").strip().lower()
-    if any(token in payment_text for token in ("cash", "نقد")):
-        payment_method = "cash"
-    elif any(token in payment_text for token in ("credit", "اعتبار")):
-        payment_method = "credit"
-    elif any(token in payment_text for token in ("card", "online", "bank", "درگاه", "کارت")):
-        payment_method = "card"
-    elif flt(order_payload.get("paid_price") or order_payload.get("final_amount") or 0) > 0:
-        payment_method = "card"
-    else:
-        payment_method = "credit"
+    # Food Partner's settlement happens outside this ERPNext account. Keep the
+    # imported invoice on account; never turn the platform's payment state into
+    # a local POS payment or Payment Entry. The source payment method remains
+    # available separately in the external snapshot fields.
+    payment_method = "credit"
 
     # This is the same settlement function used by Management POS. It creates
     # the SI, payments, payment method, status and audit note consistently.

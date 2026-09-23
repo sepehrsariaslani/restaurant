@@ -19,7 +19,9 @@ from restaurant.snapp_sync import (
     _extract_total_pages,
     _build_sales_invoice_external_values,
     _create_sales_order,
+    _ensure_customer,
     _ensure_sales_invoice_for_order,
+    _food_partner_customer_name,
     _get_schema_status,
     _extract_vendor_id_from_token,
     _build_snapp_order_preview,
@@ -40,6 +42,29 @@ from restaurant.snapp_sync import (
 class TestSnappSync(FrappeTestCase):
     def test_normalize_bearer_header_value_before_request(self):
         self.assertEqual(_normalize_bearer_token(" Bearer abc123 "), "abc123")
+
+    def test_food_partner_customer_name_preserves_name_and_uses_guest_id_only_as_fallback(self):
+        self.assertEqual(_food_partner_customer_name("مشتری نمونه", "20937854"), "مشتری نمونه")
+        self.assertEqual(_food_partner_customer_name("Snapp Guest", "20937854"), "Snapp Guest ID 20937854")
+
+    def test_existing_guest_customer_is_renamed_when_food_partner_provides_real_name(self):
+        fake_db = SimpleNamespace(
+            get_value=Mock(
+                side_effect=["CUST-1", "Snapp Guest 20937854"]
+            ),
+            set_value=Mock(),
+        )
+        with patch(
+            "restaurant.snapp_sync._has_column",
+            side_effect=lambda doctype, fieldname: doctype == "Customer"
+            and fieldname in {"restaurant_external_customer_id", "restaurant_external_source"},
+        ), patch.object(snapp_sync.frappe, "db", fake_db):
+            customer = _ensure_customer("مشتری نمونه", "", "20937854")
+
+        self.assertEqual(customer, "CUST-1")
+        fake_db.set_value.assert_called_once_with(
+            "Customer", "CUST-1", "customer_name", "مشتری نمونه", update_modified=False
+        )
 
     def test_extract_vendor_id_from_jwt_claim(self):
         payload = base64.urlsafe_b64encode(
@@ -824,9 +849,10 @@ class TestSnappSync(FrappeTestCase):
             result = _ensure_sales_invoice_for_order("SO-1", order_payload)
 
         self.assertEqual(result["sales_invoice"], "SI-1")
+        self.assertEqual(result["payment_method"], "credit")
         fake_api.settle_pos_order.assert_called_once()
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["order_name"], "SO-1")
-        self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["payment"]["method"], "card")
+        self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["payment"]["method"], "credit")
         self.assertEqual(fake_api.settle_pos_order.call_args.kwargs["commit"], False)
 
     def test_schema_status_exposes_fields_missing_before_migration(self):
