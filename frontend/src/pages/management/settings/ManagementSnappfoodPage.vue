@@ -91,10 +91,17 @@
               <div v-else class="mapping-list">
                 <div v-for="row in category.rows" :key="`${row.external_id}-${row.title}`" class="mapping-row">
                   <div><strong>{{ row.title || 'بدون عنوان' }}</strong><small>variation: {{ row.variation_id || '—' }} · product: {{ row.product_id || '—' }} · قیمت: {{ row.price || '—' }}</small><small class="mapping-state" :class="row.mapping_status === 'Mapped' ? 'is-mapped' : 'is-unmapped'">{{ row.mapping_status === 'Mapped' ? `نگاشت واقعی: ${row.mapped_item?.item_name || row.mapped_item?.name || 'Item داخلی'}` : 'نگاشت واقعی ثبت نشده است' }}</small><small v-if="row.mapping_status !== 'Mapped' && row.suggested_item">پیشنهاد بر اساس نام (هنوز ثبت نشده): {{ row.suggested_item.item_name || row.suggested_item.name }}</small></div>
-                  <select class="input mapping-select" v-model="mappingDrafts[row.external_id]">
-                    <option value="">انتخاب Item داخلی</option>
-                    <option v-for="item in mappingRows.items" :key="item.name" :value="item.name">{{ item.item_name }} · {{ item.item_code }}</option>
-                  </select>
+                  <SearchableDropdown
+                    v-model="mappingDrafts[row.external_id]"
+                    class="mapping-select"
+                    :options="mappingItemOptions"
+                    :search-fn="searchMappingItemOptions"
+                    placeholder="انتخاب Item داخلی"
+                    search-placeholder="جستجوی نام، کد یا شناسه کالا..."
+                    no-results-text="کالایی پیدا نشد؛ عبارت دیگری جستجو کنید."
+                    clearable
+                    fixed-panel
+                  />
                   <button class="secondary-btn" type="button" @click="saveMapping(row)" :disabled="mappingSaving === row.external_id">{{ mappingSaving === row.external_id ? '...' : 'ثبت نگاشت' }}</button>
                   <button v-if="!mappingDrafts[row.external_id]" class="secondary-btn" type="button" @click="createItemFromMapping(row)" :disabled="mappingCreating === row.external_id">{{ mappingCreating === row.external_id ? 'در حال ساخت...' : 'ساخت Item و ثبت نگاشت' }}</button>
                 </div>
@@ -136,6 +143,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import {
   getSnappfoodIntegrationConfig,
   getSnappfoodCategories,
@@ -185,6 +193,11 @@ const mappingDrafts = reactive({})
 const tokenVisible = ref(false)
 const status = reactive({ has_token: false, vendor_id: '', enabled: false, require_item_mapping: true, auto_sync_invoices: true, schema_ready: false, schema_missing: [] })
 const form = reactive({ snapp_vendor_id: '', snapp_bearer_token: '', snapp_report_url: 'https://snappfood.ir/vms/v3/restaurant/report', snapp_menu_api_base_url: 'https://apigw.snappfood.ir', snapp_origin_url: '', snapp_hostdomain: '', snapp_page_size: 50, snapp_amount_multiplier: 10, snapp_default_customer: '', snapp_sync_enabled: false, snapp_auto_sync_invoices: true, snapp_require_item_mapping: true })
+
+const mappingItemOptions = computed(() => mappingRows.items.map((item) => ({
+  value: item.name,
+  label: `${item.item_name || item.name}${item.item_code ? ` · ${item.item_code}` : ''}`,
+})))
 
 const categorySections = computed(() => {
   const sections = []
@@ -308,6 +321,19 @@ async function searchMappingItems() {
     if (data?.status === 'error' || data?.error) error.value = data.error || 'جستجوی Item ناموفق بود.'
     else successMessage.value = `${mappingRows.items.length} Item برای «${search}» پیدا شد.`
   } catch (err) { error.value = err?.message || 'جستجوی Item ناموفق بود.' } finally { itemSearchLoading.value = false }
+}
+async function searchMappingItemOptions(search = '') {
+  const query = String(search || '').trim()
+  if (query.length < 2) return []
+  try {
+    const data = await searchSnappfoodItems({ search: query, limit: 50 })
+    return (data?.items || []).map((item) => ({
+      value: item.name,
+      label: `${item.item_name || item.name}${item.item_code ? ` · ${item.item_code}` : ''}`,
+    }))
+  } catch {
+    return []
+  }
 }
 async function saveMapping(row) {
   const itemName = mappingDrafts[row.external_id]

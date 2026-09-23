@@ -170,6 +170,16 @@ test('Food Partner mapping has an independent Item search and controlled automat
   assert.doesNotMatch(autoMappingFunction, /importSnappfoodOrders/)
 })
 
+test('Food Partner product mapping uses the shared searchable dropdown with server-side Item search', () => {
+  const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+
+  assert.match(page, /import SearchableDropdown from '@\/components\/SearchableDropdown\.vue'/)
+  assert.match(page, /v-model="mappingDrafts\[row\.external_id\]"[\s\S]{0,360}:options="mappingItemOptions"[\s\S]{0,180}:search-fn="searchMappingItemOptions"/)
+  assert.match(page, /searchMappingItemOptions\(search = ''\)/)
+  assert.match(page, /searchSnappfoodItems\(\{ search: query, limit: 50 \}\)/)
+  assert.match(page, /item\.item_name \|\| item\.name/)
+})
+
 test('Food Partner exposes a date-range preview and capped selected-order import flow', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
   const api = read('src/utils/api.js')
