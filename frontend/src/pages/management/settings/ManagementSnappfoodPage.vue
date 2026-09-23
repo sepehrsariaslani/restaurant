@@ -69,7 +69,7 @@
     </template>
 
     <template v-else-if="activeTab === 'mapping'">
-      <ManagementSurfaceCard title="نگاشت محصولات و variationها" subtitle="ابتدا منوی Food Partner را دریافت کنید، سپس هر ردیف را به Item داخلی وصل کنید.">
+      <ManagementSurfaceCard title="نگاشت محصولات و گزینه‌ها" subtitle="هر محصول Food Partner را به یک Item داخلی وصل کنید؛ variationها مثل برنج ساده و مکزیکی به‌عنوان گزینه یا modifier حفظ می‌شوند.">
         <div class="mapping-toolbar">
           <button class="secondary-btn" type="button" @click="loadMappings(true)" :disabled="mappingLoading || !status.schema_ready">{{ mappingLoading ? 'در حال دریافت منو...' : 'دریافت منوی Food Partner' }}</button>
           <button class="secondary-btn" type="button" @click="loadCategories" :disabled="categoryLoading || !status.schema_ready">{{ categoryLoading ? 'در حال دریافت گروه‌ها...' : 'دریافت گروه‌های کالا' }}</button>
@@ -84,15 +84,28 @@
           <section v-for="category in categorySections" :key="category.key" class="category-panel">
             <button class="category-trigger" type="button" @click="toggleCategory(category.key)" :aria-expanded="openCategories.has(category.key)">
               <span><strong>{{ category.title }}</strong><small>{{ category.category_id ? `شناسه: ${category.category_id}` : 'بدون گروه مشخص' }}</small></span>
-              <span>{{ category.rows.length }} کالا · {{ openCategories.has(category.key) ? 'بستن' : 'بازکردن' }}</span>
+              <span>{{ category.products.length }} کالا · {{ openCategories.has(category.key) ? 'بستن' : 'بازکردن' }}</span>
             </button>
             <div v-if="openCategories.has(category.key)" class="category-panel-body">
-              <p v-if="!category.rows.length" class="muted">برای این گروه هنوز محصولی از منوی Food Partner دریافت نشده است.</p>
+              <p v-if="!category.products.length" class="muted">برای این گروه هنوز محصولی از منوی Food Partner دریافت نشده است.</p>
               <div v-else class="mapping-list">
-                <div v-for="row in category.rows" :key="`${row.external_id}-${row.title}`" class="mapping-row">
-                  <div><strong>{{ row.title || 'بدون عنوان' }}</strong><small>variation: {{ row.variation_id || '—' }} · product: {{ row.product_id || '—' }} · قیمت: {{ row.price || '—' }}</small><small class="mapping-state" :class="row.mapping_status === 'Mapped' ? 'is-mapped' : 'is-unmapped'">{{ row.mapping_status === 'Mapped' ? `نگاشت واقعی: ${row.mapped_item?.item_name || row.mapped_item?.name || 'Item داخلی'}` : 'نگاشت واقعی ثبت نشده است' }}</small><small v-if="row.mapping_status !== 'Mapped' && row.suggested_item">پیشنهاد بر اساس نام (هنوز ثبت نشده): {{ row.suggested_item.item_name || row.suggested_item.name }}</small></div>
+                <div v-for="product in category.products" :key="product.key" class="mapping-row mapping-product-group">
+                  <div class="mapping-product-details">
+                    <strong>{{ product.title || 'بدون عنوان' }}</strong>
+                    <small>محصول Food Partner: {{ product.product_id || '—' }} · {{ product.rows.length }} گزینه</small>
+                    <div class="mapping-options" aria-label="گزینه‌های محصول Food Partner">
+                      <span v-for="row in product.rows" :key="`${row.external_id}-${row.title}`" class="mapping-option">
+                        {{ row.variation_title || row.title || 'گزینه بدون عنوان' }}
+                        <small>{{ row.variation_id ? `شناسه گزینه: ${row.variation_id}` : 'محصول بدون variation' }} · {{ row.price || '—' }}</small>
+                      </span>
+                    </div>
+                    <small class="mapping-state" :class="product.mapping_status === 'Mapped' ? 'is-mapped' : 'is-unmapped'">
+                      {{ product.mapping_status === 'Mapped' ? `همه گزینه‌ها به یک Item وصل‌اند: ${product.mapped_item?.item_name || product.mapped_item?.name || 'Item داخلی'}` : product.mapping_status === 'Partial' ? `بخشی از گزینه‌ها وصل است: ${product.mapped_item?.item_name || product.mapped_item?.name || 'Item داخلی'}` : 'محصول و همه گزینه‌هایش هنوز نگاشت نشده‌اند' }}
+                    </small>
+                    <small v-if="product.mapping_status !== 'Mapped' && product.suggested_item">پیشنهاد بر اساس نام (هنوز ثبت نشده): {{ product.suggested_item.item_name || product.suggested_item.name }}</small>
+                  </div>
                   <SearchableDropdown
-                    v-model="mappingDrafts[row.external_id]"
+                    v-model="mappingDrafts[product.key]"
                     class="mapping-select"
                     :options="mappingItemOptions"
                     :search-fn="searchMappingItemOptions"
@@ -102,8 +115,10 @@
                     clearable
                     fixed-panel
                   />
-                  <button class="secondary-btn" type="button" @click="saveMapping(row)" :disabled="mappingSaving === row.external_id">{{ mappingSaving === row.external_id ? '...' : 'ثبت نگاشت' }}</button>
-                  <button v-if="!mappingDrafts[row.external_id]" class="secondary-btn" type="button" @click="createItemFromMapping(row)" :disabled="mappingCreating === row.external_id">{{ mappingCreating === row.external_id ? 'در حال ساخت...' : 'ساخت Item و ثبت نگاشت' }}</button>
+                  <div class="mapping-product-actions">
+                    <button class="secondary-btn" type="button" @click="saveProductMapping(product)" :disabled="mappingSaving === product.key">{{ mappingSaving === product.key ? 'در حال ثبت...' : `ثبت یک Item برای ${product.rows.length} گزینه` }}</button>
+                    <button v-if="!mappingDrafts[product.key]" class="secondary-btn" type="button" @click="createItemFromProductGroup(product)" :disabled="mappingCreating === product.key">{{ mappingCreating === product.key ? 'در حال ساخت...' : 'ساخت Item و نگاشت گزینه‌ها' }}</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -144,6 +159,7 @@ import ManagementBreadcrumbs from '@/components/management/ManagementBreadcrumbs
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import { groupSnappfoodMappingRows } from '@/utils/snappfoodMapping'
 import {
   getSnappfoodIntegrationConfig,
   getSnappfoodCategories,
@@ -200,21 +216,15 @@ const mappingItemOptions = computed(() => mappingRows.items.map((item) => ({
 })))
 
 const categorySections = computed(() => {
-  const sections = []
-  const byKey = new Map()
-  const addSection = (key, title, categoryId = '') => {
-    const normalizedKey = String(key || '').trim() || '__uncategorized__'
-    if (!byKey.has(normalizedKey)) {
-      const section = { key: normalizedKey, title: title || 'بدون گروه مشخص', category_id: categoryId || '', rows: [] }
-      byKey.set(normalizedKey, section); sections.push(section)
+  const sections = groupSnappfoodMappingRows(mappingRows.menu)
+  const byKey = new Map(sections.map((section) => [section.key, section]))
+  categories.value.forEach((category) => {
+    const key = String(category.external_id || category.category_id || `title:${category.title || ''}`)
+    if (!byKey.has(key)) {
+      const section = { key, title: category.title || 'بدون گروه مشخص', category_id: category.category_id || category.external_id || '', products: [] }
+      byKey.set(key, section)
+      sections.push(section)
     }
-    return byKey.get(normalizedKey)
-  }
-  categories.value.forEach((category) => addSection(category.external_id || category.category_id, category.title, category.category_id || category.external_id))
-  mappingRows.menu.forEach((row) => {
-    const key = row.category_id || (row.category_title ? `title:${row.category_title}` : '__uncategorized__')
-    const section = addSection(key, row.category_title || 'بدون گروه مشخص', row.category_id || '')
-    section.rows.push(row)
   })
   return sections
 })
@@ -292,7 +302,9 @@ async function loadMappings(refreshMenu = false) {
       error.value = data.error || 'منوی Food Partner خوانده نشد.'
       return
     }
-    mappingRows.menu.forEach((row) => { mappingDrafts[row.external_id] = row.mapped_item?.name || '' })
+    categorySections.value.forEach((category) => category.products.forEach((product) => {
+      mappingDrafts[product.key] = product.mapped_item?.name || ''
+    }))
   } catch (err) { error.value = err?.message || 'منوی Food Partner خوانده نشد.' } finally { mappingLoading.value = false }
 }
 function toggleCategory(key) {
@@ -335,30 +347,52 @@ async function searchMappingItemOptions(search = '') {
     return []
   }
 }
-async function saveMapping(row) {
-  const itemName = mappingDrafts[row.external_id]
-  if (!itemName) { error.value = 'برای ثبت نگاشت، ابتدا Item داخلی را انتخاب کنید.'; return }
-  mappingSaving.value = row.external_id; error.value = ''
-  try {
-    const result = await saveSnappfoodItemMapping({ item_name: itemName, product_id: row.product_id, variation_id: row.variation_id, product_hash_id: row.product_hash_id, variation_hash_id: row.variation_hash_id, menu_item_id: row.menu_item_id || row.external_id })
-    if (result?.status !== 'success') throw new Error(result?.message || 'سرور نگاشت را تأیید نکرد.')
-    const selectedItem = mappingRows.items.find((item) => item.name === itemName)
+function applyProductMapping(product, itemName, selectedItem) {
+  product.rows.forEach((row) => {
     row.mapping_status = 'Mapped'
     row.mapped_item = selectedItem || { name: itemName, item_name: itemName }
     row.suggested_item = null
-    mappingDrafts[row.external_id] = itemName
-    successMessage.value = `نگاشت «${row.title}» ثبت شد.`
+  })
+  mappingDrafts[product.key] = itemName
+}
+async function saveProductMapping(product) {
+  const itemName = mappingDrafts[product.key]
+  if (!itemName) { error.value = 'برای ثبت نگاشت، ابتدا Item داخلی را انتخاب کنید.'; return }
+  if (!product.product_id) { error.value = 'شناسه محصول Food Partner موجود نیست؛ گزینه‌ها را نمی‌توان به‌صورت گروهی نگاشت کرد.'; return }
+  mappingSaving.value = product.key; error.value = ''; successMessage.value = ''
+  try {
+    const result = await saveSnappfoodItemMapping({
+      item_name: itemName,
+      product_id: product.product_id,
+      product_hash_id: product.product_hash_id,
+      menu_item_id: product.product_id,
+      map_product_group: 1,
+    })
+    if (result?.status !== 'success') throw new Error(result?.message || 'سرور نگاشت را تأیید نکرد.')
+    const selectedItem = mappingRows.items.find((item) => item.name === itemName)
+    applyProductMapping(product, itemName, selectedItem)
+    successMessage.value = `«${product.title}» و هر ${product.rows.length} گزینه‌اش به یک Item وصل شد؛ عنوان گزینه در سفارش حفظ می‌شود.`
   } catch (err) { error.value = err?.message || 'ثبت نگاشت ناموفق بود.' } finally { mappingSaving.value = '' }
 }
-async function createItemFromMapping(row) {
-  if (!row?.title || !row?.external_id) { error.value = 'عنوان و شناسهٔ Food Partner برای ساخت Item لازم است.'; return }
-  mappingCreating.value = row.external_id; error.value = ''; successMessage.value = ''
+async function createItemFromProductGroup(product) {
+  if (!product?.title || !product?.product_id) { error.value = 'عنوان و شناسه محصول Food Partner برای ساخت Item لازم است.'; return }
+  mappingCreating.value = product.key; error.value = ''; successMessage.value = ''
   try {
-    const result = await createSnappfoodItemFromMapping({ title: row.title, price: row.price, product_id: row.product_id, variation_id: row.variation_id, product_hash_id: row.product_hash_id, variation_hash_id: row.variation_hash_id, menu_item_id: row.external_id })
-    mappingDrafts[row.external_id] = result?.item || ''
-    successMessage.value = result?.created ? `Item «${row.title}» ساخته و نگاشت شد.` : `Item «${row.title}» قبلاً وجود داشت و نگاشت شد.`
-    await loadMappings(true)
-  } catch (err) { error.value = err?.message || 'ساخت Item و ثبت نگاشت ناموفق بود.' } finally { mappingCreating.value = '' }
+    const result = await createSnappfoodItemFromMapping({
+      title: product.title,
+      product_title: product.title,
+      price: product.rows[0]?.price || 0,
+      product_id: product.product_id,
+      product_hash_id: product.product_hash_id,
+      menu_item_id: product.product_id,
+      map_product_group: 1,
+    })
+    const itemName = result?.item || ''
+    mappingDrafts[product.key] = itemName
+    const selectedItem = mappingRows.items.find((item) => item.name === itemName)
+    applyProductMapping(product, itemName, selectedItem)
+    successMessage.value = result?.created ? `Item «${product.title}» ساخته و همه گزینه‌ها به آن نگاشت شدند.` : `Item «${product.title}» موجود بود و همه گزینه‌ها به آن نگاشت شدند.`
+  } catch (err) { error.value = err?.message || 'ساخت Item و ثبت نگاشت گزینه‌ها ناموفق بود.' } finally { mappingCreating.value = '' }
 }
 async function runAutoMapping(createMissing = false) {
   if (!status.schema_ready) { error.value = 'ابتدا migration اپ Restaurant را روی سایت اجرا کنید.'; return }
@@ -436,4 +470,5 @@ onMounted(loadConfig)
 .status-grid,.form-grid,.switch-grid{display:grid;gap:14px}.status-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.switch-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}.status-pill{border-radius:999px;padding:9px 12px;background:var(--surface-soft,#f6f7fb);font-size:12px;text-align:center}.status-pill.is-on{color:#166534;background:#dcfce7}.status-pill.is-off{color:#6b7280}.status-pill.is-warn{color:#92400e;background:#fef3c7}.schema-warning{margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.check-row{display:flex;gap:8px;align-items:center;font-size:13px}.security-note{margin:18px 0 0;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.8}.actions-row,.mapping-toolbar,.sync-card,.token-actions{display:flex;gap:10px;align-items:center;margin-top:20px}.token-field{min-width:0}.token-actions{margin-top:8px}.mapping-search{max-width:300px}.category-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.category-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-color,#e5e7eb);border-radius:999px;padding:7px 10px;background:var(--surface-soft,#f6f7fb);font-size:12px}.category-pill small{color:#6b7280}.mapping-list{display:grid;gap:10px;margin-top:16px}.mapping-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:12px;align-items:center;border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:12px}.mapping-row small{display:block;color:#6b7280;margin-top:4px}.mapping-select{min-width:0}.sync-result{font-size:13px;color:#166534}.error-list{margin:18px 0 0;color:#b91c1c;line-height:1.9;font-size:12px}@media(max-width:800px){.status-grid,.form-grid,.switch-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr}.mapping-toolbar{align-items:stretch;flex-direction:column}.mapping-search{max-width:none}}
 .mapping-state.is-mapped{color:#166534}.mapping-state.is-unmapped{color:#b45309}
 .mapping-toolbar{flex-wrap:wrap}.mapping-toolbar .mapping-search{flex:1 1 240px}
+.mapping-product-details{display:grid;gap:4px;min-width:0}.mapping-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.mapping-option{display:grid;gap:2px;max-width:100%;padding:6px 9px;border:1px solid var(--border-color,#e5e7eb);border-radius:10px;background:var(--surface-soft,#f6f7fb);font-size:12px;line-height:1.6}.mapping-option small{margin:0}.mapping-product-actions{display:grid;gap:6px;min-width:160px}.mapping-product-actions .secondary-btn{white-space:normal;min-height:44px}
 </style>

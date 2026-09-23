@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+import restaurant.snapp_sync as snapp_sync
 from restaurant.snapp_sync import (
     _build_snapp_item_creation_values,
     _build_order_menu_rows,
@@ -9,6 +10,7 @@ from restaurant.snapp_sync import (
     search_snappfood_items,
     _match_local_item_by_title,
     _normalize_sales_invoice_line_value,
+    _resolve_item_code,
     normalize_snapp_order,
     _resolve_snapp_primary_customer,
 )
@@ -105,6 +107,32 @@ class TestSnappItemMatching(unittest.TestCase):
         )
 
         self.assertEqual(result["name"], "ITEM-1")
+
+    def test_grouped_parent_item_wins_over_individual_variation_mapping(self):
+        line = {
+            "product_id": "34911711",
+            "variation_id": "34935660",
+            "menu_item_id": "34935660",
+            "title": "کاسه برنجین میگو پلو میکس مکزیکی",
+        }
+        with patch.object(snapp_sync, "_find_mapped_product_group_item", return_value="ITEM-RICE-BOWL-SHRIMP"):
+            self.assertEqual(_resolve_item_code(line), "ITEM-RICE-BOWL-SHRIMP")
+
+    def test_product_group_mapping_is_recognized_by_its_parent_alias(self):
+        with patch.object(snapp_sync, "_has_column", return_value=True), patch.object(
+            snapp_sync.frappe,
+            "get_all",
+            return_value=[
+                {
+                    "name": "ITEM-RICE-BOWL-SHRIMP",
+                    "restaurant_external_menu_item_id": "34911711",
+                    "restaurant_external_variation_id": "",
+                }
+            ],
+        ):
+            result = snapp_sync._find_mapped_product_group_item("34911711")
+
+        self.assertEqual(result, "ITEM-RICE-BOWL-SHRIMP")
 
     def test_matches_persian_title_after_spacing_and_arabic_character_normalization(self):
         rows = [

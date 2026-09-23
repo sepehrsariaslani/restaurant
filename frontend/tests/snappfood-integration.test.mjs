@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { groupSnappfoodMappingRows } from '../src/utils/snappfoodMapping.js'
 
 const root = path.resolve(new URL('..', import.meta.url).pathname)
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
@@ -78,10 +79,12 @@ test('Food Partner settings lets the server infer vendor ID from a saved token a
 
 test('Food Partner mapping renders category context with product and variation IDs', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const mapping = read('src/utils/snappfoodMapping.js')
 
-  assert.match(page, /row\.category_title/)
   assert.match(page, /row\.variation_id/)
-  assert.match(page, /row\.product_id/)
+  assert.match(page, /product\.product_id/)
+  assert.match(page, /product\.rows/)
+  assert.match(mapping, /row\.category_title/)
 })
 
 test('Food Partner mapping can load and display menu categories', () => {
@@ -104,14 +107,21 @@ test('Food Partner settings makes disabled automatic invoicing explicit', () => 
   assert.match(page, /برای ثبت فاکتور native در همان POS/)
 })
 
-test('Food Partner mapping groups products in an accordion and keeps each row mappable', () => {
+test('Food Partner mapping groups all variations under one parent product and maps them to one Item', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const backend = read('../restaurant/snapp_sync.py')
+  const api = read('../restaurant/api.py')
 
   assert.match(page, /category-accordion/)
   assert.match(page, /toggleCategory/)
   assert.match(page, /categorySections/)
-  assert.match(page, /row\.product_id/)
-  assert.match(page, /ثبت نگاشت/)
+  assert.match(page, /groupSnappfoodMappingRows/)
+  assert.match(page, /ثبت یک Item برای \$\{product\.rows\.length\} گزینه/)
+  assert.match(page, /map_product_group: 1/)
+  assert.match(page, /عنوان گزینه در سفارش حفظ می‌شود/)
+  assert.match(backend, /def _find_mapped_product_group_item\(/)
+  assert.match(backend, /map_product_group=False/)
+  assert.match(api, /map_product_group=bool\(cint\(payload\.get\("map_product_group"\)\)\)/)
 })
 
 test('Food Partner mapping can create a native Item without importing an order', () => {
@@ -120,21 +130,23 @@ test('Food Partner mapping can create a native Item without importing an order',
   const backend = read('../restaurant/api.py')
   const sync = read('../restaurant/snapp_sync.py')
 
-  assert.match(page, /ساخت Item و ثبت نگاشت/)
-  assert.match(page, /createItemFromMapping/)
+  assert.match(page, /ساخت Item و نگاشت گزینه‌ها/)
+  assert.match(page, /createItemFromProductGroup/)
   assert.match(api, /createSnappfoodItemFromMapping/)
   assert.match(backend, /def create_snappfood_item_from_mapping\(/)
   assert.match(sync, /def create_snappfood_item_from_mapping\(/)
-  assert.doesNotMatch(page, /createItemFromMapping[\s\S]{0,500}importSnappfoodOrders/)
+  assert.doesNotMatch(page, /createItemFromProductGroup[\s\S]{0,500}importSnappfoodOrders/)
 })
 
 test('Food Partner mapping distinguishes an exact ID mapping from a name suggestion', () => {
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
+  const mapping = read('src/utils/snappfoodMapping.js')
   const sync = read('../restaurant/snapp_sync.py')
 
-  assert.match(page, /row\.mapping_status === 'Mapped'/)
-  assert.match(page, /row\.mapped_item/)
-  assert.match(page, /mappingDrafts\[row\.external_id\] = row\.mapped_item\?\.name/)
+  assert.match(page, /product\.mapping_status === 'Mapped'/)
+  assert.match(mapping, /row\.mapping_status === 'Mapped'/)
+  assert.match(mapping, /row\.mapped_item/)
+  assert.match(page, /mappingDrafts\[product\.key\] = product\.mapped_item\?\.name/)
   assert.match(page, /پیشنهاد بر اساس نام.*هنوز ثبت نشده/)
   assert.match(sync, /def _find_mapped_local_item\(/)
   assert.match(sync, /"mapping_status": "Mapped" if exact else "Unmapped"/)
@@ -174,10 +186,42 @@ test('Food Partner product mapping uses the shared searchable dropdown with serv
   const page = read('src/pages/management/settings/ManagementSnappfoodPage.vue')
 
   assert.match(page, /import SearchableDropdown from '@\/components\/SearchableDropdown\.vue'/)
-  assert.match(page, /v-model="mappingDrafts\[row\.external_id\]"[\s\S]{0,360}:options="mappingItemOptions"[\s\S]{0,180}:search-fn="searchMappingItemOptions"/)
+  assert.match(page, /v-model="mappingDrafts\[product\.key\]"[\s\S]{0,360}:options="mappingItemOptions"[\s\S]{0,180}:search-fn="searchMappingItemOptions"/)
   assert.match(page, /searchMappingItemOptions\(search = ''\)/)
   assert.match(page, /searchSnappfoodItems\(\{ search: query, limit: 50 \}\)/)
   assert.match(page, /item\.item_name \|\| item\.name/)
+})
+
+test('Food Partner parent product keeps each variation as a modifier option in the same mapping group', () => {
+  const sections = groupSnappfoodMappingRows([
+    {
+      category_id: 'rice-bowls',
+      category_title: 'کاسه برنجین',
+      product_id: '34911711',
+      product_title: 'کاسه برنجین میگو',
+      external_id: '34911711',
+      variation_id: '34911711',
+      variation_title: 'پلو میکس ساده',
+      title: 'کاسه برنجین میگو پلو میکس ساده',
+      price: 979000,
+    },
+    {
+      category_id: 'rice-bowls',
+      category_title: 'کاسه برنجین',
+      product_id: '34911711',
+      product_title: 'کاسه برنجین میگو',
+      external_id: '34935660',
+      variation_id: '34935660',
+      variation_title: 'پلو میکس مکزیکی',
+      title: 'کاسه برنجین میگو پلو میکس مکزیکی',
+      price: 999000,
+    },
+  ])
+
+  assert.equal(sections.length, 1)
+  assert.equal(sections[0].products.length, 1)
+  assert.equal(sections[0].products[0].title, 'کاسه برنجین میگو')
+  assert.deepEqual(sections[0].products[0].rows.map((row) => row.variation_title), ['پلو میکس ساده', 'پلو میکس مکزیکی'])
 })
 
 test('Food Partner exposes a date-range preview and capped selected-order import flow', () => {

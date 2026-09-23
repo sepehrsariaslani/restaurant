@@ -648,6 +648,7 @@ def _extract_current_food_partner_menu_entries(payload):
             variations = variations if isinstance(variations, list) else []
             product_id = str(product.get("id") or "").strip()
             product_hash_id = str(product.get("hashId") or "").strip()
+            product_title = str(_food_partner_field_value(product, "title") or "").strip()
             if variations:
                 variants = [(variation, True) for variation in variations if isinstance(variation, dict)]
             else:
@@ -663,6 +664,10 @@ def _extract_current_food_partner_menu_entries(payload):
                         "variationId": variation_id,
                         "productHashId": product_hash_id,
                         "variationHashId": variation_hash_id,
+                        "productTitle": product_title,
+                        "variationTitle": str(_food_partner_field_value(variation, "title") or "").strip()
+                        if is_variation
+                        else "",
                         "title": _food_partner_field_value(variation, "title")
                         or _food_partner_field_value(product, "title")
                         or "",
@@ -1154,6 +1159,20 @@ def fetch_snapp_menu(settings=None):
                 "variation_id": variation_id,
                 "product_hash_id": str(entry.get("productHashId") or entry.get("product_hash_id") or "").strip(),
                 "variation_hash_id": str(entry.get("variationHashId") or entry.get("variation_hash_id") or "").strip(),
+                "product_title": str(
+                    entry.get("productTitle")
+                    or entry.get("product_title")
+                    or entry.get("productName")
+                    or entry.get("product_name")
+                    or ""
+                ).strip(),
+                "variation_title": str(
+                    entry.get("variationTitle")
+                    or entry.get("variation_title")
+                    or entry.get("variationName")
+                    or entry.get("variation_name")
+                    or ""
+                ).strip(),
                 "category_id": str(entry.get("_category_id") or entry.get("categoryId") or entry.get("category_id") or "").strip(),
                 "category_title": str(
                     entry.get("_category_title")
@@ -1551,18 +1570,61 @@ def save_snappfood_item_mapping(
     product_hash_id="",
     variation_hash_id="",
     menu_item_id="",
+    map_product_group=False,
     commit=True,
 ):
     if not item_name or not frappe.db.exists("Item", item_name):
         raise frappe.ValidationError("آیتم داخلی برای نگاشت معتبر نیست.")
+    product_id = str(product_id or "").strip()
+    product_hash_id = str(product_hash_id or "").strip()
+    if map_product_group:
+        if not product_id:
+            raise frappe.ValidationError("برای نگاشت محصول و گزینه‌های آن، شناسه محصول Food Partner لازم است.")
+        current_product_id = str(
+            frappe.db.get_value("Item", item_name, "restaurant_external_product_id") or ""
+        ).strip() if _has_column("Item", "restaurant_external_product_id") else ""
+        if current_product_id and current_product_id != product_id:
+            raise frappe.ValidationError(
+                "این Item قبلاً به محصول دیگری از Food Partner متصل شده است؛ ابتدا نگاشت قبلی آن را بررسی کنید."
+            )
+        for fieldname, value in (
+            ("restaurant_external_product_id", product_id),
+            ("restaurant_external_product_hash_id", product_hash_id),
+            ("restaurant_external_menu_item_id", product_id),
+        ):
+            if not value or not _has_column("Item", fieldname):
+                continue
+            matches = frappe.get_all(
+                "Item",
+                filters={fieldname: value},
+                fields=["name"],
+                limit_page_length=2,
+                ignore_permissions=True,
+            )
+            if any(row.get("name") != item_name for row in matches):
+                raise frappe.ValidationError(
+                    "شناسه این محصول قبلاً روی Item دیگری نگاشت شده است؛ نگاشت قبلی را بررسی کنید."
+                )
+
+    if map_product_group:
+        mapping_values = {
+            "restaurant_external_product_id": product_id,
+            "restaurant_external_variation_id": "",
+            "restaurant_external_product_hash_id": product_hash_id,
+            "restaurant_external_variation_hash_id": "",
+            # In product-group mode the parent ID is the stable mapping key.
+            "restaurant_external_menu_item_id": product_id,
+        }
+    else:
+        mapping_values = {
+            "restaurant_external_product_id": product_id,
+            "restaurant_external_variation_id": str(variation_id or "").strip(),
+            "restaurant_external_product_hash_id": product_hash_id,
+            "restaurant_external_variation_hash_id": str(variation_hash_id or "").strip(),
+            "restaurant_external_menu_item_id": str(menu_item_id or variation_id or product_id or "").strip(),
+        }
     values = {}
-    for fieldname, value in (
-        ("restaurant_external_product_id", product_id),
-        ("restaurant_external_variation_id", variation_id),
-        ("restaurant_external_product_hash_id", product_hash_id),
-        ("restaurant_external_variation_hash_id", variation_hash_id),
-        ("restaurant_external_menu_item_id", menu_item_id or variation_id or product_id),
-    ):
+    for fieldname, value in mapping_values.items():
         if _has_column("Item", fieldname):
             values[fieldname] = str(value or "").strip()
     if _has_column("Item", "restaurant_external_mapping_status"):
@@ -1573,6 +1635,32 @@ def save_snappfood_item_mapping(
     if commit:
         frappe.db.commit()
     return {"status": "success", "item": item_name, "values": values}
+
+
+def _find_mapped_product_group_item(product_id):
+    """Resolve a parent-product mapping before any individual variation alias."""
+    product_id = str(product_id or "").strip()
+    required_fields = (
+        "restaurant_external_product_id",
+        "restaurant_external_menu_item_id",
+        "restaurant_external_variation_id",
+    )
+    if not product_id or not all(_has_column("Item", fieldname) for fieldname in required_fields):
+        return ""
+    rows = frappe.get_all(
+        "Item",
+        filters={"restaurant_external_product_id": product_id},
+        fields=["name", "restaurant_external_menu_item_id", "restaurant_external_variation_id"],
+        limit_page_length=20,
+        ignore_permissions=True,
+    )
+    matches = [
+        row
+        for row in rows
+        if str(row.get("restaurant_external_menu_item_id") or "").strip() == product_id
+        and not str(row.get("restaurant_external_variation_id") or "").strip()
+    ]
+    return matches[0].get("name") if len(matches) == 1 else ""
 
 
 def auto_map_snappfood_items(create_missing=False, refresh_menu=1):
@@ -2102,17 +2190,23 @@ def create_snappfood_item_from_mapping(
     product_hash_id="",
     variation_hash_id="",
     menu_item_id="",
+    product_title="",
+    map_product_group=False,
     commit=True,
 ):
     """Create or map one native Item without creating an order or invoice."""
+    map_product_group = bool(cint(map_product_group))
+    product_id = str(product_id or "").strip()
+    if map_product_group and not product_id:
+        raise frappe.ValidationError("برای ساخت Item و نگاشت گزینه‌ها، شناسه محصول Food Partner لازم است.")
     line = {
-        "title": str(title or "").strip(),
+        "title": str((product_title if map_product_group else "") or title or "").strip(),
         "unit_price": flt(price or 0),
-        "product_id": str(product_id or "").strip(),
-        "variation_id": str(variation_id or "").strip(),
+        "product_id": product_id,
+        "variation_id": "" if map_product_group else str(variation_id or "").strip(),
         "product_hash_id": str(product_hash_id or "").strip(),
-        "variation_hash_id": str(variation_hash_id or "").strip(),
-        "menu_item_id": str(menu_item_id or variation_id or product_id or "").strip(),
+        "variation_hash_id": "" if map_product_group else str(variation_hash_id or "").strip(),
+        "menu_item_id": product_id if map_product_group else str(menu_item_id or variation_id or product_id or "").strip(),
     }
     if not line["title"]:
         raise frappe.ValidationError("عنوان کالای Food Partner برای ساخت Item خالی است.")
@@ -2129,11 +2223,18 @@ def create_snappfood_item_from_mapping(
         raise frappe.ValidationError("برای ساخت Item، شناسهٔ کالای Food Partner لازم است.")
 
     external_fields = (
-        ("restaurant_external_menu_item_id", line.get("menu_item_id")),
-        ("restaurant_external_product_id", line.get("product_id")),
-        ("restaurant_external_variation_id", line.get("variation_id")),
-        ("restaurant_external_product_hash_id", line.get("product_hash_id")),
-        ("restaurant_external_variation_hash_id", line.get("variation_hash_id")),
+        (
+            ("restaurant_external_product_id", line.get("product_id")),
+            ("restaurant_external_product_hash_id", line.get("product_hash_id")),
+        )
+        if map_product_group
+        else (
+            ("restaurant_external_menu_item_id", line.get("menu_item_id")),
+            ("restaurant_external_product_id", line.get("product_id")),
+            ("restaurant_external_variation_id", line.get("variation_id")),
+            ("restaurant_external_product_hash_id", line.get("product_hash_id")),
+            ("restaurant_external_variation_hash_id", line.get("variation_hash_id")),
+        )
     )
     existing_item = ""
     for fieldname, value in external_fields:
@@ -2149,7 +2250,16 @@ def create_snappfood_item_from_mapping(
         ) or ""
 
     if existing_item:
-        _tag_item_mapping(existing_item, line)
+        if map_product_group:
+            save_snappfood_item_mapping(
+                item_name=existing_item,
+                product_id=line["product_id"],
+                product_hash_id=line["product_hash_id"],
+                map_product_group=True,
+                commit=False,
+            )
+        else:
+            _tag_item_mapping(existing_item, line)
         if _has_column("Item", "custom_snapp_code"):
             current_code = frappe.db.get_value("Item", existing_item, "custom_snapp_code")
             if not (current_code or "").strip():
@@ -2169,16 +2279,27 @@ def create_snappfood_item_from_mapping(
     item_doc = frappe.get_doc(_build_snapp_item_creation_values(line, item_group, item_code))
     if _has_column("Item", "restaurant_enabled"):
         item_doc.set("restaurant_enabled", 0)
-    if _has_column("Item", "restaurant_external_menu_item_id"):
-        item_doc.set("restaurant_external_menu_item_id", line["menu_item_id"])
-    if _has_column("Item", "restaurant_external_product_id"):
-        item_doc.set("restaurant_external_product_id", line["product_id"])
-    if _has_column("Item", "restaurant_external_variation_id"):
-        item_doc.set("restaurant_external_variation_id", line["variation_id"])
-    if _has_column("Item", "restaurant_external_product_hash_id"):
-        item_doc.set("restaurant_external_product_hash_id", line["product_hash_id"])
-    if _has_column("Item", "restaurant_external_variation_hash_id"):
-        item_doc.set("restaurant_external_variation_hash_id", line["variation_hash_id"])
+    if map_product_group:
+        for fieldname, value in (
+            ("restaurant_external_menu_item_id", line["menu_item_id"]),
+            ("restaurant_external_product_id", line["product_id"]),
+            ("restaurant_external_variation_id", ""),
+            ("restaurant_external_product_hash_id", line["product_hash_id"]),
+            ("restaurant_external_variation_hash_id", ""),
+        ):
+            if _has_column("Item", fieldname):
+                item_doc.set(fieldname, value)
+    else:
+        if _has_column("Item", "restaurant_external_menu_item_id"):
+            item_doc.set("restaurant_external_menu_item_id", line["menu_item_id"])
+        if _has_column("Item", "restaurant_external_product_id"):
+            item_doc.set("restaurant_external_product_id", line["product_id"])
+        if _has_column("Item", "restaurant_external_variation_id"):
+            item_doc.set("restaurant_external_variation_id", line["variation_id"])
+        if _has_column("Item", "restaurant_external_product_hash_id"):
+            item_doc.set("restaurant_external_product_hash_id", line["product_hash_id"])
+        if _has_column("Item", "restaurant_external_variation_hash_id"):
+            item_doc.set("restaurant_external_variation_hash_id", line["variation_hash_id"])
     if _has_column("Item", "restaurant_external_mapping_status"):
         item_doc.set("restaurant_external_mapping_status", "Mapped")
     if _has_column("Item", "custom_snapp_code"):
@@ -2197,6 +2318,12 @@ def _resolve_item_code(line):
     external_variation_hash_id = (line.get("variation_hash_id") or "").strip()
     title = (line.get("title") or "").strip() or "Snapp Item"
     snapp_code = _build_item_code(line)
+
+    # A product-level mapping represents the parent Item and all of its
+    # Food Partner choices. It must win over stale per-variation aliases.
+    by_product_group = _find_mapped_product_group_item(external_product_id)
+    if by_product_group:
+        return by_product_group
 
     if _has_column("Item", "custom_snapp_code"):
         by_snapp_code = frappe.db.get_value("Item", {"custom_snapp_code": snapp_code}, "name")
@@ -2223,7 +2350,6 @@ def _resolve_item_code(line):
     if external_product_id and _has_column("Item", "restaurant_external_product_id"):
         by_product = frappe.db.get_value("Item", {"restaurant_external_product_id": external_product_id}, "name")
         if by_product:
-            _tag_item_mapping(by_product, line)
             return by_product
 
     if external_variation_hash_id and _has_column("Item", "restaurant_external_variation_hash_id"):

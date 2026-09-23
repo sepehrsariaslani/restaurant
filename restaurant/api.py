@@ -22782,6 +22782,7 @@ def save_snappfood_item_mapping(payload=None):
 		product_hash_id=payload.get("product_hash_id") or "",
 		variation_hash_id=payload.get("variation_hash_id") or "",
 		menu_item_id=payload.get("menu_item_id") or "",
+		map_product_group=bool(cint(payload.get("map_product_group"))),
 	)
 
 
@@ -22812,6 +22813,8 @@ def create_snappfood_item_from_mapping(payload=None):
 		product_hash_id=payload.get("product_hash_id") or "",
 		variation_hash_id=payload.get("variation_hash_id") or "",
 		menu_item_id=payload.get("menu_item_id") or "",
+		product_title=payload.get("product_title") or "",
+		map_product_group=bool(cint(payload.get("map_product_group"))),
 	)
 
 

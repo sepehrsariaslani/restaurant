@@ -18,6 +18,7 @@ from restaurant.snapp_sync import (
     _extract_orders,
     _extract_total_pages,
     _build_sales_invoice_external_values,
+    _build_sales_order_items,
     _create_sales_order,
     _ensure_customer,
     _ensure_sales_invoice_for_order,
@@ -33,6 +34,7 @@ from restaurant.snapp_sync import (
     _normalize_bearer_token,
     fetch_snapp_orders,
     get_snappfood_mapping_rows,
+    save_snappfood_item_mapping,
     _map_order_type,
     _map_status,
     normalize_snapp_order,
@@ -242,7 +244,105 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(variation["product_id"], "36485633")
         self.assertEqual(variation["product_hash_id"], "p_club")
         self.assertEqual(variation["variation_hash_id"], "v_club_regular")
+        self.assertEqual(variation["product_title"], "کلاب بوقلمون دودی")
+        self.assertEqual(variation["variation_title"], "کلاب بوقلمون دودی تست جو")
         fake_db.commit.assert_called_once()
+
+    def test_product_group_mapping_uses_parent_id_and_clears_single_variation_aliases(self):
+        fake_db = SimpleNamespace(
+            exists=Mock(return_value=True),
+            get_value=Mock(return_value=""),
+            set_value=Mock(),
+            commit=Mock(),
+        )
+        with patch.object(snapp_sync.frappe, "db", fake_db), patch.object(
+            snapp_sync, "_has_column", return_value=True
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]):
+            result = save_snappfood_item_mapping(
+                item_name="ITEM-RICE-BOWL-SHRIMP",
+                product_id="34911711",
+                product_hash_id="product-shrimp-bowl",
+                map_product_group=True,
+            )
+
+        self.assertEqual(result["status"], "success")
+        fake_db.set_value.assert_called_once_with(
+            "Item",
+            "ITEM-RICE-BOWL-SHRIMP",
+            {
+                "restaurant_external_product_id": "34911711",
+                "restaurant_external_variation_id": "",
+                "restaurant_external_product_hash_id": "product-shrimp-bowl",
+                "restaurant_external_variation_hash_id": "",
+                "restaurant_external_menu_item_id": "34911711",
+                "restaurant_external_mapping_status": "Mapped",
+            },
+            update_modified=True,
+        )
+        fake_db.commit.assert_called_once()
+
+    def test_two_food_partner_variations_match_one_parent_product_mapping(self):
+        local_items = [
+            {
+                "name": "ITEM-RICE-BOWL-SHRIMP",
+                "item_name": "کاسه برنجین میگو",
+                "restaurant_external_product_id": "34911711",
+                "restaurant_external_menu_item_id": "34911711",
+                "restaurant_external_variation_id": "",
+            }
+        ]
+        simple = {
+            "external_id": "34911711",
+            "product_id": "34911711",
+            "variation_id": "34911711",
+            "title": "کاسه برنجین میگو پلو میکس ساده",
+        }
+        mexican = {
+            "external_id": "34935660",
+            "product_id": "34911711",
+            "variation_id": "34935660",
+            "title": "کاسه برنجین میگو پلو میکس مکزیکی",
+        }
+
+        self.assertEqual(snapp_sync._find_mapped_local_item(simple, local_items)["name"], local_items[0]["name"])
+        self.assertEqual(snapp_sync._find_mapped_local_item(mexican, local_items)["name"], local_items[0]["name"])
+
+    def test_imported_modifier_variations_keep_their_titles_and_prices_on_the_shared_item(self):
+        order = normalize_snapp_order(
+            {
+                "id": "order-rice-options",
+                "orderItems": [
+                    {
+                        "id": "34911711",
+                        "productId": "34911711",
+                        "variationId": "34911711",
+                        "title": "کاسه برنجین میگو پلو میکس ساده",
+                        "price": 979000,
+                        "qty": 1,
+                    },
+                    {
+                        "id": "34935660",
+                        "productId": "34911711",
+                        "variationId": "34935660",
+                        "title": "کاسه برنجین میگو پلو میکس مکزیکی",
+                        "price": 999000,
+                        "qty": 1,
+                    },
+                ],
+            },
+            amount_multiplier=1,
+        )
+        with patch("restaurant.snapp_sync._resolve_item_code", return_value="ITEM-RICE-BOWL-SHRIMP"), patch.object(
+            snapp_sync, "_has_column", return_value=False
+        ), patch.object(snapp_sync, "_default_uom", return_value="Nos"):
+            rows = _build_sales_order_items(order)
+
+        self.assertEqual([row["item_code"] for row in rows], ["ITEM-RICE-BOWL-SHRIMP"] * 2)
+        self.assertEqual([row["description"] for row in rows], [
+            "کاسه برنجین میگو پلو میکس ساده",
+            "کاسه برنجین میگو پلو میکس مکزیکی",
+        ])
+        self.assertEqual([row["rate"] for row in rows], [979000, 999000])
 
     def test_extract_orders_from_nested_payload(self):
         payload = {"data": {"items": [{"id": "ord-1"}, {"id": "ord-2"}], "totalPages": 4}}
