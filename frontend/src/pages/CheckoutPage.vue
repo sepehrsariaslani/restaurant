@@ -83,7 +83,7 @@
         </section>
 
         <section class="order-flow-card checkout-confirmation-card">
-          <div class="checkout-card-heading"><div><p class="checkout-card-kicker">۴. مرور سفارش</p><h2>آیتم‌های سفارش</h2></div><a class="order-flow-secondary" href="/cart">ویرایش سبد</a></div>
+          <div class="checkout-card-heading"><div><p class="checkout-card-kicker">{{ orderReviewStep }}. مرور سفارش</p><h2>آیتم‌های سفارش</h2></div><a class="order-flow-secondary" href="/cart">ویرایش سبد</a></div>
           <div class="checkout-product-summary">
             <article v-for="line in cartLines" :key="line.id" class="checkout-product-row">
               <img :src="productImage(line)" :alt="line.item_title || line.title" width="68" height="68" loading="lazy" />
@@ -141,6 +141,7 @@ const paymentMethod = ref('')
 
 const context = computed(() => cartState.orderContext || {})
 const hasContext = computed(() => Boolean(context.value.order_type))
+const orderReviewStep = computed(() => context.value.order_type === 'pickup' ? '۵' : '۴')
 const cartLines = computed(() => cartState.lines)
 const discountAmount = computed(() => Number(couponResult.value?.discount_amount || 0))
 const totals = computed(() => calculateOrderTotals({ lines: cartLines.value, context: context.value, discount: discountAmount.value }))
