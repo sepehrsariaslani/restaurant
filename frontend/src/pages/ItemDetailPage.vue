@@ -546,20 +546,41 @@
       <section class="related-section" v-if="relatedItems.length">
         <h3 class="related-title">محصولات مرتبط</h3>
         <div class="related-scroll">
-          <a
+          <article
             v-for="ri in relatedItems"
             :key="ri.slug"
-            :href="`/item/${ri.slug}`"
             class="related-card"
           >
-            <div class="related-img-wrap">
-              <img :src="ri.image || fallbackImage" :alt="ri.title" loading="lazy" @error="onRelatedImageError" />
-            </div>
-            <div class="related-card-content">
-              <p class="related-name">{{ ri.title }}</p>
-              <strong class="related-price">{{ formatMoney(ri.base_price, currency) }}</strong>
-            </div>
-          </a>
+            <a :href="`/item/${ri.slug}`" class="related-card-link">
+              <div class="related-img-wrap">
+                <img :src="ri.image || fallbackImage" :alt="ri.title" loading="lazy" @error="onRelatedImageError" />
+                <span v-if="relatedUnavailableLabel(ri)" class="related-status-badge">
+                  {{ relatedUnavailableLabel(ri) }}
+                </span>
+              </div>
+              <div class="related-card-content">
+                <div class="related-heading-row">
+                  <p class="related-name">{{ ri.title }}</p>
+                  <strong class="related-price">{{ formatMoney(ri.base_price, currency) }}</strong>
+                </div>
+                <p v-if="ri.short_desc" class="related-description">{{ ri.short_desc }}</p>
+                <div v-if="relatedDetails(ri).length" class="related-details">
+                  <span v-for="detail in relatedDetails(ri)" :key="detail" class="related-detail-chip">{{ detail }}</span>
+                </div>
+              </div>
+            </a>
+            <button
+              class="related-add-btn"
+              type="button"
+              :disabled="Boolean(relatedUnavailableLabel(ri))"
+              :aria-label="relatedActionLabel(ri)"
+              :title="relatedActionLabel(ri)"
+              @click.stop.prevent="addRelatedItem(ri)"
+            >
+              <span aria-hidden="true">+</span>
+              <small v-if="relatedCartQuantity(ri)">{{ relatedCartQuantity(ri).toLocaleString('fa-IR') }}</small>
+            </button>
+          </article>
         </div>
       </section>
     </div>
@@ -642,7 +663,7 @@ import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney, normalizeMobile, parseQuery } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
-import { getLineById, upsertLine } from '@/stores/cartStore'
+import { cartState, getLineById, upsertLine } from '@/stores/cartStore'
 import { getItemReviews as getLocalItemReviews, addItemReview, getAverageRating as getLocalAverageRating, getReviewCount as getLocalReviewCount } from '@/utils/reviewsStore'
 
 const props = defineProps({
@@ -713,6 +734,76 @@ async function loadRelatedItems() {
     const data = await getRelatedItems(slug, 6)
     relatedItems.value = Array.isArray(data) ? data : []
   } catch (_) { relatedItems.value = [] }
+}
+
+function relatedUnavailableLabel(source = {}) {
+  if (Number(source?.out_of_stock ?? source?.restaurant_out_of_stock ?? 0) === 1) return 'ناموجود'
+  if (Number(source?.stock_out || 0) === 1) return 'اتمام موجودی'
+  if (Number(source?.coming_soon ?? source?.restaurant_coming_soon ?? 0) === 1) return 'به‌زودی'
+  return ''
+}
+
+function relatedNeedsOptions(source = {}) {
+  return Number(source?.has_customization || 0) === 1 || (
+    Number(source?.restaurant_is_customizable || 0) === 1 &&
+    Number(source?.restaurant_builder_active || 0) === 1
+  )
+}
+
+function relatedActionLabel(source = {}) {
+  const unavailable = relatedUnavailableLabel(source)
+  if (unavailable) return unavailable
+  return relatedNeedsOptions(source)
+    ? `انتخاب گزینه‌های ${source?.title || 'محصول'}`
+    : `افزودن ${source?.title || 'محصول'} به سبد`
+}
+
+function relatedDetails(source = {}) {
+  const values = [source?.category_title, source?.subcategory_title]
+  const tags = Array.isArray(source?.tags) ? source.tags : []
+  values.push(...tags)
+  const kcal = Number(source?.nutrition?.kcal ?? source?.nutrition_kcal ?? 0)
+  if (Number.isFinite(kcal) && kcal > 0) values.push(`${Math.round(kcal).toLocaleString('fa-IR')} کیلوکالری`)
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 4)
+}
+
+function relatedCartQuantity(source = {}) {
+  const slug = String(source?.slug || '').trim()
+  if (!slug) return 0
+  return cartState.lines
+    .filter((line) => String(line?.item_slug || '').trim() === slug)
+    .reduce((quantity, line) => quantity + Number(line?.qty || 0), 0)
+}
+
+function addRelatedItem(source = {}) {
+  if (!source?.slug || relatedUnavailableLabel(source)) return
+  if (relatedNeedsOptions(source)) {
+    window.location.href = `/item/${source.slug}`
+    return
+  }
+
+  const slug = String(source.slug).trim()
+  const basePrice = Number(source.base_price || 0)
+  const existing = cartState.lines.find((line) => (
+    String(line?.item_slug || '').trim() === slug &&
+    !(Array.isArray(line?.ingredient_catalog) && line.ingredient_catalog.length) &&
+    !(Array.isArray(line?.modifier_groups_catalog) && line.modifier_groups_catalog.length)
+  ))
+  const nextQuantity = Math.max(Number(existing?.qty || 0) + 1, 1)
+  upsertLine({
+    ...(existing || {}),
+    id: existing?.id,
+    item_slug: slug,
+    item_title: source.title,
+    item_image: source.image || '',
+    base_price: basePrice,
+    qty: nextQuantity,
+    unit_price_preview: Number(existing?.unit_price_preview || basePrice),
+    line_total_preview: Number(existing?.unit_price_preview || basePrice) * nextQuantity,
+    customization: existing?.customization || { ingredient_adjustments: [], selected_modifiers: [] },
+    ingredient_catalog: [],
+    modifier_groups_catalog: [],
+  })
 }
 
 // ─── Review validation ───────────────────────────────────────────────
@@ -2243,65 +2334,153 @@ onUnmounted(() => {
 }
 .related-scroll::-webkit-scrollbar { display: none; }
 .related-card {
-  flex: 0 0 min(92vw, 26rem);
-  display: flex;
-  flex-direction: column;
+  flex: 0 0 min(88vw, 25rem);
+  position: relative;
   overflow: hidden;
-  padding: 0.35rem;
   border: 1px solid var(--ds-color-border);
-  border-radius: 24px;
-  background: var(--ds-color-product-media-surface);
+  border-radius: 22px;
+  background: var(--ds-color-surface-raised, #fff);
   box-shadow: var(--ds-shadow-sm);
-  text-decoration: none;
   color: inherit;
   scroll-snap-align: start;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 .related-card:hover {
   transform: translateY(-2px);
-  border-color: var(--ds-color-product-accent);
+  border-color: var(--ds-color-action-primary);
   box-shadow: var(--ds-shadow-md);
 }
-.related-card:focus-visible {
-  outline: 3px solid var(--ds-color-product-accent);
+.related-card:focus-within {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
   outline-offset: 3px;
+}
+.related-card-link {
+  display: block;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
 }
 .related-img-wrap {
   width: 100%;
-  aspect-ratio: 2 / 1;
-  border-radius: 20px;
+  aspect-ratio: 1.9 / 1;
   overflow: hidden;
-  background: var(--ds-color-product-media-surface);
+  background: var(--ds-color-surface-raised, #fff);
+  border-bottom: 1px solid var(--ds-color-border);
+  position: relative;
 }
 .related-img-wrap img {
   width: 100%;
   height: 100%;
-  padding: 0.45rem;
+  padding: 0.85rem;
   box-sizing: border-box;
   object-fit: contain;
+  object-position: center;
   display: block;
 }
-.related-card-content {
+.related-status-badge {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-start: 0.75rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: var(--ds-color-status-danger-soft);
+  color: var(--ds-color-status-danger);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.related-add-btn {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 0.65rem;
+  inset-inline-end: 0.65rem;
+  width: 2.65rem;
+  height: 2.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ds-color-product-accent, #c97852);
+  color: var(--ds-color-text-inverse);
+  box-shadow: 0 4px 12px rgb(52 38 31 / 18%);
+  cursor: pointer;
+  transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
+}
+.related-add-btn span { font-size: 1.65rem; line-height: 1; font-weight: 500; }
+.related-add-btn small {
+  position: absolute;
+  inset-block-end: -0.3rem;
+  inset-inline-start: -0.3rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
   display: grid;
-  gap: 0.2rem;
-  padding: 0.65rem 0.8rem 0.75rem;
+  place-items: center;
+  padding: 0 0.2rem;
+  border: 2px solid var(--ds-color-surface-raised);
+  border-radius: 999px;
+  background: var(--ds-color-text-primary);
+  color: var(--ds-color-text-inverse);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+.related-add-btn:hover:not(:disabled) { transform: scale(1.06); background: var(--ds-color-action-accent, #c98d42); }
+.related-add-btn:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
+.related-add-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+.related-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem 1rem;
   text-align: right;
+}
+.related-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
 }
 .related-name {
   margin: 0;
-  font-size: 0.95rem;
+  min-width: 0;
+  font-size: 1rem;
   color: var(--text-primary, #3f2a1d);
   font-weight: 700;
   line-height: 1.5;
+}
+.related-price {
+  flex: 0 0 auto;
+  padding-top: 0.1rem;
+  font-size: 0.92rem;
+  color: var(--ds-color-action-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.related-description {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.7;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.related-price {
-  font-size: 0.88rem;
-  color: var(--ds-color-product-accent);
-  font-variant-numeric: tabular-nums;
+.related-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.related-detail-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -2563,7 +2742,8 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .related-card,
-  .related-card:hover { transition: none; transform: none; }
+  .related-card:hover,
+  .related-add-btn { transition: none; transform: none; }
 }
 
 /* ════════════════════════════════════════════════════════════════
