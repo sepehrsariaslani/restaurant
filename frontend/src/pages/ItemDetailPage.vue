@@ -115,10 +115,11 @@
         <p class="item-desc">{{ item.long_desc || item.short_desc || 'توضیح تکمیلی ثبت نشده است.' }}</p>
 
         <!-- Tabs -->
-        <div class="detail-tabs">
+        <div class="detail-tabs" role="group" aria-label="بخش‌های اطلاعات محصول">
           <button
             class="detail-tab"
             :class="{ active: activeTab === 'details' }"
+            :aria-pressed="activeTab === 'details'"
             @click="activeTab = 'details'"
             type="button"
           >
@@ -127,6 +128,7 @@
           <button
             class="detail-tab"
             :class="{ active: activeTab === 'ingredients' }"
+            :aria-pressed="activeTab === 'ingredients'"
             @click="activeTab = 'ingredients'"
             type="button"
           >
@@ -136,6 +138,7 @@
             v-if="isBuilderEnabled"
             class="detail-tab"
             :class="{ active: activeTab === 'builder' }"
+            :aria-pressed="activeTab === 'builder'"
             @click="activeTab = 'builder'"
             type="button"
           >
@@ -144,6 +147,7 @@
           <button
             class="detail-tab"
             :class="{ active: activeTab === 'reviews' }"
+            :aria-pressed="activeTab === 'reviews'"
             @click="activeTab = 'reviews'"
             type="button"
           >
@@ -363,16 +367,18 @@
             <p class="item-desc">{{ item.long_desc || item.short_desc || 'توضیح تکمیلی ثبت نشده است.' }}</p>
 
             <!-- Tabs -->
-            <div class="detail-tabs desktop-tabs">
+            <div class="detail-tabs desktop-tabs" role="group" aria-label="بخش‌های اطلاعات محصول">
               <button
                 class="detail-tab"
                 :class="{ active: activeTab === 'details' }"
+                :aria-pressed="activeTab === 'details'"
                 @click="activeTab = 'details'"
                 type="button"
               >اطلاعات کلی</button>
               <button
                 class="detail-tab"
                 :class="{ active: activeTab === 'ingredients' }"
+                :aria-pressed="activeTab === 'ingredients'"
                 @click="activeTab = 'ingredients'"
                 type="button"
               >{{ ingredientTabLabel }}</button>
@@ -380,12 +386,14 @@
                 v-if="isBuilderEnabled"
                 class="detail-tab"
                 :class="{ active: activeTab === 'builder' }"
+                :aria-pressed="activeTab === 'builder'"
                 @click="activeTab = 'builder'"
                 type="button"
               >سفارشی‌سازی</button>
               <button
                 class="detail-tab"
                 :class="{ active: activeTab === 'reviews' }"
+                :aria-pressed="activeTab === 'reviews'"
                 @click="activeTab = 'reviews'"
                 type="button"
               >
@@ -1623,15 +1631,15 @@ onUnmounted(() => {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.82);
+  background: color-mix(in srgb, var(--ds-color-surface-raised, #fff) 84%, transparent);
   backdrop-filter: blur(8px);
   border: none;
   cursor: pointer;
   font-size: 1.3rem;
-  color: var(--text-primary, #3f2a1d);
+  color: var(--ds-color-text-primary, var(--text-primary, #3f2a1d));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1643,23 +1651,39 @@ onUnmounted(() => {
 
 .gallery-dots {
   position: absolute;
-  bottom: 0.75rem;
+  bottom: 0.45rem;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 0.35rem;
+  gap: 0;
   z-index: 2;
 }
 
 .gallery-dot {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+}
+.gallery-dot::before {
+  content: '';
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.55);
-  cursor: pointer;
-  transition: background 0.2s, width 0.2s;
+  background: rgba(255,255,255,0.72);
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.24);
+  transition: background 0.2s, width 0.2s, border-radius 0.2s;
 }
-.gallery-dot.active { background: #fff; width: 20px; border-radius: 4px; }
+.gallery-dot.active::before { background: #fff; width: 20px; border-radius: 4px; }
+.gallery-dot:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: -2px;
+}
 
 /* Overlay nav buttons on the hero image */
 .hero-nav {
@@ -1680,16 +1704,16 @@ onUnmounted(() => {
 }
 
 .nav-circle {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.82);
+  background: color-mix(in srgb, var(--ds-color-surface-raised, #fff) 84%, transparent);
   backdrop-filter: blur(8px);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-primary, #3f2a1d);
+  color: var(--ds-color-text-primary, var(--text-primary, #3f2a1d));
   font-size: 1.2rem;
   cursor: pointer;
   text-decoration: none;
@@ -1800,7 +1824,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.4rem;
   padding: 0.3rem;
-  background: var(--theme-surface-alt, #f1e7db);
+  background: var(--ds-color-surface-muted, var(--theme-surface-alt, #f1e7db));
   border-radius: 16px;
   position: sticky;
   top: 0.5rem;
@@ -1809,11 +1833,12 @@ onUnmounted(() => {
 
 .detail-tab {
   flex: 1;
-  padding: 0.6rem 0.4rem;
+  min-height: 44px;
+  padding: 0.55rem 0.4rem;
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, var(--text-muted, #846b58));
   font-family: inherit;
   font-size: 0.82rem;
   font-weight: 600;
@@ -1827,14 +1852,14 @@ onUnmounted(() => {
 }
 
 .detail-tab.active {
-  background: var(--accent-green, #6f4a31);
-  color: #fff;
+  background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
+  color: var(--ds-color-text-inverse, #fff);
   box-shadow: 0 4px 12px rgb(var(--palette-deep-sapphire-rgb) / 0.25);
 }
 
 .detail-tab:not(.active):hover {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
-  color: var(--text-primary, #3f2a1d);
+  background: var(--ds-color-action-primary-soft, rgb(var(--palette-deep-sapphire-rgb) / 0.06));
+  color: var(--ds-color-text-primary, var(--text-primary, #3f2a1d));
 }
 
 .tab-badge {
@@ -2175,8 +2200,8 @@ onUnmounted(() => {
   bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
   left: 0.5rem;
   right: 0.5rem;
-  background: #fff;
-  border: 1px solid var(--glass-border, #e5ddd4);
+  background: var(--ds-color-surface-raised, #fff);
+  border: 1px solid var(--ds-color-border, var(--glass-border, #e5ddd4));
   box-shadow: 0 10px 30px rgba(0,0,0,0.12);
   padding: 0.6rem 0.7rem;
   display: flex;
@@ -2205,12 +2230,12 @@ onUnmounted(() => {
   text-align: center;
 }
 .qty-btn {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   font-size: 1.1rem;
   cursor: pointer;
   display: flex;
@@ -2237,11 +2262,12 @@ onUnmounted(() => {
 .bottom-price strong { font-size: 1.05rem; color: var(--text-primary, #3f2a1d); font-weight: 800; }
 
 .add-to-cart-btn {
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   border: none;
   border-radius: 999px;
   padding: 0.75rem 1.3rem;
@@ -2792,6 +2818,13 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .detail-page :deep(*) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .related-card,
   .related-card:hover,
   .related-add-btn { transition: none; transform: none; }

@@ -107,11 +107,13 @@ test('menu and product detail replace failed optional images with their designed
 })
 
 test('customer menu starts loading immediately and exposes accessible responsive controls', async () => {
-  const [menu, categoryRail, bottomNav, orderContext] = await Promise.all([
+  const [menu, categoryRail, bottomNav, orderContext, productCard, detail] = await Promise.all([
     source('pages/MenuPage.vue'),
     source('components/CategoryImageRail.vue'),
     source('components/MobileBottomNav.vue'),
     source('components/OrderContextStrip.vue'),
+    source('components/MenuProductCard.vue'),
+    source('pages/ItemDetailPage.vue'),
   ])
 
   assert.match(menu, /const loading = ref\(true\)/)
@@ -128,6 +130,14 @@ test('customer menu starts loading immediately and exposes accessible responsive
   assert.match(bottomNav, /--ds-color-action-primary/)
   assert.match(orderContext, /min-height:\s*44px/)
   assert.match(orderContext, /--ds-color-surface-raised/)
+  assert.match(productCard, /const isUnavailable = computed\(\(\) => isComingSoon\.value \|\| isStockOut\.value \|\| isOutOfStock\.value \|\| isTemporarilyUnavailable\.value\)/)
+  assert.match(productCard, /if \(isUnavailable\.value\) return/)
+  assert.match(productCard, /out_of_stock_until/)
+  assert.match(detail, /const isUnavailable = computed\(\(\) => isOutOfStock\.value \|\| isStockOut\.value \|\| isComingSoon\.value\)/)
+  assert.match(detail, /:disabled="isUnavailable"/)
+  assert.doesNotMatch(detail, /unavailableReason \|\| isBuilderEnabled \?/)
+  assert.match(detail, /class="gallery-dot"[\s\S]*:aria-pressed="galleryIndex === idx"/)
+  assert.match(detail, /const loading = ref\(true\)/)
 })
 
 test('delivery choices include configured company branches and exclude table locations', () => {

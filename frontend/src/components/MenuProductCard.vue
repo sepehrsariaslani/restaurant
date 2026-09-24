@@ -96,7 +96,7 @@
               <strong>{{ cartQty }}</strong>
               <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
             </div>
-            <button v-if="isCustomizable && !isTemporarilyUnavailable" class="add-btn add-btn--pill customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+            <button v-if="isCustomizable && !isUnavailable" class="add-btn add-btn--pill customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
               <span>بساز</span>
               <span class="add-circle"><Pencil :size="14" /></span>
             </button>
@@ -145,7 +145,7 @@
             <Layers :size="13" />
             BOM
           </button>
-          <button v-if="isCustomizable && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+          <button v-if="isCustomizable && !isUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
             <span class="add-icon"><Pencil :size="15" /></span>
           </button>
           <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
@@ -166,7 +166,7 @@
           {{ item.prep_time_mins }} دقیقه
         </span>
         <span class="unavailable-badge grid-badge" v-if="isTemporarilyUnavailable">ناموجود</span>
-        <button class="like-btn grid-like" type="button" :aria-label="`علاقه‌مندی`" @click.prevent="toggleLike">
+        <button class="like-btn grid-like" type="button" :aria-label="liked ? 'حذف از علاقه‌مندی' : 'افزودن به علاقه‌مندی'" :aria-pressed="liked" @click.prevent="toggleLike">
           <svg width="17" height="17" viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </button>
       </a>
@@ -197,7 +197,7 @@
               <strong>{{ cartQty }}</strong>
               <button type="button" class="qty-step" @click.prevent="$emit('quick-increase', item)"><Plus :size="13" /></button>
             </div>
-            <button v-if="isCustomizable && !isTemporarilyUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
+            <button v-if="isCustomizable && !isUnavailable" class="add-btn customize-btn" type="button" :aria-label="`سفارشی‌سازی ${item.title}`" @click.prevent="handleCustomize">
               <span class="add-icon"><Pencil :size="15" /></span>
             </button>
             <button v-else-if="!isUnavailable" class="add-btn" type="button" :class="{ added: justAdded, loading: isAdding }" :aria-label="`افزودن ${item.title} به سبد`" @click.prevent="handleAdd">
@@ -270,7 +270,7 @@ onMounted(() => {
 const reviewCount = computed(() => getReviewCount(props.item?.slug || ''))
 
 function handleAdd() {
-  if (isComingSoon.value) return
+  if (isUnavailable.value) return
   emit('quick-add', props.item)
   justAdded.value = true
   isAdding.value = true
@@ -324,17 +324,18 @@ const isStockOut = computed(() => Number(props.item?.stock_out || 0) === 1)
 const isOutOfStock = computed(() => Number(props.item?.out_of_stock ?? props.item?.restaurant_out_of_stock ?? 0) === 1)
 const unavailableReason = computed(() => {
   if (isOutOfStock.value) return 'ناموجود'
-  if (isStockOut.value) return 'اتمام'
+  if (isStockOut.value) return 'اتمام موجودی'
   return ''
 })
 const isTemporarilyUnavailable = computed(() => {
-  if (Number(props.item?.is_temporarily_unavailable || 0) !== 1) return false
-  const until = props.item?.unavailable_until || ''
-  if (!until) return true
+  const flagged = Number(props.item?.is_temporarily_unavailable || 0) === 1
+  const until = props.item?.unavailable_until || props.item?.out_of_stock_until || props.item?.restaurant_out_of_stock_until || ''
+  if (!until) return flagged
   const untilDate = new Date(until)
+  if (Number.isNaN(untilDate.getTime())) return flagged
   return untilDate > new Date()
 })
-const isUnavailable = computed(() => isComingSoon.value || isTemporarilyUnavailable.value)
+const isUnavailable = computed(() => isComingSoon.value || isStockOut.value || isOutOfStock.value || isTemporarilyUnavailable.value)
 const isCustomizable = computed(() =>
   Number(props.item?.restaurant_is_customizable || 0) === 1 &&
   Number(props.item?.restaurant_builder_active || 1) === 1,
@@ -345,7 +346,7 @@ const displayBasePriceText = computed(() => {
 })
 
 function handleCustomize() {
-  if (!props.item?.slug) return
+  if (!props.item?.slug || isUnavailable.value) return
   window.location.href = `/item/${props.item.slug}`
 }
 </script>
@@ -385,7 +386,7 @@ function handleCustomize() {
 
 /* Like button */
 .like-btn {
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;
   border-radius: 50%;
   border: 1.5px solid rgb(var(--palette-deep-saffron-rgb) / 0.3);
   background: rgb(var(--palette-eggshell-rgb) / 0.74);
@@ -399,7 +400,7 @@ function handleCustomize() {
 
 /* Glass-style add button */
 .add-btn {
-  width: 42px; height: 42px;
+  width: 44px; height: 44px;
   border-radius: 14px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.18);
   background: rgb(var(--palette-eggshell-rgb) / 0.92);
@@ -424,12 +425,12 @@ function handleCustomize() {
 }
 .add-btn.added {
   background: var(--palette-deep-sapphire);
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   border-color: var(--palette-deep-sapphire);
   box-shadow: 0 4px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.30);
 }
 .add-btn:focus-visible {
-  outline: 2px solid var(--palette-deep-saffron);
+  outline: 3px solid var(--ds-color-focus-ring, var(--palette-deep-saffron));
   outline-offset: 2px;
 }
 
@@ -457,7 +458,7 @@ function handleCustomize() {
 }
 .add-btn--pill.added .add-circle {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
 }
 
 /* Reduced motion */
@@ -482,7 +483,7 @@ function handleCustomize() {
     border-radius: 12px;
   }
   .add-btn--pill {
-    height: 42px;
+    height: 44px;
     padding: 0 1rem 0 1.2rem;
     font-size: 0.82rem;
   }
@@ -504,6 +505,10 @@ function handleCustomize() {
   font-size: 1rem;
 }
 .detail-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.34);
   padding: 0.3rem 0.72rem;
@@ -608,27 +613,27 @@ function handleCustomize() {
 }
 
 .qty-step {
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.38);
-  background: #fff;
-  color: var(--ink-800, #1e1a17);
+  background: var(--ds-color-surface-raised, #fff);
+  color: var(--ds-color-text-primary, var(--ink-800, #1e1a17));
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
 }
 
 .qty-pill--compact .qty-step {
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
   font-size: 0.92rem;
 }
 
 /* ─── LAYOUT: compact (modern healthy food card) ─── */
 .layout--compact {
   display: grid;
-  grid-template-columns: 102px minmax(0, 1fr) 34px;
+  grid-template-columns: 102px minmax(0, 1fr) 44px;
   gap: 10px;
   align-items: center;
   direction: rtl;
@@ -785,10 +790,10 @@ function handleCustomize() {
 
 /* Add button — compact accent */
 .add-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   background: var(--add-btn-bg, var(--accent-gold));
-  color: #ffffff;
+  color: var(--ds-color-text-inverse, #ffffff);
   border: none;
   border-radius: 13px;
   box-shadow: 0 8px 16px rgb(var(--palette-deep-saffron-rgb) / 0.22);
@@ -845,7 +850,7 @@ function handleCustomize() {
 /* ─── Responsive: compact layout ─── */
 @media (max-width: 600px) {
   .layout--compact {
-    grid-template-columns: 86px minmax(0, 1fr) 32px;
+    grid-template-columns: 86px minmax(0, 1fr) 44px;
     min-height: 122px;
     padding: 10px;
     gap: 8px;
@@ -876,8 +881,8 @@ function handleCustomize() {
   }
 
   .add-btn {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 13px;
   }
 
@@ -897,7 +902,7 @@ function handleCustomize() {
 
 @media (max-width: 360px) {
   .layout--compact {
-    grid-template-columns: 76px minmax(0, 1fr) 30px;
+    grid-template-columns: 76px minmax(0, 1fr) 44px;
     min-height: 112px;
     padding: 9px;
     gap: 6px;
