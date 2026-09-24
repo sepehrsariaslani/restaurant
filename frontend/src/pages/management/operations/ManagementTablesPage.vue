@@ -17,9 +17,10 @@
           />
         </div>
         <button class="primary-btn add-table-btn" type="button" @click="openCreateTable">
-          + افزودن میز
+          <Plus :size="17" />
+          <span>افزودن میز</span>
         </button>
-        <button class="refresh-btn" type="button" :disabled="loading" @click="loadTables" title="بروزرسانی اطلاعات">
+        <button class="refresh-btn" type="button" :disabled="loading" @click="loadTables" title="بروزرسانی اطلاعات" aria-label="بروزرسانی اطلاعات">
           <RefreshCcw :size="18" :class="{ 'is-spinning': loading }" />
         </button>
       </div>
@@ -88,11 +89,29 @@
       </div>
     </div>
 
-    <p class="muted-loading" v-if="loading && !tables.length">در حال همگام‌سازی سالن...</p>
+    <div v-if="loading && !tables.length" class="state-panel state-panel--loading" role="status" aria-live="polite">
+      <RefreshCcw :size="24" class="is-spinning" aria-hidden="true" />
+      <strong>در حال همگام‌سازی سالن</strong>
+      <span>میزها، نشست‌ها و رزروهای native در حال دریافت هستند.</span>
+    </div>
+
     <div class="workspace-alerts" v-if="error || successMessage">
       <p class="error-alert" v-if="error"><AlertCircle :size="16" /> {{ error }}</p>
       <p class="success-alert" v-if="successMessage"><CheckCircle2 :size="16" /> {{ successMessage }}</p>
+      <button v-if="error && !tables.length" class="secondary-btn alert-retry" type="button" @click="loadTables">
+        تلاش دوباره
+      </button>
     </div>
+
+    <section v-else-if="!loading && !tables.length" class="state-panel state-panel--empty">
+      <div class="empty-icon-wrapper"><Armchair :size="34" /></div>
+      <strong>هنوز میزی برای این سالن ثبت نشده است</strong>
+      <p>اولین میز را در native Restaurant Table بسازید تا در نمای سالن و POS قابل استفاده باشد.</p>
+      <button class="primary-btn" type="button" @click="openCreateTable">
+        <Plus :size="17" />
+        <span>افزودن اولین میز</span>
+      </button>
+    </section>
 
     <section v-if="creatingTable" class="create-table-card">
       <div>
@@ -113,7 +132,9 @@
       </div>
     </section>
 
-    <template v-if="!loading || tables.length">
+    <p class="muted-loading" v-if="loading && tables.length" role="status" aria-live="polite">در حال تازه‌سازی اطلاعات سالن...</p>
+
+    <template v-if="tables.length">
       <section v-if="activeTab === 'floor'" class="workspace-floor">
         <div class="floor-grid-area">
           <div class="floor-filters" v-if="floorCards.length || search">
@@ -140,7 +161,7 @@
             <div class="empty-icon-wrapper"><Armchair :size="32" /></div>
             <strong>میزی یافت نشد</strong>
             <p>در این نما با فیلترهای فعلی موردی وجود ندارد.</p>
-            <button v-if="search || statusFilter" class="secondary-btn mt-2" @click="search = ''; statusFilter = ''">پاک کردن فیلترها</button>
+            <button v-if="search || statusFilter" class="secondary-btn mt-2" type="button" @click="search = ''; statusFilter = ''">پاک کردن فیلترها</button>
           </div>
         </div>
 
@@ -158,6 +179,224 @@
             @open-reservations="openReservationsForTable"
             @delete="deleteTable"
           />
+
+          <section v-if="selectedTableDetail.table" class="table-operations-panel" aria-labelledby="table-operations-title">
+            <header class="operations-panel-head">
+              <div>
+                <span class="section-eyebrow">عملیات native میز</span>
+                <h2 id="table-operations-title">سفارش و نشست {{ selectedTableDetail.table.table_number || selectedTableDetail.table.name }}</h2>
+                <p v-if="selectedTableDetail.table.location" class="operations-location">
+                  <MapPin :size="14" />
+                  <span>{{ selectedTableDetail.table.location }}</span>
+                </p>
+              </div>
+              <span class="operation-source-badge">Restaurant Table</span>
+            </header>
+
+            <div v-if="tableDetailLoading" class="inline-state" role="status" aria-live="polite">
+              <RefreshCcw :size="18" class="is-spinning" />
+              <span>در حال دریافت نشست و سفارش‌های میز...</span>
+            </div>
+            <div v-else-if="tableDetailError" class="inline-state inline-state--error" role="alert">
+              <AlertCircle :size="18" />
+              <span>{{ tableDetailError }}</span>
+              <button class="secondary-btn" type="button" @click="loadSelectedTableDetail">تلاش دوباره</button>
+            </div>
+
+            <template v-else>
+              <div class="operation-summary-grid">
+                <div class="operation-summary-card">
+                  <Users :size="17" />
+                  <span>مشتری / نفرات</span>
+                  <strong>{{ customerDraft.customer_name || 'ثبت نشده' }} · {{ Number(customerDraft.guest_count || 0).toLocaleString('fa-IR') }} نفر</strong>
+                </div>
+                <div class="operation-summary-card">
+                  <ClipboardList :size="17" />
+                  <span>سفارش‌های نشست</span>
+                  <strong>{{ selectedTableOrders.length.toLocaleString('fa-IR') }} سفارش</strong>
+                </div>
+                <div class="operation-summary-card">
+                  <ReceiptText :size="17" />
+                  <span>جمع نشست</span>
+                  <strong dir="ltr">{{ formatMoney(selectedTableTotals.session_grand_total || 0, currency) }}</strong>
+                </div>
+                <div class="operation-summary-card">
+                  <Clock3 :size="17" />
+                  <span>وضعیت نشست</span>
+                  <strong>{{ selectedTableLiveDetail?.session ? tableSessionStatusLabel(selectedTableLiveDetail.session.status) : 'بدون نشست فعال' }}</strong>
+                </div>
+              </div>
+
+              <section class="operation-section customer-operation-section">
+                <div class="operation-section-head">
+                  <div>
+                    <h3>مشتری و تعداد نفرات</h3>
+                    <p>اطلاعات در متادیتای نشست native همین میز ذخیره می‌شود.</p>
+                  </div>
+                  <UserRound :size="19" />
+                </div>
+                <form class="customer-form" @submit.prevent="assignCustomer">
+                  <label>
+                    نام مشتری
+                    <input v-model.trim="customerDraft.customer_name" class="input" placeholder="مثلاً علی رضایی" autocomplete="name" />
+                  </label>
+                  <label>
+                    موبایل
+                    <input v-model.trim="customerDraft.customer_mobile" class="input" dir="ltr" inputmode="tel" placeholder="۰۹۱۲..." autocomplete="tel" />
+                  </label>
+                  <label>
+                    تعداد نفرات
+                    <input v-model.number="customerDraft.guest_count" class="input" type="number" min="1" step="1" />
+                  </label>
+                  <label>
+                    نوع مشتری
+                    <input v-model.trim="customerDraft.customer_type" class="input" placeholder="اختیاری" />
+                  </label>
+                  <button class="primary-btn customer-save-btn" type="submit" :disabled="tableOperationKey === 'customer'">
+                    <Save :size="16" />
+                    <span>{{ tableOperationKey === 'customer' ? 'در حال ثبت...' : 'ثبت روی نشست' }}</span>
+                  </button>
+                </form>
+              </section>
+
+              <section class="operation-section" v-if="selectedTableLiveDetail?.session?.name">
+                <div class="operation-section-head">
+                  <div>
+                    <h3>جابجایی یا ترکیب نشست</h3>
+                    <p>فقط مقصدهای معتبر native نمایش داده می‌شوند.</p>
+                  </div>
+                  <ArrowRightLeft :size="19" />
+                </div>
+                <div class="session-routing-grid">
+                  <div class="routing-action">
+                    <label for="move-table-target">انتقال به میز آزاد</label>
+                    <div class="routing-controls">
+                      <select id="move-table-target" v-model="moveTableTarget" class="input">
+                        <option value="">انتخاب میز</option>
+                        <option v-for="table in movableTables" :key="table.name" :value="table.name">
+                          {{ table.table_number || table.name }}{{ table.location ? ` · ${table.location}` : '' }}
+                        </option>
+                      </select>
+                      <button class="secondary-btn" type="button" :disabled="!moveTableTarget || tableOperationKey === 'move'" @click="moveSelectedTableSession">
+                        {{ tableOperationKey === 'move' ? 'در حال انتقال...' : 'انتقال' }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="routing-action">
+                    <label for="merge-table-target">ترکیب با نشست فعال</label>
+                    <div class="routing-controls">
+                      <select id="merge-table-target" v-model="mergeTableTarget" class="input">
+                        <option value="">انتخاب میز</option>
+                        <option v-for="table in mergeableTables" :key="table.name" :value="table.name">
+                          {{ table.table_number || table.name }}{{ table.location ? ` · ${table.location}` : '' }}
+                        </option>
+                      </select>
+                      <button class="secondary-btn" type="button" :disabled="!mergeTableTarget || tableOperationKey === 'merge'" @click="mergeSelectedTableSession">
+                        {{ tableOperationKey === 'merge' ? 'در حال ترکیب...' : 'ترکیب' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="operation-section">
+                <div class="operation-section-head">
+                  <div>
+                    <h3>مدیریت سفارش‌های میز</h3>
+                    <p>وضعیت هر سفارش و آیتم‌های قابل ویرایش از facade native خوانده شده است.</p>
+                  </div>
+                  <ClipboardList :size="19" />
+                </div>
+                <div v-if="selectedTableOrders.length" class="table-order-list">
+                  <article v-for="order in selectedTableOrders" :key="order.name" class="table-order-card">
+                    <header class="table-order-head">
+                      <div>
+                        <strong>{{ order.order_code || order.name }}</strong>
+                        <span>{{ formatDateTime(order.created_at) }}</span>
+                      </div>
+                      <span class="order-status-badge" :class="`order-status-${order.status}`">{{ tableOrderStatusLabel(order.status) }}</span>
+                    </header>
+
+                    <div class="order-meta-row">
+                      <span>{{ order.items?.length?.toLocaleString('fa-IR') || '۰' }} قلم</span>
+                      <strong dir="ltr">{{ formatMoney(order.grand_total || 0, currency) }}</strong>
+                    </div>
+
+                    <div class="order-items" v-if="order.items?.length">
+                      <div v-for="item in order.items" :key="item.row_name || item.menu_item" class="order-item-row">
+                        <div class="order-item-copy">
+                          <strong>{{ item.menu_item_title || item.menu_item }}</strong>
+                          <span dir="ltr">{{ formatMoney(item.price_at_time || 0, currency) }}</span>
+                        </div>
+                        <div class="order-item-quantity">
+                          <button v-if="order.is_editable" class="quantity-btn" type="button" :disabled="tableOperationKey === `item:${order.name}:${item.row_name}`" :aria-label="`کاهش ${item.menu_item_title || item.menu_item}`" @click="updateOrderItem(order, item, -1)">−</button>
+                          <span>{{ Number(item.quantity || 0).toLocaleString('fa-IR') }}</span>
+                          <button v-if="order.is_editable" class="quantity-btn" type="button" :disabled="tableOperationKey === `item:${order.name}:${item.row_name}`" :aria-label="`افزایش ${item.menu_item_title || item.menu_item}`" @click="updateOrderItem(order, item, 1)">+</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <footer class="order-action-row">
+                      <button v-if="order.status === 'pending'" class="secondary-btn" type="button" :disabled="tableOperationKey === `order:${order.name}`" @click="transitionOrder(order, 'confirm')">تأیید سفارش</button>
+                      <button v-if="order.status === 'confirmed'" class="secondary-btn" type="button" :disabled="tableOperationKey === `order:${order.name}`" @click="transitionOrder(order, 'serve')">ثبت سرو</button>
+                      <button v-if="['confirmed', 'served'].includes(order.status)" class="primary-btn" type="button" :disabled="tableOperationKey === `order:${order.name}`" @click="transitionOrder(order, 'pay')">ثبت تسویه</button>
+                    </footer>
+                  </article>
+                </div>
+                <div v-else class="inline-empty-state">
+                  <ClipboardList :size="21" />
+                  <span>برای نشست این میز هنوز سفارشی ثبت نشده است.</span>
+                  <a class="secondary-btn" :href="`/management/pos?table=${encodeURIComponent(selectedTableDetail.table.name)}`">رفتن به POS</a>
+                </div>
+              </section>
+
+              <section class="operation-section" v-if="selectedTableRequests.length">
+                <div class="operation-section-head">
+                  <div>
+                    <h3>درخواست‌های میز</h3>
+                    <p>درخواست‌های pending را پس از رسیدگی ببندید.</p>
+                  </div>
+                  <MessageSquareText :size="19" />
+                </div>
+                <div class="table-request-list">
+                  <div v-for="request in selectedTableRequests" :key="request.name" class="table-request-row">
+                    <div>
+                      <strong>{{ tableRequestTypeLabel(request.request_type) }}</strong>
+                      <span>{{ request.description || 'بدون توضیح' }} · {{ formatDateTime(request.created_at) }}</span>
+                    </div>
+                    <button v-if="request.status === 'pending'" class="secondary-btn" type="button" :disabled="tableOperationKey === `request:${request.name}`" @click="resolveRequest(request)">
+                      {{ tableOperationKey === `request:${request.name}` ? 'در حال بستن...' : 'رفع شد' }}
+                    </button>
+                    <span v-else class="request-status">{{ request.status === 'resolved' ? 'رسیدگی شده' : request.status }}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="operation-section qr-menu-section">
+                <div class="operation-section-head">
+                  <div>
+                    <h3>QR و منوی همین میز</h3>
+                    <p>لینک و تصویر از endpoint واقعی native تولید می‌شوند.</p>
+                  </div>
+                  <QrCode :size="19" />
+                </div>
+                <div class="qr-menu-content">
+                  <div class="qr-preview" v-if="selectedTableQrUrl && !qrLoadError">
+                    <img :src="selectedTableQrUrl" :alt="`QR منوی ${selectedTableDetail.table.table_number || selectedTableDetail.table.name}`" @error="qrLoadError = true" />
+                  </div>
+                  <div v-else class="qr-preview qr-preview--empty"><QrCode :size="30" /><span>پیش‌نمایش QR در دسترس نیست</span></div>
+                  <div class="qr-menu-copy">
+                    <strong>{{ selectedTableMenuUrl ? 'مشتری با اسکن QR وارد منوی میز می‌شود.' : 'برای این میز token منوی عمومی برنگشته است.' }}</strong>
+                    <span v-if="selectedTableMenuUrl" class="qr-menu-url" dir="ltr">{{ selectedTableMenuUrl }}</span>
+                    <div class="qr-menu-actions">
+                      <a v-if="selectedTableMenuUrl" class="primary-btn" :href="selectedTableMenuUrl" target="_blank" rel="noopener">باز کردن منو <ExternalLink :size="15" /></a>
+                      <a v-if="selectedTableQrUrl" class="secondary-btn" :href="selectedTableQrUrl" target="_blank" rel="noopener">باز کردن QR <ExternalLink :size="15" /></a>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </template>
+          </section>
         </aside>
       </section>
 
@@ -196,7 +435,28 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Search, RefreshCcw, LayoutDashboard, CalendarDays, History, AlertCircle, CheckCircle2, Armchair } from 'lucide-vue-next'
+import {
+  AlertCircle,
+  Armchair,
+  ArrowRightLeft,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  ExternalLink,
+  History,
+  LayoutDashboard,
+  MapPin,
+  MessageSquareText,
+  Plus,
+  QrCode,
+  ReceiptText,
+  RefreshCcw,
+  Save,
+  Search,
+  UserRound,
+  Users,
+} from 'lucide-vue-next'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementReservationsPanel from '@/components/management/tables/ManagementReservationsPanel.vue'
 import ManagementSessionsPanel from '@/components/management/tables/ManagementSessionsPanel.vue'
@@ -204,13 +464,23 @@ import ManagementTableCard from '@/components/management/tables/ManagementTableC
 import ManagementTableDetailPanel from '@/components/management/tables/ManagementTableDetailPanel.vue'
 import {
   closeTableSession,
+  confirmTableOrder,
   createManagementTable,
   deleteManagementTable,
+  getTableDetail,
   getManagementTables,
+  assignTableSessionCustomer,
+  mergeTableSessions,
+  moveTableSession,
+  payTableOrder,
+  resolveTableRequest,
+  serveTableOrder,
   updateManagementTable,
   updateManagementTableReservation,
   updateManagementTableSession,
+  updateTableOrderItem,
 } from '@/utils/api'
+import { formatMoney } from '@/utils/format'
 import {
   buildFloorTableCards,
   buildSelectedTableDetail,
@@ -241,6 +511,16 @@ const savingMap = reactive({})
 const selectedTableName = ref('')
 const selectedReservationName = ref('')
 const selectedSessionName = ref('')
+
+const selectedTableLiveDetail = ref(null)
+const tableDetailLoading = ref(false)
+const tableDetailError = ref('')
+const tableOperationKey = ref('')
+const qrLoadError = ref(false)
+const moveTableTarget = ref('')
+const mergeTableTarget = ref('')
+const customerDraft = reactive(createCustomerDraft())
+let selectedTableDetailRequestKey = 0
 
 const tableDraft = reactive(createTableDraft())
 const reservationDraft = reactive(createReservationDraft())
@@ -289,6 +569,28 @@ const selectedTableDetail = computed(() =>
 const selectedReservation = computed(() => reservations.value.find((row) => row.name === selectedReservationName.value) || null)
 const selectedSession = computed(() => sessions.value.find((row) => row.name === selectedSessionName.value) || null)
 
+const selectedTableOrders = computed(() => (
+  Array.isArray(selectedTableLiveDetail.value?.orders) ? selectedTableLiveDetail.value.orders : []
+))
+const selectedTableRequests = computed(() => (
+  Array.isArray(selectedTableLiveDetail.value?.requests) ? selectedTableLiveDetail.value.requests : []
+))
+const selectedTableTotals = computed(() => selectedTableLiveDetail.value?.totals || {})
+const movableTables = computed(() => tables.value.filter((table) => (
+  table.name !== selectedTableName.value && !String(table.active_session || '').trim() && Number(table.is_active ?? 1) !== 0
+)))
+const mergeableTables = computed(() => tables.value.filter((table) => (
+  table.name !== selectedTableName.value && String(table.active_session || '').trim() && Number(table.is_active ?? 1) !== 0
+)))
+const selectedTableQrUrl = computed(() => {
+  const tableName = String(selectedTableLiveDetail.value?.table?.name || selectedTableName.value || '').trim()
+  return tableName ? `/api/method/restaurant.api.get_table_qr_svg?table=${encodeURIComponent(tableName)}` : ''
+})
+const selectedTableMenuUrl = computed(() => {
+  const token = String(selectedTableLiveDetail.value?.table?.qr_code_token || '').trim()
+  return token ? `/table/${encodeURIComponent(token)}` : ''
+})
+
 const hasTableChanges = computed(() => {
   if (!selectedTable.value) return false
   return ['table_number', 'status', 'location', 'notes', 'is_active', 'active_session'].some((key) => String(tableDraft[key] ?? '') !== String(selectedTable.value[key] ?? ''))
@@ -305,6 +607,10 @@ watch(selectedReservation, (row) => {
 watch(selectedSession, (row) => {
   Object.assign(sessionDraft, createSessionDraft(), row || {})
 }, { immediate: true })
+
+watch(selectedTableName, () => {
+  loadSelectedTableDetail()
+})
 
 function createTableDraft() {
   return {
@@ -348,8 +654,19 @@ function createSessionDraft() {
   }
 }
 
+function createCustomerDraft() {
+  return {
+    customer_name: '',
+    customer_mobile: '',
+    customer_type: '',
+    guest_count: 1,
+  }
+}
+
 function ensureSelections() {
-  if (tables.value.length && !tables.value.some((row) => row.name === selectedTableName.value)) {
+  if (!tables.value.length) {
+    selectedTableName.value = ''
+  } else if (!tables.value.some((row) => row.name === selectedTableName.value)) {
     selectedTableName.value = tables.value[0].name
   }
   const sortedReservations = sortReservations(reservations.value)
@@ -361,10 +678,10 @@ function ensureSelections() {
   }
 }
 
-async function loadTables() {
+async function loadTables({ preserveFeedback = false } = {}) {
   loading.value = true
   error.value = ''
-  successMessage.value = ''
+  if (!preserveFeedback) successMessage.value = ''
   try {
     const payload = await getManagementTables()
     tables.value = Array.isArray(payload?.tables) ? payload.tables : []
@@ -379,6 +696,44 @@ async function loadTables() {
   }
 }
 
+async function loadSelectedTableDetail() {
+  const tableName = String(selectedTableName.value || '').trim()
+  const requestKey = ++selectedTableDetailRequestKey
+  selectedTableDetailRequestKey = requestKey
+  tableDetailError.value = ''
+  qrLoadError.value = false
+  moveTableTarget.value = ''
+  mergeTableTarget.value = ''
+  selectedTableLiveDetail.value = null
+
+  if (!tableName) {
+    tableDetailLoading.value = false
+    Object.assign(customerDraft, createCustomerDraft())
+    return
+  }
+
+  tableDetailLoading.value = true
+  try {
+    const payload = await getTableDetail(tableName)
+    if (selectedTableDetailRequestKey !== requestKey) return
+    selectedTableLiveDetail.value = payload || null
+    const session = payload?.session || {}
+    Object.assign(customerDraft, createCustomerDraft(), {
+      customer_name: session.customer_name || '',
+      customer_mobile: session.customer_mobile || '',
+      customer_type: session.customer_type || '',
+      guest_count: Math.max(Number(session.guest_count || 1), 1),
+    })
+  } catch (detailError) {
+    if (selectedTableDetailRequestKey === requestKey) {
+      selectedTableLiveDetail.value = null
+      tableDetailError.value = detailError?.message || 'دریافت سفارش‌ها و نشست میز ناموفق بود.'
+    }
+  } finally {
+    if (selectedTableDetailRequestKey === requestKey) tableDetailLoading.value = false
+  }
+}
+
 async function withSaveState(key, action, successText = 'تغییرات با موفقیت ذخیره شد.') {
   if (!key) return
   savingMap[key] = true
@@ -387,7 +742,7 @@ async function withSaveState(key, action, successText = 'تغییرات با م�
   try {
     await action()
     successMessage.value = successText
-    await loadTables()
+    await loadTables({ preserveFeedback: true })
   } catch (saveError) {
     error.value = saveError.message || 'ذخیره اطلاعات ناموفق بود.'
   } finally {
@@ -434,7 +789,7 @@ async function createTable() {
     const result = await createManagementTable({ ...newTable, is_active: newTable.is_active ? 1 : 0 })
     creatingTable.value = false
     successMessage.value = `میز «${result?.table?.table_number || newTable.table_number}» با موفقیت اضافه شد.`
-    await loadTables()
+    await loadTables({ preserveFeedback: true })
     selectedTableName.value = result?.table?.name || selectedTableName.value
   } catch (createError) {
     error.value = createError.message || 'افزودن میز ناموفق بود.'
@@ -463,6 +818,7 @@ async function saveTable(row = tableDraft) {
       active_session: row.active_session,
     }),
   )
+  if (row.name === selectedTableName.value) await loadSelectedTableDetail()
 }
 
 async function saveReservation(row = reservationDraft) {
@@ -490,6 +846,7 @@ async function saveSession(row = sessionDraft) {
       note: row.note,
     }),
   )
+  if (row.table === selectedTableName.value) await loadSelectedTableDetail()
 }
 
 function resolveActiveSession(table) {
@@ -508,6 +865,135 @@ async function clearTableSession(table) {
   }
   if (!window.confirm(`سشن فعال ${targetTable.table_number || targetTable.name} بسته شود؟`)) return
   await withSaveState(session.name, () => closeTableSession(session.name), 'سشن با موفقیت بسته و میز خالی شد.')
+  if (targetTable.name === selectedTableName.value) await loadSelectedTableDetail()
+}
+
+async function runTableOperation(key, action, successText) {
+  if (!key || tableOperationKey.value) return
+  tableOperationKey.value = key
+  error.value = ''
+  successMessage.value = ''
+  try {
+    await action()
+    successMessage.value = successText
+    await loadTables({ preserveFeedback: true })
+    await loadSelectedTableDetail()
+  } catch (operationError) {
+    error.value = operationError?.message || 'عملیات میز انجام نشد.'
+  } finally {
+    tableOperationKey.value = ''
+  }
+}
+
+async function assignCustomer() {
+  const tableName = String(selectedTableName.value || '').trim()
+  if (!tableName) return
+  await runTableOperation(
+    'customer',
+    () => assignTableSessionCustomer({
+      table_name: tableName,
+      customer_name: customerDraft.customer_name,
+      mobile: customerDraft.customer_mobile,
+      customer_type: customerDraft.customer_type,
+      guest_count: Math.max(Number(customerDraft.guest_count || 1), 1),
+    }),
+    'اطلاعات مشتری روی نشست میز ثبت شد.',
+  )
+}
+
+async function updateOrderItem(order, item, quantityDelta) {
+  if (!order?.name || !item?.row_name || !order.is_editable) return
+  await runTableOperation(
+    `item:${order.name}:${item.row_name}`,
+    () => updateTableOrderItem({
+      order_name: order.name,
+      row_name: item.row_name,
+      quantity_delta: quantityDelta,
+    }),
+    'مقدار آیتم سفارش به‌روز شد.',
+  )
+}
+
+async function transitionOrder(order, transition) {
+  if (!order?.name) return
+  const actions = {
+    confirm: confirmTableOrder,
+    serve: serveTableOrder,
+    pay: payTableOrder,
+  }
+  const labels = {
+    confirm: 'سفارش تأیید شد.',
+    serve: 'سرو سفارش ثبت شد.',
+    pay: 'تسویه سفارش ثبت شد.',
+  }
+  if (!actions[transition]) return
+  await runTableOperation(`order:${order.name}`, () => actions[transition](order.name), labels[transition])
+}
+
+async function resolveRequest(request) {
+  if (!request?.name || request.status !== 'pending') return
+  await runTableOperation(
+    `request:${request.name}`,
+    () => resolveTableRequest(request.name),
+    'درخواست میز رسیدگی‌شده علامت خورد.',
+  )
+}
+
+async function moveSelectedTableSession() {
+  const sessionName = String(selectedTableLiveDetail.value?.session?.name || '').trim()
+  if (!sessionName || !moveTableTarget.value) return
+  await runTableOperation(
+    'move',
+    () => moveTableSession({ session_name: sessionName, target_table: moveTableTarget.value }),
+    'نشست به میز مقصد منتقل شد.',
+  )
+}
+
+async function mergeSelectedTableSession() {
+  const sessionName = String(selectedTableLiveDetail.value?.session?.name || '').trim()
+  if (!sessionName || !mergeTableTarget.value) return
+  if (!window.confirm('نشست این میز با نشست میز مقصد ترکیب شود؟')) return
+  await runTableOperation(
+    'merge',
+    () => mergeTableSessions({ source_session: sessionName, target_table: mergeTableTarget.value }),
+    'نشست‌ها با موفقیت ترکیب شدند.',
+  )
+}
+
+function tableOrderStatusLabel(status) {
+  return {
+    pending: 'در انتظار تأیید',
+    confirmed: 'تأیید شده',
+    served: 'سرو شده',
+    paid: 'تسویه شده',
+    cancelled: 'لغو شده',
+  }[String(status || '').toLowerCase()] || 'نامشخص'
+}
+
+function tableSessionStatusLabel(status) {
+  return String(status || '').toLowerCase() === 'closed' ? 'بسته شده' : 'فعال'
+}
+
+function tableRequestTypeLabel(type) {
+  return {
+    call_waiter: 'درخواست گارسون',
+    bill: 'درخواست صورت‌حساب',
+    water: 'درخواست آب',
+    service: 'درخواست خدمات',
+  }[String(type || '').toLowerCase()] || String(type || 'درخواست میز')
+}
+
+function formatDateTime(value) {
+  const text = String(value || '').trim()
+  if (!text) return '—'
+  const parsed = new Date(text.replace(' ', 'T'))
+  if (Number.isNaN(parsed.getTime())) return text
+  return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed)
 }
 
 function goToPos(table) {
