@@ -2559,9 +2559,11 @@ onUnmounted(() => {
     font-size: 1rem;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .related-card { transition: none; }
-  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .related-card,
+  .related-card:hover { transition: none; transform: none; }
 }
 
 /* ════════════════════════════════════════════════════════════════
