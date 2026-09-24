@@ -70,6 +70,15 @@ test('cart actions remain touch friendly, named, and tied to dynamic theme token
   assert.match(cart, /--ds-color-action-primary/)
 })
 
+test('delivery keeps manual coordinates visible when the map key is not configured', async () => {
+  const page = await source('pages/OrderDeliveryPage.vue')
+
+  assert.match(page, /<AddressPickerMap v-model="addressLocation" :config="mapConfig" \/>/)
+  assert.match(page, /<details class="advanced-location-box" :open="!String\(mapConfig\.api_key \|\| ''\)\.trim\(\)">/)
+  assert.match(page, /عرض جغرافیایی/)
+  assert.match(page, /طول جغرافیایی/)
+})
+
 test('Frappe serves checkout through the restaurant SPA route', async () => {
   const hooks = await readFile(new URL('../../restaurant/hooks.py', import.meta.url), 'utf8')
 

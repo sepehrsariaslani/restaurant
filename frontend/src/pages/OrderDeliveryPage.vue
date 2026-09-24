@@ -58,7 +58,7 @@
               <label class="order-flow-field"><span>واحد</span><input class="order-flow-input" v-model="address.unit" /></label>
             </div>
             <p class="order-flow-alert">در صورت عدم دسترسی به نقشه، آدرس را کامل و دقیق بنویسید. نیازی به وارد کردن مختصات نیست.</p>
-            <details class="advanced-location-box">
+            <details class="advanced-location-box" :open="!String(mapConfig.api_key || '').trim()">
               <summary>تنظیمات پیشرفته موقعیت</summary>
               <div class="order-flow-grid order-flow-grid--2">
                 <label class="order-flow-field"><span>عرض جغرافیایی</span><input class="order-flow-input" dir="ltr" v-model="address.lat" /></label>
