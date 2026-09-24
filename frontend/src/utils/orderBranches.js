@@ -31,3 +31,10 @@ export function isCustomerPickupCompany(row = {}) {
 export function isCustomerDeliveryCompany(row = {}) {
   return isCustomerCompany(row) && row.delivery_available === true
 }
+
+export function resolveDeliveryCompanySelection(rows = [], selectedId = '') {
+  const available = rows.filter(isCustomerDeliveryCompany)
+  const selected = String(selectedId || '').trim()
+  if (available.some((row) => String(row.id || row.name || '').trim() === selected)) return selected
+  return available.length === 1 ? String(available[0].id || available[0].name || '').trim() : ''
+}

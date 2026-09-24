@@ -120,7 +120,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveCheckoutDraft, saveOrderContext } from '@/stores/cartStore'
 import { formatMoney, normalizeMobile as normalizeMobileUtil } from '@/utils/format'
-import { isCustomerDeliveryCompany } from '@/utils/orderBranches'
+import { isCustomerDeliveryCompany, resolveDeliveryCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getCustomerCheckoutProfile, getMenuBoot } from '@/utils/api'
 import './orderFlow.css'
 
@@ -258,6 +258,7 @@ async function loadBoot() {
   try {
     const [branchPayload, boot] = await Promise.all([getBranches(), getMenuBoot('')])
     branches.value = Array.isArray(branchPayload?.branches) ? branchPayload.branches : []
+    selectedCompanyId.value = resolveDeliveryCompanySelection(branches.value, selectedCompanyId.value)
     currency.value = boot?.currency || 'IRR'
     persistContext()
   } catch (err) {
