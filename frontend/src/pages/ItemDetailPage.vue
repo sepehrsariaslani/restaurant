@@ -576,7 +576,6 @@
                   <p class="related-name">{{ ri.title }}</p>
                   <strong class="related-price">{{ formatMoney(ri.base_price, currency) }}</strong>
                 </div>
-                <p v-if="ri.short_desc" class="related-description">{{ ri.short_desc }}</p>
                 <div v-if="relatedDetails(ri).length" class="related-details">
                   <span
                     v-for="detail in relatedDetails(ri)"
@@ -585,6 +584,7 @@
                     :class="`related-detail-chip--${detail.tone}`"
                   >{{ detail.label }}</span>
                 </div>
+                <p v-if="ri.short_desc" class="related-description-panel">{{ ri.short_desc }}</p>
               </div>
             </a>
             <button
@@ -2388,28 +2388,17 @@ onUnmounted(() => {
   flex: 0 0 min(88vw, 25rem);
   position: relative;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--ds-color-status-success) 34%, var(--ds-color-border));
+  border: 1px solid var(--ds-color-border);
   border-radius: 22px;
-  background: var(--ds-color-surface-raised, #fff);
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--ds-color-status-success) 10%, transparent);
+  background: #fff;
+  box-shadow: var(--ds-shadow-sm, 0 8px 24px rgb(52 38 31 / 0.06));
   color: inherit;
   scroll-snap-align: start;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
-.related-card::before {
-  content: '';
-  position: absolute;
-  z-index: 2;
-  inset-block-start: 0;
-  inset-inline: 1rem;
-  height: 4px;
-  border-radius: 0 0 999px 999px;
-  background: linear-gradient(90deg, var(--ds-color-status-success), var(--ds-color-action-accent), var(--ds-color-action-primary));
-  pointer-events: none;
-}
 .related-card:hover {
   transform: translateY(-2px);
-  border-color: var(--ds-color-action-primary);
+  border-color: var(--ds-color-action-accent);
   box-shadow: var(--ds-shadow-md);
 }
 .related-card:focus-within {
@@ -2426,7 +2415,7 @@ onUnmounted(() => {
   width: 100%;
   aspect-ratio: 1.9 / 1;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--ds-color-surface-muted), var(--ds-color-surface-raised));
+  background: #fff;
   border-bottom: 1px solid var(--ds-color-border);
   position: relative;
 }
@@ -2460,11 +2449,11 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
   border-radius: 50%;
-  background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse);
-  box-shadow: 0 0 0 5px var(--ds-color-action-accent-soft), 0 4px 12px color-mix(in srgb, var(--ds-color-text-primary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ds-color-status-success) 35%, transparent);
+  background: #fff;
+  color: var(--ds-color-status-success);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-color-text-primary) 14%, transparent);
   cursor: pointer;
   transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
 }
@@ -2478,21 +2467,21 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   padding: 0 0.2rem;
-  border: 2px solid var(--ds-color-surface-raised);
+  border: 2px solid #fff;
   border-radius: 999px;
   background: var(--ds-color-text-primary);
   color: var(--ds-color-text-inverse);
   font-size: 0.65rem;
   font-weight: 800;
 }
-.related-add-btn:hover:not(:disabled) { transform: scale(1.06); background: var(--ds-color-action-primary); }
+.related-add-btn:hover:not(:disabled) { transform: scale(1.06); border-color: var(--ds-color-action-accent); color: var(--ds-color-action-accent); }
 .related-add-btn:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
 .related-add-btn:disabled { cursor: not-allowed; opacity: 0.45; }
 .related-card-content {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  padding: 0.9rem 1rem 1rem;
+  padding: 0.9rem 1rem 0.9rem;
   text-align: right;
 }
 .related-heading-row {
@@ -2513,14 +2502,18 @@ onUnmounted(() => {
   flex: 0 0 auto;
   padding-top: 0.1rem;
   font-size: 0.92rem;
-  color: var(--ds-color-action-primary);
+  color: var(--ds-color-text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.related-description {
-  margin: 0;
-  color: var(--ds-color-text-secondary);
-  font-size: 0.8rem;
+.related-description-panel {
+  margin: 0 -1rem -0.9rem;
+  padding: 0.72rem 1rem;
+  border-radius: 0;
+  background: var(--ds-color-status-success);
+  color: var(--ds-color-text-inverse, #fff);
+  font-size: 0.78rem;
+  font-weight: 600;
   line-height: 1.7;
   display: -webkit-box;
   -webkit-line-clamp: 2;
