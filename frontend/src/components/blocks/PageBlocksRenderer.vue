@@ -32,6 +32,6 @@ const isHomePage = computed(() => ['home', 'homev2'].includes(String(props.page 
 .page-blocks {
   display: flex;
   flex-direction: column;
-  gap: clamp(2.5rem, 6vw, 5rem);
+  gap: clamp(1.8rem, 4vw, 3.2rem);
 }
 </style>

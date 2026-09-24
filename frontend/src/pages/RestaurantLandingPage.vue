@@ -205,8 +205,8 @@ onUnmounted(() => {
 }
 
 .home-content {
-  padding-block: clamp(2rem, 6vw, 4rem);
-  background: var(--bg-soft, #f7f5f2);
+  padding-block: clamp(1.25rem, 3vw, 2.5rem);
+  background: var(--ds-color-bg-page, var(--bg-soft));
 }
 
 .home-page--v2 {
@@ -220,7 +220,7 @@ onUnmounted(() => {
 }
 
 :global(.home-page--v2 .page-blocks) {
-  gap: clamp(2rem, 4vw, 3.5rem);
+  gap: clamp(1.8rem, 4vw, 3.2rem);
 }
 
 :global(.home-page--v2 .home-sticky-cart),
@@ -257,11 +257,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.55rem;
   border-radius: 999px;
-  padding: 0.65rem 0.9rem;
-  background: var(--accent-gold);
-  color: var(--ink-900);
+  min-height: 48px;
+  padding: 0.65rem 1rem;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
   text-decoration: none;
-  box-shadow: 0 16px 38px rgb(0 0 0 / 0.16);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--ds-color-action-accent) 26%, transparent);
 }
 
 .home-sticky-cart span {

@@ -481,18 +481,19 @@ const pagination = ref({
 
 // ─── computed ───────────────────────────────────────────────────────
 const menuCardTheme = computed(() => {
-  const theme = props.boot?.theme && typeof props.boot.theme === 'object' ? props.boot.theme : {}
   return {
-    primary_color: theme.primary_color || props.boot?.primary_color || 'var(--accent-gold)',
-    primary_color_dark: theme.primary_color_dark || props.boot?.primary_color_dark || 'var(--accent-gold80)',
-    accent_color: theme.accent_color || props.boot?.accent_color || 'var(--accent-green)',
-    surface: theme.surface || 'var(--pos-surface-color, #ffffff)',
-    surface_alt: theme.surface_alt || 'var(--theme-surface-alt)',
-    border: theme.border || 'var(--glass-border)',
-    text_primary: theme.text_primary || 'var(--text-primary)',
-    text_secondary: theme.text_secondary || 'var(--text-secondary)',
-    text_muted: theme.text_muted || 'var(--text-muted)',
-    add_btn_bg: theme.add_btn_bg || theme.accent_color || props.boot?.accent_color || 'var(--accent-gold)',
+    primary_color: 'var(--ds-color-action-primary)',
+    primary_color_dark: 'color-mix(in srgb, var(--ds-color-action-primary) 88%, var(--ds-color-text-primary))',
+    accent_color: 'var(--ds-color-status-success)',
+    success: 'var(--ds-color-status-success)',
+    success_bg: 'var(--ds-color-status-success-soft)',
+    surface: 'var(--ds-color-surface-raised)',
+    surface_alt: 'var(--ds-color-surface-muted)',
+    border: 'var(--ds-color-border)',
+    text_primary: 'var(--ds-color-text-primary)',
+    text_secondary: 'var(--ds-color-text-secondary)',
+    text_muted: 'var(--ds-color-text-muted)',
+    add_btn_bg: 'var(--ds-color-action-accent)',
   }
 })
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
@@ -2181,13 +2182,13 @@ onUnmounted(() => {
 
 /* ─── ریسپانسیو ─── */
 @media (min-width: 760px) {
-  .menu-shell {
-    width: min(980px, 100%);
+.menu-shell {
+    width: min(1180px, calc(100% - 1rem));
   }
 
   .menu-toolbar,
   .tag-filter-row {
-    width: min(980px, 100%);
+    width: min(1180px, calc(100% - 1rem));
   }
 
   .item-list {

@@ -263,8 +263,8 @@ onMounted(async () => {
   align-items: center;
   padding: 0.42rem 0.7rem;
   border-radius: 999px;
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.13);
-  color: var(--ds-color-action-primary, var(--accent-green));
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
   font-weight: 800;
   font-size: 0.83rem;
 }
@@ -311,9 +311,33 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 0.72rem 1rem;
-  background: var(--ds-color-action-primary, var(--accent-green));
-  color: var(--ds-color-text-inverse, #fff);
   font-weight: 850;
+}
+
+.go-menu {
+  border: 1px solid color-mix(in srgb, var(--ds-color-status-success) 28%, var(--ds-color-border));
+  background: var(--ds-color-status-success-soft);
+  color: var(--ds-color-status-success);
+  text-decoration: none;
+}
+
+.checkout-btn {
+  border: 1px solid var(--ds-color-action-accent);
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
+  text-decoration: none;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ds-color-action-accent) 22%, transparent);
+  transition: transform var(--ds-motion-fast) ease, filter var(--ds-motion-fast) ease;
+}
+
+.checkout-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.96);
+}
+
+.cart-shell :is(a, button):focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
 }
 
 .summary-panel {

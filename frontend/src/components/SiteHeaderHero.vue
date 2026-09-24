@@ -19,7 +19,7 @@
 
         <nav class="hero-desktop-nav" aria-label="ناوبری">
           <a
-            v-for="link in links"
+            v-for="link in desktopLinks"
             :key="link.url"
             :href="link.url"
             class="hero-nav-link"
@@ -30,9 +30,6 @@
         </nav>
 
         <div class="hero-header__actions">
-          <a :href="managementLoginUrl" class="hero-mgmt-pill" aria-label="ورود مدیریت">
-            ورود مدیریت
-          </a>
           <button class="hero-search-btn" type="button" @click="openSearch" aria-label="جستجو">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="18" height="18">
               <circle cx="11" cy="11" r="8" />
@@ -85,7 +82,6 @@
           <span class="hero-count-pill" v-if="link.kind === 'cart' && cartCount > 0">{{ cartCount }}</span>
         </a>
       </nav>
-      <a class="sheet-management-btn" :href="managementLoginUrl" @click="mobileOpen = false">ورود به مدیریت</a>
     </aside>
   </div>
 </template>
@@ -105,7 +101,6 @@ const props = defineProps({
 
 const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
-const managementLoginUrl = '/management/login?redirect_to=%2Fmanagement'
 
 const heroTitle = computed(() => String(props.branding?.hero_section_title || props.branding?.hero_title || props.branding?.name || 'سبک زندگی سالم، انتخاب هر روز ما').trim())
 const heroSubtitle = computed(() => String(props.branding?.hero_section_description || props.branding?.hero_subtitle || props.branding?.tagline || 'غذاهای سالم و متنوع با بهترین مواد اولیه تازه برای یک زندگی پرانرژی و متعادل.').trim())
@@ -132,6 +127,8 @@ const links = computed(() => {
   }
   return base
 })
+
+const desktopLinks = computed(() => links.value.filter((link) => link.kind !== 'cart'))
 </script>
 
 <style scoped>
@@ -257,19 +254,6 @@ const links = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-}
-
-.hero-mgmt-pill {
-  border-radius: 999px;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  background: rgb(255 255 255 / 0.12);
-  backdrop-filter: blur(8px);
-  color: #174d32;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.46rem 0.72rem;
-  white-space: nowrap;
-  text-decoration: none;
 }
 
 .hero-search-btn {
@@ -489,14 +473,14 @@ const links = computed(() => {
   right: -320px;
   width: min(300px, 86vw);
   height: 100vh;
-  background: #1c1411;
-  border-left: 1px solid rgb(255 255 255 / 0.1);
+  background: var(--ds-color-surface-raised);
+  border-left: 1px solid var(--ds-color-border);
   box-shadow: -12px 0 24px rgb(0 0 0 / 0.3);
   transition: right 0.22s ease;
   padding: 0.9rem 0.8rem;
   z-index: 120;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   gap: 0.8rem;
 }
 
@@ -506,16 +490,16 @@ const links = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #174d32;
+  color: var(--ds-color-text-primary);
 }
 
 .sheet-close {
-  width: 2rem;
-  height: 2rem;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
-  border: 1px solid rgb(255 255 255 / 0.2);
-  background: transparent;
-  color: #174d32;
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-action-primary);
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -529,25 +513,14 @@ const links = computed(() => {
 .sheet-links a {
   border-radius: 12px;
   padding: 0.58rem 0.65rem;
-  background: rgb(255 255 255 / 0.06);
-  border: 1px solid rgb(255 255 255 / 0.1);
-  color: #174d32;
+  min-height: 48px;
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
+  color: var(--ds-color-text-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
   text-decoration: none;
-}
-
-.sheet-management-btn {
-  border-radius: 12px;
-  padding: 0.62rem 0.65rem;
-  text-align: right;
-  border: 1px solid rgb(255 200 100 / 0.3);
-  background: rgb(255 200 100 / 0.12);
-  color: rgb(255 220 150);
-  font-weight: 700;
-  text-decoration: none;
-  display: block;
 }
 
 @media (min-width: 920px) {
@@ -555,7 +528,49 @@ const links = computed(() => {
   .hero-hamburger { display: none; }
 }
 
-@media (max-width: 540px) {
-  .hero-mgmt-pill { display: none; }
+/* The optional hero header follows the same live semantic palette as the rest
+   of the customer storefront. */
+.hero-header__bg {
+  background:
+    radial-gradient(circle at 15% 18%, color-mix(in srgb, var(--ds-color-action-accent) 12%, transparent), transparent 24%),
+    linear-gradient(135deg, var(--ds-color-bg-page) 0%, var(--ds-color-surface-raised) 100%);
 }
+
+.hero-header__overlay {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ds-color-surface-raised) 48%, transparent) 0%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 72%, transparent) 46%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 94%, transparent) 100%
+  );
+}
+
+.hero-brand-dot { background: var(--ds-color-action-accent); }
+.hero-brand-copy strong,
+.hero-title,
+.sheet-head { color: var(--ds-color-text-primary); }
+.hero-brand-copy small,
+.hero-subtitle { color: var(--ds-color-text-secondary); }
+.hero-nav-link { color: var(--ds-color-text-primary); border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); }
+.hero-nav-link:hover { background: var(--ds-color-action-primary-soft); }
+.hero-count-pill { background: var(--ds-color-action-accent); color: var(--ds-color-text-inverse, #fff); }
+.hero-search-btn,
+.hero-hamburger { width: 44px; height: 44px; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); }
+.hero-search-btn:hover { background: var(--ds-color-action-primary-soft); }
+.hero-cart-pill { min-width: 44px; height: 44px; border-color: var(--ds-color-action-accent); background: var(--ds-color-action-accent); color: var(--ds-color-text-inverse, #fff); }
+.hero-cart-pill span { background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent); color: var(--ds-color-text-inverse, #fff); }
+.hero-hamburger span { background: var(--ds-color-action-primary); }
+.hero-eyebrow { background: var(--ds-color-action-accent-soft); border-color: color-mix(in srgb, var(--ds-color-action-accent) 35%, transparent); color: var(--ds-color-action-primary); }
+.hero-cta-btn { min-height: 48px; display: inline-flex; align-items: center; background: var(--ds-color-action-accent); color: var(--ds-color-text-inverse, #fff); }
+.hero-cta-btn:hover { background: var(--ds-color-action-accent); filter: brightness(0.96); }
+.hero-cta-outline { min-height: 48px; display: inline-flex; align-items: center; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-text-primary); }
+.hero-cta-outline:hover { background: var(--ds-color-action-primary-soft); }
+.hero-scroll-hint span { border-color: var(--ds-color-border); }
+.hero-scroll-hint span::after { background: var(--ds-color-action-accent); }
+.mobile-sheet { background: var(--ds-color-surface-raised); border-color: var(--ds-color-border); grid-template-rows: auto 1fr; }
+.sheet-close { width: 44px; height: 44px; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); }
+.sheet-links a { min-height: 48px; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-text-primary); }
+.sheet-links a:hover { background: var(--ds-color-action-primary-soft); }
+.hero-header :is(a, button):focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
+
 </style>

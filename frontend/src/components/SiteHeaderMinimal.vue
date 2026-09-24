@@ -52,8 +52,8 @@ defineProps({
   top: 0;
   z-index: 200;
   width: 100%;
-  background: #1c1411;
-  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  background: var(--ds-color-surface-raised);
+  border-bottom: 1px solid var(--ds-color-border);
   direction: rtl;
 }
 
@@ -78,7 +78,7 @@ defineProps({
 .shm-brand {
   font-size: 1.05rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--ds-color-text-primary);
   letter-spacing: -0.01em;
   text-decoration: none;
   white-space: nowrap;
@@ -94,14 +94,14 @@ defineProps({
   padding: 0.3rem 0.65rem;
   border-radius: 999px;
   font-size: 0.84rem;
-  color: rgb(255 255 255 / 0.72);
+  color: var(--ds-color-text-secondary);
   text-decoration: none;
   transition: background 0.15s, color 0.15s;
 }
 
 .shm-link:hover {
-  background: rgb(255 255 255 / 0.1);
-  color: #fff;
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
 }
 
 .shm-search {
@@ -109,20 +109,20 @@ defineProps({
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 50%;
-  color: rgb(255 255 255 / 0.8);
-  background: rgb(255 255 255 / 0.08);
-  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: var(--ds-color-action-primary);
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
   cursor: pointer;
   transition: background 0.15s;
   flex-shrink: 0;
 }
 
 .shm-search:hover {
-  background: rgb(255 255 255 / 0.16);
-  color: #fff;
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
 }
 
 .shm-cart {
@@ -130,19 +130,19 @@ defineProps({
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 50%;
-  color: rgb(255 255 255 / 0.8);
-  background: rgb(255 255 255 / 0.08);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: var(--ds-color-text-inverse, #fff);
+  background: var(--ds-color-action-accent);
+  border: 1px solid var(--ds-color-action-accent);
   text-decoration: none;
   transition: background 0.15s;
   flex-shrink: 0;
 }
 
 .shm-cart:hover {
-  background: rgb(255 255 255 / 0.16);
-  color: #fff;
+  filter: brightness(0.96);
 }
 
 .shm-cart-count {
@@ -152,8 +152,8 @@ defineProps({
   min-width: 1.05rem;
   height: 1.05rem;
   border-radius: 999px;
-  background: #c98d42;
-  color: #fff;
+  background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent);
+  color: var(--ds-color-text-inverse, #fff);
   font-size: 0.6rem;
   font-weight: 700;
   display: flex;

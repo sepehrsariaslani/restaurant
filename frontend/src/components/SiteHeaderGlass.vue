@@ -16,7 +16,7 @@
 
       <nav class="glass-nav" aria-label="ناوبری">
         <a
-          v-for="link in links"
+          v-for="link in desktopLinks"
           :key="link.url"
           :href="link.url"
           class="glass-nav-link"
@@ -28,7 +28,6 @@
       </nav>
 
       <div class="glass-actions">
-        <a :href="managementLoginUrl" class="glass-mgmt-btn">ورود مدیریت</a>
         <button class="glass-search-btn" type="button" @click="openSearch" aria-label="جستجو">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="18" height="18">
             <circle cx="11" cy="11" r="8" />
@@ -60,7 +59,6 @@
           <span class="glass-count" v-if="link.kind === 'cart' && cartCount > 0">{{ cartCount }}</span>
         </a>
       </nav>
-      <a class="glass-sheet-mgmt" :href="managementLoginUrl" @click="mobileOpen = false">ورود به مدیریت</a>
     </aside>
   </header>
 </template>
@@ -80,7 +78,6 @@ const props = defineProps({
 
 const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
-const managementLoginUrl = '/management/login?redirect_to=%2Fmanagement'
 
 const links = computed(() => {
   const base = [
@@ -95,6 +92,8 @@ const links = computed(() => {
   }
   return base
 })
+
+const desktopLinks = computed(() => links.value.filter((link) => link.kind !== 'cart'))
 
 function isActive(link) {
   if (link.key === 'menu') return props.page === 'menu' || props.page === 'item'
@@ -114,10 +113,10 @@ function isActive(link) {
   right: 0;
   z-index: 120;
   padding: 0;
-  background: rgb(255 255 255 / 0.72);
+  background: color-mix(in srgb, var(--ds-color-surface-raised) 92%, transparent);
   backdrop-filter: blur(18px) saturate(1.6);
   -webkit-backdrop-filter: blur(18px) saturate(1.6);
-  border-bottom: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.12);
+  border-bottom: 1px solid var(--ds-color-border);
   box-shadow: 0 2px 24px rgb(0 0 0 / 0.07);
 }
 
@@ -196,8 +195,8 @@ function isActive(link) {
 }
 
 .glass-nav-link.active {
-  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.12);
-  color: var(--palette-deep-sapphire, #6F4A31);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
   font-weight: 700;
 }
 
@@ -205,8 +204,8 @@ function isActive(link) {
   min-width: 1.05rem;
   height: 1.05rem;
   border-radius: 999px;
-  background: var(--palette-deep-sapphire, #6F4A31);
-  color: #fff;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
   font-size: 0.64rem;
   display: inline-flex;
   align-items: center;
@@ -221,30 +220,13 @@ function isActive(link) {
   gap: 0.4rem;
 }
 
-.glass-mgmt-btn {
-  border-radius: 999px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.28);
-  background: rgb(var(--palette-june-bud-rgb, 201 223 144) / 0.28);
-  color: var(--ink-800, #3d2e26);
-  font-size: 0.76rem;
-  font-weight: 700;
-  padding: 0.46rem 0.75rem;
-  white-space: nowrap;
-  text-decoration: none;
-  transition: background 0.15s;
-}
-
-.glass-mgmt-btn:hover {
-  background: rgb(var(--palette-june-bud-rgb, 201 223 144) / 0.45);
-}
-
 .glass-search-btn {
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 10px;
-  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.08);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.18);
-  color: var(--text-primary, #3f2a1d);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
+  color: var(--ds-color-action-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -253,17 +235,17 @@ function isActive(link) {
 }
 
 .glass-search-btn:hover {
-  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.16);
-  border-color: var(--accent-green, #6f4a31);
+  background: var(--ds-color-action-primary-soft);
+  border-color: var(--ds-color-action-primary);
 }
 
 .glass-cart-btn {
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 12px;
-  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.08);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.18);
-  color: var(--ink-800, #3d2e26);
+  min-width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--ds-color-action-accent);
+  border: 1px solid var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -274,7 +256,7 @@ function isActive(link) {
 }
 
 .glass-cart-btn:hover {
-  background: rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.14);
+  filter: brightness(0.96);
 }
 
 .glass-cart-btn svg { width: 16px; height: 16px; }
@@ -283,8 +265,8 @@ function isActive(link) {
   min-width: 0.9rem;
   height: 0.9rem;
   border-radius: 999px;
-  background: var(--accent-green, #4caf50);
-  color: #fff;
+  background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent);
+  color: var(--ds-color-text-inverse, #fff);
   font-size: 0.6rem;
   display: inline-flex;
   align-items: center;
@@ -293,8 +275,8 @@ function isActive(link) {
 }
 
 .glass-hamburger {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.2);
   background: transparent;
@@ -331,7 +313,7 @@ function isActive(link) {
   right: -320px;
   width: min(300px, 86vw);
   height: 100vh;
-  background: rgb(255 255 255 / 0.92);
+  background: var(--ds-color-surface-raised);
   backdrop-filter: blur(20px);
   border-left: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.14);
   box-shadow: -12px 0 28px rgb(0 0 0 / 0.1);
@@ -339,7 +321,7 @@ function isActive(link) {
   padding: 0.9rem 0.8rem;
   z-index: 120;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   gap: 0.8rem;
 }
 
@@ -353,8 +335,8 @@ function isActive(link) {
 }
 
 .glass-sheet-close {
-  width: 2rem;
-  height: 2rem;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.2);
   background: transparent;
@@ -388,24 +370,9 @@ function isActive(link) {
   font-weight: 700;
 }
 
-.glass-sheet-mgmt {
-  border-radius: 12px;
-  padding: 0.62rem 0.65rem;
-  text-align: center;
-  border: 1px solid rgb(var(--palette-june-bud-rgb, 201 223 144) / 0.5);
-  background: rgb(var(--palette-june-bud-rgb, 201 223 144) / 0.22);
-  color: var(--ink-800, #3d2e26);
-  font-weight: 700;
-  text-decoration: none;
-  display: block;
-}
-
 @media (min-width: 920px) {
   .glass-nav { display: flex; }
   .glass-hamburger { display: none; }
 }
 
-@media (max-width: 540px) {
-  .glass-mgmt-btn { display: none; }
-}
 </style>

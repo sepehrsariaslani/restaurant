@@ -12,9 +12,13 @@
       </a>
 
       <div class="webapp-actions">
-        <button class="webapp-icon-btn" type="button" aria-label="اعلان‌ها">
-          <Bell :size="17" />
+        <button class="webapp-icon-btn" type="button" aria-label="جستجو در منو" @click="openSearch">
+          <Search :size="17" />
         </button>
+        <a class="webapp-icon-btn mobile-cart-btn" href="/cart" :aria-label="`سبد سفارش، ${cartCount} آیتم`">
+          <ShoppingCart :size="17" />
+          <span v-if="cartCount > 0" class="mobile-cart-count">{{ cartCount }}</span>
+        </a>
         <a class="webapp-icon-btn" href="/customer/dashboard" aria-label="داشبورد کاربر">
           <UserRound :size="17" />
         </a>
@@ -32,7 +36,7 @@
 
       <nav class="desktop-nav" aria-label="ناوبری">
         <a
-          v-for="link in links"
+          v-for="link in desktopLinks"
           :key="link.url"
           :href="link.url"
           class="nav-link"
@@ -44,32 +48,18 @@
         </a>
       </nav>
 
-      <button class="center-search-btn" type="button" @click="openSearch" aria-label="جستجو">
-        <Search :size="16" />
-        <span class="center-search-label">جستجو در منو</span>
-      </button>
-
       <div class="header-actions">
-        <button class="action-icon-pill" type="button" aria-label="اعلان‌ها">
-          <Bell :size="16" />
-        </button>
-
-        <a class="action-icon-pill" href="/customer/dashboard" aria-label="داشبورد کاربر">
+        <a class="action-icon-pill" href="/customer/dashboard" aria-label="حساب کاربری" title="حساب کاربری">
           <UserRound :size="16" />
         </a>
-
-        <a :href="managementLoginUrl" class="management-login-pill" aria-label="ورود مدیریت">
-          <ShieldCheck :size="15" />
-          <span>مدیریت</span>
-        </a>
-
-        <button class="search-pill search-pill--desktop" type="button" @click="openSearch" aria-label="جستجو">
+        <button class="search-pill" type="button" @click="openSearch" aria-label="جستجو در منو" title="جستجو در منو">
           <Search :size="16" />
         </button>
 
         <a href="/cart" class="cart-pill" aria-label="سبد سفارش">
           <ShoppingCart :size="16" />
-          <span v-if="cartCount > 0">{{ cartCount }}</span>
+          <span class="cart-label">سبد</span>
+          <span v-if="cartCount > 0" class="cart-count">{{ cartCount }}</span>
         </a>
 
         <button class="hamburger" :class="{ open: mobileOpen }" type="button" @click="mobileOpen = !mobileOpen" aria-label="منو">
@@ -120,17 +110,13 @@
         </a>
       </nav>
 
-      <a class="sheet-management-btn" :href="managementLoginUrl" @click="mobileOpen = false">
-        <ShieldCheck :size="17" />
-        <span>ورود به مدیریت</span>
-      </a>
     </aside>
   </header>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Bell, ChevronLeft, CircleHelp, Home, List, Menu, Search, ShieldCheck, ShoppingCart, UserRound, X } from 'lucide-vue-next'
+import { ChevronLeft, CircleHelp, Home, List, Menu, Search, ShoppingCart, UserRound, X } from 'lucide-vue-next'
 import { useSearchModal } from '@/composables/useSearchModal'
 
 const props = defineProps({
@@ -165,7 +151,6 @@ const props = defineProps({
 
 const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
-const managementLoginUrl = '/management/login?redirect_to=%2Fmanagement'
 
 const brandInitial = computed(() => String(props.branding?.name || 'V').trim().charAt(0) || 'V')
 
@@ -183,7 +168,7 @@ const links = computed(() => {
   const base = [
     { key: 'landing', label: 'خانه', hint: 'شروع سریع', url: '/', prefix: '/', exact: true, icon: Home },
     { key: 'menu', label: 'منو', hint: 'مشاهده محصولات', url: '/menu', prefix: '/menu', icon: List },
-    { key: 'product-groups', label: 'دسته‌بندی منو', hint: 'گروه‌های محصول', url: '/product-groups', prefix: '/product-groups', icon: List },
+    { key: 'product-groups', label: 'دسته‌ها', hint: 'گروه‌های محصول', url: '/product-groups', prefix: '/product-groups', icon: List },
     { key: 'about-us', label: 'درباره ما', hint: 'داستان برند', url: '/about-us', prefix: '/about-us', icon: UserRound },
     { key: 'faq', label: 'سوالات', hint: 'پاسخ‌های پرتکرار', url: '/faq', prefix: '/faq', icon: CircleHelp },
     { key: 'cart', label: 'سبد سفارش', hint: 'تکمیل خرید', url: '/cart', prefix: '/cart', kind: 'cart', icon: ShoppingCart },
@@ -195,6 +180,8 @@ const links = computed(() => {
 
   return base
 })
+
+const desktopLinks = computed(() => links.value.filter((link) => link.kind !== 'cart'))
 
 function isActive(link) {
   if (link.key === 'menu') {
@@ -255,7 +242,7 @@ function isActive(link) {
   right: 0.9rem;
   height: 58px;
   border-radius: 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ds-color-surface-raised) 82%, transparent), transparent);
   pointer-events: none;
 }
 
@@ -265,14 +252,14 @@ function isActive(link) {
   min-height: 46px;
   margin: 0 auto;
   display: none;
-  grid-template-columns: 40px minmax(0, 1fr) 84px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.35rem;
   padding: 0.28rem 0.35rem;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  box-shadow: 0 10px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  background: var(--ds-color-surface-raised, #fff);
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-primary) 12%, var(--ds-color-border));
+  box-shadow: var(--ds-shadow-sm, 0 10px 24px rgb(52 38 31 / 0.08));
   backdrop-filter: blur(14px);
   color: var(--text-primary);
 }
@@ -280,7 +267,7 @@ function isActive(link) {
 .webapp-brand {
   min-width: 0;
   justify-self: center;
-  color: var(--text-primary);
+  color: var(--ds-color-text-primary);
   text-decoration: none;
   font-weight: 900;
   font-size: 0.88rem;
@@ -299,23 +286,29 @@ function isActive(link) {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.28rem;
+  gap: 0.25rem;
 }
 
 .webapp-icon-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 13px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  background: #fff;
-  color: var(--accent-green);
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-action-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgb(var(--palette-deep-sapphire-rgb) / 0.06);
+  box-shadow: none;
   text-decoration: none;
   font-family: inherit;
+}
+
+.webapp-icon-btn:hover {
+  background: var(--ds-color-action-primary-soft);
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 28%, var(--ds-color-border));
 }
 
 .webapp-menu-btn {
@@ -333,9 +326,9 @@ function isActive(link) {
   justify-content: space-between;
   gap: 0.5rem;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.10);
-  box-shadow: 0 16px 36px rgb(var(--palette-deep-sapphire-rgb) / 0.075);
+  background: color-mix(in srgb, var(--ds-color-surface-raised) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-primary) 10%, var(--ds-color-border));
+  box-shadow: var(--ds-shadow-sm, 0 16px 36px rgb(52 38 31 / 0.075));
   color: var(--text-primary);
   backdrop-filter: blur(20px);
 }
@@ -422,21 +415,20 @@ function isActive(link) {
 }
 
 .nav-link.active {
-  background: #fff;
-  color: var(--accent-green);
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 18%, transparent);
+  box-shadow: none;
 }
 
 .nav-link:hover {
   background: rgba(255, 255, 255, 0.72);
-  color: var(--accent-green);
+  color: var(--ds-color-action-primary);
   transform: translateY(-1px);
 }
 
 .nav-link svg,
 .action-icon-pill svg,
-.management-login-pill svg,
 .search-pill svg,
 .cart-pill svg {
   flex-shrink: 0;
@@ -462,40 +454,28 @@ function isActive(link) {
   min-width: max-content;
 }
 
-.action-icon-pill,
-.management-login-pill {
+.action-icon-pill {
   height: 2rem;
   border-radius: 12px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  background: #fff;
-  color: var(--text-primary);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
-  box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.045);
+  box-shadow: none;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
 .action-icon-pill {
-  width: 2rem;
+  width: 44px;
+  height: 44px;
   padding: 0;
   cursor: pointer;
 }
 
-.management-login-pill {
-  gap: 0.28rem;
-  background: rgb(var(--palette-june-bud-rgb) / 0.22);
-  color: var(--text-primary);
-  font-size: 0.7rem;
-  font-weight: 900;
-  line-height: 1;
-  padding: 0 0.62rem;
-  white-space: nowrap;
-}
-
 .action-icon-pill:hover,
-.management-login-pill:hover,
 .cart-pill:hover,
 .search-pill:hover {
   background: var(--accent-green20, rgb(var(--palette-deep-sapphire-rgb) / 0.07));
@@ -505,19 +485,19 @@ function isActive(link) {
 }
 
 .search-pill {
-  min-width: 2rem;
-  height: 2rem;
+  min-width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: #fff;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  color: var(--text-primary);
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
+  color: var(--ds-color-text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 0.35rem;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
-  box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.045);
+  box-shadow: none;
 }
 
 .search-pill svg { width: 16px; height: 16px; }
@@ -525,17 +505,17 @@ function isActive(link) {
 
 
 .cart-pill {
-  min-width: 2rem;
-  height: 2rem;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  color: var(--text-primary);
+  min-width: 5.6rem;
+  min-height: 2.75rem;
+  border-radius: 15px;
+  background: var(--ds-color-action-accent);
+  border: 1px solid var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
-  padding: 0 0.35rem;
+  gap: 0.38rem;
+  padding: 0 0.72rem;
   text-decoration: none;
   box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.045);
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
@@ -547,27 +527,39 @@ function isActive(link) {
 }
 
 .cart-pill span {
-  min-width: 0.95rem;
-  height: 0.95rem;
-  border-radius: 999px;
-  background: var(--accent-green);
-  color: #fff;
-  font-size: 0.62rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.cart-pill:hover,
+.cart-pill:focus-visible {
+  background: color-mix(in srgb, var(--ds-color-action-accent) 88%, var(--ds-color-text-primary));
+  border-color: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
+}
+
+.cart-pill .cart-count {
+  min-width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  padding-inline: 0.2rem;
+  background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent);
+  color: var(--ds-color-text-inverse, #fff);
 }
 
 .hamburger {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.24);
-  background: #fff;
+  background: var(--ds-color-surface-raised);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-green);
+  color: var(--ds-color-action-primary);
   padding: 0;
 }
 
@@ -592,14 +584,14 @@ function isActive(link) {
   right: -360px;
   width: min(330px, 88vw);
   height: 100vh;
-  background: linear-gradient(180deg, #fff, var(--theme-surface-alt, #f8f4ed));
-  border-left: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  background: var(--ds-color-surface-raised);
+  border-left: 1px solid var(--ds-color-border);
   box-shadow: -18px 0 42px rgb(15 23 42 / 0.18);
   transition: right 0.24s cubic-bezier(0.22, 1, 0.36, 1);
   padding: 0.9rem 0.8rem;
   z-index: 121;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto 1fr;
   gap: 0.72rem;
   overflow-y: auto;
 }
@@ -663,12 +655,12 @@ function isActive(link) {
 }
 
 .sheet-close {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 13px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  background: #fff;
-  color: var(--accent-green);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-action-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -678,10 +670,10 @@ function isActive(link) {
 
 .sheet-search {
   width: 100%;
-  min-height: 42px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+  min-height: 48px;
+  border: 1px solid var(--ds-color-border);
   border-radius: 15px;
-  background: #fff;
+  background: var(--ds-color-surface-raised);
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
@@ -703,8 +695,8 @@ function isActive(link) {
 .sheet-links a {
   border-radius: 17px;
   padding: 0.55rem 0.58rem;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
   color: var(--text-primary);
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
@@ -726,8 +718,8 @@ function isActive(link) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-green20, rgb(var(--palette-deep-sapphire-rgb) / 0.07));
-  color: var(--accent-green);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
 }
 
 .sheet-link-copy {
@@ -763,41 +755,25 @@ function isActive(link) {
 }
 
 .sheet-links a.active {
-  background: linear-gradient(135deg, var(--accent-green), var(--accent-green80, var(--accent-green)));
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 12px 26px rgb(var(--palette-deep-sapphire-rgb) / 0.18);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 24%, var(--ds-color-border));
+  box-shadow: inset 3px 0 0 var(--ds-color-action-primary);
 }
 
 .sheet-links a.active .sheet-link-icon {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-action-accent);
 }
 
 .sheet-links a.active .sheet-link-copy small,
 .sheet-links a.active .sheet-link-trail {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--ds-color-text-secondary);
 }
 
 .sheet-links a.active .count-pill {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.sheet-management-btn {
-  min-height: 44px;
-  border-radius: 16px;
-  padding: 0 0.75rem;
-  text-align: center;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  background: rgb(var(--palette-june-bud-rgb) / 0.28);
-  color: var(--text-primary);
-  font-weight: 900;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  text-decoration: none;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
 }
 
 @media (min-width: 920px) {
@@ -837,60 +813,13 @@ function isActive(link) {
   }
 }
 
-/* Centered search button in navbar */
-.center-search-btn {
-  display: none;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 14px;
-  padding: 0.46rem 0.78rem;
-  background: #fff;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.10);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s;
-  font-family: inherit;
-  font-size: 0.74rem;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.055);
-}
-
-.center-search-btn svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.center-search-btn:hover {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.4);
-  transform: translateY(-1px);
-}
-
-.center-search-btn:active {
-  transform: translateY(0);
-}
-
-/* Desktop (>=920px): show compact inline search, hide the legacy icon search */
-@media (min-width: 920px) {
-  .center-search-btn {
-    display: inline-flex;
-  }
-  .search-pill--desktop {
-    display: none;
-  }
-}
-
 @media (max-width: 1120px) and (min-width: 920px) {
   .brand-link {
     min-width: 126px;
     max-width: 180px;
   }
 
-  .brand-copy small,
-  .management-login-pill span,
-  .center-search-label {
+  .brand-copy small {
     display: none;
   }
 
@@ -902,23 +831,31 @@ function isActive(link) {
     padding-inline: 0.48rem;
   }
 
-  .management-login-pill {
-    width: 2rem;
-    padding: 0;
-  }
 }
 
-/* Mobile header uses .webapp-header instead of .header-inner */
 @media (max-width: 919px) {
-  .center-search-btn,
-  .search-pill--desktop {
-    display: none;
-  }
+  .header-actions { display: none; }
 }
 
-@media (max-width: 540px) {
-  .management-login-pill {
-    display: none;
-  }
+.mobile-cart-count {
+  position: absolute;
+  inset-block-start: -3px;
+  inset-inline-start: -3px;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 3px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.app-header :is(button, a):focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
 }
 </style>

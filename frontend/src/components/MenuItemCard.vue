@@ -27,7 +27,9 @@
           </div>
           <div class="classic-actions">
             <a :href="`/item/${item.slug}`" class="classic-link">مشاهده ↗</a>
-            <button class="classic-add" type="button" @click="$emit('quick-add', item)">+</button>
+          <button class="classic-add" type="button" :aria-label="`افزودن ${item.title} به سبد`" @click="$emit('quick-add', item)">
+            <Plus :size="18" aria-hidden="true" />
+          </button>
           </div>
         </div>
       </div>
@@ -79,6 +81,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Plus } from 'lucide-vue-next'
 import { formatMoney } from '@/utils/format'
 import { getAverageRating, getReviewCount } from '@/utils/reviewsStore'
 
@@ -135,15 +138,15 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 
 /* ─── CLASSIC variant ─── */
 .menu-card--classic {
-  background: var(--glass-bg, #fdf8f1);
-  border: 1px solid var(--glass-border, #d5c3af);
+  background: var(--ds-color-surface-raised, var(--glass-bg));
+  border: 1px solid var(--ds-color-border, var(--glass-border));
   box-shadow: var(--shadow-soft);
 }
 
 .classic-img-wrap {
   position: relative;
   height: 180px;
-  background: var(--theme-surface-alt, #f1e7db);
+  background: var(--ds-color-product-media-surface, #fff);
 }
 
 .classic-img {
@@ -157,8 +160,8 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   position: absolute;
   top: 10px;
   left: 10px;
-  background: var(--accent-green, #6f4a31);
-  color: var(--palette-eggshell, #fbf8f4);
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
   border-radius: 999px;
   padding: 0.22rem 0.62rem;
   font-size: 0.78rem;
@@ -176,7 +179,7 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 .classic-cat {
   margin: 0 0 0.22rem;
   font-size: 0.72rem;
-  color: var(--accent-gold, #c98d42);
+  color: var(--ds-color-status-success);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -208,8 +211,8 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   margin: 0.25rem 0 0;
 }
 .cr-stars { display: flex; gap: 0.05rem; }
-.cr-star { font-size: 0.78rem; color: #ddd; }
-.cr-star.filled { color: #f5a623; }
+.cr-star { font-size: 0.78rem; color: var(--ds-color-border); }
+.cr-star.filled { color: var(--ds-color-action-accent); }
 .cr-count { font-size: 0.72rem; color: var(--text-muted, #846b58); }
 
 .classic-tags-row {
@@ -251,8 +254,8 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 }
 
 .ctag {
-  background: var(--accent-green40, rgba(111,74,49,0.14));
-  color: var(--text-primary, #3f2a1d);
+  background: var(--ds-color-status-success-soft);
+  color: var(--ds-color-status-success);
   border-radius: 999px;
   padding: 0.15rem 0.5rem;
   font-size: 0.68rem;
@@ -274,18 +277,29 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 }
 
 .classic-add {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   border: none;
-  background: var(--accent-green, #6f4a31);
-  color: var(--palette-eggshell, #fbf8f4);
-  font-size: 1.1rem;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-text-inverse, #fff);
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--ds-color-action-accent) 22%, transparent);
+  transition: transform var(--ds-motion-fast) ease, filter var(--ds-motion-fast) ease;
+}
+
+.classic-add:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.96);
+}
+
+.classic-add:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring);
+  outline-offset: 3px;
 }
 
 /* ─── DARK variant ─── */
