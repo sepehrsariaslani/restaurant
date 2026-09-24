@@ -87,7 +87,7 @@ test('customer landing blocks render Persian cart, category, and popular labels 
   assert.match(landing, /aria-label="مشاهده سبد سفارش"/)
   assert.match(landing, /<span>سبد سفارش<\/span>/)
   assert.match(landing, /\{\{ cartCount \}\} آیتم/)
-  assert.match(categories, /\{\{ cat\.count \}\} آیتم/)
+  assert.match(categories, /\{\{ formatCount\(cat\.count\) \}\} آیتم/)
   assert.match(popular, /محبوب شماره ۱/)
   assert.match(popular, />افزودن<\/button>/)
 })
@@ -104,6 +104,30 @@ test('menu and product detail replace failed optional images with their designed
   assert.match(ingredients, /@error="markIngredientImageBroken\(ingredient\)"/)
   assert.match(ingredients, /v-if="ingredient\.image && !isIngredientImageBroken\(ingredient\)"/)
   assert.match(ingredients, /class="card-img-placeholder"/)
+})
+
+test('customer menu starts loading immediately and exposes accessible responsive controls', async () => {
+  const [menu, categoryRail, bottomNav, orderContext] = await Promise.all([
+    source('pages/MenuPage.vue'),
+    source('components/CategoryImageRail.vue'),
+    source('components/MobileBottomNav.vue'),
+    source('components/OrderContextStrip.vue'),
+  ])
+
+  assert.match(menu, /const loading = ref\(true\)/)
+  assert.doesNotMatch(menu, /await getManagementSessionProfile\(\)/)
+  assert.match(menu, /aria-controls="menu-sort-options"/)
+  assert.match(menu, /:aria-pressed="sortMode === option\.value"/)
+  assert.match(menu, /:aria-pressed="selectedTag === tag"/)
+  assert.match(menu, /min-height:\s*44px/)
+  assert.match(menu, /bottom:\s*calc\(6\.25rem \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(categoryRail, /role="group" aria-label="دسته‌بندی‌های منو"/)
+  assert.match(categoryRail, /:aria-pressed="selectedCategory === category\.slug"/)
+  assert.match(categoryRail, /min-height:\s*44px/)
+  assert.match(bottomNav, /bottom:\s*calc\(0\.62rem \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(bottomNav, /--ds-color-action-primary/)
+  assert.match(orderContext, /min-height:\s*44px/)
+  assert.match(orderContext, /--ds-color-surface-raised/)
 })
 
 test('delivery choices include configured company branches and exclude table locations', () => {

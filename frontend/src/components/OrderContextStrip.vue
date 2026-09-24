@@ -48,9 +48,9 @@ const iconComponent = computed(() => {
   gap: 0.75rem;
   padding: 0.65rem 0.75rem;
   border-radius: 20px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  background: rgb(var(--palette-eggshell-rgb) / 0.94);
-  box-shadow: 0 10px 24px rgb(15 23 42 / 0.06);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.14));
+  background: var(--ds-color-surface, rgb(var(--palette-eggshell-rgb) / 0.94));
+  box-shadow: var(--ds-shadow-sm, 0 10px 24px rgb(15 23 42 / 0.06));
   animation: strip-in 180ms ease-out both;
 }
 
@@ -61,8 +61,8 @@ const iconComponent = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.14);
-  color: var(--accent-green);
+  background: var(--ds-color-action-accent-soft, rgb(var(--palette-deep-saffron-rgb) / 0.14));
+  color: var(--ds-color-action-primary, var(--accent-green));
 }
 
 .strip-copy {
@@ -77,7 +77,7 @@ const iconComponent = computed(() => {
 }
 
 .strip-copy small {
-  color: var(--text-muted);
+  color: var(--ds-color-text-muted, var(--text-muted));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -85,23 +85,32 @@ const iconComponent = computed(() => {
 }
 
 .strip-action {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   padding: 0.48rem 0.76rem;
-  background: #fff;
-  color: var(--accent-green);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
+  background: var(--ds-color-surface-raised, #fff);
+  color: var(--ds-color-action-primary, var(--accent-green));
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.16));
   font-weight: 800;
   font-size: 0.82rem;
   white-space: nowrap;
 }
 
+.strip-action:hover {
+  background: var(--ds-color-action-primary-soft, var(--theme-surface-alt));
+}
+
+.strip-action:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
+}
+
 .order-context-strip.is-missing {
-  border-color: rgb(var(--warning-rgb) / 0.28);
-  background: rgb(var(--warning-rgb) / 0.08);
+  border-color: color-mix(in srgb, var(--ds-color-status-warning, var(--warning, #c67b2a)) 35%, var(--ds-color-border, transparent));
+  background: var(--ds-color-status-warning-soft, rgb(var(--warning-rgb) / 0.08));
 }
 
 @keyframes strip-in {

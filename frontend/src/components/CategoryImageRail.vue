@@ -1,12 +1,14 @@
 <template>
   <div class="img-rail-stack">
     <div class="img-rail-wrap">
-      <div class="img-rail">
+      <div class="img-rail" role="group" aria-label="دسته‌بندی‌های منو">
         <button
           v-for="category in categories"
           :key="category.slug"
           class="img-pill"
+          type="button"
           :class="{ active: selectedCategory === category.slug }"
+          :aria-pressed="selectedCategory === category.slug"
           @click="$emit('select-category', category.slug)"
         >
           <div class="img-copy">
@@ -22,10 +24,12 @@
 
     <transition name="slide-down">
       <div class="img-sub-wrap" v-if="subcategories.length">
-        <div class="img-rail">
+        <div class="img-rail" role="group" :aria-label="`زیرگروه‌های ${activeCategoryTitle}`">
           <button
             class="sub-pill"
+            type="button"
             :class="{ active: !selectedSubcategory }"
+            :aria-pressed="!selectedSubcategory"
             @click="$emit('select-subcategory', '')"
           >
             همه {{ activeCategoryTitle }}
@@ -34,7 +38,9 @@
             v-for="sub in subcategories"
             :key="sub.slug"
             class="sub-pill"
+            type="button"
             :class="{ active: selectedSubcategory === sub.slug }"
+            :aria-pressed="selectedSubcategory === sub.slug"
             @click="$emit('select-subcategory', sub.slug)"
           >
             {{ sub.title }}
@@ -97,16 +103,16 @@ function toFaCount(value) {
 }
 
 .img-rail-wrap {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  background: var(--ds-color-surface-raised, #fff);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.08));
   border-radius: 0 0 15px 15px;
   padding: 0.35rem 0.42rem 0.38rem;
   box-shadow: 0 6px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.06);
 }
 
 .img-sub-wrap {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  background: var(--ds-color-surface-raised, #fff);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.08));
   border-top: none;
   border-radius: 0 0 15px 15px;
   padding: 0.24rem 0.34rem 0.34rem;
@@ -130,8 +136,8 @@ function toFaCount(value) {
   gap: 0.34rem;
   flex-shrink: 0;
   cursor: pointer;
-  background: #fff;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.10);
+  background: var(--ds-color-surface-raised, #fff);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.10));
   padding: 0.42rem 0.5rem;
   border-radius: 13px;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
@@ -144,8 +150,8 @@ function toFaCount(value) {
 }
 .img-pill:hover { transform: translateY(-2px); }
 .img-pill.active {
-  background: linear-gradient(180deg, var(--accent-green), var(--accent-green80));
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.7);
+  background: linear-gradient(180deg, var(--ds-color-action-primary, var(--accent-green)), var(--ds-color-action-accent, var(--accent-green80)));
+  border-color: var(--ds-color-action-primary, var(--accent-green));
   box-shadow: 0 12px 26px rgb(var(--palette-deep-sapphire-rgb) / 0.20);
 }
 
@@ -153,7 +159,7 @@ function toFaCount(value) {
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: var(--accent-green20, var(--theme-surface-alt));
+  background: var(--ds-color-action-primary-soft, var(--accent-green20, var(--theme-surface-alt)));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -170,11 +176,11 @@ function toFaCount(value) {
 }
 
 .cat-icon {
-  color: var(--accent-green);
+  color: var(--ds-color-action-primary, var(--accent-green));
 }
 
 .img-pill.active .cat-icon {
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
 }
 
 .img-copy {
@@ -185,7 +191,7 @@ function toFaCount(value) {
 
 .img-label {
   font-size: 0.72rem;
-  color: var(--text-primary);
+  color: var(--ds-color-text-primary, var(--text-primary));
   font-weight: 900;
   white-space: nowrap;
   max-width: 100%;
@@ -197,7 +203,7 @@ function toFaCount(value) {
 
 .img-count {
   font-size: 0.58rem;
-  color: var(--text-muted);
+  color: var(--ds-color-text-muted, var(--text-muted));
   line-height: 1;
   white-space: nowrap;
   text-align: right;
@@ -205,32 +211,52 @@ function toFaCount(value) {
 
 .img-pill.active .img-label,
 .img-pill.active .img-count {
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
 }
 
 .sub-pill {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  min-height: 44px;
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.14));
   border-radius: 999px;
-  background: #fff;
+  background: var(--ds-color-surface-raised, #fff);
   padding: 0.28rem 0.6rem;
   white-space: nowrap;
   font-size: 0.68rem;
-  color: var(--text-secondary);
+  color: var(--ds-color-text-secondary, var(--text-secondary));
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
   font-family: inherit;
 }
-.sub-pill:hover { background: var(--accent-green20, var(--theme-surface-alt)); }
+.sub-pill:hover { background: var(--ds-color-action-primary-soft, var(--accent-green20, var(--theme-surface-alt))); }
 .sub-pill.active {
-  background: var(--accent-green);
-  border-color: var(--accent-green);
-  color: #fff;
+  background: var(--ds-color-action-primary, var(--accent-green));
+  border-color: var(--ds-color-action-primary, var(--accent-green));
+  color: var(--ds-color-text-inverse, #fff);
   font-weight: 800;
 }
 
 .slide-down-enter-active { animation: slideDown 0.28s ease; }
 .slide-down-leave-active { animation: slideDown 0.2s ease reverse; }
+.img-rail-stack button:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
+  position: relative;
+  z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .img-pill,
+  .img-circle,
+  .sub-pill {
+    transition: none;
+  }
+
+  .slide-down-enter-active,
+  .slide-down-leave-active {
+    animation: none;
+    transition: none;
+  }
+}
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }

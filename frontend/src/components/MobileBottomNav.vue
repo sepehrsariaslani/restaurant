@@ -1,29 +1,29 @@
 <template>
   <nav class="mobile-bottom-nav" dir="rtl" aria-label="منوی پایین">
-    <a href="/" class="nav-item" :class="{ active: page === 'landing' }">
+    <a href="/" class="nav-item" :class="{ active: page === 'landing' || page === 'homev2' }" :aria-current="page === 'landing' || page === 'homev2' ? 'page' : undefined">
       <Home class="nav-icon" :size="20" />
       <small>خانه</small>
     </a>
 
-    <a href="/menu" class="nav-item" :class="{ active: page === 'menu' || page === 'item' }">
+    <a href="/menu" class="nav-item" :class="{ active: page === 'menu' || page === 'item' }" :aria-current="page === 'menu' || page === 'item' ? 'page' : undefined">
       <List class="nav-icon" :size="20" />
       <small>منو</small>
     </a>
 
-    <a href="/search" class="nav-item nav-search" :class="{ active: page === 'search' }" aria-label="جستجو">
+    <a href="/search" class="nav-item nav-search" :class="{ active: page === 'search' }" :aria-current="page === 'search' ? 'page' : undefined" aria-label="جستجو">
       <span class="search-orb">
         <Search :size="22" />
       </span>
       <small>جستجو</small>
     </a>
 
-    <a href="/cart" class="nav-item" :class="{ active: page === 'cart' }">
+    <a href="/cart" class="nav-item" :class="{ active: page === 'cart' }" :aria-current="page === 'cart' ? 'page' : undefined" :aria-label="cartCount > 0 ? `سبد سفارش، ${cartCount.toLocaleString('fa-IR')} آیتم` : 'سبد سفارش'">
       <ShoppingCart class="nav-icon" :size="20" />
       <small>سبد</small>
-      <i v-if="cartCount > 0">{{ cartCount }}</i>
+      <i v-if="cartCount > 0" aria-hidden="true">{{ cartCount.toLocaleString('fa-IR') }}</i>
     </a>
 
-    <a href="/customer/dashboard" class="nav-item" :class="{ active: isCustomerAccountActive }">
+    <a href="/customer/dashboard" class="nav-item" :class="{ active: isCustomerAccountActive }" :aria-current="isCustomerAccountActive ? 'page' : undefined">
       <UserRound class="nav-icon" :size="20" />
       <small>حساب</small>
     </a>
@@ -59,13 +59,14 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
 <style scoped>
 .mobile-bottom-nav {
   position: fixed;
-  bottom: 0.62rem;
+  bottom: calc(0.62rem + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   width: min(520px, calc(100% - 0.8rem));
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
+  background: var(--ds-color-surface-raised, #fff);
+  background: color-mix(in srgb, var(--ds-color-surface-raised, #fff) 96%, transparent);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.12));
   box-shadow: 0 10px 24px rgba(15,23,42,0.1);
   padding: 0.34rem;
   display: grid;
@@ -79,7 +80,7 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
   min-height: 48px;
   border: 0;
   border-radius: 16px;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, var(--text-muted, #846b58));
   background: transparent;
   display: grid;
   align-content: center;
@@ -104,8 +105,8 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
 }
 
 .nav-item.active {
-  background: var(--accent-green20, rgba(111,74,49,0.09));
-  color: var(--accent-green, #6f4a31);
+  background: var(--ds-color-action-primary-soft, var(--accent-green20, rgba(111,74,49,0.09)));
+  color: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
 }
 
 .nav-search {
@@ -117,21 +118,21 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
   width: 44px;
   height: 44px;
   border-radius: 18px;
-  background: var(--accent-green, #6f4a31);
-  color: #fff;
+  background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
+  color: var(--ds-color-text-inverse, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 20px rgb(var(--palette-deep-sapphire-rgb) / 0.20);
+  box-shadow: var(--ds-shadow-md, 0 10px 20px rgb(var(--palette-deep-sapphire-rgb) / 0.20));
 }
 
 .nav-search small {
-  color: var(--accent-green, #6f4a31);
+  color: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
   margin-top: -0.1rem;
 }
 
 .nav-search.active .search-orb {
-  background: linear-gradient(135deg, var(--accent-green), var(--accent-gold));
+  background: linear-gradient(135deg, var(--ds-color-action-primary, var(--accent-green)), var(--ds-color-action-accent, var(--accent-gold)));
 }
 
 .nav-item i {
@@ -143,14 +144,21 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
   height: 0.95rem;
   padding: 0 0.2rem;
   border-radius: 999px;
-  background: var(--danger, #e74c3c);
-  color: #fff;
+  background: var(--ds-color-status-danger, var(--danger, #e74c3c));
+  color: var(--ds-color-text-inverse, #fff);
   font-style: normal;
   font-size: 0.56rem;
   font-weight: 800;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.mobile-bottom-nav a:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
+  position: relative;
+  z-index: 1;
 }
 
 @media (min-width: 920px) {

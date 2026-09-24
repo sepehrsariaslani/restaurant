@@ -17,17 +17,24 @@
       />
     </div>
 
-    <div class="menu-toolbar">
-      <button class="sort-toggle" type="button" @click="toggleSortMenu" :aria-expanded="sortMenuOpen ? 'true' : 'false'">
+    <div class="menu-toolbar" role="group" aria-label="مرتب‌سازی منو">
+      <button
+        class="sort-toggle"
+        type="button"
+        @click="toggleSortMenu"
+        :aria-expanded="sortMenuOpen ? 'true' : 'false'"
+        aria-controls="menu-sort-options"
+      >
         <ChevronDown :size="16" />
         <span>{{ activeSortLabel }}</span>
       </button>
-      <div class="sort-menu" v-if="sortMenuOpen">
+      <div class="sort-menu" id="menu-sort-options" role="group" aria-label="گزینه‌های مرتب‌سازی" v-show="sortMenuOpen">
         <button
           v-for="option in sortOptions"
           :key="option.value"
           type="button"
           :class="{ active: sortMode === option.value }"
+          :aria-pressed="sortMode === option.value"
           @click="setSortMode(option.value)"
         >
           {{ option.label }}
@@ -36,17 +43,21 @@
     </div>
 
     <!-- فیلتر تگ‌ها -->
-    <div class="tag-filter-row" v-if="availableTags.length">
+    <div class="tag-filter-row" role="group" aria-label="فیلتر بر اساس برچسب" v-if="availableTags.length">
       <button
         class="tag-filter-btn"
+        type="button"
         :class="{ active: !selectedTag }"
+        :aria-pressed="!selectedTag"
         @click="selectedTag = ''"
       >همه</button>
       <button
         v-for="tag in availableTags"
         :key="tag"
         class="tag-filter-btn"
+        type="button"
         :class="{ active: selectedTag === tag }"
+        :aria-pressed="selectedTag === tag"
         @click="selectedTag = selectedTag === tag ? '' : tag"
       >{{ tag }}</button>
     </div>
@@ -85,15 +96,15 @@
       <!-- سربرگ نتایج -->
       <section class="result-head" ref="resultHeadRef">
         <transition name="fade" mode="out-in">
-          <p class="muted result-count" v-if="!loading" key="count">
+          <p class="muted result-count" role="status" aria-live="polite" aria-atomic="true" v-if="!loading" key="count">
             <span class="count-badge">{{ pagination.total }}</span>
             محصول آماده سفارش
           </p>
-          <p class="muted" v-else key="loading-text">در حال بارگذاری...</p>
+          <p class="muted" role="status" aria-live="polite" v-else key="loading-text">در حال بارگذاری...</p>
         </transition>
-        <p class="muted error-text" v-if="error">
+        <p class="muted error-text" role="alert" v-if="error">
           {{ error }}
-          <button class="retry-btn" @click="reloadItems(1)" :disabled="loading">تلاش مجدد</button>
+          <button class="retry-btn" type="button" @click="reloadItems(1)" :disabled="loading">تلاش مجدد</button>
         </p>
       </section>
 
@@ -235,7 +246,7 @@
           <Utensils class="empty-icon" :size="34" stroke-width="1.8" />
           <p class="empty-title">{{ emptyStateTitle }}</p>
           <p class="muted">{{ emptyStateMessage }}</p>
-          <button class="reset-btn" @click="resetFilters">{{ emptyStateAction }}</button>
+          <button class="reset-btn" type="button" @click="resetFilters">{{ emptyStateAction }}</button>
         </LiquidGlassCard>
       </transition>
 
@@ -368,7 +379,7 @@ const menuHighlight = ref(
   },
 )
 const items = ref([])
-const loading = ref(false)
+const loading = ref(true)
 const loadingMore = ref(false)
 const error = ref('')
 const selectedTag = ref('')
@@ -1412,12 +1423,13 @@ function scrollToTop() {
 }
 
 onMounted(async () => {
-  try {
-    const profile = await getManagementSessionProfile()
-    canViewBom.value = Boolean(profile?.is_staff || profile?.is_admin)
-  } catch (_) {
-    canViewBom.value = false
-  }
+  getManagementSessionProfile()
+    .then((profile) => {
+      canViewBom.value = Boolean(profile?.is_staff || profile?.is_admin)
+    })
+    .catch(() => {
+      canViewBom.value = false
+    })
 
   // Apply category from URL query parameter
   const urlCategory = new URLSearchParams(window.location.search).get('category')
@@ -1474,7 +1486,7 @@ onUnmounted(() => {
 .category-rail-sticky {
   position: relative;
   z-index: 100;
-  background: var(--theme-background, #f6f1ea);
+  background: var(--ds-color-bg-page, var(--theme-background, #f6f1ea));
   padding: 0;
   border-bottom: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.1);
   transition: box-shadow 0.2s ease;
@@ -1519,12 +1531,12 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 0.62rem;
   border-radius: 12px;
-  border: 1px solid var(--glass-border);
-  background: #fff;
-  color: var(--text-secondary);
+  border: 1px solid var(--ds-color-border, var(--glass-border));
+  background: var(--ds-color-surface-raised, #fff);
+  color: var(--ds-color-text-secondary, var(--text-secondary));
   box-shadow: 0 6px 14px rgb(15 23 42 / 0.045);
   font-family: inherit;
   font-size: 0.72rem;
@@ -1541,8 +1553,8 @@ onUnmounted(() => {
   gap: 0.18rem;
   padding: 0.28rem;
   border-radius: 13px;
-  border: 1px solid var(--glass-border);
-  background: #fff;
+  border: 1px solid var(--ds-color-border, var(--glass-border));
+  background: var(--ds-color-surface-raised, #fff);
   box-shadow: 0 12px 24px rgb(15 23 42 / 0.10);
 }
 
@@ -1550,9 +1562,10 @@ onUnmounted(() => {
   border: 0;
   background: transparent;
   border-radius: 9px;
-  padding: 0.4rem 0.52rem;
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
   text-align: right;
-  color: var(--text-secondary);
+  color: var(--ds-color-text-secondary, var(--text-secondary));
   font-family: inherit;
   font-size: 0.72rem;
   font-weight: 700;
@@ -1561,8 +1574,8 @@ onUnmounted(() => {
 
 .sort-menu button.active,
 .sort-menu button:hover {
-  background: var(--accent-green20);
-  color: var(--accent-green);
+  background: var(--ds-color-action-primary-soft, var(--accent-green20));
+  color: var(--ds-color-action-primary, var(--accent-green));
 }
 
 /* Reserve space when rail is fixed so content doesn't jump */
@@ -1582,26 +1595,27 @@ onUnmounted(() => {
 }
 
 .tag-filter-btn {
-  background: var(--glass-bg, #fdf8f1);
-  border: 1px solid var(--glass-border, #d5c3af);
+  min-height: 44px;
+  background: var(--ds-color-surface, var(--glass-bg, #fdf8f1));
+  border: 1px solid var(--ds-color-border, var(--glass-border, #d5c3af));
   border-radius: 999px;
-  padding: 0.3rem 0.75rem;
+  padding: 0.45rem 0.85rem;
   font-size: 0.78rem;
-  color: var(--text-secondary, #654a38);
+  color: var(--ds-color-text-secondary, var(--text-secondary, #654a38));
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
 }
 
 .tag-filter-btn:hover {
-  border-color: var(--accent-green, #6f4a31);
-  color: var(--accent-green, #6f4a31);
+  border-color: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
+  color: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
 }
 
 .tag-filter-btn.active {
-  background: var(--accent-green, #6f4a31);
-  border-color: var(--accent-green, #6f4a31);
-  color: #fff;
+  background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
+  border-color: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
+  color: var(--ds-color-text-inverse, #fff);
   font-weight: 600;
 }
 
@@ -1634,8 +1648,8 @@ onUnmounted(() => {
   min-width: 1.6rem;
   padding: 0.1rem 0.38rem;
   border-radius: 999px;
-  background: var(--accent-green20);
-  color: var(--ink-800);
+  background: var(--ds-color-action-primary-soft, var(--accent-green20));
+  color: var(--ds-color-text-primary, var(--ink-800));
   font-weight: 700;
   font-size: 0.78rem;
 }
@@ -1945,9 +1959,10 @@ onUnmounted(() => {
 .reset-btn {
   margin-top: 0.5rem;
   border-radius: 999px;
-  border: 1px solid var(--accent-green40);
-  background: var(--accent-green20);
-  color: var(--ink-800);
+  min-height: 44px;
+  border: 1px solid var(--ds-color-border, var(--accent-green40));
+  background: var(--ds-color-action-primary-soft, var(--accent-green20));
+  color: var(--ds-color-action-primary, var(--ink-800));
   padding: 0.46rem 1rem;
   font-family: inherit;
   font-size: 0.82rem;
@@ -1956,7 +1971,7 @@ onUnmounted(() => {
 }
 
 .reset-btn:hover {
-  background: var(--accent-green40);
+  background: var(--ds-color-action-accent-soft, var(--accent-green40));
 }
 
 /* ─── anchor برای infinite scroll ─── */
@@ -1973,8 +1988,8 @@ onUnmounted(() => {
   transform: translateX(-50%);
   width: min(500px, calc(100% - 1rem));
   border-radius: 20px;
-  background: #fff;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.2);
+  background: var(--ds-color-surface-raised, #fff);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.2));
   box-shadow: 0 14px 34px rgb(15 23 42 / 0.12);
   display: flex;
   justify-content: space-between;
@@ -1982,7 +1997,7 @@ onUnmounted(() => {
   padding: 0.72rem 1rem;
   z-index: 80;
   text-decoration: none;
-  color: var(--text-primary);
+  color: var(--ds-color-text-primary, var(--text-primary));
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -2170,6 +2185,11 @@ onUnmounted(() => {
     width: min(980px, 100%);
   }
 
+  .menu-toolbar,
+  .tag-filter-row {
+    width: min(980px, 100%);
+  }
+
   .item-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2247,8 +2267,8 @@ onUnmounted(() => {
   height: 46px;
   border-radius: 50%;
   border: 0;
-  background: var(--accent-green, #6f4a31);
-  color: #fff;
+  background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
+  color: var(--ds-color-text-inverse, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2272,5 +2292,34 @@ onUnmounted(() => {
 }
 .scroll-top-btn:active {
   transform: scale(0.95);
+}
+
+@media (max-width: 919px) {
+  .menu-shell {
+    padding-bottom: max(11rem, calc(11rem + env(safe-area-inset-bottom)));
+  }
+
+  .sticky-cart {
+    bottom: calc(6.25rem + env(safe-area-inset-bottom));
+  }
+
+  .scroll-top-btn {
+    bottom: calc(10rem + env(safe-area-inset-bottom));
+  }
+}
+
+.menu-page-root :deep(a:focus-visible),
+.menu-page-root :deep(button:focus-visible) {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-page-root :deep(*) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 </style>
