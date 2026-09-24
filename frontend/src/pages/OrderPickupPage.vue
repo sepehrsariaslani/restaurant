@@ -157,4 +157,39 @@ onMounted(() => {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+.order-flow-hero {
+  padding: clamp(1rem, 2vw, 1.3rem);
+}
+
+.order-flow-title {
+  font-size: clamp(1.55rem, 4vw, 2.25rem);
+  line-height: 1.25;
+}
+
+.order-flow-hero > .order-flow-secondary {
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.order-flow-branch-card.active {
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 64%, var(--ds-color-border));
+}
+
+.order-flow-steps {
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.order-flow-step {
+  scroll-snap-align: start;
+}
+
+@media (max-width: 560px) {
+  .order-flow-hero > .order-flow-secondary {
+    white-space: normal;
+  }
+}
 </style>
