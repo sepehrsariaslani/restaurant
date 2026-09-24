@@ -3,6 +3,8 @@ const freeze = (value) => Object.freeze(value)
 const primitiveColors = freeze({
   primary: '#C97852',
   accent: '#C98D42',
+  productAccent: '#C97852',
+  productMedia: '#FFFFFF',
   surface: '#FBF7F1',
   surfaceAlt: '#E8DDD0',
   background: '#F6F0E6',
@@ -26,9 +28,9 @@ export const designTokens = freeze({
   color: freeze({
     primitive: primitiveColors,
     semantic: freeze({
-      surface: freeze({ page: '--ds-color-bg-page', default: primitiveColors.background, base: '--ds-color-surface', raised: '--ds-color-surface-raised', muted: '--ds-color-surface-muted' }),
+      surface: freeze({ page: '--ds-color-bg-page', default: primitiveColors.background, base: '--ds-color-surface', raised: '--ds-color-surface-raised', muted: '--ds-color-surface-muted', productMedia: '--ds-color-product-media-surface' }),
       text: freeze({ primary: '--ds-color-text-primary', secondary: '--ds-color-text-secondary', muted: '--ds-color-text-muted', inverse: '--ds-color-text-inverse' }),
-      action: freeze({ primary: '--ds-color-action-primary', accent: '--ds-color-action-accent', focus: '--ds-color-focus-ring' }),
+      action: freeze({ primary: '--ds-color-action-primary', accent: '--ds-color-action-accent', product: '--ds-color-product-accent', focus: '--ds-color-focus-ring' }),
       status: freeze({ success: '--ds-color-status-success', warning: '--ds-color-status-warning', danger: '--ds-color-status-danger', info: '--ds-color-status-info' }),
     }),
   }),
@@ -44,6 +46,8 @@ export const tokenRows = freeze([
   { group: 'رنگ معنایی', token: '--ds-color-surface', label: 'سطح پایه', value: primitiveColors.surface, swatch: primitiveColors.surface },
   { group: 'رنگ معنایی', token: '--ds-color-action-primary', label: 'عمل اصلی', value: primitiveColors.primary, swatch: primitiveColors.primary },
   { group: 'رنگ معنایی', token: '--ds-color-action-accent', label: 'اکسنت', value: primitiveColors.accent, swatch: primitiveColors.accent },
+  { group: 'رنگ معنایی', token: '--ds-color-product-accent', label: 'اکسنت محصول', value: primitiveColors.productAccent, swatch: primitiveColors.productAccent },
+  { group: 'رنگ معنایی', token: '--ds-color-product-media-surface', label: 'سطح تصویر محصول', value: primitiveColors.productMedia, swatch: primitiveColors.productMedia },
   { group: 'رنگ معنایی', token: '--ds-color-text-primary', label: 'متن اصلی', value: primitiveColors.text, swatch: primitiveColors.text },
   { group: 'رنگ وضعیت', token: '--ds-color-status-success', label: 'موفقیت', value: primitiveColors.success, swatch: primitiveColors.success },
   { group: 'رنگ وضعیت', token: '--ds-color-status-warning', label: 'هشدار', value: primitiveColors.warning, swatch: primitiveColors.warning },

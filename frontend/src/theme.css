@@ -85,6 +85,10 @@
 	--ds-color-action-primary-soft: rgb(201 120 82 / 0.10);
 	--ds-color-action-accent: #c98d42;
 	--ds-color-action-accent-soft: rgb(201 141 66 / 0.12);
+	--ds-color-product-accent: #c97852;
+	--ds-color-product-accent-rgb: 201 120 82;
+	--ds-color-product-accent-soft: rgb(201 120 82 / 0.12);
+	--ds-color-product-media-surface: #ffffff;
 	--ds-color-focus-ring: #c98d42;
 	--ds-color-status-success: #6f7b56;
 	--ds-color-status-success-soft: rgb(111 123 86 / 0.12);
@@ -251,6 +255,10 @@ body.management-theme-dark {
 	--ds-color-action-primary-soft: rgb(192 112 80 / 0.16);
 	--ds-color-action-accent: #d8a15b;
 	--ds-color-action-accent-soft: rgb(216 161 91 / 0.18);
+	--ds-color-product-accent: #d98a66;
+	--ds-color-product-accent-rgb: 217 138 102;
+	--ds-color-product-accent-soft: rgb(217 138 102 / 0.16);
+	--ds-color-product-media-surface: #25221f;
 	--ds-color-focus-ring: #f0bd73;
 	--ds-color-status-success: #7f8b54;
 	--ds-color-status-success-soft: rgb(127 139 84 / 0.16);

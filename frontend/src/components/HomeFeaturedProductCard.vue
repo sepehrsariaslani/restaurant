@@ -3,11 +3,11 @@
     <a class="home-product-card__media" :href="itemUrl" :aria-label="`مشاهده ${item.title}`">
       <span class="home-product-card__shine" aria-hidden="true"></span>
       <img class="home-product-card__image" :src="resolvedImage" :alt="item.title" loading="lazy" />
-      <span class="home-product-card__offer">{{ offerText }}</span>
     </a>
 
     <div class="home-product-card__body">
       <div class="home-product-card__info">
+        <span class="home-product-card__offer">{{ offerText }}</span>
         <p class="home-product-card__category">{{ categoryLabel }}</p>
         <h3 class="home-product-card__title">{{ item.title }}</h3>
         <div class="home-product-card__tags" v-if="displayTags.length">
@@ -93,14 +93,9 @@ onUnmounted(() => {
 
 <style scoped>
 .home-product-card {
-  --home-card-bg: var(--palette-deep-sapphire);
-  --home-card-bg-rgb: var(--palette-deep-sapphire-rgb);
-  --home-card-accent: var(--palette-june-bud);
-  --home-card-accent-rgb: var(--palette-june-bud-rgb);
-  --home-card-warm: var(--palette-deep-saffron);
-  --home-card-warm-rgb: var(--palette-deep-saffron-rgb);
-  --home-card-surface: var(--palette-eggshell);
-  --home-card-surface-rgb: var(--palette-eggshell-rgb);
+  --home-card-bg: var(--ds-color-product-media-surface);
+  --home-card-accent: var(--ds-color-product-accent);
+  --home-card-surface: var(--ds-color-text-primary);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -108,8 +103,9 @@ onUnmounted(() => {
   max-width: 100%;
   overflow: hidden;
   border-radius: 1.45rem;
-  background: linear-gradient(145deg, rgb(var(--home-card-bg-rgb) / 0.95), var(--home-card-bg));
-  box-shadow: 0 10px 24px rgb(var(--home-card-bg-rgb) / 0.16), inset 0 0 0 1px rgb(var(--home-card-surface-rgb) / 0.08);
+  background: var(--home-card-bg);
+  border: 1px solid var(--ds-color-border);
+  box-shadow: var(--ds-shadow-sm);
   isolation: isolate;
   transform: translateZ(0);
   transition: transform 0.24s ease, box-shadow 0.24s ease;
@@ -120,27 +116,27 @@ onUnmounted(() => {
   position: absolute;
   inset: 0.48rem;
   border-radius: 1.1rem;
-  border: 1px solid rgb(var(--home-card-surface-rgb) / 0.08);
+  border: 1px solid var(--ds-color-border);
   pointer-events: none;
   z-index: 2;
 }
 
 .home-product-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 18px 38px rgb(var(--home-card-bg-rgb) / 0.22), inset 0 0 0 1px rgb(var(--home-card-surface-rgb) / 0.1);
+  box-shadow: var(--ds-shadow-md);
 }
 
 .home-product-card__media {
   position: relative;
   display: block;
   margin: 0.55rem 0.55rem 0;
-  height: 168px;
+  min-height: 168px;
+  max-height: 240px;
+  aspect-ratio: 1.25 / 1;
   overflow: hidden;
   border-radius: 1.05rem 1.05rem 1.35rem 1.35rem;
-  background:
-    linear-gradient(135deg, rgb(var(--home-card-accent-rgb) / 0.88), rgb(var(--home-card-surface-rgb) / 0.82)),
-    radial-gradient(circle at 50% 30%, rgb(var(--home-card-surface-rgb) / 0.72), transparent 44%);
-  box-shadow: inset 0 0 0 6px rgb(var(--home-card-bg-rgb) / 0.86), inset 0 -38px 0 rgb(var(--home-card-accent-rgb) / 0.76);
+  background: var(--ds-color-product-media-surface);
+  box-shadow: inset 0 0 0 1px var(--ds-color-border);
   text-decoration: none;
 }
 
@@ -150,33 +146,30 @@ onUnmounted(() => {
 
 .home-product-card__image {
   position: absolute;
-  inset: 0.8rem 0.85rem 2.55rem;
-  width: calc(100% - 1.7rem);
-  height: calc(100% - 3.35rem);
+  inset: 0.55rem;
+  width: calc(100% - 1.1rem);
+  height: calc(100% - 1.1rem);
   object-fit: contain;
   object-position: center;
-  filter: drop-shadow(0 14px 16px rgb(var(--home-card-bg-rgb) / 0.24));
-  transition: transform 0.28s ease, filter 0.28s ease;
+  filter: drop-shadow(0 8px 12px color-mix(in srgb, var(--ds-color-text-primary) 12%, transparent));
+  transition: filter 0.28s ease;
   z-index: 1;
 }
 
 .home-product-card:hover .home-product-card__image {
-  transform: scale(1.04) translateY(-2px);
-  filter: drop-shadow(0 18px 18px rgb(var(--home-card-bg-rgb) / 0.28));
+  filter: drop-shadow(0 10px 14px color-mix(in srgb, var(--ds-color-text-primary) 16%, transparent));
 }
 
 .home-product-card__offer {
-  position: absolute;
-  right: 0;
-  left: 0;
-  bottom: 0.48rem;
-  z-index: 3;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 1.55rem;
-  padding: 0 0.75rem;
-  color: var(--home-card-surface);
+  min-height: 1.45rem;
+  margin-bottom: 0.45rem;
+  padding: 0.12rem 0.58rem;
+  border-radius: 999px;
+  background: var(--ds-color-product-accent-soft);
+  color: var(--ds-color-product-accent);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -200,7 +193,7 @@ onUnmounted(() => {
 
 .home-product-card__category {
   margin: 0 0 0.15rem;
-  color: rgb(var(--home-card-surface-rgb) / 0.6);
+  color: var(--ds-color-text-muted);
   font-size: 0.66rem;
   font-weight: 800;
 }
@@ -232,20 +225,20 @@ onUnmounted(() => {
   min-height: 1.35rem;
   padding: 0.18rem 0.5rem;
   border-radius: 999px;
-  background: rgb(var(--home-card-surface-rgb) / 0.1);
-  color: rgb(var(--home-card-surface-rgb) / 0.82);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-secondary);
   font-size: 0.64rem;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: inset 0 0 0 1px rgb(var(--home-card-surface-rgb) / 0.05);
+  border: 1px solid var(--ds-color-border);
 }
 
 .home-product-card__divider {
   width: 1px;
   height: 4.35rem;
-  background: linear-gradient(to bottom, transparent, rgb(var(--home-card-surface-rgb) / 0.22), transparent);
+  background: var(--ds-color-border);
 }
 
 .home-product-card__action {
@@ -257,7 +250,7 @@ onUnmounted(() => {
 }
 
 .home-product-card__price {
-  color: var(--home-card-surface);
+  color: var(--ds-color-product-accent);
   font-size: clamp(1rem, 2vw, 1.32rem);
   line-height: 1.05;
   font-weight: 900;
@@ -269,10 +262,10 @@ onUnmounted(() => {
 .home-product-card__add {
   min-width: 5.6rem;
   height: 2.25rem;
-  border: 1px solid rgb(var(--home-card-surface-rgb) / 0.16);
+  border: 1px solid var(--ds-color-product-accent);
   border-radius: 999px;
-  background: rgb(var(--home-card-surface-rgb) / 0.1);
-  color: var(--home-card-surface);
+  background: transparent;
+  color: var(--ds-color-product-accent);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -283,7 +276,7 @@ onUnmounted(() => {
   font-size: 0.78rem;
   line-height: 1;
   font-weight: 800;
-  box-shadow: inset 0 0 0 1px rgb(var(--home-card-surface-rgb) / 0.04);
+  box-shadow: none;
   transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
 }
 
@@ -291,14 +284,14 @@ onUnmounted(() => {
 .home-product-card__add:focus-visible,
 .home-product-card__add.added {
   background: var(--home-card-accent);
-  border-color: rgb(var(--home-card-accent-rgb) / 0.82);
-  color: var(--home-card-bg);
+  border-color: var(--home-card-accent);
+  color: var(--ds-color-text-inverse);
   transform: translateY(-1px);
   outline: none;
 }
 
 .home-product-card__add:focus-visible {
-  box-shadow: 0 0 0 3px rgb(var(--home-card-accent-rgb) / 0.36);
+  box-shadow: 0 0 0 3px var(--ds-color-product-accent-soft);
 }
 
 .home-product-card__add-icon {
@@ -315,7 +308,9 @@ onUnmounted(() => {
   }
 
   .home-product-card__media {
-    height: 150px;
+    min-height: 168px;
+    max-height: 220px;
+    aspect-ratio: 1.25 / 1;
     border-radius: 0.95rem 0.95rem 1.2rem 1.2rem;
   }
 

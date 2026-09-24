@@ -1405,6 +1405,23 @@ onUnmounted(() => {
 
 <style scoped>
 .detail-page {
+  --palette-deep-sapphire: var(--ds-color-product-accent);
+  --palette-deep-sapphire-rgb: var(--ds-color-product-accent-rgb);
+  --palette-deep-saffron: var(--ds-color-product-accent);
+  --palette-deep-saffron-rgb: var(--ds-color-product-accent-rgb);
+  --palette-gold-rgb: var(--ds-color-product-accent-rgb);
+  --accent-green: var(--ds-color-product-accent);
+  --accent-green-rgb: var(--ds-color-product-accent-rgb);
+  --accent-rgb: var(--ds-color-product-accent-rgb);
+  --accent-green80: color-mix(in srgb, var(--ds-color-product-accent) 90%, transparent);
+  --accent-green60: color-mix(in srgb, var(--ds-color-product-accent) 70%, transparent);
+  --accent-green40: color-mix(in srgb, var(--ds-color-product-accent) 14%, transparent);
+  --accent-green20: color-mix(in srgb, var(--ds-color-product-accent) 8%, transparent);
+  --accent-gold: var(--ds-color-product-accent);
+  --accent-gold80: color-mix(in srgb, var(--ds-color-product-accent) 90%, transparent);
+  --accent-gold50: color-mix(in srgb, var(--ds-color-product-accent) 60%, transparent);
+  --accent-gold20: var(--ds-color-product-accent-soft);
+  --accent-orange: var(--ds-color-product-accent);
   min-height: 100svh;
   background: var(--theme-background, #f6f1ea);
   direction: rtl;
@@ -1436,9 +1453,7 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top, rgb(255 255 255 / 0.92), transparent 42%),
-    linear-gradient(180deg, rgb(var(--palette-eggshell-rgb) / 0.98), rgb(var(--palette-eggshell-rgb) / 0.86));
+  background: var(--ds-color-product-media-surface);
 }
 
 .gallery-track {
@@ -1628,7 +1643,7 @@ onUnmounted(() => {
 }
 .stars-display { display: flex; gap: 0.1rem; }
 .star { color: #ddd; font-size: 1rem; }
-.star.filled { color: #f5a623; }
+.star.filled { color: var(--ds-color-product-accent); }
 .star.sm { font-size: 0.75rem; }
 .rating-num { font-size: 0.9rem; font-weight: 700; color: var(--text-primary, #3f2a1d); }
 .rating-count { font-size: 0.78rem; color: var(--text-muted, #846b58); }
@@ -1970,7 +1985,7 @@ onUnmounted(() => {
   line-height: 1;
   transition: color 0.15s;
 }
-.star-btn.filled { color: #f5a623; }
+.star-btn.filled { color: var(--ds-color-product-accent); }
 
 .review-input,
 .review-textarea {
@@ -2230,12 +2245,12 @@ onUnmounted(() => {
   height: 100px;
   border-radius: 14px;
   overflow: hidden;
-  background: var(--theme-surface-alt, #f1e7db);
+  background: var(--ds-color-product-media-surface);
 }
 .related-img-wrap img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .related-name {
@@ -2286,7 +2301,7 @@ onUnmounted(() => {
     height: 480px;
     border-radius: 28px;
     overflow: hidden;
-    background: var(--theme-surface-alt, #f1e7db);
+    background: var(--ds-color-product-media-surface);
     box-shadow: 0 12px 36px rgba(0,0,0,0.1);
     cursor: pointer;
     position: relative;
@@ -2295,7 +2310,7 @@ onUnmounted(() => {
   .desktop-main-image img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     display: block;
   }
@@ -2314,7 +2329,7 @@ onUnmounted(() => {
     border-radius: 14px;
     overflow: hidden;
     border: 2px solid transparent;
-    background: var(--theme-surface-alt, #f1e7db);
+    background: var(--ds-color-product-media-surface);
     cursor: pointer;
     padding: 0;
     flex-shrink: 0;
@@ -2328,7 +2343,7 @@ onUnmounted(() => {
   .thumb-btn img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
   }
 
