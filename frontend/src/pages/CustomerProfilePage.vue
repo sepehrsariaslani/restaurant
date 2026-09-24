@@ -6,13 +6,15 @@
           <ChevronRight :size="20" />
         </button>
         <div class="customer-page__titles">
-          <p class="customer-page__eyebrow"><UserRound :size="14" /> ویرایش حساب</p>
-          <h1 class="customer-page__title">ویرایش اطلاعات شخصی</h1>
-          <p class="customer-page__subtitle">این صفحه فقط برای اصلاح اطلاعات پایه حساب شماست.</p>
+          <p class="customer-page__eyebrow"><UserRound :size="14" /> {{ isLoggedIn ? 'ویرایش حساب' : 'حساب مشتری' }}</p>
+          <h1 class="customer-page__title">{{ isLoggedIn ? 'ویرایش اطلاعات شخصی' : 'ورود برای مدیریت حساب' }}</h1>
+          <p class="customer-page__subtitle">
+            {{ isLoggedIn ? 'این صفحه فقط برای اصلاح اطلاعات پایه حساب شماست.' : 'برای دیدن و ویرایش اطلاعات شخصی، ابتدا وارد حساب خود شوید.' }}
+          </p>
         </div>
-        <a class="customer-page__action" href="/customer/dashboard">
+        <a class="customer-page__action" :href="isLoggedIn ? '/customer/dashboard' : '/customer/login?redirect=/customer/profile'">
           <LayoutDashboard :size="16" />
-          <span>حساب من</span>
+          <span>{{ isLoggedIn ? 'حساب من' : 'ورود' }}</span>
         </a>
       </div>
 
@@ -30,7 +32,14 @@
     <div class="customer-page__body">
       <p v-if="error" class="customer-section__hint customer-danger-text">{{ error }}</p>
 
-      <section class="customer-section customer-glass-card customer-list-card">
+      <section v-if="!isLoggedIn" class="customer-glass-card customer-empty profile-login-prompt">
+        <div class="customer-icon-badge"><UserRound :size="28" /></div>
+        <h3>اطلاعات حساب در دسترس نیست</h3>
+        <p>پس از ورود با شماره موبایل، می‌توانید اطلاعات شخصی خود را اینجا مدیریت کنید.</p>
+        <a class="primary-btn" href="/customer/login?redirect=/customer/profile">ورود به حساب</a>
+      </section>
+
+      <section v-else class="customer-section customer-glass-card customer-list-card" :aria-busy="loading">
         <div class="customer-section__head">
           <div>
             <h2>اطلاعات قابل ویرایش</h2>
@@ -115,10 +124,15 @@ try {
 } catch {}
 
 const avatarLetter = computed(() => (form.value.name ? form.value.name.slice(0, 1) : 'ک'))
+const isLoggedIn = computed(() => Boolean(String(form.value.phone || '').trim()))
 
 function goBack() { window.history.back() }
 
 async function saveProfile() {
+  if (!readAuth().mobile) {
+    window.location.href = '/customer/login?redirect=/customer/profile'
+    return
+  }
   saving.value = true
   saved.value = false
   try {

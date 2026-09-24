@@ -135,8 +135,8 @@
               @status="mapStatus = $event"
             />
 
-            <details class="location-coordinates">
-              <summary>تنظیمات پیشرفته موقعیت</summary>
+            <details class="location-coordinates" :open="!hasMapKey">
+              <summary>{{ hasMapKey ? 'تنظیمات پیشرفته موقعیت' : 'ثبت دستی مختصات' }}</summary>
               <div class="location-coordinates__grid">
                 <label>
                   <span>عرض جغرافیایی</span>
@@ -151,9 +151,11 @@
             <p v-if="locationError" class="location-error">{{ locationError }}</p>
             <p v-else-if="hasLocation" class="location-ok">
               <MapPinCheck :size="15" />
-              لوکیشن آدرس ثبت شده و قابل استفاده روی نقشه است.
+              مختصات معتبر برای این آدرس ثبت شده است.
             </p>
-            <p v-else class="location-hint">برای ذخیره آدرس، انتخاب لوکیشن الزامی است.</p>
+            <p v-else class="location-hint">
+              {{ hasMapKey ? 'برای ذخیره آدرس، نقطهٔ روی نقشه یا مختصات معتبر را ثبت کنید.' : 'نقشه فعال نیست؛ مختصات را دستی وارد کنید تا بتوانید آدرس را ذخیره کنید.' }}
+            </p>
           </div>
 
           <div class="modal-actions">
@@ -249,6 +251,7 @@ const newAddr = ref({ label: 'خانه', type: 'خانه', address: '', detail: 
 const hasLocation = computed(() => (
   isValidCoordinate(newAddr.value.lat, -90, 90) && isValidCoordinate(newAddr.value.lng, -180, 180)
 ))
+const hasMapKey = computed(() => Boolean(String(mapConfig.value.api_key || '').trim()))
 const canSaveAddress = computed(() => newAddr.value.address.trim() && hasLocation.value)
 const addressLocation = computed({
   get() {
