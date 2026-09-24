@@ -1,6 +1,6 @@
 <template>
   <GlassCard class="line-card">
-    <button class="remove-btn" type="button" @click="$emit('remove')">×</button>
+    <button class="remove-btn" type="button" :aria-label="`حذف ${line.item_title} از سبد`" @click="$emit('remove')">×</button>
 
     <div class="line-main">
       <a class="product-visual" :href="`/item/${line.item_slug}?edit=${line.id}`" :aria-label="`مشاهده ${line.item_title}`">
@@ -15,7 +15,7 @@
         <strong class="unit-price">{{ formatMoney(line.unit_price_preview, currency) }}</strong>
       </div>
 
-      <div class="qty-side" aria-label="تعداد محصول">
+      <div class="qty-side" role="group" :aria-label="`تعداد ${line.item_title}`">
         <button class="qty-btn" type="button" :aria-label="`کم کردن ${line.item_title}`" @click="$emit('qty-change', Number(line.qty) - 1)">−</button>
         <strong>{{ line.qty }}</strong>
         <button class="qty-btn qty-btn--add" type="button" :aria-label="`افزودن ${line.item_title}`" @click="$emit('qty-change', Number(line.qty) + 1)">+</button>
@@ -119,22 +119,23 @@ const builderEditUrl = computed(() => {
   gap: 0.9rem;
   border-radius: 28px;
   padding: 1rem;
-  background: rgb(var(--palette-eggshell-rgb) / 0.98);
+  background: var(--ds-color-surface-raised, rgb(var(--palette-eggshell-rgb) / 0.98));
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.12));
 }
 
 .remove-btn {
   position: absolute;
   top: 0.46rem;
   inset-inline-start: 0.46rem;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(206, 94, 94, 0.35);
-  background: rgba(255, 246, 246, 0.8);
-  color: #b84f4f;
+  border: 1px solid color-mix(in srgb, var(--ds-color-status-danger, #b84f4f) 35%, transparent);
+  background: var(--ds-color-surface-raised, #fff);
+  color: var(--ds-color-status-danger, #b84f4f);
   font-size: 1.15rem;
   line-height: 1;
 }
@@ -190,18 +191,18 @@ const builderEditUrl = computed(() => {
   display: flex;
   align-items: center;
   gap: 0;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.14));
   border-radius: 999px;
   overflow: hidden;
-  background: #fff;
+  background: var(--ds-color-surface-raised, #fff);
 }
 
 .qty-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 0;
   background: transparent;
-  color: var(--accent-gold);
+  color: var(--ds-color-action-primary, var(--accent-green));
   font-size: 1.35rem;
   line-height: 1;
 }
@@ -224,11 +225,11 @@ const builderEditUrl = computed(() => {
 
 .mini-btn {
   border-radius: 999px;
-  border: 1px solid rgb(var(--palette-deep-saffron-rgb) / 0.32);
-  min-height: 36px;
+  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-saffron-rgb) / 0.32));
+  min-height: 44px;
   padding: 0.34rem 0.76rem;
-  background: rgb(var(--palette-june-bud-rgb) / 0.38);
-  color: var(--text-primary);
+  background: var(--ds-color-surface-sunken, rgb(var(--palette-june-bud-rgb) / 0.38));
+  color: var(--ds-color-text-primary, var(--text-primary));
   font-size: 0.74rem;
   white-space: nowrap;
 }
@@ -248,8 +249,16 @@ const builderEditUrl = computed(() => {
 }
 
 .qty-btn--add {
-  background: var(--accent-green);
-  color: #fff;
+  background: var(--ds-color-action-primary, var(--accent-green));
+  color: var(--ds-color-text-inverse, #fff);
+}
+
+.remove-btn:focus-visible,
+.qty-btn:focus-visible,
+.mini-btn:focus-visible,
+.product-visual:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--accent-orange));
+  outline-offset: 3px;
 }
 
 .qty-side > strong {

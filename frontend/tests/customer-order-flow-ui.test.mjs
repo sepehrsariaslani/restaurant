@@ -43,12 +43,31 @@ test('checkout summarizes the selected order context in editable confirmation ca
   assert.match(page, /ویرایش نوع سفارش/)
   assert.match(page, /class="checkout-product-summary"/)
   assert.match(page, /if \(!context\.value\.branch\) return 'برای ارسال، انتخاب شرکت الزامی است\.'/)
+  assert.match(page, /orderReviewStep = computed\(\(\) => context\.value\.order_type === 'pickup' \? '۵' : '۴'\)/)
+  assert.match(page, /\{\{ orderReviewStep \}\}\. مرور سفارش/)
 })
 
 test('cart switches to one column before image-first cards become cramped', async () => {
   const page = await source('pages/CartPage.vue')
 
   assert.match(page, /@media \(max-width: 760px\)/)
+  assert.match(page, /margin-bottom:\s*calc\(7\.5rem \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(page, /\.summary-panel\s*\{\s*position:\s*static;/)
+})
+
+test('cart actions remain touch friendly, named, and tied to dynamic theme tokens', async () => {
+  const [cart, line] = await Promise.all([
+    source('pages/CartPage.vue'),
+    source('components/CartLineEditor.vue'),
+  ])
+
+  assert.match(line, /:aria-label="`حذف \$\{line\.item_title\} از سبد`"/)
+  assert.match(line, /role="group" :aria-label="`تعداد \$\{line\.item_title\}`"/)
+  assert.match(line, /\.remove-btn\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/s)
+  assert.match(line, /\.qty-btn\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/s)
+  assert.match(line, /\.mini-btn\s*\{[^}]*min-height:\s*44px;/s)
+  assert.match(line, /--ds-color-action-primary/)
+  assert.match(cart, /--ds-color-action-primary/)
 })
 
 test('Frappe serves checkout through the restaurant SPA route', async () => {
