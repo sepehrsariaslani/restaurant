@@ -352,6 +352,19 @@ onMounted(async () => {
   background: rgb(var(--palette-june-bud-rgb) / 0.45);
 }
 
+.checkout-context-page .order-flow-form .order-flow-field {
+  max-width: 34rem;
+}
+
+.checkout-context-page .order-flow-form .order-flow-input:not(:focus) {
+  border-color: color-mix(in srgb, var(--ds-color-border) 35%, var(--ds-color-text-muted) 65%);
+}
+
+.checkout-context-page .payment-method-card {
+  border-color: color-mix(in srgb, var(--ds-color-border) 35%, var(--ds-color-text-muted) 65%);
+  background: var(--ds-color-surface-raised);
+}
+
 @media (max-width: 560px) {
   .checkout-card-heading { gap: 0.6rem; }
   .checkout-card-heading .order-flow-secondary { min-height: 38px; padding-inline: 0.72rem; font-size: 0.76rem; }

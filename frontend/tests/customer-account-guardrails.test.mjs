@@ -34,3 +34,11 @@ test('pickup screen keeps its title, action, and selected card visually balanced
   assert.match(source, /\.order-flow-branch-card\.active\s*\{[^}]*color-mix\(in srgb, var\(--ds-color-action-primary\)/s)
   assert.match(source, /scroll-snap-type:\s*x proximity/)
 })
+
+test('checkout keeps customer fields visible under the dynamic theme', async () => {
+  const source = await page('CheckoutPage.vue')
+
+  assert.match(source, /\.checkout-context-page \.order-flow-form \.order-flow-field\s*\{[^}]*max-width:\s*34rem/s)
+  assert.match(source, /\.order-flow-input:not\(:focus\)\s*\{[^}]*color-mix\(in srgb, var\(--ds-color-border\)[^}]*var\(--ds-color-text-muted\)/s)
+  assert.match(source, /\.payment-method-card\s*\{[^}]*background:\s*var\(--ds-color-surface-raised\)/s)
+})
