@@ -18,7 +18,7 @@
         <div class="error-state" v-else-if="error">
           <svg class="error-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <p class="error-msg">{{ error }}</p>
-          <button class="retry-btn" @click="loadItem" :disabled="loading">تلاش مجدد</button>
+          <button class="retry-btn" type="button" @click="loadItem" :disabled="loading">تلاش مجدد</button>
         </div>
       </div>
     </div>
@@ -41,16 +41,19 @@
         </div>
 
         <template v-if="galleryImages.length > 1">
-          <button class="gallery-arrow gallery-arrow--prev" @click="prevImage" aria-label="قبلی">›</button>
-          <button class="gallery-arrow gallery-arrow--next" @click="nextImage" aria-label="بعدی">‹</button>
-          <div class="gallery-dots">
-            <span
+          <button class="gallery-arrow gallery-arrow--prev" type="button" @click="prevImage" aria-label="تصویر قبلی">›</button>
+          <button class="gallery-arrow gallery-arrow--next" type="button" @click="nextImage" aria-label="تصویر بعدی">‹</button>
+          <div class="gallery-dots" role="group" aria-label="انتخاب تصویر محصول">
+            <button
               v-for="(_, idx) in galleryImages"
               :key="idx"
               class="gallery-dot"
+              type="button"
               :class="{ active: galleryIndex === idx }"
+              :aria-label="`تصویر ${idx + 1} از ${galleryImages.length}`"
+              :aria-pressed="galleryIndex === idx"
               @click="galleryIndex = idx"
-            ></span>
+            ></button>
           </div>
         </template>
 
@@ -66,6 +69,7 @@
               type="button"
               @click="toggleWishlist"
               aria-label="علاقه‌مندی"
+              :aria-pressed="isWishlisted"
             >{{ isWishlisted ? '♥' : '♡' }}</button>
             <button
               class="nav-circle"
@@ -290,7 +294,7 @@
       <div class="desktop-detail-layout desktop-only" v-if="item">
         <!-- Left: Image (sticky) -->
         <div class="desktop-image-col">
-          <div class="desktop-main-image" @click="openLightbox" role="button" tabindex="0" aria-label="مشاهده تصویر در اندازه بزرگ" @keydown.enter="openLightbox">
+          <div class="desktop-main-image" @click="openLightbox" role="button" tabindex="0" aria-label="مشاهده تصویر در اندازه بزرگ" @keydown.enter.space.prevent="openLightbox">
             <img :src="galleryImages[galleryIndex]" :alt="item.title" />
             <div class="zoom-hint">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
@@ -302,6 +306,7 @@
               :key="idx"
               class="thumb-btn"
               :class="{ active: galleryIndex === idx }"
+              type="button"
               @click="galleryIndex = idx"
             >
               <img :src="src" :alt="`${item.title} - ${idx + 1}`" />
@@ -320,11 +325,11 @@
 
             <!-- Top actions -->
             <div class="desktop-top-actions">
-              <button class="desktop-action-btn" :class="{ loved: isWishlisted }" @click="toggleWishlist" aria-label="علاقه‌مندی">
+              <button class="desktop-action-btn" type="button" :class="{ loved: isWishlisted }" @click="toggleWishlist" aria-label="علاقه‌مندی" :aria-pressed="isWishlisted">
                 <span class="heart-icon">{{ isWishlisted ? '♥' : '♡' }}</span>
                 <span class="action-label">{{ isWishlisted ? 'ذخیره شده' : 'علاقه‌مندی' }}</span>
               </button>
-              <button class="desktop-action-btn" @click="shareProduct" aria-label="اشتراک‌گذاری">
+              <button class="desktop-action-btn" type="button" @click="shareProduct" aria-label="اشتراک‌گذاری">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 <span class="action-label">اشتراک‌گذاری</span>
               </button>
@@ -532,8 +537,8 @@
                 <small>قیمت کل</small>
                 <strong>{{ unavailableReason || formatMoney(linePreview.lineTotal, currency) }}</strong>
               </div>
-              <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isComingSoon || isOutOfStock" @click="primaryAddAction">
-                {{ unavailableReason || isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+              <button class="add-to-cart-btn desktop-add-btn" type="button" :disabled="isUnavailable" @click="primaryAddAction">
+                {{ unavailableReason || (isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد') }}
                 <span class="cart-plus" v-if="!isComingSoon">+</span>
               </button>
             </div>
@@ -565,7 +570,12 @@
                 </div>
                 <p v-if="ri.short_desc" class="related-description">{{ ri.short_desc }}</p>
                 <div v-if="relatedDetails(ri).length" class="related-details">
-                  <span v-for="detail in relatedDetails(ri)" :key="detail" class="related-detail-chip">{{ detail }}</span>
+                  <span
+                    v-for="detail in relatedDetails(ri)"
+                    :key="detail.label"
+                    class="related-detail-chip"
+                    :class="`related-detail-chip--${detail.tone}`"
+                  >{{ detail.label }}</span>
                 </div>
               </div>
             </a>
@@ -598,8 +608,8 @@
           <small>قیمت کل</small>
           <strong>{{ unavailableReason || formatMoney(linePreview.lineTotal, currency) }}</strong>
         </div>
-        <button class="add-to-cart-btn" type="button" :disabled="isComingSoon || isOutOfStock" @click="primaryAddAction">
-          {{ unavailableReason || isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
+        <button class="add-to-cart-btn" type="button" :disabled="isUnavailable" @click="primaryAddAction">
+          {{ unavailableReason || (isBuilderEnabled ? (item.restaurant_customize_button_label || 'شروع سفارشی‌سازی') : isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد') }}
           <span class="cart-plus" v-if="!isComingSoon">+</span>
         </button>
       </div>
@@ -631,9 +641,9 @@
     <!-- ─── Image Lightbox ─── -->
     <Teleport to="body">
       <div class="lightbox-overlay" v-if="lightboxOpen" @click.self="closeLightbox" role="dialog" aria-modal="true" aria-label="نمایش تصویر در اندازه بزرگ">
-        <button class="lightbox-close" @click="closeLightbox" aria-label="بستن">✕</button>
-        <button class="lightbox-arrow lightbox-arrow--prev" @click="lightboxPrev" aria-label="تصویر قبلی">‹</button>
-        <button class="lightbox-arrow lightbox-arrow--next" @click="lightboxNext" aria-label="تصویر بعدی">›</button>
+        <button class="lightbox-close" type="button" @click="closeLightbox" aria-label="بستن">✕</button>
+        <button class="lightbox-arrow lightbox-arrow--prev" type="button" @click="lightboxPrev" aria-label="تصویر قبلی">‹</button>
+        <button class="lightbox-arrow lightbox-arrow--next" type="button" @click="lightboxNext" aria-label="تصویر بعدی">›</button>
         <div class="lightbox-image-wrap">
           <img :src="galleryImages[lightboxIndex]" :alt="item?.title" class="lightbox-img" />
         </div>
@@ -642,7 +652,7 @@
     </Teleport>
 
     <!-- ─── Scroll to top ─── -->
-    <button class="scroll-top-btn" :class="{ visible: showScrollTop }" @click="scrollToTop" aria-label="بازگشت به بالا">
+    <button class="scroll-top-btn" type="button" :class="{ visible: showScrollTop }" @click="scrollToTop" aria-label="بازگشت به بالا">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
     </button>
 
@@ -672,7 +682,7 @@ const props = defineProps({
 
 const fallbackImage = '/assets/restaurant/frontend/veederakht-home-hero.webp'
 
-const loading = ref(false)
+const loading = ref(true)
 const error = ref('')
 const item = ref(null)
 const activeTab = ref('details')
@@ -759,12 +769,21 @@ function relatedActionLabel(source = {}) {
 }
 
 function relatedDetails(source = {}) {
-  const values = [source?.category_title, source?.subcategory_title]
+  const values = [
+    { label: source?.category_title, tone: 'success' },
+    { label: source?.subcategory_title, tone: 'primary' },
+  ]
   const tags = Array.isArray(source?.tags) ? source.tags : []
-  values.push(...tags)
+  values.push(...tags.map((label) => ({ label, tone: 'accent' })))
   const kcal = Number(source?.nutrition?.kcal ?? source?.nutrition_kcal ?? 0)
-  if (Number.isFinite(kcal) && kcal > 0) values.push(`${Math.round(kcal).toLocaleString('fa-IR')} کیلوکالری`)
-  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 4)
+  if (Number.isFinite(kcal) && kcal > 0) {
+    values.push({ label: `${Math.round(kcal).toLocaleString('fa-IR')} کیلوکالری`, tone: 'success' })
+  }
+  const seen = new Set()
+  return values
+    .map((entry) => ({ label: String(entry?.label || '').trim(), tone: entry?.tone || 'accent' }))
+    .filter((entry) => entry.label && !seen.has(entry.label) && seen.add(entry.label))
+    .slice(0, 4)
 }
 
 function relatedCartQuantity(source = {}) {
@@ -1043,7 +1062,8 @@ const builderInitialSelections = computed(() => {
 const isComingSoon = computed(() => Number(item.value?.coming_soon ?? item.value?.restaurant_coming_soon ?? 0) === 1)
 const isStockOut = computed(() => Number(item.value?.stock_out || 0) === 1)
 const isOutOfStock = computed(() => Number(item.value?.out_of_stock ?? item.value?.restaurant_out_of_stock ?? 0) === 1)
-const unavailableReason = computed(() => (isOutOfStock.value ? 'ناموجود' : isStockOut.value ? 'اتمام' : isComingSoon.value ? 'به‌زودی' : ''))
+const isUnavailable = computed(() => isOutOfStock.value || isStockOut.value || isComingSoon.value)
+const unavailableReason = computed(() => (isOutOfStock.value ? 'ناموجود' : isStockOut.value ? 'اتمام موجودی' : isComingSoon.value ? 'به‌زودی' : ''))
 const activeBranch = ref(
   String(props.boot.active_branch || props.boot?.table_context?.table?.branch || query.branch || '').trim(),
 )
@@ -1319,6 +1339,7 @@ async function handleBuilderSelectionChange(selections) {
 }
 
 async function primaryAddAction() {
+  if (isUnavailable.value) return
   if (isBuilderEnabled.value) {
     if (!builderTemplate.value && !builderLoading.value) {
       await loadBuilderTemplate()
@@ -1334,7 +1355,7 @@ async function primaryAddAction() {
 }
 
 function handleBuilderAddToCart(payload) {
-  if (!item.value) return
+  if (!item.value || isUnavailable.value) return
 
   const finalPrice = Number(
     payload?.builder_pricing_breakdown?.final_price ??
@@ -1400,7 +1421,11 @@ function handleBuilderAddToCart(payload) {
 
 async function loadItem() {
   const slug = resolveSlug()
-  if (!slug) { error.value = 'آدرس محصول معتبر نیست.'; return }
+  if (!slug) {
+    loading.value = false
+    error.value = 'آدرس محصول معتبر نیست.'
+    return
+  }
   loading.value = true
   error.value = ''
   try {
@@ -1432,7 +1457,7 @@ async function loadItem() {
 }
 
 function addToCart() {
-  if (!item.value || isComingSoon.value || !validateSelections()) return
+  if (!item.value || isUnavailable.value || !validateSelections()) return
   const cleanCustomization = sanitizeCustomization(customization.value, ingredients.value)
   upsertLine({
     id: editLineId.value || undefined,
@@ -2337,13 +2362,24 @@ onUnmounted(() => {
   flex: 0 0 min(88vw, 25rem);
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--ds-color-border);
+  border: 1px solid color-mix(in srgb, var(--ds-color-status-success) 34%, var(--ds-color-border));
   border-radius: 22px;
   background: var(--ds-color-surface-raised, #fff);
-  box-shadow: var(--ds-shadow-sm);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--ds-color-status-success) 10%, transparent);
   color: inherit;
   scroll-snap-align: start;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.related-card::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 0;
+  inset-inline: 1rem;
+  height: 4px;
+  border-radius: 0 0 999px 999px;
+  background: linear-gradient(90deg, var(--ds-color-status-success), var(--ds-color-action-accent), var(--ds-color-action-primary));
+  pointer-events: none;
 }
 .related-card:hover {
   transform: translateY(-2px);
@@ -2364,7 +2400,7 @@ onUnmounted(() => {
   width: 100%;
   aspect-ratio: 1.9 / 1;
   overflow: hidden;
-  background: var(--ds-color-surface-raised, #fff);
+  background: linear-gradient(135deg, var(--ds-color-surface-muted), var(--ds-color-surface-raised));
   border-bottom: 1px solid var(--ds-color-border);
   position: relative;
 }
@@ -2400,9 +2436,9 @@ onUnmounted(() => {
   justify-content: center;
   border: 0;
   border-radius: 50%;
-  background: var(--ds-color-product-accent, #c97852);
+  background: var(--ds-color-action-accent);
   color: var(--ds-color-text-inverse);
-  box-shadow: 0 4px 12px rgb(52 38 31 / 18%);
+  box-shadow: 0 0 0 5px var(--ds-color-action-accent-soft), 0 4px 12px color-mix(in srgb, var(--ds-color-text-primary) 18%, transparent);
   cursor: pointer;
   transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
 }
@@ -2423,7 +2459,7 @@ onUnmounted(() => {
   font-size: 0.65rem;
   font-weight: 800;
 }
-.related-add-btn:hover:not(:disabled) { transform: scale(1.06); background: var(--ds-color-action-accent, #c98d42); }
+.related-add-btn:hover:not(:disabled) { transform: scale(1.06); background: var(--ds-color-action-primary); }
 .related-add-btn:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
 .related-add-btn:disabled { cursor: not-allowed; opacity: 0.45; }
 .related-card-content {
@@ -2474,13 +2510,28 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   min-height: 1.55rem;
-  border: 1px solid var(--ds-color-border);
+  border: 1px solid currentColor;
   border-radius: 999px;
   padding: 0.1rem 0.55rem;
-  background: var(--ds-color-surface);
+  background: transparent;
   color: var(--ds-color-text-secondary);
   font-size: 0.7rem;
   font-weight: 600;
+}
+.related-detail-chip--success {
+  border-color: color-mix(in srgb, var(--ds-color-status-success) 45%, transparent);
+  background: var(--ds-color-status-success-soft);
+  color: var(--ds-color-status-success);
+}
+.related-detail-chip--primary {
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 42%, transparent);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
+}
+.related-detail-chip--accent {
+  border-color: color-mix(in srgb, var(--ds-color-action-accent) 48%, transparent);
+  background: var(--ds-color-action-accent-soft);
+  color: var(--ds-color-action-accent);
 }
 
 /* ════════════════════════════════════════════════════════════════
