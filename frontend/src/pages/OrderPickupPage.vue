@@ -139,3 +139,22 @@ onMounted(() => {
   loadBranches()
 })
 </script>
+
+<style scoped>
+.order-flow-layout .pickup-branch-grid .order-flow-branch-card,
+.order-flow-layout > .order-flow-list > .order-flow-branch-card {
+  width: min(100%, 32rem);
+  justify-self: start;
+}
+
+.order-flow-steps {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.order-flow-step {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+</style>

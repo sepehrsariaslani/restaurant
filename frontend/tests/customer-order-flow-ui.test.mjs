@@ -233,3 +233,11 @@ test('customer, product, and order page wrappers provide the shared frontend ver
 
   for (const page of pages) assert.match(page, /context\.frontend_version\s*=\s*get_frontend_version\(context\)/)
 })
+
+test('pickup selection avoids a stretched single-branch card and wrapped progress steps', async () => {
+  const page = await source('pages/OrderPickupPage.vue')
+
+  assert.match(page, /\.pickup-branch-grid \.order-flow-branch-card,\s*\.order-flow-layout > \.order-flow-list > \.order-flow-branch-card\s*\{[^}]*width:\s*min\(100%,\s*32rem\);[^}]*justify-self:\s*start;/s)
+  assert.match(page, /\.order-flow-steps\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s)
+  assert.match(page, /\.order-flow-step\s*\{[^}]*flex:\s*0 0 auto;[^}]*white-space:\s*nowrap;/s)
+})
