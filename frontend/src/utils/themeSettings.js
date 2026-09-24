@@ -1,5 +1,6 @@
 import { getManagementThemeSettings, setManagementThemeSettings } from './api'
 import { designTokens } from '../design-system/tokens'
+import { ensureThemeBorderContrast } from './themeContrast.js'
 
 const THEME_STORAGE_KEY = 'restaurant.theme.settings.v1'
 const palette = designTokens.color.primitive
@@ -265,7 +266,7 @@ export function applyThemeSettings(settings = {}) {
   const normalized = sanitizeThemeSettings({ ...defaultThemeSettings, ...settings })
   const softPrimary = normalizeHex(normalized.surfaceAlt, tintHex(normalized.primary, 0.84))
   const bgSoft = normalizeHex(normalized.background, tintHex(normalized.surface, 0.35))
-  const borderColor = normalizeHex(normalized.border, tintHex(normalized.primary, 0.62))
+  const borderColor = ensureThemeBorderContrast(normalized.border, normalized.surface, normalized.primary)
 
   // Publish the semantic token layer first; legacy aliases below keep older
   // public and management components working during the incremental rollout.
