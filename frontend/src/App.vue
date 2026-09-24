@@ -70,7 +70,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <PublicHeader
-      v-if="page !== 'landing' && !isCustomerPage && page !== 'checkout' && page !== 'payment-fail' && page !== 'not-found' && page !== 'kitchen'"
+      v-if="page !== 'landing' && page !== 'homev2' && !isCustomerPage && page !== 'checkout' && page !== 'payment-fail' && page !== 'not-found' && page !== 'kitchen'"
       :branding="branding"
       :page="page"
       :cart-count="cartCount"
@@ -83,7 +83,7 @@
       class="app-main"
       :class="{ 'app-main--no-offset': useNoHeaderOffset }"
     >
-      <RestaurantLandingPage v-if="page === 'landing'" :boot="boot" />
+      <RestaurantLandingPage v-if="page === 'landing' || page === 'homev2'" :boot="boot" :page="page" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
       <MenuPage v-else-if="page === 'menu'" :boot="boot" />
@@ -327,6 +327,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/management/settings')) return 'management-settings'
 
     if (pathname === '/' || pathname === '') return 'landing'
+    if (pathname === '/homev2' || pathname === '/homev2/') return 'homev2'
     if (pathname.startsWith('/product-groups') || pathname.startsWith('/product_groups') || pathname.startsWith('/groups')) return 'product-groups'
     if (pathname.startsWith('/menu')) return 'menu'
     if (pathname.startsWith('/search')) return 'search'
@@ -406,7 +407,7 @@ const isCustomerPage = page.startsWith('customer-') || page === 'customer-delive
 const isFullscreenPage = page === 'checkout' || isOrderFlowPage || page === 'payment-fail' || page === 'not-found' || page === 'kitchen'
 
 const useNoHeaderOffset = computed(() => {
-  return page === 'landing' || isCustomerPage || isFullscreenPage
+  return page === 'landing' || page === 'homev2' || isCustomerPage || isFullscreenPage
 })
 
 const lastOrderUrl = computed(() => {

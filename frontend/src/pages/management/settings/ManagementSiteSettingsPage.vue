@@ -1614,6 +1614,7 @@ const previewDevice = ref('desktop')
 
 const builderPageOptions = [
   { value: 'home', label: 'صفحه اصلی', subtitle: 'خانه و لندینگ اصلی' },
+  { value: 'homev2', label: 'صفحه اصلی v2', subtitle: 'نسخه سالم‌محور با هیروی سه‌بعدی' },
   { value: 'about', label: 'درباره ما', subtitle: 'داستان و معرفی برند' },
   { value: 'faq', label: 'سوالات متداول', subtitle: 'پرسش و پاسخ عمومی' },
   { value: 'product_groups', label: 'گروه‌های محصول', subtitle: 'ورودی منوی دسته‌بندی‌شده' },
@@ -1624,7 +1625,7 @@ const previewDeviceOptions = [
   { value: 'mobile', label: 'گوشی' },
 ]
 
-const authoringPages = ['home', 'about', 'faq', 'product_groups']
+const authoringPages = ['home', 'homev2', 'about', 'faq', 'product_groups']
 
 function currentSiteSettingsPayload() {
   persistActiveHeroContent()
@@ -1828,7 +1829,9 @@ function applyRouteState() {
       : props.entryMode === 'theme-settings'
         ? 'theme'
         : normalizeStage(params.get('stage') || tabStageMap[legacyTab] || '')
-  const requestedPage = props.entryMode === 'home-builder' ? 'home' : String(params.get('page') || '').trim()
+  const requestedPage = props.entryMode === 'home-builder'
+    ? normalizeBuilderPage(params.get('page') || 'home')
+    : String(params.get('page') || '').trim()
   const requestedPanel = String(params.get('panel') || '').trim()
   const requestedLayoutPanel = String(params.get('layout_panel') || '').trim()
 

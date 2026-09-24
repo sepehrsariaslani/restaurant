@@ -1,5 +1,5 @@
 <template>
-  <div class="home-page" dir="rtl">
+  <div class="home-page" :class="{ 'home-page--v2': page === 'homev2' }" dir="rtl">
     <PublicHeader
       v-if="!previewMode"
       :branding="branding"
@@ -21,7 +21,7 @@
     </div>
 
     <div id="content" class="home-content" :class="{ 'needs-header-offset': !previewMode }">
-      <HomePageRenderer :boot="boot" @quick-add="quickAdd" />
+      <HomePageRenderer :boot="boot" :page="page" @quick-add="quickAdd" />
     </div>
 
     <Transition name="home-toast">
@@ -73,6 +73,10 @@ const props = defineProps({
   previewMode: {
     type: Boolean,
     default: false,
+  },
+  page: {
+    type: String,
+    default: 'home',
   },
 })
 
@@ -203,6 +207,58 @@ onUnmounted(() => {
 .home-content {
   padding-block: clamp(2rem, 6vw, 4rem);
   background: var(--bg-soft, #f7f5f2);
+}
+
+.home-page--v2 {
+  --healthy-brand-green: #236246;
+  --healthy-brand-orange: #e98b34;
+  --palette-deep-sapphire: var(--healthy-brand-green);
+  --palette-deep-sapphire-rgb: 35 98 70;
+  --palette-deep-saffron: var(--healthy-brand-orange);
+  --palette-deep-saffron-rgb: 233 139 52;
+  --accent-green: var(--healthy-brand-green);
+  --accent-green-rgb: 35 98 70;
+  --accent-green80: rgb(35 98 70 / 0.9);
+  --accent-green60: rgb(35 98 70 / 0.7);
+  --accent-green40: rgb(35 98 70 / 0.14);
+  --accent-green20: rgb(35 98 70 / 0.08);
+  --accent-gold: var(--healthy-brand-orange);
+  --accent-gold80: rgb(233 139 52 / 0.9);
+  --accent-gold50: rgb(233 139 52 / 0.6);
+  --accent-gold20: rgb(233 139 52 / 0.12);
+  --accent-color: var(--healthy-brand-green);
+  --brand-600: var(--healthy-brand-green);
+  --ds-color-action-primary: var(--healthy-brand-green);
+  --ds-color-action-primary-soft: rgb(35 98 70 / 0.1);
+  --ds-color-action-accent: var(--healthy-brand-orange);
+  --ds-color-action-accent-soft: rgb(233 139 52 / 0.13);
+  --ds-color-focus-ring: #e98b34;
+  --ds-color-status-success: #3d835e;
+  --ds-color-bg-page: #f6f6ed;
+  --ds-color-surface: #fffdf6;
+  --ds-color-surface-raised: #ffffff;
+  --ds-color-surface-muted: #e9eddf;
+  --ds-color-border: #dce5d9;
+  --ds-color-text-primary: #20392b;
+  --ds-color-text-secondary: #4f6858;
+  --ds-color-text-muted: #748276;
+  color: var(--ds-color-text-primary);
+  background: #f6f6ed;
+}
+
+:global(.home-page--v2 .home-content) {
+  padding-block: clamp(1rem, 3vw, 2.4rem) clamp(3rem, 7vw, 6rem);
+  background: #f6f6ed;
+}
+
+:global(.home-page--v2 .page-blocks) {
+  gap: clamp(3rem, 7vw, 6rem);
+}
+
+:global(.home-page--v2 .home-sticky-cart),
+:global(.home-page--v2 .home-toast) {
+  background: var(--healthy-brand-green);
+  color: #fffdf6;
 }
 
 .needs-header-offset {

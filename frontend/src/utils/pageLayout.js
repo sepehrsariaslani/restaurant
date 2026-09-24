@@ -75,12 +75,68 @@ export function buildLegacyPageLayout(boot = {}, page = "home") {
 	const pageKey = normalizePageBuilderKey(page);
 	const builders = {
 		home: buildLegacyHomeLayout,
+		homev2: buildLegacyHomeV2Layout,
 		about: buildLegacyAboutLayout,
 		faq: buildLegacyFaqLayout,
 		product_groups: buildLegacyProductGroupsLayout,
 	};
 	const build = builders[pageKey] || buildLegacyHomeLayout;
 	return build(boot).map((block, index) => ({ ...block, order: index }));
+}
+
+function buildLegacyHomeV2Layout(boot = {}) {
+	const blocks = [
+		createBlock("healthy_hero", {
+			variant: "club",
+			props: {
+				eyebrow: "غذای سالم، با حال خوب",
+				title: "هر روز، یک انتخاب",
+				highlight: "خوش‌طعم‌تر از همیشه",
+				description: "طعم‌های تازه و ترکیب‌های متعادل، برای وقتی که می‌خواهی هم خوشمزه بخوری هم انتخاب خوبی داشته باشی.",
+				ctaLabel: "دیدن منوی سالم",
+				ctaHref: "/menu",
+			},
+		}),
+		createBlock("categories", {
+			variant: "grid",
+			props: {
+				eyebrow: "منوی تازه و متنوع",
+				title: "از کجا شروع کنیم؟",
+			},
+		}),
+		createBlock("products", {
+			variant: "grid",
+			props: {
+				eyebrow: "پیشنهادهای خوش‌طعم",
+				title: "انتخاب‌های محبوب",
+				source: "featured",
+				limit: 6,
+			},
+		}),
+		createBlock("features", {
+			variant: "cards",
+			props: {
+				eyebrow: "ویدرخت، با نگاه سالم‌تر",
+				title: "ساده انتخاب کن، خوب بخور",
+				items: [
+					{ icon: "leaf", title: "ترکیب‌های تازه", description: "مواد و مزه‌ها را با دقت کنار هم می‌چینیم." },
+					{ icon: "sliders", title: "انتخاب‌های متنوع", description: "برای سلیقه‌ها و حال‌وهوای مختلف." },
+					{ icon: "heart", title: "غذای سالم و خوش‌طعم", description: "تعادل خوب، بدون کنار گذاشتن لذت غذا." },
+				],
+			},
+		}),
+		createBlock("banner", {
+			variant: "solid",
+			props: {
+				title: "برای انتخاب بعدی آماده‌ای؟",
+				description: "منوی روز را ببین و ترکیب مورد علاقه‌ات را پیدا کن.",
+				ctaLabel: "رفتن به منو",
+				ctaHref: "/menu",
+			},
+		}),
+	];
+
+	return blocks.filter(Boolean);
 }
 
 function buildLegacyHomeLayout(boot = {}) {

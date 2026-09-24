@@ -60,6 +60,7 @@
               :key="def.type"
               type="button"
               class="pbw__palette-item"
+              :disabled="isTypeAtLimit(def.type)"
               @click="addBlock(def.type)"
             >
               <strong>{{ def.label }}</strong>
@@ -79,7 +80,13 @@
         </div>
         <div class="pbw__stage" :class="`pbw__stage--${device}`">
           <div class="pbw__viewport">
-            <component :is="pageMeta.previewComponent" :key="previewKey" :boot="previewBoot" preview-mode />
+          <component
+            :is="pageMeta.previewComponent"
+            :key="previewKey"
+            :boot="previewBoot"
+            v-bind="pageMeta.previewProps || {}"
+            preview-mode
+          />
           </div>
         </div>
       </main>
@@ -149,6 +156,13 @@ const PAGE_META = {
     label: 'صفحه اصلی',
     subtitle: 'چیدمان و ترتیب نمایش بلاک‌های خانه.',
     previewComponent: RestaurantLandingPage,
+    previewProps: { page: 'home' },
+  },
+  homev2: {
+    label: 'صفحه اصلی v2',
+    subtitle: 'نسخه سالم‌محور با هیروی سه‌بعدی و چیدمان مستقل.',
+    previewComponent: RestaurantLandingPage,
+    previewProps: { page: 'homev2' },
   },
   about: {
     label: 'درباره ما',
@@ -220,6 +234,11 @@ function variantLabel(block) {
   return variant ? variant.label : block.variant
 }
 
+function isTypeAtLimit(type) {
+  const definition = getBlockType(type)
+  return Boolean(definition?.single && blocks.value.some((block) => block.type === type))
+}
+
 function ensureSelectedBlock() {
   if (!blocks.value.length) {
     selectedId.value = ''
@@ -231,6 +250,7 @@ function ensureSelectedBlock() {
 }
 
 function addBlock(type) {
+  if (isTypeAtLimit(type)) return
   const block = createBlock(type)
   if (!block) return
   blocks.value = [...blocks.value, block]
@@ -603,6 +623,11 @@ watch(
   flex-direction: column;
   gap: 0.2rem;
   text-align: center;
+}
+
+.pbw__palette-item:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
 }
 
 .pbw__palette-item strong {

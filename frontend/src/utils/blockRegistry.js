@@ -31,6 +31,7 @@ const FeaturesBlock = defineAsyncComponent(() => import("@/components/blocks/Fea
 const FaqBlock = defineAsyncComponent(() => import("@/components/blocks/FaqBlock.vue"));
 const BannerBlock = defineAsyncComponent(() => import("@/components/blocks/BannerBlock.vue"));
 const PopularBlock = defineAsyncComponent(() => import("@/components/blocks/PopularBlock.vue"));
+const HealthyHeroBlock = defineAsyncComponent(() => import("@/components/blocks/HealthyHeroBlock.vue"));
 
 let _uid = 0;
 export function makeBlockId(type = "blk") {
@@ -409,12 +410,54 @@ export const BLOCK_TYPES = {
 			};
 		},
 	},
+
+	healthy_hero: {
+		type: "healthy_hero",
+		label: "هیرو سبز و سه‌بعدی",
+		icon: "leaf",
+		component: markRaw(HealthyHeroBlock),
+		single: true,
+		variants: [
+			{ value: "club", label: "ساندویچ باشگاهی", desc: "نمایش ساندویچ لایه‌ای با بازشدن تعاملی ترکیبات" },
+		],
+		defaultVariant: "club",
+		props: [
+			{ key: "eyebrow", label: "برچسب بالا", type: "text", default: "غذای سالم، با حال خوب" },
+			{ key: "title", label: "عنوان اصلی", type: "text", default: "هر روز، یک انتخاب" },
+			{ key: "highlight", label: "ادامه عنوان", type: "text", default: "خوش‌طعم‌تر از همیشه" },
+			{ key: "description", label: "توضیح", type: "textarea", default: "طعم‌های تازه و ترکیب‌های متعادل، برای وقتی که می‌خواهی هم خوشمزه بخوری هم انتخاب خوبی داشته باشی." },
+			{ key: "ctaLabel", label: "متن دکمه اصلی", type: "text", default: "دیدن منوی سالم" },
+			{ key: "ctaHref", label: "لینک دکمه اصلی", type: "link", default: "/menu" },
+			{ key: "ingredients", label: "ترکیبات ساندویچ", type: "features", default: [
+				{ icon: "wheat", title: "نان تست جو", description: "دو برش برشته و خوش‌عطر" },
+				{ icon: "leaf", title: "کاهوی تازه", description: "ترد و سبز" },
+				{ icon: "utensils", title: "سینه مرغ گریل‌شده", description: "همراه سس سبک سبزیجات" },
+				{ icon: "sparkles", title: "پیاز کاراملی", description: "با طعمی ملایم و شیرین" },
+				{ icon: "sparkles", title: "کمی ذرت شیرین", description: "برای یک طعم دلنشین" },
+			] },
+		],
+		toProps(block) {
+			const p = block.props || {};
+			return {
+				eyebrow: str(p.eyebrow, "غذای سالم، با حال خوب"),
+				title: str(p.title, "هر روز، یک انتخاب"),
+				highlight: str(p.highlight, "خوش‌طعم‌تر از همیشه"),
+				description: str(p.description, "طعم‌های تازه و ترکیب‌های متعادل، برای وقتی که می‌خواهی هم خوشمزه بخوری هم انتخاب خوبی داشته باشی."),
+				ctaLabel: str(p.ctaLabel, "دیدن منوی سالم"),
+				ctaHref: str(p.ctaHref, "/menu"),
+				ingredients: Array.isArray(p.ingredients) ? p.ingredients : [],
+			};
+		},
+	},
 };
 
 export const BLOCK_TYPE_LIST = Object.values(BLOCK_TYPES);
 
 const PAGE_ALIASES = {
 	home: "home",
+	homev2: "homev2",
+	home_v2: "homev2",
+	"home-v2": "homev2",
 	about: "about",
 	faq: "faq",
 	product_groups: "product_groups",
@@ -427,6 +470,7 @@ export function normalizePageBuilderKey(page = "home") {
 
 export const PAGE_BLOCK_CATALOGS = {
 	home: ["hero", "categories", "products", "popular", "features", "about", "faq", "banner"],
+	homev2: ["healthy_hero", "categories", "products", "popular", "features", "about", "faq", "banner"],
 	about: ["hero", "about", "banner"],
 	faq: ["hero", "faq", "banner"],
 	product_groups: ["hero", "categories", "banner"],
