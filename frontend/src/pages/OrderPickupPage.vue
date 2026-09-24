@@ -1,5 +1,5 @@
 <template>
-  <section class="order-flow-page">
+  <section class="order-flow-page order-flow-page--pickup">
     <header class="order-flow-hero">
       <div>
         <p class="order-flow-eyebrow">بیرون‌بر / تحویل توسط مشتری</p>
@@ -56,7 +56,7 @@
         </section>
       </main>
 
-      <OrderContextSummary :next-step="nextStep" :currency="currency">
+      <OrderContextSummary class="pickup-order-summary" :next-step="nextStep" :currency="currency">
         <button class="order-flow-primary" type="button" :disabled="!selectedBranch" @click="continueToMenu">{{ continueLabel }}</button>
       </OrderContextSummary>
     </div>
@@ -67,7 +67,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
-import { findCustomerCompanyBranch, isCustomerPickupCompany } from '@/utils/orderBranches'
+import { isCustomerPickupCompany, resolvePickupCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getMenuBoot } from '@/utils/api'
 import './orderFlow.css'
 
@@ -115,8 +115,7 @@ async function loadBranches() {
   try {
     const [branchPayload, boot] = await Promise.all([getBranches(), getMenuBoot('')])
     branches.value = (Array.isArray(branchPayload?.branches) ? branchPayload.branches : []).filter(isCustomerPickupCompany)
-    const selected = findCustomerCompanyBranch(branches.value, selectedBranchId.value)
-    selectedBranchId.value = selected ? branchKey(selected) : ''
+    selectedBranchId.value = resolvePickupCompanySelection(branches.value, selectedBranchId.value)
     currency.value = boot?.currency || 'IRR'
   } catch (err) {
     error.value = err.message || 'دریافت شرکت‌ها ناموفق بود.'
@@ -192,4 +191,39 @@ onMounted(() => {
     white-space: normal;
   }
 }
+
+.order-flow-page--pickup .order-flow-title {
+  font-size: clamp(1.45rem, 3vw, 1.9rem);
+  line-height: 1.3;
+}
+
+.order-flow-page--pickup .pickup-branch-card {
+  min-height: 0;
+  padding: 0.85rem 1rem;
+}
+
+.order-flow-page--pickup .pickup-branch-card.active {
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 58%, var(--ds-color-border));
+  border-inline-start: 3px solid var(--ds-color-action-primary);
+}
+
+.order-flow-page--pickup .pickup-branch-card__action {
+  margin-top: 0.1rem;
+}
+
+.order-flow-page--pickup .pickup-time-card__heading {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.order-flow-page--pickup .pickup-time-options {
+  max-width: 34rem;
+}
+
+
+.order-flow-page--pickup :deep(.pickup-order-summary header > p:last-child),
+.order-flow-page--pickup :deep(.pickup-order-summary .order-flow-summary-line:nth-child(-n + 4)) {
+  display: none;
+}
+
 </style>

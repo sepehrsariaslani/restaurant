@@ -38,3 +38,10 @@ export function resolveDeliveryCompanySelection(rows = [], selectedId = '') {
   if (available.some((row) => String(row.id || row.name || '').trim() === selected)) return selected
   return available.length === 1 ? String(available[0].id || available[0].name || '').trim() : ''
 }
+
+export function resolvePickupCompanySelection(rows = [], selectedId = '') {
+  const available = rows.filter(isCustomerPickupCompany)
+  const selected = findCustomerCompanyBranch(available, selectedId)
+  if (selected) return String(selected.id || selected.name || '').trim()
+  return available.length === 1 ? String(available[0].id || available[0].name || '').trim() : ''
+}
