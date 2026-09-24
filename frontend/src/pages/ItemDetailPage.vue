@@ -2388,7 +2388,11 @@ onUnmounted(() => {
   flex: 0 0 min(88vw, 25rem);
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--ds-color-border);
+  border: 1px solid color-mix(
+    in srgb,
+    color-mix(in srgb, var(--ds-color-status-success) 58%, var(--ds-color-action-accent)) 14%,
+    var(--ds-color-border)
+  );
   border-radius: 22px;
   background: #fff;
   box-shadow: var(--ds-shadow-sm, 0 8px 24px rgb(52 38 31 / 0.06));
@@ -2398,7 +2402,7 @@ onUnmounted(() => {
 }
 .related-card:hover {
   transform: translateY(-2px);
-  border-color: var(--ds-color-action-accent);
+  border-color: color-mix(in srgb, var(--ds-color-status-success) 52%, var(--ds-color-action-accent));
   box-shadow: var(--ds-shadow-md);
 }
 .related-card:focus-within {
@@ -2416,7 +2420,7 @@ onUnmounted(() => {
   aspect-ratio: 1.9 / 1;
   overflow: hidden;
   background: #fff;
-  border-bottom: 1px solid var(--ds-color-border);
+  border-bottom: 1px solid color-mix(in srgb, var(--ds-color-border) 72%, var(--ds-color-status-success));
   position: relative;
 }
 .related-img-wrap img {
@@ -2450,10 +2454,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--ds-color-status-success) 35%, transparent);
-  background: #fff;
-  color: var(--ds-color-status-success);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-color-text-primary) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-accent) 72%, var(--ds-color-status-success));
+  background: var(--ds-color-action-accent);
+  color: #fff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-color-action-accent) 24%, transparent);
   cursor: pointer;
   transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
 }
@@ -2469,14 +2473,26 @@ onUnmounted(() => {
   padding: 0 0.2rem;
   border: 2px solid #fff;
   border-radius: 999px;
-  background: var(--ds-color-text-primary);
+  background: var(--ds-color-status-success);
   color: var(--ds-color-text-inverse);
   font-size: 0.65rem;
   font-weight: 800;
 }
-.related-add-btn:hover:not(:disabled) { transform: scale(1.06); border-color: var(--ds-color-action-accent); color: var(--ds-color-action-accent); }
+.related-add-btn:hover:not(:disabled) {
+  transform: scale(1.06);
+  border-color: var(--ds-color-status-success);
+  background: color-mix(in srgb, var(--ds-color-status-success) 68%, var(--ds-color-action-accent));
+  color: #fff;
+}
 .related-add-btn:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
-.related-add-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+.related-add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background: var(--ds-color-surface-muted);
+  border-color: var(--ds-color-border);
+  color: var(--ds-color-text-secondary);
+  box-shadow: none;
+}
 .related-card-content {
   display: flex;
   flex-direction: column;
@@ -2494,7 +2510,7 @@ onUnmounted(() => {
   margin: 0;
   min-width: 0;
   font-size: 1rem;
-  color: var(--text-primary, #3f2a1d);
+  color: var(--ds-color-text-primary);
   font-weight: 700;
   line-height: 1.5;
 }
@@ -2502,16 +2518,17 @@ onUnmounted(() => {
   flex: 0 0 auto;
   padding-top: 0.1rem;
   font-size: 0.92rem;
-  color: var(--ds-color-text-primary);
+  color: var(--ds-color-status-success);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .related-description-panel {
   margin: 0 -1rem -0.9rem;
-  padding: 0.72rem 1rem;
+  padding: 0.72rem 0.85rem 0.72rem 1rem;
   border-radius: 0;
-  background: var(--ds-color-status-success);
-  color: var(--ds-color-text-inverse, #fff);
+  border-inline-start: 3px solid color-mix(in srgb, var(--ds-color-status-success) 68%, var(--ds-color-action-accent));
+  background: color-mix(in srgb, var(--ds-color-status-success) 16%, #fff);
+  color: var(--ds-color-text-primary);
   font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.7;
@@ -2529,28 +2546,21 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   min-height: 1.55rem;
-  border: 1px solid currentColor;
+  border: 1px solid color-mix(
+    in srgb,
+    color-mix(in srgb, var(--ds-color-status-success) 58%, var(--ds-color-action-accent)) 28%,
+    var(--ds-color-border)
+  );
   border-radius: 999px;
   padding: 0.1rem 0.55rem;
-  background: transparent;
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--ds-color-status-success) 58%, var(--ds-color-action-accent)) 9%,
+    #fff
+  );
   color: var(--ds-color-text-secondary);
   font-size: 0.7rem;
   font-weight: 600;
-}
-.related-detail-chip--success {
-  border-color: color-mix(in srgb, var(--ds-color-status-success) 45%, transparent);
-  background: var(--ds-color-status-success-soft);
-  color: var(--ds-color-status-success);
-}
-.related-detail-chip--primary {
-  border-color: color-mix(in srgb, var(--ds-color-action-primary) 42%, transparent);
-  background: var(--ds-color-action-primary-soft);
-  color: var(--ds-color-action-primary);
-}
-.related-detail-chip--accent {
-  border-color: color-mix(in srgb, var(--ds-color-action-accent) 48%, transparent);
-  background: var(--ds-color-action-accent-soft);
-  color: var(--ds-color-action-accent);
 }
 
 /* ════════════════════════════════════════════════════════════════
