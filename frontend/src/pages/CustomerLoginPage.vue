@@ -83,7 +83,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { sendOtp as sendOtpAPI, verifyOtp as verifyOtpAPI } from '@/utils/api'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
-const brandName = ref(window._BOOT?.restaurant_name || window._BOOT?.brand_name || 'رستوران')
+const props = defineProps({
+  boot: { type: Object, default: () => ({}) },
+})
+const brandName = computed(() =>
+  props.boot?.branding?.name || window._BOOT?.restaurant_name || window._BOOT?.brand_name || 'رستوران',
+)
 const step = ref('phone')
 const phone = ref('')
 const otpDigits = ref(['', '', '', '', '', ''])
@@ -194,7 +199,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f7f0e8;
+  background: var(--ds-color-bg-page, #f7f0e8);
   direction: rtl;
 }
 
@@ -214,7 +219,12 @@ onUnmounted(() => clearInterval(countdownTimer))
 .hero-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(30,15,5,0.5) 0%, rgba(30,15,5,0.8) 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(var(--palette-deep-sapphire-rgb, 47 95 71) / 0.7),
+    rgb(var(--palette-deep-saffron-rgb, 255 89 0) / 0.46) 52%,
+    rgb(var(--palette-deep-sapphire-rgb, 47 95 71) / 0.84)
+  );
 }
 
 .hero-logo {
@@ -255,7 +265,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 }
 
 .login-card {
-  background: #fff;
+  background: var(--ds-color-surface-raised, #fff);
   border-radius: 32px 32px 0 0;
   margin-top: -24px;
   flex: 1;
@@ -274,7 +284,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   gap: 0.4rem;
   background: none;
   border: none;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, #846b58);
   font-size: 0.9rem;
   font-family: inherit;
   cursor: pointer;
@@ -285,23 +295,23 @@ onUnmounted(() => clearInterval(countdownTimer))
 .card-title {
   font-size: 1.5rem;
   font-weight: 800;
-  color: var(--text-primary, #3f2a1d);
+  color: var(--ds-color-text-primary, #3f2a1d);
   margin: 0 0 0.4rem;
 }
 
 .card-sub {
   font-size: 0.9rem;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, #846b58);
   margin: 0 0 1.8rem;
 }
 
 .input-group {
   display: flex;
   align-items: center;
-  border: 2px solid #e5ddd4;
+  border: 2px solid var(--ds-color-border, #e5ddd4);
   border-radius: 16px;
   overflow: hidden;
-  background: #fdf8f1;
+  background: var(--ds-color-surface-muted, #fdf8f1);
   transition: border-color 0.2s;
 }
 .input-group:focus-within { border-color: var(--accent-green, #6f4a31); }
@@ -309,10 +319,10 @@ onUnmounted(() => clearInterval(countdownTimer))
 .input-prefix {
   padding: 0 1rem;
   font-size: 0.95rem;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, #846b58);
   font-weight: 600;
-  border-left: 2px solid #e5ddd4;
-  background: #f1e7db;
+  border-left: 2px solid var(--ds-color-border, #e5ddd4);
+  background: var(--ds-color-surface-muted, #f1e7db);
   align-self: stretch;
   display: flex;
   align-items: center;
@@ -333,7 +343,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 
 .input-hint {
   font-size: 0.78rem;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, #846b58);
   text-align: center;
   margin: 0.6rem 0 1.5rem;
 }
@@ -363,14 +373,14 @@ onUnmounted(() => clearInterval(countdownTimer))
   align-items: center;
   gap: 0.75rem;
   margin: 1.25rem 0;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-muted, #846b58);
   font-size: 0.82rem;
 }
 .divider::before, .divider::after {
   content: '';
   flex: 1;
   height: 1px;
-  background: #e5ddd4;
+  background: var(--ds-color-border, #e5ddd4);
 }
 
 .ghost-btn {
@@ -399,20 +409,20 @@ onUnmounted(() => clearInterval(countdownTimer))
 .otp-box {
   width: 46px;
   height: 54px;
-  border: 2px solid #e5ddd4;
+  border: 2px solid var(--ds-color-border, #e5ddd4);
   border-radius: 14px;
   text-align: center;
   font-size: 1.3rem;
   font-weight: 700;
   font-family: inherit;
-  background: #fdf8f1;
+  background: var(--ds-color-surface-muted, #fdf8f1);
   outline: none;
   transition: border-color 0.2s;
 }
 .otp-box:focus { border-color: var(--accent-green, #6f4a31); }
 
 .timer-row { text-align: center; margin-bottom: 1.2rem; }
-.timer-text { font-size: 0.85rem; color: var(--text-muted, #846b58); }
+.timer-text { font-size: 0.85rem; color: var(--ds-color-text-muted, #846b58); }
 .resend-btn {
   display: block;
   width: 100%;
@@ -428,11 +438,11 @@ onUnmounted(() => clearInterval(countdownTimer))
 }
 
 .error-msg {
-  color: #e74c3c;
+  color: var(--ds-color-status-danger, #e74c3c);
   font-size: 0.85rem;
   text-align: center;
   margin-top: 0.75rem;
-  background: #fff0f0;
+  background: var(--ds-color-status-danger-soft, #fff0f0);
   border-radius: 10px;
   padding: 0.6rem 0.8rem;
 }

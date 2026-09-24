@@ -13,7 +13,7 @@
     <div v-if="variant === 'cards'" class="about-cards">
       <article v-for="(s, idx) in visibleSections" :key="s.name || idx" class="about-card">
         <div class="about-card__media">
-          <img :src="s.image || fallbackImage" :alt="s.title" loading="lazy" />
+          <AboutMedia :image="s.image" :alt="s.title" :title="s.title" />
         </div>
         <div class="about-card__body">
           <h3>{{ s.title }}</h3>
@@ -30,7 +30,7 @@
     <!-- STORY -->
     <div v-else-if="variant === 'story'" class="about-story">
       <div class="about-story__media">
-        <img :src="primary.image || fallbackImage" :alt="primary.title" loading="lazy" />
+        <AboutMedia :image="primary.image" :alt="primary.title" :title="primary.title" variant="story" />
       </div>
       <div class="about-story__body">
         <h3>{{ primary.title }}</h3>
@@ -51,6 +51,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import AboutMedia from '@/components/blocks/AboutMedia.vue'
 import '@/components/blocks/blocks.css'
 
 const props = defineProps({
@@ -63,9 +64,6 @@ const props = defineProps({
   sections: { type: Array, default: () => [] },
   limit: { type: Number, default: 3 },
 })
-
-const fallbackImage =
-  'https://images.unsplash.com/photo-1551218808-94e220e084d2?w=900&auto=format&fit=crop&q=60'
 
 const activeSections = computed(() =>
   (props.sections || []).filter((s) => Number(s?.is_active ?? 1) !== 0),
@@ -85,6 +83,7 @@ function excerpt(value) {
   const lastSpace = cut.lastIndexOf(' ')
   return `${cut.slice(0, lastSpace > 90 ? lastSpace : 150).trim()}\u2026`
 }
+
 </script>
 
 <style scoped>
@@ -109,10 +108,9 @@ function excerpt(value) {
   box-shadow: 0 18px 40px rgb(0 0 0 / 0.08);
 }
 
-.about-card__media img {
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
+.about-card__media {
+  border-radius: var(--blk-radius) var(--blk-radius) 0 0;
+  overflow: hidden;
 }
 
 .about-card__body {
@@ -166,11 +164,9 @@ function excerpt(value) {
   align-items: center;
 }
 
-.about-story__media img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+.about-story__media {
   border-radius: var(--blk-radius);
+  overflow: hidden;
 }
 
 .about-story__body h3 {

@@ -65,9 +65,10 @@
 					<!-- Card Image (second column in RTL → left side) -->
 					<div class="card-img" v-if="!compact" @click="onImageClick(ingredient)">
 						<img
-							v-if="ingredient.image"
+							v-if="ingredient.image && !isIngredientImageBroken(ingredient)"
 							:src="ingredient.image"
 							:alt="ingredient.customer_label || ingredient.name"
+							@error="markIngredientImageBroken(ingredient)"
 						/>
 						<div v-else class="card-img-placeholder">
 							{{ (ingredient.customer_label || ingredient.name || "?").slice(0, 1) }}
@@ -273,6 +274,21 @@ const customization = computed(() =>
 	sanitizeCustomization(props.modelValue || {}, props.ingredients || []),
 );
 const search = ref("");
+const brokenIngredientImageKeys = ref(new Set());
+
+function ingredientImageKey(ingredient = {}) {
+	return String(ingredient?.image || ingredient?.key || ingredient?.name || ingredient?.customer_label || "").trim();
+}
+
+function isIngredientImageBroken(ingredient) {
+	return brokenIngredientImageKeys.value.has(ingredientImageKey(ingredient));
+}
+
+function markIngredientImageBroken(ingredient) {
+	const key = ingredientImageKey(ingredient);
+	if (!key || brokenIngredientImageKeys.value.has(key)) return;
+	brokenIngredientImageKeys.value = new Set([...brokenIngredientImageKeys.value, key]);
+}
 
 function formatNumber(value, options = {}) {
 	const numeric = Number(value || 0);
@@ -283,7 +299,7 @@ function formatNumber(value, options = {}) {
 }
 
 function onImageClick(ingredient) {
-	if (ingredient?.image) {
+	if (ingredient?.image && !isIngredientImageBroken(ingredient)) {
 		emit("ingredient-image-tap", ingredient);
 	}
 }

@@ -7,7 +7,7 @@
     </div>
 
     <!-- GRID -->
-    <div v-if="variant === 'grid'" class="products-grid">
+    <div v-if="variant === 'grid'" class="products-grid" :class="{ 'products-grid--single': items.length === 1 && cardVariant === 'classic' }">
       <MenuItemCard
         v-for="(item, idx) in items"
         :key="item.slug || item.item_code || idx"
@@ -83,6 +83,39 @@ defineEmits(['quick-add'])
   align-items: stretch;
 }
 
+.products-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.products-grid--single :deep(.menu-card--classic) {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  min-height: 250px;
+}
+
+.products-grid--single :deep(.classic-img-wrap) {
+  height: 100%;
+  min-height: 250px;
+}
+
+.products-grid--single :deep(.classic-img) {
+  object-fit: cover;
+}
+
+.products-grid--single :deep(.classic-body) {
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+
+.products-grid--single :deep(.classic-title) {
+  font-size: clamp(1.2rem, 2.3vw, 1.6rem);
+}
+
+.products-grid--single :deep(.classic-add) {
+  width: 44px;
+  height: 44px;
+  font-size: 1.35rem;
+}
+
 .products-rail {
   display: grid;
   grid-auto-flow: column;
@@ -116,8 +149,30 @@ defineEmits(['quick-add'])
 }
 
 @media (max-width: 800px) {
+  .products-grid--single :deep(.menu-card--classic) {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    min-height: 210px;
+  }
+
+  .products-grid--single :deep(.classic-img-wrap) {
+    min-height: 210px;
+  }
+
   .products-spotlight {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .products-grid--single :deep(.menu-card--classic) {
+    display: flex;
+    min-height: 0;
+  }
+
+  .products-grid--single :deep(.classic-img-wrap) {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
   }
 }
 </style>

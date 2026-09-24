@@ -91,6 +91,7 @@ website_route_rules = [
 	{"from_route": "/about-us", "to_route": "restaurant/about_us"},
 	{"from_route": "/faq", "to_route": "restaurant/faq"},
 	{"from_route": "/cart", "to_route": "restaurant/cart"},
+	{"from_route": "/checkout", "to_route": "restaurant/index"},
 	{"from_route": "/order-success", "to_route": "restaurant/order_success"},
 	{"from_route": "/order-success/<order_code>", "to_route": "restaurant/order_success"},
 	{"from_route": "/order", "to_route": "order"},

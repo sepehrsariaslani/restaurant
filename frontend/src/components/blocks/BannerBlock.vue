@@ -65,8 +65,8 @@ defineProps({
 }
 
 .banner-cta {
-  background: #fff;
-  color: var(--blk-ink);
+  background: var(--ds-color-surface-raised, #fff);
+  color: var(--ds-color-text-primary, var(--blk-ink));
   flex: 0 0 auto;
 }
 

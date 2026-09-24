@@ -553,10 +553,12 @@
             class="related-card"
           >
             <div class="related-img-wrap">
-              <img :src="ri.image || fallbackImage" :alt="ri.title" loading="lazy" />
+              <img :src="ri.image || fallbackImage" :alt="ri.title" loading="lazy" @error="onRelatedImageError" />
             </div>
-            <p class="related-name">{{ ri.title }}</p>
-            <strong class="related-price">{{ formatMoney(ri.base_price, currency) }}</strong>
+            <div class="related-card-content">
+              <p class="related-name">{{ ri.title }}</p>
+              <strong class="related-price">{{ formatMoney(ri.base_price, currency) }}</strong>
+            </div>
           </a>
         </div>
       </section>
@@ -647,7 +649,7 @@ const props = defineProps({
   boot: { type: Object, default: () => ({}) },
 })
 
-const fallbackImage = 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=1000&auto=format&fit=crop&q=60'
+const fallbackImage = '/assets/restaurant/frontend/veederakht-home-hero.webp'
 
 const loading = ref(false)
 const error = ref('')
@@ -697,6 +699,13 @@ async function shareProduct() {
 
 // ─── Related items ───────────────────────────────────────────────────
 const relatedItems = ref([])
+
+function onRelatedImageError(event) {
+  const image = event.currentTarget
+  if (!image || image.dataset.localFallbackApplied === '1') return
+  image.dataset.localFallbackApplied = '1'
+  image.src = fallbackImage
+}
 async function loadRelatedItems() {
   const slug = item.value?.slug || ''
   if (!slug) return
@@ -2225,46 +2234,73 @@ onUnmounted(() => {
 }
 .related-scroll {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.9rem;
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x mandatory;
-  padding-bottom: 0.5rem;
+  padding: 0.25rem 0.2rem 0.75rem;
 }
 .related-scroll::-webkit-scrollbar { display: none; }
 .related-card {
-  flex-shrink: 0;
-  width: 140px;
+  flex: 0 0 min(92vw, 26rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.35rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 24px;
+  background: var(--ds-color-product-media-surface);
+  box-shadow: var(--ds-shadow-sm);
   text-decoration: none;
   color: inherit;
   scroll-snap-align: start;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.related-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ds-color-product-accent);
+  box-shadow: var(--ds-shadow-md);
+}
+.related-card:focus-visible {
+  outline: 3px solid var(--ds-color-product-accent);
+  outline-offset: 3px;
 }
 .related-img-wrap {
-  width: 140px;
-  height: 100px;
-  border-radius: 14px;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: 20px;
   overflow: hidden;
   background: var(--ds-color-product-media-surface);
 }
 .related-img-wrap img {
   width: 100%;
   height: 100%;
+  padding: 0.45rem;
+  box-sizing: border-box;
   object-fit: contain;
   display: block;
 }
+.related-card-content {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.8rem 0.75rem;
+  text-align: right;
+}
 .related-name {
-  margin: 0.4rem 0 0.15rem;
-  font-size: 0.8rem;
+  margin: 0;
+  font-size: 0.95rem;
   color: var(--text-primary, #3f2a1d);
-  font-weight: 600;
-  white-space: nowrap;
+  font-weight: 700;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .related-price {
-  font-size: 0.78rem;
-  color: var(--accent-green, #6f4a31);
+  font-size: 0.88rem;
+  color: var(--ds-color-product-accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2523,19 +2559,8 @@ onUnmounted(() => {
     font-size: 1rem;
   }
 
-  /* Desktop related items grid */
-  .related-scroll {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    overflow-x: visible;
-  }
-  .related-card {
-    width: 100%;
-  }
-  .related-img-wrap {
-    width: 100%;
-    height: 140px;
+  @media (prefers-reduced-motion: reduce) {
+    .related-card { transition: none; }
   }
 }
 

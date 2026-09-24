@@ -9,12 +9,12 @@
   --blk-radius-sm: 12px;
   --blk-gap: clamp(1rem, 2.5vw, 1.75rem);
   --blk-pad: clamp(1.25rem, 4vw, 2.75rem);
-  --blk-accent: var(--accent-green, #3b7a57);
-  --blk-ink: var(--ink-900, #1a1410);
-  --blk-ink-soft: var(--ink-700, #5b5248);
-  --blk-surface: #ffffff;
-  --blk-surface-soft: #f7f5f2;
-  --blk-border: rgb(0 0 0 / 0.07);
+  --blk-accent: var(--ds-color-action-primary, var(--accent-green, #3b7a57));
+  --blk-ink: var(--ds-color-text-primary, var(--ink-900, #1a1410));
+  --blk-ink-soft: var(--ds-color-text-secondary, var(--ink-700, #5b5248));
+  --blk-surface: var(--ds-color-surface-raised, #ffffff);
+  --blk-surface-soft: var(--ds-color-surface-muted, #f7f5f2);
+  --blk-border: color-mix(in srgb, var(--ds-color-border, #000) 82%, var(--ds-color-surface-raised, #fff));
   width: min(1160px, calc(100% - 2rem));
   margin-inline: auto;
   color: var(--blk-ink);
@@ -97,7 +97,7 @@
 
 .blk-btn--primary {
   background: var(--blk-accent);
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   box-shadow: 0 10px 24px color-mix(in srgb, var(--blk-accent) 30%, transparent);
 }
 
@@ -109,4 +109,9 @@
 
 .blk-btn--ghost:hover {
   background: var(--blk-surface-soft);
+}
+
+.blk :is(a, button):focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 3px;
 }

@@ -13,6 +13,7 @@
       <main class="order-flow-list">
         <p v-if="loading" class="order-flow-alert">در حال دریافت شرکت‌ها...</p>
         <p v-if="error" class="order-flow-alert danger">{{ error }}</p>
+        <p v-if="!loading && !error && !branches.length" class="order-flow-alert">فعلاً شرکتِ باز و فعالی برای تحویل حضوری در دسترس نیست.</p>
 
         <button
           v-for="branch in branches"
@@ -66,6 +67,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
+import { findCustomerCompanyBranch, isCustomerPickupCompany } from '@/utils/orderBranches'
 import { getBranches, getMenuBoot } from '@/utils/api'
 import './orderFlow.css'
 
@@ -112,7 +114,9 @@ async function loadBranches() {
   error.value = ''
   try {
     const [branchPayload, boot] = await Promise.all([getBranches(), getMenuBoot('')])
-    branches.value = Array.isArray(branchPayload?.branches) ? branchPayload.branches : []
+    branches.value = (Array.isArray(branchPayload?.branches) ? branchPayload.branches : []).filter(isCustomerPickupCompany)
+    const selected = findCustomerCompanyBranch(branches.value, selectedBranchId.value)
+    selectedBranchId.value = selected ? branchKey(selected) : ''
     currency.value = boot?.currency || 'IRR'
   } catch (err) {
     error.value = err.message || 'دریافت شرکت‌ها ناموفق بود.'

@@ -101,7 +101,7 @@
       <OrderDineInPage v-else-if="page === 'order-dine-in'" />
       <OrderPickupPage v-else-if="page === 'order-pickup'" />
       <OrderDeliveryPage v-else-if="page === 'order-delivery'" />
-      <CustomerLoginPage v-else-if="page === 'customer-login'" />
+      <CustomerLoginPage v-else-if="page === 'customer-login'" :boot="boot" />
       <CustomerDashboardPage v-else-if="page === 'customer-dashboard'" />
       <CustomerProfilePage v-else-if="page === 'customer-profile'" />
       <CustomerAddressesPage v-else-if="page === 'customer-addresses'" />

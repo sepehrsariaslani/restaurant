@@ -54,6 +54,14 @@ function bool(value, fallback = false) {
 	return Number(value) ? true : Boolean(value);
 }
 
+function productKey(item = {}) {
+	return str(item?.slug || item?.item_code || item?.item || item?.name || item?.title).toLowerCase();
+}
+
+function firstNonEmptyArray(...values) {
+	return values.find((value) => Array.isArray(value) && value.length) || [];
+}
+
 // ---------------------------------------------------------------------------
 // Block type definitions
 // ---------------------------------------------------------------------------
@@ -198,7 +206,7 @@ export const BLOCK_TYPES = {
 			const source = str(p.source, "featured");
 			let items = [];
 			if (source === "best_seller") {
-				items = boot.best_seller_items || boot.featured_items || [];
+				items = firstNonEmptyArray(boot.best_seller_items, boot.featured_items);
 			} else if (source === "category") {
 				const cat = str(p.category);
 				const all = boot.categories || [];
@@ -344,6 +352,7 @@ export const BLOCK_TYPES = {
 			{ key: "subtitle", label: "\u0632\u06cc\u0631\u0639\u0646\u0648\u0627\u0646", type: "text", default: "" },
 			{ key: "moreLabel", label: "\u0645\u062a\u0646 \u0644\u06cc\u0646\u06a9 \u0628\u06cc\u0634\u062a\u0631", type: "text", default: "\u0645\u0634\u0627\u0647\u062f\u0647 \u0645\u0646\u0648" },
 			{ key: "moreHref", label: "\u0644\u06cc\u0646\u06a9 \u0628\u06cc\u0634\u062a\u0631", type: "link", default: "/menu" },
+			{ key: "excludeFeatured", label: "\u067e\u0646\u0647\u0627\u0646 \u06a9\u0631\u062f\u0646 \u0645\u062d\u0635\u0648\u0644\u0627\u062a \u062a\u06a9\u0631\u0627\u0631\u06cc", type: "boolean", default: false },
 			{
 				key: "source",
 				label: "\u0645\u0646\u0628\u0639",
@@ -359,12 +368,23 @@ export const BLOCK_TYPES = {
 		toProps(block, boot) {
 			const p = block.props || {};
 			const source = str(p.source, "best_seller");
-			const highlight = (boot.menu_highlight && boot.menu_highlight.items) || [];
-			let items = [];
+			const highlight = boot.menu_highlight?.items;
+			let items;
 			if (source === "featured") {
-				items = boot.featured_items || [];
+				items = Array.isArray(boot.featured_items) ? boot.featured_items : [];
 			} else {
-				items = boot.best_seller_items || highlight || boot.featured_items || [];
+				items = firstNonEmptyArray(boot.best_seller_items, highlight, boot.featured_items);
+				if (bool(p.excludeFeatured, false)) {
+					const web = boot.web_settings || {};
+					const featuredLimit = num(web.restaurant_menu_highlight_featured_limit, 8) || 8;
+					const excluded = new Set(
+						(Array.isArray(boot.featured_items) ? boot.featured_items : [])
+							.slice(0, featuredLimit)
+							.map(productKey)
+							.filter(Boolean),
+					);
+					items = items.filter((item) => !excluded.has(productKey(item)));
+				}
 			}
 			const limit = num(p.limit, 5);
 			return {

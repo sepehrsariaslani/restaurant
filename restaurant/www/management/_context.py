@@ -4,6 +4,7 @@ from urllib.parse import quote
 import frappe
 
 from restaurant.api import get_menu_boot
+from restaurant.www._frontend import get_frontend_version
 
 
 def _ensure_management_page_access():
@@ -69,22 +70,6 @@ def _ensure_roles(required_roles):
 
 
 
-import os
-
-def _get_frontend_version():
-    try:
-        # Cache busting strategy: Use the actual modified time of the built asset
-        # so it auto-updates precisely when `npm run build` is executed.
-        asset_path = frappe.get_app_path("restaurant", "public", "frontend", "assets", "index.js")
-        if os.path.exists(asset_path):
-            return str(int(os.path.getmtime(asset_path)))
-    except Exception:
-        pass
-    
-    # Fallback to frappe's system build version
-    return frappe.utils.get_build_version()
-
-
 def build_context(context, page_name, extra_boot=None, required_roles=None):
     _ensure_management_page_access()
     _ensure_roles(required_roles)
@@ -101,5 +86,5 @@ def build_context(context, page_name, extra_boot=None, required_roles=None):
     if isinstance(extra_boot, dict):
         boot.update(extra_boot)
     context.boot = boot
-    context.frontend_version = _get_frontend_version()
+    context.frontend_version = get_frontend_version(context)
     return context

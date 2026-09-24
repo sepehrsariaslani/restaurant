@@ -31,9 +31,9 @@
     </Transition>
 
     <Transition name="cart-pop">
-      <a v-if="!previewMode && cartCount > 0" class="home-sticky-cart" href="/cart" aria-label="\u0645\u0634\u0627\u0647\u062f\u0647 \u0633\u0628\u062f \u0633\u0641\u0627\u0631\u0634">
-        <span>\u0633\u0628\u062f \u0633\u0641\u0627\u0631\u0634</span>
-        <strong>{{ cartCount }} \u0622\u06cc\u062a\u0645</strong>
+      <a v-if="!previewMode && cartCount > 0" class="home-sticky-cart" href="/cart" aria-label="مشاهده سبد سفارش">
+        <span>سبد سفارش</span>
+        <strong>{{ cartCount }} آیتم</strong>
       </a>
     </Transition>
 
@@ -210,55 +210,23 @@ onUnmounted(() => {
 }
 
 .home-page--v2 {
-  --healthy-brand-green: #236246;
-  --healthy-brand-orange: #e98b34;
-  --palette-deep-sapphire: var(--healthy-brand-green);
-  --palette-deep-sapphire-rgb: 35 98 70;
-  --palette-deep-saffron: var(--healthy-brand-orange);
-  --palette-deep-saffron-rgb: 233 139 52;
-  --accent-green: var(--healthy-brand-green);
-  --accent-green-rgb: 35 98 70;
-  --accent-green80: rgb(35 98 70 / 0.9);
-  --accent-green60: rgb(35 98 70 / 0.7);
-  --accent-green40: rgb(35 98 70 / 0.14);
-  --accent-green20: rgb(35 98 70 / 0.08);
-  --accent-gold: var(--healthy-brand-orange);
-  --accent-gold80: rgb(233 139 52 / 0.9);
-  --accent-gold50: rgb(233 139 52 / 0.6);
-  --accent-gold20: rgb(233 139 52 / 0.12);
-  --accent-color: var(--healthy-brand-green);
-  --brand-600: var(--healthy-brand-green);
-  --ds-color-action-primary: var(--healthy-brand-green);
-  --ds-color-action-primary-soft: rgb(35 98 70 / 0.1);
-  --ds-color-action-accent: var(--healthy-brand-orange);
-  --ds-color-action-accent-soft: rgb(233 139 52 / 0.13);
-  --ds-color-focus-ring: #e98b34;
-  --ds-color-status-success: #3d835e;
-  --ds-color-bg-page: #f6f6ed;
-  --ds-color-surface: #fffdf6;
-  --ds-color-surface-raised: #ffffff;
-  --ds-color-surface-muted: #e9eddf;
-  --ds-color-border: #dce5d9;
-  --ds-color-text-primary: #20392b;
-  --ds-color-text-secondary: #4f6858;
-  --ds-color-text-muted: #748276;
   color: var(--ds-color-text-primary);
-  background: #f6f6ed;
+  background: var(--ds-color-bg-page);
 }
 
 :global(.home-page--v2 .home-content) {
-  padding-block: clamp(1rem, 3vw, 2.4rem) clamp(3rem, 7vw, 6rem);
-  background: #f6f6ed;
+  padding-block: clamp(1rem, 3vw, 2.4rem) clamp(2.5rem, 5vw, 4.5rem);
+  background: var(--ds-color-bg-page);
 }
 
 :global(.home-page--v2 .page-blocks) {
-  gap: clamp(3rem, 7vw, 6rem);
+  gap: clamp(2rem, 4vw, 3.5rem);
 }
 
 :global(.home-page--v2 .home-sticky-cart),
 :global(.home-page--v2 .home-toast) {
-  background: var(--healthy-brand-green);
-  color: #fffdf6;
+  background: var(--ds-color-action-primary);
+  color: var(--ds-color-text-inverse, #fffdf6);
 }
 
 .needs-header-offset {

@@ -10,10 +10,10 @@
     </div>
 
     <!-- SHOWCASE: one large lead item + ranked list -->
-    <div v-if="variant === 'showcase'" class="pop-showcase">
+    <div v-if="variant === 'showcase'" class="pop-showcase" :class="{ 'pop-showcase--single': items.length === 1 }">
       <a class="pop-lead" :href="hrefFor(lead)">
         <div class="pop-lead__media" :style="bgFor(lead)">
-          <span class="pop-badge">\u0645\u062d\u0628\u0648\u0628 \u0634\u0645\u0627\u0631\u0647 \u06f1</span>
+          <span class="pop-badge">محبوب شماره ۱</span>
         </div>
         <div class="pop-lead__body">
           <h3>{{ lead.title }}</h3>
@@ -37,7 +37,7 @@
     </div>
 
     <!-- RANKED GRID: cards with rank badges -->
-    <div v-else class="pop-grid">
+    <div v-else class="pop-grid" :class="{ 'pop-grid--single': items.length === 1 }">
       <a
         v-for="(item, idx) in items"
         :key="item.slug || idx"
@@ -52,7 +52,7 @@
           <small v-if="item.short_desc">{{ item.short_desc }}</small>
           <div class="pop-card__foot">
             <span class="pop-price">{{ priceFor(item) }}</span>
-            <button type="button" class="pop-add" @click.prevent="$emit('quick-add', item)">\u0627\u0641\u0632\u0648\u062f\u0646</button>
+            <button type="button" class="pop-add" @click.prevent="$emit('quick-add', item)">افزودن</button>
           </div>
         </div>
       </a>
@@ -77,8 +77,7 @@ const props = defineProps({
 
 defineEmits(['quick-add'])
 
-const fallbackImage =
-  'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=70'
+const fallbackImage = '/assets/restaurant/frontend/veederakht-home-hero.webp'
 
 const lead = computed(() => props.items[0] || {})
 const rest = computed(() => props.items.slice(1, 5))
@@ -106,8 +105,8 @@ function priceFor(item) {
 
 <style scoped>
 .popular__eyebrow {
-  color: #b4531f;
-  background: color-mix(in srgb, #f2994a 16%, transparent);
+  color: var(--ds-color-action-accent, var(--blk-accent));
+  background: color-mix(in srgb, var(--ds-color-action-accent, var(--blk-accent)) 16%, transparent);
 }
 
 /* Showcase */
@@ -116,6 +115,26 @@ function priceFor(item) {
   grid-template-columns: 1.15fr 1fr;
   gap: var(--blk-gap);
   align-items: start;
+}
+
+.pop-showcase--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pop-showcase--single .pop-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: stretch;
+}
+
+.pop-showcase--single .pop-lead__media {
+  min-height: 250px;
+  aspect-ratio: auto;
+}
+
+.pop-showcase--single .pop-lead__body {
+  align-self: center;
+  padding: clamp(1rem, 3vw, 1.75rem);
 }
 
 .pop-lead {
@@ -167,11 +186,11 @@ function priceFor(item) {
   inset-inline-start: 0.75rem;
   padding: 0.32rem 0.8rem;
   border-radius: 999px;
-  background: linear-gradient(135deg, #f2994a, #eb5757);
-  color: #fff;
+  background: linear-gradient(135deg, var(--ds-color-action-accent, #f2994a), var(--ds-color-action-primary, #2f5f47));
+  color: var(--ds-color-text-inverse, #fff);
   font-size: 0.75rem;
   font-weight: 800;
-  box-shadow: 0 8px 20px rgb(235 87 87 / 0.35);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--ds-color-action-accent, #f2994a) 35%, transparent);
 }
 
 .pop-badge--sm {
@@ -273,6 +292,26 @@ function priceFor(item) {
   gap: var(--blk-gap);
 }
 
+.pop-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pop-grid--single .pop-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: stretch;
+}
+
+.pop-grid--single .pop-card__media {
+  min-height: 230px;
+  aspect-ratio: auto;
+}
+
+.pop-grid--single .pop-card__body {
+  align-self: center;
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+
 .pop-card {
   display: flex;
   flex-direction: column;
@@ -334,13 +373,26 @@ function priceFor(item) {
   font: inherit;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   background: var(--blk-accent);
 }
 
 @media (max-width: 800px) {
   .pop-showcase {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .pop-showcase--single .pop-lead,
+  .pop-grid--single .pop-card {
+    display: flex;
+  }
+
+  .pop-showcase--single .pop-lead__media,
+  .pop-grid--single .pop-card__media {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
   }
 }
 </style>

@@ -1,6 +1,7 @@
 import frappe
 
 from restaurant.api import get_menu_boot, table_boot
+from restaurant.www._frontend import get_frontend_version
 
 
 def _resolve_table_context():
@@ -38,4 +39,5 @@ def get_context(context):
         boot["table_context"] = table_context
 
     context.boot = boot
+    context.frontend_version = get_frontend_version(context)
     return context

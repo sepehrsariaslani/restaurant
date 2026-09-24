@@ -3,7 +3,8 @@
     <ScrollReveal
       v-for="(block, index) in blocks"
       :key="block.id"
-      :delay="Math.min(index, 6) * 80"
+      :threshold="isHomePage ? 0.08 : 0.15"
+      :delay="isHomePage ? Math.min(index, 4) * 35 : Math.min(index, 6) * 80"
     >
       <BlockRenderer :block="block" :boot="boot" @quick-add="$emit('quick-add', $event)" />
     </ScrollReveal>
@@ -24,6 +25,7 @@ const props = defineProps({
 defineEmits(['quick-add'])
 
 const blocks = computed(() => resolvePageLayout(props.boot, props.page))
+const isHomePage = computed(() => ['home', 'homev2'].includes(String(props.page || '').toLowerCase()))
 </script>
 
 <style scoped>

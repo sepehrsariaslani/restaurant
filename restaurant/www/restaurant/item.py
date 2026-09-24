@@ -1,7 +1,8 @@
 import frappe
 from frappe import _
 
-from restaurant.api import get_item_detail, table_boot
+from restaurant.api import get_item_detail, get_public_site_boot, table_boot
+from restaurant.www._frontend import get_frontend_version
 
 
 def _resolve_slug_from_request():
@@ -47,11 +48,12 @@ def get_context(context):
     if not branch and table_context:
         branch = (table_context.get("table", {}) or {}).get("branch", "") or ""
 
-    boot = {
+    boot = get_public_site_boot()
+    boot.update({
         "item_slug": slug,
         "edit_line": (frappe.form_dict.get("edit") or "").strip(),
         "active_branch": branch,
-    }
+    })
 
     if slug:
         try:
@@ -69,4 +71,5 @@ def get_context(context):
         boot["table_context"] = table_context
 
     context.boot = boot
+    context.frontend_version = get_frontend_version(context)
     return context

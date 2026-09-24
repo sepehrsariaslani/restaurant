@@ -30,6 +30,7 @@
           <p>برای اینکه سفارش دقیقاً به میز شما وصل شود، QR روی میز را اسکن کنید. اگر انتخاب دستی میز فعال باشد، می‌توانید شرکت و شماره میز را وارد کنید.</p>
           <p v-if="loading" class="order-flow-alert">در حال دریافت شرکت‌ها...</p>
           <p v-if="error" class="order-flow-alert danger">{{ error }}</p>
+          <p v-if="!loading && !error && !branches.length" class="order-flow-alert">شرکت فعالی برای انتخاب دستی پیدا نشد؛ QR میز را اسکن کنید یا از کارکنان رستوران کمک بگیرید.</p>
           <div class="order-flow-form" v-if="branches.length">
             <label class="order-flow-field">
               <span>شرکت</span>
@@ -65,6 +66,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
+import { findCustomerCompanyBranch, isCustomerCompany } from '@/utils/orderBranches'
 import { getBranches, getMenuBoot } from '@/utils/api'
 import './orderFlow.css'
 
@@ -103,10 +105,17 @@ async function loadBranches() {
   loading.value = true
   try {
     const [branchPayload, boot] = await Promise.all([getBranches(), getMenuBoot('')])
-    branches.value = Array.isArray(branchPayload?.branches) ? branchPayload.branches : []
+    branches.value = (Array.isArray(branchPayload?.branches) ? branchPayload.branches : []).filter(isCustomerCompany)
     currency.value = boot?.currency || 'IRR'
-    const selected = branches.value.find((row) => row.id === branch.value || row.name === branch.value)
-    if (selected && !branchTitle.value) branchTitle.value = selected.title || selected.name
+    const selected = findCustomerCompanyBranch(branches.value, branch.value)
+    if (!tableContext.value && !selected) {
+      branch.value = ''
+      table.value = ''
+    }
+    if (selected) {
+      branch.value = selected.id || selected.name
+      if (!branchTitle.value) branchTitle.value = selected.title || selected.name
+    }
   } catch (err) {
     error.value = err.message || 'دریافت شرکت‌ها ناموفق بود.'
   } finally {

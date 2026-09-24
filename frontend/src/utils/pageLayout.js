@@ -28,6 +28,14 @@ function text(value, fallback = "") {
 	return out || fallback;
 }
 
+function productKey(item = {}) {
+	return text(item?.slug || item?.item_code || item?.item || item?.name || item?.title).toLowerCase();
+}
+
+function firstNonEmptyArray(...values) {
+	return values.map(asArray).find((rows) => rows.length) || [];
+}
+
 function firstActive(rows = []) {
 	return asArray(rows).find((row) => Number(row?.is_active ?? 1) !== 0) || rows[0] || {};
 }
@@ -144,6 +152,10 @@ function buildLegacyHomeLayout(boot = {}) {
 	const components = resolveSiteComponents(boot);
 	const web = boot?.web_settings || {};
 	const blocks = [];
+	const savedHeroDescription = text(branding.hero_section_description || branding.hero_subtitle);
+	const heroDescription = /تصویر بزرگ|متن کوتاه/.test(savedHeroDescription)
+		? "غذای تازه و خوش‌طعم را انتخاب کن و سفارش را در چند قدم ساده ثبت کن."
+		: savedHeroDescription;
 
 	const heroVariant = components.hero_section_variant;
 	if (heroVariant && heroVariant !== "off") {
@@ -160,7 +172,7 @@ function buildLegacyHomeLayout(boot = {}) {
 				props: {
 					eyebrow: "",
 					title: branding.hero_section_title || branding.hero_title,
-					description: branding.hero_section_description || branding.hero_subtitle,
+					description: heroDescription,
 					image: branding.hero_image,
 					ctaLabel:
 						branding.hero_section_cta || branding.primary_cta_label || "مشاهده منو",
@@ -180,11 +192,21 @@ function buildLegacyHomeLayout(boot = {}) {
 	);
 
 	const highlightEnabled = Number(web.restaurant_menu_highlight_enabled ?? 1) !== 0;
+	const featuredLimit = safeNumber(web.restaurant_menu_highlight_featured_limit, 8) || 8;
+	const featuredItems = asArray(boot.featured_items);
+	const popularItems = firstNonEmptyArray(
+		boot.best_seller_items,
+		boot.menu_highlight?.items,
+		featuredItems,
+	);
+	const visibleFeatured = highlightEnabled ? featuredItems.slice(0, featuredLimit) : [];
+	const visibleFeaturedKeys = new Set(visibleFeatured.map(productKey).filter(Boolean));
 	if (highlightEnabled) {
 		blocks.push(
 			createBlock("products", {
 				variant: "grid",
 				props: {
+					eyebrow: "\u067e\u06cc\u0634\u0646\u0647\u0627\u062f\u0647\u0627\u06cc \u0648\u06cc\u062f\u0631\u062e\u062a",
 					title:
 						text(web.restaurant_menu_highlight_title, "محبوب‌ترین انتخاب‌ها"),
 					source: "featured",
@@ -195,11 +217,17 @@ function buildLegacyHomeLayout(boot = {}) {
 		);
 	}
 
-	const hasPopular =
-		asArray(boot.featured_items).length ||
-		(boot.menu_highlight && asArray(boot.menu_highlight.items).length);
+	const hasPopular = popularItems.some((item) => {
+		const key = productKey(item);
+		return !highlightEnabled || !key || !visibleFeaturedKeys.has(key);
+	});
 	if (hasPopular) {
-		blocks.push(createBlock("popular", { variant: "showcase" }));
+		blocks.push(
+			createBlock("popular", {
+				variant: "showcase",
+				props: { excludeFeatured: highlightEnabled },
+			}),
+		);
 	}
 
 	blocks.push(createBlock("features", { variant: "cards" }));

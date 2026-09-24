@@ -2600,6 +2600,19 @@ def _get_branding_payload():
 	return result
 
 
+def get_public_site_boot():
+	"""Return lightweight, theme-aware boot data for public SPA routes.
+
+	Cart, item detail, and order-flow pages do not need the full menu payload,
+	but they still need the same public brand and saved theme as the home page.
+	"""
+	return {
+		"branding": _get_branding_payload(),
+		"theme_settings": _load_management_theme_settings(),
+		"currency": _get_currency(),
+	}
+
+
 def _get_hero_slides(branch=None):
 	if not frappe.db.exists("DocType", "Restaurant Hero Slide"):
 		return []

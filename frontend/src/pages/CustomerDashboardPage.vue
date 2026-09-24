@@ -465,13 +465,13 @@ onMounted(async () => {
 .club-tier {
   margin: 0.24rem 0 0;
   font-size: 0.78rem;
-  color: var(--color-primary, #b8722d);
+  color: var(--ds-color-action-accent, #b8722d);
   font-weight: 700;
 }
 
 .club-badge {
-  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-  color: #7a4a12;
+  background: var(--ds-color-action-accent-soft, rgb(255 89 0 / 0.13));
+  color: var(--ds-color-action-accent, #b84b00);
 }
 
 .club-summary__stats {
@@ -511,11 +511,11 @@ onMounted(async () => {
 }
 
 .club-msg.ok {
-  color: #2f7b47;
+  color: var(--ds-color-status-success, #2f7b47);
 }
 
 .club-msg.err {
-  color: #b3402e;
+  color: var(--ds-color-status-danger, #b3402e);
 }
 
 .club-summary__actions {

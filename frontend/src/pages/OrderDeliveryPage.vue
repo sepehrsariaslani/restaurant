@@ -120,6 +120,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveCheckoutDraft, saveOrderContext } from '@/stores/cartStore'
 import { formatMoney, normalizeMobile as normalizeMobileUtil } from '@/utils/format'
+import { isCustomerDeliveryCompany } from '@/utils/orderBranches'
 import { getBranches, getCustomerCheckoutProfile, getMenuBoot } from '@/utils/api'
 import './orderFlow.css'
 
@@ -147,7 +148,7 @@ const address = reactive({
 
 const normalizedMobile = computed(() => normalizeMobileUtil(mobile.value || ''))
 function branchKey(branch = {}) { return branch.id || branch.name || '' }
-const deliveryCompanies = computed(() => branches.value.filter((row) => row.delivery_available !== false && row.isOpen !== false))
+const deliveryCompanies = computed(() => branches.value.filter(isCustomerDeliveryCompany))
 const selectedCompany = computed(() => deliveryCompanies.value.find((row) => branchKey(row) === selectedCompanyId.value) || null)
 const outOfRange = computed(() => {
   const lat = Number(address.lat)

@@ -200,12 +200,12 @@
         v-if="displayItems.length && nextCategoryMeta"
         type="button"
         class="next-category-card"
-        :class="{ 'next-category-card--image': nextCategoryMeta.image }"
+        :class="{ 'next-category-card--image': nextCategoryMeta.image && !nextCategoryImageFailed }"
         @click="goToNextCategory"
       >
-        <template v-if="nextCategoryMeta.image">
+        <template v-if="nextCategoryMeta.image && !nextCategoryImageFailed">
           <span class="next-category-card__media-full">
-            <img :src="nextCategoryMeta.image" :alt="nextCategoryMeta.title" />
+            <img :src="nextCategoryMeta.image" :alt="nextCategoryMeta.title" @error="nextCategoryImageFailed = true" />
           </span>
           <span class="next-category-card__overlay"></span>
           <span class="next-category-card__copy next-category-card__copy--overlay">
@@ -595,6 +595,9 @@ const nextCategoryMeta = computed(() => {
     image: String(nextCategory?.image || '').trim(),
   }
 })
+
+const nextCategoryImageFailed = ref(false)
+watch(() => nextCategoryMeta.value?.slug, () => { nextCategoryImageFailed.value = false })
 
 const highlightedItems = computed(() => {
   const payload = menuHighlight.value || {}

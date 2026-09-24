@@ -1,5 +1,5 @@
 <template>
-  <section class="blk categories" dir="rtl" v-if="categories.length">
+  <section class="blk categories" dir="rtl" v-if="normalized.length">
     <div class="blk__head">
       <span v-if="eyebrow" class="blk__eyebrow">{{ eyebrow }}</span>
       <h2 class="blk__title">{{ title }}</h2>
@@ -14,11 +14,9 @@
         class="cat-card"
         :href="cat.href"
       >
-        <div class="cat-card__media" :style="cat.image ? { backgroundImage: `url('${cat.image}')` } : {}">
-          <span v-if="!cat.image" class="cat-card__ph">{{ cat.title.slice(0, 1) }}</span>
-        </div>
+        <CategoryMedia :image="cat.image" :icon="cat.icon" />
         <span class="cat-card__label">{{ cat.title }}</span>
-        <small v-if="cat.count" class="cat-card__count">{{ cat.count }} \u0622\u06cc\u062a\u0645</small>
+        <small class="cat-card__count">{{ formatCount(cat.count) }} آیتم</small>
       </a>
     </div>
 
@@ -32,12 +30,7 @@
     <!-- CIRCLES -->
     <div v-else class="cat-circles">
       <a v-for="(cat, idx) in normalized" :key="cat.key || idx" class="cat-circle" :href="cat.href">
-        <span
-          class="cat-circle__img"
-          :style="cat.image ? { backgroundImage: `url('${cat.image}')` } : {}"
-        >
-          <span v-if="!cat.image" class="cat-card__ph">{{ cat.title.slice(0, 1) }}</span>
-        </span>
+        <CategoryMedia :image="cat.image" :icon="cat.icon" variant="circle" />
         <span class="cat-circle__label">{{ cat.title }}</span>
       </a>
     </div>
@@ -46,6 +39,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import CategoryMedia from '@/components/blocks/CategoryMedia.vue'
 import '@/components/blocks/blocks.css'
 
 const props = defineProps({
@@ -58,17 +52,26 @@ const props = defineProps({
 })
 
 const normalized = computed(() =>
-  (props.categories || []).map((c) => {
-    const slug = String(c.slug || c.name || '').trim()
-    return {
-      key: slug || c.title,
-      title: String(c.title || c.name || '').trim(),
-      image: String(c.image || c.icon || '').trim(),
-      count: Number(c.item_count || (Array.isArray(c.items) ? c.items.length : 0)) || 0,
-      href: slug ? `/menu?category=${encodeURIComponent(slug)}` : '/menu',
-    }
-  }),
+  (props.categories || [])
+    .map((c) => {
+      const slug = String(c.slug || c.name || '').trim()
+      const iconValue = String(c.menu_icon || c.icon || '').trim()
+      const imageValue = String(c.image || (iconValue.startsWith('/') || iconValue.startsWith('http') ? iconValue : '')).trim()
+      return {
+        key: slug || c.title,
+        title: String(c.title || c.name || '').trim(),
+        image: imageValue,
+        icon: iconValue,
+        count: Number(c.item_count || (Array.isArray(c.items) ? c.items.length : 0)) || 0,
+        href: slug ? `/menu?category=${encodeURIComponent(slug)}` : '/menu',
+      }
+    })
+    .filter((category) => category.title && category.count > 0),
 )
+
+function formatCount(value) {
+  return new Intl.NumberFormat('fa-IR').format(value)
+}
 </script>
 
 <style scoped>
@@ -84,27 +87,18 @@ const normalized = computed(() =>
   gap: 0.5rem;
   text-decoration: none;
   color: inherit;
-}
-
-.cat-card__media {
-  aspect-ratio: 1 / 1;
   border-radius: var(--blk-radius-sm);
-  background: var(--blk-surface-soft) center / cover no-repeat;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.18s ease;
 }
 
-.cat-card:hover .cat-card__media {
+.cat-card:hover :deep(.category-media) {
   transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 44%, var(--ds-color-border));
 }
 
-.cat-card__ph {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--blk-accent);
-  opacity: 0.6;
+.cat-card:focus-visible,
+.cat-circle:focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, var(--ds-color-action-accent));
+  outline-offset: 4px;
 }
 
 .cat-card__label {
@@ -159,20 +153,8 @@ const normalized = computed(() =>
   width: 96px;
 }
 
-.cat-circle__img {
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  background: var(--blk-surface-soft) center / cover no-repeat;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid transparent;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-
-.cat-circle:hover .cat-circle__img {
-  border-color: var(--blk-accent);
+.cat-circle:hover :deep(.category-media) {
+  border-color: var(--ds-color-action-primary);
   transform: translateY(-2px);
 }
 

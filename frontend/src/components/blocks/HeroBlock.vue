@@ -87,8 +87,7 @@ const props = defineProps({
   currency: { type: String, default: 'IRR' },
 })
 
-const fallbackImage =
-  'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&auto=format&fit=crop&q=70'
+const fallbackImage = '/assets/restaurant/frontend/veederakht-home-hero.webp'
 
 const resolvedVariant = computed(() => {
   const raw = String(props.variant || 'fullscreen').trim()
@@ -99,7 +98,7 @@ const resolvedVariant = computed(() => {
 })
 
 const coverStyle = computed(() => ({
-  backgroundImage: `linear-gradient(180deg, rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.55)), url('${props.image || fallbackImage}')`,
+  backgroundImage: `url('${props.image || fallbackImage}')`,
 }))
 
 const normalizedSlides = computed(() =>
@@ -140,8 +139,15 @@ const normalizedSlides = computed(() =>
   align-items: center;
 }
 
+.hero-cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(270deg, rgb(0 0 0 / 0.74) 0%, rgb(0 0 0 / 0.52) 42%, rgb(0 0 0 / 0.08) 88%);
+}
+
 .hero-cover--fullscreen {
-  min-height: clamp(420px, 72vh, 680px);
+  min-height: clamp(380px, 60vh, 560px);
 }
 
 .hero-cover--banner {
@@ -149,13 +155,15 @@ const normalizedSlides = computed(() =>
 }
 
 .hero-cover__inner {
+  position: relative;
+  z-index: 1;
   padding: var(--blk-pad);
-  max-width: 44ch;
-  color: #fff;
+  max-width: 48ch;
+  color: var(--ds-color-text-inverse, #fff);
 }
 
 .hero-cover__eyebrow {
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   background: rgb(255 255 255 / 0.2);
 }
 
@@ -171,12 +179,16 @@ const normalizedSlides = computed(() =>
   margin: 0.85rem 0 0;
   font-size: 1.02rem;
   line-height: 1.8;
-  color: rgb(255 255 255 / 0.9);
+  color: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 90%, transparent);
 }
 
 .hero-cover__ghost {
-  color: #fff;
+  color: var(--ds-color-text-inverse, #fff);
   border-color: rgb(255 255 255 / 0.5);
+}
+
+.hero-cover .blk-btn {
+  min-height: 44px;
 }
 
 .hero-cover--banner .hero-cover__title {
@@ -215,7 +227,7 @@ const normalizedSlides = computed(() =>
   grid-template-columns: 1.15fr 0.95fr;
   padding: clamp(1rem, 3vw, 1.5rem);
   border-radius: var(--blk-radius);
-  background: linear-gradient(135deg, rgb(255 251 247), rgb(245 237 228));
+  background: linear-gradient(135deg, var(--ds-color-surface-raised, #fff), var(--ds-color-surface-muted, #f5ede4));
   border: 1px solid var(--blk-border);
 }
 
@@ -316,6 +328,20 @@ const normalizedSlides = computed(() =>
 }
 
 @media (max-width: 860px) {
+  .hero-cover--fullscreen {
+    min-height: clamp(390px, 68svh, 560px);
+  }
+
+  .hero-cover::before {
+    background: linear-gradient(180deg, rgb(0 0 0 / 0.06) 8%, rgb(0 0 0 / 0.28) 42%, rgb(0 0 0 / 0.82) 100%);
+  }
+
+  .hero-cover__inner {
+    max-width: 42ch;
+    padding: clamp(1.25rem, 6vw, 2rem);
+    margin-top: auto;
+  }
+
   .hero-split {
     grid-template-columns: 1fr;
   }
