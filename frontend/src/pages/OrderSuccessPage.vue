@@ -3,12 +3,12 @@
     <header class="success-hero">
       <div class="success-hero-copy">
         <p class="eyebrow">پیگیری سفارش</p>
-        <h1>سفارش شما ثبت شد</h1>
-        <p class="muted">کد سفارش، وضعیت فعلی، و آیتم‌های ثبت‌شده در یک نگاه.</p>
+        <h1>{{ orderCode ? 'سفارش شما ثبت شد' : 'پیگیری سفارش' }}</h1>
+        <p class="muted">{{ orderCode ? 'کد سفارش، وضعیت فعلی، و آیتم‌های ثبت‌شده در یک نگاه.' : 'کد سفارش را از نشانی پیگیری یا از فهرست سفارش‌های خود باز کنید.' }}</p>
       </div>
 
       <div class="success-hero-actions">
-        <button class="primary-btn" type="button" @click="loadOrder" :disabled="loading">{{ loading ? 'در حال بروزرسانی...' : 'بروزرسانی وضعیت' }}</button>
+        <button v-if="orderCode" class="primary-btn" type="button" @click="loadOrder" :disabled="loading">{{ loading ? 'در حال بروزرسانی...' : 'بروزرسانی وضعیت' }}</button>
         <a class="secondary-btn" href="/menu">سفارش دوباره</a>
         <a class="secondary-btn" href="/customer/orders">سفارش‌های من</a>
       </div>
