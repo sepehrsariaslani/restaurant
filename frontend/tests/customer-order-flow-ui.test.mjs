@@ -120,13 +120,10 @@ test('customer landing blocks render Persian cart, category, and popular labels 
   assert.match(popular, />افزودن<\/button>/)
 })
 
-test('menu and product detail replace failed optional images with their designed fallbacks', async () => {
-  const menu = await source('pages/MenuPage.vue')
+test('product detail replaces failed optional images with its designed fallback', async () => {
   const item = await source('pages/ItemDetailPage.vue')
   const ingredients = await source('components/IngredientQuantityEditor.vue')
 
-  assert.match(menu, /nextCategoryImageFailed = true/)
-  assert.match(menu, /nextCategoryMeta\.image && !nextCategoryImageFailed/)
   assert.match(item, /@error="onRelatedImageError"/)
   assert.match(item, /\/assets\/restaurant\/frontend\/veederakht-home-hero\.webp/)
   assert.match(ingredients, /@error="markIngredientImageBroken\(ingredient\)"/)

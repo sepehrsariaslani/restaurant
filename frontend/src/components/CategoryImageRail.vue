@@ -1,5 +1,5 @@
 <template>
-  <div class="img-rail-stack">
+  <div ref="railStack" class="img-rail-stack">
     <div class="img-rail-wrap">
       <div class="img-rail" role="group" aria-label="دسته‌بندی‌های منو">
         <button
@@ -52,10 +52,11 @@
 </template>
 
 <script setup>
+import { nextTick, ref, watch } from 'vue'
 import { Beef, CakeSlice, Coffee, CupSoda, Drumstick, Fish, GlassWater, Pizza, Salad, Sandwich, Soup, Utensils, Wheat } from 'lucide-vue-next'
 import { getMenuIconComponent } from '@/utils/menuIcons'
 
-defineProps({
+const props = defineProps({
   categories:          { type: Array,  default: () => [] },
   selectedCategory:    { type: String, default: '' },
   subcategories:       { type: Array,  default: () => [] },
@@ -63,6 +64,27 @@ defineProps({
   activeCategoryTitle: { type: String, default: 'دسته' },
 })
 defineEmits(['select-category', 'select-subcategory'])
+const railStack = ref(null)
+
+function centerActive(selector) {
+  const button = railStack.value?.querySelector(selector)
+  const rail = button?.closest('.img-rail')
+  if (!button || !rail) return
+  const buttonRect = button.getBoundingClientRect()
+  const railRect = rail.getBoundingClientRect()
+  const distance = buttonRect.left + buttonRect.width / 2 - railRect.left - railRect.width / 2
+  rail.scrollBy({ left: distance, behavior: 'smooth' })
+}
+
+watch(() => props.selectedCategory, async () => {
+  await nextTick()
+  centerActive('.img-rail-wrap .img-pill.active')
+})
+
+watch(() => [props.selectedSubcategory, props.subcategories], async () => {
+  await nextTick()
+  centerActive('.img-sub-wrap .sub-pill.active')
+})
 
 const ICON_RULES = [
   { keys: ['نوشیدنی', 'drink', 'سردنوش', 'آبمیوه'], icon: CupSoda },
