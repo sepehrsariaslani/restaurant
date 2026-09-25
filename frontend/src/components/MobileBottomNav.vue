@@ -49,6 +49,11 @@
             <button ref="moreCloseRef" class="mobile-more-close" type="button" aria-label="بستن" @click="closeMore"><X :size="20" /></button>
           </header>
           <nav class="mobile-more-links" aria-label="صفحه‌های بیشتر">
+            <button type="button" class="mobile-more-link" @click="openSearchFromMore">
+              <span class="mobile-more-icon"><Search :size="19" aria-hidden="true" /></span>
+              <span><strong>جستجو</strong><small>پیدا کردن غذا در منو</small></span>
+              <ChevronLeft class="mobile-more-chevron" :size="17" aria-hidden="true" />
+            </button>
             <a v-for="link in moreLinks" :key="link.href" :href="link.href" class="mobile-more-link" @click="closeMore">
               <span class="mobile-more-icon"><component :is="link.icon" :size="19" aria-hidden="true" /></span>
               <span><strong>{{ link.label }}</strong><small>{{ link.hint }}</small></span>
@@ -82,6 +87,8 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Bike, ChevronLeft, CircleHelp, Clock3, Home, List, MapPin, MoreHorizontal, Search, Share2, ShoppingCart, Store, UserRound, X } from 'lucide-vue-next'
 import { customerAccountHref, hasCustomerSession } from '@/utils/customerAuth'
 import ShareWebsiteButton from '@/components/customer/ShareWebsiteButton.vue'
+import { useSearchModal } from '@/composables/useSearchModal'
+const { openSearch } = useSearchModal()
 
 const props = defineProps({
   page: { type: String, default: 'landing' },
@@ -114,7 +121,6 @@ const moreDialogRef = ref(null)
 let bodyOverflowBeforeSheet = ''
 const accountHref = computed(() => isSignedIn.value ? '/customer/dashboard' : customerAccountHref('/customer/dashboard'))
 const moreLinks = computed(() => [
-  { href: '/search', label: 'جستجو', hint: 'پیدا کردن غذا در منو', icon: Search },
   { href: '/order/type', label: 'شروع سفارش', hint: 'نوع سفارش و مقصد را انتخاب کنید', icon: Bike },
   { href: customerAccountHref('/customer/orders'), label: 'سفارش‌های من', hint: 'پیگیری و خریدهای قبلی', icon: Clock3 },
   { href: '/customer/branches', label: 'شعبه‌ها', hint: 'نشانی و ساعت کار', icon: Store },
@@ -129,6 +135,12 @@ function toggleMore() {
 
 function closeMore() {
   moreOpen.value = false
+}
+
+async function openSearchFromMore() {
+  closeMore()
+  await nextTick()
+  openSearch()
 }
 
 function onKeydown(event) {

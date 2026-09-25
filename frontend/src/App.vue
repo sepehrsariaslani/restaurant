@@ -92,7 +92,6 @@
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
       <MenuPage v-else-if="page === 'menu'" :boot="boot" />
       <ProductGroupsPage v-else-if="page === 'product-groups'" :boot="boot" />
-      <CustomerSearchPage v-else-if="page === 'search'" />
       <ItemDetailPage v-else-if="page === 'item'" :boot="boot" />
       <CartPage v-else-if="page === 'cart'" />
       <CustomizePage v-else-if="page === 'customize'" :boot="boot" />
@@ -151,11 +150,11 @@
   </div>
 
   <SiteLoaderOverlay v-if="!isManagement && !isCustomerPage && !isFullscreenPage" :settings="loaderSettings" />
-  <GlobalSearchModal />
+  <GlobalSearchModal :currency="boot.currency || 'IRR'" :categories="boot.categories || []" />
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, onMounted, reactive } from 'vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
 import PublicHeader from './components/PublicHeader.vue'
 import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
@@ -166,7 +165,7 @@ import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
 import MenuPage from './pages/MenuPage.vue'
 import ProductGroupsPage from './pages/ProductGroupsPage.vue'
-import CustomerSearchPage from './pages/CustomerSearchPage.vue'
+import { useSearchModal } from './composables/useSearchModal'
 import ItemDetailPage from './pages/ItemDetailPage.vue'
 import CartPage from './pages/CartPage.vue'
 import CustomizePage from './pages/CustomizePage.vue'
@@ -336,7 +335,7 @@ function resolveInitialPage() {
     if (pathname === '/homev2' || pathname === '/homev2/') return 'homev2'
     if (pathname.startsWith('/product-groups') || pathname.startsWith('/product_groups') || pathname.startsWith('/groups')) return 'product-groups'
     if (pathname.startsWith('/menu')) return 'menu'
-    if (pathname.startsWith('/search')) return 'search'
+    if (pathname.startsWith('/search')) return 'menu'
     if (pathname.startsWith('/item')) return 'item'
     if (pathname.startsWith('/cart')) return 'cart'
     if (pathname.startsWith('/about-us') || pathname.startsWith('/about_us')) return 'about-us'
@@ -377,6 +376,14 @@ function resolveInitialPage() {
 }
 
 const page = resolveInitialPage()
+const { openSearch } = useSearchModal()
+onMounted(() => {
+  if (window.location.pathname.startsWith('/search')) {
+    const query = new URLSearchParams(window.location.search).get('q') || ''
+    window.history.replaceState({}, '', '/menu')
+    openSearch(query)
+  }
+})
 const boot = reactive(window._BOOT || {})
 window._BOOT = boot
 const isManagement = computed(() => String(page || '').startsWith('management-'))

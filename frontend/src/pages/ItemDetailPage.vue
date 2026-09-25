@@ -106,7 +106,10 @@
         </div>
 
         <!-- Description -->
-        <p class="item-desc">{{ item.long_desc || item.short_desc || 'توضیح تکمیلی ثبت نشده است.' }}</p>
+        <div class="mobile-description">
+          <p class="item-desc" :class="{ 'item-desc--collapsed': !descriptionExpanded }">{{ item.long_desc || item.short_desc || 'توضیح تکمیلی ثبت نشده است.' }}</p>
+          <button v-if="(item.long_desc || item.short_desc || '').length > 150" class="description-toggle" type="button" :aria-expanded="descriptionExpanded" @click="descriptionExpanded = !descriptionExpanded">{{ descriptionExpanded ? 'نمایش کمتر' : 'توضیحات بیشتر' }}</button>
+        </div>
 
         <!-- Tabs -->
         <div class="detail-tabs" role="group" aria-label="بخش‌های اطلاعات محصول">
@@ -597,9 +600,9 @@
     <!-- ─── Mobile Sticky Add-to-Cart Bar (sits above the bottom nav) ─── -->
     <div class="sticky-bottom-bar mobile-only" v-if="item" dir="rtl">
       <div class="qty-control" v-if="hasIngredientCustomization || hasModifierCustomization">
-        <button class="qty-btn" type="button" @click="qty = Math.max(qty - 1, 1)">−</button>
+        <button class="qty-btn" type="button" aria-label="کاهش تعداد" @click="qty = Math.max(qty - 1, 1)">−</button>
         <span class="qty-num">{{ qty }}</span>
-        <button class="qty-btn" type="button" @click="qty += 1">+</button>
+        <button class="qty-btn" type="button" aria-label="افزایش تعداد" @click="qty += 1">+</button>
       </div>
 
       <div class="price-and-add">
@@ -685,6 +688,7 @@ const loading = ref(true)
 const error = ref('')
 const item = ref(null)
 const activeTab = ref('details')
+const descriptionExpanded = ref(false)
 const ingredients = ref([])
 const modifierGroups = ref([])
 const allergens = ref([])
@@ -1184,7 +1188,9 @@ function resolveSlug() {
   if (fromBoot) return fromBoot
   const path = window.location.pathname.replace(/^\/|\/+$/g, '')
   const parts = path.split('/')
-  if (parts.length >= 3 && parts[parts.length - 2] === 'item') return parts[parts.length - 1]
+  if (parts.length >= 2 && parts[parts.length - 2] === 'item') {
+    try { return decodeURIComponent(parts[parts.length - 1]) } catch { return parts[parts.length - 1] }
+  }
   return ''
 }
 
@@ -1797,6 +1803,15 @@ onUnmounted(() => {
   line-height: 1.7;
 }
 
+.description-toggle { min-height: 44px; border: 0; background: transparent; color: var(--ds-color-action-primary); font: inherit; font-size: .82rem; font-weight: 800; padding: .25rem 0; cursor: pointer; }
+.description-toggle:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 2px; }
+
+@media (max-width: 767px) {
+  .item-desc--collapsed { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .content-card { background: var(--ds-color-surface-raised); }
+  .base-price { color: var(--ds-color-text-primary); }
+}
+
 /* ════════════════════════════════════════════════════════════════
    TABS
    ════════════════════════════════════════════════════════════════ */
@@ -2267,6 +2282,16 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 1rem;
   font-weight: 900;
+}
+
+@media (max-width: 480px) {
+  .sticky-bottom-bar { display: grid; grid-template-columns: 1fr auto; gap: .55rem; padding: .7rem; }
+  .sticky-bottom-bar > .qty-control { grid-column: 2; grid-row: 1; padding: 0; background: transparent; }
+  .sticky-bottom-bar .qty-btn { width: 44px; height: 44px; }
+  .sticky-bottom-bar .price-and-add { display: contents; }
+  .sticky-bottom-bar .bottom-price { grid-column: 1; grid-row: 1; align-self: center; }
+  .sticky-bottom-bar .bottom-price strong { font-size: .98rem; white-space: nowrap; }
+  .sticky-bottom-bar .add-to-cart-btn { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: center; }
 }
 
 /* Print */

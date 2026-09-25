@@ -22,6 +22,11 @@
     </div>
 
     <div id="content" class="home-content" :class="{ 'needs-header-offset': !previewMode }">
+      <div v-if="!previewMode" class="home-shortcuts" aria-label="دسترسی سریع سفارش">
+        <button type="button" class="home-shortcuts__search" @click="openSearch"><Search :size="20" aria-hidden="true" /><span>چی میل دارید؟ جستجو در منو</span></button>
+        <a class="home-shortcuts__method" href="/order/type"><Bike :size="19" aria-hidden="true" /><span>روش دریافت</span></a>
+        <a v-if="cartCount" class="home-shortcuts__cart" href="/cart">سبد من <span>{{ cartCount.toLocaleString('fa-IR') }}</span></a>
+      </div>
       <HomePageRenderer :boot="boot" :page="page" @quick-add="quickAdd" />
     </div>
 
@@ -48,6 +53,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
+import { Bike, Search } from 'lucide-vue-next'
 import { upsertLine, cartState } from '@/stores/cartStore'
 import PublicHeader from '@/components/PublicHeader.vue'
 import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
@@ -55,6 +61,8 @@ import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import HomePageRenderer from '@/components/blocks/HomePageRenderer.vue'
 import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'
+import { useSearchModal } from '@/composables/useSearchModal'
+const { openSearch } = useSearchModal()
 
 const props = defineProps({
   boot: {
@@ -200,6 +208,42 @@ onUnmounted(() => {
 .home-content {
   padding-block: clamp(1.25rem, 3vw, 2.5rem);
   background: var(--ds-color-bg-page, var(--bg-soft));
+}
+
+.home-shortcuts {
+  width: min(1160px, calc(100% - 2rem));
+  margin: 0 auto 1rem;
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+}
+.home-shortcuts :is(button, a) {
+  min-height: 48px;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 15px;
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  padding: .6rem .9rem;
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.home-shortcuts__search { flex: 1; justify-content: flex-start !important; color: var(--ds-color-text-muted) !important; }
+.home-shortcuts__method { white-space: nowrap; }
+.home-shortcuts__cart { white-space: nowrap; background: var(--ds-color-action-accent-soft, #fff1e5) !important; }
+.home-shortcuts__cart span { color: var(--ds-color-action-accent); }
+.home-shortcuts :is(button, a):focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 2px; }
+@media (min-width: 921px) { .home-shortcuts { display: none; } }
+@media (max-width: 420px) {
+  .home-shortcuts { width: calc(100% - 2rem); gap: .45rem; }
+  .home-shortcuts :is(button, a) { padding-inline: .65rem; }
+  .home-shortcuts__cart { display: none !important; }
 }
 
 .home-page--v2 {

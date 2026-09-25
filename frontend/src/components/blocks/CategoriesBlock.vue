@@ -163,4 +163,15 @@ function formatCount(value) {
   font-weight: 700;
   text-align: center;
 }
+
+@media (max-width: 620px) {
+  .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+  .cat-card { display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; gap: 0 .65rem; border: 1px solid var(--ds-color-border); background: var(--ds-color-surface-raised); padding: .55rem; }
+  .cat-card :deep(.category-media) { grid-row: 1 / 3; width: 64px; height: 64px; min-height: 0; border-radius: 12px; }
+  .cat-card__label { align-self: end; font-size: .82rem; line-height: 1.35; }
+  .cat-card__count { align-self: start; font-size: .7rem; }
+}
+@media (max-width: 360px) {
+  .cat-grid { grid-template-columns: 1fr; }
+}
 </style>

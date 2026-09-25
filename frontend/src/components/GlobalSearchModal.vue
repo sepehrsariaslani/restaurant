@@ -8,7 +8,7 @@
         dir="rtl"
         role="dialog"
         aria-modal="true"
-        aria-label="جستجوی سراسری"
+        aria-label="جستجو در منو"
         @click.self="closeSearch"
         @keydown.esc="closeSearch"
       >
@@ -25,6 +25,7 @@
               class="search-input"
               placeholder="جستجو در منو..."
               autocomplete="off"
+              aria-label="نام غذا یا دسته‌بندی"
               @keydown.esc="closeSearch"
               @keydown.enter="goFirst"
             />
@@ -41,18 +42,20 @@
             >
               <div class="result-img-wrap">
                 <img
-                  :src="item.image || fallback"
+                  v-if="item.image"
+                  :src="item.image"
                   :alt="item.title"
                   class="result-img"
                   loading="lazy"
-                  @error="$event.target.src = fallback"
+                  @error="$event.target.style.display = 'none'"
                 />
+                <Utensils v-else :size="22" aria-hidden="true" />
               </div>
               <div class="result-info">
                 <strong class="result-name">{{ item.title }}</strong>
                 <small class="result-cat">{{ item.category_title || item.category || 'منو' }}</small>
               </div>
-              <span class="result-price">{{ formatMoney(item.base_price, 'TOMAN') }}</span>
+              <span class="result-price">{{ Number(item.base_price) > 0 ? formatMoney(item.base_price, currency) : 'قیمت پس از انتخاب' }}</span>
               <span class="result-arrow">←</span>
             </a>
           </div>
@@ -62,7 +65,12 @@
             <p>در حال جستجو...</p>
           </div>
 
-          <div class="search-empty" v-else-if="query.length >= 2 && !searching">
+          <div class="search-empty" v-else-if="searchError">
+            <p>{{ searchError }}</p>
+            <button type="button" class="hint-chip" @click="doSearch(query.trim())">تلاش دوباره</button>
+          </div>
+
+          <div class="search-empty" v-else-if="query.trim().length >= 2 && !searching">
             <Utensils class="empty-icon" :size="30" />
             <p>نتیجه‌ای برای «{{ query }}» یافت نشد.</p>
           </div>
@@ -81,34 +89,51 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { Search, Utensils, X } from 'lucide-vue-next'
 import { useSearchModal } from '@/composables/useSearchModal'
 import { getMenuItems } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 
-const { searchOpen, closeSearch } = useSearchModal()
+const props = defineProps({
+  currency: { type: String, default: 'IRR' },
+  categories: { type: Array, default: () => [] },
+})
+const { searchOpen, searchQuery, closeSearch } = useSearchModal()
 
 const query = ref('')
 const results = ref([])
 const searching = ref(false)
+const searchError = ref('')
 const inputEl = ref(null)
-
-const fallback = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&auto=format&fit=crop&q=60'
-
-const hintChips = ['برگر', 'پیتزا', 'سالاد', 'قهوه', 'دسر']
+const hintChips = computed(() => props.categories
+  .map((category) => String(category.title || category.category_name || category.name || '').trim())
+  .filter(Boolean).slice(0, 5))
 
 let debounceTimer = null
+let requestVersion = 0
+let previousFocus = null
+let previousOverflow = ''
 
 watch(searchOpen, async (val) => {
   if (val) {
-    query.value = ''
+    previousFocus = document.activeElement
+    previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    query.value = searchQuery.value
     results.value = []
     await nextTick()
     inputEl.value?.focus()
     document.addEventListener('keydown', onKeyTrap)
   } else {
+    requestVersion += 1
+    clearTimeout(debounceTimer)
+    query.value = ''
+    results.value = []
+    searching.value = false
+    document.body.style.overflow = previousOverflow
     document.removeEventListener('keydown', onKeyTrap)
+    previousFocus?.focus?.()
   }
 })
 
@@ -131,29 +156,43 @@ function onKeyTrap(e) {
 
 watch(query, (val) => {
   clearTimeout(debounceTimer)
+  requestVersion += 1
   results.value = []
+  searchError.value = ''
   if (String(val || '').trim().length < 2) {
     searching.value = false
     return
   }
   searching.value = true
-  debounceTimer = setTimeout(() => doSearch(String(val).trim()), 320)
+  const version = requestVersion
+  debounceTimer = setTimeout(() => doSearch(String(val).trim(), version), 320)
 })
 
-async function doSearch(term) {
+async function doSearch(term, version = requestVersion) {
   if (!term || term.length < 2) {
     searching.value = false
     return
   }
+  searching.value = true
+  searchError.value = ''
   try {
     const data = await getMenuItems({ search: term, page: 1, page_size: 8 })
-    results.value = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : [])
+    if (version === requestVersion && searchOpen.value) {
+      results.value = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : [])
+      searchError.value = ''
+    }
   } catch (_) {
-    results.value = []
+    if (version === requestVersion && searchOpen.value) searchError.value = 'جستجو انجام نشد. دوباره تلاش کنید.'
   } finally {
-    searching.value = false
+    if (version === requestVersion) searching.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  clearTimeout(debounceTimer)
+  document.removeEventListener('keydown', onKeyTrap)
+  if (searchOpen.value) document.body.style.overflow = previousOverflow
+})
 
 function goFirst() {
   if (results.value.length) {
@@ -168,20 +207,21 @@ function goFirst() {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(28, 20, 17, 0.72);
-  backdrop-filter: blur(12px);
+  background: rgb(35 27 20 / 0.55);
+  backdrop-filter: blur(7px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 6rem 1rem 2rem;
+  padding: min(9vh, 5rem) 1rem 2rem;
 }
 
 .search-box {
   width: 100%;
   max-width: 640px;
-  background: var(--theme-background, #fdf8f1);
+  background: var(--ds-color-surface-raised, #fffaf5);
+  border: 1px solid var(--ds-color-border);
   border-radius: 24px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 24px 70px rgb(35 27 20 / 0.2);
   overflow: hidden;
   animation: search-drop 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -196,7 +236,7 @@ function goFirst() {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.2rem;
-  border-bottom: 1px solid var(--theme-border, #e0d8cf);
+  border-bottom: 1px solid var(--ds-color-border, #e0d8cf);
 }
 
 .search-icon {
@@ -223,11 +263,11 @@ function goFirst() {
 }
 
 .search-close-btn {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
-  background: var(--theme-surface-alt, #f0ece7);
+  background: var(--ds-color-surface-sunken, #f0ece7);
   color: var(--text-muted, #846b58);
   font-size: 1.1rem;
   cursor: pointer;
@@ -267,7 +307,9 @@ function goFirst() {
   border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--theme-surface-alt, #f0ece7);
+  background: var(--ds-color-product-media-surface, #f0ece7);
+  display: grid;
+  place-items: center;
 }
 
 .result-img {
@@ -301,7 +343,7 @@ function goFirst() {
 .result-price {
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--accent-gold, #c98d42);
+  color: var(--ds-color-text-primary, #3f2a1d);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -360,7 +402,8 @@ function goFirst() {
   border: 1px solid var(--glass-border, #d5c3af);
   background: transparent;
   border-radius: 999px;
-  padding: 0.25rem 0.75rem;
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
   font-size: 0.8rem;
   cursor: pointer;
   color: var(--text-primary, #3f2a1d);
@@ -380,5 +423,24 @@ function goFirst() {
 .search-modal-enter-from,
 .search-modal-leave-to {
   opacity: 0;
+}
+
+.search-box :is(button, a, input):focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring, #d9874b);
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .search-overlay { padding: 0; align-items: flex-end; }
+  .search-box { max-width: none; max-height: min(80dvh, 720px); border-radius: 24px 24px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  .search-input-row { padding: .75rem 1rem; }
+  .search-results { max-height: calc(80dvh - 84px); }
+  .result-row { min-height: 76px; padding: .65rem 1rem; }
+  .result-arrow { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-box, .search-spinner { animation: none; }
+  .search-modal-enter-active, .search-modal-leave-active { transition: none; }
 }
 </style>

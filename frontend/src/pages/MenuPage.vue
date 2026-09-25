@@ -2,7 +2,7 @@
   <div class="menu-page-root">
     <div class="menu-intro">
       <div><p>تازه آماده می‌کنیم</p><h1>امروز چی میل دارید؟</h1></div>
-      <a href="/search" class="menu-search-link" aria-label="جستجو در منو"><Search :size="20" /> <span>جستجو</span></a>
+      <button type="button" class="menu-search-link" aria-label="جستجو در منو" @click="openSearch"><Search :size="20" /> <span>جستجو</span></button>
     </div>
     <!-- ─── Sticky Category Rail (first on mobile, after hero on desktop) ─── -->
     <div
@@ -318,6 +318,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, Teleport } from 'vue'
+import { useSearchModal } from '@/composables/useSearchModal'
 import { Search, ChevronDown, ChevronsUp, Utensils } from 'lucide-vue-next'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
@@ -332,6 +333,7 @@ import { getMenuItems, getManagementSessionProfile, getBuilderTemplate, computeB
 import { formatMoney } from '@/utils/format'
 import { getMenuIconComponent } from '@/utils/menuIcons'
 import { cartState, upsertLine, removeLine } from '@/stores/cartStore'
+const { openSearch } = useSearchModal()
 
 const props = defineProps({
   boot: {

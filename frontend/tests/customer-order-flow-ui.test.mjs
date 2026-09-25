@@ -9,13 +9,15 @@ async function source(path) {
   return readFile(new URL(path, root), 'utf8')
 }
 
-test('cart line keeps the product image as a large, stable visual anchor', async () => {
+test('cart line keeps the product image visible beside details and touch-friendly actions', async () => {
   const page = await source('components/CartLineEditor.vue')
 
   assert.match(page, /class="product-visual"/)
-  assert.match(page, /width:\s*clamp\(112px, 20vw, 144px\)/)
+  assert.match(page, /width:\s*clamp\(96px, 16vw, 128px\)/)
   assert.match(page, /aspect-ratio:\s*1/)
   assert.match(page, /object-fit:\s*contain/)
+  assert.match(page, /\.qty-btn\s*\{\s*width:\s*44px/)
+  assert.match(page, /class="line-total"/)
 })
 
 test('customer language uses branches while preserving native company identity', async () => {
