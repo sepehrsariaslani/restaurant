@@ -10,7 +10,7 @@
           <h1 class="customer-page__title">{{ customerName }}</h1>
           <p class="customer-page__subtitle">مرکز مدیریت سفارش‌ها، آدرس‌ها و اطلاعات حساب شما.</p>
         </div>
-        <a href="/customer/profile" class="hero-profile-link" aria-label="ویرایش اطلاعات شخصی">
+        <a v-if="customerMobile" href="/customer/profile" class="hero-profile-link" aria-label="ویرایش اطلاعات شخصی">
           <span>{{ avatarLetter }}</span>
         </a>
       </div>
@@ -37,12 +37,12 @@
         <div class="account-summary__main">
           <span class="customer-icon-badge"><UserRound :size="22" /></span>
           <div>
-            <h2>{{ customerName }}</h2>
-            <p>{{ customerMobile || 'برای ذخیره سفارش‌ها وارد حساب شوید.' }}</p>
+            <h2>{{ customerMobile ? 'اطلاعات حساب مشتری' : 'حساب کاربری مهمان' }}</h2>
+            <p>{{ customerMobile || 'برای ذخیره و پیگیری سفارش‌ها وارد حساب شوید.' }}</p>
           </div>
         </div>
         <div class="account-summary__actions">
-          <a href="/customer/profile" class="customer-page__ghost-action">
+          <a v-if="customerMobile" href="/customer/profile" class="customer-page__ghost-action">
             <Pencil :size="16" />
             ویرایش اطلاعات
           </a>
@@ -51,7 +51,7 @@
             خروج
           </button>
           <a v-else href="/customer/login?redirect=/customer/dashboard" class="customer-page__ghost-action">
-            ورود
+            ورود / ثبت‌نام
           </a>
         </div>
       </section>

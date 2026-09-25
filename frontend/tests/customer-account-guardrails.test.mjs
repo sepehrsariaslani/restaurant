@@ -8,6 +8,16 @@ async function page(name) {
   return readFile(new URL(name, root), 'utf8')
 }
 
+test('guest dashboard shows one clear sign-in route and hides profile editing', async () => {
+  const source = await page('CustomerDashboardPage.vue')
+
+  assert.match(source, /v-if="customerMobile" href="\/customer\/profile" class="hero-profile-link"/)
+  assert.match(source, /customerMobile \? 'اطلاعات حساب مشتری' : 'حساب کاربری مهمان'/)
+  assert.match(source, /برای ذخیره و پیگیری سفارش‌ها وارد حساب شوید/)
+  assert.match(source, /<a v-if="customerMobile" href="\/customer\/profile" class="customer-page__ghost-action">/)
+  assert.match(source, /ورود \/ ثبت‌نام/)
+})
+
 test('guest profile explains the login requirement and does not expose editable fields', async () => {
   const source = await page('CustomerProfilePage.vue')
 
