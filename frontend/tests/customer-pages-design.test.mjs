@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { customerAccountHref, hasCustomerSession } from '../src/utils/customerAuth.js'
+import { normalizeMobile } from '../src/utils/format.js'
+import { designTokens } from '../src/design-system/tokens.js'
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
@@ -51,6 +53,23 @@ test('Veederakht default colors use readable, runtime-derived foregrounds', () =
   assert.match(tokens, /accent: '#DFAF2E'/)
   assert.match(themeSettings, /readableForeground\(normalized\.primary\)/)
   assert.match(themeSettings, /readableForeground\(normalized\.accent\)/)
+})
+
+test('Persian and Arabic phone digits normalize to the same mobile number', () => {
+  assert.equal(normalizeMobile('۰۹۱۲ ۳۴۵ ۶۷۸۹'), '09123456789')
+  assert.equal(normalizeMobile('٠٩١٢٣٤٥٦٧٨٩'), '09123456789')
+})
+
+test('frontend and server fallback themes share the orange and saffron palette', () => {
+  const backend = readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
+  const defaults = backend.match(/MANAGEMENT_THEME_DEFAULTS = \{([\s\S]*?)\n\}/)?.[1]
+
+  assert.ok(defaults, 'server theme defaults should be declared')
+  for (const key of ['primary', 'accent', 'success', 'danger', 'warning', 'surface', 'surfaceAlt', 'background', 'border', 'text', 'textSecondary', 'muted']) {
+    const value = designTokens.color.primitive[key]
+    assert.ok(defaults.includes(`"${key}": "${value}"`), `server ${key} should match frontend token ${value}`)
+  }
+  assert.ok(defaults.includes(`"posAccent": "${designTokens.color.primitive.accent}"`))
 })
 
 test('mobile account links send guests to sign-in and return to the requested account page', () => {

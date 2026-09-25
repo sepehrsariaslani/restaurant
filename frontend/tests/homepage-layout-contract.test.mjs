@@ -37,11 +37,15 @@ test('public desktop navigation labels meet the updated reading size', async () 
   assert.match(header, /--ds-color-action-primary/)
 })
 
-test('customer login uses the saved hero image and a restaurant-branded fallback', async () => {
+test('customer login uses a compact brand panel and adapts its two-column layout for mobile', async () => {
   const login = await source('pages/CustomerLoginPage.vue')
 
-  assert.match(login, /:src="heroImage"/)
-  assert.match(login, /props\.boot\?\.branding\?\.hero_image/)
-  assert.match(login, /veederakht-home-hero\.webp/)
-  assert.doesNotMatch(login, /NooshYar%20Image\.png/)
+  assert.match(login, /class="logo-circle" aria-hidden="true"><Utensils :size="28" \/>/)
+  assert.match(login, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 0\.95fr\)/)
+  assert.match(login, /@media\s*\(max-width:\s*919px\)[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/)
+  assert.match(login, /var\(--ds-color-action-primary\)/)
+  assert.match(login, /var\(--ds-color-action-accent-soft\)/)
+  assert.match(login, /autocomplete="tel-national"/)
+  assert.match(login, /one-time-code/)
+  assert.doesNotMatch(login, /hero-bg|heroImage|veederakht-home-hero/)
 })

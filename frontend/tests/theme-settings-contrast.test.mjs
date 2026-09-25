@@ -35,7 +35,7 @@ test('a low contrast border also adapts for dark surfaces', () => {
 })
 
 test('dynamic action and status foregrounds keep labels readable', () => {
-  for (const background of ['#2F5F47', '#C65316', '#FF5900', '#F1C232', '#777777', '#FFFFFF', '#000000', '#91C788']) {
+  for (const background of ['#B94712', '#DFAF2E', '#2F5F47', '#C65316', '#FF5900', '#F1C232', '#777777', '#FFFFFF', '#000000', '#91C788']) {
     const foreground = readableForeground(background)
     assert.ok(contrastRatio(foreground, background) >= 4.5, `${foreground} should contrast with ${background}`)
   }

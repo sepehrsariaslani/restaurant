@@ -1,19 +1,18 @@
 <template>
   <div class="login-page" dir="rtl">
-    <div class="login-hero">
+    <section class="login-hero" :aria-label="`ورود به ${brandName}`">
       <div class="hero-overlay"></div>
-      <img class="hero-bg" :src="heroImage" alt="" />
       <div class="hero-logo">
-        <div class="logo-circle">🍽️</div>
+        <span class="logo-circle" aria-hidden="true"><Utensils :size="28" /></span>
         <h1 class="brand-name">{{ brandName }}</h1>
-        <p class="brand-sub">با شماره موبایل وارد شوید</p>
+        <p class="brand-sub">طعم تازه، سفارش ساده</p>
       </div>
-    </div>
+    </section>
 
-    <div class="login-card">
+    <section class="login-card" aria-label="ورود یا ثبت‌نام مشتری">
       <div v-if="step === 'phone'">
         <h2 class="card-title">ورود / ثبت‌نام</h2>
-        <p class="card-sub">شماره موبایل خود را وارد کنید</p>
+        <p class="card-sub">برای دریافت کد تأیید، شماره موبایل‌تان را وارد کنید.</p>
         <div class="input-group">
           <span class="input-prefix">+۹۸</span>
           <input
@@ -21,7 +20,9 @@
             class="phone-input"
             type="tel"
             inputmode="numeric"
-            maxlength="10"
+            maxlength="14"
+            autocomplete="tel-national"
+            aria-label="شماره موبایل"
             placeholder="۹۱۲ ۳۴۵ ۶۷۸۹"
             v-model="phone"
             @input="onPhoneInput"
@@ -54,7 +55,9 @@
             class="otp-box"
             type="tel"
             inputmode="numeric"
-            maxlength="1"
+            :maxlength="i === 0 ? 6 : 1"
+            :autocomplete="i === 0 ? 'one-time-code' : 'off'"
+            :aria-label="`رقم ${(i + 1).toLocaleString('fa-IR')} از کد تأیید`"
             v-model="otpDigits[i]"
             @input="onOtpInput(i, $event)"
             @keydown="onOtpKeydown(i, $event)"
@@ -74,13 +77,15 @@
       </div>
 
       <p class="error-msg" v-if="error">{{ error }}</p>
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Utensils } from 'lucide-vue-next'
 import { sendOtp as sendOtpAPI, verifyOtp as verifyOtpAPI } from '@/utils/api'
+import { normalizeMobile } from '@/utils/format'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const props = defineProps({
@@ -88,9 +93,6 @@ const props = defineProps({
 })
 const brandName = computed(() =>
   props.boot?.branding?.name || window._BOOT?.restaurant_name || window._BOOT?.brand_name || 'رستوران',
-)
-const heroImage = computed(() =>
-  props.boot?.branding?.hero_image || '/assets/restaurant/frontend/veederakht-home-hero.webp',
 )
 const step = ref('phone')
 const phone = ref('')
@@ -105,19 +107,23 @@ let countdownTimer = null
 const phoneInput = ref(null)
 
 const isPhoneValid = computed(() => {
-  const cleaned = phone.value.replace(/\D/g, '')
+  const cleaned = normalizeMobile(phone.value)
   return cleaned.length === 10 && cleaned.startsWith('9')
 })
 
 const displayPhone = computed(() => {
-  const cleaned = phone.value.replace(/\D/g, '')
+  const cleaned = normalizeMobile(phone.value)
   return `0${cleaned}`
 })
 
 const otpCode = computed(() => otpDigits.value.join(''))
 
 function onPhoneInput(e) {
-  phone.value = e.target.value.replace(/\D/g, '').slice(0, 10)
+  let cleaned = normalizeMobile(e.target.value)
+  if (cleaned.startsWith('0098') && cleaned.length > 10) cleaned = cleaned.slice(4)
+  else if (cleaned.startsWith('98') && cleaned.length > 10) cleaned = cleaned.slice(2)
+  else if (cleaned.startsWith('0') && cleaned.length > 10) cleaned = cleaned.slice(1)
+  phone.value = cleaned.slice(0, 10)
 }
 
 async function sendOtp() {
@@ -125,7 +131,7 @@ async function sendOtp() {
   sending.value = true
   error.value = ''
   try {
-    const fullPhone = `0${phone.value.replace(/\D/g, '')}`
+    const fullPhone = `0${normalizeMobile(phone.value)}`
     const result = await sendOtpAPI({ mobile: fullPhone })
     if (result?.debug_otp) console.info('[Restaurant OTP]', result.debug_otp)
     step.value = 'otp'
@@ -144,7 +150,7 @@ async function verifyOtp() {
   verifying.value = true
   error.value = ''
   try {
-    const fullPhone = `0${phone.value.replace(/\D/g, '')}`
+    const fullPhone = `0${normalizeMobile(phone.value)}`
     const data = await verifyOtpAPI({ mobile: fullPhone, otp: otpCode.value })
     if (data?.success || data?.verified) {
       const customer = data.customer || {}
@@ -170,10 +176,20 @@ async function verifyOtp() {
 }
 
 function onOtpInput(index, event) {
-  const val = event.target.value.replace(/\D/g, '').slice(0, 1)
-  otpDigits.value[index] = val
-  if (val && index < 5) {
-    otpRefs.value[index + 1]?.focus()
+  const digits = normalizeMobile(event.target.value)
+  if (digits.length > 1) {
+    const nextDigits = [...otpDigits.value]
+    digits.slice(0, 6 - index).split('').forEach((digit, offset) => {
+      nextDigits[index + offset] = digit
+    })
+    otpDigits.value = nextDigits
+    event.target.value = nextDigits[index] || ''
+    const nextIndex = Math.min(index + digits.length, 5)
+    otpRefs.value[nextIndex]?.focus()
+  } else {
+    const val = digits.slice(0, 1)
+    otpDigits.value[index] = val
+    if (val && index < 5) otpRefs.value[index + 1]?.focus()
   }
   if (otpCode.value.length === 6) verifyOtp()
 }
@@ -213,86 +229,121 @@ onUnmounted(() => clearInterval(countdownTimer))
 
 <style scoped>
 .login-page {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--ds-color-bg-page, #f7f0e8);
+  min-height: 100dvh;
+  width: min(1160px, 100%);
+  margin-inline: auto;
+  padding: clamp(1rem, 3vw, 2.5rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(1rem, 3vw, 2.5rem);
+  background:
+    radial-gradient(ellipse at 12% 12%, var(--ds-color-action-accent-soft) 0, transparent 42%),
+    var(--ds-color-bg-page);
   direction: rtl;
 }
 
 .login-hero {
   position: relative;
-  height: 280px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.hero-bg {
+  grid-column: 2;
+  min-height: min(600px, calc(100dvh - 5rem));
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 32px;
+  background: var(--ds-color-action-primary);
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--ds-color-action-primary) 20%, transparent);
 }
 
 .hero-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, color-mix(in srgb, var(--ds-color-action-primary, #b94712) 72%, var(--ds-color-text-primary, #382719)) 78%, transparent),
-    color-mix(in srgb, color-mix(in srgb, var(--ds-color-action-accent, #dfaf2e) 48%, var(--ds-color-text-primary, #382719)) 68%, transparent) 52%,
-    color-mix(in srgb, color-mix(in srgb, var(--ds-color-action-primary, #b94712) 64%, var(--ds-color-text-primary, #382719)) 88%, transparent)
-  );
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 80% 15%, color-mix(in srgb, var(--ds-color-action-accent) 25%, transparent), transparent 42%),
+    radial-gradient(ellipse at 15% 85%, color-mix(in srgb, var(--ds-color-action-accent) 18%, transparent), transparent 42%);
+}
+
+.hero-overlay::before,
+.hero-overlay::after {
+  content: '';
+  position: absolute;
+  width: clamp(240px, 35vw, 440px);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-primary-foreground) 22%, transparent);
+  border-radius: 50%;
+}
+
+.hero-overlay::before {
+  inset-inline-start: -18%;
+  bottom: -32%;
+  box-shadow:
+    0 0 0 24px color-mix(in srgb, var(--ds-color-action-primary-foreground) 5%, transparent),
+    0 0 0 52px color-mix(in srgb, var(--ds-color-action-primary-foreground) 4%, transparent);
+}
+
+.hero-overlay::after {
+  inset-inline-end: -24%;
+  top: -38%;
+  width: clamp(180px, 25vw, 320px);
+  border-color: color-mix(in srgb, var(--ds-color-action-accent) 60%, transparent);
 }
 
 .hero-logo {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
+  gap: 0.85rem;
+  padding: 2rem;
   text-align: center;
+  color: var(--ds-color-action-primary-foreground);
 }
 
 .logo-circle {
-  width: 70px;
-  height: 70px;
-  background: rgba(255,255,255,0.15);
-  backdrop-filter: blur(10px);
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  border: 2px solid rgba(255,255,255,0.3);
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-primary-foreground) 32%, transparent);
+  background: color-mix(in srgb, var(--ds-color-action-accent) 24%, transparent);
+  color: var(--ds-color-action-primary-foreground);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ds-color-text-primary) 12%, transparent);
 }
 
 .brand-name {
-  color: #fff;
-  font-size: 1.6rem;
+  color: inherit;
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
   font-weight: 800;
   margin: 0;
 }
 
 .brand-sub {
-  color: rgba(255,255,255,0.75);
-  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--ds-color-action-primary-foreground) 78%, transparent);
+  font-size: 1rem;
   margin: 0;
+  line-height: 1.7;
 }
 
 .login-card {
-  background: var(--ds-color-surface-raised, #fff);
-  border-radius: 32px 32px 0 0;
-  margin-top: -24px;
-  flex: 1;
-  padding: 2rem 1.5rem 6rem;
+  grid-column: 1;
+  align-self: center;
+  width: 100%;
+  max-width: 480px;
+  margin: 0;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
   position: relative;
   z-index: 2;
-  max-width: 480px;
-  width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 28px;
+  background: var(--ds-color-surface-raised);
+  box-shadow: var(--shadow-soft);
 }
 
 .back-row {
@@ -332,6 +383,10 @@ onUnmounted(() => clearInterval(countdownTimer))
   transition: border-color 0.2s;
 }
 .input-group:focus-within { border-color: var(--ds-color-action-primary); box-shadow: 0 0 0 3px var(--ds-color-action-primary-soft); }
+.login-page :is(button, a, input):focus-visible {
+  outline: 3px solid var(--ds-color-focus-ring);
+  outline-offset: 3px;
+}
 
 .input-prefix {
   padding: 0 1rem;
@@ -367,7 +422,8 @@ onUnmounted(() => clearInterval(countdownTimer))
 
 .primary-btn {
   width: 100%;
-  padding: 1rem;
+  min-height: 52px;
+  padding: 0.8rem 1rem;
   background: var(--ds-color-action-primary);
   color: var(--ds-color-action-primary-foreground, #fff);
   border: none;
@@ -402,6 +458,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 
 .ghost-btn {
   width: 100%;
+  min-height: 48px;
   display: block;
   padding: 0.9rem;
   border: 2px solid var(--ds-color-action-primary);
@@ -474,4 +531,49 @@ onUnmounted(() => clearInterval(countdownTimer))
   display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 919px) {
+  .login-page {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 0;
+    padding: 0.75rem 0.75rem calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .login-hero {
+    grid-column: 1;
+    min-height: clamp(176px, 24svh, 218px);
+    border-radius: 24px;
+  }
+
+  .hero-logo { gap: 0.55rem; padding: 1rem 0.8rem 1.5rem; }
+  .logo-circle { width: 58px; height: 58px; }
+  .logo-circle svg { width: 24px; height: 24px; }
+  .brand-name { font-size: 1.45rem; }
+  .brand-sub { font-size: 0.88rem; }
+
+  .login-card {
+    grid-column: 1;
+    justify-self: center;
+    max-width: 520px;
+    margin-top: -14px;
+    padding: 1.35rem 1rem 1.25rem;
+    border-radius: 24px;
+  }
+
+  .card-sub { margin-bottom: 1.2rem; }
+  .input-hint { margin-bottom: 1.1rem; }
+  .divider { margin: 1rem 0; }
+  .otp-row { gap: clamp(0.25rem, 2vw, 0.6rem); }
+  .otp-box { width: clamp(36px, 10.5vw, 46px); height: clamp(46px, 12vw, 54px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-btn,
+  .input-group,
+  .otp-box,
+  .ghost-btn { transition: none; }
+  .spinner { animation: none; }
+}
 </style>
