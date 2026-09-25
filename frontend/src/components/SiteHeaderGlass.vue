@@ -148,7 +148,11 @@ function isActive(link) {
   width: 2rem;
   height: 2rem;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--palette-deep-sapphire, #6F4A31), #9b6a47);
+  background: linear-gradient(
+    135deg,
+    var(--ds-color-action-primary),
+    color-mix(in srgb, var(--ds-color-action-primary) 84%, black)
+  );
   display: flex;
   align-items: center;
   justify-content: center;

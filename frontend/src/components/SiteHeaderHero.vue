@@ -57,7 +57,6 @@
         <p class="hero-subtitle">{{ heroSubtitle }}</p>
         <div class="hero-cta-row">
           <a class="hero-cta-btn" href="/menu">{{ heroCta }}</a>
-          <a class="hero-cta-outline" href="/menu">مشاهده منو</a>
         </div>
         <div class="hero-benefits">
           <span>مواد اولیه تازه</span>
@@ -150,7 +149,9 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 .hero-header__bg {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 15% 18%, rgb(255 255 255 / 0.85), transparent 24%), linear-gradient(135deg, #fff8ee 0%, #f3dfc7 100%);
+  background:
+    radial-gradient(circle at 15% 18%, color-mix(in srgb, var(--ds-color-action-accent) 12%, transparent), transparent 24%),
+    linear-gradient(135deg, var(--ds-color-bg-page) 0%, var(--ds-color-surface-raised) 100%);
   background-size: cover;
   background-position: left center;
   background-repeat: no-repeat;
@@ -161,9 +162,9 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgb(255 249 240 / 0.18) 0%,
-    rgb(255 249 240 / 0.44) 46%,
-    rgb(255 249 240 / 0.72) 100%
+    color-mix(in srgb, var(--ds-color-surface-raised) 48%, transparent) 0%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 72%, transparent) 46%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 94%, transparent) 100%
   );
 }
 
@@ -193,14 +194,14 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   width: 1.65rem;
   height: 1.65rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.9);
+  background: var(--ds-color-action-accent);
   flex-shrink: 0;
 }
 
 .hero-brand-copy strong {
   display: block;
   font-size: 0.95rem;
-  color: #174d32;
+  color: var(--ds-color-text-primary);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -208,7 +209,7 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 .hero-brand-copy small {
   display: block;
   font-size: 0.72rem;
-  color: rgb(23 77 50 / 0.62);
+  color: var(--ds-color-text-secondary);
 }
 
 .hero-desktop-nav {
@@ -221,9 +222,9 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   border-radius: 999px;
   padding: 0.44rem 0.8rem;
   font-size: 0.82rem;
-  color: #174d32;
-  border: 1px solid rgb(23 77 50 / 0.14);
-  background: rgb(255 255 255 / 0.58);
+  color: var(--ds-color-text-primary);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
   backdrop-filter: blur(8px);
   text-decoration: none;
   display: inline-flex;
@@ -233,15 +234,15 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 }
 
 .hero-nav-link:hover {
-  background: rgb(255 255 255 / 0.85);
+  background: var(--ds-color-action-primary-soft);
 }
 
 .hero-count-pill {
   min-width: 1rem;
   height: 1rem;
   border-radius: 999px;
-  background: rgb(255 200 100 / 0.85);
-  color: #1c1411;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.64rem;
   display: inline-flex;
   align-items: center;
@@ -257,13 +258,13 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 }
 
 .hero-search-btn {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: rgb(255 255 255 / 0.12);
-  border: 1px solid rgb(255 255 255 / 0.24);
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
   backdrop-filter: blur(8px);
-  color: #174d32;
+  color: var(--ds-color-action-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -272,17 +273,17 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 }
 
 .hero-search-btn:hover {
-  background: rgb(255 255 255 / 0.22);
+  background: var(--ds-color-action-primary-soft);
 }
 
 .hero-cart-pill {
-  width: 2.2rem;
-  height: 2.2rem;
+  min-width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: rgb(255 255 255 / 0.12);
-  border: 1px solid rgb(255 255 255 / 0.24);
+  background: var(--ds-color-action-accent);
+  border: 1px solid var(--ds-color-action-accent);
   backdrop-filter: blur(8px);
-  color: #174d32;
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -297,8 +298,8 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   min-width: 0.9rem;
   height: 0.9rem;
   border-radius: 999px;
-  background: #e8a347;
-  color: #1c1411;
+  background: color-mix(in srgb, var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff)) 18%, transparent);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.6rem;
   display: inline-flex;
   align-items: center;
@@ -307,11 +308,11 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 }
 
 .hero-hamburger {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
-  border: 1px solid rgb(255 255 255 / 0.24);
-  background: rgb(255 255 255 / 0.1);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
   backdrop-filter: blur(8px);
   display: grid;
   align-content: center;
@@ -324,7 +325,7 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   display: block;
   height: 2px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--ds-color-action-primary);
   transition: transform 0.2s;
 }
 
@@ -351,9 +352,9 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   width: max-content;
   border-radius: 999px;
   padding: 0.28rem 0.9rem;
-  background: rgb(255 200 100 / 0.18);
-  border: 1px solid rgb(255 200 100 / 0.35);
-  color: rgb(255 220 150);
+  background: var(--ds-color-action-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-accent) 35%, transparent);
+  color: var(--ds-color-action-primary);
   font-size: 0.78rem;
   font-weight: 700;
   margin: 0;
@@ -363,15 +364,14 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   margin: 0;
   font-size: clamp(1.8rem, 5vw, 3.2rem);
   font-weight: 900;
-  color: #174d32;
+  color: var(--ds-color-text-primary);
   line-height: 1.2;
-  text-shadow: 0 2px 16px rgb(0 0 0 / 0.4);
 }
 
 .hero-subtitle {
   margin: 0;
   font-size: clamp(0.9rem, 2vw, 1.1rem);
-  color: rgb(28 20 17 / 0.68);
+  color: var(--ds-color-text-secondary);
   line-height: 1.65;
 }
 
@@ -384,35 +384,21 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
 
 .hero-cta-btn {
   padding: 0.72rem 1.5rem;
+  min-height: 48px;
   border-radius: 999px;
-  background: #e8a347;
-  color: #1c1411;
+  background: var(--ds-color-action-accent);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.9rem;
   font-weight: 800;
   text-decoration: none;
-  transition: background 0.18s, transform 0.15s;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.18s, transform 0.15s, filter var(--ds-motion-fast, 160ms);
 }
 
 .hero-cta-btn:hover {
-  background: #d4923a;
+  filter: brightness(0.96);
   transform: translateY(-1px);
-}
-
-.hero-cta-outline {
-  padding: 0.72rem 1.4rem;
-  border-radius: 999px;
-  border: 1.5px solid rgb(255 255 255 / 0.45);
-  color: #174d32;
-  background: transparent;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-decoration: none;
-  backdrop-filter: blur(4px);
-  transition: background 0.18s;
-}
-
-.hero-cta-outline:hover {
-  background: rgb(255 255 255 / 0.12);
 }
 
 .hero-scroll-hint {
@@ -428,7 +414,7 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   width: 1.6rem;
   height: 2.6rem;
   border-radius: 999px;
-  border: 2px solid rgb(255 255 255 / 0.4);
+  border: 2px solid var(--ds-color-border);
   position: relative;
 }
 
@@ -440,7 +426,7 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   transform: translateX(-50%);
   width: 0.32rem;
   height: 0.32rem;
-  background: #fff;
+  background: var(--ds-color-action-accent);
   border-radius: 50%;
   animation: scrollDot 1.5s ease-in-out infinite;
 }
@@ -528,49 +514,17 @@ const desktopLinks = computed(() => links.value.filter((link) => link.kind !== '
   .hero-hamburger { display: none; }
 }
 
-/* The optional hero header follows the same live semantic palette as the rest
-   of the customer storefront. */
-.hero-header__bg {
-  background:
-    radial-gradient(circle at 15% 18%, color-mix(in srgb, var(--ds-color-action-accent) 12%, transparent), transparent 24%),
-    linear-gradient(135deg, var(--ds-color-bg-page) 0%, var(--ds-color-surface-raised) 100%);
-}
-
-.hero-header__overlay {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--ds-color-surface-raised) 48%, transparent) 0%,
-    color-mix(in srgb, var(--ds-color-surface-raised) 72%, transparent) 46%,
-    color-mix(in srgb, var(--ds-color-surface-raised) 94%, transparent) 100%
-  );
-}
-
-.hero-brand-dot { background: var(--ds-color-action-accent); }
-.hero-brand-copy strong,
-.hero-title,
-.sheet-head { color: var(--ds-color-text-primary); }
-.hero-brand-copy small,
-.hero-subtitle { color: var(--ds-color-text-secondary); }
-.hero-nav-link { color: var(--ds-color-text-primary); border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); }
-.hero-nav-link:hover { background: var(--ds-color-action-primary-soft); }
-.hero-count-pill { background: var(--ds-color-action-accent); color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff)); }
-.hero-search-btn,
-.hero-hamburger { width: 44px; height: 44px; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); }
-.hero-search-btn:hover { background: var(--ds-color-action-primary-soft); }
-.hero-cart-pill { min-width: 44px; height: 44px; border-color: var(--ds-color-action-accent); background: var(--ds-color-action-accent); color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff)); }
-.hero-cart-pill span { background: color-mix(in srgb, var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff)) 18%, transparent); color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff)); }
-.hero-hamburger span { background: var(--ds-color-action-primary); }
-.hero-eyebrow { background: var(--ds-color-action-accent-soft); border-color: color-mix(in srgb, var(--ds-color-action-accent) 35%, transparent); color: var(--ds-color-action-primary); }
-.hero-cta-btn { min-height: 48px; display: inline-flex; align-items: center; background: var(--ds-color-action-accent); color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff)); }
-.hero-cta-btn:hover { background: var(--ds-color-action-accent); filter: brightness(0.96); }
-.hero-cta-outline { min-height: 48px; display: inline-flex; align-items: center; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-text-primary); }
-.hero-cta-outline:hover { background: var(--ds-color-action-primary-soft); }
-.hero-scroll-hint span { border-color: var(--ds-color-border); }
-.hero-scroll-hint span::after { background: var(--ds-color-action-accent); }
-.mobile-sheet { background: var(--ds-color-surface-raised); border-color: var(--ds-color-border); grid-template-rows: auto 1fr; }
-.sheet-close { width: 44px; height: 44px; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); }
-.sheet-links a { min-height: 48px; border-color: var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-text-primary); }
-.sheet-links a:hover { background: var(--ds-color-action-primary-soft); }
 .hero-header :is(a, button):focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-header *,
+  .hero-header *::before,
+  .hero-header *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 </style>

@@ -55,6 +55,22 @@ test('Veederakht default colors use readable, runtime-derived foregrounds', () =
   assert.match(themeSettings, /readableForeground\(normalized\.accent\)/)
 })
 
+test('optional public hero and glass headers stay on the user-selected theme', () => {
+  const heroHeader = source('../src/components/SiteHeaderHero.vue')
+  const glassHeader = source('../src/components/SiteHeaderGlass.vue')
+
+  for (const fixedBrandColor of ['#174d32', '#e8a347', '#d4923a', '#fff8ee', '#f3dfc7']) {
+    assert.doesNotMatch(heroHeader, new RegExp(fixedBrandColor, 'i'))
+  }
+  assert.match(heroHeader, /var\(--ds-color-action-accent\)/)
+  assert.match(heroHeader, /var\(--ds-color-action-accent-foreground/)
+  assert.match(heroHeader, /var\(--ds-color-text-primary\)/)
+  assert.equal((heroHeader.match(/class="hero-cta-btn"/g) || []).length, 1)
+  assert.doesNotMatch(heroHeader, /hero-cta-outline/)
+  assert.match(glassHeader, /color-mix\(in srgb, var\(--ds-color-action-primary\) 84%, black\)/)
+  assert.doesNotMatch(glassHeader, /#9b6a47/i)
+})
+
 test('Persian and Arabic phone digits normalize to the same mobile number', () => {
   assert.equal(normalizeMobile('۰۹۱۲ ۳۴۵ ۶۷۸۹'), '09123456789')
   assert.equal(normalizeMobile('٠٩١٢٣٤٥٦٧٨٩'), '09123456789')
