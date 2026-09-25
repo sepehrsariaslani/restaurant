@@ -33,7 +33,7 @@
         </div>
       </div>
       <div class="hero-split__media">
-        <img :src="image || fallbackImage" :alt="title" loading="lazy" />
+        <img :src="image || fallbackImage" :alt="title" loading="eager" fetchpriority="high" decoding="async" />
       </div>
     </div>
 
@@ -147,10 +147,11 @@ const normalizedSlides = computed(() =>
   inset: 0;
   background: linear-gradient(
     270deg,
-    color-mix(in srgb, var(--ds-color-surface-raised) 98%, transparent) 0%,
-    color-mix(in srgb, var(--ds-color-surface-raised) 96%, transparent) 38%,
-    color-mix(in srgb, var(--ds-color-surface-raised) 72%, transparent) 56%,
-    transparent 82%
+    var(--ds-color-surface-raised) 0%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 98%, transparent) 30%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 78%, transparent) 42%,
+    color-mix(in srgb, var(--ds-color-surface-raised) 18%, transparent) 56%,
+    transparent 68%
   );
 }
 
@@ -202,7 +203,7 @@ const normalizedSlides = computed(() =>
 
 .hero-cover .blk-btn--primary {
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   box-shadow: 0 10px 24px color-mix(in srgb, var(--ds-color-action-accent) 28%, transparent);
 }
 

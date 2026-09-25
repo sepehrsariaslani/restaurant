@@ -97,7 +97,7 @@
 
 .blk-btn--primary {
   background: var(--blk-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   box-shadow: 0 10px 24px color-mix(in srgb, var(--blk-accent) 30%, transparent);
 }
 

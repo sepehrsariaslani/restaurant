@@ -18,11 +18,16 @@ test('homepage uses a compact section rhythm without changing other page spacing
 
 test('homepage hero keeps its editable variant while taking less vertical space', async () => {
   const hero = await source('components/blocks/HeroBlock.vue')
+  const blockTokens = await source('components/blocks/blocks.css')
 
   assert.match(hero, /const raw = String\(props\.variant \|\| 'fullscreen'\)/)
   assert.match(hero, /min-height:\s*clamp\(320px, 42vh, 440px\)/)
   assert.match(hero, /min-height:\s*clamp\(320px, 46svh, 420px\)/)
   assert.match(hero, /--ds-color-action-accent/)
+  assert.match(hero, /--ds-color-action-accent-foreground/)
+  assert.match(hero, /color-mix\(in srgb, var\(--ds-color-surface-raised\) 18%, transparent\) 56%/)
+  assert.match(hero, /loading="eager" fetchpriority="high" decoding="async"/)
+  assert.match(blockTokens, /--ds-color-action-primary-foreground/)
 })
 
 test('public desktop navigation labels meet the updated reading size', async () => {
