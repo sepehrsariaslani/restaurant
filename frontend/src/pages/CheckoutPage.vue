@@ -319,7 +319,7 @@ onMounted(async () => {
   align-items: flex-start;
   border: 1.5px solid rgb(var(--palette-deep-sapphire-rgb) / 0.14);
   border-radius: 18px;
-  background: #fff;
+  background: var(--ds-color-surface-raised);
   padding: 0.8rem;
   cursor: pointer;
 }

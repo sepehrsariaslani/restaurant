@@ -1560,7 +1560,7 @@ onUnmounted(() => {
 <style scoped>
 .detail-page {
   --detail-warm-green: color-mix(in srgb, var(--ds-color-status-success) 72%, var(--ds-color-action-accent));
-  --detail-warm-green-soft: color-mix(in srgb, var(--detail-warm-green) 20%, #fff);
+  --detail-warm-green-soft: color-mix(in srgb, var(--detail-warm-green) 20%, var(--ds-color-surface-raised));
   min-height: 100svh;
   background: var(--theme-background, #f6f1ea);
   direction: rtl;
@@ -1730,7 +1730,7 @@ onUnmounted(() => {
 .back-btn { font-size: 1.5rem; font-weight: 700; }
 
 .wishlist-circle.loved {
-  color: #e74c3c;
+  color: var(--ds-color-status-danger);
   background: rgba(255,255,255,0.95);
 }
 
@@ -1797,7 +1797,7 @@ onUnmounted(() => {
   gap: 0.4rem;
 }
 .stars-display { display: flex; gap: 0.1rem; }
-.star { color: #ddd; font-size: 1rem; }
+.star { color: var(--ds-color-text-muted); font-size: 1rem; }
 .star.filled { color: var(--ds-color-action-accent); }
 .star.sm { font-size: 0.75rem; }
 .rating-num { font-size: 0.9rem; font-weight: 700; color: var(--text-primary, #3f2a1d); }
@@ -1965,7 +1965,7 @@ onUnmounted(() => {
 }
 .section-head h3 { margin: 0; font-size: 1rem; color: var(--text-primary, #3f2a1d); }
 
-.error-msg { color: #c0392b; font-size: 0.83rem; margin: 0; }
+.error-msg { color: var(--ds-color-status-danger); font-size: 0.83rem; margin: 0; }
 .muted { color: var(--text-muted, #846b58); font-size: 0.82rem; }
 
 .builder-launch-card {
@@ -2174,7 +2174,7 @@ onUnmounted(() => {
 .review-success {
   margin: 0;
   font-size: 0.82rem;
-  color: #27ae60;
+  color: var(--ds-color-status-success);
   font-weight: 600;
 }
 
@@ -2757,16 +2757,16 @@ onUnmounted(() => {
     transition: border-color 0.2s, background 0.2s;
   }
   .desktop-action-btn.loved {
-    border-color: #e74c3c;
-    background: rgba(231, 76, 60, 0.06);
-    color: #e74c3c;
+    border-color: var(--ds-color-status-danger);
+    background: var(--ds-color-status-danger-soft);
+    color: var(--ds-color-status-danger);
   }
   .desktop-action-btn .heart-icon {
     font-size: 1.05rem;
     line-height: 1;
   }
   .desktop-action-btn:not(.loved) .heart-icon { color: var(--text-muted, #846b58); }
-  .desktop-action-btn.loved .heart-icon { color: #e74c3c; }
+  .desktop-action-btn.loved .heart-icon { color: var(--ds-color-status-danger); }
   .desktop-action-btn:hover {
     border-color: var(--accent-green, #6f4a31);
     background: var(--accent-green20, rgba(111,74,49,0.06));

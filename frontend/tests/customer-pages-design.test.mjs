@@ -134,3 +134,14 @@ test('customer account surfaces use live theme colors and the guest dashboard re
   assert.match(login, /postLoginDestination\(\)/)
   assert.match(login, /destination\.origin !== window\.location\.origin/)
 })
+
+test('customer product feedback and checkout payment surfaces follow semantic theme colors', () => {
+  const detail = source('../src/pages/ItemDetailPage.vue')
+  const checkout = source('../src/pages/CheckoutPage.vue')
+
+  assert.match(detail, /\.wishlist-circle\.loved\s*\{[^}]*color:\s*var\(--ds-color-status-danger\)/s)
+  assert.match(detail, /\.error-msg\s*\{[^}]*color:\s*var\(--ds-color-status-danger\)/s)
+  assert.match(detail, /\.review-success\s*\{[^}]*color:\s*var\(--ds-color-status-success\)/s)
+  assert.match(detail, /\.desktop-action-btn\.loved\s*\{[^}]*var\(--ds-color-status-danger\)/s)
+  assert.match(checkout, /\.payment-method-card\s*\{[^}]*background:\s*var\(--ds-color-surface-raised\)/s)
+})
