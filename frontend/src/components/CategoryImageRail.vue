@@ -26,15 +26,6 @@
       <div class="img-sub-wrap" v-if="subcategories.length">
         <div class="img-rail" role="group" :aria-label="`زیرگروه‌های ${activeCategoryTitle}`">
           <button
-            class="sub-pill"
-            type="button"
-            :class="{ active: !selectedSubcategory }"
-            :aria-pressed="!selectedSubcategory"
-            @click="$emit('select-subcategory', '')"
-          >
-            همه {{ activeCategoryTitle }}
-          </button>
-          <button
             v-for="sub in subcategories"
             :key="sub.slug"
             class="sub-pill"

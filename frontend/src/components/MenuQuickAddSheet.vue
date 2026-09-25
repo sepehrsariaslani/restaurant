@@ -6,7 +6,7 @@
           <div class="drag-handle" aria-hidden="true"></div>
           <div class="sheet-head__row">
             <button class="icon-btn back-btn" type="button" @click="$emit('close')" aria-label="بازگشت"><ChevronRight :size="20" /></button>
-            <span class="sheet-title">افزودن به سبد</span>
+            <span class="sheet-title">{{ isEditing ? 'ویرایش محصول در سبد' : 'افزودن به سبد' }}</span>
             <button class="icon-btn close-btn" type="button" @click="$emit('close')" aria-label="بستن"><X :size="20" /></button>
           </div>
         </header>
@@ -98,7 +98,7 @@
           </div>
 
           <!-- State 1: Not yet added — show qty stepper + add button -->
-          <template v-if="!hasAdded">
+          <template v-if="!hasAdded || isEditing">
             <div class="footer-qty">
               <button class="qty-btn qty-minus" type="button" @click="qty = Math.max(1, qty - 1)" :disabled="qty <= 1" :class="{ 'is-disabled': qty <= 1 }">
                 <Minus :size="13" />
@@ -110,7 +110,7 @@
             </div>
             <button class="footer-cta" type="button" @click="confirmAdd">
               <ShoppingBasket class="footer-cta-icon" :size="16" />
-              افزودن به سبد
+              {{ isEditing ? 'ذخیره تغییرات' : 'افزودن به سبد' }}
             </button>
           </template>
 
@@ -150,6 +150,7 @@ import { formatMoney } from '@/utils/format'
 const props = defineProps({
   open: { type: Boolean, default: false },
   item: { type: Object, default: null },
+  editingLine: { type: Object, default: null },
   currency: { type: String, default: 'TOMAN' },
   branch: { type: String, default: '' },
 })
@@ -167,6 +168,7 @@ const customization = ref({
   selected_modifiers: [],
 })
 const selectionError = ref('')
+const isEditing = computed(() => Boolean(props.editingLine?.id))
 
 // Post-add state
 const hasAdded = ref(false)
@@ -270,25 +272,27 @@ watch(
     selectionError.value = ''
     hasAdded.value = false
     addedQty.value = 1
-    qty.value = 1
+    qty.value = isEditing.value ? Math.max(1, Number(props.editingLine?.qty || 1)) : 1
     selectedItem.value = mergeItemData(props.item, null)
-    ingredients.value = []
-    modifierGroups.value = []
-    customization.value = {
-      ingredient_adjustments: [],
-      selected_modifiers: [],
-    }
+    ingredients.value = isEditing.value ? props.editingLine?.ingredient_catalog || [] : []
+    modifierGroups.value = isEditing.value ? props.editingLine?.modifier_groups_catalog || [] : []
+    customization.value = isEditing.value
+      ? sanitizeCustomization(props.editingLine?.customization || {}, ingredients.value)
+      : { ingredient_adjustments: [], selected_modifiers: [] }
 
     try {
       const detail = await getItemDetail(props.item.slug, props.branch)
       selectedItem.value = mergeItemData(props.item, detail.item)
-      ingredients.value = detail.ingredients || []
-      modifierGroups.value = detail.modifier_groups || []
-      customization.value = withVariantContext(
-        createDefaultCustomization(ingredients.value, modifierGroups.value),
-      )
+      if (isEditing.value) selectedItem.value.base_price = Number(props.editingLine.base_price || 0)
+      ingredients.value = detail.ingredients || ingredients.value
+      modifierGroups.value = detail.modifier_groups || modifierGroups.value
+      customization.value = withVariantContext(isEditing.value
+        ? sanitizeCustomization(props.editingLine?.customization || {}, ingredients.value)
+        : createDefaultCustomization(ingredients.value, modifierGroups.value))
     } catch (err) {
-      error.value = err.message || 'دریافت تنظیمات آیتم ناموفق بود.'
+      if (!isEditing.value || (!ingredients.value.length && !modifierGroups.value.length)) {
+        error.value = err.message || 'دریافت تنظیمات آیتم ناموفق بود.'
+      }
     } finally {
       loading.value = false
     }
@@ -341,6 +345,8 @@ function confirmAdd() {
     ingredient_catalog: ingredients.value,
     modifier_groups_catalog: modifierGroups.value,
   })
+
+  if (isEditing.value) return
 
   // Switch to post-add state: show qty control in footer
   hasAdded.value = true

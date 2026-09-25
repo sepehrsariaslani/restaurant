@@ -4,16 +4,12 @@
     :class="`menu-card--${resolvedVariant}`"
   >
     <template v-if="resolvedVariant === 'classic'">
-      <div class="classic-img-wrap">
+      <a class="classic-img-wrap" :href="`/item/${item.slug}`" :aria-label="`مشاهده ${item.title}`">
         <img :src="resolvedImage" :alt="item.title" class="classic-img" />
-        <span class="classic-price-badge">{{ formatMoney(item.base_price, currency) }}</span>
-      </div>
+      </a>
       <div class="classic-body">
-        <div class="classic-tags-row" v-if="itemTags.length">
-          <span class="ctag" v-for="tag in itemTags" :key="tag">{{ tag }}</span>
-        </div>
-        <p class="classic-cat" v-else>{{ item.category_title || item.category || 'منو' }}</p>
-        <h3 class="classic-title">{{ item.title }}</h3>
+        <p class="classic-cat">{{ item.category_title || item.category || 'پیشنهاد ویژه' }}</p>
+        <a class="classic-title-link" :href="`/item/${item.slug}`"><h3 class="classic-title">{{ item.title }}</h3></a>
         <p class="classic-desc muted">{{ item.short_desc || 'توضیحی برای این آیتم ثبت نشده است.' }}</p>
         <div class="classic-rating" v-if="reviewCnt > 0">
           <span class="cr-stars">
@@ -22,14 +18,11 @@
           <span class="cr-count">{{ avgRating }} ({{ reviewCnt }})</span>
         </div>
         <div class="classic-footer">
-          <div class="classic-tags">
-            <span class="ctag" v-for="tag in itemTags" :key="tag">{{ tag }}</span>
-          </div>
+          <strong class="classic-price">{{ formatMoney(item.base_price, currency) }}</strong>
           <div class="classic-actions">
-            <a :href="`/item/${item.slug}`" class="classic-link">مشاهده ↗</a>
-          <button class="classic-add" type="button" :aria-label="`افزودن ${item.title} به سبد`" @click="$emit('quick-add', item)">
-            <Plus :size="18" aria-hidden="true" />
-          </button>
+            <button class="classic-add" type="button" :aria-label="`انتخاب ${item.title}`" @click="$emit('quick-add', item)">
+              <Plus :size="18" aria-hidden="true" /> <span>انتخاب</span>
+            </button>
           </div>
         </div>
       </div>
@@ -138,15 +131,18 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 
 /* ─── CLASSIC variant ─── */
 .menu-card--classic {
-  background: var(--ds-color-surface-raised, var(--glass-bg));
-  border: 1px solid var(--ds-color-border, var(--glass-border));
-  box-shadow: var(--shadow-soft);
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
+  box-shadow: var(--ds-shadow-sm);
+  transition: transform var(--ds-motion-normal) var(--ds-motion-ease), box-shadow var(--ds-motion-normal) var(--ds-motion-ease);
 }
+.menu-card--classic:hover { transform: translateY(-3px); box-shadow: var(--ds-shadow-md); }
 
 .classic-img-wrap {
-  position: relative;
-  height: 180px;
-  background: var(--ds-color-product-media-surface, #fff);
+  display: block;
+  height: 210px;
+  padding: .9rem;
+  background: var(--ds-color-product-media-surface);
 }
 
 .classic-img {
@@ -156,48 +152,35 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   object-position: center;
 }
 
-.classic-price-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: var(--ds-color-action-accent);
-  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
-  border-radius: 999px;
-  padding: 0.22rem 0.62rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  box-shadow: 0 4px 12px rgb(var(--palette-deep-sapphire-rgb) / 0.22);
-}
-
 .classic-body {
-  padding: 0.9rem;
+  padding: 1.1rem;
   display: flex;
   flex-direction: column;
   flex: 1;
 }
 
 .classic-cat {
-  margin: 0 0 0.22rem;
-  font-size: 0.72rem;
-  color: var(--ds-color-status-success);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  margin: 0 0 .4rem;
+  color: var(--ds-color-action-primary);
+  font-size: .73rem;
+  font-weight: 800;
 }
+.classic-title-link { color: inherit; text-decoration: none; }
+.classic-title-link:focus-visible, .classic-img-wrap:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: -3px; }
 
 .classic-title {
   margin: 0 0 0.3rem;
-  font-size: 1.05rem;
-  color: var(--text-primary, #3f2a1d);
-  line-height: 1.3;
+  font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  color: var(--ds-color-text-primary);
+  line-height: 1.4;
 }
 
 .classic-desc {
   margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-size: .85rem;
+  line-height: 1.7;
   flex: 1;
-  color: var(--text-muted, #846b58);
+  color: var(--ds-color-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -215,13 +198,6 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 .cr-star.filled { color: var(--ds-color-action-accent); }
 .cr-count { font-size: 0.72rem; color: var(--text-muted, #846b58); }
 
-.classic-tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-bottom: 0.35rem;
-}
-
 .navy-tags-row {
   display: flex;
   flex-wrap: wrap;
@@ -238,20 +214,16 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
 }
 
 .classic-footer {
-  margin-top: 0.75rem;
+  margin-top: 1rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--ds-color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-.classic-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  flex: 1;
-  min-width: 0;
-}
+.classic-price { color: var(--ds-color-text-primary); font-size: clamp(.95rem, 2vw, 1.2rem); font-weight: 900; white-space: nowrap; }
 
 .ctag {
   background: var(--ds-color-status-success-soft);
@@ -268,27 +240,22 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   flex-shrink: 0;
 }
 
-.classic-link {
-  font-size: 0.78rem;
-  color: var(--accent-green, #6f4a31);
-  text-decoration: none;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .classic-add {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  min-height: 44px;
+  padding: .5rem .9rem;
+  gap: .35rem;
+  border-radius: var(--ds-radius-md);
   border: none;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
+  color: var(--ds-color-action-accent-foreground);
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--ds-color-action-accent) 22%, transparent);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 800;
   transition: transform var(--ds-motion-fast) ease, filter var(--ds-motion-fast) ease;
 }
 

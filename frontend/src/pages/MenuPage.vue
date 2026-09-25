@@ -648,7 +648,7 @@ function syncActiveSectionFromScroll() {
   if (!activeGroup) return
   if (selectedCategorySlug.value !== activeGroup.slug) selectedCategorySlug.value = activeGroup.slug
 
-  let subcategory = ''
+  let subcategory = activeGroup.subcategories[0]?.slug || ''
   for (const section of activeGroup.sections) {
     const element = subcategorySectionRefs.value[section.anchorKey]
     if (element && element.getBoundingClientRect().top <= threshold) subcategory = section.slug
@@ -664,10 +664,7 @@ function selectCategory(slug) {
 
 function selectSubcategory(slug) {
   const cleanSlug = String(slug || '').trim()
-  if (!cleanSlug) {
-    scrollElementIntoMenuView(categorySectionRefs.value[selectedCategorySlug.value])
-    return
-  }
+  if (!cleanSlug) return
   const target = subcategorySectionRefs.value[selectedCategorySlug.value + ':' + cleanSlug]
   if (target) scrollElementIntoMenuView(target)
 }

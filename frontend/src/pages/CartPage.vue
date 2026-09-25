@@ -66,15 +66,14 @@
       <button class="checkout-btn" type="button" @click="openCheckout">{{ hasContext ? 'ادامه سفارش' : 'روش دریافت' }}<ChevronLeft :size="18" /></button>
     </div>
 
-    <CartToppingSheet
+    <MenuQuickAddSheet
       :open="editorOpen"
-      :line="activeLine"
-      :ingredients="activeIngredients"
-      :customization="activeCustomization"
+      :item="editorItem"
+      :editing-line="activeLine"
       :currency="currency"
-      :loading="editorLoading"
+      :branch="cartState.orderContext.branch || ''"
       @close="closeEditor"
-      @apply="applyCustomization"
+      @confirm="applyCustomization"
     />
   </div>
 </template>
@@ -83,27 +82,29 @@
 import { ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import CartLineEditor from '@/components/CartLineEditor.vue'
-import CartToppingSheet from '@/components/CartToppingSheet.vue'
+import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { cartState, getLineById, removeLine, setLineQty, upsertLine } from '@/stores/cartStore'
-import { getItemDetail, getMenuBoot } from '@/utils/api'
+import { getMenuBoot } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
-import { estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
 import { orderContextIssue } from '@/utils/customerOrderValidation'
+import { buildEditedCartLine } from '@/utils/cartEditPayload'
 import { calculateOrderTotals, orderContextChangeUrl, ORDER_FLOW_CURRENCY_FALLBACK } from '@/utils/orderFlow'
 
 const currency = ref(ORDER_FLOW_CURRENCY_FALLBACK)
 const error = ref('')
 const editorOpen = ref(false)
-const editorLoading = ref(false)
 const activeLineId = ref('')
-const activeIngredients = ref([])
-const activeModifierGroups = ref([])
-const activeCustomization = ref({ ingredient_adjustments: [], selected_modifiers: [] })
 
 const totalQty = computed(() => cartState.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0))
 const hasContext = computed(() => Boolean(cartState.orderContext?.order_type))
 const activeLine = computed(() => getLineById(activeLineId.value) || null)
+const editorItem = computed(() => activeLine.value ? {
+  slug: activeLine.value.item_slug,
+  title: activeLine.value.item_title,
+  image: activeLine.value.item_image,
+  base_price: activeLine.value.base_price,
+} : null)
 const totals = computed(() => calculateOrderTotals({ lines: cartState.lines, context: cartState.orderContext }))
 
 function openCheckout() {
@@ -131,64 +132,20 @@ function remove(lineId) {
 
 function closeEditor() {
   editorOpen.value = false
-  editorLoading.value = false
   activeLineId.value = ''
-  activeIngredients.value = []
-  activeModifierGroups.value = []
-  activeCustomization.value = { ingredient_adjustments: [], selected_modifiers: [] }
 }
 
-async function openCustomization(line) {
+function openCustomization(line) {
   if (!line?.id) return
   activeLineId.value = line.id
   editorOpen.value = true
-  editorLoading.value = true
-
-  const fallbackIngredients = Array.isArray(line.ingredient_catalog) ? line.ingredient_catalog : []
-  const fallbackModifiers = Array.isArray(line.modifier_groups_catalog) ? line.modifier_groups_catalog : []
-  activeIngredients.value = fallbackIngredients
-  activeModifierGroups.value = fallbackModifiers
-  activeCustomization.value = sanitizeCustomization(line.customization || {}, fallbackIngredients)
-
-  try {
-    const detail = await getItemDetail(line.item_slug)
-    const ingredients = detail.ingredients || fallbackIngredients
-    const modifiers = detail.modifier_groups || fallbackModifiers
-    activeIngredients.value = ingredients
-    activeModifierGroups.value = modifiers
-    activeCustomization.value = sanitizeCustomization(line.customization || {}, ingredients)
-  } catch (_) {
-    // Keep fallback catalogs when detail fetch fails; cart editing remains available.
-  } finally {
-    editorLoading.value = false
-  }
 }
 
-function applyCustomization(nextCustomization) {
+function applyCustomization(preview) {
   const line = activeLine.value
   if (!line) return
-
-  const cleanCustomization = sanitizeCustomization(nextCustomization || {}, activeIngredients.value)
-  const preview = estimateLine({
-    basePrice: Number(line.base_price || 0),
-    qty: Number(line.qty || 1),
-    ingredients: activeIngredients.value,
-    modifierGroups: activeModifierGroups.value,
-    customization: cleanCustomization,
-  })
-
-  upsertLine({
-    ...line,
-    id: line.id,
-    qty: preview.qty,
-    customization: preview.customization,
-    unit_price_preview: preview.unitPrice,
-    line_total_preview: preview.lineTotal,
-    ingredient_catalog: activeIngredients.value,
-    modifier_groups_catalog: activeModifierGroups.value,
-  })
-
-  editorOpen.value = false
+  upsertLine(buildEditedCartLine(line, preview))
+  closeEditor()
 }
 
 onMounted(async () => {

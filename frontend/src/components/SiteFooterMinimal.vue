@@ -7,6 +7,7 @@
         <a href="/" class="sfm-link">خانه</a>
         <a href="/menu" class="sfm-link">منو</a>
         <a href="/cart" class="sfm-link">سبد</a>
+        <a href="/about-us" class="sfm-link">درباره ما</a>
       </nav>
     </div>
   </footer>
@@ -27,8 +28,8 @@ defineProps({
 
 <style scoped>
 .site-footer-minimal {
-  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb, 111 74 49) / 0.12);
-  background: rgb(var(--palette-eggshell-rgb, 251 248 244) / 0.92);
+  border-top: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-muted);
   direction: rtl;
 }
 
@@ -46,12 +47,12 @@ defineProps({
 .sfm-brand {
   font-size: 0.88rem;
   font-weight: 800;
-  color: var(--ink-800, #3d2e26);
+  color: var(--ds-color-action-primary);
 }
 
 .sfm-copy {
   font-size: 0.75rem;
-  color: var(--ink-700, #7a6a60);
+  color: var(--ds-color-text-muted);
   flex: 1;
   text-align: center;
 }
@@ -63,7 +64,7 @@ defineProps({
 
 .sfm-link {
   font-size: 0.78rem;
-  color: var(--ink-700, #7a6a60);
+  color: var(--ds-color-text-secondary);
   text-decoration: none;
   padding: 0.2rem 0.4rem;
   border-radius: 6px;
@@ -71,8 +72,9 @@ defineProps({
 }
 
 .sfm-link:hover {
-  color: var(--ink-900, #1c1411);
+  color: var(--ds-color-action-primary);
 }
+.sfm-link:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 2px; }
 
 @media (max-width: 520px) {
   .sfm-inner {

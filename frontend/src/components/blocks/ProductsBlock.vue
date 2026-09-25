@@ -89,31 +89,21 @@ defineEmits(['quick-add'])
 
 .products-grid--single :deep(.menu-card--classic) {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  min-height: 250px;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  height: clamp(270px, 29vw, 340px);
 }
 
 .products-grid--single :deep(.classic-img-wrap) {
-  height: 100%;
-  min-height: 250px;
-}
-
-.products-grid--single :deep(.classic-img) {
-  object-fit: cover;
+  height: auto;
+  min-height: 0;
 }
 
 .products-grid--single :deep(.classic-body) {
-  padding: clamp(1rem, 3vw, 1.75rem);
+  padding: clamp(1rem, 3vw, 1.5rem);
 }
 
 .products-grid--single :deep(.classic-title) {
   font-size: clamp(1.2rem, 2.3vw, 1.6rem);
-}
-
-.products-grid--single :deep(.classic-add) {
-  width: 44px;
-  height: 44px;
-  font-size: 1.35rem;
 }
 
 .products-rail {
@@ -151,7 +141,7 @@ defineEmits(['quick-add'])
 @media (max-width: 800px) {
   .products-grid--single :deep(.menu-card--classic) {
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-    min-height: 210px;
+    min-height: 0;
   }
 
   .products-grid--single :deep(.classic-img-wrap) {
@@ -165,14 +155,29 @@ defineEmits(['quick-add'])
 
 @media (max-width: 520px) {
   .products-grid--single :deep(.menu-card--classic) {
-    display: flex;
-    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+    height: auto;
+    min-height: 180px;
   }
 
   .products-grid--single :deep(.classic-img-wrap) {
     height: auto;
-    min-height: 0;
-    aspect-ratio: 16 / 9;
+    min-height: 180px;
+    padding: .65rem;
+  }
+  .products-grid--single :deep(.classic-body) {
+    padding: .9rem;
+  }
+  .products-grid--single :deep(.classic-desc) {
+    -webkit-line-clamp: 2;
+  }
+  .products-grid--single :deep(.classic-footer) {
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+  .products-grid--single :deep(.classic-add) {
+    min-height: 40px;
   }
 }
 </style>

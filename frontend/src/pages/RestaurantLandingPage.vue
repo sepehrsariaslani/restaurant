@@ -31,6 +31,14 @@
     </div>
 
     <CartActionFeedback :message="toastMessage" />
+    <MenuQuickAddSheet
+      :open="Boolean(previewItem)"
+      :item="previewItem"
+      :currency="boot.currency || 'IRR'"
+      :branch="cartState.orderContext.branch || ''"
+      @close="previewItem = null"
+      @confirm="confirmQuickAdd"
+    />
 
     <SiteFooter
       v-if="!previewMode && siteComponents.footer_variant === 'full'"
@@ -57,6 +65,7 @@ import { Bike, Search } from 'lucide-vue-next'
 import { upsertLine, cartState } from '@/stores/cartStore'
 import PublicHeader from '@/components/PublicHeader.vue'
 import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
+import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import HomePageRenderer from '@/components/blocks/HomePageRenderer.vue'
@@ -80,6 +89,7 @@ const props = defineProps({
 })
 
 const toastMessage = ref('')
+const previewItem = ref(null)
 let toastTimer = null
 
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
@@ -91,20 +101,12 @@ const previewBrandInitial = computed(() => String(branding.value?.name || 'V').t
 function quickAdd(item) {
   if (props.previewMode) return
   if (!item) return
-  upsertLine({
-    item_slug: item.slug,
-    item_title: item.title,
-    item_image: item.image,
-    base_price: Number(item.base_price || 0),
-    qty: 1,
-    unit_price_preview: Number(item.base_price || 0),
-    line_total_preview: Number(item.base_price || 0),
-    customization: {
-      ingredient_adjustments: [],
-      selected_modifiers: [],
-    },
-  })
-  showToast(`${item.title || '\u0622\u06cc\u062a\u0645'} \u0628\u0647 \u0633\u0628\u062f \u0627\u0636\u0627\u0641\u0647 \u0634\u062f.`)
+  previewItem.value = item
+}
+
+function confirmQuickAdd(payload) {
+  upsertLine(payload)
+  showToast(`${payload.item_title || 'آیتم'} به سبد اضافه شد.`)
 }
 
 function showToast(message) {
