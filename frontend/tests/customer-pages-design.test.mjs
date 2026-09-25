@@ -122,6 +122,16 @@ test('item additions keep the order cart but avoid the duplicate floating cart a
   assert.doesNotMatch(dashboard, /cartCount|class="account-action-card customer-glass-card" href="\/cart"/)
 })
 
+test('cart feedback stays centered in RTL and clears the product sticky purchase bar', () => {
+  const feedback = source('../src/components/customer/CartActionFeedback.vue')
+  const detail = source('../src/pages/ItemDetailPage.vue')
+
+  assert.match(feedback, /left:\s*50%;\s*right:\s*auto;/)
+  assert.doesNotMatch(feedback, /inset-inline-start:\s*50%/)
+  assert.match(feedback, /cart-action-feedback--product[\s\S]*?bottom:\s*calc\(5\.2rem \+ 6\.25rem/)
+  assert.match(detail, /<CartActionFeedback :message="cartActionMessage" placement="product" \/>/)
+})
+
 test('customer account surfaces use live theme colors and the guest dashboard requires sign-in', () => {
   const theme = source('../src/theme.css')
   const dashboard = source('../src/pages/CustomerDashboardPage.vue')
@@ -133,6 +143,15 @@ test('customer account surfaces use live theme colors and the guest dashboard re
   assert.match(dashboard, /window\.location\.replace\('\/customer\/login\?redirect=%2Fcustomer%2Fdashboard'\)/)
   assert.match(login, /postLoginDestination\(\)/)
   assert.match(login, /destination\.origin !== window\.location\.origin/)
+})
+
+test('customer login keeps the form beside the brand on desktop and stacks it on mobile', () => {
+  const login = source('../src/pages/CustomerLoginPage.vue')
+
+  assert.match(login, /\.login-hero\s*\{[^}]*grid-row:\s*1;/s)
+  assert.match(login, /\.login-card\s*\{[^}]*grid-row:\s*1;/s)
+  assert.match(login, /@media\s*\(max-width:\s*919px\)[\s\S]*?\.login-hero\s*\{[^}]*grid-row:\s*auto;/)
+  assert.match(login, /@media\s*\(max-width:\s*919px\)[\s\S]*?\.login-card\s*\{[^}]*grid-row:\s*auto;/)
 })
 
 test('customer product feedback and checkout payment surfaces follow semantic theme colors', () => {

@@ -1,6 +1,6 @@
 <template>
   <div class="detail-page" dir="rtl">
-    <CartActionFeedback :message="cartActionMessage" />
+    <CartActionFeedback :message="cartActionMessage" placement="product" />
     <div class="state-shell" v-if="!item && (loading || error)">
       <div class="state-content">
         <!-- Loading skeleton -->

@@ -1,6 +1,13 @@
 <template>
   <Transition name="cart-feedback">
-    <div v-if="message" class="cart-action-feedback" role="status" aria-live="polite" dir="rtl">
+    <div
+      v-if="message"
+      class="cart-action-feedback"
+      :class="`cart-action-feedback--${placement}`"
+      role="status"
+      aria-live="polite"
+      dir="rtl"
+    >
       <CheckCircle2 :size="18" aria-hidden="true" />
       <span>{{ message }}</span>
     </div>
@@ -12,6 +19,7 @@ import { CheckCircle2 } from 'lucide-vue-next'
 
 defineProps({
   message: { type: String, default: '' },
+  placement: { type: String, default: 'bottom' },
 })
 </script>
 
@@ -19,7 +27,8 @@ defineProps({
 .cart-action-feedback {
   position: fixed;
   z-index: 118;
-  inset-inline-start: 50%;
+  left: 50%;
+  right: auto;
   bottom: calc(5.2rem + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   width: max-content;
@@ -37,6 +46,10 @@ defineProps({
   box-shadow: 0 10px 28px rgb(32 24 16 / 0.16);
   font-size: 0.84rem;
   font-weight: 750;
+}
+
+.cart-action-feedback--product {
+  bottom: calc(5.2rem + 6.25rem + env(safe-area-inset-bottom));
 }
 
 .cart-action-feedback svg {
@@ -57,6 +70,10 @@ defineProps({
 
 @media (min-width: 920px) {
   .cart-action-feedback {
+    bottom: 1.25rem;
+  }
+
+  .cart-action-feedback--product {
     bottom: 1.25rem;
   }
 }

@@ -246,6 +246,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 .login-hero {
   position: relative;
   grid-column: 2;
+  grid-row: 1;
   min-height: min(600px, calc(100dvh - 5rem));
   width: 100%;
   display: grid;
@@ -333,6 +334,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 
 .login-card {
   grid-column: 1;
+  grid-row: 1;
   align-self: center;
   width: 100%;
   max-width: 480px;
@@ -543,6 +545,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 
   .login-hero {
     grid-column: 1;
+    grid-row: auto;
     min-height: clamp(176px, 24svh, 218px);
     border-radius: 24px;
   }
@@ -555,6 +558,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 
   .login-card {
     grid-column: 1;
+    grid-row: auto;
     justify-self: center;
     max-width: 520px;
     margin-top: -14px;
