@@ -118,6 +118,8 @@ test('mobile browsing uses one shared bottom bar and opens the extra links as an
   assert.match(nav, /<small>بیشتر<\/small>/)
   assert.match(nav, /role="dialog" aria-modal="true"/)
   assert.match(nav, /customerAccountHref\('\/customer\/dashboard'\)/)
+  assert.match(nav, /ShareWebsiteButton[\s\S]*?appearance="menu"[\s\S]*?label="اشتراک‌گذاری سایت"/)
+  assert.match(nav, /const siteShareUrl = window\.location\.origin/)
   assert.match(landing, /class="desktop-public-header"/)
   assert.doesNotMatch(app, /page !== 'item'/)
 })
@@ -150,6 +152,7 @@ test('cart feedback stays centered in RTL and clears the product sticky purchase
 
 test('product sharing uses the accessible, theme-aware shared control on mobile and desktop', () => {
   const share = source('../src/components/customer/ShareWebsiteButton.vue')
+  const nav = source('../src/components/MobileBottomNav.vue')
   const detail = source('../src/pages/ItemDetailPage.vue')
 
   assert.match(share, /navigator\.share\(data\)/)
@@ -159,6 +162,9 @@ test('product sharing uses the accessible, theme-aware shared control on mobile 
   assert.match(share, /role="status"[\s\S]*?aria-live="polite"/)
   assert.match(share, /var\(--ds-color-action-primary\)/)
   assert.match(share, /var\(--ds-color-surface-raised\)/)
+  assert.match(share, /<slot>/)
+  assert.match(share, /'icon', 'action', 'menu'/)
+  assert.match(nav, /@shared="closeMore"[\s\S]*?@copied="closeMore"/)
   assert.match(detail, /<ShareWebsiteButton appearance="icon" :title="item\.title \|\| 'محصول ویدرخت'" \/>/)
   assert.match(detail, /<ShareWebsiteButton appearance="action" :title="item\.title \|\| 'محصول ویدرخت'" \/>/)
   assert.doesNotMatch(detail, /shareProduct|share-toast|shareToastVisible/)

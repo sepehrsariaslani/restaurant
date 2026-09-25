@@ -61,6 +61,22 @@
               <span><strong>{{ link.label }}</strong><small>{{ link.hint }}</small></span>
               <ChevronLeft class="mobile-more-chevron" :size="17" aria-hidden="true" />
             </a>
+            <ShareWebsiteButton
+              class="mobile-more-link mobile-more-link--share"
+              appearance="menu"
+              label="اشتراک‌گذاری سایت"
+              title="ویدرخت"
+              :url="siteShareUrl"
+              @shared="closeMore"
+              @copied="closeMore"
+              @error="closeMore"
+            >
+              <template #default>
+                <span class="mobile-more-icon"><Share2 :size="19" aria-hidden="true" /></span>
+                <span><strong>اشتراک‌گذاری سایت</strong><small>معرفی سایت به دوستان</small></span>
+                <ChevronLeft class="mobile-more-chevron" :size="17" aria-hidden="true" />
+              </template>
+            </ShareWebsiteButton>
           </nav>
         </section>
       </div>
@@ -70,8 +86,9 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { Bike, ChevronLeft, CircleHelp, Clock3, Home, List, MapPin, MoreHorizontal, Search, ShoppingCart, Store, UserRound, X } from 'lucide-vue-next'
+import { Bike, ChevronLeft, CircleHelp, Clock3, Home, List, MapPin, MoreHorizontal, Search, Share2, ShoppingCart, Store, UserRound, X } from 'lucide-vue-next'
 import { customerAccountHref, hasCustomerSession } from '@/utils/customerAuth'
+import ShareWebsiteButton from '@/components/customer/ShareWebsiteButton.vue'
 
 const props = defineProps({
   page: { type: String, default: 'landing' },
@@ -94,6 +111,7 @@ const customerAccountPages = new Set([
 ])
 
 const isCustomerAccountActive = computed(() => customerAccountPages.has(props.page))
+const siteShareUrl = window.location.origin
 const moreOpen = ref(false)
 const isSignedIn = ref(hasCustomerSession())
 const moreTriggerRef = ref(null)
@@ -376,6 +394,8 @@ onBeforeUnmount(() => {
   color: var(--ds-color-text-primary);
   text-decoration: none;
 }
+
+.mobile-more-link--share { grid-column: 1 / -1; }
 
 .mobile-more-link strong {
   display: block;

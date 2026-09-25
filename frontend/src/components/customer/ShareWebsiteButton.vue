@@ -9,8 +9,10 @@
     :disabled="isSharing"
     @click="sharePage"
   >
-    <Share2 :size="iconSize" aria-hidden="true" />
-    <span v-if="appearance !== 'icon'">{{ label }}</span>
+    <slot>
+      <Share2 :size="iconSize" aria-hidden="true" />
+      <span v-if="appearance !== 'icon'">{{ label }}</span>
+    </slot>
   </button>
 
   <Teleport to="body">
@@ -43,7 +45,7 @@ const props = defineProps({
   appearance: {
     type: String,
     default: 'icon',
-    validator: (value) => ['icon', 'action'].includes(value),
+    validator: (value) => ['icon', 'action', 'menu'].includes(value),
   },
   iconSize: { type: Number, default: 18 },
 })
@@ -177,11 +179,31 @@ onBeforeUnmount(() => clearTimeout(feedbackTimer))
   font-weight: 600;
 }
 
+.share-website-button--menu {
+  width: 100%;
+  min-height: 72px;
+  padding: 0.55rem;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 17px;
+  color: var(--ds-color-text-primary);
+  background: var(--ds-color-surface);
+  text-align: start;
+}
+
 .share-website-button--icon:hover,
 .share-website-button--action:hover {
   color: var(--ds-color-action-primary);
   border-color: var(--ds-color-action-primary);
   background: var(--ds-color-action-primary-soft);
+}
+
+.share-website-button--menu:hover {
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 38%, var(--ds-color-border));
+  background: color-mix(in srgb, var(--ds-color-action-primary) 5%, var(--ds-color-surface));
 }
 
 .share-website-button:focus-visible {
