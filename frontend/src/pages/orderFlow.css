@@ -291,8 +291,8 @@
 }
 
 .order-flow-primary {
-  background: var(--accent-green);
-  color: #fff;
+  background: var(--ds-color-action-primary);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse));
 }
 
 .order-flow-secondary {

@@ -53,6 +53,6 @@ p { color: var(--text-muted); line-height: 1.9; }
   justify-content: center;
   font-weight: 850;
 }
-.primary-btn { background: var(--accent-green); color: #fff; }
+.primary-btn { background: var(--accent-green); color: var(--ds-color-action-primary-foreground, #fff); }
 .secondary-btn { border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / .16); color: var(--accent-green); }
 </style>

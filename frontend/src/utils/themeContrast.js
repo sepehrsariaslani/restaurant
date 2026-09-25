@@ -29,6 +29,14 @@ function contrastRatio(first, second) {
   return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05)
 }
 
+/** Choose whichever of black or white gives the strongest readable text contrast. */
+export function readableForeground(background) {
+  const safeBackground = normalizeHex(background, '#000000')
+  return contrastRatio(safeBackground, '#FFFFFF') >= contrastRatio(safeBackground, '#000000')
+    ? '#FFFFFF'
+    : '#000000'
+}
+
 function mixHex(first, second, secondRatio) {
   const safeRatio = Math.max(0, Math.min(1, secondRatio))
   const firstChannels = toRgb(first)

@@ -425,7 +425,7 @@ function handleCustomize() {
 }
 .add-btn.added {
   background: var(--palette-deep-sapphire);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   border-color: var(--palette-deep-sapphire);
   box-shadow: 0 4px 16px rgb(var(--palette-deep-sapphire-rgb) / 0.30);
 }
@@ -457,8 +457,8 @@ function handleCustomize() {
   transition: background 0.22s ease, color 0.22s ease;
 }
 .add-btn--pill.added .add-circle {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--ds-color-text-inverse, #fff);
+  background: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 18%, transparent);
+  color: var(--ds-color-action-primary-foreground, #fff);
 }
 
 /* Reduced motion */
@@ -793,7 +793,7 @@ function handleCustomize() {
   width: 44px;
   height: 44px;
   background: var(--add-btn-bg, var(--accent-gold));
-  color: var(--ds-color-text-inverse, #ffffff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #ffffff));
   border: none;
   border-radius: 13px;
   box-shadow: 0 8px 16px rgb(var(--palette-deep-saffron-rgb) / 0.22);

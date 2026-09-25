@@ -1616,7 +1616,7 @@ onUnmounted(() => {
 .tag-filter-btn.active {
   background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
   border-color: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   font-weight: 600;
 }
 
@@ -1678,7 +1678,7 @@ onUnmounted(() => {
 }
 .retry-btn:hover {
   background: var(--danger, #c0392b);
-  color: #fff;
+  color: var(--ds-color-status-danger-foreground, #fff);
 }
 .retry-btn:disabled {
   opacity: 0.5;
@@ -2269,7 +2269,7 @@ onUnmounted(() => {
   border-radius: 50%;
   border: 0;
   background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   display: inline-flex;
   align-items: center;
   justify-content: center;

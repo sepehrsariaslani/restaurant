@@ -164,7 +164,7 @@ MANAGEMENT_THEME_PREVIOUS_DEFAULTS = {
 	"posDanger": "#AB3535",
 	"posWarning": "#F59E0B",
 }
-MANAGEMENT_THEME_DEFAULTS = {
+MANAGEMENT_THEME_REFERENCE_DEFAULTS = {
 	"primary": "#C97852",
 	"accent": "#C98D42",
 	"success": "#6F7B56",
@@ -179,6 +179,25 @@ MANAGEMENT_THEME_DEFAULTS = {
 	"muted": "#746454",
 	"posPrimary": "#6F4A31",
 	"posAccent": "#C98D42",
+	"posSuccess": "#0B7D4A",
+	"posDanger": "#AB3535",
+	"posWarning": "#F59E0B",
+}
+MANAGEMENT_THEME_DEFAULTS = {
+	"primary": "#2F5F47",
+	"accent": "#C65316",
+	"success": "#287347",
+	"danger": "#A8443C",
+	"warning": "#915B0B",
+	"surface": "#FFFEFC",
+	"surfaceAlt": "#F5E8CB",
+	"background": "#FBF8F0",
+	"border": "#D8C9AE",
+	"text": "#243A2F",
+	"textSecondary": "#47594B",
+	"muted": "#68796B",
+	"posPrimary": "#6F4A31",
+	"posAccent": "#C65316",
 	"posSuccess": "#0B7D4A",
 	"posDanger": "#AB3535",
 	"posWarning": "#F59E0B",
@@ -276,7 +295,11 @@ def _is_legacy_default_theme_settings(payload):
 	source = payload if isinstance(payload, dict) else {}
 	if not source:
 		return False
-	for defaults in (MANAGEMENT_THEME_LEGACY_DEFAULTS, MANAGEMENT_THEME_PREVIOUS_DEFAULTS):
+	for defaults in (
+		MANAGEMENT_THEME_LEGACY_DEFAULTS,
+		MANAGEMENT_THEME_PREVIOUS_DEFAULTS,
+		MANAGEMENT_THEME_REFERENCE_DEFAULTS,
+	):
 		if all(
 			_normalize_theme_hex(source.get(key), default_value) == default_value
 			for key, default_value in defaults.items()

@@ -77,7 +77,7 @@
       </div>
     </ManagementSurfaceCard>
 
-    <ManagementSurfaceCard title="پیش‌نمایش سریع">
+    <ManagementSurfaceCard title="پیش‌نمایش سریع" subtitle="خوانایی متن روی رنگ‌های اصلی و مکمل به‌صورت خودکار تنظیم می‌شود.">
       <div class="preview-grid">
         <article>
           <small>Primary</small>
@@ -147,7 +147,7 @@ const emit = defineEmits(['save-draft', 'reset-draft'])
 
 const generalFields = [
   { key: 'primary', label: 'رنگ اصلی برند' },
-  { key: 'accent', label: 'رنگ اکسنت' },
+  { key: 'accent', label: 'رنگ مکمل برند' },
   { key: 'surface', label: 'پس‌زمینه کارت‌ها' },
   { key: 'surfaceAlt', label: 'سطح ثانویه (جعبه‌ها)' },
   { key: 'background', label: 'پس‌زمینه اصلی صفحه' },
@@ -422,10 +422,12 @@ watch(
 
 .preview-btn-primary {
   background: var(--accent-green);
+  color: var(--ds-color-action-primary-foreground, #fff);
 }
 
 .preview-btn-accent {
   background: var(--accent-gold);
+  color: var(--ds-color-action-accent-foreground, #fff);
 }
 
 .preview-chip {
@@ -439,18 +441,22 @@ watch(
 
 .preview-chip-success {
   background: var(--success);
+  color: var(--ds-color-status-success-foreground, #fff);
 }
 
 .preview-chip-danger {
   background: var(--danger);
+  color: var(--ds-color-status-danger-foreground, #fff);
 }
 
 .preview-chip-pos-success {
   background: var(--pos-success-color);
+  color: var(--pos-success-foreground, #fff);
 }
 
 .preview-chip-pos-danger {
   background: var(--pos-danger-color);
+  color: var(--pos-danger-foreground, #fff);
 }
 
 @media (max-width: 980px) {

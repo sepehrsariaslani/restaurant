@@ -174,8 +174,8 @@ function confirm() {
 }
 
 .delivery-tab.is-active {
-  background: linear-gradient(135deg, var(--accent-green), var(--accent-gold));
-  color: #fff;
+  background: var(--ds-color-action-primary);
+  color: var(--ds-color-action-primary-foreground, #fff);
   box-shadow: 0 12px 24px rgb(var(--palette-deep-sapphire-rgb) / 0.22);
 }
 

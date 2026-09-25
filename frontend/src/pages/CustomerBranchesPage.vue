@@ -87,8 +87,8 @@ onMounted(async () => {
   position: absolute; top: 12px; right: 12px;
   font-size: 0.75rem; font-weight: 700; border-radius: 999px; padding: 4px 10px;
 }
-.branch-status.open { background: rgba(46,125,50,0.9); color: #fff; }
-.branch-status.closed { background: rgba(183,28,28,0.9); color: #fff; }
+.branch-status.open { background: var(--ds-color-status-success); color: var(--ds-color-status-success-foreground, #fff); }
+.branch-status.closed { background: var(--ds-color-status-danger); color: var(--ds-color-status-danger-foreground, #fff); }
 
 .branch-body { padding: 1.2rem; }
 .branch-name { font-size: 1.05rem; font-weight: 800; color: #3f2a1d; margin: 0 0 0.75rem; }

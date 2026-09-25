@@ -72,30 +72,35 @@
 
 :root {
 	/* Restaurant Design System: semantic tokens are the source used by new UI. */
-	--ds-color-bg-page: #f6f0e6;
-	--ds-color-surface: #fbf7f1;
+	--ds-color-bg-page: #fbf8f0;
+	--ds-color-surface: #fffeFC;
 	--ds-color-surface-raised: #ffffff;
-	--ds-color-surface-muted: #e8ddd0;
-	--ds-color-border: #d8c8b4;
-	--ds-color-text-primary: #34261f;
-	--ds-color-text-secondary: #654a38;
-	--ds-color-text-muted: #746454;
+	--ds-color-surface-muted: #f5e8cb;
+	--ds-color-border: #d8c9ae;
+	--ds-color-text-primary: #243a2f;
+	--ds-color-text-secondary: #47594b;
+	--ds-color-text-muted: #68796b;
 	--ds-color-text-inverse: #ffffff;
-	--ds-color-action-primary: #c97852;
-	--ds-color-action-primary-soft: rgb(201 120 82 / 0.10);
-	--ds-color-action-accent: #c98d42;
-	--ds-color-action-accent-soft: rgb(201 141 66 / 0.12);
-	--ds-color-product-accent: #c97852;
-	--ds-color-product-accent-rgb: 201 120 82;
-	--ds-color-product-accent-soft: rgb(201 120 82 / 0.12);
+	--ds-color-action-primary: #2f5f47;
+	--ds-color-action-primary-foreground: #ffffff;
+	--ds-color-action-primary-soft: rgb(47 95 71 / 0.10);
+	--ds-color-action-accent: #c65316;
+	--ds-color-action-accent-foreground: #ffffff;
+	--ds-color-action-accent-soft: rgb(198 83 22 / 0.12);
+	--ds-color-product-accent: #c65316;
+	--ds-color-product-accent-rgb: 198 83 22;
+	--ds-color-product-accent-soft: rgb(198 83 22 / 0.12);
 	--ds-color-product-media-surface: #ffffff;
-	--ds-color-focus-ring: #c98d42;
-	--ds-color-status-success: #6f7b56;
-	--ds-color-status-success-soft: rgb(111 123 86 / 0.12);
-	--ds-color-status-warning: #c67b2a;
-	--ds-color-status-warning-soft: rgb(198 123 42 / 0.14);
-	--ds-color-status-danger: #a6543f;
-	--ds-color-status-danger-soft: rgb(166 84 63 / 0.12);
+	--ds-color-focus-ring: #c65316;
+	--ds-color-status-success: #287347;
+	--ds-color-status-success-foreground: #ffffff;
+	--ds-color-status-success-soft: rgb(40 115 71 / 0.12);
+	--ds-color-status-warning: #915b0b;
+	--ds-color-status-warning-foreground: #ffffff;
+	--ds-color-status-warning-soft: rgb(145 91 11 / 0.14);
+	--ds-color-status-danger: #a8443c;
+	--ds-color-status-danger-foreground: #ffffff;
+	--ds-color-status-danger-soft: rgb(168 68 60 / 0.12);
 	--ds-color-status-info: #3e8ed0;
 	--ds-color-status-info-soft: rgb(62 142 208 / 0.12);
 	--ds-space-0: 0;
@@ -132,9 +137,9 @@
 	--palette-june-bud: var(--ds-color-surface-muted);
 	--palette-deep-saffron: var(--ds-color-action-accent);
 	--palette-eggshell: var(--ds-color-surface-raised);
-	--palette-deep-sapphire-rgb: 201 120 82;
-	--palette-june-bud-rgb: 232 221 208;
-	--palette-deep-saffron-rgb: 201 141 66;
+	--palette-deep-sapphire-rgb: 47 95 71;
+	--palette-june-bud-rgb: 245 232 203;
+	--palette-deep-saffron-rgb: 198 83 22;
 	--palette-eggshell-rgb: 255 255 255;
 	--theme-surface-alt: var(--ds-color-surface-muted);
 	--theme-background: var(--ds-color-bg-page);
@@ -182,11 +187,14 @@
 	--text-muted: var(--ds-color-text-muted);
 	--text-secondary: var(--ds-color-text-secondary);
 	--danger: var(--ds-color-status-danger);
-	--danger-rgb: 166 84 63;
+	--danger-foreground: var(--ds-color-status-danger-foreground);
+	--danger-rgb: 168 68 60;
 	--success: var(--ds-color-status-success);
-	--success-rgb: 111 123 86;
+	--success-foreground: var(--ds-color-status-success-foreground);
+	--success-rgb: 40 115 71;
 	--warning: var(--ds-color-status-warning);
-	--warning-rgb: 198 123 42;
+	--warning-foreground: var(--ds-color-status-warning-foreground);
+	--warning-rgb: 145 91 11;
 	--bg-soft: var(--theme-background);
 	--radius-xl: var(--ds-radius-xl);
 	--radius-lg: var(--ds-radius-lg);
@@ -199,18 +207,21 @@
 	--pos-accent-color: #c98d42;
 	--pos-accent-rgb: 201 141 66;
 	--pos-success-color: #0b7d4a;
+	--pos-success-foreground: #ffffff;
 	--pos-success-rgb: 11 125 74;
 	--pos-danger-color: #ab3535;
+	--pos-danger-foreground: #ffffff;
 	--pos-danger-rgb: 171 53 53;
 	--pos-warning-color: #f59e0b;
+	--pos-warning-foreground: #000000;
 	--pos-warning-rgb: 245 158 11;
 	--pos-surface-color: #ffffff;
 
 	/* Management aliases: the legacy surface vocabulary resolves to the same tokens. */
-	--mg-bg-page: #f6f0e6;
-	--mg-bg-surface: #fbf7f1;
-	--mg-bg-soft: #e8ddd0;
-	--mg-surface-alt: #e8ddd0;
+	--mg-bg-page: #fbf8f0;
+	--mg-bg-surface: #fffeFC;
+	--mg-bg-soft: #f5e8cb;
+	--mg-surface-alt: #f5e8cb;
 	--mg-text-main: #34261f;
 	--mg-text-secondary: #654a38;
 	--mg-text-muted: #746454;
@@ -252,8 +263,10 @@ body.management-theme-dark {
 	--ds-color-text-muted: #a39b93;
 	--ds-color-text-inverse: #1c1a18;
 	--ds-color-action-primary: #c07050;
+	--ds-color-action-primary-foreground: #1c1a18;
 	--ds-color-action-primary-soft: rgb(192 112 80 / 0.16);
 	--ds-color-action-accent: #d8a15b;
+	--ds-color-action-accent-foreground: #1c1a18;
 	--ds-color-action-accent-soft: rgb(216 161 91 / 0.18);
 	--ds-color-product-accent: #d98a66;
 	--ds-color-product-accent-rgb: 217 138 102;
@@ -261,10 +274,13 @@ body.management-theme-dark {
 	--ds-color-product-media-surface: #25221f;
 	--ds-color-focus-ring: #f0bd73;
 	--ds-color-status-success: #7f8b54;
+	--ds-color-status-success-foreground: #1c1a18;
 	--ds-color-status-success-soft: rgb(127 139 84 / 0.16);
 	--ds-color-status-warning: #e2b56c;
+	--ds-color-status-warning-foreground: #1c1a18;
 	--ds-color-status-warning-soft: rgb(226 181 108 / 0.18);
 	--ds-color-status-danger: #c25b4e;
+	--ds-color-status-danger-foreground: #000000;
 	--ds-color-status-danger-soft: rgb(194 91 78 / 0.16);
 	--ds-color-status-info: #8fc4e7;
 	--ds-color-status-info-soft: rgb(143 196 231 / 0.16);
@@ -410,7 +426,7 @@ a {
 	padding: 0 0.35rem;
 	border-radius: 999px;
 	font-size: 0.72rem;
-	color: #fff;
+	color: var(--ds-color-action-primary-foreground, #fff);
 	background: var(--accent-green);
 }
 
@@ -1003,7 +1019,7 @@ button {
 .customer-chip.is-active {
 	background: var(--accent-green);
 	border-color: var(--accent-green);
-	color: #fff;
+	color: var(--ds-color-action-primary-foreground, #fff);
 	box-shadow: 0 10px 22px rgb(var(--palette-deep-sapphire-rgb) / 0.22);
 }
 
@@ -1027,8 +1043,8 @@ button {
 	min-height: 52px;
 	border: 0;
 	border-radius: 18px;
-	background: linear-gradient(135deg, var(--accent-green), var(--accent-gold));
-	color: #fff;
+	background: var(--ds-color-action-primary);
+	color: var(--ds-color-action-primary-foreground, #fff);
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;

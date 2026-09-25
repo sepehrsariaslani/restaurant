@@ -169,7 +169,7 @@ onMounted(() => {
 .order-flow-hero > .order-flow-secondary {
   width: fit-content;
   max-width: 100%;
-  justify-self: start;
+  justify-self: center;
   white-space: nowrap;
 }
 

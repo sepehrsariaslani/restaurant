@@ -161,7 +161,7 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   top: 10px;
   left: 10px;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   border-radius: 999px;
   padding: 0.22rem 0.62rem;
   font-size: 0.78rem;
@@ -282,7 +282,7 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   border-radius: 14px;
   border: none;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -503,7 +503,7 @@ const reviewCnt = computed(() => getReviewCount(itemSlug.value))
   border-radius: 50%;
   border: none;
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   font-size: 1rem;
   cursor: pointer;
   display: flex;

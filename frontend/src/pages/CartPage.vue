@@ -324,7 +324,7 @@ onMounted(async () => {
 .checkout-btn {
   border: 1px solid var(--ds-color-action-accent);
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   text-decoration: none;
   box-shadow: 0 10px 24px color-mix(in srgb, var(--ds-color-action-accent) 22%, transparent);
   transition: transform var(--ds-motion-fast) ease, filter var(--ds-motion-fast) ease;

@@ -1,6 +1,6 @@
 import { getManagementThemeSettings, setManagementThemeSettings } from './api'
 import { designTokens } from '../design-system/tokens'
-import { ensureThemeBorderContrast } from './themeContrast.js'
+import { ensureThemeBorderContrast, readableForeground } from './themeContrast.js'
 
 const THEME_STORAGE_KEY = 'restaurant.theme.settings.v1'
 const palette = designTokens.color.primitive
@@ -18,8 +18,8 @@ export const defaultThemeSettings = {
   text: palette.text,
   textSecondary: palette.textSecondary,
   muted: palette.muted,
-  // POS keeps its established deep-sapphire action color; management pages
-  // use the terracotta reference primary above.
+  // POS keeps its established deep-brown action color; customer pages use
+  // the shared brand-green primary and orange accent above.
   posPrimary: '#6F4A31',
   posAccent: palette.accent,
   posSuccess: '#0B7D4A',
@@ -29,11 +29,33 @@ export const defaultThemeSettings = {
 
 export const themePresets = [
   {
+    id: 'veederakht-green-orange',
+    name: 'ویدرخته · سبز و نارنجی',
+    description: 'سبز جنگلی برای هویت برند، نارنجی گرم برای اقدام‌ها و زمینه‌های کرم زعفرانی.',
+    colors: {
+      ...defaultThemeSettings,
+    },
+  },
+  {
     id: 'nooshyar-brown',
     name: 'نوش‌یار قهوه‌ای',
     description: 'تم اصلی برند با قاعده ۶۰/۳۰/۱۰ (خنثی گرم + قهوه‌ای + اکسنت طلایی).',
     colors: {
       ...defaultThemeSettings,
+      primary: '#C97852',
+      accent: '#C98D42',
+      success: '#6F7B56',
+      danger: '#A6543F',
+      warning: '#C67B2A',
+      surface: '#FBF7F1',
+      surfaceAlt: '#E8DDD0',
+      background: '#F6F0E6',
+      border: '#D8C8B4',
+      text: '#34261F',
+      textSecondary: '#654A38',
+      muted: '#746454',
+      posPrimary: '#6F4A31',
+      posAccent: '#C98D42',
     },
   },
   {
@@ -279,18 +301,23 @@ export function applyThemeSettings(settings = {}) {
   setCssVar('--ds-color-text-secondary', normalized.textSecondary)
   setCssVar('--ds-color-text-muted', normalized.muted)
   setCssVar('--ds-color-action-primary', normalized.primary)
+  setCssVar('--ds-color-action-primary-foreground', readableForeground(normalized.primary))
   setCssVar('--ds-color-action-primary-soft', alphaColorFromHex(normalized.primary, 0.1))
   setCssVar('--ds-color-action-accent', normalized.accent)
+  setCssVar('--ds-color-action-accent-foreground', readableForeground(normalized.accent))
   setCssVar('--ds-color-action-accent-soft', alphaColorFromHex(normalized.accent, 0.12))
-  setCssVar('--ds-color-product-accent', normalized.primary)
-  setCssVar('--ds-color-product-accent-rgb', rgbStringFromHex(normalized.primary))
-  setCssVar('--ds-color-product-accent-soft', alphaColorFromHex(normalized.primary, 0.12))
+  setCssVar('--ds-color-product-accent', normalized.accent)
+  setCssVar('--ds-color-product-accent-rgb', rgbStringFromHex(normalized.accent))
+  setCssVar('--ds-color-product-accent-soft', alphaColorFromHex(normalized.accent, 0.12))
   setCssVar('--ds-color-focus-ring', normalized.accent)
   setCssVar('--ds-color-status-success', normalized.success)
+  setCssVar('--ds-color-status-success-foreground', readableForeground(normalized.success))
   setCssVar('--ds-color-status-success-soft', alphaColorFromHex(normalized.success, 0.12))
   setCssVar('--ds-color-status-warning', normalized.warning)
+  setCssVar('--ds-color-status-warning-foreground', readableForeground(normalized.warning))
   setCssVar('--ds-color-status-warning-soft', alphaColorFromHex(normalized.warning, 0.14))
   setCssVar('--ds-color-status-danger', normalized.danger)
+  setCssVar('--ds-color-status-danger-foreground', readableForeground(normalized.danger))
   setCssVar('--ds-color-status-danger-soft', alphaColorFromHex(normalized.danger, 0.12))
 
   setCssVar('--palette-deep-sapphire', normalized.primary)
@@ -331,10 +358,13 @@ export function applyThemeSettings(settings = {}) {
   setCssVar('--ink-200', tintHex(normalized.muted, 0.72))
   setCssVar('--management-ink', normalized.text)
   setCssVar('--danger', normalized.danger)
+  setCssVar('--danger-foreground', readableForeground(normalized.danger))
   setCssVar('--danger-rgb', rgbStringFromHex(normalized.danger))
   setCssVar('--success', normalized.success)
+  setCssVar('--success-foreground', readableForeground(normalized.success))
   setCssVar('--success-rgb', rgbStringFromHex(normalized.success))
   setCssVar('--warning', normalized.warning)
+  setCssVar('--warning-foreground', readableForeground(normalized.warning))
   setCssVar('--warning-rgb', rgbStringFromHex(normalized.warning))
 
   // The management shell still consumes its established --mg-* vocabulary.
@@ -378,10 +408,13 @@ export function applyThemeSettings(settings = {}) {
   setCssVar('--pos-accent-color', normalized.posAccent)
   setCssVar('--pos-accent-rgb', rgbStringFromHex(normalized.posAccent))
   setCssVar('--pos-success-color', normalized.posSuccess)
+  setCssVar('--pos-success-foreground', readableForeground(normalized.posSuccess))
   setCssVar('--pos-success-rgb', rgbStringFromHex(normalized.posSuccess))
   setCssVar('--pos-danger-color', normalized.posDanger)
+  setCssVar('--pos-danger-foreground', readableForeground(normalized.posDanger))
   setCssVar('--pos-danger-rgb', rgbStringFromHex(normalized.posDanger))
   setCssVar('--pos-warning-color', normalized.posWarning)
+  setCssVar('--pos-warning-foreground', readableForeground(normalized.posWarning))
   setCssVar('--pos-warning-rgb', rgbStringFromHex(normalized.posWarning))
   setCssVar('--pos-surface-color', normalized.surface)
 

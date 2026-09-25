@@ -1838,7 +1838,7 @@ onUnmounted(() => {
 
 .detail-tab.active {
   background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   box-shadow: 0 4px 12px rgb(var(--palette-deep-sapphire-rgb) / 0.25);
 }
 
@@ -1855,7 +1855,7 @@ onUnmounted(() => {
   height: 20px;
   border-radius: 999px;
   background: var(--accent-gold, #c98d42);
-  color: #fff;
+  color: var(--ds-color-action-accent-foreground, #fff);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0 0.35rem;
@@ -2016,7 +2016,7 @@ onUnmounted(() => {
   border: none;
   border-radius: 16px;
   background: var(--ds-color-action-accent);
-  color: #fff;
+  color: var(--ds-color-action-accent-foreground, #fff);
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 800;
@@ -2070,7 +2070,7 @@ onUnmounted(() => {
   height: 36px;
   border-radius: 50%;
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2140,7 +2140,7 @@ onUnmounted(() => {
 
 .submit-review-btn {
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   border: none;
   border-radius: 999px;
   padding: 0.65rem 1.5rem;
@@ -2220,7 +2220,7 @@ onUnmounted(() => {
   border-radius: 50%;
   border: none;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 1.1rem;
   cursor: pointer;
   display: flex;
@@ -2252,7 +2252,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.4rem;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   border: none;
   border-radius: 999px;
   padding: 0.75rem 1.3rem;
@@ -2334,7 +2334,7 @@ onUnmounted(() => {
   border-radius: 999px;
   border: 1px solid var(--accent-green, #6f4a31);
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   padding: 0.6rem 1.5rem;
   font-family: inherit;
   font-size: 0.88rem;
@@ -2441,7 +2441,7 @@ onUnmounted(() => {
   border-radius: 50%;
   border: 1px solid var(--ds-color-action-accent);
   background: var(--ds-color-action-accent);
-  color: #fff;
+  color: var(--ds-color-action-accent-foreground, #fff);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-color-action-accent) 24%, transparent);
   cursor: pointer;
   transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
@@ -2467,7 +2467,7 @@ onUnmounted(() => {
   transform: scale(1.06);
   border-color: var(--ds-color-action-accent);
   background: var(--ds-color-action-accent);
-  color: #fff;
+  color: var(--ds-color-action-accent-foreground, #fff);
   filter: brightness(0.96);
 }
 .related-add-btn:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
@@ -2910,7 +2910,7 @@ onUnmounted(() => {
   border-radius: 50%;
   border: 0;
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;

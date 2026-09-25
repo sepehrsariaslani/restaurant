@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ensureThemeBorderContrast } from '../src/utils/themeContrast.js'
+import { ensureThemeBorderContrast, readableForeground } from '../src/utils/themeContrast.js'
+import { designTokens } from '../src/design-system/tokens.js'
 
 function luminance(hex) {
   const value = hex.replace('#', '')
@@ -31,4 +32,17 @@ test('a low contrast border also adapts for dark surfaces', () => {
 
   assert.notEqual(border, '#38322E')
   assert.ok(contrastRatio(border, '#2E2A27') >= 3)
+})
+
+test('dynamic action and status foregrounds keep labels readable', () => {
+  for (const background of ['#2F5F47', '#C65316', '#FF5900', '#F1C232', '#777777', '#FFFFFF', '#000000', '#91C788']) {
+    const foreground = readableForeground(background)
+    assert.ok(contrastRatio(foreground, background) >= 4.5, `${foreground} should contrast with ${background}`)
+  }
+
+  assert.equal(designTokens.color.semantic.action.primaryForeground, '--ds-color-action-primary-foreground')
+  assert.equal(designTokens.color.semantic.action.accentForeground, '--ds-color-action-accent-foreground')
+  assert.equal(designTokens.color.semantic.status.successForeground, '--ds-color-status-success-foreground')
+  assert.equal(designTokens.color.semantic.status.warningForeground, '--ds-color-status-warning-foreground')
+  assert.equal(designTokens.color.semantic.status.dangerForeground, '--ds-color-status-danger-foreground')
 })

@@ -64,7 +64,7 @@ defineEmits(['action'])
   border: 0; border-radius: 999px;
   background: var(--accent-green);
   border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.48);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   padding: 0 0.6rem 0 1rem;
   height: 44px;
   display: inline-flex; align-items: center; gap: 0.55rem;

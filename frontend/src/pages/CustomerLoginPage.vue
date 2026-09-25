@@ -355,7 +355,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   width: 100%;
   padding: 1rem;
   background: var(--accent-green, #6f4a31);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   border: none;
   border-radius: 16px;
   font-size: 1rem;

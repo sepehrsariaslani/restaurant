@@ -156,13 +156,13 @@ onMounted(() => {
   padding: 0.85rem 0.95rem;
   background: rgb(255 255 255 / 0.1);
   border-color: rgb(255 255 255 / 0.12);
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   box-shadow: none;
 }
 
 .hero-summary__item small {
   display: block;
-  color: rgb(255 255 255 / 0.7);
+  color: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 70%, transparent);
 }
 
 .hero-summary__item strong {

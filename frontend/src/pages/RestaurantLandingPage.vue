@@ -158,8 +158,8 @@ onUnmounted(() => {
   width: 2rem;
   height: 2rem;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--palette-deep-sapphire, #6f4a31), #9c7454);
-  color: #fff;
+  background: var(--ds-color-action-primary);
+  color: var(--ds-color-action-primary-foreground, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -198,8 +198,8 @@ onUnmounted(() => {
   min-height: 2rem;
   padding: 0 0.85rem;
   border-radius: 999px;
-  background: rgb(111 74 49 / 0.08);
-  color: var(--palette-deep-sapphire, #6f4a31);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
   font-size: 0.76rem;
   font-weight: 800;
 }
@@ -222,7 +222,7 @@ onUnmounted(() => {
 :global(.home-page--v2 .home-sticky-cart),
 :global(.home-page--v2 .home-toast) {
   background: var(--ds-color-action-primary);
-  color: var(--ds-color-text-inverse, #fffdf6);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fffdf6));
 }
 
 .needs-header-offset {
@@ -237,8 +237,8 @@ onUnmounted(() => {
   max-width: min(340px, calc(100vw - 2rem));
   border-radius: 999px;
   padding: 0.7rem 1rem;
-  background: var(--palette-deep-sapphire, #6F4A31);
-  color: #fff;
+  background: var(--ds-color-action-primary);
+  color: var(--ds-color-action-primary-foreground, #fff);
   box-shadow: 0 16px 38px rgb(0 0 0 / 0.18);
   font-size: 0.86rem;
   font-weight: 800;
@@ -256,7 +256,7 @@ onUnmounted(() => {
   min-height: 48px;
   padding: 0.65rem 1rem;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   text-decoration: none;
   box-shadow: 0 14px 30px color-mix(in srgb, var(--ds-color-action-accent) 26%, transparent);
 }

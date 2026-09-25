@@ -386,7 +386,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   text-decoration: none;
   font-size: 1.1rem;
   font-weight: 800;
@@ -401,7 +401,7 @@ onMounted(async () => {
   border: 1px solid rgb(255 255 255 / 0.15);
   border-radius: 18px;
   background: rgb(255 255 255 / 0.12);
-  color: rgb(255 255 255 / 0.84);
+  color: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 84%, transparent);
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -421,7 +421,7 @@ onMounted(async () => {
 
 .hero-stat {
   padding: 0.85rem 0.95rem;
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
   background: rgb(255 255 255 / 0.1);
   border-color: rgb(255 255 255 / 0.12);
   box-shadow: none;
@@ -430,7 +430,7 @@ onMounted(async () => {
 .hero-stat small {
   display: block;
   font-size: 0.74rem;
-  color: rgb(255 255 255 / 0.68);
+  color: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 68%, transparent);
 }
 
 .hero-stat strong {
@@ -471,7 +471,7 @@ onMounted(async () => {
 
 .club-badge {
   background: var(--ds-color-action-accent-soft, rgb(255 89 0 / 0.13));
-  color: var(--ds-color-action-accent, #b84b00);
+  color: var(--ds-color-text-primary);
 }
 
 .club-summary__stats {
