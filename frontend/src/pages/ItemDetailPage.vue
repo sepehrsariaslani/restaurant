@@ -72,14 +72,7 @@
               aria-label="علاقه‌مندی"
               :aria-pressed="isWishlisted"
             >{{ isWishlisted ? '♥' : '♡' }}</button>
-            <button
-              class="nav-circle"
-              type="button"
-              @click="shareProduct"
-              aria-label="اشتراک‌گذاری"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            </button>
+            <ShareWebsiteButton appearance="icon" :title="item.title || 'محصول ویدرخت'" />
           </div>
         </div>
       </div>
@@ -334,10 +327,7 @@
                 <span class="heart-icon">{{ isWishlisted ? '♥' : '♡' }}</span>
                 <span class="action-label">{{ isWishlisted ? 'ذخیره شده' : 'علاقه‌مندی' }}</span>
               </button>
-              <button class="desktop-action-btn" type="button" @click="shareProduct" aria-label="اشتراک‌گذاری">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                <span class="action-label">اشتراک‌گذاری</span>
-              </button>
+              <ShareWebsiteButton appearance="action" :title="item.title || 'محصول ویدرخت'" />
             </div>
 
             <p class="item-category">{{ item.category_title || item.category || 'منو' }}</p>
@@ -665,8 +655,6 @@
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
     </button>
 
-    <!-- ─── Share toast ─── -->
-    <div class="share-toast" :class="{ visible: shareToastVisible }">لینک کپی شد</div>
   </div>
 </template>
 
@@ -679,6 +667,7 @@ import ModifierRecipeImpactSelector from '@/components/ModifierRecipeImpactSelec
 import LivePricingBreakdown from '@/components/LivePricingBreakdown.vue'
 import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
 import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
+import ShareWebsiteButton from '@/components/customer/ShareWebsiteButton.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney, normalizeMobile, parseQuery } from '@/utils/format'
@@ -724,8 +713,6 @@ const showScrollTop = ref(false)
 function handleScroll() { showScrollTop.value = window.scrollY > 400 }
 function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
-// ─── Share ───────────────────────────────────────────────────────────
-const shareToastVisible = ref(false)
 const cartActionMessage = ref('')
 let cartActionTimer = null
 
@@ -733,18 +720,6 @@ function showCartActionFeedback(message) {
   cartActionMessage.value = message
   clearTimeout(cartActionTimer)
   cartActionTimer = setTimeout(() => { cartActionMessage.value = '' }, 2200)
-}
-
-async function shareProduct() {
-  const url = window.location.href
-  const title = item.value?.title || ''
-  if (navigator.share) {
-    try { await navigator.share({ title, url }) } catch (_) {}
-  } else {
-    try { await navigator.clipboard.writeText(url) } catch (_) {}
-    shareToastVisible.value = true
-    setTimeout(() => { shareToastVisible.value = false }, 2000)
-  }
 }
 
 // ─── Related items ───────────────────────────────────────────────────
@@ -2299,7 +2274,7 @@ onUnmounted(() => {
 .print-product-card { display: none; }
 @media print {
   .sticky-bottom-bar, .hero-nav, .gallery-arrow, .gallery-dots,
-  .scroll-top-btn, .lightbox-overlay, .share-toast { display: none !important; }
+  .scroll-top-btn, .lightbox-overlay { display: none !important; }
   .print-product-card { display: block; padding: 1rem; }
   .print-product-name { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; }
   .print-product-desc { font-size: 0.9rem; color: #555; margin-bottom: 0.5rem; }
@@ -2956,28 +2931,4 @@ onUnmounted(() => {
   .scroll-top-btn { bottom: 2rem; }
 }
 
-/* ════════════════════════════════════════════════════════════════
-   SHARE TOAST
-   ════════════════════════════════════════════════════════════════ */
-.share-toast {
-  position: fixed;
-  bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: var(--text-primary, #3f2a1d);
-  color: #fff;
-  padding: 0.6rem 1.2rem;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  opacity: 0;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  z-index: 9999;
-  pointer-events: none;
-  white-space: nowrap;
-}
-.share-toast.visible {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
 </style>

@@ -148,6 +148,22 @@ test('cart feedback stays centered in RTL and clears the product sticky purchase
   assert.match(detail, /<CartActionFeedback :message="cartActionMessage" placement="product" \/>/)
 })
 
+test('product sharing uses the accessible, theme-aware shared control on mobile and desktop', () => {
+  const share = source('../src/components/customer/ShareWebsiteButton.vue')
+  const detail = source('../src/pages/ItemDetailPage.vue')
+
+  assert.match(share, /navigator\.share\(data\)/)
+  assert.match(share, /navigator\.clipboard\?\.writeText/)
+  assert.match(share, /navigator\.clipboard\.writeText\(value\)/)
+  assert.match(share, /document\.execCommand\('copy'\)/)
+  assert.match(share, /role="status"[\s\S]*?aria-live="polite"/)
+  assert.match(share, /var\(--ds-color-action-primary\)/)
+  assert.match(share, /var\(--ds-color-surface-raised\)/)
+  assert.match(detail, /<ShareWebsiteButton appearance="icon" :title="item\.title \|\| 'محصول ویدرخت'" \/>/)
+  assert.match(detail, /<ShareWebsiteButton appearance="action" :title="item\.title \|\| 'محصول ویدرخت'" \/>/)
+  assert.doesNotMatch(detail, /shareProduct|share-toast|shareToastVisible/)
+})
+
 test('customer account surfaces use live theme colors and the guest dashboard requires sign-in', () => {
   const theme = source('../src/theme.css')
   const dashboard = source('../src/pages/CustomerDashboardPage.vue')
