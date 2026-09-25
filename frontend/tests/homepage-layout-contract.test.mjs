@@ -31,3 +31,12 @@ test('public desktop navigation labels meet the updated reading size', async () 
   assert.match(header, /\.nav-link\s*\{[^}]*font-size:\s*0\.8rem;/s)
   assert.match(header, /--ds-color-action-primary/)
 })
+
+test('customer login uses the saved hero image and a restaurant-branded fallback', async () => {
+  const login = await source('pages/CustomerLoginPage.vue')
+
+  assert.match(login, /:src="heroImage"/)
+  assert.match(login, /props\.boot\?\.branding\?\.hero_image/)
+  assert.match(login, /veederakht-home-hero\.webp/)
+  assert.doesNotMatch(login, /NooshYar%20Image\.png/)
+})

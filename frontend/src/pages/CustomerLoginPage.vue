@@ -2,7 +2,7 @@
   <div class="login-page" dir="rtl">
     <div class="login-hero">
       <div class="hero-overlay"></div>
-      <img class="hero-bg" src='/NooshYar%20Image.png' alt="" />
+      <img class="hero-bg" :src="heroImage" alt="" />
       <div class="hero-logo">
         <div class="logo-circle">🍽️</div>
         <h1 class="brand-name">{{ brandName }}</h1>
@@ -88,6 +88,9 @@ const props = defineProps({
 })
 const brandName = computed(() =>
   props.boot?.branding?.name || window._BOOT?.restaurant_name || window._BOOT?.brand_name || 'رستوران',
+)
+const heroImage = computed(() =>
+  props.boot?.branding?.hero_image || '/assets/restaurant/frontend/veederakht-home-hero.webp',
 )
 const step = ref('phone')
 const phone = ref('')
