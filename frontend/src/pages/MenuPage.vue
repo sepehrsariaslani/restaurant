@@ -229,7 +229,7 @@ import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { getMenuItems, getManagementSessionProfile, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { buildMenuSections } from '@/utils/menuSections'
-import { cartState, upsertLine, removeLine } from '@/stores/cartStore'
+import { cartState, upsertLine, removeLine, saveOrderContext } from '@/stores/cartStore'
 const { openSearch } = useSearchModal()
 
 const props = defineProps({
@@ -251,7 +251,7 @@ function resolveBranchFromBoot() {
   }
 
   const branchParam = new URLSearchParams(window.location.search).get('branch')
-  return String(branchParam || '').trim()
+  return String(branchParam || cartState.orderContext.branch || '').trim()
 }
 
 // ─── state ─────────────────────────────────────────────────────────
@@ -959,6 +959,12 @@ function scrollToTop() {
 }
 
 onMounted(async () => {
+  if (activeBranch.value) {
+    saveOrderContext({
+      branch: activeBranch.value,
+      branch_title: props.boot.active_branch_title || props.boot.branch_title || activeBranch.value,
+    })
+  }
   getManagementSessionProfile()
     .then((profile) => {
       canViewBom.value = Boolean(profile?.is_staff || profile?.is_admin)

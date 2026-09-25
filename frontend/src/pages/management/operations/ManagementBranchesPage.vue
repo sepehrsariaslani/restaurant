@@ -76,7 +76,18 @@
           <label>تلفن<input class="input" v-model.trim="form.restaurant_branch_phone" /></label>
           <label>عرض جغرافیایی<input class="input" type="number" step="0.000001" v-model.number="form.restaurant_branch_lat" /></label>
           <label>طول جغرافیایی<input class="input" type="number" step="0.000001" v-model.number="form.restaurant_branch_lng" /></label>
+          <div class="branch-map-field full-row">
+            <strong>موقعیت شعبه روی نقشه</strong>
+            <small>نقطه شعبه مرکز محاسبه محدوده ارسال خواهد بود.</small>
+            <AddressPickerMap v-model="branchLocation" :config="branchMapConfig" />
+          </div>
           <label class="full-row">آدرس<input class="input" v-model.trim="form.restaurant_branch_address" /></label>
+          <label class="check-row"><input type="checkbox" v-model="form.restaurant_pickup_available" :true-value="1" :false-value="0" /> تحویل حضوری و درب ماشین فعال باشد</label>
+          <label class="check-row"><input type="checkbox" v-model="form.restaurant_delivery_available" :true-value="1" :false-value="0" /> ارسال به آدرس فعال باشد</label>
+          <label>شعاع ارسال (کیلومتر)<input class="input" type="number" min="0" step="0.1" v-model.number="form.restaurant_delivery_radius_km" /><small>عدد صفر یعنی محدوده‌ای برای ارسال محدود نشده است.</small></label>
+          <label>هزینه ارسال<input class="input" type="number" min="0" step="1000" v-model.number="form.restaurant_delivery_fee" /></label>
+          <label>حداقل زمان ارسال (دقیقه)<input class="input" type="number" min="1" v-model.number="form.restaurant_delivery_eta_min" /></label>
+          <label>حداکثر زمان ارسال (دقیقه)<input class="input" type="number" min="1" v-model.number="form.restaurant_delivery_eta_max" /></label>
           <label class="check-row"><input type="checkbox" v-model="form.restaurant_branch_active" :true-value="1" :false-value="0" /> فعال</label>
         </div>
         <p class="error" v-if="formError">{{ formError }}</p>
@@ -95,6 +106,7 @@ import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
+import AddressPickerMap from '@/components/checkout/AddressPickerMap.vue'
 import {
   getManagementBranchBoot,
   listManagementBranches,
@@ -111,6 +123,15 @@ const error = ref('')
 const message = ref('')
 const showActiveOnly = ref(false)
 const form = ref(null)
+const branchLocation = computed({
+  get: () => ({ lat: form.value?.restaurant_branch_lat ?? '', lng: form.value?.restaurant_branch_lng ?? '' }),
+  set: (point = {}) => {
+    if (!form.value) return
+    form.value.restaurant_branch_lat = point.lat ?? ''
+    form.value.restaurant_branch_lng = point.lng ?? ''
+  },
+})
+const branchMapConfig = { default_lat: 35.6997, default_lng: 51.3381, default_zoom: 12 }
 const formError = ref('')
 const saving = ref(false)
 const transferForm = reactive({ customer: '', target_branch: '' })
@@ -150,8 +171,8 @@ async function reload() {
 function openForm(b) {
   formError.value = ''
   form.value = b
-    ? { name: b.name, company_name: b.company_name, abbr: b.abbr, restaurant_public_title: b.label || '', restaurant_branch_phone: b.phone || '', restaurant_branch_lat: b.lat || 0, restaurant_branch_lng: b.lng || 0, restaurant_branch_address: b.address || '', restaurant_branch_active: b.is_active, restaurant_is_branch: 1 }
-    : { name: '', company_name: '', abbr: '', restaurant_public_title: '', restaurant_branch_phone: '', restaurant_branch_lat: 0, restaurant_branch_lng: 0, restaurant_branch_address: '', restaurant_branch_active: 1, restaurant_is_branch: 1 }
+    ? { name: b.name, company_name: b.company_name, abbr: b.abbr, restaurant_public_title: b.label || '', restaurant_branch_phone: b.phone || '', restaurant_branch_lat: Number(b.lat) === 0 && Number(b.lng) === 0 ? '' : b.lat ?? '', restaurant_branch_lng: Number(b.lat) === 0 && Number(b.lng) === 0 ? '' : b.lng ?? '', restaurant_branch_address: b.address || '', restaurant_branch_active: b.is_active, restaurant_is_branch: 1, restaurant_pickup_available: b.pickup_available, restaurant_delivery_available: b.delivery_available, restaurant_delivery_radius_km: b.delivery_radius_km || 0, restaurant_delivery_fee: b.delivery_fee || 0, restaurant_delivery_eta_min: b.delivery_eta_min || 35, restaurant_delivery_eta_max: b.delivery_eta_max || 45 }
+    : { name: '', company_name: '', abbr: '', restaurant_public_title: '', restaurant_branch_phone: '', restaurant_branch_lat: '', restaurant_branch_lng: '', restaurant_branch_address: '', restaurant_branch_active: 1, restaurant_is_branch: 1, restaurant_pickup_available: 1, restaurant_delivery_available: 1, restaurant_delivery_radius_km: 0, restaurant_delivery_fee: 0, restaurant_delivery_eta_min: 35, restaurant_delivery_eta_max: 45 }
 }
 
 async function saveForm() {
@@ -201,6 +222,8 @@ onMounted(reload)
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.65rem; margin-bottom: 0.7rem; }
 .form-grid label { display: grid; gap: 0.3rem; font-size: 0.86rem; }
 .full-row { grid-column: 1 / -1; }
+.branch-map-field { display: grid; gap: .35rem; }
+.branch-map-field > small { color: var(--mg-text-muted, var(--ds-color-text-muted)); font-size: .8rem; }
 .row-actions { white-space: nowrap; display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .shared-list { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 0.45rem; font-size: 0.88rem; }
 </style>

@@ -13,9 +13,14 @@ export function orderContextChangeUrl(context = cartState.orderContext || {}) {
 
 export function resetOrderContextForType(type) {
   const nextType = ['dine_in', 'pickup', 'delivery'].includes(type) ? type : ''
+  const previous = cartState.orderContext || {}
   const next = {
     ...defaultOrderContext(),
     order_type: nextType,
+    // Branch choice is made before browsing the menu and belongs to this
+    // customer's local ordering session, even when the receiving method changes.
+    branch: previous.branch || '',
+    branch_title: previous.branch_title || '',
     delivery_fee: 0,
   }
   if (nextType !== 'delivery') {

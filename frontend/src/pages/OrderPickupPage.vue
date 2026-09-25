@@ -22,7 +22,17 @@
         <p v-if="error" class="order-flow-alert danger">{{ error }}</p>
         <p v-if="!loading && !error && !branches.length" class="order-flow-alert">فعلاً شعبهِ باز و فعالی برای تحویل حضوری در دسترس نیست.</p>
 
-        <div v-if="!loading && !error && branches.length" class="pickup-branch-grid" role="group" aria-label="شعبه‌های آماده تحویل بیرون‌بر">
+        <section v-if="selectedBranch" class="order-flow-card pickup-selected-branch">
+          <div class="delivery-branch-heading">
+            <div><p class="order-flow-eyebrow">شعبهٔ انتخاب‌شده</p><h2>{{ selectedBranch.title || selectedBranch.name }}</h2><p>{{ selectedBranch.address || 'نشانی شعبه ثبت نشده است.' }}</p></div>
+            <button class="order-flow-secondary" type="button" @click="branchPickerOpen = !branchPickerOpen">{{ branchPickerOpen ? 'بستن نقشه' : 'تغییر شعبه' }}</button>
+          </div>
+        </section>
+
+        <div v-if="!loading && !error && branches.length && (branchPickerOpen || !selectedBranch)" class="pickup-branch-picker order-flow-card" role="group" aria-label="شعبه‌های آماده تحویل بیرون‌بر">
+          <h2>از روی نقشه یا فهرست، شعبه را انتخاب کنید</h2>
+          <BranchMapPicker v-model="selectedBranchId" :branches="branches" />
+          <div class="pickup-branch-grid">
         <button
           v-for="branch in branches"
           :key="branch.id || branch.name"
@@ -47,6 +57,21 @@
           </div>
           <span class="pickup-branch-card__action">{{ selectedBranchId === branchKey(branch) ? 'این شعبه انتخاب شد' : 'انتخاب این شعبه' }}<ChevronLeft :size="16" /></span>
         </button>
+          </div>
+        </div>
+
+        <div v-if="branchAvailabilityStatus === 'checking' && hasCartLines" class="order-flow-alert" role="status">در حال بررسی اقلام سبد در این شعبه…</div>
+        <div v-else-if="branchAvailabilityStatus === 'unavailable'" class="order-flow-alert danger" role="alert">
+          <strong>این شعبه همهٔ اقلام سبد را ندارد.</strong>
+          <ul><li v-for="item in unavailableItems" :key="item.id || item.item_slug">{{ item.item_title }} — {{ unavailableReason(item.reason) }}</li></ul>
+          <div class="delivery-availability-actions">
+            <button class="order-flow-secondary" type="button" @click="removeUnavailableItems">حذف اقلام ناموجود از سبد</button>
+            <button class="order-flow-secondary" type="button" @click="branchPickerOpen = true">انتخاب شعبهٔ دیگر</button>
+          </div>
+        </div>
+        <div v-else-if="branchAvailabilityStatus === 'error'" class="order-flow-alert danger" role="alert">
+          {{ branchAvailabilityError }}
+          <button class="order-flow-secondary" type="button" @click="verifyBranchAvailability">تلاش دوباره</button>
         </div>
 
         <section v-if="pickupMethod === 'car'" class="order-flow-card pickup-vehicle-card">
@@ -99,11 +124,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { CheckCircle2, Circle, Clock3, ChevronLeft, MapPin } from 'lucide-vue-next'
 import CustomerVehiclePicker from '@/components/customer/CustomerVehiclePicker.vue'
+import BranchMapPicker from '@/components/checkout/BranchMapPicker.vue'
 import { vehicleComplete } from '@/utils/customerOrderValidation'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
 import { isCustomerPickupCompany, resolvePickupCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getMenuBoot } from '@/utils/api'
+import { useBranchCartAvailability } from '@/composables/useBranchCartAvailability'
 import './orderFlow.css'
 
 const query = new URLSearchParams(window.location.search)
@@ -119,6 +146,14 @@ const loading = ref(false)
 const error = ref('')
 const currency = ref('IRR')
 const selectedBranchId = ref(cartState.orderContext.branch || '')
+const branchPickerOpen = ref(!selectedBranchId.value)
+const {
+  status: branchAvailabilityStatus,
+  unavailableItems,
+  error: branchAvailabilityError,
+  verify: verifyBranchAvailability,
+  removeUnavailable: removeUnavailableItems,
+} = useBranchCartAvailability(selectedBranchId)
 const pickupTimeType = ref(cartState.orderContext.pickup_time_type || 'asap')
 const pickupTime = ref(cartState.orderContext.pickup_time || '')
 const customerNote = ref(cartState.orderContext.customer_note || '')
@@ -131,7 +166,7 @@ const selectedBranch = computed(() => branches.value.find((branch) => branchKey(
 const hasCartLines = computed(() => cartState.lines.length > 0)
 const continueLabel = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'ادامه به منوی این شعبه')
 const nextStep = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'مشاهده منو و انتخاب غذا')
-const canContinue = computed(() => Boolean(selectedBranch.value && (pickupTimeType.value !== 'scheduled' || pickupTime.value) && (pickupMethod.value !== 'car' || vehicleComplete(vehicle.value))))
+const canContinue = computed(() => Boolean(selectedBranch.value && (pickupTimeType.value !== 'scheduled' || pickupTime.value) && (pickupMethod.value !== 'car' || vehicleComplete(vehicle.value)) && (!hasCartLines.value || branchAvailabilityStatus.value === 'available')))
 
 watch([selectedBranch, pickupTimeType, pickupTime, customerNote, pickupMethod, vehicle], persistPickup, { deep: true })
 
@@ -155,6 +190,13 @@ function persistPickup() {
 
 function selectBranch(branch) {
   selectedBranchId.value = branchKey(branch)
+  branchPickerOpen.value = false
+}
+
+function unavailableReason(reason) {
+  if (reason === 'not_in_branch') return 'در این شعبه عرضه نمی‌شود'
+  if (reason === 'out_of_stock') return 'فعلاً موجود نیست'
+  return 'در فهرست فروش این شعبه نیست'
 }
 
 async function loadBranches() {
@@ -164,6 +206,7 @@ async function loadBranches() {
     const [branchPayload, boot] = await Promise.all([getBranches(), getMenuBoot('')])
     branches.value = (Array.isArray(branchPayload?.branches) ? branchPayload.branches : []).filter(isCustomerPickupCompany)
     selectedBranchId.value = resolvePickupCompanySelection(branches.value, selectedBranchId.value)
+    branchPickerOpen.value = !selectedBranchId.value
     currency.value = boot?.currency || 'IRR'
   } catch (err) {
     error.value = err.message || 'دریافت شعبه‌ها ناموفق بود.'
@@ -190,6 +233,16 @@ onMounted(() => {
 
 <style scoped>
 .pickup-vehicle-card > p { margin-bottom: 1rem; }
+.pickup-selected-branch { display: grid; gap: .8rem; }
+.pickup-selected-branch .delivery-branch-heading h2 { margin: 0; }
+.pickup-branch-picker { display: grid; gap: .8rem; }
+.pickup-branch-picker > h2 { margin: 0; font-size: 1rem; }
+.delivery-branch-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.delivery-branch-heading > div { display: grid; gap: .25rem; }
+.delivery-branch-heading h2 { margin: 0; }
+.delivery-branch-heading p { margin: 0; color: var(--ds-color-text-secondary); font-size: .84rem; }
+.delivery-availability-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; }
+.order-flow-alert ul { margin: .5rem 0; padding-inline-start: 1.25rem; }
 
 .order-flow-layout .pickup-branch-grid .order-flow-branch-card,
 .order-flow-layout > .order-flow-list > .order-flow-branch-card {

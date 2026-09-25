@@ -10784,6 +10784,128 @@ def get_branches():
 	return {"branches": list(branches.values())}
 
 
+def _cart_item_branch_availability(line, branch):
+	"""Resolve one customer cart line against the branch-scoped menu catalog."""
+	slug = str(line.get("item_slug") or line.get("slug") or line.get("item") or "").strip()
+	if not slug:
+		return {"available": False, "reason": "not_found"}
+
+	normalized_slug = _normalize_slug(slug) or slug
+	filters = {"restaurant_slug": normalized_slug} if _has_column("Item", "restaurant_slug") else {"name": slug}
+	fields = ["name", "item_name", "disabled"]
+	for fieldname in ("restaurant_slug", "restaurant_enabled", "restaurant_branch", "restaurant_out_of_stock", "variant_of"):
+		if _has_column("Item", fieldname) and fieldname not in fields:
+			fields.append(fieldname)
+	rows = frappe.get_all("Item", filters=filters, fields=fields, ignore_permissions=True, limit_page_length=100)
+	if not rows and slug != normalized_slug:
+		rows = frappe.get_all("Item", filters={"name": slug}, fields=fields, ignore_permissions=True, limit_page_length=100)
+	if not rows:
+		return {"available": False, "reason": "not_found"}
+
+	branch_key = str(branch or "").strip().casefold()
+	branch_matches = []
+	for row in rows:
+		row_branch = str(row.get("restaurant_branch") or "").strip()
+		parent = str(row.get("variant_of") or "").strip()
+		parent_branch = ""
+		parent_out_of_stock = 0
+		if parent:
+			parent_fields = []
+			for fieldname in ("restaurant_branch", "restaurant_out_of_stock", "restaurant_enabled", "disabled"):
+				if _has_column("Item", fieldname):
+					parent_fields.append(fieldname)
+			if parent_fields:
+				parent_row = frappe.db.get_value("Item", parent, parent_fields, as_dict=True) or {}
+				parent_branch = str(parent_row.get("restaurant_branch") or "").strip()
+				parent_out_of_stock = cint(parent_row.get("restaurant_out_of_stock") or 0)
+				if cint(parent_row.get("disabled") or 0) or (
+					_has_column("Item", "restaurant_enabled") and not cint(parent_row.get("restaurant_enabled") or 0)
+				):
+					continue
+		if (row_branch and row_branch.casefold() != branch_key) or (parent_branch and parent_branch.casefold() != branch_key):
+			continue
+		row["_parent_out_of_stock"] = parent_out_of_stock
+		branch_matches.append(row)
+	if not branch_matches:
+		return {"available": False, "reason": "not_in_branch"}
+
+	for row in branch_matches:
+		if cint(row.get("disabled") or 0):
+			continue
+		if _has_column("Item", "restaurant_enabled") and not cint(row.get("restaurant_enabled") or 0):
+			continue
+		if cint(row.get("restaurant_out_of_stock") or 0) or cint(row.get("_parent_out_of_stock") or 0):
+			continue
+		return {"available": True, "reason": ""}
+	return {"available": False, "reason": "out_of_stock"}
+
+
+def _check_cart_branch_availability(items, branch):
+	branch = str(branch or "").strip()
+	if not branch:
+		return {"available": False, "unavailable_items": []}
+
+	unavailable = []
+	for line in items or []:
+		if not isinstance(line, dict):
+			continue
+		result = _cart_item_branch_availability(line, branch)
+		if not result.get("available"):
+			unavailable.append({
+				"id": str(line.get("id") or ""),
+				"item_slug": str(line.get("item_slug") or line.get("slug") or ""),
+				"item_title": str(line.get("item_title") or line.get("title") or line.get("item_slug") or "آیتم"),
+				"qty": flt(line.get("qty") or 1),
+				"reason": result.get("reason") or "not_found",
+			})
+	return {"available": not unavailable, "unavailable_items": unavailable}
+
+
+@frappe.whitelist(allow_guest=True)
+def check_cart_branch_availability(branch=None, items=None):
+	branch = str(branch or "").strip()
+	items = _parse_json(items, [])
+	if not isinstance(items, list):
+		frappe.throw(_("فهرست اقلام سبد معتبر نیست."))
+	if len(items) > 100:
+		frappe.throw(_("سبد سفارش بیش از حد بزرگ است."))
+	result = _check_cart_branch_availability(items, branch)
+	return {"branch": branch, **result}
+
+
+def _validate_customer_delivery_branch(branch_name, delivery_payload):
+	branch_name = str(branch_name or "").strip()
+	if not branch_name or not isinstance(delivery_payload, dict):
+		return
+
+	branches = get_branches().get("branches") or []
+	branch = next((row for row in branches if str(row.get("id") or row.get("name") or "").strip() == branch_name), None)
+	if not branch:
+		frappe.throw(_("شعبه انتخاب‌شده دیگر در دسترس نیست؛ شعبه دیگری انتخاب کنید."))
+	if not cint(branch.get("is_active") if branch.get("is_active") not in (None, "") else 1) or branch.get("isOpen") is False:
+		frappe.throw(_("شعبه انتخاب‌شده در حال حاضر فعال نیست؛ شعبه دیگری انتخاب کنید."))
+	if not branch.get("delivery_available"):
+		frappe.throw(_("ارسال سفارش از این شعبه در دسترس نیست؛ شعبه دیگری انتخاب کنید."))
+
+	radius_km = flt(branch.get("delivery_radius_km") or 0)
+	branch_lat = _to_bounded_float(branch.get("lat"), minimum=-90, maximum=90)
+	branch_lng = _to_bounded_float(branch.get("lng"), minimum=-180, maximum=180)
+	target_lat = _to_bounded_float(delivery_payload.get("lat"), minimum=-90, maximum=90)
+	target_lng = _to_bounded_float(delivery_payload.get("lng"), minimum=-180, maximum=180)
+	if radius_km <= 0:
+		return
+	if None in (branch_lat, branch_lng, target_lat, target_lng):
+		frappe.throw(_("موقعیت شعبه یا نشانی تحویل برای بررسی محدوده ارسال ثبت نشده است."))
+
+	rad = math.pi / 180
+	d_lat = (target_lat - branch_lat) * rad
+	d_lng = (target_lng - branch_lng) * rad
+	a = math.sin(d_lat / 2) ** 2 + math.cos(branch_lat * rad) * math.cos(target_lat * rad) * math.sin(d_lng / 2) ** 2
+	distance_km = 6371 * 2 * math.atan2(math.sqrt(min(1, a)), math.sqrt(max(0, 1 - a)))
+	if distance_km > radius_km:
+		frappe.throw(_("این نشانی خارج از محدوده ارسال شعبه انتخاب‌شده است؛ آدرس یا شعبه را تغییر دهید."))
+
+
 def _reservation_time_key(value):
 	if value in (None, ""):
 		return ""
@@ -11546,6 +11668,14 @@ def place_order(
 	order_context = _parse_json(order_context, {})
 	if not isinstance(order_context, dict):
 		order_context = {}
+	selected_branch = str(order_context.get("branch") or "").strip()
+	if selected_branch and cart_items:
+		availability = _check_cart_branch_availability(cart_items, selected_branch)
+		if not availability.get("available"):
+			unavailable_names = [row.get("item_title") or row.get("item_slug") for row in availability.get("unavailable_items") or []]
+			frappe.throw(_("این اقلام در شعبه انتخاب‌شده موجود نیستند: {0}. سبد را اصلاح یا شعبه دیگری انتخاب کنید.").format("، ".join(unavailable_names[:8])))
+	if resolved_delivery_mode == "delivery" and selected_branch and delivery_payload:
+		_validate_customer_delivery_branch(selected_branch, delivery_payload)
 	if order_type == "takeaway" and resolved_delivery_mode == "pickup" and pickup_method == "car":
 		customer_docname = _ensure_customer(customer_name, mobile)
 		vehicle_snapshot = _parse_json(pickup_vehicle_snapshot, {})

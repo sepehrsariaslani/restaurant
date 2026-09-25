@@ -15,6 +15,19 @@
 
         <OrderContextStrip :currency="currency" />
 
+        <div v-if="branchAvailabilityStatus === 'unavailable'" class="branch-availability-alert" role="alert">
+          <strong>این شعبه همهٔ اقلام سبد را ندارد.</strong>
+          <ul><li v-for="item in unavailableItems" :key="item.id || item.item_slug">{{ item.item_title }} — {{ unavailableReason(item.reason) }}</li></ul>
+          <div class="branch-availability-actions">
+            <button type="button" class="mini-btn" @click="removeUnavailableItems">حذف اقلام ناموجود</button>
+            <button type="button" class="mini-btn" @click="changeBranch">انتخاب شعبهٔ دیگر</button>
+          </div>
+        </div>
+        <div v-else-if="branchAvailabilityStatus === 'error'" class="branch-availability-alert" role="alert">
+          {{ branchAvailabilityError }}
+          <button type="button" class="mini-btn" @click="verifyBranchAvailability">تلاش دوباره</button>
+        </div>
+
         <div class="cart-content" :class="{ 'cart-content--empty': !cartState.lines.length }">
           <section class="line-list">
             <CartLineEditor
@@ -53,7 +66,7 @@
           </div>
 
           <a class="checkout-btn" :class="{ disabled: !cartState.lines.length }" href="/checkout" @click.prevent="openCheckout">
-            {{ hasContext ? 'ادامه سفارش' : 'انتخاب روش دریافت' }}
+            {{ checkingCheckout ? 'در حال بررسی شعبه…' : hasContext ? 'ادامه سفارش' : 'انتخاب روش دریافت' }}
           </a>
           <p class="error" v-if="error">{{ error }}</p>
           </section>
@@ -63,7 +76,7 @@
 
     <div v-if="cartState.lines.length" class="cart-mobile-checkout">
       <div><small>{{ totalQty.toLocaleString('fa-IR') }} آیتم</small><strong>{{ formatMoney(totals.grand_total, currency) }}</strong></div>
-      <button class="checkout-btn" type="button" @click="openCheckout">{{ hasContext ? 'ادامه سفارش' : 'روش دریافت' }}<ChevronLeft :size="18" /></button>
+      <button class="checkout-btn" type="button" :disabled="checkingCheckout" @click="openCheckout">{{ checkingCheckout ? 'در حال بررسی…' : hasContext ? 'ادامه سفارش' : 'روش دریافت' }}<ChevronLeft :size="18" /></button>
     </div>
 
     <MenuQuickAddSheet
@@ -90,11 +103,20 @@ import { formatMoney } from '@/utils/format'
 import { orderContextIssue } from '@/utils/customerOrderValidation'
 import { buildEditedCartLine } from '@/utils/cartEditPayload'
 import { calculateOrderTotals, orderContextChangeUrl, ORDER_FLOW_CURRENCY_FALLBACK } from '@/utils/orderFlow'
+import { useBranchCartAvailability } from '@/composables/useBranchCartAvailability'
 
 const currency = ref(ORDER_FLOW_CURRENCY_FALLBACK)
 const error = ref('')
 const editorOpen = ref(false)
 const activeLineId = ref('')
+const checkingCheckout = ref(false)
+const {
+  status: branchAvailabilityStatus,
+  unavailableItems,
+  error: branchAvailabilityError,
+  verify: verifyBranchAvailability,
+  removeUnavailable: removeUnavailableItems,
+} = useBranchCartAvailability(() => cartState.orderContext.branch, { watch: false })
 
 const totalQty = computed(() => cartState.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0))
 const hasContext = computed(() => Boolean(cartState.orderContext?.order_type))
@@ -107,13 +129,30 @@ const editorItem = computed(() => activeLine.value ? {
 } : null)
 const totals = computed(() => calculateOrderTotals({ lines: cartState.lines, context: cartState.orderContext }))
 
-function openCheckout() {
+async function openCheckout() {
+  if (checkingCheckout.value) return
   if (!cartState.lines.length) return
   if (!hasContext.value) {
     window.location.href = '/order/type'
     return
   }
+  if (cartState.orderContext.branch) {
+    checkingCheckout.value = true
+    const available = await verifyBranchAvailability()
+    checkingCheckout.value = false
+    if (!available) return
+  }
   window.location.href = orderContextIssue(cartState.orderContext) ? orderContextChangeUrl(cartState.orderContext) : '/checkout'
+}
+
+function changeBranch() {
+  window.location.href = orderContextChangeUrl(cartState.orderContext)
+}
+
+function unavailableReason(reason) {
+  if (reason === 'not_in_branch') return 'در این شعبه عرضه نمی‌شود'
+  if (reason === 'out_of_stock') return 'فعلاً موجود نیست'
+  return 'در فهرست فروش این شعبه نیست'
 }
 
 function setQty(lineId, qty) {
@@ -281,6 +320,29 @@ onMounted(async () => {
 .checkout-btn:hover {
   transform: translateY(-1px);
   filter: brightness(0.96);
+}
+
+.branch-availability-alert {
+  display: grid;
+  gap: .55rem;
+  padding: .85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--ds-color-status-danger) 30%, var(--ds-color-border));
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-status-danger-soft);
+  color: var(--ds-color-text-primary);
+  font-size: .86rem;
+}
+.branch-availability-alert ul { display: grid; gap: .3rem; margin: 0; padding-inline-start: 1.2rem; color: var(--ds-color-text-secondary); }
+.branch-availability-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.branch-availability-actions button, .branch-availability-alert > button {
+  min-height: 44px;
+  padding: .5rem .85rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-action-primary);
+  font: inherit;
+  cursor: pointer;
 }
 
 .cart-shell :is(a, button):focus-visible {

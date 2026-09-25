@@ -1315,6 +1315,10 @@ export function getBranches() {
 	return callRestaurantAPI("get_branches", {});
 }
 
+export function checkCartBranchAvailability({ branch = "", items = [] } = {}) {
+	return callRestaurantAPI("check_cart_branch_availability", { branch, items });
+}
+
 export function getAvailableTables({
 	branch = "",
 	reservation_date = "",

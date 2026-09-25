@@ -77,25 +77,49 @@
         </label>
 
         <section class="order-flow-card">
-          <h2>انتخاب شعبه برای آماده‌سازی</h2>
-          <p>از میان شعبه‌های فعالِ قابل‌ارسال، محل آماده‌سازی سفارشتان را انتخاب کنید.</p>
-          <div class="order-flow-list company-choice-list">
-            <button
-              v-for="company in deliveryCompanies"
-              :key="branchKey(company)"
-              type="button"
-              class="order-flow-branch-card"
-              :class="{ active: selectedCompanyId === branchKey(company) }"
-              @click="selectedCompanyId = branchKey(company)"
-            >
-              <div class="order-flow-card-head">
-                <div><h3>{{ company.title || company.name }}</h3><p>{{ company.address || 'آدرس شعبه ثبت نشده است.' }}</p></div>
-                <span class="order-flow-pill">ارسال فعال</span>
-              </div>
-              <div class="order-flow-branch-meta"><span class="order-flow-pill">{{ deliveryTimeFor(company) }}</span><span class="order-flow-pill">{{ deliveryFeeFor(company) }}</span></div>
-            </button>
+          <div class="delivery-branch-heading">
+            <div><h2>شعبهٔ آماده‌سازی</h2><p>شعبهٔ ذخیره‌شده را نگه دارید یا از روی نقشه تغییرش دهید.</p></div>
+            <button v-if="selectedCompany" class="order-flow-secondary" type="button" @click="branchPickerOpen = !branchPickerOpen">{{ branchPickerOpen ? 'بستن نقشه' : 'تغییر شعبه' }}</button>
+          </div>
+          <div v-if="selectedCompany" class="delivery-selected-branch">
+            <MapPin :size="19" aria-hidden="true" />
+            <div><strong>{{ selectedCompany.title || selectedCompany.name }}</strong><span>{{ selectedCompany.address || 'نشانی شعبه ثبت نشده است.' }}</span><small v-if="Number(selectedCompany.delivery_radius_km || 0) > 0">ارسال تا {{ selectedCompany.delivery_radius_km }} کیلومتر از شعبه</small></div>
+            <span class="order-flow-pill">{{ deliveryTimeFor(selectedCompany) }}</span>
+          </div>
+          <p v-else class="order-flow-alert danger">برای ادامه، شعبهٔ ارسال را انتخاب کنید.</p>
+          <div v-if="branchPickerOpen || !selectedCompany" class="delivery-branch-picker">
+            <BranchMapPicker v-model="selectedCompanyId" :branches="deliveryCompanies" :show-delivery-radius="true" />
+            <div class="order-flow-list company-choice-list">
+              <button
+                v-for="company in deliveryCompanies"
+                :key="branchKey(company)"
+                type="button"
+                class="order-flow-branch-card"
+                :class="{ active: selectedCompanyId === branchKey(company) }"
+                @click="selectCompany(company)"
+              >
+                <div class="order-flow-card-head">
+                  <div><h3>{{ company.title || company.name }}</h3><p>{{ company.address || 'آدرس شعبه ثبت نشده است.' }}</p></div>
+                  <span class="order-flow-pill">ارسال فعال</span>
+                </div>
+                <div class="order-flow-branch-meta"><span class="order-flow-pill">{{ deliveryTimeFor(company) }}</span><span class="order-flow-pill">{{ deliveryFeeFor(company) }}</span></div>
+              </button>
+            </div>
           </div>
           <p v-if="!deliveryCompanies.length" class="order-flow-alert danger">فعلاً شعبه فعالی برای ارسال وجود ندارد.</p>
+          <div v-if="branchAvailabilityStatus === 'checking' && hasCartLines" class="order-flow-alert" role="status">در حال بررسی اقلام سبد در این شعبه…</div>
+          <div v-else-if="branchAvailabilityStatus === 'unavailable'" class="order-flow-alert danger" role="alert">
+            <strong>این شعبه همهٔ اقلام سبد را ندارد.</strong>
+            <ul><li v-for="item in unavailableItems" :key="item.id || item.item_slug">{{ item.item_title }} — {{ unavailableReason(item.reason) }}</li></ul>
+            <div class="delivery-availability-actions">
+              <button class="order-flow-secondary" type="button" @click="removeUnavailableItems">حذف اقلام ناموجود از سبد</button>
+              <button class="order-flow-secondary" type="button" @click="branchPickerOpen = true">انتخاب شعبهٔ دیگر</button>
+            </div>
+          </div>
+          <div v-else-if="branchAvailabilityStatus === 'error'" class="order-flow-alert danger" role="alert">
+            {{ branchAvailabilityError }}
+            <button class="order-flow-secondary" type="button" @click="verifyBranchAvailability">تلاش دوباره</button>
+          </div>
         </section>
 
         <section class="order-flow-card">
@@ -133,12 +157,15 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { MapPin } from 'lucide-vue-next'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import AddressPickerMap from '@/components/checkout/AddressPickerMap.vue'
+import BranchMapPicker from '@/components/checkout/BranchMapPicker.vue'
 import { cartState, saveCheckoutDraft, saveOrderContext } from '@/stores/cartStore'
 import { formatMoney, normalizeMobile as normalizeMobileUtil } from '@/utils/format'
 import { isCustomerDeliveryCompany, resolveDeliveryCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getCustomerCheckoutProfile, getMenuBoot, saveCustomerDeliveryAddress } from '@/utils/api'
+import { useBranchCartAvailability } from '@/composables/useBranchCartAvailability'
 import { hasDeliveryCoordinates, deliveryOutsideRadius } from '@/utils/customerOrderValidation'
 import './orderFlow.css'
 
@@ -171,6 +198,14 @@ const mapConfig = ref({
 })
 const branches = ref([])
 const selectedCompanyId = ref(cartState.orderContext.branch || '')
+const branchPickerOpen = ref(!selectedCompanyId.value)
+const {
+  status: branchAvailabilityStatus,
+  unavailableItems,
+  error: branchAvailabilityError,
+  verify: verifyBranchAvailability,
+  removeUnavailable: removeUnavailableItems,
+} = useBranchCartAvailability(selectedCompanyId)
 const currency = ref('IRR')
 const courierNote = ref(cartState.orderContext.courier_note || '')
 const address = reactive({
@@ -206,12 +241,23 @@ const etaMax = computed(() => Number(selectedCompany.value?.delivery_eta_max || 
 const deliveryFee = computed(() => Number(selectedCompany.value?.delivery_fee || 0))
 const etaText = computed(() => `${etaMin.value} تا ${etaMax.value} دقیقه`)
 const deliveryFeeText = computed(() => deliveryFee.value ? formatMoney(deliveryFee.value, currency.value) : 'پس از تایید شعبه')
-const canContinue = computed(() => Boolean(address.address_line.trim() && hasCoordinates.value && selectedCompany.value))
+const canContinue = computed(() => Boolean(address.address_line.trim() && hasCoordinates.value && selectedCompany.value && (!hasCartLines.value || branchAvailabilityStatus.value === 'available')))
 const hasCartLines = computed(() => cartState.lines.length > 0)
 const continueLabel = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'ادامه به منوی شعبه')
 const nextStep = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'مشاهده منو و انتخاب غذا')
 const deliveryTimeFor = (company) => `${Number(company?.delivery_eta_min || 35)} تا ${Number(company?.delivery_eta_max || 45)} دقیقه`
 const deliveryFeeFor = (company) => Number(company?.delivery_fee || 0) ? formatMoney(company.delivery_fee, currency.value) : 'هزینه پس از تأیید'
+
+function selectCompany(company) {
+  selectedCompanyId.value = branchKey(company)
+  branchPickerOpen.value = false
+}
+
+function unavailableReason(reason) {
+  if (reason === 'not_in_branch') return 'در این شعبه عرضه نمی‌شود'
+  if (reason === 'out_of_stock') return 'فعلاً موجود نیست'
+  return 'در فهرست فروش این شعبه نیست'
+}
 
 watch([customerName, mobile, selectedAddressId, useNewAddress, address, courierNote, selectedCompany, saveAddressForFuture], persistContext, { deep: true })
 
@@ -251,8 +297,8 @@ function persistContext() {
   })
   saveOrderContext({
     order_type: 'delivery',
-    branch: selectedCompany.value?.id || selectedCompany.value?.name || '',
-    branch_title: selectedBranch?.title || selectedBranch?.name || '',
+    branch: selectedBranch?.id || selectedBranch?.name || selectedCompanyId.value || cartState.orderContext.branch || '',
+    branch_title: selectedBranch?.title || selectedBranch?.name || cartState.orderContext.branch_title || '',
     address: selectedAddressPayload(),
     eta_min: etaMin.value,
     eta_max: etaMax.value,
@@ -326,6 +372,7 @@ async function loadBoot() {
     const [branchPayload, boot] = await Promise.all([getBranches(), getMenuBoot('')])
     branches.value = Array.isArray(branchPayload?.branches) ? branchPayload.branches : []
     selectedCompanyId.value = resolveDeliveryCompanySelection(branches.value, selectedCompanyId.value)
+    branchPickerOpen.value = !selectedCompanyId.value
     currency.value = boot?.currency || 'IRR'
     if (boot?.checkout_map && typeof boot.checkout_map === 'object') {
       mapConfig.value = { ...mapConfig.value, ...boot.checkout_map }
@@ -382,6 +429,16 @@ onMounted(() => {
 .delivery-location-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .delivery-location-toolbar > div { display: grid; gap: .2rem; }
 .delivery-location-toolbar small { color: var(--text-muted); line-height: 1.6; }
+.delivery-branch-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.delivery-branch-heading h2 { margin: 0; }
+.delivery-branch-heading p { margin: .35rem 0 0; color: var(--ds-color-text-secondary); font-size: .84rem; }
+.delivery-selected-branch { display: flex; align-items: center; gap: .75rem; margin-top: .9rem; padding: .85rem; border-radius: var(--ds-radius-md); background: var(--ds-color-surface-muted); color: var(--ds-color-action-primary); }
+.delivery-selected-branch > div { display: grid; flex: 1; min-width: 0; gap: .2rem; }
+.delivery-selected-branch strong { color: var(--ds-color-text-primary); }
+.delivery-selected-branch span, .delivery-selected-branch small { color: var(--ds-color-text-secondary); font-size: .8rem; }
+.delivery-branch-picker { display: grid; gap: .8rem; margin-top: .9rem; }
+.delivery-availability-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; }
+.order-flow-alert ul { margin: .5rem 0; padding-inline-start: 1.25rem; }
 @media (max-width: 560px) { .delivery-location-toolbar { align-items: stretch; flex-direction: column; } }
 
 .advanced-location-box summary {

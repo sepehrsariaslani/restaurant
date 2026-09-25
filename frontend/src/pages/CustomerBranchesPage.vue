@@ -89,10 +89,10 @@
                 <Navigation :size="17" aria-hidden="true" />
                 مسیریابی
               </a>
-              <a class="branch-action branch-action--primary" :href="menuHref(branch)">
+              <button class="branch-action branch-action--primary" type="button" @click="openBranchMenu(branch)">
                 دیدن منوی این شعبه
                 <ArrowLeft :size="17" aria-hidden="true" />
-              </a>
+              </button>
             </div>
           </div>
         </article>
@@ -126,6 +126,7 @@ import {
 import DsBadge from '@/components/design/DsBadge.vue'
 import DsButton from '@/components/design/DsButton.vue'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
+import { cartState, saveOrderContext } from '@/stores/cartStore'
 import { getBranches } from '@/utils/api'
 import { isCustomerCompany } from '@/utils/orderBranches'
 
@@ -168,8 +169,23 @@ function mapHref(branch) {
   }
 }
 
-function menuHref(branch) {
-  return `/menu?branch=${encodeURIComponent(branchKey(branch))}`
+function openBranchMenu(branch) {
+  const id = branchKey(branch)
+  if (!id) return
+  saveOrderContext({ branch: id, branch_title: branch.title || branch.name || id })
+
+  const returnTo = new URLSearchParams(window.location.search).get('return') || ''
+  const safeReturn = ['/order/type', '/order/delivery', '/cart'].includes(returnTo)
+    || /^\/order\/pickup(?:\?method=(?:car|walk))?$/.test(returnTo)
+  if (safeReturn) {
+    window.location.href = returnTo
+    return
+  }
+  if (cartState.lines.length && cartState.orderContext.order_type) {
+    window.location.href = '/cart'
+    return
+  }
+  window.location.href = `/menu?branch=${encodeURIComponent(id)}`
 }
 
 async function loadBranches() {
@@ -385,6 +401,7 @@ onMounted(loadBranches)
   font: inherit;
   font-size: 0.84rem;
   font-weight: 700;
+  cursor: pointer;
   text-decoration: none;
   transition: transform var(--ds-motion-fast) var(--ds-motion-ease), background-color var(--ds-motion-fast) ease;
 }

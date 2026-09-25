@@ -35,13 +35,16 @@ export function isCustomerDeliveryCompany(row = {}) {
 export function resolveDeliveryCompanySelection(rows = [], selectedId = '') {
   const available = rows.filter(isCustomerDeliveryCompany)
   const selected = String(selectedId || '').trim()
-  if (available.some((row) => String(row.id || row.name || '').trim() === selected)) return selected
+  if (selected) return available.some((row) => String(row.id || row.name || '').trim() === selected) ? selected : ''
   return available.length === 1 ? String(available[0].id || available[0].name || '').trim() : ''
 }
 
 export function resolvePickupCompanySelection(rows = [], selectedId = '') {
   const available = rows.filter(isCustomerPickupCompany)
-  const selected = findCustomerCompanyBranch(available, selectedId)
-  if (selected) return String(selected.id || selected.name || '').trim()
+  const requested = String(selectedId || '').trim()
+  if (requested) {
+    const selected = findCustomerCompanyBranch(available, requested)
+    return selected ? String(selected.id || selected.name || '').trim() : ''
+  }
   return available.length === 1 ? String(available[0].id || available[0].name || '').trim() : ''
 }

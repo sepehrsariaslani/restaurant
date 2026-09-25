@@ -18,6 +18,7 @@ from frappe.utils import cint, flt, today
 from restaurant.api import (
 	_bi_kpi,
 	_compose_management_report,
+	_ensure_company_branch_fields,
 	_ensure_management_access,
 	_has_column,
 	_management_datetime_bounds,
@@ -71,6 +72,7 @@ def _br_ops_call(helper_name, *args, **kwargs):
 
 def _br_ensure_ops_ready():
 	try:
+		_ensure_company_branch_fields()
 		_br_fp_call(
 			"_fp_ensure_custom_fields",
 			"Customer",
@@ -107,7 +109,21 @@ def _br_branch_rows(active_only=False):
 	if active_only and _has_column("Company", "restaurant_branch_active"):
 		filters["restaurant_branch_active"] = 1
 	fields = ["name", "company_name", "abbr"]
-	for extra in ("restaurant_is_branch", "restaurant_branch_active", "restaurant_public_title", "restaurant_branch_address", "restaurant_branch_phone", "restaurant_branch_lat", "restaurant_branch_lng"):
+	for extra in (
+		"restaurant_is_branch",
+		"restaurant_branch_active",
+		"restaurant_public_title",
+		"restaurant_branch_address",
+		"restaurant_branch_phone",
+		"restaurant_branch_lat",
+		"restaurant_branch_lng",
+		"restaurant_pickup_available",
+		"restaurant_delivery_available",
+		"restaurant_delivery_eta_min",
+		"restaurant_delivery_eta_max",
+		"restaurant_delivery_fee",
+		"restaurant_delivery_radius_km",
+	):
 		if _has_column("Company", extra):
 			fields.append(extra)
 	rows = frappe.get_all("Company", filters=filters, fields=fields, order_by="company_name asc", limit_page_length=200)
@@ -185,6 +201,12 @@ def _serialize_branch(row):
 		"phone": row.get("restaurant_branch_phone") or "",
 		"lat": flt(row.get("restaurant_branch_lat"), 6),
 		"lng": flt(row.get("restaurant_branch_lng"), 6),
+		"pickup_available": cint(row.get("restaurant_pickup_available") if row.get("restaurant_pickup_available") is not None else 1),
+		"delivery_available": cint(row.get("restaurant_delivery_available") if row.get("restaurant_delivery_available") is not None else 1),
+		"delivery_eta_min": cint(row.get("restaurant_delivery_eta_min") or 35),
+		"delivery_eta_max": cint(row.get("restaurant_delivery_eta_max") or 45),
+		"delivery_fee": flt(row.get("restaurant_delivery_fee") or 0),
+		"delivery_radius_km": flt(row.get("restaurant_delivery_radius_km") or 0),
 	}
 
 
@@ -199,11 +221,22 @@ def list_management_branches(active_only=0):
 def save_management_branch(payload=None):
 	"""Create/update a branch (ERPNext Company with branch fields)."""
 	_ensure_management_access()
+	_br_ensure_ops_ready()
 	payload = _parse_json(payload, {})
 	name = (payload.get("name") or "").strip()
 	company_name = (payload.get("company_name") or "").strip()
 	if not company_name and not name:
 		frappe.throw(_("نام شعبه الزامی است."))
+	delivery_radius = flt(payload.get("restaurant_delivery_radius_km") or 0)
+	if delivery_radius < 0:
+		frappe.throw(_("شعاع ارسال نمی‌تواند منفی باشد."))
+	if delivery_radius > 0:
+		latitude = payload.get("restaurant_branch_lat")
+		longitude = payload.get("restaurant_branch_lng")
+		if latitude in (None, "") or longitude in (None, "") or (flt(latitude) == 0 and flt(longitude) == 0):
+			frappe.throw(_("برای تعیین شعاع ارسال، موقعیت شعبه را روی نقشه مشخص کنید."))
+	if cint(payload.get("restaurant_delivery_eta_max") or 45) < cint(payload.get("restaurant_delivery_eta_min") or 35):
+		frappe.throw(_("حداکثر زمان ارسال باید برابر یا بیشتر از حداقل زمان باشد."))
 	if name and frappe.db.exists("Company", name):
 		doc = frappe.get_doc("Company", name)
 	else:
@@ -225,6 +258,12 @@ def save_management_branch(payload=None):
 		"restaurant_branch_phone": lambda v: (v or "").strip(),
 		"restaurant_branch_lat": lambda v: flt(v, 6),
 		"restaurant_branch_lng": lambda v: flt(v, 6),
+		"restaurant_pickup_available": lambda v: cint(v),
+		"restaurant_delivery_available": lambda v: cint(v),
+		"restaurant_delivery_eta_min": lambda v: cint(v),
+		"restaurant_delivery_eta_max": lambda v: cint(v),
+		"restaurant_delivery_fee": lambda v: flt(v),
+		"restaurant_delivery_radius_km": lambda v: flt(v, 2),
 	}
 	for fieldname, normalize in field_map.items():
 		if payload.get(fieldname) is not None and hasattr(doc, fieldname):
