@@ -1,6 +1,7 @@
 import { createApp } from "vue";
 import App from "./App.vue";
 import "./theme.css";
+import "./design-system/customer.css";
 import { applySavedThemeSettings, hydrateThemeSettingsFromServer } from "./utils/themeSettings";
 
 function bootstrapDocument() {

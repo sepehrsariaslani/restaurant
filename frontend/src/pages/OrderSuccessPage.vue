@@ -62,6 +62,10 @@
               <dt>نوع سفارش</dt>
               <dd>{{ orderTypeLabel }}</dd>
             </div>
+            <div v-if="orderContext.order_type === 'pickup' && orderContext.pickup_method === 'car'">
+              <dt>تحویل کنار خودرو</dt>
+              <dd>{{ pickupVehicleText }}</dd>
+            </div>
             <div>
               <dt>کد رهگیری</dt>
               <dd>{{ orderCode }}</dd>
@@ -172,9 +176,14 @@ const timeText = computed(() => {
   }
   return ctx.prep_time_mins ? `آماده سرو حدود ${ctx.prep_time_mins} دقیقه` : 'پس از تایید آشپزخانه'
 })
+const pickupVehicleText = computed(() => {
+  const vehicle = orderContext.value.pickup_vehicle || {}
+  return [vehicle.type, vehicle.color, vehicle.plate ? `پلاک ${vehicle.plate}` : ''].filter(Boolean).join(' · ') || 'مشخصات خودرو ثبت شده است'
+})
 const nextStepText = computed(() => {
   const ctx = orderContext.value
-  if (ctx.order_type === 'pickup') return 'وقتی وضعیت آماده تحویل شد، به شعبه مراجعه کنید.'
+  if (ctx.order_type === 'pickup' && ctx.pickup_method === 'car') return 'وقتی وضعیت آماده تحویل شد، به محل دریافت خودرو مراجعه کنید.'
+  if (ctx.order_type === 'pickup') return 'وقتی وضعیت آماده تحویل شد، به شرکت مراجعه کنید.'
   if (ctx.order_type === 'delivery') return 'وضعیت پیک را از همین صفحه پیگیری کنید.'
   return 'وقتی آماده سرو شد، کارکنان سفارش را به میز می‌آورند.'
 })

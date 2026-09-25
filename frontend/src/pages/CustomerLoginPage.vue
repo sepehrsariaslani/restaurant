@@ -160,6 +160,7 @@ async function verifyOtp() {
           customer_name: customer.name || '',
           customer_id: customer.customer_id || '',
           verified_at: new Date().toISOString(),
+          customer_token: data.customer_token || '',
         }))
         localStorage.setItem('customer_phone', fullPhone)
         if (customer.name) localStorage.setItem('customer_name', customer.name)
@@ -254,8 +255,8 @@ onUnmounted(() => clearInterval(countdownTimer))
   overflow: hidden;
   isolation: isolate;
   border-radius: 32px;
-  background: var(--ds-color-action-primary);
-  box-shadow: 0 24px 64px color-mix(in srgb, var(--ds-color-action-primary) 20%, transparent);
+  background: var(--ds-color-surface-muted);
+  border: 1px solid var(--ds-color-border);
 }
 
 .hero-overlay {
@@ -264,8 +265,8 @@ onUnmounted(() => clearInterval(countdownTimer))
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 80% 15%, color-mix(in srgb, var(--ds-color-action-accent) 25%, transparent), transparent 42%),
-    radial-gradient(ellipse at 15% 85%, color-mix(in srgb, var(--ds-color-action-accent) 18%, transparent), transparent 42%);
+    radial-gradient(ellipse at 80% 15%, var(--ds-color-action-accent-soft), transparent 42%),
+    radial-gradient(ellipse at 15% 85%, var(--ds-color-action-primary-soft), transparent 42%);
 }
 
 .hero-overlay::before,
@@ -274,7 +275,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   position: absolute;
   width: clamp(240px, 35vw, 440px);
   aspect-ratio: 1;
-  border: 1px solid color-mix(in srgb, var(--ds-color-action-primary-foreground) 22%, transparent);
+  border: 1px solid var(--ds-color-border);
   border-radius: 50%;
 }
 
@@ -282,8 +283,8 @@ onUnmounted(() => clearInterval(countdownTimer))
   inset-inline-start: -18%;
   bottom: -32%;
   box-shadow:
-    0 0 0 24px color-mix(in srgb, var(--ds-color-action-primary-foreground) 5%, transparent),
-    0 0 0 52px color-mix(in srgb, var(--ds-color-action-primary-foreground) 4%, transparent);
+    0 0 0 24px color-mix(in srgb, var(--ds-color-surface-raised) 35%, transparent),
+    0 0 0 52px color-mix(in srgb, var(--ds-color-surface-raised) 25%, transparent);
 }
 
 .hero-overlay::after {
@@ -303,7 +304,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   gap: 0.85rem;
   padding: 2rem;
   text-align: center;
-  color: var(--ds-color-action-primary-foreground);
+  color: var(--ds-color-action-primary);
 }
 
 .logo-circle {
@@ -312,10 +313,9 @@ onUnmounted(() => clearInterval(countdownTimer))
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--ds-color-action-primary-foreground) 32%, transparent);
-  background: color-mix(in srgb, var(--ds-color-action-accent) 24%, transparent);
-  color: var(--ds-color-action-primary-foreground);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--ds-color-text-primary) 12%, transparent);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-action-primary);
 }
 
 .brand-name {
@@ -326,7 +326,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 }
 
 .brand-sub {
-  color: color-mix(in srgb, var(--ds-color-action-primary-foreground) 78%, transparent);
+  color: var(--ds-color-text-secondary);
   font-size: 1rem;
   margin: 0;
   line-height: 1.7;

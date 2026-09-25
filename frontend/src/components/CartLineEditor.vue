@@ -11,7 +11,7 @@
         <h3>{{ line.item_title }}</h3>
         <p class="muted" v-if="isBuilderItem">{{ builderSummaryText }}</p>
         <p class="muted" v-else-if="summary.length">{{ summary[0] }}</p>
-        <p class="muted" v-else>سفارشی سازی نشده</p>
+
         <strong class="unit-price">{{ formatMoney(line.unit_price_preview, currency) }}</strong>
       </div>
 
@@ -26,7 +26,7 @@
       <div class="line-actions">
         <a v-if="isBuilderItem" class="mini-btn" :href="builderEditUrl">ویرایش سفارشی‌سازی</a>
         <button v-else class="mini-btn" type="button" @click="$emit('edit-customization')">ویرایش مواد</button>
-        <a class="mini-btn" :href="`/item/${line.item_slug}?edit=${line.id}`">صفحه محصول</a>
+
       </div>
       <strong class="line-total">{{ formatMoney(line.line_total_preview, currency) }}</strong>
     </div>
@@ -117,7 +117,7 @@ const builderEditUrl = computed(() => {
   position: relative;
   display: grid;
   gap: 0.9rem;
-  border-radius: 28px;
+  border-radius: var(--ds-radius-md);
   padding: 1rem;
   background: var(--ds-color-surface-raised, rgb(var(--palette-eggshell-rgb) / 0.98));
   border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.12));
@@ -126,7 +126,7 @@ const builderEditUrl = computed(() => {
 .remove-btn {
   position: absolute;
   top: 0.46rem;
-  inset-inline-start: 0.46rem;
+  inset-inline-end: 0.46rem;
   width: 44px;
   height: 44px;
   display: inline-flex;
@@ -145,7 +145,7 @@ const builderEditUrl = computed(() => {
   grid-template-columns: clamp(112px, 20vw, 144px) minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  padding-inline-start: 1.6rem;
+  padding-inline-end: 1.8rem;
 }
 
 .product-visual {
@@ -154,13 +154,13 @@ const builderEditUrl = computed(() => {
   overflow: hidden;
   display: block;
   border-radius: 24px;
-  background: linear-gradient(145deg, rgb(var(--palette-june-bud-rgb) / 0.76), rgb(var(--palette-eggshell-rgb) / 0.96));
+  background: var(--ds-color-product-media-surface);
 }
 
 .thumb {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
   display: block;
 }
@@ -268,11 +268,11 @@ const builderEditUrl = computed(() => {
 
 @media (max-width: 620px) {
   .line-card { padding: 0.8rem; gap: 0.72rem; }
-  .line-main { grid-template-columns: 104px minmax(0, 1fr); gap: 0.75rem; padding-inline-start: 1.8rem; }
-  .product-visual { width: 104px; }
+  .line-main { grid-template-columns: 88px minmax(0, 1fr); gap: .75rem; padding-inline-start: 0; padding-inline-end: 1.8rem; }
+  .product-visual { width: 88px; border-radius: var(--ds-radius-md); }
   .qty-side { grid-column: 2; justify-self: start; }
   .foot-row { grid-template-columns: 1fr; }
   .line-total { order: -1; }
-  .remove-btn { top: 0.4rem; inset-inline-start: 0.4rem; }
+  .remove-btn { top: .25rem; inset-inline-end: .25rem; }
 }
 </style>

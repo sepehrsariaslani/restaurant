@@ -1,76 +1,119 @@
 <template>
-  <section class="order-flow-page order-flow-page--pickup">
+  <section class="order-flow-page order-flow-page--mobile-cta order-flow-page--pickup">
     <header class="order-flow-hero">
       <div>
-        <p class="order-flow-eyebrow">بیرون‌بر / تحویل توسط مشتری</p>
-        <h1 class="order-flow-title">از کدام شرکت تحویل می‌گیرید؟</h1>
-        <p class="order-flow-subtitle">شما سفارش را از شرکت انتخاب‌شده تحویل می‌گیرید. هزینه ارسال برای سفارش بیرون‌بر محاسبه نمی‌شود.</p>
+        <p class="order-flow-eyebrow">{{ pickupMethod === 'car' ? 'تحویل درب ماشین' : 'تحویل حضوری' }}</p>
+        <h1 class="order-flow-title">از کدام شعبه تحویل می‌گیرید؟</h1>
+        <p class="order-flow-subtitle">شما سفارش را از شعبه انتخاب‌شده تحویل می‌گیرید. هزینه ارسال برای سفارش بیرون‌بر محاسبه نمی‌شود.</p>
       </div>
       <a class="order-flow-secondary" href="/order/type">تغییر نوع سفارش</a>
     </header>
 
+    <nav class="order-flow-steps" aria-label="مراحل سفارش">
+      <span class="order-flow-step is-complete">۱. نوع سفارش</span>
+      <span class="order-flow-step active" aria-current="step">۲. انتخاب شعبه</span>
+      <span class="order-flow-step">۳. منوی شعبه</span>
+      <span class="order-flow-step">۴. ثبت سفارش</span>
+    </nav>
+
     <div class="order-flow-layout">
       <main class="order-flow-list">
-        <p v-if="loading" class="order-flow-alert">در حال دریافت شرکت‌ها...</p>
+        <p v-if="loading" class="order-flow-alert">در حال دریافت شعبه‌ها...</p>
         <p v-if="error" class="order-flow-alert danger">{{ error }}</p>
-        <p v-if="!loading && !error && !branches.length" class="order-flow-alert">فعلاً شرکتِ باز و فعالی برای تحویل حضوری در دسترس نیست.</p>
+        <p v-if="!loading && !error && !branches.length" class="order-flow-alert">فعلاً شعبهِ باز و فعالی برای تحویل حضوری در دسترس نیست.</p>
 
+        <div v-if="!loading && !error && branches.length" class="pickup-branch-grid" role="group" aria-label="شعبه‌های آماده تحویل بیرون‌بر">
         <button
           v-for="branch in branches"
           :key="branch.id || branch.name"
           type="button"
-          class="order-flow-branch-card"
+          class="order-flow-branch-card pickup-branch-card"
           :class="{ active: selectedBranchId === branchKey(branch) }"
+          :aria-pressed="selectedBranchId === branchKey(branch)"
           @click="selectBranch(branch)"
         >
-          <div class="order-flow-card-head">
-            <div>
-              <h3>{{ branch.title || branch.name }}</h3>
-              <p>{{ branch.address || 'آدرس شرکت ثبت نشده است.' }}</p>
-            </div>
+          <div class="pickup-branch-card__top">
+            <span class="pickup-branch-card__selection" aria-hidden="true">
+              <CheckCircle2 v-if="selectedBranchId === branchKey(branch)" :size="21" />
+              <Circle v-else :size="21" />
+            </span>
             <span class="order-flow-pill" :class="branch.isOpen ? '' : 'warning'">{{ branch.open_label || (branch.isOpen ? 'باز' : 'بسته') }}</span>
           </div>
+          <strong class="pickup-branch-card__title">{{ branch.title || branch.name }}</strong>
+          <span class="pickup-branch-card__address"><MapPin :size="15" />{{ branch.address || 'نشانی شعبه ثبت نشده است.' }}</span>
           <div class="order-flow-branch-meta">
-            <span class="order-flow-pill">آماده‌سازی حدود {{ branch.prepTime || branch.prep_time_mins || 20 }} دقیقه</span>
+            <span class="order-flow-pill"><Clock3 :size="14" /> حدود {{ branch.prepTime || branch.prep_time_mins || 20 }} دقیقه</span>
             <span class="order-flow-pill">بدون هزینه ارسال</span>
-            <span class="order-flow-pill" :class="branch.pickup_available === false ? 'warning' : ''">{{ branch.pickup_available === false ? 'فعلاً پیکاپ ندارد' : 'پیکاپ فعال' }}</span>
           </div>
-          <span class="order-flow-primary">تحویل از این شرکت</span>
+          <span class="pickup-branch-card__action">{{ selectedBranchId === branchKey(branch) ? 'این شعبه انتخاب شد' : 'انتخاب این شعبه' }}<ChevronLeft :size="16" /></span>
         </button>
+        </div>
 
-        <section class="order-flow-card" v-if="selectedBranch">
-          <h2>زمان تحویل</h2>
-          <p>زمان آماده‌سازی تقریبی بر اساس برنامه شرکت انتخاب‌شده نمایش داده می‌شود.</p>
-          <div class="order-flow-segmented" style="margin-top:.8rem">
+        <section v-if="pickupMethod === 'car'" class="order-flow-card pickup-vehicle-card">
+          <h2>با کدام خودرو می‌آیید؟</h2>
+          <p>مدل، رنگ و پلاک را مشخص کنید تا راحت‌تر پیدایتان کنیم.</p>
+          <CustomerVehiclePicker v-model="vehicle" :mobile="mobile" :customer-name="customerName" :signed-in="signedIn" />
+        </section>
+
+        <section class="order-flow-card pickup-time-card" v-if="selectedBranch">
+          <div class="pickup-time-card__heading">
+            <div>
+              <p class="order-flow-eyebrow">قدم بعدی · {{ selectedBranch.title || selectedBranch.name }}</p>
+              <h2>چه زمانی تحویل می‌گیرید؟</h2>
+              <p>زمان تقریبی آماده‌سازی این شعبه {{ selectedBranch.prepTime || selectedBranch.prep_time_mins || 20 }} دقیقه است.</p>
+            </div>
+            <Clock3 :size="22" aria-hidden="true" />
+          </div>
+          <div class="order-flow-segmented pickup-time-options">
             <button type="button" :class="{ active: pickupTimeType === 'asap' }" @click="pickupTimeType = 'asap'">هرچه سریع‌تر</button>
             <button type="button" :class="{ active: pickupTimeType === 'scheduled' }" @click="pickupTimeType = 'scheduled'">انتخاب زمان</button>
           </div>
-          <label class="order-flow-field" v-if="pickupTimeType === 'scheduled'" style="margin-top:.8rem">
-            <span>زمان تحویل از شرکت</span>
+          <label class="order-flow-field pickup-time-field" v-if="pickupTimeType === 'scheduled'">
+            <span>ساعت تحویل</span>
             <input class="order-flow-input" type="time" v-model="pickupTime" />
           </label>
-          <label class="order-flow-field" style="margin-top:.8rem">
-            <span>یادداشت اختیاری برای شرکت</span>
-            <textarea class="order-flow-textarea" rows="3" v-model="customerNote" placeholder="مثلاً لطفاً سس جدا باشد" />
-          </label>
+          <p v-if="pickupTimeType === 'scheduled' && !pickupTime" class="pickup-time-hint">یک ساعت انتخاب کنید تا ادامه سفارش فعال شود.</p>
+          <details class="pickup-note-details">
+            <summary>افزودن یادداشت برای شعبه <span>اختیاری</span></summary>
+            <label class="order-flow-field">
+              <span>یادداشت سفارش</span>
+              <textarea class="order-flow-textarea" rows="2" v-model="customerNote" placeholder="مثلاً لطفاً سس جدا باشد" />
+            </label>
+          </details>
         </section>
       </main>
 
       <OrderContextSummary class="pickup-order-summary" :next-step="nextStep" :currency="currency">
-        <button class="order-flow-primary" type="button" :disabled="!selectedBranch" @click="continueToMenu">{{ continueLabel }}</button>
+        <button class="order-flow-primary pickup-summary-cta" type="button" :disabled="!canContinue" @click="continueToMenu">{{ continueLabel }}</button>
       </OrderContextSummary>
+    </div>
+
+    <div v-if="selectedBranch" class="order-mobile-cta" role="region" aria-label="ادامه سفارش">
+      <div><small>{{ selectedBranch.title || selectedBranch.name }}</small><strong>{{ pickupTimeType === 'scheduled' && pickupTime ? `تحویل ساعت ${pickupTime}` : `آماده‌سازی حدود ${selectedBranch.prepTime || selectedBranch.prep_time_mins || 20} دقیقه` }}</strong></div>
+      <button class="order-flow-primary" type="button" :disabled="!canContinue" @click="continueToMenu">{{ continueLabel }}</button>
     </div>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { CheckCircle2, Circle, Clock3, ChevronLeft, MapPin } from 'lucide-vue-next'
+import CustomerVehiclePicker from '@/components/customer/CustomerVehiclePicker.vue'
+import { vehicleComplete } from '@/utils/customerOrderValidation'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
 import { isCustomerPickupCompany, resolvePickupCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getMenuBoot } from '@/utils/api'
 import './orderFlow.css'
 
+const query = new URLSearchParams(window.location.search)
+const pickupMethod = ref(query.get('method') === 'car' ? 'car' : query.get('method') === 'walk' ? 'walk' : cartState.orderContext.pickup_method || 'walk')
+const vehicle = ref(cartState.orderContext.pickup_vehicle || {})
+let auth = {}
+try { auth = JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}') } catch {}
+const signedIn = Boolean(auth.mobile)
+const mobile = auth.mobile || ''
+const customerName = auth.customer_name || ''
 const branches = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -86,13 +129,18 @@ function branchKey(branch = {}) {
 
 const selectedBranch = computed(() => branches.value.find((branch) => branchKey(branch) === selectedBranchId.value) || null)
 const hasCartLines = computed(() => cartState.lines.length > 0)
-const continueLabel = computed(() => hasCartLines.value ? 'ادامه به تکمیل سفارش' : 'مشاهده منو')
+const continueLabel = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'ادامه به منوی این شعبه')
 const nextStep = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'مشاهده منو و انتخاب غذا')
+const canContinue = computed(() => Boolean(selectedBranch.value && (pickupTimeType.value !== 'scheduled' || pickupTime.value) && (pickupMethod.value !== 'car' || vehicleComplete(vehicle.value))))
 
-watch([selectedBranch, pickupTimeType, pickupTime, customerNote], () => {
+watch([selectedBranch, pickupTimeType, pickupTime, customerNote, pickupMethod, vehicle], persistPickup, { deep: true })
+
+function persistPickup() {
   if (!selectedBranch.value) return
   saveOrderContext({
     order_type: 'pickup',
+    pickup_method: pickupMethod.value,
+    pickup_vehicle: pickupMethod.value === 'car' ? { ...vehicle.value } : null,
     branch: selectedBranch.value.id || selectedBranch.value.name,
     branch_title: selectedBranch.value.title || selectedBranch.value.name,
     prep_time_mins: Number(selectedBranch.value.prepTime || selectedBranch.value.prep_time_mins || 20),
@@ -103,7 +151,7 @@ watch([selectedBranch, pickupTimeType, pickupTime, customerNote], () => {
     courier_note: '',
     address: null,
   })
-}, { deep: true })
+}
 
 function selectBranch(branch) {
   selectedBranchId.value = branchKey(branch)
@@ -118,14 +166,15 @@ async function loadBranches() {
     selectedBranchId.value = resolvePickupCompanySelection(branches.value, selectedBranchId.value)
     currency.value = boot?.currency || 'IRR'
   } catch (err) {
-    error.value = err.message || 'دریافت شرکت‌ها ناموفق بود.'
+    error.value = err.message || 'دریافت شعبه‌ها ناموفق بود.'
   } finally {
     loading.value = false
   }
 }
 
 function continueToMenu() {
-  if (!selectedBranch.value) return
+  if (!canContinue.value) return
+  persistPickup()
   if (hasCartLines.value) {
     window.location.href = '/checkout'
     return
@@ -134,16 +183,18 @@ function continueToMenu() {
 }
 
 onMounted(() => {
-  saveOrderContext({ order_type: 'pickup', delivery_fee: 0, address: null, courier_note: '' })
+  saveOrderContext({ order_type: 'pickup', pickup_method: pickupMethod.value, delivery_fee: 0, address: null, courier_note: '' })
   loadBranches()
 })
 </script>
 
 <style scoped>
+.pickup-vehicle-card > p { margin-bottom: 1rem; }
+
 .order-flow-layout .pickup-branch-grid .order-flow-branch-card,
 .order-flow-layout > .order-flow-list > .order-flow-branch-card {
   width: min(100%, 32rem);
-  justify-self: start;
+  justify-self: center;
 }
 
 .order-flow-steps {
@@ -169,27 +220,8 @@ onMounted(() => {
 .order-flow-hero > .order-flow-secondary {
   width: fit-content;
   max-width: 100%;
-  justify-self: center;
+  justify-self: start;
   white-space: nowrap;
-}
-
-.order-flow-branch-card.active {
-  border-color: color-mix(in srgb, var(--ds-color-action-primary) 64%, var(--ds-color-border));
-}
-
-.order-flow-steps {
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-}
-
-.order-flow-step {
-  scroll-snap-align: start;
-}
-
-@media (max-width: 560px) {
-  .order-flow-hero > .order-flow-secondary {
-    white-space: normal;
-  }
 }
 
 .order-flow-page--pickup .order-flow-title {
@@ -220,10 +252,27 @@ onMounted(() => {
   max-width: 34rem;
 }
 
-
 .order-flow-page--pickup :deep(.pickup-order-summary header > p:last-child),
 .order-flow-page--pickup :deep(.pickup-order-summary .order-flow-summary-line:nth-child(-n + 4)) {
   display: none;
 }
 
+.order-flow-branch-card.active {
+  border-color: color-mix(in srgb, var(--ds-color-action-primary) 64%, var(--ds-color-border));
+}
+
+.order-flow-steps {
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.order-flow-step {
+  scroll-snap-align: start;
+}
+
+@media (max-width: 560px) {
+  .order-flow-hero > .order-flow-secondary {
+    white-space: normal;
+  }
+}
 </style>

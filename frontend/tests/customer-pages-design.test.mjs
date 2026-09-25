@@ -49,8 +49,8 @@ test('Veederakht default colors use readable, runtime-derived foregrounds', () =
   const tokens = source('../src/design-system/tokens.js')
   const themeSettings = source('../src/utils/themeSettings.js')
 
-  assert.match(tokens, /primary: '#B94712'/)
-  assert.match(tokens, /accent: '#DFAF2E'/)
+  assert.match(tokens, /primary: '#2F684F'/)
+  assert.match(tokens, /accent: '#E87935'/)
   assert.match(themeSettings, /readableForeground\(normalized\.primary\)/)
   assert.match(themeSettings, /readableForeground\(normalized\.accent\)/)
 })
@@ -76,7 +76,7 @@ test('Persian and Arabic phone digits normalize to the same mobile number', () =
   assert.equal(normalizeMobile('٠٩١٢٣٤٥٦٧٨٩'), '09123456789')
 })
 
-test('frontend and server fallback themes share the orange and saffron palette', () => {
+test('frontend and server fallback themes share the green and orange palette', () => {
   const backend = readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
   const defaults = backend.match(/MANAGEMENT_THEME_DEFAULTS = \{([\s\S]*?)\n\}/)?.[1]
 

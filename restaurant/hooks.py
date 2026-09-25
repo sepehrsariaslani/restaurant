@@ -112,6 +112,7 @@ website_route_rules = [
 	{"from_route": "/customer/login", "to_route": "restaurant/index"},
 	{"from_route": "/customer/dashboard", "to_route": "restaurant/index"},
 	{"from_route": "/customer/profile", "to_route": "restaurant/index"},
+	{"from_route": "/customer/vehicles", "to_route": "restaurant/index"},
 	{"from_route": "/customer/addresses", "to_route": "restaurant/index"},
 	{"from_route": "/customer/branches", "to_route": "restaurant/index"},
 	{"from_route": "/customer/orders", "to_route": "customer/orders"},

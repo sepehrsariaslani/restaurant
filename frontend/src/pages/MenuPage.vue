@@ -1,5 +1,9 @@
 <template>
   <div class="menu-page-root">
+    <div class="menu-intro">
+      <div><p>تازه آماده می‌کنیم</p><h1>امروز چی میل دارید؟</h1></div>
+      <a href="/search" class="menu-search-link" aria-label="جستجو در منو"><Search :size="20" /> <span>جستجو</span></a>
+    </div>
     <!-- ─── Sticky Category Rail (first on mobile, after hero on desktop) ─── -->
     <div
       class="category-rail-sticky"
@@ -314,7 +318,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, Teleport } from 'vue'
-import { ChevronDown, ChevronsUp, Utensils } from 'lucide-vue-next'
+import { Search, ChevronDown, ChevronsUp, Utensils } from 'lucide-vue-next'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
 import CategoryImageRail from '@/components/CategoryImageRail.vue'
@@ -1474,6 +1478,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.menu-intro { width: min(1120px, calc(100% - 2rem)); margin: 1.1rem auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.menu-intro p { color: var(--ds-color-action-primary); font-size: .8rem; margin: 0 0 .3rem; }
+.menu-intro h1 { font-size: clamp(1.35rem, 3vw, 1.9rem); margin: 0; }
+.menu-search-link { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding: .5rem .7rem; border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); border: 1px solid var(--ds-color-border); color: var(--ds-color-action-primary); text-decoration: none; }
+
 .menu-shell {
   width: min(540px, calc(100% - 1rem));
   margin: 0 auto;
@@ -1508,7 +1517,7 @@ onUnmounted(() => {
 /* On mobile (no header), rail sits at top: 0 when sticky */
 @media (max-width: 919px) {
   .category-rail-sticky.is-sticky {
-    top: 3.3rem;
+    top: 0;
   }
 }
 

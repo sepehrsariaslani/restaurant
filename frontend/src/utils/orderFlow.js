@@ -6,7 +6,7 @@ export const ORDER_FLOW_CURRENCY_FALLBACK = 'IRR'
 
 export function orderContextChangeUrl(context = cartState.orderContext || {}) {
   if (context.order_type === 'delivery') return '/order/delivery'
-  if (context.order_type === 'pickup') return '/order/pickup'
+  if (context.order_type === 'pickup') return context.pickup_method === 'car' ? '/order/pickup?method=car' : '/order/pickup?method=walk'
   if (context.order_type === 'dine_in') return '/order/dine-in'
   return '/order/type'
 }
@@ -60,16 +60,16 @@ export function useOrderTotals(discountRef = null) {
 export function orderTypeLabel(context = {}) {
   if (context.order_type === 'dine_in') return 'حضوری داخل سالن'
   if (context.order_type === 'delivery') return 'ارسال با پیک'
-  if (context.order_type === 'pickup') return 'بیرون‌بر'
+  if (context.order_type === 'pickup') return context.pickup_method === 'car' ? 'درب ماشین' : 'تحویل حضوری'
   return 'نوع سفارش انتخاب نشده'
 }
 
 export function orderDestinationText(context = {}) {
   if (context.order_type === 'dine_in') {
-    return `${context.branch_title || context.branch || 'شرکت'} · میز ${context.table || '-'}`
+    return `${context.branch_title || context.branch || 'شعبه'} · ${context.table_title || `میز ${context.table || '-'}`}`
   }
   if (context.order_type === 'pickup') {
-    return `تحویل از ${context.branch_title || context.branch || 'شرکت انتخاب نشده'}`
+    return `تحویل از ${context.branch_title || context.branch || 'شعبه انتخاب نشده'}`
   }
   if (context.order_type === 'delivery') {
     const address = context.address || {}
@@ -81,12 +81,12 @@ export function orderDestinationText(context = {}) {
 export function orderTimeText(context = {}) {
   if (context.order_type === 'pickup') {
     if (context.pickup_time_type === 'scheduled' && context.pickup_time) return `تحویل در ${context.pickup_time}`
-    return context.prep_time_mins ? `آماده‌سازی حدود ${context.prep_time_mins} دقیقه` : 'آماده‌سازی پس از تایید شرکت'
+    return context.prep_time_mins ? `آماده‌سازی حدود ${context.prep_time_mins} دقیقه` : 'آماده‌سازی پس از تایید شعبه'
   }
   if (context.order_type === 'delivery') {
     if (context.delivery_time_type === 'scheduled' && context.delivery_time) return `ارسال در ${context.delivery_time}`
     if (context.eta_min && context.eta_max) return `${context.eta_min} تا ${context.eta_max} دقیقه`
-    return 'زمان نهایی پس از تایید شرکت مشخص می‌شود'
+    return 'زمان نهایی پس از تایید شعبه مشخص می‌شود'
   }
   if (context.order_type === 'dine_in') {
     return context.prep_time_mins ? `آماده سرو حدود ${context.prep_time_mins} دقیقه` : 'پس از تایید آشپزخانه'
@@ -97,7 +97,7 @@ export function orderTimeText(context = {}) {
 export function deliveryFeeText(context = {}, currency = ORDER_FLOW_CURRENCY_FALLBACK) {
   if (context.order_type !== 'delivery') return 'بدون هزینه ارسال'
   const fee = Number(context.delivery_fee || 0)
-  return fee ? formatMoney(fee, currency) : 'هزینه نهایی پس از تایید شرکت'
+  return fee ? formatMoney(fee, currency) : 'هزینه نهایی پس از تایید شعبه'
 }
 
 export function orderContextStripText(context = {}, currency = ORDER_FLOW_CURRENCY_FALLBACK) {

@@ -7,7 +7,7 @@
       <strong>{{ title }}</strong>
       <small>{{ subtitle }}</small>
     </div>
-    <a class="strip-action" :href="changeUrl">{{ hasContext ? 'تغییر' : 'انتخاب نوع سفارش' }}</a>
+    <a class="strip-action" :href="changeUrl">{{ hasContext ? 'تغییر' : 'انتخاب' }}</a>
   </section>
 </template>
 
@@ -25,8 +25,8 @@ const context = computed(() => cartState.orderContext || {})
 const hasContext = computed(() => Boolean(context.value.order_type))
 const title = computed(() => hasContext.value ? orderTypeLabel(context.value) : 'نوع سفارش مشخص نیست')
 const subtitle = computed(() => {
-  if (!hasContext.value) return 'برای محاسبه شعبه، زمان و هزینه ارسال، ابتدا نوع سفارش را انتخاب کنید.'
-  return `${orderDestinationText(context.value)} · ${orderTimeText(context.value)} · ${deliveryFeeText(context.value, props.currency)}`
+  if (!hasContext.value) return 'نشانی، شعبه یا میز خود را مشخص کنید.'
+  return orderDestinationText(context.value)
 })
 const changeUrl = computed(() => orderContextChangeUrl(context.value))
 const iconComponent = computed(() => {
@@ -124,13 +124,12 @@ const iconComponent = computed(() => {
 
 @media (max-width: 640px) {
   .order-context-strip {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
     border-radius: 18px;
   }
 
   .strip-action {
-    grid-column: 1 / -1;
-    width: 100%;
+    padding-inline: .65rem;
   }
 }
 </style>

@@ -27,13 +27,11 @@ test('guest profile explains the login requirement and does not expose editable 
   assert.match(source, /if \(!readAuth\(\)\.mobile\)[^]*?customer\/login\?redirect=\/customer\/profile/)
 })
 
-test('address form opens manual coordinates when the map key is missing', async () => {
+test('address saving requires a real server record and preserves manual map recovery', async () => {
   const source = await page('CustomerAddressesPage.vue')
-
-  assert.match(source, /<details class="location-coordinates" :open="!hasMapKey">/)
-  assert.match(source, /ثبت دستی مختصات/)
-  assert.match(source, /const hasMapKey = computed\(\(\) => Boolean\(String\(mapConfig\.value\.api_key \|\| ''\)\.trim\(\)\)\)/)
-  assert.match(source, /مختصات را دستی وارد کنید تا بتوانید آدرس را ذخیره کنید/)
+  assert.match(source, /:open="mapStatus === 'error'"/)
+  assert.match(source, /if \(!result\?\.address\?\.id\) throw/)
+  assert.doesNotMatch(source, /localStorage\.setItem/)
 })
 
 test('pickup screen keeps its title, action, and selected card visually balanced', async () => {

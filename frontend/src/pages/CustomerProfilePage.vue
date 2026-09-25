@@ -3,7 +3,7 @@
     <CustomerPageHeader
       :eyebrow="isLoggedIn ? 'ویرایش حساب' : 'حساب مشتری'"
       :title="isLoggedIn ? 'ویرایش اطلاعات شخصی' : 'ورود برای مدیریت حساب'"
-      :subtitle="isLoggedIn ? 'این صفحه فقط برای اصلاح اطلاعات پایه حساب شماست.' : 'برای دیدن و ویرایش اطلاعات شخصی، ابتدا وارد حساب خود شوید.'"
+      :subtitle="isLoggedIn ? 'اطلاعات تماس برای سفارش‌های بعدی شما استفاده می‌شود.' : 'برای دیدن و ویرایش اطلاعات شخصی، ابتدا وارد حساب خود شوید.'"
       hero-class="profile-hero"
       fallback-href="/customer/dashboard"
     >
@@ -27,7 +27,7 @@
     </CustomerPageHeader>
 
     <div class="customer-page__body">
-      <p v-if="error" class="customer-section__hint customer-danger-text">{{ error }}</p>
+      <p v-if="error" class="customer-section__hint customer-danger-text" role="alert">{{ error }} <a v-if="needsSignIn" href="/customer/login?redirect=%2Fcustomer%2Fprofile">ورود دوباره</a></p>
 
       <section v-if="!isLoggedIn" class="customer-glass-card customer-empty profile-login-prompt">
         <div class="customer-icon-badge"><UserRound :size="28" /></div>
@@ -40,7 +40,7 @@
         <div class="customer-section__head">
           <div>
             <h2>اطلاعات قابل ویرایش</h2>
-            <p>برای مدیریت آدرس‌ها، سفارش‌ها و شروع سفارش از صفحه «حساب من» استفاده کنید.</p>
+            <p>نام و ایمیل را ویرایش کنید؛ شماره موبایل، شناسه ورود شماست.</p>
           </div>
         </div>
 
@@ -58,11 +58,6 @@
             <label>ایمیل (اختیاری)</label>
             <input class="customer-input" v-model="form.email" placeholder="example@email.com" dir="ltr" type="email" autocomplete="email" />
           </div>
-          <div class="customer-field">
-            <label>تاریخ تولد</label>
-            <input class="customer-input" v-model="form.birthday" placeholder="۱۳۷۰/۰۱/۰۱" autocomplete="bday" />
-          </div>
-
           <button class="customer-primary-cta save-cta" :disabled="saving" @click="saveProfile">
             <LoaderCircle v-if="saving" :size="18" class="spin" />
             <Save v-else :size="18" />
@@ -79,26 +74,26 @@
 import { computed, onMounted, ref } from 'vue'
 import { LayoutDashboard, LoaderCircle, Save, UserRound } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
-import { getCustomerProfile } from '@/utils/api'
+import { getCustomerProfile, saveCustomerProfile } from '@/utils/api'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const saving = ref(false)
 const saved = ref(false)
 const loading = ref(false)
 const error = ref('')
+const needsSignIn = computed(() => { try { return !JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}').customer_token } catch { return true } })
 
 const form = ref({
   name: '',
   phone: '',
   email: '',
-  birthday: '',
 })
 
 function readAuth() {
   try {
     const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
     return {
-      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
+      mobile: auth.mobile || '',
       name: auth.customer_name || localStorage.getItem('customer_name') || '',
     }
   } catch {
@@ -118,7 +113,6 @@ try {
   form.value.name = auth.name
   form.value.phone = auth.mobile
   form.value.email = localStorage.getItem('customer_email') || ''
-  form.value.birthday = localStorage.getItem('customer_birthday') || ''
 } catch {}
 
 const avatarLetter = computed(() => (form.value.name ? form.value.name.slice(0, 1) : 'ک'))
@@ -126,22 +120,25 @@ const isLoggedIn = computed(() => Boolean(String(form.value.phone || '').trim())
 
 
 async function saveProfile() {
+  if (saving.value) return
   if (!readAuth().mobile) {
     window.location.href = '/customer/login?redirect=/customer/profile'
     return
   }
+  if (!form.value.name.trim()) { error.value = 'نام و نام خانوادگی را وارد کنید.'; return }
   saving.value = true
   saved.value = false
+  error.value = ''
   try {
-    await new Promise((resolve) => setTimeout(resolve, 450))
+    const result = await saveCustomerProfile({ name: form.value.name.trim(), email: form.value.email.trim() })
+    if (!result?.customer?.customer_id) throw new Error('سرور ذخیره اطلاعات را تأیید نکرد؛ دوباره تلاش کنید.')
     const name = form.value.name.trim()
     localStorage.setItem('customer_name', name)
     localStorage.setItem('customer_email', form.value.email.trim())
-    localStorage.setItem('customer_birthday', form.value.birthday.trim())
     updateStoredAuthName(name)
     saved.value = true
     setTimeout(() => { saved.value = false }, 3000)
-  } finally {
+  } catch (err) { error.value = err.message || 'ذخیره اطلاعات حساب انجام نشد.' } finally {
     saving.value = false
   }
 }
@@ -155,6 +152,7 @@ onMounted(async () => {
     const customer = data?.customer || {}
     form.value.name = customer.name || auth.name || form.value.name
     form.value.phone = customer.mobile || auth.mobile
+    form.value.email = customer.email || ''
   } catch (err) {
     error.value = err?.message || 'خطا در دریافت پروفایل'
   } finally {
@@ -181,14 +179,14 @@ onMounted(async () => {
   width: 72px;
   height: 72px;
   border-radius: 24px;
-  background: rgb(255 255 255 / 0.14);
+  background: var(--ds-color-action-primary-soft);
   border: 1px solid rgb(255 255 255 / 0.18);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 1.7rem;
   font-weight: 800;
-  color: var(--ds-color-action-primary-foreground, #fff);
+  color: var(--ds-color-action-primary);
 }
 
 .profile-hero__meta strong {
@@ -198,7 +196,7 @@ onMounted(async () => {
 
 .profile-hero__meta p {
   margin: 0.3rem 0 0;
-  color: rgb(255 255 255 / 0.72);
+  color: var(--ds-color-text-secondary);
 }
 
 .save-cta {

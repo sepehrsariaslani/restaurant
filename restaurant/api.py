@@ -184,24 +184,28 @@ MANAGEMENT_THEME_REFERENCE_DEFAULTS = {
 	"posWarning": "#F59E0B",
 }
 MANAGEMENT_THEME_DEFAULTS = {
-	"primary": "#B94712",
-	"accent": "#DFAF2E",
+	"primary": "#2F684F",
+	"accent": "#E87935",
 	"success": "#287347",
 	"danger": "#A8443C",
 	"warning": "#915B0B",
-	"surface": "#FFFEFC",
-	"surfaceAlt": "#F8EBCB",
-	"background": "#FFF9ED",
-	"border": "#E2D0AB",
-	"text": "#382719",
-	"textSecondary": "#5F4930",
-	"muted": "#806A50",
+	"surface": "#FFFDF9",
+	"surfaceAlt": "#F5EFE7",
+	"background": "#FCFAF7",
+	"border": "#E3D8CB",
+	"text": "#322F29",
+	"textSecondary": "#5E584F",
+	"muted": "#776F64",
 	"posPrimary": "#6F4A31",
-	"posAccent": "#DFAF2E",
+	"posAccent": "#E87935",
 	"posSuccess": "#0B7D4A",
 	"posDanger": "#AB3535",
 	"posWarning": "#F59E0B",
 }
+MANAGEMENT_THEME_STOREFRONT_PREVIOUS = (
+	{"primary": "#B94712", "accent": "#DFAF2E", "surface": "#FFFEFC", "surfaceAlt": "#F8EBCB", "background": "#FFF9ED", "border": "#E2D0AB", "text": "#382719", "textSecondary": "#5F4930", "muted": "#806A50"},
+	{"primary": "#246B4B", "accent": "#E97732", "surface": "#FFFFFF", "surfaceAlt": "#EDF4EF", "background": "#F7F9F6", "border": "#D6E1D9", "text": "#20392C", "textSecondary": "#496153", "muted": "#65766B"},
+)
 MANAGEMENT_THEME_HEX_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 MANAGEMENT_SITE_LOADER_PRESETS = {
 	"steaming-bowl",
@@ -285,6 +289,10 @@ def _normalize_theme_hex(color, fallback):
 
 def _sanitize_management_theme_settings(payload=None):
 	source = payload if isinstance(payload, dict) else {}
+	for previous in MANAGEMENT_THEME_STOREFRONT_PREVIOUS:
+		if all(str(source.get(key) or "").upper() == value for key, value in previous.items()):
+			source = {**source, **{key: MANAGEMENT_THEME_DEFAULTS[key] for key in previous}}
+			break
 	return {
 		key: _normalize_theme_hex(source.get(key), default_value)
 		for key, default_value in MANAGEMENT_THEME_DEFAULTS.items()
@@ -7909,7 +7917,7 @@ def _list_customer_delivery_addresses(customer_name):
 	rows = frappe.get_all(
 		"Address",
 		fields=fields,
-		filters={"name": ["in", names]},
+		filters={"name": ["in", names], "disabled": 0},
 		order_by="modified desc",
 		ignore_permissions=True,
 	)
@@ -8271,7 +8279,7 @@ def _resolve_delivery_address_for_order(
 
 	if not normalized.get("id") and delivery_address_id:
 		normalized["id"] = delivery_address_id
-	if not normalized.get("id"):
+	if not normalized.get("id") and cint(snapshot_payload.get("save_for_future", 1)):
 		saved = _upsert_customer_delivery_address(customer_name, normalized)
 		return saved
 	return normalized
@@ -10312,7 +10320,10 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 	elif not resolved_name:
 		resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
 	frappe.cache().delete_value(_otp_cache_key(normalized_mobile))
+	from restaurant.customer_account import issue_customer_session
+
 	return {
+		"customer_token": issue_customer_session(customer_docname, normalized_mobile),
 		"success": True,
 		"verified": 1,
 		"mobile": normalized_mobile,
@@ -10808,6 +10819,7 @@ def get_available_tables(branch=None, reservation_date=None, reservation_time=No
 			) == _reservation_time_key(reservation_time):
 				reserved.add(row.get("table"))
 
+	future_visit = bool(reservation_date and getdate(reservation_date) > getdate(nowdate()))
 	tables = []
 	for row in frappe.get_all(
 		"Restaurant Table",
@@ -10818,7 +10830,7 @@ def get_available_tables(branch=None, reservation_date=None, reservation_time=No
 		ignore_permissions=True,
 	):
 		status = (row.get("status") or "empty").strip().lower()
-		available = status in {"empty", "available"} and row.name not in reserved
+		available = (future_visit or status in {"empty", "available"}) and row.name not in reserved
 		tables.append(
 			{
 				"id": row.name,
@@ -10827,7 +10839,7 @@ def get_available_tables(branch=None, reservation_date=None, reservation_time=No
 				"table_number": row.get("table_number") or row.name,
 				"branch": row.get("location") or "",
 				"area": row.get("location") or "main",
-				"capacity": max(cint(guest_count), 1),
+				"capacity": None,
 				"status": "available" if available else ("reserved" if row.name in reserved else "occupied"),
 				"is_available": 1 if available else 0,
 				"shape": "rect",
@@ -10853,11 +10865,16 @@ def create_table_reservation(payload=None, **kwargs):
 	reservation_time = data.get("reservation_time") or data.get("time")
 	if not reservation_date or not reservation_time:
 		frappe.throw(_("Reservation date and time are required."))
-	guest_count = max(cint(data.get("guest_count") or data.get("guests") or 1), 1)
+	if get_datetime(f"{getdate(reservation_date)} {get_time(reservation_time)}") <= now_datetime():
+		frappe.throw(_("زمان گذشته قابل رزرو نیست؛ زمان دیگری انتخاب کنید."))
+	guest_count = cint(data.get("guest_count") or data.get("guests") or 1)
+	if not 1 <= guest_count <= 20:
+		frappe.throw(_("تعداد نفرات باید بین ۱ و ۲۰ باشد."))
 	table_name = (data.get("table") or data.get("table_id") or "").strip()
 	branch = (data.get("branch") or "").strip()
 
 	if table_name:
+		frappe.db.sql("select name from `tabRestaurant Table` where name=%s for update", table_name)
 		available = get_available_tables(
 			branch=branch,
 			reservation_date=reservation_date,
@@ -10877,7 +10894,7 @@ def create_table_reservation(payload=None, **kwargs):
 			"reservation_date": getdate(reservation_date),
 			"reservation_time": reservation_time,
 			"guest_count": guest_count,
-			"status": data.get("status") or "pending",
+			"status": "pending",
 			"note": data.get("note") or "",
 		}
 	)
@@ -11360,6 +11377,7 @@ def get_customer_checkout_profile(mobile, customer_name=None):
 			"name": resolved_name,
 			"mobile": normalized_mobile,
 			"customer_id": customer_docname or "",
+			"email": frappe.db.get_value("Customer", customer_docname, "email_id") or "" if customer_docname else "",
 		},
 		"addresses": addresses,
 		"vehicles": vehicles,
@@ -11525,14 +11543,37 @@ def place_order(
 		delivery_text = legacy_address if order_type == "dine_in" else ""
 
 	pickup_vehicle_payload = {}
+	order_context = _parse_json(order_context, {})
+	if not isinstance(order_context, dict):
+		order_context = {}
 	if order_type == "takeaway" and resolved_delivery_mode == "pickup" and pickup_method == "car":
 		customer_docname = _ensure_customer(customer_name, mobile)
-		pickup_vehicle_payload = _resolve_customer_vehicle_for_order(
-			customer_name=customer_docname,
-			mobile=mobile,
-			vehicle_id=pickup_vehicle_id,
-			vehicle_snapshot=pickup_vehicle_snapshot,
-		)
+		vehicle_snapshot = _parse_json(pickup_vehicle_snapshot, {})
+		if not isinstance(vehicle_snapshot, dict):
+			vehicle_snapshot = {}
+		if pickup_vehicle_id or cint(vehicle_snapshot.get("save_for_future") or 0):
+			pickup_vehicle_payload = _resolve_customer_vehicle_for_order(
+				customer_name=customer_docname,
+				mobile=mobile,
+				vehicle_id=pickup_vehicle_id,
+				vehicle_snapshot=vehicle_snapshot,
+			)
+		else:
+			vehicle_payload = _normalize_vehicle_payload(
+				vehicle_snapshot, customer_name=customer_docname, mobile=mobile
+			)
+			pickup_vehicle_payload = {
+				"id": "",
+				"title": vehicle_payload.get("title") or "",
+				"type": vehicle_payload.get("vehicle_type") or "",
+				"color": vehicle_payload.get("color") or "",
+				"plate": vehicle_payload.get("plate_number") or "",
+			}
+		order_context["pickup_method"] = "car"
+		order_context["pickup_vehicle"] = pickup_vehicle_payload
+	elif order_type == "takeaway" and resolved_delivery_mode == "pickup":
+		order_context["pickup_method"] = "walk"
+		order_context.pop("pickup_vehicle", None)
 
 	financial_modifiers = financial_modifiers or {}
 	# Direct parameter takes precedence, then financial_modifiers fallback
@@ -11582,6 +11623,7 @@ def get_order(order_code, mobile):
 		{
 
 			"restaurant_customer_mobile": mobile,
+			"name": order_code,
 		},
 		"name",
 	)
@@ -11602,6 +11644,7 @@ def get_order_production_status(order_code, mobile):
 		{
 
 			"restaurant_customer_mobile": mobile,
+			"name": order_code,
 		},
 		"name",
 	)

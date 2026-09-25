@@ -5,16 +5,9 @@
       <small>خانه</small>
     </a>
 
-    <a href="/menu" class="nav-item" :class="{ active: page === 'menu' || page === 'item' }" :aria-current="page === 'menu' || page === 'item' ? 'page' : undefined">
+    <a href="/menu" class="nav-item" :class="{ active: page === 'menu' || page === 'item' || page === 'search' || page === 'product-groups' }" :aria-current="page === 'menu' || page === 'item' || page === 'search' || page === 'product-groups' ? 'page' : undefined">
       <List class="nav-icon" :size="20" />
       <small>منو</small>
-    </a>
-
-    <a href="/search" class="nav-item nav-search" :class="{ active: page === 'search' }" :aria-current="page === 'search' ? 'page' : undefined" aria-label="جستجو">
-      <span class="search-orb">
-        <Search :size="22" />
-      </span>
-      <small>جستجو</small>
     </a>
 
     <a href="/cart" class="nav-item" :class="{ active: page === 'cart' }" :aria-current="page === 'cart' ? 'page' : undefined" :aria-label="cartCount > 0 ? `سبد سفارش، ${cartCount.toLocaleString('fa-IR')} آیتم` : 'سبد سفارش'">
@@ -101,6 +94,7 @@ const customerAccountPages = new Set([
   'customer-dashboard',
   'customer-profile',
   'customer-addresses',
+  'customer-vehicles',
   'customer-branches',
   'customer-orders',
   'customer-order-detail',
@@ -120,6 +114,7 @@ const moreDialogRef = ref(null)
 let bodyOverflowBeforeSheet = ''
 const accountHref = computed(() => isSignedIn.value ? '/customer/dashboard' : customerAccountHref('/customer/dashboard'))
 const moreLinks = computed(() => [
+  { href: '/search', label: 'جستجو', hint: 'پیدا کردن غذا در منو', icon: Search },
   { href: '/order/type', label: 'شروع سفارش', hint: 'نوع سفارش و مقصد را انتخاب کنید', icon: Bike },
   { href: customerAccountHref('/customer/orders'), label: 'سفارش‌های من', hint: 'پیگیری و خریدهای قبلی', icon: Clock3 },
   { href: '/customer/branches', label: 'شعبه‌ها', hint: 'نشانی و ساعت کار', icon: Store },
@@ -198,14 +193,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 10px 24px rgba(15,23,42,0.1);
   padding: 0.34rem;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.12rem;
   z-index: 115;
   backdrop-filter: blur(16px);
 }
 
 .nav-item {
-  min-height: 48px;
+  min-height: 52px;
   border: 0;
   border-radius: 16px;
   color: var(--ds-color-text-muted, var(--text-muted, #846b58));
@@ -213,7 +208,7 @@ onBeforeUnmount(() => {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 0.08rem;
+  gap: 0.3rem;
   position: relative;
   text-decoration: none;
   transition: background 0.2s, color 0.2s, transform 0.15s;
@@ -227,7 +222,7 @@ onBeforeUnmount(() => {
 }
 
 .nav-item small {
-  font-size: 0.56rem;
+  font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.1;
 }
@@ -274,8 +269,8 @@ onBeforeUnmount(() => {
 
 .nav-item i {
   position: absolute;
-  top: 3px;
-  left: 50%;
+  top: 0;
+  left: 30%;
   transform: translateX(-50%);
   min-width: 0.95rem;
   height: 0.95rem;
@@ -284,7 +279,7 @@ onBeforeUnmount(() => {
   background: var(--ds-color-action-accent);
   color: var(--ds-color-action-accent-foreground);
   font-style: normal;
-  font-size: 0.56rem;
+  font-size: 0.72rem;
   font-weight: 800;
   display: inline-flex;
   align-items: center;
@@ -448,7 +443,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 370px) {
   .mobile-bottom-nav { width: calc(100% - 0.5rem); padding: 0.28rem; }
-  .nav-item small { font-size: 0.51rem; }
+  .nav-item small { font-size: 0.68rem; }
   .mobile-more-links { grid-template-columns: 1fr; }
 }
 

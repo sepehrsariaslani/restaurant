@@ -7,7 +7,7 @@
     <div class="content-scroll">
       <!-- Step Indicator -->
       <div class="steps-row">
-        <div v-for="(s, i) in steps" :key="i" class="step-item" :class="{ active: step === i, done: step > i }">
+        <div v-for="(s, i) in steps" :key="i" :aria-current="step === i ? 'step' : undefined" class="step-item" :class="{ active: step === i, done: step > i }">
           <div class="step-dot"><Check v-if="step > i" :size="15" aria-hidden="true" /><span v-else>{{ i + 1 }}</span></div>
           <span class="step-label">{{ s }}</span>
         </div>
@@ -57,7 +57,7 @@
           </div>
         </div>
 
-        <button class="next-btn" type="button" :disabled="!selectedDate || !selectedTime" @click="step = 1">
+        <button class="next-btn" type="button" :disabled="!selectedDate || !selectedTime || !reservationTimeIsFuture(selectedDate, selectedTime)" @click="step = 1">
           انتخاب میز
           <ArrowLeft :size="18" aria-hidden="true" />
         </button>
@@ -66,7 +66,8 @@
       <!-- Step 2: Table Selection -->
       <div v-if="step === 1" class="step-card">
         <h3 class="step-title">انتخاب میز</h3>
-        <p class="step-sub">میز مورد نظر خود را انتخاب کنید</p>
+        <p class="step-sub">فقط میزهای آزاد در زمان انتخابی قابل رزرو هستند.</p>
+        <label v-if="areas.length > 1" class="form-group">سالن / محل میز<select class="form-input" v-model="selectedArea"><option value="">همه سالن‌ها</option><option v-for="area in areas" :key="area" :value="area">{{ customerTableAreaLabel(area) }}</option></select></label>
         <p v-if="tablesLoading" class="step-sub" role="status" aria-live="polite">
           <LoaderCircle :size="16" class="reservation-spinner" aria-hidden="true" />
           در حال دریافت میزهای آزاد...
@@ -80,7 +81,7 @@
         <div v-if="tables.length" class="table-map-preview" role="group" aria-label="میزهای قابل رزرو">
           <div class="table-grid">
             <button
-              v-for="t in tables"
+              v-for="t in visibleTables"
               :key="t.id"
               class="table-item"
               :class="[t.status, { selected: selectedTable?.id === t.id }]"
@@ -91,7 +92,7 @@
               @click="selectedTable = t"
             >
               <Armchair :size="18" aria-hidden="true" />
-              <span>{{ t.label }}</span>
+              <span>میز {{ t.label }}</span><small v-if="t.branch">{{ customerTableAreaLabel(t.branch) }}</small>
             </button>
           </div>
         </div>
@@ -167,14 +168,15 @@
       <!-- Step 4: Success -->
       <div v-if="step === 3" class="step-card success-card">
         <CircleCheck class="success-icon" :size="48" aria-hidden="true" />
-        <h3>رزرو ثبت شد!</h3>
-        <p>رزرو شما با موفقیت انجام شد. کد رزرو برای شما ارسال می‌شود.</p>
+        <h3>درخواست رزرو ثبت شد</h3>
+        <p>رزرو شما در انتظار تأیید رستوران است. کد پیگیری را نگه دارید.</p>
+        <strong class="reservation-code" dir="ltr">{{ reservation?.name }}</strong>
         <div class="confirm-summary">
           <div class="summary-row"><span><CalendarDays :size="16" aria-hidden="true" /> تاریخ</span><strong>{{ selectedDateLabel }}</strong></div>
           <div class="summary-row"><span><Clock3 :size="16" aria-hidden="true" /> ساعت</span><strong>{{ selectedTime }}</strong></div>
           <div class="summary-row"><span><UsersRound :size="16" aria-hidden="true" /> نفرات</span><strong>{{ guests }} نفر</strong></div>
         </div>
-        <a href="/customer/dashboard" class="next-btn" style="text-decoration:none; display:block; text-align:center; margin-top:1rem;">بازگشت به خانه</a>
+        <a href="/customer/dashboard" class="next-btn" style="text-decoration:none; display:block; text-align:center; margin-top:1rem;">بازگشت به حساب من</a>
       </div>
     </div>
   </div>
@@ -184,9 +186,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Armchair, ArrowLeft, CalendarDays, Check, CircleCheck, Clock3, LoaderCircle, RefreshCw, UsersRound } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
+import { isValidCustomerMobile, reservationTimeIsFuture } from '@/utils/customerOrderValidation'
 import { createTableReservation, getAvailableTables } from '@/utils/api'
+import { customerTableAreaLabel } from '@/utils/customerTableAreas'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
+const reservation = ref(null)
+const selectedArea = ref('')
 const step = ref(0)
 const guests = ref(2)
 const selectedDate = ref('')
@@ -214,10 +220,13 @@ const availableDates = Array.from({ length: 7 }, (_, i) => {
   }
 })
 
-const availableTimes = ['12:00', '13:00', '14:00', '18:00', '19:00', '20:00', '21:00', '22:00']
-  .map(value => ({ value, label: value, available: true }))
+const availableTimes = computed(() => ['12:00', '13:00', '14:00', '18:00', '19:00', '20:00', '21:00', '22:00']
+  .map(value => ({ value, label: value, available: reservationTimeIsFuture(selectedDate.value, value) })))
 
 const tables = ref([])
+const areas = computed(() => [...new Set(tables.value.map(t => t.branch).filter(Boolean))])
+const visibleTables = computed(() => selectedArea.value ? tables.value.filter(t => t.branch === selectedArea.value) : tables.value)
+watch(selectedArea, () => { selectedTable.value = null })
 
 const selectedDateLabel = computed(() => {
   const d = availableDates.find(d => d.value === selectedDate.value)
@@ -225,7 +234,7 @@ const selectedDateLabel = computed(() => {
 })
 
 async function loadTables() {
-  if (!selectedDate.value || !selectedTime.value) return
+  if (!selectedDate.value || !selectedTime.value) { tablesRequestId++; tables.value = []; selectedTable.value = null; tablesLoading.value = false; return }
   const requestId = ++tablesRequestId
   tablesLoading.value = true
   error.value = ''
@@ -250,11 +259,13 @@ async function loadTables() {
 }
 
 async function submitReservation() {
-  if (!selectedTable.value) return
+  if (!selectedTable.value || submitting.value) return
+  if (!reserverName.value.trim() || !isValidCustomerMobile(reserverPhone.value)) { error.value = 'نام و شماره موبایل معتبر را وارد کنید.'; return }
+  if (!reservationTimeIsFuture(selectedDate.value, selectedTime.value)) { error.value = 'زمان گذشته قابل رزرو نیست؛ ساعت دیگری انتخاب کنید.'; step.value = 0; return }
   submitting.value = true
   error.value = ''
   try {
-    await createTableReservation({
+    const result = await createTableReservation({
       customer_name: reserverName.value,
       mobile: reserverPhone.value,
       table: selectedTable.value.id,
@@ -264,6 +275,8 @@ async function submitReservation() {
       guest_count: guests.value,
       note: reserverNote.value,
     })
+    reservation.value = result?.reservation
+    if (!reservation.value?.name) throw new Error('ثبت رزرو تأیید نشد؛ دوباره تلاش کنید.')
     step.value = 3
   } catch (err) {
     error.value = err?.message || 'خطا در ثبت رزرو'
@@ -274,7 +287,7 @@ async function submitReservation() {
 
 onMounted(() => {
   selectedDate.value = availableDates[0]?.value || ''
-  selectedTime.value = availableTimes[0]?.value || ''
+  selectedTime.value = availableTimes.value.find(t => t.available)?.value || ''
   if (new URLSearchParams(window.location.search).get('step') === 'table') step.value = 1
   try {
     const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
@@ -283,13 +296,17 @@ onMounted(() => {
   } catch {}
 })
 
+watch(selectedDate, () => { if (!availableTimes.value.some(t => t.value === selectedTime.value && t.available)) selectedTime.value = availableTimes.value.find(t => t.available)?.value || '' })
 watch([selectedDate, selectedTime, guests], loadTables)
 </script>
 
 <style scoped>
+.reservation-code { display: block; padding: 1rem; background: var(--ds-color-action-primary-soft); color: var(--ds-color-action-primary); border-radius: var(--ds-radius-md); margin-block: 1rem; }
+.table-item small { font-size: .72rem; }
+
 .reservation-page { min-height: 100vh; background: var(--ds-color-bg-page); color: var(--ds-color-text-primary); direction: rtl; }
 
-.content-scroll { width: min(100%, 840px); margin-inline: auto; padding: 1.25rem 1rem 4rem; }
+.content-scroll { width: min(100%, 840px); margin-inline: auto; padding: 1.25rem 1rem 8rem; }
 
 .steps-row {
   display: flex; align-items: center; gap: 0; margin-bottom: 1.5rem;

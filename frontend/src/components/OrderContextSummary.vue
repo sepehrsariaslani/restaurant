@@ -2,8 +2,8 @@
   <aside class="order-flow-sticky-summary" dir="rtl">
     <header>
       <p class="order-flow-eyebrow">مسیر سفارش</p>
-      <h3>خلاصه سفارش شما</h3>
-      <p>در هر مرحله بدانید سفارش برای کجاست، چه زمانی آماده می‌شود، چقدر هزینه دارد و قدم بعدی چیست.</p>
+      <h3>خلاصه مسیر</h3>
+      <p>مقصد، زمان و هزینه سفارش</p>
     </header>
 
     <div class="order-flow-summary-line">

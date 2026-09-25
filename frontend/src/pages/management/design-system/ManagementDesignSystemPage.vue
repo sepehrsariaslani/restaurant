@@ -139,6 +139,10 @@
             </ManagementSurfaceCard>
           </section>
 
+          <ManagementSurfaceCard title="خودرو مشتری" subtitle="نمونهٔ نمایشی بدون ذخیره؛ فرم مشترک حساب و تحویل درب ماشین">
+            <CustomerVehiclePicker v-model="vehiclePreview" />
+          </ManagementSurfaceCard>
+
           <ManagementSurfaceCard title="کارت محصول مشتری" subtitle="نمونه‌ی واقعی MenuProductCard با hierarchy تصویر، قیمت و اقدام">
             <div class="ds-product-card-stage"><MenuProductCard :item="referenceProduct" layout="featured" :cart-qty="1" /></div>
           </ManagementSurfaceCard>
@@ -296,6 +300,7 @@ import ManagementProductReadinessPanel from '@/components/management/catalog/Man
 import ManagementProductSummaryCard from '@/components/management/catalog/ManagementProductSummaryCard.vue'
 import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
 import ManagementProductDetailShell from '@/components/management/catalog/ManagementProductDetailShell.vue'
+import CustomerVehiclePicker from '@/components/customer/CustomerVehiclePicker.vue'
 import MenuProductCard from '@/components/MenuProductCard.vue'
 import DsBadge from '@/components/design/DsBadge.vue'
 import DsButton from '@/components/design/DsButton.vue'
@@ -304,6 +309,7 @@ import { designSystemCatalog, designSystemTabs, iconCatalog } from '@/design-sys
 import { PRODUCT_DETAIL_TABS } from '@/utils/managementProductDetail'
 import { defaultThemeSettings, themePresets } from '@/utils/themeSettings'
 
+const vehiclePreview = ref({ type: 'پژو ۲۰۷', color: 'سفید', plate: 'نمونه' })
 const activeTab = ref('theme')
 const previewMode = ref('light')
 const selectedPresetId = ref(themePresets[0]?.id || 'nooshyar-brown')

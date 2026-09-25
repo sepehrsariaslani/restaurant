@@ -1,6 +1,7 @@
 <template>
   <component
     :is="resolvedComponent"
+    class="public-site-navigation"
     :key="headerKey"
     v-bind="resolvedProps"
     v-on="resolvedListeners"
@@ -75,3 +76,9 @@ const resolvedProps = computed(() => {
 })
 const resolvedListeners = computed(() => ({}))
 </script>
+
+<style>
+@media (max-width: 919px) {
+  .public-site-navigation { display: none !important; }
+}
+</style>

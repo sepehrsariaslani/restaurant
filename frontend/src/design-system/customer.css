@@ -1,0 +1,40 @@
+/* Customer surfaces reuse Restaurant's live semantic tokens. */
+.app-layout { background: var(--ds-color-bg-page); }
+.app-layout .blob { display: none; }
+.app-layout .customer-page { background: var(--ds-color-bg-page); min-height: 100dvh; }
+.app-layout .customer-page__hero { max-width: 940px; margin: 1rem auto 0; padding: 1.4rem 1.25rem; border-radius: 0; background: transparent; color: var(--ds-color-text-primary); box-shadow: none; }
+.app-layout .customer-page__hero::before, .app-layout .customer-page__hero::after { display: none; }
+.app-layout .customer-page__eyebrow { color: var(--ds-color-action-primary); }
+.app-layout .customer-page__subtitle { color: var(--ds-color-text-muted); }
+.app-layout .customer-page__title { font-size: clamp(1.4rem, 3vw, 1.9rem); }
+.app-layout .customer-page__titles { text-align: start; }
+.app-layout .customer-page__back, .app-layout .customer-page__action { border: 1px solid var(--ds-color-border); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); }
+.app-layout .customer-page__body { max-width: 940px; margin: auto; padding: 0 1.25rem 1.5rem; }
+.app-layout .customer-glass-card { background: var(--ds-color-surface-raised); box-shadow: none; border-radius: var(--ds-radius-md); border-color: var(--ds-color-border); }
+.app-layout .customer-glass-card::before { display: none; }
+.app-layout .order-flow-hero { border: 0; background: transparent; box-shadow: none; padding: .8rem 0 1.2rem; }
+.app-layout .order-flow-title { font-size: clamp(1.45rem, 3vw, 2rem); line-height: 1.5; }
+.app-layout .order-flow-card, .app-layout .order-flow-sticky-summary { box-shadow: none; border-radius: var(--ds-radius-md); }
+.app-layout .order-flow-primary { background: var(--ds-color-action-accent); color: var(--ds-color-action-accent-foreground); border-color: var(--ds-color-action-accent); box-shadow: none; border-radius: var(--ds-radius-md); }
+.app-layout .order-flow-secondary { box-shadow: none; border-radius: var(--ds-radius-md); }
+.app-layout .order-flow-input, .app-layout .order-flow-select, .app-layout .order-flow-textarea, .app-layout .customer-input, .app-layout .customer-textarea { background: var(--ds-color-surface-raised); color: var(--ds-color-text-primary); border-color: var(--ds-color-border); font-family: inherit; min-height: 48px; }
+.app-layout :is(button, a, input, select, textarea):focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; }
+.app-layout :is(button, input) { accent-color: var(--ds-color-action-primary); }
+.app-layout .order-flow-card--choice:hover { transform: none; border-color: var(--ds-color-action-primary); }
+.app-layout .order-flow-card--choice { background: var(--ds-color-surface-raised); box-shadow: none; }
+@media (max-width: 919px) {
+  .app-layout .app-main { padding-top: 0; }
+  .app-layout .customer-page__hero { margin-top: 0; padding-top: max(1.25rem, env(safe-area-inset-top)); }
+  .app-layout .customer-page__body { padding-inline: 1rem; }
+  .app-layout .customer-page__subtitle { font-size: .84rem; }
+  .app-layout .order-flow-page { width: calc(100% - 2rem); }
+  .app-layout .order-flow-page--mobile-cta { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
+  .app-layout .order-mobile-cta { bottom: calc(5rem + env(safe-area-inset-bottom)); border-radius: var(--ds-radius-md); }
+  .app-layout .order-flow-sticky-summary > .order-flow-primary { display: none; }
+  .app-layout .order-flow-hero { grid-template-columns: 1fr; gap: .6rem; }
+  .app-layout .order-flow-hero > .order-flow-secondary { justify-self: start; }
+  .app-layout .order-flow-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-layout *, .app-layout *::before, .app-layout *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

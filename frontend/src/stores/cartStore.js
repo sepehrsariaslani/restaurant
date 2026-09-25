@@ -34,6 +34,8 @@ export function defaultOrderContext() {
 		table: "",
 		table_title: "",
 		address: null,
+		pickup_method: "walk",
+		pickup_vehicle: null,
 		pickup_time_type: "asap",
 		pickup_time: "",
 		delivery_time_type: "asap",

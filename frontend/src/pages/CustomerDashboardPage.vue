@@ -3,7 +3,7 @@
     <CustomerPageHeader
       eyebrow="حساب من"
       :title="customerName"
-      subtitle="مرکز مدیریت سفارش‌ها، آدرس‌ها و اطلاعات حساب شما."
+      subtitle="سفارش‌ها و اطلاعات شما، همیشه در دسترس."
       hero-class="dashboard-hero"
       compact
       :show-back="false"
@@ -16,11 +16,6 @@
         </a>
         <span v-else class="customer-page-header__spacer" aria-hidden="true"></span>
       </template>
-
-      <button class="hero-search" type="button" @click="goSearch">
-        <Search :size="18" />
-        <span>جستجو در منو، غذاها و پیشنهادها...</span>
-      </button>
 
     </CustomerPageHeader>
 
@@ -47,6 +42,17 @@
           </a>
         </div>
       </section>
+
+      <nav class="account-shortcuts customer-glass-card" aria-label="مدیریت حساب">
+        <a href="/order/type"><ShoppingBag :size="22" /><span><strong>شروع سفارش</strong><small>انتخاب روش دریافت و غذا</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/orders"><ReceiptText :size="22" /><span><strong>سفارش‌های من</strong><small>پیگیری و سفارش دوباره</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/addresses"><MapPin :size="22" /><span><strong>آدرس‌های من</strong><small>خانه، محل کار و نشانی‌های ذخیره‌شده</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/vehicles"><CarFront :size="22" /><span><strong>خودروهای من</strong><small>تحویل راحت درب ماشین</small></span><ChevronLeft :size="18" /></a>
+        <a href="/table-reservation"><CalendarDays :size="22" /><span><strong>رزرو میز</strong><small>انتخاب روز، ساعت و میز</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/branches"><Store :size="22" /><span><strong>شعبه‌ها</strong><small>نشانی و ساعت کار</small></span><ChevronLeft :size="18" /></a>
+      </nav>
+      <p v-if="profileLoading" class="customer-section__hint" role="status">در حال دریافت اطلاعات حساب…</p>
+      <p v-if="profileError" class="customer-danger-text" role="alert">{{ profileError }}</p>
 
       <section v-if="club && club.points_enabled !== false" class="customer-section customer-glass-card club-summary">
         <div class="club-summary__head">
@@ -86,41 +92,6 @@
         </div>
       </section>
 
-      <section class="customer-section">
-        <div class="customer-section__head">
-          <div>
-            <h2>شروع سفارش</h2>
-            <p>مسیر اصلی سفارش را از اینجا شروع کنید.</p>
-          </div>
-        </div>
-        <div class="order-choice-grid">
-          <a href="/order/type" class="order-choice customer-glass-card order-choice--primary">
-            <span class="customer-icon-badge"><Bike :size="22" /></span>
-            <div>
-              <strong>شروع سفارش جدید</strong>
-              <small>حضوری، بیرون‌بر یا ارسال را شفاف انتخاب کنید</small>
-            </div>
-            <ChevronLeft :size="18" />
-          </a>
-          <a href="/customer/orders" class="order-choice customer-glass-card">
-            <span class="customer-icon-badge"><PackageCheck :size="22" /></span>
-            <div>
-              <strong>تکرار سفارش قبلی</strong>
-              <small>از سفارش‌های اخیر دوباره سفارش دهید</small>
-            </div>
-            <ChevronLeft :size="18" />
-          </a>
-          <a :href="lastOrderUrl" class="order-choice customer-glass-card">
-            <span class="customer-icon-badge"><UtensilsCrossed :size="22" /></span>
-            <div>
-              <strong>پیگیری سفارش</strong>
-              <small>وضعیت سفارش فعلی یا اخیر را ببینید</small>
-            </div>
-            <ChevronLeft :size="18" />
-          </a>
-        </div>
-      </section>
-
       <section class="customer-section customer-glass-card customer-list-card recent-orders-section">
         <div class="customer-section__head">
           <div>
@@ -140,66 +111,13 @@
             <ChevronLeft :size="17" />
           </a>
         </div>
-        <div v-else class="inline-empty">
+        <div v-else-if="!profileLoading && !profileError" class="inline-empty">
           <ReceiptText :size="24" />
           <p>هنوز سفارشی ثبت نشده است.</p>
           <a href="/order/type" class="primary-btn">شروع سفارش</a>
         </div>
       </section>
 
-      <section class="customer-section">
-        <div class="customer-section__head">
-          <div>
-            <h2>مدیریت حساب</h2>
-            <p>کارهای پرتکرار حساب شما.</p>
-          </div>
-        </div>
-        <div class="account-action-grid">
-          <a href="/customer/addresses" class="account-action-card customer-glass-card">
-            <span class="customer-icon-badge"><MapPin :size="21" /></span>
-            <div>
-              <strong>آدرس‌ها</strong>
-              <small>ثبت آدرس و لوکیشن</small>
-            </div>
-          </a>
-          <a href="/customer/orders" class="account-action-card customer-glass-card">
-            <span class="customer-icon-badge"><ReceiptText :size="21" /></span>
-            <div>
-              <strong>سفارش‌ها</strong>
-              <small>تاریخچه و پیگیری</small>
-            </div>
-          </a>
-          <a href="/customer/branches" class="account-action-card customer-glass-card">
-            <span class="customer-icon-badge"><Store :size="21" /></span>
-            <div>
-              <strong>شعبه‌ها</strong>
-              <small>آدرس و ساعات کاری</small>
-            </div>
-          </a>
-        </div>
-      </section>
-
-      <section class="customer-section" v-if="specialOffers.length">
-        <div class="customer-section__head">
-          <div>
-            <h2>پیشنهاد برای سفارش بعدی</h2>
-            <p>چند انتخاب سریع از منو.</p>
-          </div>
-          <a href="/menu" class="customer-page__ghost-action offers-link">مشاهده منو</a>
-        </div>
-
-        <div class="offers-scroll">
-          <a v-for="offer in specialOffers" :key="offer.id" href="/menu" class="offer-card customer-glass-card">
-            <div class="offer-card__image-wrap">
-              <img :src="offer.image" :alt="offer.title" loading="lazy" />
-            </div>
-            <div class="offer-card__body">
-              <strong>{{ offer.title }}</strong>
-              <p>{{ offer.subtitle }}</p>
-            </div>
-          </a>
-        </div>
-      </section>
     </div>
   </div>
 </template>
@@ -207,22 +125,20 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import {
-  Bike,
+  CarFront,
+  CalendarDays,
   ChevronLeft,
   LogOut,
   MapPin,
-  PackageCheck,
   Pencil,
   ReceiptText,
-  Search,
+  ShoppingBag,
   Sparkles,
   Star,
   Store,
   UserRound,
-  UtensilsCrossed,
   Wallet,
 } from 'lucide-vue-next'
-import { cartState } from '@/stores/cartStore'
 import { getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 import { hasCustomerSession } from '@/utils/customerAuth'
@@ -266,26 +182,18 @@ async function redeemAllPoints() {
   }
 }
 
+const profileLoading = ref(false)
+const profileError = ref('')
 const orders = ref([])
-const specialOffers = ref([])
 const currency = ref('TOMAN')
 
 const customerName = computed(() => customer.value.name || 'مهمان عزیز')
 const customerMobile = computed(() => normalizeMobile(customer.value.mobile || ''))
 const recentOrders = computed(() => orders.value.slice(0, 3))
-const lastOrderUrl = computed(() => {
-  const code = cartState.lastOrder?.order_code
-  const mobile = cartState.lastOrder?.mobile || customerMobile.value
-  return code && mobile ? `/order-success/${encodeURIComponent(code)}?mobile=${encodeURIComponent(mobile)}` : '/customer/orders'
-})
 const avatarLetter = computed(() => {
   const name = customerName.value
   return name !== 'مهمان عزیز' ? name.slice(0, 1) : 'ک'
 })
-
-function goSearch() {
-  window.location.href = '/search'
-}
 
 function readAuth() {
   try {
@@ -338,6 +246,7 @@ onMounted(async () => {
   }
   customer.value = { name: auth.name, mobile: auth.mobile }
   if (auth.mobile) {
+    profileLoading.value = true
     try {
       const profile = await getCustomerProfile({ mobile: auth.mobile })
       customer.value = profile?.customer || customer.value
@@ -345,21 +254,21 @@ onMounted(async () => {
       orders.value = profile?.orders || []
       if (profile?.currency) currency.value = profile.currency
       if (customer.value.name) localStorage.setItem('customer_name', customer.value.name)
-    } catch {}
+    } catch (err) { profileError.value = err.message || 'اطلاعات حساب دریافت نشد؛ صفحه را دوباره باز کنید.' }
+    finally { profileLoading.value = false }
   }
-  try {
-    const menu = await getMenuItems({ page_size: 6 })
-    specialOffers.value = (menu?.items || []).slice(0, 6).map((item) => ({
-      id: item.slug || item.name,
-      title: item.title,
-      subtitle: item.short_desc || item.category_title || 'پیشنهاد امروز',
-      image: item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&auto=format&fit=crop&q=60',
-    }))
-  } catch {}
+
 })
 </script>
 
 <style scoped>
+.account-shortcuts { margin-bottom: 1.25rem; padding: .2rem 1rem; }
+.account-shortcuts a { display: flex; align-items: center; gap: .9rem; padding: 1rem 0; color: var(--ds-color-action-primary); text-decoration: none; min-height: 76px; }
+.account-shortcuts a + a { border-top: 1px solid var(--ds-color-border); }
+.account-shortcuts span { display: grid; gap: .25rem; flex: 1; }
+.account-shortcuts strong { color: var(--ds-color-text-primary); font-size: .95rem; }
+.account-shortcuts small { color: var(--ds-color-text-muted); font-size: .8rem; }
+
 .dashboard-page {
   padding-bottom: 8rem;
 }
@@ -375,11 +284,11 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--ds-color-action-primary-foreground, #fff);
+  color: var(--ds-color-action-primary);
   text-decoration: none;
   font-size: 1.1rem;
   font-weight: 800;
-  background: rgb(255 255 255 / 0.16);
+  background: var(--ds-color-action-primary-soft);
   border: 1px solid rgb(255 255 255 / 0.18);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
 }
@@ -521,44 +430,6 @@ onMounted(async () => {
   background: rgb(var(--danger-rgb) / 0.06);
 }
 
-.order-choice-grid {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.order-choice {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  padding: 1rem;
-  color: inherit;
-  text-decoration: none;
-}
-
-.order-choice--primary {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.18);
-  box-shadow: 0 14px 30px rgb(var(--palette-deep-sapphire-rgb) / 0.1);
-}
-
-.order-choice div {
-  flex: 1;
-  min-width: 0;
-}
-
-.order-choice strong,
-.account-action-card strong {
-  display: block;
-  font-size: 0.96rem;
-  margin-bottom: 0.2rem;
-}
-
-.order-choice small,
-.account-action-card small {
-  display: block;
-  color: var(--text-muted);
-  line-height: 1.7;
-}
-
 .recent-orders-list {
   display: grid;
   gap: 0.55rem;
@@ -673,12 +544,6 @@ onMounted(async () => {
   margin: 0.3rem 0 0;
   font-size: 0.76rem;
   color: var(--text-muted);
-}
-
-@media (min-width: 760px) {
-  .order-choice-grid {
-    grid-template-columns: 1.2fr 1fr 1fr;
-  }
 }
 
 @media (max-width: 480px) {

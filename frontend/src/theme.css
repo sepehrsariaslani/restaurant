@@ -72,26 +72,26 @@
 
 :root {
 	/* Restaurant Design System: semantic tokens are the source used by new UI. */
-	--ds-color-bg-page: #fff9ed;
-	--ds-color-surface: #fffeFC;
-	--ds-color-surface-raised: #ffffff;
-	--ds-color-surface-muted: #f8ebcb;
-	--ds-color-border: #e2d0ab;
-	--ds-color-text-primary: #382719;
-	--ds-color-text-secondary: #5f4930;
-	--ds-color-text-muted: #806a50;
+	--ds-color-bg-page: #fcfaf7;
+	--ds-color-surface: #fffdf9;
+	--ds-color-surface-raised: #fffdf9;
+	--ds-color-surface-muted: #f5efe7;
+	--ds-color-border: #e3d8cb;
+	--ds-color-text-primary: #322f29;
+	--ds-color-text-secondary: #5e584f;
+	--ds-color-text-muted: #776f64;
 	--ds-color-text-inverse: #ffffff;
-	--ds-color-action-primary: #b94712;
+	--ds-color-action-primary: #2f684f;
 	--ds-color-action-primary-foreground: #ffffff;
-	--ds-color-action-primary-soft: rgb(185 71 18 / 0.10);
-	--ds-color-action-accent: #dfaf2e;
-	--ds-color-action-accent-foreground: #1c1a18;
-	--ds-color-action-accent-soft: rgb(223 175 46 / 0.16);
-	--ds-color-product-accent: #dfaf2e;
-	--ds-color-product-accent-rgb: 223 175 46;
-	--ds-color-product-accent-soft: rgb(223 175 46 / 0.16);
+	--ds-color-action-primary-soft: rgb(47 104 79 / 0.08);
+	--ds-color-action-accent: #e87935;
+	--ds-color-action-accent-foreground: #322f29;
+	--ds-color-action-accent-soft: rgb(232 121 53 / 0.13);
+	--ds-color-product-accent: #e87935;
+	--ds-color-product-accent-rgb: 232 121 53;
+	--ds-color-product-accent-soft: rgb(232 121 53 / 0.13);
 	--ds-color-product-media-surface: #ffffff;
-	--ds-color-focus-ring: #dfaf2e;
+	--ds-color-focus-ring: #e87935;
 	--ds-color-status-success: #287347;
 	--ds-color-status-success-foreground: #ffffff;
 	--ds-color-status-success-soft: rgb(40 115 71 / 0.12);

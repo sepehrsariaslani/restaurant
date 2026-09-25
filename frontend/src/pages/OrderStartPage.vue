@@ -15,8 +15,8 @@
     <section class="order-flow-context-grid">
       <div class="order-flow-fact"><small>۱</small><strong>نوع سفارش را انتخاب کنید</strong></div>
       <div class="order-flow-fact"><small>۲</small><strong>شعبه، میز یا آدرس را مشخص کنید</strong></div>
-      <div class="order-flow-fact"><small>۳</small><strong>منو را ببینید و سبد را بسازید</strong></div>
-      <div class="order-flow-fact"><small>۴</small><strong>پرداخت و پیگیری سفارش</strong></div>
+      <div class="order-flow-fact"><small>۳</small><strong>منوی همان شعبه را ببینید و سفارش را بسازید</strong></div>
+      <div class="order-flow-fact"><small>۴</small><strong>سفارش را نهایی و پیگیری کنید</strong></div>
     </section>
 
     <div class="order-flow-grid">
@@ -24,11 +24,11 @@
         <div class="order-flow-card-head">
           <div>
             <h2>سفارش جدید</h2>
-            <p>حضوری، بیرون‌بر یا ارسال را انتخاب کنید.</p>
+            <p>اول محل سفارش را مشخص کنید تا منوی همان شعبه را ببینید.</p>
           </div>
           <span class="order-flow-icon"><Plus :size="24" /></span>
         </div>
-        <a class="order-flow-primary" href="/order/type">شروع سفارش جدید</a>
+        <a class="order-flow-primary" href="/order/type">انتخاب نوع سفارش</a>
       </article>
 
       <article class="order-flow-card order-flow-card--selectable">
@@ -70,10 +70,12 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { MapPinned, Plus, RotateCcw } from 'lucide-vue-next'
 import { cartState } from '@/stores/cartStore'
 import './orderFlow.css'
+
+onMounted(() => window.location.replace('/order/type'))
 
 const trackUrl = computed(() => {
   const code = cartState.lastOrder?.order_code

@@ -1,5 +1,5 @@
 <template>
-  <LiquidGlassBackdrop>
+  <div class="cart-page">
     <section class="cart-shell">
       <section class="cart-frame">
         <header class="cart-heading">
@@ -28,12 +28,13 @@
             />
 
             <div class="empty-box" v-if="!cartState.lines.length">
-              <p class="muted">سبد سفارش خالی است.</p>
+              <ShoppingBag :size="40" aria-hidden="true" /><h2>سبد شما منتظر یک انتخاب خوشمزه است</h2><p class="muted">از منو شروع کنید و غذای دلخواهتان را اضافه کنید.</p>
               <a href="/menu" class="go-menu">مشاهده منو</a>
             </div>
           </section>
 
-          <section class="summary-panel">
+          <section v-if="cartState.lines.length" class="summary-panel">
+          <h2 class="summary-title">خلاصه سفارش</h2>
           <div class="sum-row">
             <span>جمع اقلام</span>
             <strong>{{ formatMoney(totals.subtotal, currency) }}</strong>
@@ -44,7 +45,7 @@
           </div>
           <div class="sum-row muted-fee" v-else>
             <span>ارسال</span>
-            <strong>{{ cartState.orderContext.order_type === 'delivery' ? 'پس از تایید شرکت' : 'بدون هزینه ارسال' }}</strong>
+            <strong>{{ cartState.orderContext.order_type === 'delivery' ? 'پس از تایید شعبه' : 'بدون هزینه ارسال' }}</strong>
           </div>
           <div class="sum-row total">
             <span>مبلغ قابل پرداخت</span>
@@ -52,13 +53,18 @@
           </div>
 
           <a class="checkout-btn" :class="{ disabled: !cartState.lines.length }" href="/checkout" @click.prevent="openCheckout">
-            {{ hasContext ? 'ادامه به تکمیل سفارش →' : 'انتخاب نوع سفارش →' }}
+            {{ hasContext ? 'ادامه سفارش' : 'انتخاب روش دریافت' }}
           </a>
           <p class="error" v-if="error">{{ error }}</p>
           </section>
         </div>
       </section>
     </section>
+
+    <div v-if="cartState.lines.length" class="cart-mobile-checkout">
+      <div><small>{{ totalQty.toLocaleString('fa-IR') }} آیتم</small><strong>{{ formatMoney(totals.grand_total, currency) }}</strong></div>
+      <button class="checkout-btn" type="button" @click="openCheckout">{{ hasContext ? 'ادامه سفارش' : 'روش دریافت' }}<ChevronLeft :size="18" /></button>
+    </div>
 
     <CartToppingSheet
       :open="editorOpen"
@@ -70,13 +76,12 @@
       @close="closeEditor"
       @apply="applyCustomization"
     />
-  </LiquidGlassBackdrop>
+  </div>
 </template>
 
 <script setup>
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
-import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import CartLineEditor from '@/components/CartLineEditor.vue'
 import CartToppingSheet from '@/components/CartToppingSheet.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
@@ -84,7 +89,8 @@ import { cartState, getLineById, removeLine, setLineQty, upsertLine } from '@/st
 import { getItemDetail, getMenuBoot } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
-import { calculateOrderTotals, ORDER_FLOW_CURRENCY_FALLBACK } from '@/utils/orderFlow'
+import { orderContextIssue } from '@/utils/customerOrderValidation'
+import { calculateOrderTotals, orderContextChangeUrl, ORDER_FLOW_CURRENCY_FALLBACK } from '@/utils/orderFlow'
 
 const currency = ref(ORDER_FLOW_CURRENCY_FALLBACK)
 const error = ref('')
@@ -106,7 +112,7 @@ function openCheckout() {
     window.location.href = '/order/type'
     return
   }
-  window.location.href = '/checkout'
+  window.location.href = orderContextIssue(cartState.orderContext) ? orderContextChangeUrl(cartState.orderContext) : '/checkout'
 }
 
 function setQty(lineId, qty) {
@@ -196,6 +202,11 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.summary-title { font-size: 1.05rem; margin: 0; }
+.cart-mobile-checkout { display: none; }
+.empty-box { min-height: 300px; }
+.empty-box h2 { font-size: 1.1rem; margin: 0; }
+
 .cart-shell {
   width: min(980px, calc(100% - 2rem));
   margin: 1rem auto 6rem;
@@ -362,6 +373,15 @@ onMounted(async () => {
   color: var(--ds-color-status-danger, var(--danger));
 }
 
+@media (max-width: 919px) {
+  .cart-mobile-checkout { position: fixed; bottom: calc(5rem + env(safe-area-inset-bottom)); z-index: 110; inset-inline: .75rem; display: flex; align-items: center; gap: .75rem; padding: .75rem; border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border); background: var(--ds-color-surface-raised); box-shadow: var(--ds-shadow-sm); }
+  .cart-mobile-checkout > div { display: grid; gap: .2rem; flex: 1; }
+  .cart-mobile-checkout small { color: var(--ds-color-text-muted); }
+  .cart-mobile-checkout strong { font-size: .9rem; white-space: nowrap; }
+  .cart-mobile-checkout .checkout-btn { width: auto; margin: 0; gap: .4rem; border-radius: var(--ds-radius-md); }
+  .summary-panel > .checkout-btn { display: none; }
+  .cart-shell { padding-bottom: 5rem; }
+}
 @media (max-width: 760px) {
   .cart-shell {
     width: min(100% - 1rem, 100%);

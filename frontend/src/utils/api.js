@@ -4200,3 +4200,13 @@ export function deleteManagementVendor(name = "") {
 export function getManagementAccountingBoot() {
 	return callRestaurantAPI("get_management_accounting_boot", {});
 }
+
+function customerEditToken() {
+  try { return JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}').customer_token || '' } catch { return '' }
+}
+export function saveCustomerProfile({ name = '', email = '' } = {}) {
+  return callMethodByPath('restaurant.customer_account.save_profile', { customer_token: customerEditToken(), name, email })
+}
+export function archiveCustomerAddress(address_id) {
+  return callMethodByPath('restaurant.customer_account.archive_address', { customer_token: customerEditToken(), address_id })
+}

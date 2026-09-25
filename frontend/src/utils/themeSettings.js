@@ -19,7 +19,7 @@ export const defaultThemeSettings = {
   textSecondary: palette.textSecondary,
   muted: palette.muted,
   // POS keeps its established deep-brown action color; customer pages use
-  // configurable orange and saffron-yellow brand colors above.
+  // configurable green and orange brand colors above.
   posPrimary: '#6F4A31',
   posAccent: palette.accent,
   posSuccess: '#0B7D4A',
@@ -29,9 +29,9 @@ export const defaultThemeSettings = {
 
 export const themePresets = [
   {
-    id: 'veederakht-orange-yellow',
-    name: 'ویدرخت · نارنجی و زرد زعفرانی',
-    description: 'نارنجی برای اقدام اصلی، زرد زعفرانی برای تأکیدها و زمینه‌های گرم و روشن.',
+    id: 'veederakht-green-orange',
+    name: 'ویدرخت · سبز و نارنجی گرم',
+    description: 'سبز برای هویت و انتخاب‌ها، نارنجی برای اقدام و زمینه‌های خنثیِ گرم.',
     colors: {
       ...defaultThemeSettings,
     },
@@ -240,7 +240,16 @@ function managementSuccessBackground(success) {
   return tintHex(success, 0.78)
 }
 
+const previousStorefrontPalettes = [
+  { primary: "#B94712", accent: "#DFAF2E", surface: "#FFFEFC", surfaceAlt: "#F8EBCB", background: "#FFF9ED", border: "#E2D0AB", text: "#382719", textSecondary: "#5F4930", muted: "#806A50" },
+  { primary: "#246B4B", accent: "#E97732", surface: "#FFFFFF", surfaceAlt: "#EDF4EF", background: "#F7F9F6", border: "#D6E1D9", text: "#20392C", textSecondary: "#496153", muted: "#65766B" },
+]
+
 export function sanitizeThemeSettings(partial = {}) {
+  const previous = previousStorefrontPalettes.find((palette) => Object.entries(palette).every(([key, value]) => normalizeHex(partial[key], "") === value))
+  if (previous) {
+    partial = { ...partial, ...Object.fromEntries(Object.keys(previous).map((key) => [key, defaultThemeSettings[key]])) }
+  }
   return COLOR_KEYS.reduce((acc, key) => {
     acc[key] = normalizeHex(partial[key], defaultThemeSettings[key])
     return acc

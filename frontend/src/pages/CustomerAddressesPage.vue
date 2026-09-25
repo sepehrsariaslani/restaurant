@@ -1,643 +1,125 @@
 <template>
   <div class="customer-page addresses-page" dir="rtl">
-    <CustomerPageHeader
-      eyebrow="مدیریت آدرس‌ها"
-      title="آدرس‌های من"
-      subtitle="آدرس‌های تحویل خود را برای سفارش‌های سریع‌تر نگه دارید."
-      fallback-href="/customer/dashboard"
-    >
-      <template #eyebrow-icon><MapPin :size="14" aria-hidden="true" /></template>
-      <template #action>
-        <button class="customer-page__action" type="button" @click="openAddForm">
-          <Plus :size="16" />
-          <span>جدید</span>
-        </button>
-      </template>
+    <CustomerPageHeader eyebrow="حساب من" title="آدرس‌های من" subtitle="یک بار ذخیره کنید، سفارش بعدی سریع‌تر می‌رسد." fallback-href="/customer/dashboard">
+      <template #eyebrow-icon><MapPin :size="16" /></template>
+      <template #action><button class="customer-page__action" type="button" @click="openEditor()"><Plus :size="18" />جدید</button></template>
     </CustomerPageHeader>
-
-    <div class="customer-page__body">
-      <p v-if="error" class="customer-section__hint customer-danger-text">{{ error }}</p>
-
-      <div v-if="addresses.length === 0" class="customer-glass-card customer-empty">
-        <div class="customer-icon-badge"><MapPinned :size="28" /></div>
-        <h3>آدرسی ثبت نشده</h3>
-        <p>برای تحویل سریع‌تر، آدرس خانه یا محل کارتان را ذخیره کنید.</p>
-        <button class="primary-btn" @click="openAddForm">افزودن آدرس جدید</button>
-      </div>
-
-      <div v-else class="customer-stack">
-        <article
-          v-for="addr in addresses"
-          :key="addr.id"
-          class="address-card customer-glass-card"
-          :class="{ 'is-selected': selectedId === addr.id }"
-          @click="selectedId = addr.id"
-        >
-          <div class="address-card__radio">
-            <span class="address-card__dot" :class="{ 'is-active': selectedId === addr.id }"></span>
+    <main class="customer-page__body">
+      <p v-if="loading" class="address-message" role="status">در حال دریافت آدرس‌ها…</p>
+      <p v-if="error" class="address-error" role="alert">{{ error }} <button v-if="!showForm" type="button" @click="loadAddresses">تلاش دوباره</button></p>
+      <p v-if="message" class="address-message" role="status">{{ message }}</p>
+      <section v-if="showForm" class="address-editor customer-glass-card">
+        <div class="address-editor-head"><h2>{{ editingId ? 'ویرایش آدرس' : 'آدرس جدید' }}</h2><button class="customer-page__ghost-action" type="button" @click="showForm = false" aria-label="بستن فرم آدرس"><X :size="20" /></button></div>
+        <div class="address-map-head"><span>اول محل دقیق تحویل را انتخاب کنید</span><button type="button" class="customer-page__ghost-action" :disabled="locating" @click="useCurrentLocation"><Crosshair :size="17" />{{ locating ? 'در حال دریافت…' : 'موقعیت من' }}</button></div>
+        <AddressPickerMap v-model="addressLocation" :config="mapConfig" @status="mapStatus = $event" />
+        <p v-if="locationError" class="address-error" role="alert">{{ locationError }}</p>
+        <details :open="mapStatus === 'error'" class="address-manual"><summary>ورود دستی مختصات</summary><div class="address-grid">
+          <label class="customer-field">عرض جغرافیایی<input class="customer-input" v-model="draft.lat" inputmode="decimal" dir="ltr" /></label>
+          <label class="customer-field">طول جغرافیایی<input class="customer-input" v-model="draft.lng" inputmode="decimal" dir="ltr" /></label>
+        </div></details>
+        <form class="address-form" @submit.prevent="saveAddress">
+          <label class="customer-field">عنوان آدرس<input class="customer-input" v-model.trim="draft.title" placeholder="خانه یا محل کار" required /></label>
+          <label class="customer-field">نشانی کامل<textarea class="customer-textarea" v-model.trim="draft.address_line" placeholder="خیابان، کوچه و جزئیات مسیر" rows="3" required /></label>
+          <div class="address-grid">
+            <label class="customer-field">پلاک<input class="customer-input" v-model="draft.plaque" /></label>
+            <label class="customer-field">واحد<input class="customer-input" v-model="draft.unit" /></label>
           </div>
-
-          <div class="address-card__body">
-            <div class="address-card__head">
-              <div>
-                <strong>{{ addr.label }}</strong>
-                <p>{{ addr.address }}</p>
-              </div>
-              <span class="customer-kicker">{{ addr.type }}</span>
-            </div>
-            <small v-if="addr.detail">{{ addr.detail }}</small>
-          </div>
-
-          <div class="address-card__actions">
-            <button class="icon-action" @click.stop="editAddress(addr)" aria-label="ویرایش آدرس">
-              <Pencil :size="16" />
-            </button>
-            <button class="icon-action icon-action--danger" @click.stop="deleteAddress(addr.id)" aria-label="حذف آدرس">
-              <Trash2 :size="16" />
-            </button>
-          </div>
+          <div class="address-editor-actions"><button class="customer-page__ghost-action" type="button" @click="showForm = false">انصراف</button><button class="address-save" type="submit" :disabled="saving || !canSaveAddress">{{ saving ? 'در حال ذخیره…' : 'ذخیره آدرس' }}</button></div>
+          <p v-if="!hasLocation" class="address-message">برای ذخیره، نقطهٔ تحویل را روی نقشه انتخاب کنید.</p>
+        </form>
+      </section>
+      <div v-else-if="!loading && !error && !addresses.length" class="customer-empty customer-glass-card"><MapPin :size="32" /><h2>اولین آدرس را اضافه کنید</h2><p>خانه یا محل کار؛ هرجا که دوست دارید غذا برسد.</p><button class="address-save" type="button" @click="openEditor()">افزودن آدرس</button></div>
+      <div v-else-if="!showForm" class="address-list">
+        <article v-for="address in addresses" :key="address.id" class="address-card customer-glass-card">
+          <div class="address-card-heading"><span class="customer-icon-badge"><MapPin :size="22" /></span><h2>{{ address.title }}</h2><button class="customer-page__ghost-action" type="button" :aria-label="`ویرایش ${address.title}`" @click="openEditor(address)"><Pencil :size="17" /></button></div>
+          <p>{{ address.address_line }}</p><small v-if="address.plaque || address.unit">{{ address.plaque ? `پلاک ${address.plaque}` : '' }} {{ address.unit ? `· واحد ${address.unit}` : '' }}</small>
+          <button v-if="auth.customer_token" class="address-archive" type="button" :disabled="archiving === address.id" @click="archive(address)"><Trash2 :size="16" />حذف از آدرس‌های من</button>
+          <button class="address-use" type="button" @click="useAddress(address)">سفارش به این آدرس <ChevronLeft :size="17" /></button>
         </article>
-
-        <button class="add-address-row customer-glass-card" @click="openAddForm">
-          <Plus :size="18" />
-          افزودن آدرس جدید
-        </button>
       </div>
-    </div>
-
-    <Teleport to="body">
-      <div class="modal-overlay" v-if="showForm" @click.self="closeForm">
-        <div class="modal-sheet customer-glass-card" dir="rtl">
-          <div class="modal-sheet__head">
-            <div>
-              <p class="customer-page__eyebrow modal-eyebrow"><MapPin :size="14" /> فرم آدرس</p>
-              <h3 class="modal-title">{{ editingId ? 'ویرایش آدرس' : 'آدرس جدید' }}</h3>
-            </div>
-            <button class="icon-action" @click="closeForm" aria-label="بستن">
-              <X :size="16" />
-            </button>
-          </div>
-
-          <div class="customer-field">
-            <label>نوع آدرس</label>
-            <div class="customer-chip-row">
-              <button
-                v-for="t in types"
-                :key="t"
-                class="customer-chip"
-                :class="{ 'is-active': newAddr.type === t }"
-                @click="newAddr.type = t"
-              >
-                {{ t }}
-              </button>
-            </div>
-          </div>
-
-          <div class="customer-field">
-            <label>نام یا عنوان</label>
-            <input class="customer-input" v-model="newAddr.label" placeholder="مثلاً: خانه، محل کار" />
-          </div>
-
-          <div class="customer-field">
-            <label>آدرس کامل</label>
-            <textarea class="customer-textarea" v-model="newAddr.address" placeholder="شهر، خیابان، کوچه..." rows="3"></textarea>
-          </div>
-
-          <div class="customer-field">
-            <label>واحد / طبقه / جزئیات بیشتر</label>
-            <input class="customer-input" v-model="newAddr.detail" placeholder="مثلاً: واحد ۳" />
-          </div>
-
-          <div class="customer-field">
-            <label>لینک فیلم راهنمای مسیر (اختیاری)</label>
-            <input class="customer-input" v-model="newAddr.video_url" dir="ltr" placeholder="https://... لینک ویدئو برای راهنمایی پیک" />
-            <small class="customer-hint">اگر مسیر خانه‌تان سخت است، لینک فیلم کوتاه راهنما را اینجا بگذارید تا پیک راحت‌تر پیدایتان کند.</small>
-          </div>
-
-          <div class="customer-field location-field">
-            <div class="location-field__head">
-              <div>
-                <label>لوکیشن روی نقشه</label>
-                <p>برای ارسال دقیق، موقعیت را روی نقشه انتخاب کنید یا از GPS دستگاه استفاده کنید.</p>
-              </div>
-              <button class="customer-page__ghost-action locate-btn" type="button" :disabled="locating" @click="useCurrentLocation">
-                <Crosshair :size="16" />
-                <span>{{ locating ? 'در حال دریافت...' : 'موقعیت من' }}</span>
-              </button>
-            </div>
-
-            <AddressPickerMap
-              v-if="showForm"
-              v-model="addressLocation"
-              :config="mapConfig"
-              @status="mapStatus = $event"
-            />
-
-            <details class="location-coordinates" :open="!hasMapKey">
-              <summary>{{ hasMapKey ? 'تنظیمات پیشرفته موقعیت' : 'ثبت دستی مختصات' }}</summary>
-              <div class="location-coordinates__grid">
-                <label>
-                  <span>عرض جغرافیایی</span>
-                  <input class="customer-input" v-model="newAddr.lat" inputmode="decimal" dir="ltr" placeholder="35.699700" />
-                </label>
-                <label>
-                  <span>طول جغرافیایی</span>
-                  <input class="customer-input" v-model="newAddr.lng" inputmode="decimal" dir="ltr" placeholder="51.338100" />
-                </label>
-              </div>
-            </details>
-            <p v-if="locationError" class="location-error">{{ locationError }}</p>
-            <p v-else-if="hasLocation" class="location-ok">
-              <MapPinCheck :size="15" />
-              مختصات معتبر برای این آدرس ثبت شده است.
-            </p>
-            <p v-else class="location-hint">
-              {{ hasMapKey ? 'برای ذخیره آدرس، نقطهٔ روی نقشه یا مختصات معتبر را ثبت کنید.' : 'نقشه فعال نیست؛ مختصات را دستی وارد کنید تا بتوانید آدرس را ذخیره کنید.' }}
-            </p>
-          </div>
-
-          <div class="modal-actions">
-            <button class="customer-page__ghost-action modal-cancel" @click="closeForm">انصراف</button>
-            <button class="primary-btn modal-save" @click="saveAddress" :disabled="!canSaveAddress">ذخیره آدرس</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <div class="customer-bottom-cta" v-if="addresses.length > 0">
-      <button class="customer-primary-cta" @click="confirmSelection">
-        <Check :size="18" />
-        تأیید این آدرس
-      </button>
-    </div>
+    </main>
   </div>
 </template>
-
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { Check, Crosshair, MapPin, MapPinCheck, MapPinned, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ChevronLeft, Crosshair, MapPin, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import AddressPickerMap from '@/components/checkout/AddressPickerMap.vue'
-import { getCustomerCheckoutProfile, getMenuBoot, saveCustomerDeliveryAddress } from '@/utils/api'
-
-const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
-const STORAGE_KEY = 'customer_addresses_v1'
-function loadAddresses() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] } }
-function saveAddresses(list) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch {} }
-function readAuth() {
+import { getCustomerCheckoutProfile, getMenuBoot, saveCustomerDeliveryAddress, archiveCustomerAddress } from '@/utils/api'
+import { hasDeliveryCoordinates } from '@/utils/customerOrderValidation'
+import { saveCheckoutDraft, saveOrderContext } from '@/stores/cartStore'
+let auth = {}
+try { auth = JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}') } catch {}
+const addresses = ref([]), loading = ref(true), error = ref(''), message = ref(''), showForm = ref(false), saving = ref(false)
+const archiving = ref('')
+const editingId = ref(''), locating = ref(false), locationError = ref(''), mapStatus = ref(''), mapConfig = ref({})
+const emptyAddress = () => ({ title: 'خانه', address_line: '', plaque: '', unit: '', floor: '', phone: auth.mobile || '', lat: '', lng: '' })
+const draft = reactive(emptyAddress())
+const hasLocation = computed(() => hasDeliveryCoordinates(draft))
+const canSaveAddress = computed(() => Boolean(draft.title.trim() && draft.address_line.trim() && hasLocation.value))
+const addressLocation = computed({ get: () => ({ lat: draft.lat, lng: draft.lng }), set: (point) => { draft.lat = point.lat; draft.lng = point.lng; locationError.value = '' } })
+function openEditor(address = null) { editingId.value = address?.id || ''; Object.keys(draft).forEach(key => delete draft[key]); Object.assign(draft, emptyAddress(), address || {}); error.value = ''; message.value = ''; locationError.value = ''; showForm.value = true }
+async function loadAddresses() {
+  if (!auth.mobile) { window.location.replace('/customer/login?redirect=%2Fcustomer%2Faddresses'); return }
+  loading.value = true; error.value = ''
+  try { const data = await getCustomerCheckoutProfile({ mobile: auth.mobile }); addresses.value = data.addresses || [] }
+  catch (err) { error.value = err.message || 'آدرس‌ها دریافت نشدند.' }
+  finally { loading.value = false }
+}
+async function saveAddress() {
+  if (!canSaveAddress.value || saving.value) return
+  saving.value = true; error.value = ''
   try {
-    const auth = JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}')
-    return {
-      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
-      name: auth.customer_name || localStorage.getItem('customer_name') || '',
-    }
-  } catch { return { mobile: '', name: '' } }
+    const result = await saveCustomerDeliveryAddress({ customer_info: { name: auth.customer_name || localStorage.getItem('customer_name') || 'مشتری', mobile: auth.mobile }, address_info: { ...draft, id: editingId.value } })
+    if (!result?.address?.id) throw new Error('سرور ذخیره آدرس را تأیید نکرد؛ دوباره تلاش کنید.')
+    addresses.value = result.addresses || [result.address]
+    showForm.value = false; message.value = 'آدرس در حساب شما ذخیره شد.'
+  } catch (err) { error.value = err.message || 'آدرس ذخیره نشد؛ اطلاعات فرم حفظ شده است.' }
+  finally { saving.value = false }
 }
-function normalizeAddress(row) {
-  const address = row.address || row.address_line1 || row.address_line || ''
-  const lat = firstNonEmpty(row.lat, row.latitude)
-  const lng = firstNonEmpty(row.lng, row.longitude)
-  return {
-    ...row,
-    id: row.id || row.name || Date.now(),
-    label: row.label || row.address_title || row.title || row.type || 'آدرس',
-    type: row.type || row.address_type || 'سایر',
-    address,
-    detail: row.detail || row.address_line2 || '',
-    video_url: row.video_url || row.guidance_video || '',
-    lat,
-    lng,
-  }
+async function archive(address) {
+  if (!window.confirm(`آدرس «${address.title}» از فهرست شما حذف شود؟`)) return
+  archiving.value = address.id; error.value = ''
+  try { await archiveCustomerAddress(address.id); addresses.value = addresses.value.filter(row => row.id !== address.id); message.value = 'آدرس از فهرست شما حذف شد.' }
+  catch (err) { error.value = err.message || 'حذف آدرس انجام نشد.' }
+  finally { archiving.value = '' }
 }
-
-function firstNonEmpty(...values) {
-  const value = values.find((item) => item !== undefined && item !== null && String(item).trim() !== '')
-  return value === undefined ? '' : value
+function useAddress(address) {
+  saveOrderContext({ order_type: 'delivery', address: { ...address }, table: '', pickup_vehicle: null })
+  saveCheckoutDraft({ delivery_address_id: address.id, use_new_address: false })
+  window.location.href = '/order/delivery'
 }
-
-function isValidCoordinate(value, min, max) {
-  const number = Number(value)
-  return Number.isFinite(number) && number >= min && number <= max
-}
-
-function normalizeCoordinate(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? Number(number.toFixed(6)) : ''
-}
-
-const addresses = ref(loadAddresses().map(normalizeAddress))
-const selectedId = ref(addresses.value[0]?.id || null)
-const loading = ref(false)
-const error = ref('')
-const showForm = ref(false)
-const editingId = ref(null)
-const locating = ref(false)
-const locationError = ref('')
-const mapStatus = ref('')
-const mapConfig = ref({
-  provider: 'neshan',
-  api_key: '',
-  script_url: 'https://static.neshan.org/sdk/leaflet/1.4.0/leaflet.js',
-  style_url: 'https://static.neshan.org/sdk/leaflet/1.4.0/leaflet.css',
-  default_lat: 35.6997,
-  default_lng: 51.3381,
-  default_zoom: 13,
-})
-const types = ['خانه', 'محل کار', 'سایر']
-
-const newAddr = ref({ label: 'خانه', type: 'خانه', address: '', detail: '', lat: '', lng: '' })
-
-const hasLocation = computed(() => (
-  isValidCoordinate(newAddr.value.lat, -90, 90) && isValidCoordinate(newAddr.value.lng, -180, 180)
-))
-const hasMapKey = computed(() => Boolean(String(mapConfig.value.api_key || '').trim()))
-const canSaveAddress = computed(() => newAddr.value.address.trim() && hasLocation.value)
-const addressLocation = computed({
-  get() {
-    return { lat: newAddr.value.lat, lng: newAddr.value.lng }
-  },
-  set(value = {}) {
-    newAddr.value.lat = normalizeCoordinate(value.lat)
-    newAddr.value.lng = normalizeCoordinate(value.lng)
-    locationError.value = ''
-  },
-})
-
-function openAddForm() {
-  editingId.value = null
-  locationError.value = ''
-  mapStatus.value = ''
-  newAddr.value = { label: 'خانه', type: 'خانه', address: '', detail: '', video_url: '', lat: '', lng: '' }
-  showForm.value = true
-}
-function editAddress(addr) {
-  const normalized = normalizeAddress(addr)
-  editingId.value = normalized.id
-  locationError.value = ''
-  mapStatus.value = ''
-  newAddr.value = { ...normalized }
-  showForm.value = true
-}
-function closeForm() { showForm.value = false; editingId.value = null; locationError.value = '' }
-
 function useCurrentLocation() {
   locationError.value = ''
-  if (!navigator.geolocation) {
-    locationError.value = 'مرورگر شما دسترسی به موقعیت مکانی را پشتیبانی نمی‌کند.'
-    return
-  }
+  if (!navigator.geolocation) { locationError.value = 'موقعیت من در این مرورگر در دسترس نیست؛ روی نقشه انتخاب کنید.'; return }
   locating.value = true
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      newAddr.value.lat = normalizeCoordinate(position.coords.latitude)
-      newAddr.value.lng = normalizeCoordinate(position.coords.longitude)
-      locating.value = false
-      locationError.value = ''
-    },
-    () => {
-      locating.value = false
-      locationError.value = 'دسترسی به موقعیت مکانی ممکن نشد. لطفاً اجازه GPS را فعال کنید یا نقطه را روی نقشه انتخاب کنید.'
-    },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-  )
+  navigator.geolocation.getCurrentPosition((position) => { draft.lat = position.coords.latitude; draft.lng = position.coords.longitude; locating.value = false }, () => { locating.value = false; locationError.value = 'دریافت موقعیت ممکن نشد؛ روی نقشه انتخاب کنید.' }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 })
 }
-
-async function saveAddress() {
-  if (!newAddr.value.address.trim()) return
-  if (!hasLocation.value) {
-    locationError.value = 'برای ذخیره آدرس باید لوکیشن معتبر انتخاب شود.'
-    return
-  }
-  const auth = readAuth()
-  if (!auth.mobile) {
-    error.value = 'برای ذخیره آدرس ابتدا وارد شوید.'
-    window.location.href = '/customer/login?redirect=/customer/addresses'
-    return
-  }
-  const localId = editingId.value || Date.now()
-  try {
-    const result = await saveCustomerDeliveryAddress({
-      customer_info: { name: auth.name || 'مشتری', mobile: auth.mobile },
-      address_info: {
-        id: editingId.value || '',
-        label: newAddr.value.label,
-        type: newAddr.value.type,
-        address: newAddr.value.address,
-        detail: newAddr.value.detail,
-        address_line: newAddr.value.address,
-        address_line1: newAddr.value.address,
-        address_line2: newAddr.value.detail,
-        video_url: newAddr.value.video_url || '',
-        lat: normalizeCoordinate(newAddr.value.lat),
-        lng: normalizeCoordinate(newAddr.value.lng),
-      },
-    })
-    addresses.value = (result?.addresses || []).map(normalizeAddress)
-    if (!addresses.value.length) addresses.value.push({ ...newAddr.value, id: localId })
-  } catch {
-    if (editingId.value) {
-      const idx = addresses.value.findIndex((a) => a.id === editingId.value)
-      if (idx >= 0) addresses.value[idx] = { ...newAddr.value, id: editingId.value }
-    } else {
-      addresses.value.push({ ...newAddr.value, id: localId })
-    }
-  }
-  saveAddresses(addresses.value)
-  closeForm()
-}
-
-function deleteAddress(id) {
-  if (!confirm('این آدرس حذف شود؟')) return
-  addresses.value = addresses.value.filter((a) => a.id !== id)
-  if (selectedId.value === id) selectedId.value = addresses.value[0]?.id || null
-  saveAddresses(addresses.value)
-}
-
-function confirmSelection() {
-  const addr = addresses.value.find((a) => a.id === selectedId.value)
-  if (addr) {
-    try { localStorage.setItem('selected_address', JSON.stringify(addr)) } catch {}
-    window.history.back()
-  }
-}
-
-onMounted(async () => {
-  try {
-    const boot = await getMenuBoot('')
-    if (boot?.checkout_map && typeof boot.checkout_map === 'object') {
-      mapConfig.value = { ...mapConfig.value, ...boot.checkout_map }
-    }
-  } catch {}
-
-  const auth = readAuth()
-  if (!auth.mobile) return
-  loading.value = true
-  try {
-    const data = await getCustomerCheckoutProfile({ mobile: auth.mobile, customer_name: auth.name })
-    addresses.value = (data?.addresses || []).map(normalizeAddress)
-    selectedId.value = addresses.value[0]?.id || null
-    saveAddresses(addresses.value)
-  } catch (err) {
-    error.value = err?.message || 'خطا در دریافت آدرس‌ها'
-  } finally {
-    loading.value = false
-  }
+onMounted(() => {
+  loadAddresses()
+  getMenuBoot('').then((boot) => { mapConfig.value = boot.checkout_map || {} }).catch(() => {})
 })
 </script>
-
 <style scoped>
-.address-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  padding: 1rem;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
+.address-archive { display: flex; align-items: center; gap: .4rem; min-height: 44px; font: inherit; font-size: .8rem; border: 0; background: transparent; color: var(--ds-color-status-danger); cursor: pointer; }
 
-.address-card.is-selected {
-  border-color: rgb(var(--palette-deep-sapphire-rgb) / 0.22);
-  box-shadow: 0 12px 28px rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-}
-
-.address-card__radio {
-  padding-top: 0.35rem;
-}
-
-.address-card__dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  border: 2px solid rgb(var(--palette-deep-sapphire-rgb) / 0.26);
-  display: inline-flex;
-  position: relative;
-}
-
-.address-card__dot.is-active {
-  border-color: var(--accent-green);
-}
-
-.address-card__dot.is-active::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: inherit;
-  background: var(--accent-green);
-}
-
-.address-card__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.address-card__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.address-card__head strong {
-  display: block;
-  font-size: 0.96rem;
-}
-
-.address-card__head p {
-  margin: 0.3rem 0 0;
-  color: var(--text-secondary);
-  line-height: 1.75;
-}
-
-.address-card__body small {
-  display: block;
-  margin-top: 0.35rem;
-  color: var(--text-muted);
-}
-
-.address-card__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.icon-action {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.12);
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.06);
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.icon-action--danger {
-  color: var(--danger);
-  border-color: rgb(var(--danger-rgb) / 0.18);
-  background: rgb(var(--danger-rgb) / 0.08);
-}
-
-.add-address-row {
-  min-height: 58px;
-  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.24);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  color: var(--accent-green);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(15 23 42 / 0.38);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 220;
-  padding: 1rem;
-}
-
-.modal-sheet {
-  width: min(620px, 100%);
-  padding: 1.2rem;
-  border-radius: 28px;
-}
-
-.modal-sheet__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.modal-title {
-  margin: 0.3rem 0 0;
-  font-size: 1.1rem;
-}
-
-.modal-eyebrow {
-  color: var(--text-muted);
-}
-
-.location-field {
-  padding: 0.85rem;
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.1);
-  border-radius: 22px;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.035);
-}
-
-.location-field__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.8rem;
-}
-
-.location-field__head label {
-  margin-bottom: 0.25rem;
-}
-
-.location-field__head p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  line-height: 1.7;
-}
-
-.locate-btn {
-  flex-shrink: 0;
-  min-width: auto;
-  min-height: 40px;
-  text-decoration: none;
-}
-
-.location-coordinates {
-  margin-top: 0.75rem;
-  border: 1px dashed rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  border-radius: 14px;
-  padding: 0.65rem;
-}
-
-.location-coordinates summary {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  color: var(--accent-green);
-  font-weight: 800;
-}
-
-.location-coordinates__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin-top: 0.5rem;
-}
-
-.location-coordinates label span {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.location-error,
-.location-hint,
-.location-ok {
-  margin: 0.65rem 0 0;
-  font-size: 0.78rem;
-  line-height: 1.7;
-}
-
-.location-error {
-  color: var(--danger);
-}
-
-.location-hint {
-  color: var(--text-muted);
-}
-
-.location-ok {
-  color: var(--success);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-}
-
-.modal-cancel,
-.modal-save {
-  flex: 1;
-}
-
-@media (max-width: 520px) {
-  .location-field__head,
-  .modal-actions {
-    flex-direction: column;
-  }
-
-  .locate-btn,
-  .modal-cancel,
-  .modal-save {
-    width: 100%;
-  }
-
-  .location-coordinates__grid {
-    grid-template-columns: 1fr;
-  }
-}
+.address-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.address-card, .address-editor { padding: 1.25rem; }
+.address-card-heading, .address-editor-head, .address-map-head { display: flex; align-items: center; gap: .75rem; justify-content: space-between; }
+.address-card-heading h2 { flex: 1; font-size: 1rem; margin: 0; }
+.address-card p { color: var(--ds-color-text-secondary); line-height: 1.9; }
+.address-card small { color: var(--ds-color-text-muted); }
+.address-use { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; margin-top: 1rem; padding: .6rem 0 0; border: 0; border-top: 1px solid var(--ds-color-border); background: transparent; color: var(--ds-color-action-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.address-editor { display: grid; gap: 1rem; }
+.address-editor-head h2 { margin: 0; font-size: 1.15rem; }
+.address-form { display: grid; gap: 1rem; }
+.address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.address-editor-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+.address-save { min-height: 48px; padding: .7rem 1.4rem; border: 0; border-radius: var(--ds-radius-md); background: var(--ds-color-action-primary); color: var(--ds-color-action-primary-foreground); font: inherit; font-weight: 700; cursor: pointer; }
+.address-save:disabled { opacity: .5; cursor: default; }
+.address-message { color: var(--ds-color-text-muted); font-size: .88rem; }
+.address-error { color: var(--ds-color-status-danger); line-height: 1.8; }
+.address-error button { min-height: 44px; font: inherit; color: inherit; border: 0; background: transparent; text-decoration: underline; }
+.address-manual summary { min-height: 44px; color: var(--ds-color-text-muted); cursor: pointer; }
+@media(max-width: 640px) { .address-list { grid-template-columns: 1fr; } .address-map-head { flex-wrap: wrap; font-size: .85rem; } }
 </style>

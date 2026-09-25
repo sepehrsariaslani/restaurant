@@ -50,6 +50,8 @@ export const iconCatalog = Object.freeze([
 
 export const designSystemCatalog = Object.freeze({
   components: Object.freeze([
+    { id: 'customer-vehicle-picker', title: 'انتخاب خودرو مشتری', description: 'انتخاب خودرو ذخیره‌شده، ویرایش و ثبت مشخصات برای تحویل درب ماشین.', source: 'components/customer/CustomerVehiclePicker.vue', kind: 'domain' },
+    { id: 'customer-address-map', title: 'انتخاب محل تحویل', description: 'نقشه تعاملی با نشانگر قابل جابه‌جایی، مختصات معتبر و پشتیبانی از نشان یا OpenStreetMap.', source: 'components/checkout/AddressPickerMap.vue', kind: 'domain' },
     { id: 'button', title: 'دکمه‌ها', description: 'عمل اصلی، ثانویه، کم‌اهمیت و خطرناک با حالت‌های focus و loading.', kind: 'primitive' },
     { id: 'management-pos-product-card', title: 'کارت محصول POS', description: 'کارت محصول مرجع برای نماهای شبکه‌ای، فشرده و لیستی با عکس، قیمت، تعداد و BOM.', source: 'components/management/pos/ManagementPosProductCard.vue', kind: 'reference' },
     { id: 'surface', title: 'سطح و کارت', description: 'سطوح مدیریت با hierarchy مشخص و بدون تزئین اضافه.', kind: 'primitive' },
@@ -74,6 +76,8 @@ export const designSystemCatalog = Object.freeze({
     { id: 'management-product-inventory-panel', title: 'پنل موجودی و دفتر گردش', description: 'مانده‌ی Bin، دفتر Stock Ledger، سطح سفارش و مسیرهای عملیاتی کالا.', source: 'components/management/catalog/ManagementProductInventoryPanel.vue', kind: 'domain' },
   ]),
   patterns: Object.freeze([
+    { id: 'customer-fulfillment-choice', title: 'چهار روش دریافت سفارش', description: 'درب منزل، درب ماشین، تحویل حضوری و سر میز با انتخاب مقصد پیش از منو و امکان ویرایش در تأیید.' },
+    { id: 'customer-account-addresses', title: 'حساب و مقصدهای ذخیره‌شده', description: 'دسترسی مستقیم به سفارش‌ها، آدرس‌ها، خودروها و رزرو؛ تأیید ذخیره فقط پس از پاسخ موفق سرور.' },
     { id: 'product-search', title: 'جستجو و ایجاد محصول', description: 'جستجوی سروری، فیلتر سریع، نماهای ذخیره‌شده و اقدام ایجاد.' },
     { id: 'pos-workspace', title: 'میزکار فروش POS', description: 'پنل محصولات در سمت چپ، سبد سفارش در سمت راست و کنترل‌های مشترک برای عملیات سریع فروش.' },
     { id: 'product-collection', title: 'مجموعه محصولات', description: 'لیست، گالری، کانبان، شیت، تقویم، درخت و بارگذاری صفحه‌ای.' },

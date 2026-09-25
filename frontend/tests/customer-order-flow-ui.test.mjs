@@ -15,25 +15,14 @@ test('cart line keeps the product image as a large, stable visual anchor', async
   assert.match(page, /class="product-visual"/)
   assert.match(page, /width:\s*clamp\(112px, 20vw, 144px\)/)
   assert.match(page, /aspect-ratio:\s*1/)
-  assert.match(page, /object-fit:\s*cover/)
+  assert.match(page, /object-fit:\s*contain/)
 })
 
-test('customer order flow uses company language without changing the branch data key', async () => {
-  const [dineIn, pickup, delivery, orderType, cart] = await Promise.all([
-    source('pages/OrderDineInPage.vue'),
-    source('pages/OrderPickupPage.vue'),
-    source('pages/OrderDeliveryPage.vue'),
-    source('pages/OrderTypePage.vue'),
-    source('pages/CartPage.vue'),
-  ])
-
-  assert.match(dineIn, />شرکت</)
-  assert.match(pickup, /شرکت/)
-  assert.match(delivery, /انتخاب شرکت/)
+test('customer language uses branches while preserving native company identity', async () => {
+  const [delivery, orderType] = await Promise.all([source('pages/OrderDeliveryPage.vue'), source('pages/OrderTypePage.vue')])
+  assert.match(delivery, /انتخاب شعبه/)
   assert.match(delivery, /branch:\s*selectedCompany\.value\?\.(id|name)/)
-  assert.match(orderType, /شرکت/)
-  assert.doesNotMatch(orderType, /شعبه/)
-  assert.doesNotMatch(cart, /شعبه/)
+  for (const label of ['درب منزل', 'درب ماشین', 'تحویل حضوری', 'سر میز']) assert.ok(orderType.includes(label))
 })
 
 test('checkout summarizes the selected order context in editable confirmation cards', async () => {
@@ -42,7 +31,7 @@ test('checkout summarizes the selected order context in editable confirmation ca
   assert.match(page, /class="[^"]*checkout-confirmation-card[^"]*"/)
   assert.match(page, /ویرایش نوع سفارش/)
   assert.match(page, /class="checkout-product-summary"/)
-  assert.match(page, /if \(!context\.value\.branch\) return 'برای ارسال، انتخاب شرکت الزامی است\.'/)
+  assert.match(page, /if \(!context\.value\.branch\) return 'برای ارسال، انتخاب شعبه الزامی است\.'/)
   assert.match(page, /orderReviewStep = computed\(\(\) => context\.value\.order_type === 'pickup' \? '۵' : '۴'\)/)
   assert.match(page, /\{\{ orderReviewStep \}\}\. مرور سفارش/)
 })
@@ -70,11 +59,18 @@ test('cart actions remain touch friendly, named, and tied to dynamic theme token
   assert.match(cart, /--ds-color-action-primary/)
 })
 
-test('delivery keeps manual coordinates visible when the map key is not configured', async () => {
-  const page = await source('pages/OrderDeliveryPage.vue')
+test('pickup selection avoids a stretched single-branch card and wrapped progress steps', async () => {
+  const page = await source('pages/OrderPickupPage.vue')
 
-  assert.match(page, /<AddressPickerMap v-model="addressLocation" :config="mapConfig" \/>/)
-  assert.match(page, /<details class="advanced-location-box" :open="!String\(mapConfig\.api_key \|\| ''\)\.trim\(\)">/)
+  assert.match(page, /\.pickup-branch-grid \.order-flow-branch-card,\s*\.order-flow-layout > \.order-flow-list > \.order-flow-branch-card\s*\{[^}]*width:\s*min\(100%,\s*32rem\);[^}]*justify-self:\s*center;/s)
+  assert.match(page, /\.order-flow-steps\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s)
+  assert.match(page, /\.order-flow-step\s*\{[^}]*flex:\s*0 0 auto;[^}]*white-space:\s*nowrap;/s)
+})
+
+test('delivery keeps map first and exposes manual recovery on failure', async () => {
+  const page = await source('pages/OrderDeliveryPage.vue')
+  assert.match(page, /<AddressPickerMap v-model="addressLocation" :config="deliveryMapConfig" @status="mapStatus = \$event"/)
+  assert.match(page, /:open="mapStatus === 'error'"/)
   assert.match(page, /عرض جغرافیایی/)
   assert.match(page, /طول جغرافیایی/)
 })
@@ -237,12 +233,4 @@ test('customer, product, and order page wrappers provide the shared frontend ver
   ])
 
   for (const page of pages) assert.match(page, /context\.frontend_version\s*=\s*get_frontend_version\(context\)/)
-})
-
-test('pickup selection avoids a stretched single-branch card and wrapped progress steps', async () => {
-  const page = await source('pages/OrderPickupPage.vue')
-
-  assert.match(page, /\.pickup-branch-grid \.order-flow-branch-card,\s*\.order-flow-layout > \.order-flow-list > \.order-flow-branch-card\s*\{[^}]*width:\s*min\(100%,\s*32rem\);[^}]*justify-self:\s*start;/s)
-  assert.match(page, /\.order-flow-steps\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s)
-  assert.match(page, /\.order-flow-step\s*\{[^}]*flex:\s*0 0 auto;[^}]*white-space:\s*nowrap;/s)
 })
