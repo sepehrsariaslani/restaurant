@@ -155,7 +155,7 @@ const normalizedSlides = computed(() =>
 }
 
 .hero-cover--fullscreen {
-  min-height: clamp(360px, 54vh, 500px);
+  min-height: clamp(320px, 42vh, 440px);
 }
 
 .hero-cover--banner {
@@ -344,7 +344,7 @@ const normalizedSlides = computed(() =>
 
 @media (max-width: 860px) {
   .hero-cover--fullscreen {
-    min-height: clamp(380px, 58svh, 480px);
+    min-height: clamp(320px, 46svh, 420px);
     align-items: flex-end;
     background-position: center 24%;
   }

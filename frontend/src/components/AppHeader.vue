@@ -400,7 +400,7 @@ function isActive(link) {
 .nav-link {
   border-radius: 15px;
   padding: 0.42rem 0.58rem;
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);

@@ -1,5 +1,5 @@
 <template>
-  <div class="page-blocks" dir="rtl">
+  <div class="page-blocks" :class="{ 'page-blocks--home': isHomePage }" dir="rtl">
     <ScrollReveal
       v-for="(block, index) in blocks"
       :key="block.id"
@@ -33,5 +33,9 @@ const isHomePage = computed(() => ['home', 'homev2'].includes(String(props.page 
   display: flex;
   flex-direction: column;
   gap: clamp(1.8rem, 4vw, 3.2rem);
+}
+
+.page-blocks--home {
+  gap: clamp(1.3rem, 2.7vw, 2.1rem);
 }
 </style>

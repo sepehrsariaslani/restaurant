@@ -219,10 +219,6 @@ onUnmounted(() => {
   background: var(--ds-color-bg-page);
 }
 
-:global(.home-page--v2 .page-blocks) {
-  gap: clamp(1.8rem, 4vw, 3.2rem);
-}
-
 :global(.home-page--v2 .home-sticky-cart),
 :global(.home-page--v2 .home-toast) {
   background: var(--ds-color-action-primary);
