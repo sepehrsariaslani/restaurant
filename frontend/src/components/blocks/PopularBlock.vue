@@ -186,8 +186,8 @@ function priceFor(item) {
   inset-inline-start: 0.75rem;
   padding: 0.32rem 0.8rem;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--ds-color-action-accent, #f2994a), var(--ds-color-action-primary, #2f5f47));
-  color: var(--ds-color-text-inverse, #fff);
+  background: var(--ds-color-action-primary, #b94712);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.75rem;
   font-weight: 800;
   box-shadow: 0 8px 20px color-mix(in srgb, var(--ds-color-action-accent, #f2994a) 35%, transparent);

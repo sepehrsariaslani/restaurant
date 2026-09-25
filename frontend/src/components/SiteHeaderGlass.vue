@@ -205,7 +205,7 @@ function isActive(link) {
   height: 1.05rem;
   border-radius: 999px;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.64rem;
   display: inline-flex;
   align-items: center;
@@ -245,7 +245,7 @@ function isActive(link) {
   border-radius: 14px;
   background: var(--ds-color-action-accent);
   border: 1px solid var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -266,7 +266,7 @@ function isActive(link) {
   height: 0.9rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.6rem;
   display: inline-flex;
   align-items: center;

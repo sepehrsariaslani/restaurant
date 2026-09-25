@@ -1,20 +1,18 @@
 <template>
   <div class="customer-page orders-page" dir="rtl">
-    <section class="customer-page__hero">
-      <div class="customer-page__topbar">
-        <button class="customer-page__back" type="button" @click="goBack" aria-label="بازگشت">
-          <ChevronRight :size="20" />
-        </button>
-        <div class="customer-page__titles">
-          <p class="customer-page__eyebrow"><ReceiptText :size="14" /> تاریخچه خرید</p>
-          <h1 class="customer-page__title">سفارش‌های من</h1>
-          <p class="customer-page__subtitle">همه سفارش‌های ثبت‌شده را با جزئیات و وضعیت جاری ببینید.</p>
-        </div>
+    <CustomerPageHeader
+      eyebrow="تاریخچه خرید"
+      title="سفارش‌های من"
+      subtitle="همه سفارش‌های ثبت‌شده را با جزئیات و وضعیت جاری ببینید."
+      fallback-href="/customer/dashboard"
+    >
+      <template #eyebrow-icon><ReceiptText :size="14" aria-hidden="true" /></template>
+      <template #action>
         <button class="customer-page__action" type="button" :disabled="loading" @click="loadOrders">
           <RefreshCcw :size="16" />
           <span>بروزرسانی</span>
         </button>
-      </div>
+      </template>
 
       <div class="hero-summary customer-grid customer-grid--2">
         <article class="hero-summary__item customer-glass-card">
@@ -26,7 +24,7 @@
           <strong>{{ mobile || '—' }}</strong>
         </article>
       </div>
-    </section>
+    </CustomerPageHeader>
 
     <div class="customer-page__body">
       <section class="stats-grid" v-if="orders.length">
@@ -80,7 +78,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ChevronLeft, ChevronRight, ReceiptText, RefreshCcw } from 'lucide-vue-next'
+import { ChevronLeft, ReceiptText, RefreshCcw } from 'lucide-vue-next'
+import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import { getCustomerOrders } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 
@@ -105,10 +104,6 @@ function readAuth() {
   } catch {
     return { mobile: '', name: '' }
   }
-}
-
-function goBack() {
-  window.history.back()
 }
 
 function formatDate(value = '') {

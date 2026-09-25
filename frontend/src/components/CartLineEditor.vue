@@ -250,7 +250,7 @@ const builderEditUrl = computed(() => {
 
 .qty-btn--add {
   background: var(--ds-color-action-primary, var(--accent-green));
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 .remove-btn:focus-visible,

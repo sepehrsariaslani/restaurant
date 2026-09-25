@@ -224,9 +224,9 @@ onUnmounted(() => clearInterval(countdownTimer))
   inset: 0;
   background: linear-gradient(
     135deg,
-    rgb(var(--palette-deep-sapphire-rgb, 47 95 71) / 0.7),
-    rgb(var(--palette-deep-saffron-rgb, 255 89 0) / 0.46) 52%,
-    rgb(var(--palette-deep-sapphire-rgb, 47 95 71) / 0.84)
+    color-mix(in srgb, color-mix(in srgb, var(--ds-color-action-primary, #b94712) 72%, var(--ds-color-text-primary, #382719)) 78%, transparent),
+    color-mix(in srgb, color-mix(in srgb, var(--ds-color-action-accent, #dfaf2e) 48%, var(--ds-color-text-primary, #382719)) 68%, transparent) 52%,
+    color-mix(in srgb, color-mix(in srgb, var(--ds-color-action-primary, #b94712) 64%, var(--ds-color-text-primary, #382719)) 88%, transparent)
   );
 }
 
@@ -317,7 +317,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   background: var(--ds-color-surface-muted, #fdf8f1);
   transition: border-color 0.2s;
 }
-.input-group:focus-within { border-color: var(--accent-green, #6f4a31); }
+.input-group:focus-within { border-color: var(--ds-color-action-primary); box-shadow: 0 0 0 3px var(--ds-color-action-primary-soft); }
 
 .input-prefix {
   padding: 0 1rem;
@@ -354,7 +354,7 @@ onUnmounted(() => clearInterval(countdownTimer))
 .primary-btn {
   width: 100%;
   padding: 1rem;
-  background: var(--accent-green, #6f4a31);
+  background: var(--ds-color-action-primary);
   color: var(--ds-color-action-primary-foreground, #fff);
   border: none;
   border-radius: 16px;
@@ -390,16 +390,16 @@ onUnmounted(() => clearInterval(countdownTimer))
   width: 100%;
   display: block;
   padding: 0.9rem;
-  border: 2px solid var(--accent-green, #6f4a31);
+  border: 2px solid var(--ds-color-action-primary);
   border-radius: 16px;
-  color: var(--accent-green, #6f4a31);
+  color: var(--ds-color-action-primary);
   text-align: center;
   font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
   transition: background 0.2s;
 }
-.ghost-btn:hover { background: rgba(111,74,49,0.06); }
+.ghost-btn:hover { background: var(--ds-color-action-primary-soft); }
 
 .otp-row {
   display: flex;
@@ -422,7 +422,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   outline: none;
   transition: border-color 0.2s;
 }
-.otp-box:focus { border-color: var(--accent-green, #6f4a31); }
+.otp-box:focus { border-color: var(--ds-color-action-primary); box-shadow: 0 0 0 3px var(--ds-color-action-primary-soft); }
 
 .timer-row { text-align: center; margin-bottom: 1.2rem; }
 .timer-text { font-size: 0.85rem; color: var(--ds-color-text-muted, #846b58); }
@@ -432,7 +432,7 @@ onUnmounted(() => clearInterval(countdownTimer))
   text-align: center;
   background: none;
   border: none;
-  color: var(--accent-green, #6f4a31);
+  color: var(--ds-color-action-primary);
   font-size: 0.9rem;
   font-weight: 700;
   font-family: inherit;
@@ -453,8 +453,8 @@ onUnmounted(() => clearInterval(countdownTimer))
 .spinner {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255,255,255,0.4);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 40%, transparent);
+  border-top-color: var(--ds-color-action-primary-foreground, #fff);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: inline-block;

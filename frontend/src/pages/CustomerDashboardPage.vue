@@ -1,19 +1,21 @@
 <template>
   <div class="customer-page dashboard-page" dir="rtl">
-    <section class="customer-page__hero dashboard-hero">
-      <div class="customer-page__topbar customer-page__topbar--compact">
-        <div>
-          <p class="customer-page__eyebrow">
-            <Sparkles :size="14" />
-            حساب من
-          </p>
-          <h1 class="customer-page__title">{{ customerName }}</h1>
-          <p class="customer-page__subtitle">مرکز مدیریت سفارش‌ها، آدرس‌ها و اطلاعات حساب شما.</p>
-        </div>
+    <CustomerPageHeader
+      eyebrow="حساب من"
+      :title="customerName"
+      subtitle="مرکز مدیریت سفارش‌ها، آدرس‌ها و اطلاعات حساب شما."
+      hero-class="dashboard-hero"
+      compact
+      :show-back="false"
+      fallback-href="/menu"
+    >
+      <template #eyebrow-icon><Sparkles :size="14" aria-hidden="true" /></template>
+      <template #action>
         <a v-if="customerMobile" href="/customer/profile" class="hero-profile-link" aria-label="ویرایش اطلاعات شخصی">
           <span>{{ avatarLetter }}</span>
         </a>
-      </div>
+        <span v-else class="customer-page-header__spacer" aria-hidden="true"></span>
+      </template>
 
       <button class="hero-search" type="button" @click="goSearch">
         <Search :size="18" />
@@ -30,7 +32,7 @@
           <strong>{{ cartCount.toLocaleString('fa-IR') }}</strong>
         </article>
       </div>
-    </section>
+    </CustomerPageHeader>
 
     <div class="customer-page__body">
       <section class="customer-section customer-glass-card account-summary">
@@ -241,6 +243,7 @@ import {
 import { cartState } from '@/stores/cartStore'
 import { getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
+import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))

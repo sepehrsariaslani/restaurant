@@ -54,7 +54,7 @@ function tintHex(hex, whiteRatio) {
 
 /** Keep saved theme borders while ensuring low-contrast borders remain visible. */
 export function ensureThemeBorderContrast(border, surface, primary, minimumRatio = 3) {
-  const safePrimary = normalizeHex(primary, '#2F5F47')
+  const safePrimary = normalizeHex(primary, '#B94712')
   const safeSurface = normalizeHex(surface, '#FFFFFF')
   const safeBorder = normalizeHex(border, tintHex(safePrimary, 0.62))
   const targetRatio = Math.max(1, Number(minimumRatio) || 3)

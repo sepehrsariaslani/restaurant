@@ -150,7 +150,7 @@ function toFaCount(value) {
 }
 .img-pill:hover { transform: translateY(-2px); }
 .img-pill.active {
-  background: linear-gradient(180deg, var(--ds-color-action-primary, var(--accent-green)), var(--ds-color-action-accent, var(--accent-green80)));
+  background: var(--ds-color-action-primary, var(--accent-green));
   border-color: var(--ds-color-action-primary, var(--accent-green));
   box-shadow: 0 12px 26px rgb(var(--palette-deep-sapphire-rgb) / 0.20);
 }
@@ -180,7 +180,7 @@ function toFaCount(value) {
 }
 
 .img-pill.active .cat-icon {
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 .img-copy {
@@ -211,7 +211,7 @@ function toFaCount(value) {
 
 .img-pill.active .img-label,
 .img-pill.active .img-count {
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 .sub-pill {
@@ -232,7 +232,7 @@ function toFaCount(value) {
 .sub-pill.active {
   background: var(--ds-color-action-primary, var(--accent-green));
   border-color: var(--ds-color-action-primary, var(--accent-green));
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   font-weight: 800;
 }
 

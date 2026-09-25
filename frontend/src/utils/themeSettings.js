@@ -19,7 +19,7 @@ export const defaultThemeSettings = {
   textSecondary: palette.textSecondary,
   muted: palette.muted,
   // POS keeps its established deep-brown action color; customer pages use
-  // the shared brand-green primary and orange accent above.
+  // configurable orange and saffron-yellow brand colors above.
   posPrimary: '#6F4A31',
   posAccent: palette.accent,
   posSuccess: '#0B7D4A',
@@ -29,9 +29,9 @@ export const defaultThemeSettings = {
 
 export const themePresets = [
   {
-    id: 'veederakht-green-orange',
-    name: 'ویدرخته · سبز و نارنجی',
-    description: 'سبز جنگلی برای هویت برند، نارنجی گرم برای اقدام‌ها و زمینه‌های کرم زعفرانی.',
+    id: 'veederakht-orange-yellow',
+    name: 'ویدرخت · نارنجی و زرد زعفرانی',
+    description: 'نارنجی برای اقدام اصلی، زرد زعفرانی برای تأکیدها و زمینه‌های گرم و روشن.',
     colors: {
       ...defaultThemeSettings,
     },

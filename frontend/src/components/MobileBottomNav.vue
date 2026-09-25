@@ -110,7 +110,7 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
 }
 
 .nav-search {
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   transform: translateY(-0.36rem);
 }
 
@@ -119,7 +119,7 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
   height: 44px;
   border-radius: 18px;
   background: var(--ds-color-action-primary, var(--accent-green, #6f4a31));
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -132,7 +132,8 @@ const isCustomerAccountActive = computed(() => customerAccountPages.has(props.pa
 }
 
 .nav-search.active .search-orb {
-  background: linear-gradient(135deg, var(--ds-color-action-primary, var(--accent-green)), var(--ds-color-action-accent, var(--accent-gold)));
+  background: var(--ds-color-action-primary, var(--accent-green));
+  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 .nav-item i {

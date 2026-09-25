@@ -1,21 +1,19 @@
 <template>
   <div class="customer-page addresses-page" dir="rtl">
-    <section class="customer-page__hero">
-      <div class="customer-page__topbar">
-        <button class="customer-page__back" @click="goBack" aria-label="بازگشت">
-          <ChevronRight :size="20" />
-        </button>
-        <div class="customer-page__titles">
-          <p class="customer-page__eyebrow"><MapPin :size="14" /> مدیریت آدرس‌ها</p>
-          <h1 class="customer-page__title">آدرس‌های من</h1>
-          <p class="customer-page__subtitle">آدرس‌های تحویل خود را برای سفارش‌های سریع‌تر نگه دارید.</p>
-        </div>
-        <button class="customer-page__action" @click="openAddForm">
+    <CustomerPageHeader
+      eyebrow="مدیریت آدرس‌ها"
+      title="آدرس‌های من"
+      subtitle="آدرس‌های تحویل خود را برای سفارش‌های سریع‌تر نگه دارید."
+      fallback-href="/customer/dashboard"
+    >
+      <template #eyebrow-icon><MapPin :size="14" aria-hidden="true" /></template>
+      <template #action>
+        <button class="customer-page__action" type="button" @click="openAddForm">
           <Plus :size="16" />
           <span>جدید</span>
         </button>
-      </div>
-    </section>
+      </template>
+    </CustomerPageHeader>
 
     <div class="customer-page__body">
       <p v-if="error" class="customer-section__hint customer-danger-text">{{ error }}</p>
@@ -177,7 +175,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { Check, ChevronRight, Crosshair, MapPin, MapPinCheck, MapPinned, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
+import { Check, Crosshair, MapPin, MapPinCheck, MapPinned, Pencil, Plus, Trash2, X } from 'lucide-vue-next'
+import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import AddressPickerMap from '@/components/checkout/AddressPickerMap.vue'
 import { getCustomerCheckoutProfile, getMenuBoot, saveCustomerDeliveryAddress } from '@/utils/api'
 
@@ -264,7 +263,6 @@ const addressLocation = computed({
   },
 })
 
-function goBack() { window.history.back() }
 function openAddForm() {
   editingId.value = null
   locationError.value = ''

@@ -510,7 +510,7 @@ function isActive(link) {
   border-radius: 15px;
   background: var(--ds-color-action-accent);
   border: 1px solid var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -538,7 +538,7 @@ function isActive(link) {
 .cart-pill:focus-visible {
   background: color-mix(in srgb, var(--ds-color-action-accent) 88%, var(--ds-color-text-primary));
   border-color: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 .cart-pill .cart-count {
@@ -547,7 +547,7 @@ function isActive(link) {
   border-radius: 999px;
   padding-inline: 0.2rem;
   background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 .hamburger {
@@ -773,7 +773,7 @@ function isActive(link) {
 
 .sheet-links a.active .count-pill {
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
 }
 
 @media (min-width: 920px) {
@@ -849,7 +849,7 @@ function isActive(link) {
   align-items: center;
   justify-content: center;
   background: var(--ds-color-action-accent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.62rem;
   font-weight: 800;
 }

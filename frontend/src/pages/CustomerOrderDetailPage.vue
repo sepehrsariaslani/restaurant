@@ -1,12 +1,9 @@
 <template>
   <div class="order-detail-page" dir="rtl">
-    <header class="page-header">
-      <button class="back-btn" type="button" @click="goBack" aria-label="بازگشت">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-      </button>
-      <h1 class="page-title">جزئیات سفارش</h1>
-      <a class="list-link" href="/customer/orders">لیست</a>
-    </header>
+    <CustomerPageHeader eyebrow="تاریخچه خرید" title="جزئیات سفارش" fallback-href="/customer/orders">
+      <template #eyebrow-icon><ReceiptText :size="14" aria-hidden="true" /></template>
+      <template #action><a class="customer-page__action" href="/customer/orders">سفارش‌ها</a></template>
+    </CustomerPageHeader>
 
     <section class="code-card">
       <p>کد سفارش</p>
@@ -95,6 +92,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { ReceiptText } from 'lucide-vue-next'
+import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import { getOrder } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile, parseQuery } from '@/utils/format'
 
@@ -128,10 +127,6 @@ function resolveOrderCode() {
     return decodeURIComponent(parts.slice(2).join('/'))
   }
   return String(query.order_code || '').trim()
-}
-
-function goBack() {
-  window.history.back()
 }
 
 function formatDate(value = '') {
@@ -169,10 +164,6 @@ onMounted(() => {
 
 <style scoped>
 .order-detail-page { min-height: 100vh; background: var(--ds-color-bg-page); color: var(--ds-color-text-primary); padding-bottom: 7rem; }
-.page-header { display: flex; align-items: center; justify-content: space-between; padding: 3.5rem 1rem 1rem; background: var(--ds-color-surface-raised); border-bottom: 1px solid var(--ds-color-border); }
-.back-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--ds-color-surface-muted); border: none; display: flex; align-items: center; justify-content: center; color: var(--ds-color-text-primary); cursor: pointer; }
-.page-title { font-size: 1.1rem; font-weight: 800; margin: 0; }
-.list-link { width: 40px; text-align: center; color: var(--ds-color-action-primary); text-decoration: none; font-weight: 800; font-size: .82rem; }
 .code-card, .lookup-card, .timeline-card, .items-card, .address-card, .empty-card { margin: 1rem; background: var(--ds-color-surface-raised); border-radius: 24px; padding: 1.1rem; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
 .code-card { background: var(--ds-color-action-primary); color: var(--ds-color-action-primary-foreground, #fff); position: relative; }
 .code-card p { margin: 0 0 .2rem; color: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 72%, transparent); font-size: .78rem; }
@@ -203,12 +194,12 @@ onMounted(() => {
 .item-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem; border-radius: 16px; background: var(--ds-color-surface); }
 .item-row strong { display: block; font-size: .88rem; }
 .item-row small { color: var(--ds-color-text-muted); }
-.item-row > span { color: #6f4a31; font-weight: 800; white-space: nowrap; }
-.address-card p { color: #846b58; line-height: 1.8; margin: .6rem 0 0; }
+.item-row > span { color: var(--ds-color-action-primary); font-weight: 800; white-space: nowrap; }
+.address-card p { color: var(--ds-color-text-secondary); line-height: 1.8; margin: .6rem 0 0; }
 .actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin: 1rem; }
 .empty-card { text-align: center; }
 .empty-card div { font-size: 2.2rem; }
-.empty-card p { color: #846b58; }
+.empty-card p { color: var(--ds-color-text-secondary); }
 .bottom-spacer { height: 2rem; }
 @media (min-width: 720px) { .order-detail-page { max-width: 760px; margin: 0 auto; } }
 </style>

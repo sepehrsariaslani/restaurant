@@ -1,18 +1,13 @@
 <template>
   <div class="customer-page delivery-page" dir="rtl">
-    <section class="customer-page__hero">
-      <div class="customer-page__topbar">
-        <button class="customer-page__back" @click="goBack" aria-label="بازگشت">
-          <ChevronRight :size="20" />
-        </button>
-        <div class="customer-page__titles">
-          <p class="customer-page__eyebrow"><Truck :size="14" /> انتخاب روش سفارش</p>
-          <h1 class="customer-page__title">نوع سفارش</h1>
-          <p class="customer-page__subtitle">تحویل درب منزل یا بیرون‌بر را متناسب با نیازتان انتخاب کنید.</p>
-        </div>
-        <span class="hero-side-placeholder"></span>
-      </div>
-    </section>
+    <CustomerPageHeader
+      eyebrow="انتخاب روش سفارش"
+      title="نوع سفارش"
+      subtitle="تحویل درب منزل یا بیرون‌بر را متناسب با نیازتان انتخاب کنید."
+      fallback-href="/menu"
+    >
+      <template #eyebrow-icon><Truck :size="14" aria-hidden="true" /></template>
+    </CustomerPageHeader>
 
     <div class="customer-page__body">
       <section class="customer-section">
@@ -99,7 +94,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ArrowLeft, Bike, ChevronRight, Clock3, MapPin, PackageCheck, Truck } from 'lucide-vue-next'
+import { ArrowLeft, Bike, Clock3, MapPin, PackageCheck, Truck } from 'lucide-vue-next'
+import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import { getBranches } from '@/utils/api'
 
 const orderType = ref('delivery')
@@ -129,7 +125,6 @@ const canConfirm = computed(() => {
   return Boolean(selectedBranch.value) && (selectedBranchObj.value?.isOpen ?? false)
 })
 
-function goBack() { window.history.back() }
 function confirm() {
   try {
     localStorage.setItem('order_type', orderType.value)

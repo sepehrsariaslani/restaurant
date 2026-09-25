@@ -133,7 +133,7 @@ defineProps({
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   background: var(--ds-color-action-accent);
   border: 1px solid var(--ds-color-action-accent);
   text-decoration: none;
@@ -153,7 +153,7 @@ defineProps({
   height: 1.05rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ds-color-text-inverse, #fff) 22%, transparent);
-  color: var(--ds-color-text-inverse, #fff);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
   font-size: 0.6rem;
   font-weight: 700;
   display: flex;

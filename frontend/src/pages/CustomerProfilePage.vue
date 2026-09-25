@@ -1,22 +1,19 @@
 <template>
   <div class="customer-page profile-page" dir="rtl">
-    <section class="customer-page__hero profile-hero">
-      <div class="customer-page__topbar">
-        <button class="customer-page__back" @click="goBack" aria-label="بازگشت">
-          <ChevronRight :size="20" />
-        </button>
-        <div class="customer-page__titles">
-          <p class="customer-page__eyebrow"><UserRound :size="14" /> {{ isLoggedIn ? 'ویرایش حساب' : 'حساب مشتری' }}</p>
-          <h1 class="customer-page__title">{{ isLoggedIn ? 'ویرایش اطلاعات شخصی' : 'ورود برای مدیریت حساب' }}</h1>
-          <p class="customer-page__subtitle">
-            {{ isLoggedIn ? 'این صفحه فقط برای اصلاح اطلاعات پایه حساب شماست.' : 'برای دیدن و ویرایش اطلاعات شخصی، ابتدا وارد حساب خود شوید.' }}
-          </p>
-        </div>
+    <CustomerPageHeader
+      :eyebrow="isLoggedIn ? 'ویرایش حساب' : 'حساب مشتری'"
+      :title="isLoggedIn ? 'ویرایش اطلاعات شخصی' : 'ورود برای مدیریت حساب'"
+      :subtitle="isLoggedIn ? 'این صفحه فقط برای اصلاح اطلاعات پایه حساب شماست.' : 'برای دیدن و ویرایش اطلاعات شخصی، ابتدا وارد حساب خود شوید.'"
+      hero-class="profile-hero"
+      fallback-href="/customer/dashboard"
+    >
+      <template #eyebrow-icon><UserRound :size="14" aria-hidden="true" /></template>
+      <template #action>
         <a class="customer-page__action" :href="isLoggedIn ? '/customer/dashboard' : '/customer/login?redirect=/customer/profile'">
           <LayoutDashboard :size="16" />
           <span>{{ isLoggedIn ? 'حساب من' : 'ورود' }}</span>
         </a>
-      </div>
+      </template>
 
       <div class="profile-hero__meta">
         <div class="profile-avatar">
@@ -27,7 +24,7 @@
           <p>{{ form.phone || 'شماره ثبت نشده' }}</p>
         </div>
       </div>
-    </section>
+    </CustomerPageHeader>
 
     <div class="customer-page__body">
       <p v-if="error" class="customer-section__hint customer-danger-text">{{ error }}</p>
@@ -80,7 +77,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ChevronRight, LayoutDashboard, LoaderCircle, Save, UserRound } from 'lucide-vue-next'
+import { LayoutDashboard, LoaderCircle, Save, UserRound } from 'lucide-vue-next'
+import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import { getCustomerProfile } from '@/utils/api'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
@@ -126,7 +124,6 @@ try {
 const avatarLetter = computed(() => (form.value.name ? form.value.name.slice(0, 1) : 'ک'))
 const isLoggedIn = computed(() => Boolean(String(form.value.phone || '').trim()))
 
-function goBack() { window.history.back() }
 
 async function saveProfile() {
   if (!readAuth().mobile) {
@@ -191,7 +188,7 @@ onMounted(async () => {
   justify-content: center;
   font-size: 1.7rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--ds-color-action-primary-foreground, #fff);
 }
 
 .profile-hero__meta strong {

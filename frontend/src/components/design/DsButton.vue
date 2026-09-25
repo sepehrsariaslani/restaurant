@@ -48,8 +48,8 @@ defineProps({
 .ds-button:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 2px; }
 .ds-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .ds-button--sm { min-height: 40px; padding-inline: var(--ds-space-3); font-size: 0.78rem; }
-.ds-button--primary { color: var(--ds-color-text-inverse); background: var(--ds-color-action-primary); box-shadow: var(--ds-shadow-sm); }
-.ds-button--accent { color: var(--ds-color-text-inverse); background: var(--ds-color-action-accent); }
+.ds-button--primary { color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse)); background: var(--ds-color-action-primary); box-shadow: var(--ds-shadow-sm); }
+.ds-button--accent { color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse)); background: var(--ds-color-action-accent); }
 .ds-button--secondary { color: var(--ds-color-action-primary); background: var(--ds-color-surface-raised); border-color: var(--ds-color-border); }
 .ds-button--quiet { color: var(--ds-color-text-secondary); background: transparent; }
 .ds-button--danger { color: var(--ds-color-status-danger); background: var(--ds-color-status-danger-soft); border-color: color-mix(in srgb, var(--ds-color-status-danger) 28%, var(--ds-color-border)); }

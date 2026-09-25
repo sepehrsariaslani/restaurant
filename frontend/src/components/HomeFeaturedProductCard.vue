@@ -285,7 +285,7 @@ onUnmounted(() => {
 .home-product-card__add.added {
   background: var(--home-card-accent);
   border-color: var(--home-card-accent);
-  color: var(--ds-color-text-inverse);
+  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse));
   transform: translateY(-1px);
   outline: none;
 }
