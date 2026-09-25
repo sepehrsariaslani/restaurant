@@ -2135,7 +2135,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #ddd;
+  color: var(--ds-color-text-muted);
   cursor: pointer;
   padding: 0;
   line-height: 1;
@@ -2150,7 +2150,7 @@ onUnmounted(() => {
   padding: 0.65rem 0.8rem;
   font-family: inherit;
   font-size: 0.85rem;
-  background: #fff;
+  background: var(--ds-color-surface-raised);
   color: var(--text-primary, #3f2a1d);
   width: 100%;
   box-sizing: border-box;
@@ -2400,7 +2400,7 @@ onUnmounted(() => {
     var(--ds-color-border)
   );
   border-radius: 22px;
-  background: #fff;
+  background: var(--ds-color-surface-raised);
   box-shadow: var(--ds-shadow-sm, 0 8px 24px rgb(52 38 31 / 0.06));
   color: inherit;
   scroll-snap-align: start;
@@ -2425,7 +2425,7 @@ onUnmounted(() => {
   width: 100%;
   aspect-ratio: 1.9 / 1;
   overflow: hidden;
-  background: #fff;
+  background: var(--ds-color-product-media-surface);
   border-bottom: 1px solid color-mix(in srgb, var(--ds-color-border) 72%, var(--detail-warm-green));
   position: relative;
 }
@@ -2563,7 +2563,7 @@ onUnmounted(() => {
   background: color-mix(
     in srgb,
     var(--detail-warm-green) 11%,
-    #fff
+    var(--ds-color-surface-raised)
   );
   color: var(--ds-color-text-secondary);
   font-size: 0.7rem;

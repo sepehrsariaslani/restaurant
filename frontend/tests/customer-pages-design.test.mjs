@@ -143,5 +143,18 @@ test('customer product feedback and checkout payment surfaces follow semantic th
   assert.match(detail, /\.error-msg\s*\{[^}]*color:\s*var\(--ds-color-status-danger\)/s)
   assert.match(detail, /\.review-success\s*\{[^}]*color:\s*var\(--ds-color-status-success\)/s)
   assert.match(detail, /\.desktop-action-btn\.loved\s*\{[^}]*var\(--ds-color-status-danger\)/s)
+  assert.match(detail, /\.star-btn\s*\{[^}]*color:\s*var\(--ds-color-text-muted\)/s)
+  assert.match(detail, /\.related-card\s*\{[^}]*background:\s*var\(--ds-color-surface-raised\)/s)
+  assert.match(detail, /\.related-img-wrap\s*\{[^}]*background:\s*var\(--ds-color-product-media-surface\)/s)
+  assert.match(detail, /\.review-input,[\s\S]*?background:\s*var\(--ds-color-surface-raised\)/)
   assert.match(checkout, /\.payment-method-card\s*\{[^}]*background:\s*var\(--ds-color-surface-raised\)/s)
+})
+
+test('cart page keeps one page title row alongside the shared mobile navigation', () => {
+  const cart = source('../src/pages/CartPage.vue')
+  const app = source('../src/App.vue')
+
+  assert.match(cart, /<header class="cart-heading">[\s\S]*?aria-label="بازگشت به منو"[\s\S]*?<h1>سبد سفارش<\/h1>[\s\S]*?class="cart-count-label"/)
+  assert.doesNotMatch(cart, /class="top-row"|<p>سبد خرید<\/p>/)
+  assert.match(app, /<MobileBottomNav\s+v-if="page !== 'kitchen'"/)
 })

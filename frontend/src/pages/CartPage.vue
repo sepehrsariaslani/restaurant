@@ -2,19 +2,16 @@
   <LiquidGlassBackdrop>
     <section class="cart-shell">
       <section class="cart-frame">
-        <header class="top-row">
-          <a class="icon-btn" href="/menu" aria-label="بازگشت به منو">←</a>
-          <p>سبد خرید</p>
-          <span class="top-spacer" aria-hidden="true"></span>
-        </header>
-
-        <div class="cart-heading">
-          <div>
+        <header class="cart-heading">
+          <a class="icon-btn" href="/menu" aria-label="بازگشت به منو">
+            <ChevronRight :size="20" aria-hidden="true" />
+          </a>
+          <div class="cart-heading-copy">
             <p class="cart-eyebrow">سفارش شما</p>
-            <h1>سبد خرید <span>{{ totalQty }}</span></h1>
+            <h1>سبد سفارش</h1>
           </div>
           <span class="cart-count-label">{{ totalQty }} آیتم</span>
-        </div>
+        </header>
 
         <OrderContextStrip :currency="currency" />
 
@@ -77,6 +74,7 @@
 </template>
 
 <script setup>
+import { ChevronRight } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import CartLineEditor from '@/components/CartLineEditor.vue'
@@ -210,20 +208,10 @@ onMounted(async () => {
   padding-bottom: 1rem;
 }
 
-.top-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.icon-btn,
-.top-spacer {
+.icon-btn {
   width: 44px;
   height: 44px;
-}
-
-.icon-btn {
+  text-decoration: none;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -231,20 +219,16 @@ onMounted(async () => {
   background: var(--ds-color-surface-raised, #fff);
   box-shadow: var(--shadow-soft);
   color: var(--ds-color-action-primary, var(--accent-green));
-  font-weight: 900;
-}
-
-.top-row p {
-  margin: 0;
-  font-weight: 800;
 }
 
 .cart-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 1rem;
 }
+
+.cart-heading-copy { min-width: 0; }
 
 .cart-eyebrow {
   margin: 0 0 0.25rem;
@@ -277,10 +261,6 @@ onMounted(async () => {
 }
 
 .cart-content--empty { grid-template-columns: 1fr; }
-
-.cart-frame h1 span {
-  color: var(--accent-gold);
-}
 
 .line-list {
   display: grid;
@@ -398,6 +378,6 @@ onMounted(async () => {
   .summary-panel {
     position: static;
   }
-  .cart-heading { align-items: center; }
+  .cart-heading { gap: 0.65rem; }
 }
 </style>
