@@ -19,7 +19,7 @@
           <ShoppingCart :size="17" />
           <span v-if="cartCount > 0" class="mobile-cart-count">{{ cartCount }}</span>
         </a>
-        <a class="webapp-icon-btn" href="/customer/dashboard" aria-label="داشبورد کاربر">
+        <a class="webapp-icon-btn" :href="accountHref" aria-label="حساب کاربری">
           <UserRound :size="17" />
         </a>
       </div>
@@ -49,7 +49,7 @@
       </nav>
 
       <div class="header-actions">
-        <a class="action-icon-pill" href="/customer/dashboard" aria-label="حساب کاربری" title="حساب کاربری">
+        <a class="action-icon-pill" :href="accountHref" aria-label="حساب کاربری" title="حساب کاربری">
           <UserRound :size="16" />
         </a>
         <button class="search-pill" type="button" @click="openSearch" aria-label="جستجو در منو" title="جستجو در منو">
@@ -118,6 +118,7 @@
 import { computed, ref } from 'vue'
 import { ChevronLeft, CircleHelp, Home, List, Menu, Search, ShoppingCart, UserRound, X } from 'lucide-vue-next'
 import { useSearchModal } from '@/composables/useSearchModal'
+import { customerAccountHref } from '@/utils/customerAuth'
 
 const props = defineProps({
   branding: {
@@ -151,6 +152,7 @@ const props = defineProps({
 
 const { openSearch } = useSearchModal()
 const mobileOpen = ref(false)
+const accountHref = computed(() => customerAccountHref())
 
 const brandInitial = computed(() => String(props.branding?.name || 'V').trim().charAt(0) || 'V')
 

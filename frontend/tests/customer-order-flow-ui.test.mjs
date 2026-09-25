@@ -106,15 +106,17 @@ test('the secondary home page follows the saved theme and has a local hero fallb
 })
 
 test('customer landing blocks render Persian cart, category, and popular labels as text', async () => {
-  const [landing, categories, popular] = await Promise.all([
+  const [landing, bottomNav, categories, popular] = await Promise.all([
     source('pages/RestaurantLandingPage.vue'),
+    source('components/MobileBottomNav.vue'),
     source('components/blocks/CategoriesBlock.vue'),
     source('components/blocks/PopularBlock.vue'),
   ])
 
-  assert.match(landing, /aria-label="مشاهده سبد سفارش"/)
-  assert.match(landing, /<span>سبد سفارش<\/span>/)
-  assert.match(landing, /\{\{ cartCount \}\} آیتم/)
+  assert.match(landing, /<CartActionFeedback :message="toastMessage" \/>/)
+  assert.doesNotMatch(landing, /home-sticky-cart/)
+  assert.match(bottomNav, /<small>سبد<\/small>/)
+  assert.match(bottomNav, /سبد سفارش/)
   assert.match(categories, /\{\{ formatCount\(cat\.count\) \}\} آیتم/)
   assert.match(popular, /محبوب شماره ۱/)
   assert.match(popular, />افزودن<\/button>/)
@@ -150,12 +152,14 @@ test('customer menu starts loading immediately and exposes accessible responsive
   assert.match(menu, /:aria-pressed="sortMode === option\.value"/)
   assert.match(menu, /:aria-pressed="selectedTag === tag"/)
   assert.match(menu, /min-height:\s*44px/)
-  assert.match(menu, /bottom:\s*calc\(6\.25rem \+ env\(safe-area-inset-bottom\)\)/)
-  assert.match(menu, /@media\s*\(min-width:\s*920px\)\s*\{[^}]*\.sticky-cart\s*\{[^}]*display:\s*none;/s)
+  assert.match(menu, /<CartActionFeedback :message="cartFeedback" \/>/)
+  assert.doesNotMatch(menu, /sticky-cart/)
+  assert.match(menu, /padding-bottom:\s*max\(7rem,\s*calc\(7rem \+ env\(safe-area-inset-bottom\)\)\)/)
   assert.match(categoryRail, /role="group" aria-label="دسته‌بندی‌های منو"/)
   assert.match(categoryRail, /:aria-pressed="selectedCategory === category\.slug"/)
   assert.match(categoryRail, /min-height:\s*44px/)
   assert.match(bottomNav, /bottom:\s*calc\(0\.62rem \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(bottomNav, /aria-controls="mobile-more-sheet"/)
   assert.match(bottomNav, /--ds-color-action-primary/)
   assert.match(orderContext, /min-height:\s*44px/)
   assert.match(orderContext, /--ds-color-surface-raised/)

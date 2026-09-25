@@ -22,16 +22,6 @@
         <span>جستجو در منو، غذاها و پیشنهادها...</span>
       </button>
 
-      <div class="hero-stats customer-grid customer-grid--2">
-        <article class="hero-stat customer-glass-card">
-          <small>سفارش‌های اخیر</small>
-          <strong>{{ orders.length.toLocaleString('fa-IR') }}</strong>
-        </article>
-        <article class="hero-stat customer-glass-card">
-          <small>آیتم‌های سبد</small>
-          <strong>{{ cartCount.toLocaleString('fa-IR') }}</strong>
-        </article>
-      </div>
     </CustomerPageHeader>
 
     <div class="customer-page__body">
@@ -179,13 +169,6 @@
               <small>تاریخچه و پیگیری</small>
             </div>
           </a>
-          <a href="/cart" class="account-action-card customer-glass-card">
-            <span class="customer-icon-badge"><ShoppingCart :size="21" /></span>
-            <div>
-              <strong>سبد خرید</strong>
-              <small>{{ cartCount > 0 ? `${cartCount} آیتم در سبد` : 'آماده تکمیل سفارش' }}</small>
-            </div>
-          </a>
           <a href="/customer/branches" class="account-action-card customer-glass-card">
             <span class="customer-icon-badge"><Store :size="21" /></span>
             <div>
@@ -232,7 +215,6 @@ import {
   Pencil,
   ReceiptText,
   Search,
-  ShoppingCart,
   Sparkles,
   Star,
   Store,
@@ -243,10 +225,10 @@ import {
 import { cartState } from '@/stores/cartStore'
 import { getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
+import { hasCustomerSession } from '@/utils/customerAuth'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
-const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
 const customer = ref({ name: '', mobile: '' })
 const club = ref(null)
 const redeemBusy = ref(false)
@@ -350,6 +332,10 @@ function logout() {
 
 onMounted(async () => {
   const auth = readAuth()
+  if (!hasCustomerSession()) {
+    window.location.replace('/customer/login?redirect=%2Fcustomer%2Fdashboard')
+    return
+  }
   customer.value = { name: auth.name, mobile: auth.mobile }
   if (auth.mobile) {
     try {
@@ -416,30 +402,6 @@ onMounted(async () => {
 
 .hero-search span {
   font-size: 0.9rem;
-}
-
-.hero-stats {
-  margin-top: 0.95rem;
-}
-
-.hero-stat {
-  padding: 0.85rem 0.95rem;
-  color: var(--ds-color-action-primary-foreground, #fff);
-  background: rgb(255 255 255 / 0.1);
-  border-color: rgb(255 255 255 / 0.12);
-  box-shadow: none;
-}
-
-.hero-stat small {
-  display: block;
-  font-size: 0.74rem;
-  color: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 68%, transparent);
-}
-
-.hero-stat strong {
-  display: block;
-  margin-top: 0.3rem;
-  font-size: 1.1rem;
 }
 
 .account-summary {

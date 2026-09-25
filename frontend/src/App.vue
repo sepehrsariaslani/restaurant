@@ -69,15 +69,19 @@
   </div>
 
   <div class="app-layout" :class="`page-${page}`" v-else>
-    <PublicHeader
+    <div
       v-if="page !== 'landing' && page !== 'homev2' && !isCustomerPage && page !== 'checkout' && page !== 'payment-fail' && page !== 'not-found' && page !== 'kitchen'"
-      :branding="branding"
-      :page="page"
-      :cart-count="cartCount"
-      :has-last-order="hasLastOrder"
-      :last-order-url="lastOrderUrl"
-      :header-variant="headerVariant"
-    />
+      class="desktop-public-header"
+    >
+      <PublicHeader
+        :branding="branding"
+        :page="page"
+        :cart-count="cartCount"
+        :has-last-order="hasLastOrder"
+        :last-order-url="lastOrderUrl"
+        :header-variant="headerVariant"
+      />
+    </div>
 
     <main
       class="app-main"
@@ -136,7 +140,7 @@
     />
 
     <MobileBottomNav
-      v-if="!isFullscreenPage && page !== 'kitchen' && page !== 'item'"
+      v-if="page !== 'kitchen'"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
@@ -394,11 +398,6 @@ const headerVariant = computed(() => {
   return siteComponents.value.header_variant
 })
 
-const isMobile = computed(() => {
-  if (typeof window === 'undefined') return false
-  return window.innerWidth < 920
-})
-
 const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && cartState.lastOrder?.mobile))
 
 const isOrderFlowPage = page.startsWith('order-') && page !== 'order-success'
@@ -447,13 +446,40 @@ const lastOrderUrl = computed(() => {
   min-height: 1px;
 }
 
+.desktop-public-header {
+  display: contents;
+}
+
 @media (max-width: 920px) {
   .app-main {
-    padding-top: 3.75rem;
+    padding-top: 0;
+    padding-bottom: calc(4.8rem + env(safe-area-inset-bottom));
+  }
+
+  .desktop-public-header {
+    display: none;
   }
 
   .app-main.app-main--no-offset {
     padding-top: 0;
+  }
+
+  .app-layout[class*="page-customer-"] .app-main,
+  .app-layout.page-menu .app-main,
+  .app-layout.page-item .app-main,
+  .app-layout.page-cart .app-main,
+  .app-layout.page-order-pickup .app-main,
+  .app-layout.page-order-delivery .app-main,
+  .app-layout.page-checkout .app-main {
+    padding-bottom: 0;
+  }
+
+  .app-layout :deep(.order-flow-page--mobile-cta) {
+    padding-bottom: calc(150px + env(safe-area-inset-bottom));
+  }
+
+  .app-layout :deep(.order-flow-page--mobile-cta .order-mobile-cta) {
+    bottom: calc(4.8rem + env(safe-area-inset-bottom));
   }
 }
 

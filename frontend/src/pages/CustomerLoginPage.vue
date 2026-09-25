@@ -158,7 +158,7 @@ async function verifyOtp() {
         localStorage.setItem('customer_phone', fullPhone)
         if (customer.name) localStorage.setItem('customer_name', customer.name)
       } catch {}
-      window.location.href = '/customer/dashboard'
+      window.location.href = postLoginDestination()
     } else {
       error.value = 'کد وارد شده اشتباه است.'
     }
@@ -181,6 +181,20 @@ function onOtpInput(index, event) {
 function onOtpKeydown(index, event) {
   if (event.key === 'Backspace' && !otpDigits.value[index] && index > 0) {
     otpRefs.value[index - 1]?.focus()
+  }
+}
+
+function postLoginDestination() {
+  const fallback = '/customer/dashboard'
+  const requested = new URLSearchParams(window.location.search).get('redirect') || fallback
+  if (!requested.startsWith('/') || requested.startsWith('//') || requested.includes('\\')) return fallback
+
+  try {
+    const destination = new URL(requested, window.location.origin)
+    if (destination.origin !== window.location.origin || destination.pathname.startsWith('/customer/login')) return fallback
+    return `${destination.pathname}${destination.search}${destination.hash}`
+  } catch {
+    return fallback
   }
 }
 

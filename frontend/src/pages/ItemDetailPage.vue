@@ -1,5 +1,6 @@
 <template>
   <div class="detail-page" dir="rtl">
+    <CartActionFeedback :message="cartActionMessage" />
     <div class="state-shell" v-if="!item && (loading || error)">
       <div class="state-content">
         <!-- Loading skeleton -->
@@ -677,6 +678,7 @@ import IngredientQuantityEditor from '@/components/IngredientQuantityEditor.vue'
 import ModifierRecipeImpactSelector from '@/components/ModifierRecipeImpactSelector.vue'
 import LivePricingBreakdown from '@/components/LivePricingBreakdown.vue'
 import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
+import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney, normalizeMobile, parseQuery } from '@/utils/format'
@@ -724,6 +726,15 @@ function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
 // ─── Share ───────────────────────────────────────────────────────────
 const shareToastVisible = ref(false)
+const cartActionMessage = ref('')
+let cartActionTimer = null
+
+function showCartActionFeedback(message) {
+  cartActionMessage.value = message
+  clearTimeout(cartActionTimer)
+  cartActionTimer = setTimeout(() => { cartActionMessage.value = '' }, 2200)
+}
+
 async function shareProduct() {
   const url = window.location.href
   const title = item.value?.title || ''
@@ -831,6 +842,7 @@ function addRelatedItem(source = {}) {
     ingredient_catalog: [],
     modifier_groups_catalog: [],
   })
+  showCartActionFeedback(`${source.title || 'محصول'} به سبد سفارش اضافه شد.`)
 }
 
 // ─── Review validation ───────────────────────────────────────────────
@@ -1424,7 +1436,11 @@ function handleBuilderAddToCart(payload) {
   })
 
   builderOpen.value = false
-  window.location.href = '/cart'
+  if (editLineId.value) {
+    window.location.href = '/cart'
+    return
+  }
+  showCartActionFeedback(`${item.value.title || 'محصول'} به سبد سفارش اضافه شد.`)
 }
 
 async function loadItem() {
@@ -1480,7 +1496,11 @@ function addToCart() {
     ingredient_catalog: ingredients.value,
     modifier_groups_catalog: modifierGroups.value,
   })
-  window.location.href = '/cart'
+  if (editLineId.value) {
+    window.location.href = '/cart'
+    return
+  }
+  showCartActionFeedback(`${item.value.title || 'محصول'} به سبد سفارش اضافه شد.`)
 }
 
 function resolveItemImage(source = null) {
@@ -1530,6 +1550,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearTimeout(cartActionTimer)
   window.removeEventListener('keydown', handlePrintShortcut)
   window.removeEventListener('keydown', handleLightboxKeydown)
   window.removeEventListener('scroll', handleScroll)
@@ -1543,7 +1564,7 @@ onUnmounted(() => {
   min-height: 100svh;
   background: var(--theme-background, #f6f1ea);
   direction: rtl;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 6.75rem);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 10rem);
 }
 
 .state-shell {
@@ -2182,7 +2203,7 @@ onUnmounted(() => {
    ════════════════════════════════════════════════════════════════ */
 .sticky-bottom-bar {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+  bottom: calc(env(safe-area-inset-bottom) + 5rem);
   left: 0.5rem;
   right: 0.5rem;
   background: var(--ds-color-surface-raised, #fff);

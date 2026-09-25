@@ -250,22 +250,7 @@
         </LiquidGlassCard>
       </transition>
 
-      <!-- سبد سفارش شناور -->
-      <transition name="cart-pop">
-        <a class="sticky-cart" href="/cart" v-if="cartCount > 0">
-          <div class="cart-info">
-            <span class="cart-icon"><ShoppingCart :size="20" stroke-width="2" /></span>
-            <div>
-              <small>سبد سفارش</small>
-              <strong>{{ cartCount }} آیتم</strong>
-            </div>
-          </div>
-          <div class="cart-price">
-            <strong>{{ formatMoney(cartTotal, currency) }}</strong>
-            <span class="cart-arrow">←</span>
-          </div>
-        </a>
-      </transition>
+      <CartActionFeedback :message="cartFeedback" />
 
       <MenuQuickAddSheet
         :open="quickSheetOpen"
@@ -329,7 +314,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, Teleport } from 'vue'
-import { ChevronDown, ChevronsUp, ShoppingCart, Utensils } from 'lucide-vue-next'
+import { ChevronDown, ChevronsUp, Utensils } from 'lucide-vue-next'
 import LiquidGlassBackdrop from '@/components/LiquidGlassBackdrop.vue'
 import LiquidGlassCard from '@/components/LiquidGlassCard.vue'
 import CategoryImageRail from '@/components/CategoryImageRail.vue'
@@ -337,11 +322,12 @@ import MenuProductCard from '@/components/MenuProductCard.vue'
 import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import BomPreviewModal from '@/components/BomPreviewModal.vue'
 import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
+import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
 import { getMenuItems, getManagementSessionProfile, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import { getMenuIconComponent } from '@/utils/menuIcons'
-import { cartState, cartSubtotal, upsertLine, removeLine } from '@/stores/cartStore'
+import { cartState, upsertLine, removeLine } from '@/stores/cartStore'
 
 const props = defineProps({
   boot: {
@@ -382,6 +368,8 @@ const items = ref([])
 const loading = ref(true)
 const loadingMore = ref(false)
 const error = ref('')
+const cartFeedback = ref('')
+let cartFeedbackTimer = null
 const selectedTag = ref('')
 const sortMode = ref('default')
 const sortMenuOpen = ref(false)
@@ -496,8 +484,6 @@ const menuCardTheme = computed(() => {
     add_btn_bg: 'var(--ds-color-action-accent)',
   }
 })
-const cartCount = computed(() => cartState.lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0))
-const cartTotal = computed(() => cartSubtotal())
 const availableTags = computed(() => {
   const tagSet = new Set()
   const allItems = items.value || []
@@ -1277,6 +1263,7 @@ function quickAdd(item) {
   }
   if (!itemHasCustomization(item)) {
     addSimpleLine(item, 1)
+    showCartFeedback(`${item.title || 'محصول'} به سبد سفارش اضافه شد.`)
     return
   }
   quickSheetItem.value = item
@@ -1292,6 +1279,13 @@ function quickIncrease(item) {
     return
   }
   addSimpleLine(item, 1)
+  showCartFeedback(`${item.title || 'محصول'} به سبد سفارش اضافه شد.`)
+}
+
+function showCartFeedback(message) {
+  cartFeedback.value = message
+  clearTimeout(cartFeedbackTimer)
+  cartFeedbackTimer = setTimeout(() => { cartFeedback.value = '' }, 2200)
 }
 
 function quickDecrease(item) {
@@ -1391,6 +1385,7 @@ function handleBuilderAddToCart(payload) {
       builder_template: builderTemplate.value?.name || payload?.template || '',
     },
   })
+  showCartFeedback(`${builderItem.value.title || 'محصول'} به سبد سفارش اضافه شد.`)
   setTimeout(() => {
     closeBuilderWizard()
   }, 650)
@@ -1415,6 +1410,7 @@ function confirmQuickAdd(linePayload) {
   upsertLine({
     ...linePayload,
   })
+  showCartFeedback(`${linePayload?.item_title || linePayload?.item_name || quickSheetItem.value?.title || 'محصول'} به سبد سفارش اضافه شد.`)
   closeQuickSheet()
 }
 
@@ -1468,6 +1464,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  clearTimeout(cartFeedbackTimer)
   intersectionObserver?.disconnect()
   window.removeEventListener('keydown', handlePrintShortcut)
   window.removeEventListener('scroll', onScroll)
@@ -1981,72 +1978,6 @@ onUnmounted(() => {
   margin-top: 0.5rem;
 }
 
-/* ─── سبد شناور ─── */
-.sticky-cart {
-  position: fixed;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(500px, calc(100% - 1rem));
-  border-radius: 20px;
-  background: var(--ds-color-surface-raised, #fff);
-  border: 1px solid var(--ds-color-border, rgb(var(--palette-deep-sapphire-rgb) / 0.2));
-  box-shadow: 0 14px 34px rgb(15 23 42 / 0.12);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.72rem 1rem;
-  z-index: 80;
-  text-decoration: none;
-  color: var(--ds-color-text-primary, var(--text-primary));
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.sticky-cart:hover {
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 20px 44px rgb(15 23 42 / 0.16);
-}
-
-@media (min-width: 920px) {
-  .sticky-cart {
-    display: none;
-  }
-}
-
-.cart-info {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.cart-icon {
-  font-size: 1.2rem;
-}
-
-.cart-info small {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-}
-
-.cart-info strong,
-.cart-price strong {
-  font-size: 0.9rem;
-  color: var(--text-primary);
-  display: block;
-}
-
-.cart-price {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.cart-arrow {
-  font-size: 1rem;
-  color: var(--accent-green);
-}
-
 .print-catalog {
   display: none;
 }
@@ -2060,32 +1991,6 @@ onUnmounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-}
-
-.cart-pop-enter-active {
-  animation: cartPopIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.cart-pop-leave-active {
-  animation: cartPopOut 0.25s ease forwards;
-}
-
-@keyframes cartPopIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(20px) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-@keyframes cartPopOut {
-  to {
-    opacity: 0;
-    transform: translateX(-50%) translateY(16px) scale(0.94);
-  }
 }
 
 @media print {
@@ -2104,7 +2009,6 @@ onUnmounted(() => {
   :global(.app-header),
   :global(.app-footer),
   :global(.mobile-bottom-nav),
-  :global(.sticky-cart),
   :global(.liquid-backdrop > .blob),
   :global(.header-surface),
   :global(.header-inner),
@@ -2303,11 +2207,7 @@ onUnmounted(() => {
 
 @media (max-width: 919px) {
   .menu-shell {
-    padding-bottom: max(11rem, calc(11rem + env(safe-area-inset-bottom)));
-  }
-
-  .sticky-cart {
-    bottom: calc(6.25rem + env(safe-area-inset-bottom));
+    padding-bottom: max(7rem, calc(7rem + env(safe-area-inset-bottom)));
   }
 
   .scroll-top-btn {

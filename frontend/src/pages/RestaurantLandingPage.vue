@@ -1,12 +1,13 @@
 <template>
   <div class="home-page" :class="{ 'home-page--v2': page === 'homev2' }" dir="rtl">
-    <PublicHeader
-      v-if="!previewMode"
-      :branding="branding"
-      :page="'landing'"
-      :cart-count="cartCount"
-      :header-variant="siteComponents.header_variant"
-    />
+    <div v-if="!previewMode" class="desktop-public-header">
+      <PublicHeader
+        :branding="branding"
+        :page="'landing'"
+        :cart-count="cartCount"
+        :header-variant="siteComponents.header_variant"
+      />
+    </div>
     <div v-else class="home-preview-chrome">
       <div class="home-preview-chrome__inner">
         <div class="home-preview-brand">
@@ -24,18 +25,7 @@
       <HomePageRenderer :boot="boot" :page="page" @quick-add="quickAdd" />
     </div>
 
-    <Transition name="home-toast">
-      <div v-if="!previewMode && toastMessage" class="home-toast" role="status" aria-live="polite">
-        {{ toastMessage }}
-      </div>
-    </Transition>
-
-    <Transition name="cart-pop">
-      <a v-if="!previewMode && cartCount > 0" class="home-sticky-cart" href="/cart" aria-label="مشاهده سبد سفارش">
-        <span>سبد سفارش</span>
-        <strong>{{ cartCount }} آیتم</strong>
-      </a>
-    </Transition>
+    <CartActionFeedback :message="toastMessage" />
 
     <SiteFooter
       v-if="!previewMode && siteComponents.footer_variant === 'full'"
@@ -60,6 +50,7 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { upsertLine, cartState } from '@/stores/cartStore'
 import PublicHeader from '@/components/PublicHeader.vue'
+import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import HomePageRenderer from '@/components/blocks/HomePageRenderer.vue'
@@ -127,6 +118,8 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 100svh;
 }
+
+.desktop-public-header { display: contents; }
 
 .home-preview-chrome {
   position: sticky;
@@ -219,69 +212,13 @@ onUnmounted(() => {
   background: var(--ds-color-bg-page);
 }
 
-:global(.home-page--v2 .home-sticky-cart),
-:global(.home-page--v2 .home-toast) {
-  background: var(--ds-color-action-primary);
-  color: var(--ds-color-action-primary-foreground, var(--ds-color-text-inverse, #fffdf6));
-}
-
 .needs-header-offset {
   padding-top: 5.4rem;
 }
 
-.home-toast {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 80;
-  max-width: min(340px, calc(100vw - 2rem));
-  border-radius: 999px;
-  padding: 0.7rem 1rem;
-  background: var(--ds-color-action-primary);
-  color: var(--ds-color-action-primary-foreground, #fff);
-  box-shadow: 0 16px 38px rgb(0 0 0 / 0.18);
-  font-size: 0.86rem;
-  font-weight: 800;
-}
-
-.home-sticky-cart {
-  position: fixed;
-  left: 1rem;
-  bottom: 1rem;
-  z-index: 79;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  border-radius: 999px;
-  min-height: 48px;
-  padding: 0.65rem 1rem;
-  background: var(--ds-color-action-accent);
-  color: var(--ds-color-action-accent-foreground, var(--ds-color-text-inverse, #fff));
-  text-decoration: none;
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--ds-color-action-accent) 26%, transparent);
-}
-
-.home-sticky-cart span {
-  font-size: 0.78rem;
-}
-
-.home-sticky-cart strong {
-  font-size: 0.84rem;
-}
-
-.home-toast-enter-active,
-.home-toast-leave-active,
-.cart-pop-enter-active,
-.cart-pop-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.home-toast-enter-from,
-.home-toast-leave-to,
-.cart-pop-enter-from,
-.cart-pop-leave-to {
-  opacity: 0;
-  transform: translateY(10px);
+@media (max-width: 920px) {
+  .needs-header-offset { padding-top: 0; }
+  .desktop-public-header { display: none; }
 }
 
 @media (max-width: 640px) {

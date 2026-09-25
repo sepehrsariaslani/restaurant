@@ -179,15 +179,6 @@
       </div>
       </footer>
 
-      <transition name="fade">
-      <div class="success-overlay" v-if="showSuccess">
-        <div class="success-content">
-          <CheckCircleIcon class="icon-xl" />
-          <h3>به سبد خرید اضافه شد</h3>
-          <p>{{ product.item_name || product.title }} آماده سفارش است.</p>
-        </div>
-      </div>
-      </transition>
     </section>
   </div>
 </template>
@@ -198,7 +189,6 @@ import {
   AlertCircle as AlertCircleIcon,
   ArrowLeft as ArrowLeftIcon,
   Check as CheckIcon,
-  CheckCircle as CheckCircleIcon,
   ChevronUp as ChevronUpIcon,
   Image as ImageIcon,
   Minus as MinusIcon,
@@ -224,7 +214,6 @@ const currentStepIndex = ref(0)
 const selections = reactive({})
 const searchByStep = reactive({})
 const stepError = ref('')
-const showSuccess = ref(false)
 const reviewRef = ref(null)
 const panelRef = ref(null)
 const mainRef = ref(null)
@@ -448,8 +437,6 @@ function submitOrder() {
     },
   }
   emit('add-to-cart', payload)
-  showSuccess.value = true
-  setTimeout(() => { showSuccess.value = false }, 1600)
 }
 
 function goToReview() {
@@ -837,7 +824,7 @@ watch(
   position: absolute;
   top: 0.45rem;
   left: 0.45rem;
-  color: #f97316;
+  color: var(--ds-color-action-primary);
   font-size: 0.67rem;
   font-weight: 900;
 }
@@ -854,21 +841,21 @@ watch(
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  border: 1px solid #f0e3d6;
-  background: #fff6ee;
-  color: #f97316;
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-action-primary-soft);
+  color: var(--ds-color-action-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .option-qty button.plus,
 .quick-plus {
-  background: #ff7a18;
-  border-color: #ff7a18;
-  color: #fff;
+  background: var(--ds-color-action-primary);
+  border-color: var(--ds-color-action-primary);
+  color: var(--ds-color-action-primary-foreground);
 }
 .quick-plus { position: absolute; left: 0.6rem; bottom: 0.65rem; }
-.option-qty span { min-width: 18px; text-align: center; font-weight: 900; color: #4b3d31; }
+.option-qty span { min-width: 18px; text-align: center; font-weight: 900; color: var(--ds-color-text-primary); }
 
 .step-error {
   display: flex;
@@ -913,13 +900,13 @@ watch(
   backdrop-filter: blur(14px);
 }
 .footer-price { display: grid; gap: 0.15rem; }
-.footer-price small { color: #94887d; font-size: 0.72rem; }
-.footer-price strong { color: #214032; font-size: 0.92rem; }
+.footer-price small { color: var(--ds-color-text-muted); font-size: 0.72rem; }
+.footer-price strong { color: var(--ds-color-text-primary); font-size: 0.92rem; }
 .footer-actions { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 0.5rem; }
 .collapse-btn,
 .add-cart-btn { min-height: 44px; border: 0; border-radius: 14px; font-family: inherit; font-weight: 900; }
-.collapse-btn { background: #fff; border: 1px solid #eee2d6; color: #735f4e; }
-.add-cart-btn { position: relative; overflow: hidden; background: linear-gradient(135deg, #ff7a18, #fb6514); color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; box-shadow: 0 12px 24px rgba(249, 115, 22, 0.28); }
+.collapse-btn { background: var(--ds-color-surface-raised); border: 1px solid var(--ds-color-border); color: var(--ds-color-text-secondary); }
+.add-cart-btn { position: relative; overflow: hidden; background: var(--ds-color-action-primary); color: var(--ds-color-action-primary-foreground); display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; box-shadow: 0 12px 24px color-mix(in srgb, var(--ds-color-action-primary) 28%, transparent); }
 .add-cart-btn::after {
   content: '';
   position: absolute;
@@ -933,15 +920,11 @@ watch(
 .add-cart-btn:not(:disabled):active { transform: scale(0.985); }
 .add-cart-btn:disabled { opacity: 0.45; box-shadow: none; }
 
-.success-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(20, 30, 24, 0.25); backdrop-filter: blur(8px); z-index: 5; }
-.success-content { width: min(320px, calc(100vw - 2rem)); background: #fff; border-radius: 24px; padding: 1.25rem; text-align: center; color: #214032; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18); }
-.success-content .icon-xl { color: #2f7d42; width: 48px; height: 48px; }
 
 .icon-xs { width: 14px; height: 14px; }
 .icon-sm { width: 18px; height: 18px; }
 .icon-md { width: 22px; height: 22px; }
 .icon-lg { width: 32px; height: 32px; }
-.icon-xl { width: 48px; height: 48px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 180ms ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
