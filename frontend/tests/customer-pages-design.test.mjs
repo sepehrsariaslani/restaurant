@@ -170,6 +170,15 @@ test('product sharing uses the accessible, theme-aware shared control on mobile 
   assert.doesNotMatch(detail, /shareProduct|share-toast|shareToastVisible/)
 })
 
+test('product detail keeps the site currency selected by the shared menu settings', () => {
+  const menu = source('../src/pages/MenuPage.vue')
+  const detail = source('../src/pages/ItemDetailPage.vue')
+
+  assert.match(menu, /const currency = ref\(props\.boot\.currency \|\| 'IRR'\)/)
+  assert.match(detail, /const currency = ref\(props\.boot\.currency \|\| 'IRR'\)/)
+  assert.doesNotMatch(detail, /currency\.value\s*=\s*['"]TOMAN['"]/)
+})
+
 test('customer account surfaces use live theme colors and the guest dashboard requires sign-in', () => {
   const theme = source('../src/theme.css')
   const dashboard = source('../src/pages/CustomerDashboardPage.vue')

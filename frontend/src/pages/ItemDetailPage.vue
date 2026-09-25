@@ -1433,7 +1433,6 @@ async function loadItem() {
     ingredients.value = data.ingredients || []
     modifierGroups.value = normalizeModifierGroups(data.modifier_groups || [])
     allergens.value = data.allergens || []
-    currency.value = 'TOMAN'
     const defaults = createDefaultCustomization(ingredients.value, modifierGroups.value)
     const defaultsWithVariant = withVariantContext(defaults)
     customization.value = { ...defaultsWithVariant, selected_modifiers: normalizeSelectedModifiers(defaultsWithVariant.selected_modifiers, modifierGroups.value) }
