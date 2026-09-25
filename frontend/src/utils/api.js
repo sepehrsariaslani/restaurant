@@ -1292,15 +1292,15 @@ export async function getBomPreview(item_code, signal) {
 }
 
 export function getCustomerCheckoutProfile({ mobile = "", customer_name = "" } = {}) {
-	return callRestaurantAPI("get_customer_checkout_profile", { mobile, customer_name });
+	return callRestaurantAPI("get_customer_checkout_profile", { mobile, customer_name, customer_token: customerEditToken() });
 }
 
 export function getCustomerProfile({ mobile = "" } = {}) {
-	return callRestaurantAPI("get_customer_profile", mobile ? { mobile } : {});
+	return callRestaurantAPI("get_customer_profile", { mobile, customer_token: customerEditToken() });
 }
 
 export function getCustomerOrders({ mobile = "", limit = 50, start = 0 } = {}) {
-	return callRestaurantAPI("get_customer_orders", { mobile, limit, start });
+	return callRestaurantAPI("get_customer_orders", { mobile, limit, start, customer_token: customerEditToken() });
 }
 
 export function sendOtp({ mobile = "", customer_name = "" } = {}) {
@@ -1356,15 +1356,15 @@ export function getItemReviews({ item_slug = "", item = "", page = 1, page_size 
 }
 
 export function saveCustomerDeliveryAddress({ customer_info = {}, address_info = {} } = {}) {
-	return callRestaurantAPI("save_customer_delivery_address", { customer_info, address_info });
+	return callRestaurantAPI("save_customer_delivery_address", { customer_info, address_info, customer_token: customerEditToken() });
 }
 
 export function getCustomerVehicles({ mobile = "", customer_name = "" } = {}) {
-	return callRestaurantAPI("get_customer_vehicles", { mobile, customer_name });
+	return callRestaurantAPI("get_customer_vehicles", { mobile, customer_name, customer_token: customerEditToken() });
 }
 
 export function saveCustomerVehicle({ customer_info = {}, vehicle_info = {} } = {}) {
-	return callRestaurantAPI("save_customer_vehicle", { customer_info, vehicle_info });
+	return callRestaurantAPI("save_customer_vehicle", { customer_info, vehicle_info, customer_token: customerEditToken() });
 }
 
 export function placeOrder(payload) {
@@ -3546,16 +3546,25 @@ export async function customerVerifyOTP(mobile, code) {
 	return callRestaurantAPI("customer_verify_otp", { mobile, code });
 }
 
-export async function customerLoginPassword(mobile, password) {
-	return callMethodByPath("restaurant.api.customer_login_password", { mobile, password });
+export async function customerLoginPassword(identifier, password) {
+	return callMethodByPath("restaurant.customer_account.customer_login_password", { identifier, password });
+}
+
+export async function customerRegisterPassword({ customer_token = "", name = "", email = "", password = "" } = {}) {
+	return callMethodByPath("restaurant.customer_account.customer_register_password", {
+		customer_token,
+		name,
+		email,
+		password,
+	});
 }
 
 export async function customerLogout() {
-	return callMethodByPath("restaurant.api.customer_logout", {});
+	return callMethodByPath("restaurant.customer_account.customer_logout", { customer_token: customerEditToken() });
 }
 
 export async function customerSession() {
-	return callMethodByPathGET("restaurant.api.customer_session", {});
+	return callMethodByPath("restaurant.customer_account.customer_session", { customer_token: customerEditToken() });
 }
 
 // ── Zarinpal Settings API ──────────────────────────────────
@@ -4029,7 +4038,7 @@ export function adjustManagementPoints(payload = {}) {
 }
 
 export function redeemMyPoints({ mobile = "", points = 0 } = {}) {
-	return callRestaurantAPI("redeem_my_points", { mobile, points });
+	return callRestaurantAPI("redeem_my_points", { mobile, points, customer_token: customerEditToken() });
 }
 
 // ---------------------------------------------------------------------------

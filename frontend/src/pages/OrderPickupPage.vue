@@ -138,7 +138,7 @@ const pickupMethod = ref(query.get('method') === 'car' ? 'car' : query.get('meth
 const vehicle = ref(cartState.orderContext.pickup_vehicle || {})
 let auth = {}
 try { auth = JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}') } catch {}
-const signedIn = Boolean(auth.mobile)
+const signedIn = Boolean(auth.mobile && auth.customer_token)
 const mobile = auth.mobile || ''
 const customerName = auth.customer_name || ''
 const branches = ref([])

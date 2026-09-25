@@ -22,6 +22,7 @@ from frappe.utils import add_days, cint, flt, getdate, now_datetime, today
 from restaurant.api import (
 	_bi_kpi,
 	_compose_management_report,
+	_ensure_mobile,
 	_ensure_management_access,
 	_has_column,
 	_table_columns_from_rows,
@@ -1683,22 +1684,19 @@ def adjust_management_points(payload=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def redeem_my_points(mobile="", points=0):
+def redeem_my_points(mobile="", points=0, customer_token=None):
 	"""تبدیل امتیاز به اعتبار توسط خود مشتری از داشبورد مشتری."""
 	settings = _club_club_settings()
 	if not settings["club_enabled"] or not settings["points_enabled"]:
 		frappe.throw(_("سیستم امتیازدهی فعال نیست."))
-	mobile = (mobile or "").strip()
-	if not mobile:
-		frappe.throw(_("شماره موبایل الزامی است."))
-	customer = ""
-	for fieldname in ("mobile_no", "customer_primary_mobile"):
-		if _has_column("Customer", fieldname):
-			customer = frappe.db.get_value("Customer", {fieldname: mobile, "disabled": 0}, "name") or ""
-			if customer:
-				break
-	if not customer:
-		frappe.throw(_("مشتری با این شماره یافت نشد."))
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	requested_mobile = _ensure_mobile(mobile, allow_empty=True)
+	verified_mobile = _ensure_mobile(identity.get("mobile"), allow_empty=False)
+	if requested_mobile and requested_mobile != verified_mobile:
+		frappe.throw(_("شماره همراه با حساب واردشده مطابقت ندارد."), frappe.PermissionError)
+	customer = identity["customer"]
 	return _redeem_points_core(customer, cint(points))
 
 

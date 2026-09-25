@@ -6,6 +6,7 @@ from frappe.utils import cint, flt
 
 from restaurant.api import (
 	_build_ticket_components,
+	_ensure_customer,
 	_extract_qty_map_from_ticket,
 	_recalculate_line,
 	_sync_work_order_required_items,
@@ -31,6 +32,7 @@ from restaurant.api import (
 	set_management_product_price,
 	update_management_product_settings,
 )
+from restaurant.customer_account import issue_customer_session
 
 
 class TestRestaurantAPI(FrappeTestCase):
@@ -1979,11 +1981,14 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertTrue(any(row.item_code == self.service_item_code for row in (order_doc.items or [])))
 
     def test_save_customer_delivery_address_and_checkout_profile(self):
+        mobile = "09128889977"
+        customer = _ensure_customer("مشتری نقشه", mobile)
+        customer_token = issue_customer_session(customer, mobile)
         saved = save_customer_delivery_address(
-            customer_info={"name": "مشتری نقشه", "mobile": "09128889977"},
+            customer_info={"name": "مشتری نقشه", "mobile": mobile},
             address_info={
                 "title": "خانه",
-                "phone": "09128889977",
+                "phone": mobile,
                 "address_line": "تهران، خیابان اول",
                 "plaque": "12",
                 "unit": "4",
@@ -1992,18 +1997,34 @@ class TestRestaurantAPI(FrappeTestCase):
                 "lng": 51.4348,
                 "is_primary": 1,
             },
+            customer_token=customer_token,
         )
 
         self.assertTrue(saved.get("address"))
         self.assertTrue(saved["address"].get("id"))
 
-        profile = get_customer_checkout_profile("09128889977")
-        self.assertEqual(cint(profile.get("customer", {}).get("exists")), 1)
+        profile = get_customer_checkout_profile(mobile, customer_token=customer_token)
+        self.assertEqual(profile.get("customer", {}).get("customer_id"), customer)
         self.assertTrue(profile.get("addresses"))
         first = profile["addresses"][0]
         self.assertEqual(first.get("title"), "خانه")
         self.assertAlmostEqual(float(first.get("lat")), 35.7442, places=3)
         self.assertAlmostEqual(float(first.get("lng")), 51.4348, places=3)
+        unverified_profile = get_customer_checkout_profile(mobile)
+        self.assertFalse(unverified_profile.get("addresses"))
+        with self.assertRaises(frappe.PermissionError):
+            get_customer_checkout_profile("09127776655", customer_token=customer_token)
+
+        previous_user = frappe.session.user
+        try:
+            frappe.set_user("Guest")
+            with self.assertRaises(frappe.PermissionError):
+                save_customer_delivery_address(
+                    customer_info={"name": "مهمان", "mobile": "09127776655"},
+                    address_info={"address_line": "نشانی آزمایشی", "lat": 35.7, "lng": 51.4},
+                )
+        finally:
+            frappe.set_user(previous_user)
 
     def test_place_order_with_delivery_mode_and_address_snapshot(self):
         payload = place_order(

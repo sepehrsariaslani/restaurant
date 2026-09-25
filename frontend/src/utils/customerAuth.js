@@ -5,7 +5,7 @@ export function hasCustomerSession(storage = typeof localStorage !== 'undefined'
 
   try {
     const auth = JSON.parse(storage.getItem(CUSTOMER_AUTH_KEY) || '{}')
-    return Boolean(String(auth?.mobile || '').trim())
+    return Boolean(String(auth?.mobile || '').trim() && String(auth?.customer_token || '').trim())
   } catch {
     return false
   }

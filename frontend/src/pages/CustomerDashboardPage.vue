@@ -139,7 +139,7 @@ import {
   UserRound,
   Wallet,
 } from 'lucide-vue-next'
-import { getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
+import { customerLogout, getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 import { hasCustomerSession } from '@/utils/customerAuth'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
@@ -229,8 +229,9 @@ function orderDetailUrl(order = {}) {
   return `/customer/orders/${code}?mobile=${encodeURIComponent(customerMobile.value)}`
 }
 
-function logout() {
+async function logout() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید خارج شوید؟')) return
+  try { await customerLogout() } catch {}
   localStorage.removeItem(CUSTOMER_AUTH_KEY)
   localStorage.removeItem('customer_name')
   localStorage.removeItem('customer_phone')

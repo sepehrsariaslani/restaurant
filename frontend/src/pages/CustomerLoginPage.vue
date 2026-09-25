@@ -10,7 +10,12 @@
     </section>
 
     <section class="login-card" aria-label="ورود یا ثبت‌نام مشتری">
-      <div v-if="step === 'phone'">
+      <div class="auth-method-tabs" role="group" aria-label="روش ورود">
+        <button type="button" :class="{ active: authMethod === 'password' }" :aria-pressed="authMethod === 'password'" @click="selectAuthMethod('password')">ایمیل / رمز عبور</button>
+        <button type="button" :class="{ active: authMethod === 'otp' }" :aria-pressed="authMethod === 'otp'" @click="selectAuthMethod('otp')">کد پیامکی</button>
+      </div>
+
+      <div v-if="authMethod === 'otp' && step === 'phone'">
         <h2 class="card-title">ورود / ثبت‌نام</h2>
         <p class="card-sub">برای دریافت کد تأیید، شماره موبایل‌تان را وارد کنید.</p>
         <div class="input-group">
@@ -39,7 +44,7 @@
         <a href="/menu" class="ghost-btn">ورود مهمان به منو</a>
       </div>
 
-      <div v-else-if="step === 'otp'">
+      <div v-else-if="authMethod === 'otp' && step === 'otp'">
         <button class="back-row" @click="step = 'phone'">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           تغییر شماره
@@ -76,6 +81,71 @@
         </button>
       </div>
 
+      <div v-else class="password-panel">
+        <div v-if="step === 'register_otp'">
+          <button class="back-row" type="button" @click="step = 'phone'; otpDigits = ['', '', '', '', '', '']">تغییر اطلاعات ثبت‌نام</button>
+          <h2 class="card-title">تأیید شماره</h2>
+          <p class="card-sub">کد شش‌رقمی ارسال‌شده به <strong dir="ltr">{{ registrationDisplayPhone }}</strong> را وارد کنید تا حساب به شمارهٔ خودتان متصل شود.</p>
+          <div class="otp-row">
+            <input
+              v-for="(_, i) in 6"
+              :key="i"
+              :ref="el => otpRefs[i] = el"
+              class="otp-box"
+              type="tel"
+              inputmode="numeric"
+              :maxlength="i === 0 ? 6 : 1"
+              :autocomplete="i === 0 ? 'one-time-code' : 'off'"
+              :aria-label="`رقم ${(i + 1).toLocaleString('fa-IR')} از کد تأیید`"
+              v-model="otpDigits[i]"
+              @input="onOtpInput(i, $event)"
+              @keydown="onOtpKeydown(i, $event)"
+              dir="ltr"
+            />
+          </div>
+          <div class="timer-row" v-if="countdown > 0"><span class="timer-text">ارسال مجدد تا {{ countdown }} ثانیه</span></div>
+          <button v-else class="resend-btn" type="button" :disabled="sending" @click="beginPasswordRegistration">ارسال دوبارهٔ کد</button>
+          <button class="primary-btn" type="button" :disabled="otpCode.length < 6 || registering" @click="finishPasswordRegistration">
+            <span v-if="registering" class="spinner"></span>
+            <span v-else>تأیید کد و ساخت حساب</span>
+          </button>
+        </div>
+
+        <template v-else-if="accountMode === 'login'">
+          <h2 class="card-title">ورود به حساب</h2>
+          <p class="card-sub">با ایمیل یا شماره موبایل و رمز عبور وارد شوید.</p>
+          <form class="password-form" @submit.prevent="loginWithPassword">
+            <label class="auth-field"><span>ایمیل یا شماره موبایل</span><input ref="identifierInput" v-model.trim="identifier" type="text" autocomplete="username" :inputmode="identifier.includes('@') ? 'email' : 'tel'" placeholder="name@example.com یا 09…" required /></label>
+            <label class="auth-field"><span>رمز عبور</span><input v-model="password" type="password" autocomplete="current-password" required @keydown.enter.prevent="loginWithPassword" /></label>
+            <button class="primary-btn" type="submit" :disabled="!canLoginWithPassword || loggingIn">
+              <span v-if="loggingIn" class="spinner"></span>
+              <span v-else>ورود</span>
+            </button>
+          </form>
+          <button class="mode-switch" type="button" @click="setAccountMode('register')">حساب ندارید؟ <strong>ثبت‌نام کنید</strong></button>
+          <div class="divider"><span>یا</span></div>
+          <a href="/menu" class="ghost-btn">ورود مهمان به منو</a>
+        </template>
+
+        <template v-else>
+          <h2 class="card-title">ساخت حساب مشتری</h2>
+          <p class="card-sub">پس از تأیید شماره، با ایمیل یا موبایل و همین رمز وارد می‌شوید.</p>
+          <form class="password-form" @submit.prevent="beginPasswordRegistration">
+            <label class="auth-field"><span>نام و نام خانوادگی</span><input v-model.trim="registerName" type="text" autocomplete="name" required /></label>
+            <label class="auth-field"><span>ایمیل <small>(برای ورود با ایمیل)</small></span><input v-model.trim="registerEmail" type="email" autocomplete="email" placeholder="اختیاری" /></label>
+            <label class="auth-field"><span>شماره موبایل</span><input v-model="registerPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09…" @input="onRegistrationPhoneInput" required /></label>
+            <label class="auth-field"><span>رمز عبور</span><input v-model="registerPassword" type="password" autocomplete="new-password" required /></label>
+            <label class="auth-field"><span>تکرار رمز عبور</span><input v-model="registerPasswordConfirmation" type="password" autocomplete="new-password" required /></label>
+            <p class="auth-hint">برای محافظت از سفارش‌ها و اطلاعات حساب، یک کد تأیید به موبایل شما فرستاده می‌شود.</p>
+            <button class="primary-btn" type="submit" :disabled="!canStartRegistration || sending">
+              <span v-if="sending" class="spinner"></span>
+              <span v-else>ارسال کد و ادامه</span>
+            </button>
+          </form>
+          <button class="mode-switch" type="button" @click="setAccountMode('login')">قبلاً ثبت‌نام کرده‌اید؟ <strong>وارد شوید</strong></button>
+        </template>
+      </div>
+
       <p class="error-msg" v-if="error">{{ error }}</p>
     </section>
   </div>
@@ -84,7 +154,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Utensils } from 'lucide-vue-next'
-import { sendOtp as sendOtpAPI, verifyOtp as verifyOtpAPI } from '@/utils/api'
+import {
+  customerLoginPassword,
+  customerRegisterPassword,
+  sendOtp as sendOtpAPI,
+  verifyOtp as verifyOtpAPI,
+} from '@/utils/api'
 import { normalizeMobile } from '@/utils/format'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
@@ -94,17 +169,30 @@ const props = defineProps({
 const brandName = computed(() =>
   props.boot?.branding?.name || window._BOOT?.restaurant_name || window._BOOT?.brand_name || 'رستوران',
 )
+const authMethod = ref('password')
+const accountMode = ref('login')
 const step = ref('phone')
 const phone = ref('')
+const identifier = ref('')
+const password = ref('')
+const registerName = ref('')
+const registerEmail = ref('')
+const registerPhone = ref('')
+const registerPassword = ref('')
+const registerPasswordConfirmation = ref('')
+const registrationCustomerToken = ref('')
 const otpDigits = ref(['', '', '', '', '', ''])
 const otpRefs = ref([])
 const sending = ref(false)
 const verifying = ref(false)
+const loggingIn = ref(false)
+const registering = ref(false)
 const error = ref('')
 const countdown = ref(0)
 let countdownTimer = null
 
 const phoneInput = ref(null)
+const identifierInput = ref(null)
 
 const isPhoneValid = computed(() => {
   const cleaned = normalizeMobile(phone.value)
@@ -117,6 +205,31 @@ const displayPhone = computed(() => {
 })
 
 const otpCode = computed(() => otpDigits.value.join(''))
+const registrationMobile = computed(() => {
+  let cleaned = normalizeMobile(registerPhone.value)
+  if (cleaned.startsWith('0098') && cleaned.length > 10) cleaned = cleaned.slice(4)
+  else if (cleaned.startsWith('98') && cleaned.length > 10) cleaned = cleaned.slice(2)
+  else if (cleaned.startsWith('0') && cleaned.length > 10) cleaned = cleaned.slice(1)
+  return cleaned.length === 10 && cleaned.startsWith('9') ? `0${cleaned}` : ''
+})
+const registrationDisplayPhone = computed(() => registrationMobile.value || registerPhone.value)
+const canLoginWithPassword = computed(() => Boolean(identifier.value.trim() && password.value))
+const canStartRegistration = computed(() => Boolean(
+  registerName.value.trim()
+  && registrationMobile.value
+  && registerPassword.value.length >= 8
+  && registerPassword.value === registerPasswordConfirmation.value,
+))
+
+function passwordLoginIdentifier() {
+  const value = identifier.value.trim()
+  if (value.includes('@')) return value.toLowerCase()
+  let digits = normalizeMobile(value)
+  if (digits.startsWith('0098')) digits = digits.slice(4)
+  else if (digits.startsWith('98') && digits.length > 10) digits = digits.slice(2)
+  else if (digits.startsWith('0') && digits.length > 10) digits = digits.slice(1)
+  return digits.length === 10 && digits.startsWith('9') ? '0' + digits : value
+}
 
 function onPhoneInput(e) {
   let cleaned = normalizeMobile(e.target.value)
@@ -153,18 +266,7 @@ async function verifyOtp() {
     const fullPhone = `0${normalizeMobile(phone.value)}`
     const data = await verifyOtpAPI({ mobile: fullPhone, otp: otpCode.value })
     if (data?.success || data?.verified) {
-      const customer = data.customer || {}
-      try {
-        localStorage.setItem(CUSTOMER_AUTH_KEY, JSON.stringify({
-          mobile: fullPhone,
-          customer_name: customer.name || '',
-          customer_id: customer.customer_id || '',
-          verified_at: new Date().toISOString(),
-          customer_token: data.customer_token || '',
-        }))
-        localStorage.setItem('customer_phone', fullPhone)
-        if (customer.name) localStorage.setItem('customer_name', customer.name)
-      } catch {}
+      persistCustomerSession(data, fullPhone)
       window.location.href = postLoginDestination()
     } else {
       error.value = 'کد وارد شده اشتباه است.'
@@ -173,6 +275,118 @@ async function verifyOtp() {
     error.value = 'خطا در تأیید. لطفاً دوباره تلاش کنید.'
   } finally {
     verifying.value = false
+  }
+}
+
+function persistCustomerSession(data = {}, fallbackMobile = '') {
+  const customer = data.customer || {}
+  const mobile = customer.mobile || data.mobile || fallbackMobile
+  try {
+    localStorage.setItem(CUSTOMER_AUTH_KEY, JSON.stringify({
+      mobile,
+      customer_name: customer.name || '',
+      customer_id: customer.customer_id || '',
+      email: customer.email || '',
+      verified_at: new Date().toISOString(),
+      customer_token: data.customer_token || '',
+    }))
+    localStorage.setItem('customer_phone', mobile)
+    if (customer.name) localStorage.setItem('customer_name', customer.name)
+  } catch {}
+}
+
+function selectAuthMethod(method) {
+  authMethod.value = method
+  step.value = 'phone'
+  error.value = ''
+  otpDigits.value = ['', '', '', '', '', '']
+  registrationCustomerToken.value = ''
+}
+
+function setAccountMode(mode) {
+  accountMode.value = mode
+  step.value = 'phone'
+  error.value = ''
+  password.value = ''
+  registrationCustomerToken.value = ''
+}
+
+async function loginWithPassword() {
+  if (!canLoginWithPassword.value || loggingIn.value) return
+  loggingIn.value = true
+  error.value = ''
+  try {
+    const result = await customerLoginPassword(passwordLoginIdentifier(), password.value)
+    if (!result?.success || !result?.customer_token) throw new Error('ورود با این اطلاعات انجام نشد.')
+    persistCustomerSession(result)
+    window.location.href = postLoginDestination()
+  } catch (e) {
+    error.value = e.message || 'ایمیل/شماره یا رمز عبور نادرست است.'
+  } finally {
+    loggingIn.value = false
+  }
+}
+
+function onRegistrationPhoneInput(event) {
+  let cleaned = normalizeMobile(event.target.value)
+  if (cleaned.startsWith('0098') && cleaned.length > 10) cleaned = cleaned.slice(4)
+  else if (cleaned.startsWith('98') && cleaned.length > 10) cleaned = cleaned.slice(2)
+  else if (cleaned.startsWith('0') && cleaned.length > 10) cleaned = cleaned.slice(1)
+  registerPhone.value = cleaned.slice(0, 11)
+}
+
+async function beginPasswordRegistration() {
+  if (!canStartRegistration.value || sending.value) {
+    if (registerPassword.value !== registerPasswordConfirmation.value) error.value = 'تکرار رمز عبور با رمز واردشده یکسان نیست.'
+    else if (registerPassword.value.length < 8) error.value = 'رمز عبور باید دست‌کم ۸ نویسه باشد.'
+    return
+  }
+  sending.value = true
+  error.value = ''
+  registrationCustomerToken.value = ''
+  try {
+    const result = await sendOtpAPI({ mobile: registrationMobile.value, customer_name: registerName.value.trim() })
+    if (result?.debug_otp) console.info('[Restaurant OTP]', result.debug_otp)
+    otpDigits.value = ['', '', '', '', '', '']
+    step.value = 'register_otp'
+    startCountdown(120)
+    setTimeout(() => otpRefs.value[0]?.focus(), 100)
+  } catch (e) {
+    error.value = e.message || 'ارسال کد تأیید ناموفق بود؛ تنظیمات پیامک را بررسی کنید.'
+  } finally {
+    sending.value = false
+  }
+}
+
+async function finishPasswordRegistration() {
+  if (registering.value || otpCode.value.length < 6) return
+  registering.value = true
+  error.value = ''
+  try {
+    if (!registrationCustomerToken.value) {
+      const verified = await verifyOtpAPI({
+        mobile: registrationMobile.value,
+        otp: otpCode.value,
+        customer_name: registerName.value.trim(),
+      })
+      if (!(verified?.success || verified?.verified) || !verified?.customer_token) {
+        throw new Error('کد تأیید معتبر نیست یا منقضی شده است.')
+      }
+      registrationCustomerToken.value = verified.customer_token
+    }
+    const result = await customerRegisterPassword({
+      customer_token: registrationCustomerToken.value,
+      name: registerName.value.trim(),
+      email: registerEmail.value.trim(),
+      password: registerPassword.value,
+    })
+    if (!result?.success || !result?.customer_token) throw new Error('ساخت حساب انجام نشد؛ دوباره تلاش کنید.')
+    persistCustomerSession(result, registrationMobile.value)
+    window.location.href = postLoginDestination()
+  } catch (e) {
+    error.value = e.message || 'ساخت حساب ناموفق بود؛ اطلاعات را بررسی کنید.'
+  } finally {
+    registering.value = false
   }
 }
 
@@ -192,7 +406,10 @@ function onOtpInput(index, event) {
     otpDigits.value[index] = val
     if (val && index < 5) otpRefs.value[index + 1]?.focus()
   }
-  if (otpCode.value.length === 6) verifyOtp()
+  if (otpCode.value.length === 6) {
+    if (authMethod.value === 'otp') verifyOtp()
+    else finishPasswordRegistration()
+  }
 }
 
 function onOtpKeydown(index, event) {
@@ -224,7 +441,10 @@ function startCountdown(seconds) {
   }, 1000)
 }
 
-onMounted(() => phoneInput.value?.focus())
+onMounted(() => {
+  if (identifierInput.value) identifierInput.value.focus()
+  else phoneInput.value?.focus()
+})
 onUnmounted(() => clearInterval(countdownTimer))
 </script>
 
@@ -347,6 +567,18 @@ onUnmounted(() => clearInterval(countdownTimer))
   background: var(--ds-color-surface-raised);
   box-shadow: var(--shadow-soft);
 }
+
+.auth-method-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; margin-bottom: 1.25rem; padding: .3rem; border: 1px solid var(--ds-color-border); border-radius: 15px; background: var(--ds-color-surface-muted); }
+.auth-method-tabs button { min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: var(--ds-color-text-secondary); font: inherit; font-size: .83rem; font-weight: 700; cursor: pointer; }
+.auth-method-tabs button.active { background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); box-shadow: var(--ds-shadow-sm); }
+.password-form { display: grid; gap: .85rem; }
+.auth-field { display: grid; gap: .38rem; color: var(--ds-color-text-secondary); font-size: .84rem; font-weight: 650; }
+.auth-field small { color: var(--ds-color-text-muted); font-size: .76rem; font-weight: 400; }
+.auth-field input { width: 100%; min-height: 48px; padding: .7rem .8rem; border: 1px solid var(--ds-color-border); border-radius: 13px; background: var(--ds-color-surface); color: var(--ds-color-text-primary); font: inherit; direction: ltr; text-align: start; }
+.auth-field input:focus { outline: 3px solid var(--ds-color-action-primary-soft); border-color: var(--ds-color-action-primary); }
+.auth-hint { margin: 0; color: var(--ds-color-text-muted); font-size: .76rem; line-height: 1.8; }
+.mode-switch { display: block; width: 100%; margin-top: .9rem; padding: .5rem; border: 0; background: transparent; color: var(--ds-color-text-secondary); font: inherit; font-size: .86rem; cursor: pointer; }
+.mode-switch strong { color: var(--ds-color-action-primary); }
 
 .back-row {
   display: flex;

@@ -10288,16 +10288,39 @@ def _otp_cache_key(mobile):
 	return "restaurant_customer_otp:{0}".format(_ensure_mobile(mobile))
 
 
+def _otp_cooldown_key(mobile):
+	return "restaurant_customer_otp_cooldown:{0}".format(_ensure_mobile(mobile))
+
+
 @frappe.whitelist(allow_guest=True)
 def send_otp(mobile, customer_name=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
 		return ""
+	cache = frappe.cache()
+	cooldown_key = _otp_cooldown_key(normalized_mobile)
+	if cache.get_value(cooldown_key):
+		frappe.throw(_("برای ارسال دوباره کد، کمی صبر کنید."))
+
 	otp = "".join(random.choices(string.digits, k=6))
-	frappe.cache().set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)
+	cache.set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)
 	result = {"success": True, "sent": 1, "mobile": normalized_mobile, "expires_in": 300}
 	if cint(frappe.conf.get("developer_mode")):
 		result["debug_otp"] = otp
+	else:
+		try:
+			has_sms_gateway = bool(frappe.db.get_single_value("SMS Settings", "sms_gateway_url"))
+			if not has_sms_gateway:
+				frappe.throw(_("درگاه پیامک برای ارسال کد تأیید تنظیم نشده است."))
+			sms_module = frappe.get_module("frappe.core.doctype.sms_settings.sms_settings")
+			sms_module.send_sms([normalized_mobile], _("کد تأیید حساب مشتری شما: {0}").format(otp), success_msg=False)
+		except Exception as exc:
+			cache.delete_value(_otp_cache_key(normalized_mobile))
+			if isinstance(exc, frappe.ValidationError):
+				raise
+			frappe.log_error(frappe.get_traceback(), "Restaurant customer OTP send failed")
+			frappe.throw(_("ارسال کد تأیید ناموفق بود؛ تنظیمات پیامک را بررسی کنید."))
+	cache.set_value(cooldown_key, 1, expires_in_sec=60)
 	return result
 
 
@@ -10307,10 +10330,17 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 	if not normalized_mobile:
 		return ""
 	provided = (otp or code or "").strip()
-	cached = frappe.cache().get_value(_otp_cache_key(normalized_mobile))
+	cache = frappe.cache()
+	cached = cache.get_value(_otp_cache_key(normalized_mobile))
 	if isinstance(cached, bytes):
 		cached = cached.decode()
 	if not provided or str(cached or "") != provided:
+		attempt_key = _otp_cache_key(normalized_mobile) + ":attempts"
+		attempts = cint(cache.get_value(attempt_key) or 0) + 1
+		cache.set_value(attempt_key, attempts, expires_in_sec=300)
+		if attempts >= 6:
+			cache.delete_value(_otp_cache_key(normalized_mobile))
+			cache.delete_value(attempt_key)
 		frappe.throw(_("Invalid or expired OTP."), frappe.PermissionError)
 
 	resolved_name = (customer_name or "").strip()
@@ -10319,7 +10349,9 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 		customer_docname = _ensure_customer(resolved_name or normalized_mobile, normalized_mobile)
 	elif not resolved_name:
 		resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
-	frappe.cache().delete_value(_otp_cache_key(normalized_mobile))
+	cache.delete_value(_otp_cache_key(normalized_mobile))
+	cache.delete_value(_otp_cache_key(normalized_mobile) + ":attempts")
+	cache.delete_value(_otp_cooldown_key(normalized_mobile))
 	from restaurant.customer_account import issue_customer_session
 
 	return {
@@ -11435,8 +11467,31 @@ def get_item_reviews(item_slug=None, item=None, page=1, page_size=20):
 	}
 
 
+def _customer_session_identity(customer_token=None, mobile=None, required=False):
+	"""Resolve a customer session and bind any supplied phone to it."""
+	identity = None
+	if customer_token:
+		from restaurant.customer_account import _require_customer
+
+		identity = _require_customer(customer_token)
+	elif required and frappe.session.user == "Guest":
+		frappe.throw(_("برای مشاهده اطلاعات حساب، ابتدا وارد شوید."), frappe.PermissionError)
+	elif frappe.session.user == "Guest":
+		return None
+
+	if identity:
+		from_mobile = _ensure_mobile(identity.get("mobile"), allow_empty=True)
+		requested_mobile = _ensure_mobile(mobile, allow_empty=True)
+		if requested_mobile and requested_mobile != from_mobile:
+			frappe.throw(_("شماره همراه با حساب واردشده مطابقت ندارد."), frappe.PermissionError)
+	return identity
+
+
 @frappe.whitelist(allow_guest=True)
-def get_customer_orders(mobile, limit=50, start=0):
+def get_customer_orders(mobile=None, limit=50, start=0, customer_token=None):
+	identity = _customer_session_identity(customer_token, mobile=mobile, required=True)
+	if identity:
+		mobile = identity.get("mobile")
 	mobile = _ensure_mobile(mobile)
 	limit = min(max(cint(limit), 1), 100)
 	start = max(cint(start), 0)
@@ -11467,9 +11522,12 @@ def get_customer_orders(mobile, limit=50, start=0):
 
 
 @frappe.whitelist(allow_guest=True)
-def get_customer_profile(mobile=None, customer_name=None):
-	profile = get_customer_checkout_profile(mobile=mobile, customer_name=customer_name)
-	profile["orders"] = get_customer_orders(mobile=mobile, limit=10).get("orders", []) if mobile else []
+def get_customer_profile(mobile=None, customer_name=None, customer_token=None):
+	identity = _customer_session_identity(customer_token, mobile=mobile, required=True)
+	if identity:
+		mobile = identity.get("mobile")
+	profile = get_customer_checkout_profile(mobile=mobile, customer_name=customer_name, customer_token=customer_token)
+	profile["orders"] = get_customer_orders(mobile=mobile, limit=10, customer_token=customer_token).get("orders", []) if mobile else []
 	try:
 		customer_id = (profile.get("customer") or {}).get("customer_id") or ""
 		profile["club"] = get_customer_club_summary(customer_id)
@@ -11479,11 +11537,12 @@ def get_customer_profile(mobile=None, customer_name=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def get_customer_checkout_profile(mobile, customer_name=None):
+def get_customer_checkout_profile(mobile=None, customer_name=None, customer_token=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
 		return ""
-	customer_docname = _find_customer_by_mobile(normalized_mobile)
+	identity = _customer_session_identity(customer_token, mobile=normalized_mobile)
+	customer_docname = identity.get("customer") if identity else ""
 
 	resolved_name = (customer_name or "").strip()
 	addresses = []
@@ -11496,7 +11555,7 @@ def get_customer_checkout_profile(mobile, customer_name=None):
 
 	return {
 		"customer": {
-			"name": resolved_name,
+			"name": resolved_name if identity else "",
 			"mobile": normalized_mobile,
 			"customer_id": customer_docname or "",
 			"email": frappe.db.get_value("Customer", customer_docname, "email_id") or "" if customer_docname else "",
@@ -11507,14 +11566,18 @@ def get_customer_checkout_profile(mobile, customer_name=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def save_customer_vehicle(customer_info, vehicle_info):
+def save_customer_vehicle(customer_info, vehicle_info, customer_token=None):
 	customer_payload = _parse_json(customer_info, {})
 	customer_name = (customer_payload.get("name") or customer_payload.get("customer_name") or "").strip()
-	if not customer_name:
-		frappe.throw(_("Customer name is required."))
-
 	mobile = _ensure_mobile(customer_payload.get("mobile") or customer_payload.get("phone"))
-	customer_docname = _ensure_customer(customer_name, mobile)
+	identity = _customer_session_identity(customer_token, mobile=mobile, required=True)
+	customer_docname = identity.get("customer") if identity else ""
+	if not customer_docname:
+		if not customer_name:
+			frappe.throw(_("Customer name is required."))
+		customer_docname = _ensure_customer(customer_name, mobile)
+	else:
+		customer_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or customer_name
 
 	normalized_vehicle = _normalize_vehicle_payload(
 		vehicle_info, customer_name=customer_docname, mobile=mobile
@@ -11534,11 +11597,12 @@ def save_customer_vehicle(customer_info, vehicle_info):
 
 
 @frappe.whitelist(allow_guest=True)
-def get_customer_vehicles(mobile, customer_name=None):
+def get_customer_vehicles(mobile=None, customer_name=None, customer_token=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
 		return ""
-	customer_docname = _find_customer_by_mobile(normalized_mobile)
+	identity = _customer_session_identity(customer_token, mobile=normalized_mobile)
+	customer_docname = identity.get("customer") if identity else ""
 	if not customer_docname:
 		return {
 			"vehicles": [],
@@ -11555,14 +11619,18 @@ def get_customer_vehicles(mobile, customer_name=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def save_customer_delivery_address(customer_info, address_info):
+def save_customer_delivery_address(customer_info, address_info, customer_token=None):
 	customer_payload = _parse_json(customer_info, {})
 	customer_name = (customer_payload.get("name") or customer_payload.get("customer_name") or "").strip()
-	if not customer_name:
-		frappe.throw(_("Customer name is required."))
-
 	mobile = _ensure_mobile(customer_payload.get("mobile") or customer_payload.get("phone"))
-	customer_docname = _ensure_customer(customer_name, mobile)
+	identity = _customer_session_identity(customer_token, mobile=mobile, required=True)
+	customer_docname = identity.get("customer") if identity else ""
+	if not customer_docname:
+		if not customer_name:
+			frappe.throw(_("Customer name is required."))
+		customer_docname = _ensure_customer(customer_name, mobile)
+	else:
+		customer_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or customer_name
 
 	normalized_address = _normalize_address_payload(address_info, customer_name=customer_name, mobile=mobile)
 	saved_address = _upsert_customer_delivery_address(customer_docname, normalized_address)

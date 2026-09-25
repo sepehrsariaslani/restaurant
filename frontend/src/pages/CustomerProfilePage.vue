@@ -145,7 +145,10 @@ async function saveProfile() {
 
 onMounted(async () => {
   const auth = readAuth()
-  if (!auth.mobile) return
+  if (!auth.mobile || needsSignIn.value) {
+    window.location.replace('/customer/login?redirect=%2Fcustomer%2Fprofile')
+    return
+  }
   loading.value = true
   try {
     const data = await getCustomerProfile({ mobile: auth.mobile })

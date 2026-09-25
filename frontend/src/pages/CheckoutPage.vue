@@ -158,7 +158,7 @@ function readAuth() {
 }
 
 const auth = readAuth()
-const isCustomerLoggedIn = computed(() => Boolean(auth.mobile))
+const isCustomerLoggedIn = computed(() => Boolean(auth.mobile && auth.customer_token))
 const currency = ref(ORDER_FLOW_CURRENCY_FALLBACK)
 const form = reactive({
   customer_name: auth.customer_name || localStorage.getItem('customer_name') || cartState.checkoutDraft.customer_name || '',

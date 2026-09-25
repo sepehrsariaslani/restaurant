@@ -60,7 +60,7 @@ const canSaveAddress = computed(() => Boolean(draft.title.trim() && draft.addres
 const addressLocation = computed({ get: () => ({ lat: draft.lat, lng: draft.lng }), set: (point) => { draft.lat = point.lat; draft.lng = point.lng; locationError.value = '' } })
 function openEditor(address = null) { editingId.value = address?.id || ''; Object.keys(draft).forEach(key => delete draft[key]); Object.assign(draft, emptyAddress(), address || {}); error.value = ''; message.value = ''; locationError.value = ''; showForm.value = true }
 async function loadAddresses() {
-  if (!auth.mobile) { window.location.replace('/customer/login?redirect=%2Fcustomer%2Faddresses'); return }
+  if (!auth.mobile || !auth.customer_token) { window.location.replace('/customer/login?redirect=%2Fcustomer%2Faddresses'); return }
   loading.value = true; error.value = ''
   try { const data = await getCustomerCheckoutProfile({ mobile: auth.mobile }); addresses.value = data.addresses || [] }
   catch (err) { error.value = err.message || 'آدرس‌ها دریافت نشدند.' }

@@ -138,6 +138,12 @@ async function loadOrders() {
 }
 
 onMounted(() => {
+  let token = ''
+  try { token = JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}').customer_token || '' } catch {}
+  if (!token) {
+    window.location.replace('/customer/login?redirect=%2Fcustomer%2Forders')
+    return
+  }
   if (mobile.value) loadOrders()
 })
 </script>

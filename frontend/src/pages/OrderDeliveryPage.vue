@@ -174,7 +174,7 @@ function readAuth() {
   try { return JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}') } catch { return {} }
 }
 const auth = readAuth()
-const isCustomerLoggedIn = computed(() => Boolean(auth.mobile))
+const isCustomerLoggedIn = computed(() => Boolean(auth.mobile && auth.customer_token))
 const customerName = ref(auth.customer_name || localStorage.getItem('customer_name') || cartState.checkoutDraft.customer_name || '')
 const mobile = ref(auth.mobile || localStorage.getItem('customer_phone') || cartState.checkoutDraft.mobile || '')
 const savedAddresses = ref([])

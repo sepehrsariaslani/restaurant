@@ -37,7 +37,7 @@ async function save() {
   finally { saving.value = false }
 }
 function orderWithVehicle() { saveOrderContext({ order_type: 'pickup', pickup_method: 'car', pickup_vehicle: { ...vehicle.value }, delivery_fee: 0, address: null }); window.location.href = '/order/pickup?method=car' }
-onMounted(() => { if (!mobile) window.location.replace('/customer/login?redirect=%2Fcustomer%2Fvehicles') })
+onMounted(() => { if (!mobile || !auth.customer_token) window.location.replace('/customer/login?redirect=%2Fcustomer%2Fvehicles') })
 </script>
 <style scoped>
 .vehicle-account-card { padding: 1.25rem; max-width: 640px; margin-inline: auto; }
