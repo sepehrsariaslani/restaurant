@@ -151,6 +151,7 @@ test('customer menu starts loading immediately and exposes accessible responsive
   assert.match(menu, /:aria-pressed="selectedTag === tag"/)
   assert.match(menu, /min-height:\s*44px/)
   assert.match(menu, /bottom:\s*calc\(6\.25rem \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(menu, /@media\s*\(min-width:\s*920px\)\s*\{[^}]*\.sticky-cart\s*\{[^}]*display:\s*none;/s)
   assert.match(categoryRail, /role="group" aria-label="دسته‌بندی‌های منو"/)
   assert.match(categoryRail, /:aria-pressed="selectedCategory === category\.slug"/)
   assert.match(categoryRail, /min-height:\s*44px/)

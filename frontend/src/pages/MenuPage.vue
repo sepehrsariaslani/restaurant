@@ -2007,6 +2007,12 @@ onUnmounted(() => {
   box-shadow: 0 20px 44px rgb(15 23 42 / 0.16);
 }
 
+@media (min-width: 920px) {
+  .sticky-cart {
+    display: none;
+  }
+}
+
 .cart-info {
   display: flex;
   align-items: center;
