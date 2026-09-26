@@ -8,6 +8,9 @@
  "field_order": [
   "customer",
   "balance",
+  "withdrawable_balance",
+  "cashback_balance",
+  "wallet_buckets_reconciled",
   "total_charged",
   "total_spent",
   "total_rewards",
@@ -30,6 +33,27 @@
    "label": "Balance",
    "default": "0",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "withdrawable_balance",
+   "fieldtype": "Currency",
+   "label": "Withdrawable Balance",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cashback_balance",
+   "fieldtype": "Currency",
+   "label": "Purchase-only Cashback Balance",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "wallet_buckets_reconciled",
+   "fieldtype": "Check",
+   "label": "Wallet Buckets Reconciled",
+   "default": "0",
+   "hidden": 1
   },
   {
    "fieldname": "total_charged",

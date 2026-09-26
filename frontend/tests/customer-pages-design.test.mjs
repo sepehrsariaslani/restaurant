@@ -17,11 +17,27 @@ test('customer account and service pages use the shared page header', () => {
     '../src/pages/CustomerOrdersPage.vue',
     '../src/pages/CustomerProfilePage.vue',
     '../src/pages/CustomerTableReservationPage.vue',
+    '../src/pages/CustomerWalletPage.vue',
   ]
 
   for (const page of pages) {
     assert.match(source(page), /CustomerPageHeader/, `${page} should use the shared RTL customer header`)
   }
+})
+
+test('customer wallet separates withdrawable funds from purchase-only cashback', () => {
+  const app = source('../src/App.vue')
+  const hooks = source('../../restaurant/hooks.py')
+  const wallet = source('../src/pages/CustomerWalletPage.vue')
+  const management = source('../src/pages/management/customers/ManagementClubPage.vue')
+
+  assert.match(app, /pathname\.startsWith\('\/customer\/wallet'\)/)
+  assert.match(hooks, /\{"from_route": "\/customer\/wallet", "to_route": "restaurant\/index"\}/)
+  assert.match(wallet, /موجودی قابل برداشت/)
+  assert.match(wallet, /اعتبار خرید \(کش‌بک\)/)
+  assert.match(wallet, /درخواست برداشت/)
+  assert.match(management, /ثبت واریز انجام‌شده/)
+  assert.match(management, /رد و بازگرداندن موجودی/)
 })
 
 test('customer branches exclude non-company locations and handle missing media and map URLs', () => {

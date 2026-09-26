@@ -108,6 +108,7 @@
       <CustomerDashboardPage v-else-if="page === 'customer-dashboard'" />
       <CustomerProfilePage v-else-if="page === 'customer-profile'" />
       <CustomerVehiclesPage v-else-if="page === 'customer-vehicles'" />
+      <CustomerWalletPage v-else-if="page === 'customer-wallet'" />
       <CustomerAddressesPage v-else-if="page === 'customer-addresses'" />
       <CustomerBranchesPage v-else-if="page === 'customer-branches'" />
       <CustomerOrdersPage v-else-if="page === 'customer-orders'" />
@@ -182,6 +183,7 @@ import CustomerLoginPage from './pages/CustomerLoginPage.vue'
 import CustomerDashboardPage from './pages/CustomerDashboardPage.vue'
 import CustomerProfilePage from './pages/CustomerProfilePage.vue'
 import CustomerVehiclesPage from './pages/CustomerVehiclesPage.vue'
+import CustomerWalletPage from './pages/CustomerWalletPage.vue'
 import CustomerAddressesPage from './pages/CustomerAddressesPage.vue'
 import CustomerBranchesPage from './pages/CustomerBranchesPage.vue'
 import CustomerOrdersPage from './pages/CustomerOrdersPage.vue'
@@ -351,6 +353,7 @@ function resolveInitialPage() {
     if (pathname.startsWith('/customer/dashboard')) return 'customer-dashboard'
     if (pathname.startsWith('/customer/profile')) return 'customer-profile'
     if (pathname.startsWith('/customer/vehicles')) return 'customer-vehicles'
+    if (pathname.startsWith('/customer/wallet')) return 'customer-wallet'
     if (pathname.startsWith('/customer/addresses')) return 'customer-addresses'
     if (pathname.startsWith('/customer/branches')) return 'customer-branches'
     if (pathname.startsWith('/customer/orders/')) return 'customer-order-detail'

@@ -3837,6 +3837,22 @@ export function adjustManagementWallet(payload = {}) {
 	return callRestaurantAPI("adjust_management_wallet", { payload });
 }
 
+export function listManagementWalletWithdrawalRequests({ status = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_wallet_withdrawal_requests", { status, limit, offset });
+}
+
+export function reviewManagementWalletWithdrawalRequest({ request_name = "", action = "", payment_reference = "", note = "" } = {}) {
+	return callRestaurantAPI("review_management_wallet_withdrawal_request", { request_name, action, payment_reference, note });
+}
+
+export function getMyWallet() {
+	return callRestaurantAPI("get_my_wallet", { customer_token: customerEditToken() });
+}
+
+export function requestMyWalletWithdrawal({ amount = 0, bank_iban = "", account_holder = "", note = "" } = {}) {
+	return callRestaurantAPI("request_my_wallet_withdrawal", { customer_token: customerEditToken(), amount, bank_iban, account_holder, note });
+}
+
 export function getManagementReferralSummary() {
 	return callRestaurantAPI("get_management_referral_summary", {});
 }

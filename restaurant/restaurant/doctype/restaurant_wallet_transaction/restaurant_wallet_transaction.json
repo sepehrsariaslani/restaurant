@@ -9,9 +9,12 @@
   "wallet",
   "customer",
   "kind",
+  "bucket",
   "direction",
   "amount",
   "balance_after",
+  "withdrawable_after",
+  "cashback_after",
   "reference_doctype",
   "reference_name",
   "note",
@@ -37,8 +40,15 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Kind",
-   "options": "شارژ\nپرداخت\nکش‌بک\nپاداش معرف\nانتقال ارسال\nانتقال دریافت\nتعدیل دستی\nتبدیل امتیاز",
+   "options": "شارژ\nپرداخت\nکش‌بک\nپاداش معرف\nانتقال ارسال\nانتقال دریافت\nتعدیل دستی\nتبدیل امتیاز\nدرخواست برداشت\nبازگشت درخواست برداشت",
    "reqd": 1
+  },
+  {
+   "fieldname": "bucket",
+   "fieldtype": "Select",
+   "label": "Balance Bucket",
+   "options": "کیف پول\nکش‌بک",
+   "default": "کیف پول"
   },
   {
    "fieldname": "direction",
@@ -60,6 +70,18 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Balance After"
+  },
+  {
+   "default": "0",
+   "fieldname": "withdrawable_after",
+   "fieldtype": "Currency",
+   "label": "Withdrawable Balance After"
+  },
+  {
+   "default": "0",
+   "fieldname": "cashback_after",
+   "fieldtype": "Currency",
+   "label": "Cashback Balance After"
   },
   {
    "fieldname": "reference_doctype",

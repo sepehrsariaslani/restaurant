@@ -10,7 +10,7 @@
       <p v-if="message" class="address-message" role="status">{{ message }}</p>
       <section v-if="showForm" class="address-editor customer-glass-card">
         <div class="address-editor-head"><h2>{{ editingId ? 'ویرایش آدرس' : 'آدرس جدید' }}</h2><button class="customer-page__ghost-action" type="button" @click="showForm = false" aria-label="بستن فرم آدرس"><X :size="20" /></button></div>
-        <div class="address-map-head"><span>اول محل دقیق تحویل را انتخاب کنید</span><button type="button" class="customer-page__ghost-action" :disabled="locating" @click="useCurrentLocation"><Crosshair :size="17" />{{ locating ? 'در حال دریافت…' : 'موقعیت من' }}</button></div>
+        <div class="address-map-head"><span>می‌توانید آدرس را همین حالا ذخیره کنید و نقطهٔ تحویل را روی نقشه بگذارید.</span><button type="button" class="customer-page__ghost-action" :disabled="locating" @click="useCurrentLocation"><Crosshair :size="17" />{{ locating ? 'در حال دریافت…' : 'موقعیت من' }}</button></div>
         <AddressPickerMap v-model="addressLocation" :config="mapConfig" @status="mapStatus = $event" />
         <p v-if="locationError" class="address-error" role="alert">{{ locationError }}</p>
         <details :open="mapStatus === 'error'" class="address-manual"><summary>ورود دستی مختصات</summary><div class="address-grid">
@@ -25,7 +25,7 @@
             <label class="customer-field">واحد<input class="customer-input" v-model="draft.unit" /></label>
           </div>
           <div class="address-editor-actions"><button class="customer-page__ghost-action" type="button" @click="showForm = false">انصراف</button><button class="address-save" type="submit" :disabled="saving || !canSaveAddress">{{ saving ? 'در حال ذخیره…' : 'ذخیره آدرس' }}</button></div>
-          <p v-if="!hasLocation" class="address-message">برای ذخیره، نقطهٔ تحویل را روی نقشه انتخاب کنید.</p>
+          <p v-if="!hasLocation" class="address-message">برای ثبت سفارش ارسال، باید نقطهٔ تحویل را روی نقشه انتخاب کنید. ذخیرهٔ آدرس بدون نقطه هم ممکن است.</p>
         </form>
       </section>
       <div v-else-if="!loading && !error && !addresses.length" class="customer-empty customer-glass-card"><MapPin :size="32" /><h2>اولین آدرس را اضافه کنید</h2><p>خانه یا محل کار؛ هرجا که دوست دارید غذا برسد.</p><button class="address-save" type="button" @click="openEditor()">افزودن آدرس</button></div>
@@ -56,8 +56,8 @@ const editingId = ref(''), locating = ref(false), locationError = ref(''), mapSt
 const emptyAddress = () => ({ title: 'خانه', address_line: '', plaque: '', unit: '', floor: '', phone: auth.mobile || '', lat: '', lng: '' })
 const draft = reactive(emptyAddress())
 const hasLocation = computed(() => hasDeliveryCoordinates(draft))
-const canSaveAddress = computed(() => Boolean(draft.title.trim() && draft.address_line.trim() && hasLocation.value))
-const addressLocation = computed({ get: () => ({ lat: draft.lat, lng: draft.lng }), set: (point) => { draft.lat = point.lat; draft.lng = point.lng; locationError.value = '' } })
+const canSaveAddress = computed(() => Boolean(draft.title.trim() && draft.address_line.trim()))
+const addressLocation = computed({ get: () => ({ lat: draft.lat, lng: draft.lng }), set: (point) => { if (!point) return; draft.lat = point.lat; draft.lng = point.lng; locationError.value = '' } })
 function openEditor(address = null) { editingId.value = address?.id || ''; Object.keys(draft).forEach(key => delete draft[key]); Object.assign(draft, emptyAddress(), address || {}); error.value = ''; message.value = ''; locationError.value = ''; showForm.value = true }
 async function loadAddresses() {
   if (!auth.mobile || !auth.customer_token) { window.location.replace('/customer/login?redirect=%2Fcustomer%2Faddresses'); return }
@@ -85,15 +85,21 @@ async function archive(address) {
   finally { archiving.value = '' }
 }
 function useAddress(address) {
+  if (!hasDeliveryCoordinates(address)) {
+    openEditor(address)
+    message.value = 'برای ادامهٔ سفارش ارسال، نقطهٔ تحویل را روی نقشه انتخاب کنید.'
+    return
+  }
   saveOrderContext({ order_type: 'delivery', address: { ...address }, table: '', pickup_vehicle: null })
   saveCheckoutDraft({ delivery_address_id: address.id, use_new_address: false })
   window.location.href = '/order/delivery'
 }
 function useCurrentLocation() {
   locationError.value = ''
-  if (!navigator.geolocation) { locationError.value = 'موقعیت من در این مرورگر در دسترس نیست؛ روی نقشه انتخاب کنید.'; return }
+  if (!window.isSecureContext) { locationError.value = 'مرورگر فقط در اتصال امن (HTTPS) موقعیت GPS را می‌دهد. آدرس را روی نقشه انتخاب کنید یا سایت را با HTTPS باز کنید.'; return }
+  if (!navigator.geolocation) { locationError.value = 'موقعیت GPS در این مرورگر در دسترس نیست؛ نقطه را روی نقشه انتخاب کنید.'; return }
   locating.value = true
-  navigator.geolocation.getCurrentPosition((position) => { draft.lat = position.coords.latitude; draft.lng = position.coords.longitude; locating.value = false }, () => { locating.value = false; locationError.value = 'دریافت موقعیت ممکن نشد؛ روی نقشه انتخاب کنید.' }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 })
+  navigator.geolocation.getCurrentPosition((position) => { draft.lat = position.coords.latitude; draft.lng = position.coords.longitude; locating.value = false }, (geoError) => { locating.value = false; locationError.value = geoError?.code === 1 ? 'اجازهٔ دسترسی به موقعیت داده نشد؛ روی نقشه انتخاب کنید.' : geoError?.code === 2 ? 'موقعیت فعلی پیدا نشد؛ روی نقشه انتخاب کنید.' : geoError?.code === 3 ? 'دریافت موقعیت بیش از حد طول کشید؛ روی نقشه انتخاب کنید.' : 'دریافت موقعیت ممکن نشد؛ روی نقشه انتخاب کنید.' }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 })
 }
 onMounted(() => {
   loadAddresses()

@@ -6461,6 +6461,16 @@ def _get_sales_order_payload(so_name):
 		order_context = {}
 
 	items_payload = []
+	item_codes = list({row.item_code for row in (doc.items or []) if row.item_code})
+	item_slug_by_code = {}
+	if item_codes and _has_column("Item", "restaurant_slug"):
+		for item_row in frappe.get_all(
+			"Item",
+			filters={"name": ["in", item_codes]},
+			fields=["name", "restaurant_slug"],
+			ignore_permissions=True,
+		):
+			item_slug_by_code[item_row.name] = item_row.get("restaurant_slug") or ""
 	for row in doc.items or []:
 		parsed_config = _parse_json(row.get("restaurant_customization_json"), {})
 		selection_rows = _parse_json(row.get("restaurant_selection_summary"), [])
@@ -6470,6 +6480,7 @@ def _get_sales_order_payload(so_name):
 		items_payload.append(
 			{
 				"menu_item": row.item_code,
+				"item_slug": item_slug_by_code.get(row.item_code, ""),
 				"title": row.item_name,
 				"qty": flt(row.qty),
 				"unit_price": flt(row.rate),
@@ -7948,8 +7959,12 @@ def _normalize_address_payload(address_info, customer_name, mobile):
 	lat, lng = _normalize_delivery_geo(
 		_first_non_empty(info.get("lat"), info.get("latitude")),
 		_first_non_empty(info.get("lng"), info.get("longitude")),
-		required=True,
+		required=False,
 	)
+	# A saved address can be useful before the customer grants GPS access. Keep
+	# its coordinates as a pair; actual delivery orders still require both.
+	if lat is None or lng is None:
+		lat, lng = None, None
 	is_primary = cint(info.get("is_primary") or info.get("is_primary_address") or 0)
 	video_url = _first_non_empty(info.get("video_url"), info.get("guidance_video"), info.get("video")) or ""
 	video_url = str(video_url).strip()
@@ -15671,6 +15686,35 @@ def _set_sales_order_payment_method(so_name, method):
             update_modified=False,
         )
 
+
+def _validate_pos_wallet_tender(so_name, splits):
+    """Check and lock customer wallet funds before a wallet tender is booked."""
+    from restaurant import api_club
+
+    wallet_mode = api_club._club_club_settings().get("wallet_mode_of_payment")
+    if not wallet_mode:
+        return
+    wallet_amount = sum(
+        flt(row.get("amount") or row.get("paid_amount") or 0)
+        for row in (splits or [])
+        if (row.get("mode_of_payment") or "").strip() == wallet_mode
+    )
+    if wallet_amount <= 0:
+        return
+    customer = frappe.db.get_value("Sales Order", so_name, "customer")
+    if not customer:
+        frappe.throw(_("برای پرداخت با کیف پول، مشتری سفارش مشخص نیست."))
+    wallet = api_club._club_get_or_create_wallet(customer)
+    frappe.db.sql(
+        "select name from `tabRestaurant Customer Wallet` where name = %s for update",
+        wallet.name,
+    )
+    wallet = api_club._club_reconcile_wallet_buckets(frappe.get_doc("Restaurant Customer Wallet", wallet.name))
+    if wallet.get("status") != "فعال":
+        frappe.throw(_("کیف پول این مشتری مسدود است."))
+    if wallet_amount > flt(wallet.get("balance") or 0) + 0.009:
+        frappe.throw(_("موجودی کیف پول برای این پرداخت کافی نیست."))
+
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, commit=True):
     _ensure_management_access()
@@ -15772,6 +15816,8 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
                     splits[0]["amount"] = flt(splits[0].get("amount") or 0) + rounding_delta
                 else:
                     splits[0]["amount"] = grand_total
+
+            _validate_pos_wallet_tender(so_name, splits)
     
             # Add payments to SI
             if hasattr(si_doc, "payments"):
@@ -15826,6 +15872,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
                         rounding_delta = si_outstanding - sum(flt(s.get("amount") or 0) for s in splits)
                         splits[0]["amount"] = flt(splits[0].get("amount") or 0) + rounding_delta
                     total_split = si_outstanding
+            _validate_pos_wallet_tender(so_name, splits)
             from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
             payment_entries = []
             

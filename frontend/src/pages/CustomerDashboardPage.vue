@@ -64,8 +64,12 @@
         </div>
         <div class="club-summary__stats">
           <article class="club-stat">
-            <small>اعتبار کیف پول</small>
-            <strong>{{ (club.wallet_balance || 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong>
+            <small>موجودی قابل برداشت</small>
+            <strong>{{ (club.withdrawable_balance ?? club.wallet_balance ?? 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong>
+          </article>
+          <article class="club-stat">
+            <small>اعتبار خرید (کش‌بک)</small>
+            <strong>{{ (club.cashback_balance || 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong>
           </article>
           <article class="club-stat">
             <small>امتیاز وفاداری</small>
@@ -90,6 +94,7 @@
             {{ redeemBusy ? 'در حال تبدیل...' : 'تبدیل امتیاز به اعتبار' }}
           </button>
         </div>
+        <a class="customer-page__ghost-action club-wallet-link" href="/customer/wallet"><Wallet :size="16" /> جزئیات کیف پول و درخواست برداشت</a>
       </section>
 
       <section class="customer-section customer-glass-card customer-list-card recent-orders-section">
@@ -139,7 +144,7 @@ import {
   UserRound,
   Wallet,
 } from 'lucide-vue-next'
-import { customerLogout, getCustomerProfile, getMenuItems, redeemMyPoints } from '@/utils/api'
+import { customerLogout, getCustomerProfile, getMenuItems, getMyWallet, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 import { hasCustomerSession } from '@/utils/customerAuth'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
@@ -173,7 +178,12 @@ async function redeemAllPoints() {
         ...club.value,
         points_balance: Number(payload?.points_balance) || 0,
         wallet_balance: Number(payload?.wallet_balance) || club.value.wallet_balance,
+        cashback_balance: Number(payload?.cashback_balance) || club.value.cashback_balance,
       }
+      try {
+        const walletData = await getMyWallet()
+        club.value = { ...club.value, ...walletData.wallet }
+      } catch (_) {}
     }
   } catch (err) {
     clubError.value = err?.message || 'تبدیل امتیاز انجام نشد.'
@@ -351,8 +361,17 @@ onMounted(async () => {
 
 .club-summary__stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
   gap: 0.65rem;
+}
+
+.club-wallet-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  text-decoration: none;
 }
 
 .club-stat {

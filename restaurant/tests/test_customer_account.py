@@ -15,6 +15,9 @@ class FakeCache:
     def get_value(self, key):
         return self.values.get(key)
 
+    def delete_value(self, key):
+        self.values.pop(key, None)
+
 
 class FakeAddress:
     doctype = "Address"
@@ -41,6 +44,7 @@ class CustomerAccountTests(unittest.TestCase):
         frappe.PermissionError = PermissionError
         frappe.throw = lambda message, error=ValueError: (_ for _ in ()).throw(error(message))
         frappe.cache = lambda: cls.cache
+        frappe.conf = {"encryption_key": "test-only-signing-key"}
         frappe.db = types.SimpleNamespace(exists=lambda doctype, name: doctype == "Customer" and name == "CUST-1")
         cls.frappe = frappe
         cls.original = sys.modules.get("frappe")
@@ -67,6 +71,21 @@ class CustomerAccountTests(unittest.TestCase):
         self.assertEqual(self.module._require_customer(token)["customer"], "CUST-1")
         with self.assertRaises(PermissionError):
             self.module._require_customer("invalid")
+
+    def test_signed_session_survives_cache_loss_and_rejects_tampering(self):
+        token = self.module.issue_customer_session("CUST-1", "09123456789")
+        self.cache.values.clear()
+
+        self.assertEqual(self.module._require_customer(token)["customer"], "CUST-1")
+        with self.assertRaises(PermissionError):
+            self.module._require_customer(token[:-1] + ("0" if token[-1] != "0" else "1"))
+
+    def test_logout_revokes_a_signed_session(self):
+        token = self.module.issue_customer_session("CUST-1", "09123456789")
+
+        self.assertTrue(self.module.customer_logout(token)["success"])
+        with self.assertRaises(PermissionError):
+            self.module._require_customer(token)
 
     def test_archiving_requires_the_owning_customer(self):
         token = self.module.issue_customer_session("CUST-1", "09123456789")

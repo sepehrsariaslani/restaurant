@@ -69,12 +69,16 @@ __all__ = [
 	"adjust_management_points",
 	"redeem_my_points",
 	"get_customer_club_summary",
+	"get_my_wallet",
+	"request_my_wallet_withdrawal",
 	# wallet
 	"list_management_wallets",
 	"get_management_wallet_detail",
 	"charge_management_wallet",
 	"transfer_management_wallet",
 	"adjust_management_wallet",
+	"list_management_wallet_withdrawal_requests",
+	"review_management_wallet_withdrawal_request",
 	# referral
 	"get_management_referral_summary",
 	# campaigns
@@ -103,6 +107,7 @@ __all__ = [
 CLUB_DOCTYPES = {
 	"wallet": "Restaurant Customer Wallet",
 	"wallet_txn": "Restaurant Wallet Transaction",
+	"wallet_withdrawal": "Restaurant Wallet Withdrawal Request",
 	"sms": "Restaurant SMS Message",
 	"campaign": "Restaurant Campaign",
 	"survey_question": "Restaurant Survey Question",
@@ -128,7 +133,7 @@ SMS_KINDS = ["دستی", "انبوه", "تبریک تولد", "خوش‌آمدگ
 SMS_STATUS = ["در صف", "ارسال‌شده", "ناموفق", "بدون درگاه"]
 CAMPAIGN_STATUSES = ["پیش‌نویس", "فعال", "متوقف", "پایان‌یافته"]
 CAMPAIGN_BONUS_TYPES = ["تخفیف", "کش‌بک", "امتیاز"]
-WALLET_KINDS = ["شارژ", "پرداخت", "کش‌بک", "پاداش معرف", "انتقال ارسال", "انتقال دریافت", "تعدیل دستی", "تبدیل امتیاز"]
+WALLET_KINDS = ["شارژ", "پرداخت", "کش‌بک", "پاداش معرف", "انتقال ارسال", "انتقال دریافت", "تعدیل دستی", "تبدیل امتیاز", "درخواست برداشت", "بازگشت درخواست برداشت"]
 CLUB_REPORT_KEYS = {
 	"customer-analytics",
 	"campaign-performance",
@@ -1710,7 +1715,7 @@ def club_apply_fulfillment_effects(so_name):
 
 def get_customer_club_summary(customer_name):
 	"""Guest-dashboard enrichment: wallet balance, points balance and loyalty tier."""
-	out = {"wallet_balance": 0.0, "points_balance": 0, "loyalty_tier": "", "points_enabled": False, "points_rial_value": 0.0, "points_min_redeem": 0, "points_expiry_days": 0}
+	out = {"wallet_balance": 0.0, "withdrawable_balance": 0.0, "cashback_balance": 0.0, "points_balance": 0, "loyalty_tier": "", "points_enabled": False, "points_rial_value": 0.0, "points_min_redeem": 0, "points_expiry_days": 0}
 	if not customer_name or not frappe.db.exists("Customer", customer_name):
 		return out
 	settings = _club_club_settings()
@@ -1721,12 +1726,135 @@ def get_customer_club_summary(customer_name):
 	if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]):
 		wallet_name = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer_name}, "name")
 		if wallet_name:
-			out["wallet_balance"] = flt(frappe.db.get_value(CLUB_DOCTYPES["wallet"], wallet_name, "balance"))
+			wallet = _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet_name))
+			out["wallet_balance"] = flt(wallet.get("balance") or 0)
+			out["withdrawable_balance"] = flt(wallet.get("withdrawable_balance") or 0)
+			out["cashback_balance"] = flt(wallet.get("cashback_balance") or 0)
 	if frappe.db.exists("DocType", CLUB_DOCTYPES["point_entry"]):
 		info = _club_points_map([customer_name]).get(customer_name, {})
 		out["points_balance"] = cint(info.get("balance", 0))
 		out["loyalty_tier"] = info.get("loyalty_tier", "")
 	return out
+
+
+def _wallet_withdrawal_payload(row):
+	return {
+		"name": row.get("name") or "",
+		"amount": flt(row.get("amount") or 0),
+		"bank_iban": row.get("bank_iban") or "",
+		"account_holder": row.get("account_holder") or "",
+		"status": row.get("status") or "در انتظار بررسی",
+		"payment_reference": row.get("payment_reference") or "",
+		"note": row.get("note") or "",
+		"creation": str(row.get("creation") or ""),
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_my_wallet(customer_token=None):
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	wallet_doctype_ready = frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"])
+	wallet_name = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer}, "name") if wallet_doctype_ready else ""
+	wallet = _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet_name)) if wallet_name else None
+	txn_fields = ["name", "kind", "direction", "amount", "balance_after", "note", "entry_date", "reference_name"]
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "bucket"):
+		txn_fields.append("bucket")
+	txns = frappe.get_all(
+		CLUB_DOCTYPES["wallet_txn"],
+		filters={"customer": customer},
+		fields=txn_fields,
+		order_by="creation desc",
+		limit_page_length=50,
+		ignore_permissions=True,
+	) if wallet and frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_txn"]) else []
+	withdrawal_rows = frappe.get_all(
+		CLUB_DOCTYPES["wallet_withdrawal"],
+		filters={"customer": customer},
+		fields=["name", "amount", "bank_iban", "account_holder", "status", "payment_reference", "note", "creation"],
+		order_by="creation desc",
+		limit_page_length=30,
+		ignore_permissions=True,
+	) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_withdrawal"]) else []
+	settings = _club_club_settings()
+	return {
+		"wallet": {
+			"balance": flt(wallet.get("balance") or 0) if wallet else 0,
+			"withdrawable_balance": flt(wallet.get("withdrawable_balance") or 0) if wallet else 0,
+			"cashback_balance": flt(wallet.get("cashback_balance") or 0) if wallet else 0,
+			"status": wallet.get("status") or "فعال" if wallet else "فعال",
+		},
+		"transactions": [
+			{**row, "amount": flt(row.get("amount") or 0), "balance_after": flt(row.get("balance_after") or 0), "entry_date": str(row.get("entry_date") or "")}
+			for row in txns
+		],
+		"withdrawal_requests": [_wallet_withdrawal_payload(row) for row in withdrawal_rows],
+		"rules": {
+			"cashback_percent": settings["cashback_percent"],
+			"cashback_min_order": settings["cashback_min_order"],
+			"club_enabled": settings["club_enabled"],
+		},
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def request_my_wallet_withdrawal(customer_token=None, amount=0, bank_iban="", account_holder="", note=""):
+	from restaurant.customer_account import _require_customer
+	from restaurant.wallet_rules import normalize_iranian_iban
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	amount = flt(amount, 2)
+	iban = normalize_iranian_iban(bank_iban)
+	account_holder = str(account_holder or "").strip()
+	if amount <= 0:
+		frappe.throw(_("مبلغ برداشت باید بزرگ‌تر از صفر باشد."))
+	if not iban:
+		frappe.throw(_("شماره شبا معتبر وارد کنید."))
+	if not account_holder:
+		frappe.throw(_("نام صاحب حساب را وارد کنید."))
+	if len(account_holder) > 140:
+		frappe.throw(_("نام صاحب حساب بیش از حد طولانی است."))
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_withdrawal"]):
+		frappe.throw(_("ثبت درخواست برداشت پس از به‌روزرسانی ساختار اپ در دسترس خواهد بود."))
+	if not _has_column(CLUB_DOCTYPES["wallet"], "withdrawable_balance"):
+		frappe.throw(_("تفکیک موجودی کیف پول هنوز آماده نیست؛ با پشتیبانی تماس بگیرید."))
+
+	wallet = _club_get_or_create_wallet(customer)
+	frappe.db.sql(
+		"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+		wallet.name,
+	)
+	wallet = _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name))
+	if amount > flt(wallet.get("withdrawable_balance") or 0) + 0.009:
+		frappe.throw(_("موجودی قابل برداشت کافی نیست."))
+
+	request = frappe.new_doc(CLUB_DOCTYPES["wallet_withdrawal"])
+	request.customer = customer
+	request.wallet = wallet.name
+	request.amount = amount
+	request.bank_iban = iban
+	request.account_holder = account_holder
+	request.status = "در انتظار بررسی"
+	request.note = str(note or "").strip()[:240]
+	request.insert(ignore_permissions=True)
+	txn = _club_wallet_txn(
+		wallet=wallet,
+		customer=customer,
+		kind="درخواست برداشت",
+		direction="برداشت",
+		amount=amount,
+		bucket="کیف پول",
+		note=_("رزرو مبلغ درخواست برداشت {0}").format(request.name),
+		reference_doctype=CLUB_DOCTYPES["wallet_withdrawal"],
+		reference_name=request.name,
+	)
+	request.reservation_transaction = txn.name
+	request.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "request": _wallet_withdrawal_payload(request.as_dict()), "wallet": get_my_wallet(customer_token).get("wallet")}
 
 
 # ---------------------------------------------------------------------------
@@ -1737,27 +1865,90 @@ def get_customer_club_summary(customer_name):
 def _club_get_or_create_wallet(customer_name):
 	existing = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer_name}, "name")
 	if existing:
-		return frappe.get_doc(CLUB_DOCTYPES["wallet"], existing)
+		return _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], existing))
 	doc = frappe.new_doc(CLUB_DOCTYPES["wallet"])
 	doc.customer = customer_name
 	doc.balance = 0
 	doc.status = "فعال"
+	if _has_column(CLUB_DOCTYPES["wallet"], "withdrawable_balance"):
+		doc.withdrawable_balance = 0
+		doc.cashback_balance = 0
+		doc.wallet_buckets_reconciled = 1
 	doc.insert(ignore_permissions=True)
 	return doc
 
 
-def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", reference_doctype="", reference_name=""):
+def _club_reconcile_wallet_buckets(wallet):
+	"""Separate legacy ledger balances conservatively on first read after schema upgrade."""
+	if not _has_column(CLUB_DOCTYPES["wallet"], "withdrawable_balance") or cint(
+		wallet.get("wallet_buckets_reconciled") or 0
+	):
+		return wallet
+
+	frappe.db.sql(
+		"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+		wallet.name,
+	)
+	wallet = frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name)
+	if cint(wallet.get("wallet_buckets_reconciled") or 0):
+		return wallet
+
+	cash_balance = 0.0
+	cashback_balance = 0.0
+	rows = frappe.get_all(
+		CLUB_DOCTYPES["wallet_txn"],
+		filters={"wallet": wallet.name},
+		fields=["kind", "direction", "amount", "creation"],
+		order_by="creation asc",
+		ignore_permissions=True,
+	) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_txn"]) else []
+	from restaurant.wallet_rules import split_legacy_wallet_ledger
+
+	cash_balance, cashback_balance = split_legacy_wallet_ledger(rows, wallet.get("balance") or 0)
+
+	wallet.withdrawable_balance = flt(cash_balance, 2)
+	wallet.cashback_balance = flt(cashback_balance, 2)
+	wallet.wallet_buckets_reconciled = 1
+	wallet.save(ignore_permissions=True)
+	return wallet
+
+
+def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", reference_doctype="", reference_name="", bucket=None):
 	amount = flt(amount)
 	if amount <= 0:
 		frappe.throw(_("مبلغ باید بزرگ‌تر از صفر باشد."))
+	if direction not in {"واریز", "برداشت"}:
+		frappe.throw(_("جهت تراکنش کیف پول معتبر نیست."))
 	if wallet.get("status") != "فعال":
 		frappe.throw(_("کیف پول این مشتری مسدود است."))
-	if direction == "برداشت" and flt(wallet.balance) < amount - 0.009:
+	frappe.db.sql(
+		"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+		wallet.name,
+	)
+	wallet = frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name)
+	if wallet.get("status") != "فعال":
+		frappe.throw(_("کیف پول این مشتری مسدود است."))
+	bucket_fields_ready = _has_column(CLUB_DOCTYPES["wallet"], "withdrawable_balance") and _has_column(
+		CLUB_DOCTYPES["wallet"], "cashback_balance"
+	)
+	if bucket_fields_ready:
+		wallet = _club_reconcile_wallet_buckets(wallet)
+		bucket = bucket or ("کش‌بک" if kind in {"کش‌بک", "پاداش معرف", "تبدیل امتیاز"} else "کیف پول")
+		if bucket not in {"کیف پول", "کش‌بک"}:
+			frappe.throw(_("نوع موجودی کیف پول معتبر نیست."))
+		balance_field = "cashback_balance" if bucket == "کش‌بک" else "withdrawable_balance"
+		bucket_balance = flt(wallet.get(balance_field) or 0)
+		if direction == "برداشت" and bucket_balance < amount - 0.009:
+			frappe.throw(_("موجودی {0} کافی نیست.").format("اعتبار خرید" if bucket == "کش‌بک" else "کیف پول قابل برداشت"))
+		wallet.set(balance_field, bucket_balance + (amount if direction == "واریز" else -amount))
+	elif direction == "برداشت" and flt(wallet.balance) < amount - 0.009:
 		frappe.throw(_("موجودی کیف پول کافی نیست."))
 	wallet.balance = flt(wallet.balance) + (amount if direction == "واریز" else -amount)
 	field_map = {
 		"شارژ": "total_charged",
 		"پرداخت": "total_spent",
+		"درخواست برداشت": None,
+		"بازگشت درخواست برداشت": None,
 		"انتقال ارسال": None,
 		"انتقال دریافت": None,
 		"کش‌بک": "total_rewards",
@@ -1774,6 +1965,12 @@ def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", refe
 	txn.direction = direction
 	txn.amount = amount
 	txn.balance_after = flt(wallet.balance)
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "bucket"):
+		txn.bucket = bucket or "کیف پول"
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "withdrawable_after"):
+		txn.withdrawable_after = flt(wallet.get("withdrawable_balance") or 0)
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "cashback_after"):
+		txn.cashback_after = flt(wallet.get("cashback_balance") or 0)
 	txn.reference_doctype = reference_doctype or ""
 	txn.reference_name = reference_name or ""
 	txn.note = note or ""
@@ -1786,10 +1983,14 @@ def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", refe
 def list_management_wallets(search="", limit=100, offset=0):
 	_ensure_management_access()
 	filters = {}
+	fields = ["name", "customer", "balance", "total_charged", "total_spent", "total_rewards", "status", "modified"]
+	for fieldname in ("withdrawable_balance", "cashback_balance"):
+		if _has_column(CLUB_DOCTYPES["wallet"], fieldname):
+			fields.append(fieldname)
 	rows = frappe.get_all(
 		CLUB_DOCTYPES["wallet"],
 		filters=filters,
-		fields=["name", "customer", "balance", "total_charged", "total_spent", "total_rewards", "status", "modified"],
+		fields=fields,
 		order_by="balance desc",
 		limit_start=cint(offset) or 0,
 		limit_page_length=min(max(cint(limit) or 100, 1), 400),
@@ -1808,6 +2009,8 @@ def list_management_wallets(search="", limit=100, offset=0):
 				"customer_name": customer_name,
 				"tier": tier or "",
 				"balance": flt(row["balance"]),
+				"withdrawable_balance": flt(row.get("withdrawable_balance") or 0),
+				"cashback_balance": flt(row.get("cashback_balance") or 0),
 				"total_charged": flt(row["total_charged"]),
 				"total_spent": flt(row["total_spent"]),
 				"total_rewards": flt(row["total_rewards"]),
@@ -1825,10 +2028,13 @@ def get_management_wallet_detail(customer=""):
 	if not frappe.db.exists("Customer", customer):
 		frappe.throw(_("مشتری یافت نشد: {0}").format(customer or "-"))
 	wallet = _club_get_or_create_wallet(customer)
+	txn_fields = ["name", "kind", "direction", "amount", "balance_after", "reference_doctype", "reference_name", "note", "entry_date"]
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "bucket"):
+		txn_fields.append("bucket")
 	txns = frappe.get_all(
 		CLUB_DOCTYPES["wallet_txn"],
 		filters={"customer": customer},
-		fields=["name", "kind", "direction", "amount", "balance_after", "reference_doctype", "reference_name", "note", "entry_date"],
+		fields=txn_fields,
 		order_by="creation desc",
 		limit_page_length=100,
 	)
@@ -1838,6 +2044,8 @@ def get_management_wallet_detail(customer=""):
 			"customer": wallet.customer,
 			"customer_name": frappe.db.get_value("Customer", customer, "customer_name") or customer,
 			"balance": flt(wallet.balance),
+			"withdrawable_balance": flt(wallet.get("withdrawable_balance") or 0),
+			"cashback_balance": flt(wallet.get("cashback_balance") or 0),
 			"total_charged": flt(wallet.total_charged),
 			"total_spent": flt(wallet.total_spent),
 			"total_rewards": flt(wallet.total_rewards),
@@ -1858,6 +2066,80 @@ def get_management_wallet_detail(customer=""):
 		"point_entries": (list_management_point_entries(customer=customer, limit=20).get("entries") if frappe.db.exists("DocType", CLUB_DOCTYPES["point_entry"]) else []),
 		"count": len(txns),
 	}
+
+
+@frappe.whitelist()
+def list_management_wallet_withdrawal_requests(status="", limit=100, offset=0):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_withdrawal"]):
+		return {"requests": [], "count": 0}
+	filters = {}
+	if status in {"در انتظار بررسی", "پرداخت شد", "رد شد"}:
+		filters["status"] = status
+	rows = frappe.get_all(
+		CLUB_DOCTYPES["wallet_withdrawal"],
+		filters=filters,
+		fields=["name", "customer", "wallet", "amount", "bank_iban", "account_holder", "status", "payment_reference", "note", "creation"],
+		order_by="creation desc",
+		limit_start=max(cint(offset), 0),
+		limit_page_length=min(max(cint(limit) or 100, 1), 400),
+		ignore_permissions=True,
+	)
+	for row in rows:
+		row["customer_name"] = frappe.db.get_value("Customer", row.get("customer"), "customer_name") or row.get("customer") or ""
+		row["amount"] = flt(row.get("amount") or 0)
+		row["creation"] = str(row.get("creation") or "")
+	return {"requests": rows, "count": len(rows)}
+
+
+@frappe.whitelist()
+def review_management_wallet_withdrawal_request(request_name="", action="", payment_reference="", note=""):
+	_ensure_management_access()
+	request_name = str(request_name or "").strip()
+	if not request_name or not frappe.db.exists(CLUB_DOCTYPES["wallet_withdrawal"], request_name):
+		frappe.throw(_("درخواست برداشت پیدا نشد."))
+	frappe.db.sql(
+		"select name from `tabRestaurant Wallet Withdrawal Request` where name = %s for update",
+		request_name,
+	)
+	request = frappe.get_doc(CLUB_DOCTYPES["wallet_withdrawal"], request_name)
+	if request.status != "در انتظار بررسی":
+		frappe.throw(_("این درخواست قبلاً بررسی شده است."))
+	if action not in {"paid", "reject"}:
+		frappe.throw(_("وضعیت بررسی معتبر نیست."))
+	if action == "paid":
+		payment_reference = str(payment_reference or "").strip()
+		if not payment_reference:
+			frappe.throw(_("شماره پیگیری واریز را وارد کنید."))
+		if len(payment_reference) > 120:
+			frappe.throw(_("شماره پیگیری بیش از حد طولانی است."))
+		request.status = "پرداخت شد"
+		request.payment_reference = payment_reference
+	else:
+		wallet = _club_get_or_create_wallet(request.customer)
+		frappe.db.sql(
+			"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+			wallet.name,
+		)
+		wallet = frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name)
+		_club_wallet_txn(
+			wallet=wallet,
+			customer=request.customer,
+			kind="بازگشت درخواست برداشت",
+			direction="واریز",
+			amount=flt(request.amount),
+			bucket="کیف پول",
+			note=_("بازگشت مبلغ درخواست ردشده {0}").format(request.name),
+			reference_doctype=CLUB_DOCTYPES["wallet_withdrawal"],
+			reference_name=request.name,
+		)
+		request.status = "رد شد"
+	request.note = "\n".join(filter(None, [str(request.note or "").strip(), str(note or "").strip()]))[:480]
+	request.reviewed_by = frappe.session.user
+	request.reviewed_at = now_datetime()
+	request.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "request": _wallet_withdrawal_payload(request.as_dict())}
 
 
 @frappe.whitelist()
@@ -1978,26 +2260,54 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 		# 1) Wallet payment deduction — only when the wallet Mode of Payment was used
 		if settings["wallet_mode_of_payment"] and _club_wallet_mode_match(splits, payment_breakdown, settings["wallet_mode_of_payment"]):
 			wallet_amount = 0.0
-			for row in list(splits or []) + list(payment_breakdown or []):
+			wallet_rows = payment_breakdown if payment_breakdown else splits
+			for row in wallet_rows or []:
 				if (row.get("mode_of_payment") or "").strip() == settings["wallet_mode_of_payment"]:
 					wallet_amount += flt(row.get("amount") or row.get("paid_amount") or 0)
 			if wallet_amount > 0:
-				exists = frappe.db.exists(
-					CLUB_DOCTYPES["wallet_txn"],
-					{"reference_name": so_name, "kind": "پرداخت", "customer": customer},
+				wallet = _club_get_or_create_wallet(customer)
+				frappe.db.sql(
+					"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+					wallet.name,
 				)
-				if not exists:
-					wallet = _club_get_or_create_wallet(customer)
-					_club_wallet_txn(
-						wallet=wallet,
-						customer=customer,
-						kind="پرداخت",
-						direction="برداشت",
-						amount=min(wallet_amount, flt(wallet.balance)),
-						note=_("پرداخت سفارش {0} با کیف پول").format(so_name),
-						reference_doctype="Sales Order",
-						reference_name=so_name,
-					)
+				wallet = _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name))
+				prior_payments = frappe.get_all(
+					CLUB_DOCTYPES["wallet_txn"],
+					filters={"reference_name": so_name, "kind": "پرداخت", "customer": customer},
+					fields=["amount"],
+					ignore_permissions=True,
+				)
+				remaining = max(wallet_amount - sum(flt(row.get("amount") or 0) for row in prior_payments), 0)
+				if remaining > 0.009:
+					if _has_column(CLUB_DOCTYPES["wallet"], "withdrawable_balance") and _has_column(
+						CLUB_DOCTYPES["wallet"], "cashback_balance"
+					):
+						from restaurant.wallet_rules import allocate_wallet_payment
+
+						cash_used, cashback_used = allocate_wallet_payment(
+							wallet.get("withdrawable_balance"), wallet.get("cashback_balance"), remaining
+						)
+						if cashback_used > 0:
+							_club_wallet_txn(
+								wallet=wallet, customer=customer, kind="پرداخت", direction="برداشت",
+								amount=cashback_used, bucket="کش‌بک",
+								note=_("مصرف اعتبار خرید در سفارش {0}").format(so_name),
+								reference_doctype="Sales Order", reference_name=so_name,
+							)
+						if cash_used > 0:
+							_club_wallet_txn(
+								wallet=wallet, customer=customer, kind="پرداخت", direction="برداشت",
+								amount=cash_used, bucket="کیف پول",
+								note=_("پرداخت سفارش {0} با کیف پول").format(so_name),
+								reference_doctype="Sales Order", reference_name=so_name,
+							)
+					else:
+						_club_wallet_txn(
+							wallet=wallet, customer=customer, kind="پرداخت", direction="برداشت",
+							amount=remaining,
+							note=_("پرداخت سفارش {0} با کیف پول").format(so_name),
+							reference_doctype="Sales Order", reference_name=so_name,
+						)
 
 		# 2) Cashback on the settled amount
 		credited = _has_column("Sales Order", "restaurant_cashback_credited") and cint(

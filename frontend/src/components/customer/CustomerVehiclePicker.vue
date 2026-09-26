@@ -13,6 +13,7 @@
       <label class="order-flow-field"><span>مدل خودرو</span><input class="order-flow-input" :value="modelValue.type" @input="update('type', $event.target.value)" placeholder="مثلاً پژو ۲۰۷" autocomplete="off" /></label>
       <label class="order-flow-field"><span>رنگ خودرو</span><input class="order-flow-input" :value="modelValue.color" @input="update('color', $event.target.value)" placeholder="مثلاً سفید" autocomplete="off" /></label>
       <label class="order-flow-field vehicle-plate"><span>پلاک خودرو</span><input class="order-flow-input" :value="modelValue.plate" @input="update('plate', $event.target.value)" placeholder="مثلاً ۱۲ ب ۳۴۵ ایران ۶۷" autocomplete="off" /></label>
+      <label class="order-flow-field vehicle-phone"><span>شمارهٔ تماس هنگام تحویل</span><input class="order-flow-input" :value="modelValue.mobile || mobile" @input="update('mobile', $event.target.value)" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="09…" /></label>
     </div>
     <p class="vehicle-hint"><Phone :size="16" aria-hidden="true" /> هنگام رسیدن نزدیک شعبه، از شماره تماس روی سفارش با شما هماهنگ می‌کنیم.</p>
     <label v-if="signedIn && !modelValue.id" class="vehicle-save"><input type="checkbox" :checked="modelValue.save_for_future" @change="update('save_for_future', $event.target.checked)" />ذخیره این خودرو برای سفارش‌های بعدی</label>
@@ -28,7 +29,7 @@ const editing = ref(false)
 const vehicles = ref([]), loading = ref(false), error = ref('')
 let requestId = 0
 function update(key, value) { emit('update:modelValue', { ...props.modelValue, [key]: value }) }
-function selectVehicle(vehicle) { editing.value = false; emit('update:modelValue', { id: '', type: '', color: '', plate: '', save_for_future: false, ...vehicle }) }
+function selectVehicle(vehicle) { editing.value = false; emit('update:modelValue', { id: '', type: '', color: '', plate: '', mobile: props.mobile, save_for_future: false, ...vehicle }) }
 async function loadVehicles() {
   const id = ++requestId
   vehicles.value = []; error.value = ''; loading.value = false
@@ -46,6 +47,7 @@ onMounted(loadVehicles)
 .vehicle-picker { display: grid; gap: 1rem; }
 .vehicle-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
 .vehicle-plate { grid-column: 1 / -1; }
+.vehicle-phone { grid-column: 1 / -1; }
 .vehicle-options { display: grid; gap: .65rem; }
 .vehicle-options button { min-height: 56px; display: flex; align-items: center; gap: .7rem; padding: .8rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); color: var(--ds-color-text-primary); font: inherit; text-align: start; cursor: pointer; }
 .vehicle-options button.active { border-color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); }

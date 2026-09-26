@@ -1,23 +1,119 @@
 """Customer self-service over native Customer, Contact and Address records."""
+import base64
 import hashlib
+import hmac
+import json
 import secrets
+import time
 
 import frappe
 from frappe import _
+
+CUSTOMER_SESSION_TTL = 7 * 24 * 60 * 60
 
 
 def _session_key(token):
 	return "restaurant:customer-session:" + hashlib.sha256(token.encode()).hexdigest()
 
 
+def _revoked_session_key(token):
+	return "restaurant:customer-session-revoked:" + hashlib.sha256(token.encode()).hexdigest()
+
+
+def _session_secret():
+	config = getattr(frappe, "conf", {}) or {}
+	try:
+		secret = config.get("encryption_key")
+	except AttributeError:
+		secret = getattr(config, "encryption_key", None)
+	return str(secret or "").strip()
+
+
+def _signed_session_token(customer, mobile):
+	secret = _session_secret()
+	if not secret:
+		return ""
+
+	payload = {
+		"customer": str(customer),
+		"mobile": str(mobile or ""),
+		"expires_at": int(time.time()) + CUSTOMER_SESSION_TTL,
+	}
+	encoded = base64.urlsafe_b64encode(
+		json.dumps(payload, separators=(",", ":")).encode("utf-8")
+	).decode("ascii").rstrip("=")
+	signature = hmac.new(secret.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+	return "rc1.{0}.{1}".format(encoded, signature)
+
+
+def _decode_signed_session(token):
+	secret = _session_secret()
+	parts = str(token or "").split(".", 2)
+	if not secret or len(parts) != 3 or parts[0] != "rc1":
+		return None
+
+	encoded, signature = parts[1], parts[2]
+	expected = hmac.new(secret.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+	if not hmac.compare_digest(signature, expected):
+		return None
+	try:
+		padding = "=" * (-len(encoded) % 4)
+		payload = json.loads(base64.urlsafe_b64decode(encoded + padding).decode("utf-8"))
+		if int(payload.get("expires_at") or 0) <= int(time.time()):
+			return None
+		customer = str(payload.get("customer") or "").strip()
+		if not customer:
+			return None
+		return {"customer": customer, "mobile": str(payload.get("mobile") or "")}
+	except (ValueError, TypeError, json.JSONDecodeError):
+		return None
+
+
+def _authenticated_customer_identity():
+	"""Recover a customer identity from an authenticated Frappe website session."""
+	try:
+		user_name = str(getattr(getattr(frappe, "session", None), "user", "") or "").strip()
+		if not user_name or user_name == "Guest" or not frappe.db.exists("User", user_name):
+			return None
+		user = frappe.get_doc("User", user_name)
+		if user.user_type != "Website User" or not user.enabled:
+			return None
+		customer_name = frappe.db.get_value(
+			"Portal User", {"user": user_name, "parenttype": "Customer"}, "parent"
+		)
+		if not customer_name or not frappe.db.exists("Customer", customer_name):
+			return None
+		customer = frappe.get_doc("Customer", customer_name)
+		if customer.disabled:
+			return None
+		return {
+			"customer": customer_name,
+			"mobile": str(user.mobile_no or customer.get("mobile_no") or ""),
+		}
+	except Exception:
+		return None
+
+
 def issue_customer_session(customer, mobile):
-	token = secrets.token_urlsafe(32)
-	frappe.cache().set_value(_session_key(token), {"customer": customer, "mobile": mobile}, expires_in_sec=7 * 24 * 60 * 60)
+	token = _signed_session_token(customer, mobile) or secrets.token_urlsafe(32)
+	frappe.cache().set_value(
+		_session_key(token),
+		{"customer": customer, "mobile": mobile},
+		expires_in_sec=CUSTOMER_SESSION_TTL,
+	)
 	return token
 
 
 def _require_customer(token):
-	identity = frappe.cache().get_value(_session_key(str(token or ""))) if token else None
+	token = str(token or "").strip()
+	cache = frappe.cache()
+	if token and cache.get_value(_revoked_session_key(token)):
+		frappe.throw(_("نشست حساب پایان یافته است؛ دوباره وارد شوید."), frappe.PermissionError)
+	identity = cache.get_value(_session_key(token)) if token else None
+	if not isinstance(identity, dict) or not identity.get("customer"):
+		identity = _decode_signed_session(token) if token else None
+	if not isinstance(identity, dict) or not identity.get("customer"):
+		identity = _authenticated_customer_identity()
 	if not isinstance(identity, dict) or not identity.get("customer"):
 		frappe.throw(_("برای ویرایش حساب، دوباره با شماره موبایل وارد شوید."), frappe.PermissionError)
 	if not frappe.db.exists("Customer", identity["customer"]):
@@ -185,13 +281,27 @@ def customer_register_password(customer_token=None, name=None, email=None, passw
 def customer_session(customer_token=None):
 	identity = _require_customer(customer_token)
 	customer = frappe.get_doc("Customer", identity["customer"])
-	return _customer_password_result(customer, identity.get("mobile") or "", customer.email_id or "", token=customer_token)
+	token_is_valid = bool(
+		customer_token
+		and (
+			_decode_signed_session(customer_token)
+			or frappe.cache().get_value(_session_key(str(customer_token)))
+		)
+	)
+	return _customer_password_result(
+		customer,
+		identity.get("mobile") or "",
+		customer.email_id or "",
+		token=customer_token if token_is_valid else None,
+	)
 
 
 @frappe.whitelist(allow_guest=True)
 def customer_logout(customer_token=None):
 	if customer_token:
-		frappe.cache().delete_value(_session_key(str(customer_token)))
+		cache = frappe.cache()
+		cache.set_value(_revoked_session_key(str(customer_token)), 1, expires_in_sec=CUSTOMER_SESSION_TTL)
+		cache.delete_value(_session_key(str(customer_token)))
 	return {"success": True}
 
 

@@ -530,6 +530,8 @@
           <template #cell-customer_label="{ row }"><strong>{{ row.customer_name }}</strong><small class="muted d-block">{{ row.customer }}</small></template>
           <template #cell-tier="{ value }">{{ value || '—' }}</template>
           <template #cell-balance="{ row }"><strong>{{ formatMoneyValue(row.balance) }}</strong></template>
+          <template #cell-withdrawable_balance="{ row }">{{ formatMoneyValue(row.withdrawable_balance) }}</template>
+          <template #cell-cashback_balance="{ row }">{{ formatMoneyValue(row.cashback_balance) }}</template>
           <template #cell-total_charged="{ value }">{{ formatMoneyValue(value) }}</template>
           <template #cell-total_spent="{ value }">{{ formatMoneyValue(value) }}</template>
           <template #cell-total_rewards="{ value }">{{ formatMoneyValue(value) }}</template>
@@ -543,6 +545,25 @@
             </div>
           </template>
           <template #empty>کیف پولی یافت نشد؛ با اولین شارژ یا کش‌بک به‌صورت خودکار ساخته می‌شود.</template>
+        </ManagementListView>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard title="درخواست‌های برداشت" subtitle="موجودی هنگام ثبت درخواست رزرو می‌شود؛ پرداخت بانکی را پس از انتقال واقعی تأیید کنید.">
+        <p v-if="withdrawalsError" class="error" role="alert">{{ withdrawalsError }}</p>
+        <p v-if="withdrawalsLoading" class="muted">در حال دریافت درخواست‌ها…</p>
+        <ManagementListView v-else :columns="withdrawalColumns" :rows="withdrawalRequests" row-key="name">
+          <template #cell-customer_name="{ row }"><strong>{{ row.customer_name }}</strong><small class="muted d-block">{{ row.customer }}</small></template>
+          <template #cell-amount="{ row }"><strong>{{ formatMoneyValue(row.amount) }}</strong></template>
+          <template #cell-bank_iban="{ value }"><span dir="ltr">{{ value }}</span></template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'پرداخت شد', warn: row.status === 'در انتظار بررسی' }">{{ row.status }}</span></template>
+          <template #cell-actions="{ row }">
+            <div v-if="row.status === 'در انتظار بررسی'" class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openWithdrawalReview(row, 'paid')">ثبت پرداخت</button>
+              <button type="button" class="tertiary-btn" @click="openWithdrawalReview(row, 'reject')">رد و بازگشت موجودی</button>
+            </div>
+            <small v-else>{{ row.payment_reference || '—' }}</small>
+          </template>
+          <template #empty>درخواست برداشتی برای بررسی ثبت نشده است.</template>
         </ManagementListView>
       </ManagementSurfaceCard>
 
@@ -580,7 +601,9 @@
         <div class="popup wide">
           <h3>کیف پول {{ walletDetail.wallet.customer_name }}</h3>
           <div class="totals-grid">
-            <div class="total-box"><small>موجودی</small><strong>{{ formatMoneyValue(walletDetail.wallet.balance) }}</strong></div>
+            <div class="total-box"><small>مجموع موجودی</small><strong>{{ formatMoneyValue(walletDetail.wallet.balance) }}</strong></div>
+            <div class="total-box"><small>قابل برداشت</small><strong>{{ formatMoneyValue(walletDetail.wallet.withdrawable_balance) }}</strong></div>
+            <div class="total-box"><small>اعتبار خرید</small><strong>{{ formatMoneyValue(walletDetail.wallet.cashback_balance) }}</strong></div>
             <div class="total-box"><small>مجموع شارژ</small><strong>{{ formatMoneyValue(walletDetail.wallet.total_charged) }}</strong></div>
             <div class="total-box"><small>مصرف</small><strong>{{ formatMoneyValue(walletDetail.wallet.total_spent) }}</strong></div>
             <div class="total-box"><small>پاداش‌ها</small><strong>{{ formatMoneyValue(walletDetail.wallet.total_rewards) }}</strong></div>
@@ -638,6 +661,27 @@
             <button type="button" class="tertiary-btn" @click="redeemForm = null">انصراف</button>
           </div>
         </div>
+      </div>
+
+      <div v-if="withdrawalAction" class="popup-backdrop" @click.self="withdrawalAction = null">
+        <form class="popup" @submit.prevent="saveWithdrawalReview">
+          <h3>{{ withdrawalAction.action === 'paid' ? 'تأیید واریز برداشت' : 'رد درخواست برداشت' }}</h3>
+          <p class="muted">{{ withdrawalAction.request.customer_name }} · {{ formatMoneyValue(withdrawalAction.request.amount) }}</p>
+          <p><strong>شماره شبا:</strong> <span dir="ltr">{{ withdrawalAction.request.bank_iban }}</span></p>
+          <p v-if="withdrawalAction.action === 'paid'" class="muted">فقط پس از انجام واریز واقعی، این درخواست را تأیید کنید.</p>
+          <p v-else class="muted">با رد درخواست، مبلغ رزروشده به موجودی قابل برداشت مشتری بازمی‌گردد.</p>
+          <label v-if="withdrawalAction.action === 'paid'" class="withdrawal-reference-field">شماره پیگیری واریز <span class="req">*</span>
+            <input class="input" v-model.trim="withdrawalAction.payment_reference" required maxlength="120" autocomplete="off" />
+          </label>
+          <ManagementNoteField v-model="withdrawalAction.note" label="یادداشت بررسی" :multiline="false" placeholder="یادداشت اختیاری برای سوابق" />
+          <p v-if="withdrawalsError" class="error" role="alert">{{ withdrawalsError }}</p>
+          <div class="btn-row">
+            <button type="submit" class="primary-btn" :disabled="withdrawalReviewSaving || (withdrawalAction.action === 'paid' && !withdrawalAction.payment_reference.trim())">
+              {{ withdrawalReviewSaving ? 'در حال ثبت…' : withdrawalAction.action === 'paid' ? 'ثبت واریز انجام‌شده' : 'رد و بازگرداندن موجودی' }}
+            </button>
+            <button type="button" class="tertiary-btn" :disabled="withdrawalReviewSaving" @click="withdrawalAction = null">انصراف</button>
+          </div>
+        </form>
       </div>
     </section>
 
@@ -822,7 +866,7 @@
             </select>
           </label>
         </div>
-        <p class="muted hint-line">برای پرداخت با کیف پول در صندوق، ابتدا یک «روش پرداخت» (Mode of Payment) با نام دلخواه مثل «کیف پول» در تنظیمات ERPNext بسازید و اینجا انتخابش کنید. کش‌بک پس از تسویه هر سفارش به‌صورت خودکار به کیف مشتری واریز می‌شود.</p>
+        <p class="muted hint-line">برای پرداخت با کیف پول در صندوق، ابتدا یک «روش پرداخت» (Mode of Payment) مثل «کیف پول» در ERPNext بسازید و اینجا انتخابش کنید. کش‌بک بعد از تسویه به اعتبار خرید جداگانه افزوده می‌شود و قابل برداشت بانکی نیست.</p>
         <div class="btn-row">
           <button type="button" class="primary-btn" @click="saveSettings" :disabled="settingsSaving">{{ settingsSaving ? '...' : 'ذخیره تنظیمات' }}</button>
         </div>
@@ -872,6 +916,8 @@ import {
   getManagementSmsKindStats,
   listManagementWallets,
   getManagementWalletDetail,
+  listManagementWalletWithdrawalRequests,
+  reviewManagementWalletWithdrawalRequest,
   chargeManagementWallet,
   transferManagementWallet,
   adjustManagementWallet,
@@ -973,7 +1019,7 @@ function setActiveTab(key) {
   loadedTabs[key] = true
   if (key === 'customers') loadCustomers()
   if (key === 'sms') { loadSmsTemplates(); loadSmsHistory(); loadSmsKindStats(); if (!campaigns.value.length) loadCampaigns() }
-  if (key === 'wallet') loadWallets()
+  if (key === 'wallet') { loadWallets(); loadWalletWithdrawalRequests() }
   if (key === 'referral') loadReferral()
   if (key === 'campaigns') { loadCampaigns(); loadCoupons() }
   if (key === 'voice') loadVoices()
@@ -1230,11 +1276,18 @@ const walletActionError = ref('')
 const walletActionSaving = ref(false)
 const walletDetail = ref(null)
 const walletDetailMessage = ref('')
+const withdrawalRequests = ref([])
+const withdrawalsLoading = ref(false)
+const withdrawalsError = ref('')
+const withdrawalAction = ref(null)
+const withdrawalReviewSaving = ref(false)
 const walletActionTitles = { charge: 'شارژ کیف پول', transfer: 'انتقال اعتبار', adjust: 'تعدیل دستی' }
 const walletColumns = [
   { key: 'customer_label', label: 'مشتری' },
   { key: 'tier', label: 'سطح' },
   { key: 'balance', label: 'موجودی' },
+  { key: 'withdrawable_balance', label: 'قابل برداشت' },
+  { key: 'cashback_balance', label: 'اعتبار خرید' },
   { key: 'total_charged', label: 'مجموع شارژ' },
   { key: 'total_spent', label: 'مصرف' },
   { key: 'total_rewards', label: 'پاداش‌ها' },
@@ -1250,6 +1303,7 @@ const pointEntryColumns = [
 ]
 const walletTransactionColumns = [
   { key: 'kind', label: 'نوع' },
+  { key: 'bucket', label: 'موجودی' },
   { key: 'direction', label: 'جهت' },
   { key: 'amount', label: 'مبلغ' },
   { key: 'balance_after', label: 'مانده' },
@@ -1257,6 +1311,53 @@ const walletTransactionColumns = [
   { key: 'note', label: 'شرح' },
   { key: 'entry_date', label: 'زمان' },
 ]
+const withdrawalColumns = [
+  { key: 'customer_name', label: 'مشتری' },
+  { key: 'amount', label: 'مبلغ' },
+  { key: 'bank_iban', label: 'شبا' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'creation', label: 'زمان' },
+  { key: 'actions', label: 'بررسی' },
+]
+
+async function loadWalletWithdrawalRequests() {
+  withdrawalsLoading.value = true
+  withdrawalsError.value = ''
+  try {
+    const result = await listManagementWalletWithdrawalRequests()
+    withdrawalRequests.value = result?.requests || []
+  } catch (err) {
+    withdrawalRequests.value = []
+    withdrawalsError.value = err?.message || 'درخواست‌های برداشت دریافت نشدند.'
+  } finally {
+    withdrawalsLoading.value = false
+  }
+}
+
+function openWithdrawalReview(request, action) {
+	withdrawalsError.value = ''
+	withdrawalAction.value = { request, action, payment_reference: '', note: '' }
+}
+
+async function saveWithdrawalReview() {
+	if (!withdrawalAction.value || withdrawalReviewSaving.value) return
+	withdrawalReviewSaving.value = true
+	withdrawalsError.value = ''
+	try {
+		await reviewManagementWalletWithdrawalRequest({
+			request_name: withdrawalAction.value.request.name,
+			action: withdrawalAction.value.action,
+			payment_reference: withdrawalAction.value.payment_reference,
+			note: withdrawalAction.value.note,
+		})
+		withdrawalAction.value = null
+		await Promise.all([loadWalletWithdrawalRequests(), loadWallets()])
+	} catch (err) {
+		withdrawalsError.value = err?.message || 'بررسی درخواست انجام نشد.'
+	} finally {
+		withdrawalReviewSaving.value = false
+	}
+}
 
 async function loadWallets() {
   walletsLoading.value = true
@@ -2023,6 +2124,12 @@ onMounted(async () => {
 }
 .popup.wide {
   width: min(860px, 100%);
+}
+.withdrawal-reference-field {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-muted, #6b7a72);
+  font-size: 0.84rem;
 }
 .popup h3 {
   margin: 0;

@@ -1,0 +1,48 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:WDR-{YYYY}-{#####}",
+ "creation": "2026-09-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "wallet",
+  "amount",
+  "bank_iban",
+  "account_holder",
+  "status",
+  "reservation_transaction",
+  "payment_reference",
+  "note",
+  "reviewed_by",
+  "reviewed_at"
+ ],
+ "fields": [
+  {"fieldname": "customer", "fieldtype": "Link", "in_list_view": 1, "label": "Customer", "options": "Customer", "reqd": 1},
+  {"fieldname": "wallet", "fieldtype": "Link", "label": "Wallet", "options": "Restaurant Customer Wallet", "reqd": 1},
+  {"fieldname": "amount", "fieldtype": "Currency", "in_list_view": 1, "label": "Amount", "reqd": 1},
+  {"fieldname": "bank_iban", "fieldtype": "Data", "in_list_view": 1, "label": "IBAN", "reqd": 1},
+  {"fieldname": "account_holder", "fieldtype": "Data", "label": "Account Holder", "reqd": 1},
+  {"fieldname": "status", "fieldtype": "Select", "in_list_view": 1, "label": "Status", "options": "در انتظار بررسی\nپرداخت شد\nرد شد", "default": "در انتظار بررسی", "reqd": 1},
+  {"fieldname": "reservation_transaction", "fieldtype": "Link", "label": "Reservation Transaction", "options": "Restaurant Wallet Transaction"},
+  {"fieldname": "payment_reference", "fieldtype": "Data", "label": "Payment Reference"},
+  {"fieldname": "note", "fieldtype": "Small Text", "label": "Note"},
+  {"fieldname": "reviewed_by", "fieldtype": "Link", "label": "Reviewed By", "options": "User"},
+  {"fieldname": "reviewed_at", "fieldtype": "Datetime", "label": "Reviewed At"}
+ ],
+ "links": [],
+ "modified": "2026-09-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Wallet Withdrawal Request",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"read": 1, "role": "Desk User"}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
