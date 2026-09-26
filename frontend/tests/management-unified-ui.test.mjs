@@ -65,7 +65,7 @@ test('settings hub exposes all seven categories and preserves legacy settings UR
   for (const legacyStage of ['theme', 'page-builder', 'content', 'review', 'general', 'loader']) {
     assert.ok(settingsHub.includes(legacyStage), `legacy ${legacyStage} settings routes must be recognized`)
   }
-  for (const legacyPath of ['/management/site-settings', '/management/pos-profile', '/management/pos-defaults', '/management/users', '/management/print-formats']) {
+  for (const legacyPath of ['/management/site-settings', '/management/pos-profile', '/management/pos-defaults', '/management/users', '/management/user_access', '/management/print-formats']) {
     assert.ok(app.includes(legacyPath), `${legacyPath} must route into the hub`)
   }
   assert.match(siteSettings, /hubMode/)

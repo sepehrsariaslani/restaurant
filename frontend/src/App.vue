@@ -278,7 +278,7 @@ function resolveInitialPage() {
       '/management/pos-defaults', '/management/pos_defaults', '/management/pos-profile', '/management/pos_profile',
       '/management/snappfood', '/management/snapp-food',
       '/management/zarinpal-settings', '/management/zarinpal_settings',
-      '/management/users', '/management/user-access', '/management/user',
+      '/management/users', '/management/user-access', '/management/user_access', '/management/user',
       '/management/print-formats', '/management/print_formats',
     ]
     if (settingsAliases.some((route) => pathname === route || pathname.startsWith(`${route}/`))) return 'management-settings'

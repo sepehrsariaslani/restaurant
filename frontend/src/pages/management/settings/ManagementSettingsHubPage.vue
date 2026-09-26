@@ -103,7 +103,7 @@ function normalizeRoute() {
   if (/\/management\/user(\/|$)/.test(pathname) && !/\/management\/users/.test(pathname)) {
     return { tab: 'access', view: '', entryMode: '', componentKey: 'user-detail' }
   }
-  if (/\/management\/(users|user-access)(\/|$)/.test(pathname)) {
+  if (/\/management\/(users|user-access|user_access)(\/|$)/.test(pathname)) {
     return { tab: 'access', view: '', entryMode: '', componentKey: 'users' }
   }
   if (/\/management\/(home-builder|home_builder)(\/|$)/.test(pathname)) {
