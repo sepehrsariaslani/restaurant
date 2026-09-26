@@ -56,9 +56,23 @@
             <span class="order-status">{{ formatStatus(order.status) }}</span>
           </div>
           <div class="order-card__meta">
-            <span>{{ formatDate(order.created_at || order.transaction_date || order.creation) }}</span>
+            <span class="order-card__date"><CalendarDays :size="15" aria-hidden="true" /> <span>ثبت‌شده در {{ formatDate(order.created_at || order.placed_at || order.transaction_date || order.creation) }}</span></span>
             <span>{{ formatMoney(order.grand_total || order.total || 0, currency) }}</span>
           </div>
+          <div v-if="Array.isArray(order.items) && order.items.length" class="order-card__items" role="group" aria-label="اقلام سفارش">
+            <div class="order-card__items-head">
+              <strong>آیتم‌های سفارش</strong>
+              <small>{{ order.items.length.toLocaleString('fa-IR') }} مورد</small>
+            </div>
+            <ul class="order-card__items-list">
+              <li v-for="(item, index) in order.items" :key="`${item.menu_item || item.title || 'item'}-${index}`">
+                <span class="order-item__name">{{ item.title || item.item_name || item.menu_item || 'محصول' }}</span>
+                <span class="order-item__qty">× {{ Number(item.qty || 0).toLocaleString('fa-IR') }}</span>
+                <strong>{{ formatMoney(item.line_total || item.amount || 0, currency) }}</strong>
+              </li>
+            </ul>
+          </div>
+          <p v-else class="order-card__items-empty">جزئیات اقلام این سفارش در دسترس نیست.</p>
           <div class="order-card__footer">
             <span>{{ order.channel || order.delivery_mode || 'آنلاین' }}</span>
             <span class="order-card__more">مشاهده جزئیات <ChevronLeft :size="16" /></span>
@@ -78,7 +92,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ChevronLeft, ReceiptText, RefreshCcw } from 'lucide-vue-next'
+import { CalendarDays, ChevronLeft, ReceiptText, RefreshCcw } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import { getCustomerOrders } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
@@ -155,21 +169,29 @@ onMounted(() => {
 
 .hero-summary__item {
   padding: 0.85rem 0.95rem;
-  background: rgb(255 255 255 / 0.1);
-  border-color: rgb(255 255 255 / 0.12);
-  color: var(--ds-color-action-primary-foreground, #fff);
+  background: var(--ds-color-surface-raised);
+  border: 1px solid var(--ds-color-border);
+  border-inline-start: 3px solid var(--ds-color-action-accent);
+  color: var(--ds-color-text-primary);
   box-shadow: none;
 }
 
 .hero-summary__item small {
   display: block;
-  color: color-mix(in srgb, var(--ds-color-action-primary-foreground, #fff) 70%, transparent);
+  color: var(--ds-color-text-muted);
 }
 
 .hero-summary__item strong {
   display: block;
   margin-top: 0.3rem;
   font-size: 0.96rem;
+  color: var(--ds-color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.hero-summary__item:nth-child(2) strong {
+  direction: ltr;
+  text-align: right;
 }
 
 .stats-grid {
@@ -204,6 +226,7 @@ onMounted(() => {
   padding: 1rem;
   color: inherit;
   text-decoration: none;
+  border-color: color-mix(in srgb, var(--ds-color-action-accent) 24%, var(--ds-color-border));
 }
 
 .order-card__top,
@@ -231,8 +254,8 @@ onMounted(() => {
 .order-status {
   padding: 0.34rem 0.6rem;
   border-radius: 999px;
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  color: var(--accent-green);
+  background: var(--ds-color-action-accent-soft);
+  color: var(--ds-color-action-accent-foreground);
   font-size: 0.74rem;
   font-weight: 800;
   white-space: nowrap;
@@ -244,10 +267,86 @@ onMounted(() => {
   font-size: 0.82rem;
 }
 
+.order-card__date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.order-card__date svg {
+  flex: 0 0 auto;
+  color: var(--ds-color-action-accent);
+}
+
+.order-card__items {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-muted);
+  border-inline-start: 3px solid var(--ds-color-action-accent);
+}
+
+.order-card__items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+  color: var(--ds-color-text-primary);
+  font-size: 0.84rem;
+}
+
+.order-card__items-head small {
+  color: var(--ds-color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.order-card__items-list {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-card__items-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--ds-color-border);
+  font-size: 0.8rem;
+}
+
+.order-item__name {
+  min-width: 0;
+  color: var(--ds-color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.order-item__qty {
+  color: var(--ds-color-text-muted);
+  white-space: nowrap;
+}
+
+.order-card__items-list li strong {
+  color: var(--ds-color-text-secondary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.order-card__items-empty {
+  margin: 0.75rem 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: 0.78rem;
+}
+
 .order-card__footer {
   margin-top: 0.8rem;
   padding-top: 0.8rem;
-  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.08);
+  border-top: 1px solid var(--ds-color-border);
   color: var(--text-secondary);
   font-size: 0.82rem;
   font-weight: 700;
@@ -257,6 +356,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.28rem;
+  color: var(--ds-color-action-accent-foreground);
+}
+
+.order-card__more svg {
+  color: var(--ds-color-action-accent);
 }
 
 .empty-cta {

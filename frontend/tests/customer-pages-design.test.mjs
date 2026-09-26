@@ -40,6 +40,19 @@ test('customer wallet separates withdrawable funds from purchase-only cashback',
   assert.match(management, /رد و بازگرداندن موجودی/)
 })
 
+test('customer order history shows order dates and item lines on warm readable surfaces', () => {
+  const page = source('../src/pages/CustomerOrdersPage.vue')
+  const backend = readFileSync(new URL('../../restaurant/api.py', import.meta.url), 'utf8')
+  const customerOrders = backend.slice(backend.indexOf('def get_customer_orders('), backend.indexOf('def get_customer_profile('))
+
+  assert.match(page, /v-for="\(item, index\) in order\.items"/)
+  assert.match(page, /order\.created_at \|\| order\.placed_at/)
+  assert.match(page, /var\(--ds-color-text-primary\)/)
+  assert.match(page, /var\(--ds-color-action-accent\)/)
+  assert.match(customerOrders, /order\["created_at"\] = order\.get\("placed_at"\)/)
+  assert.match(customerOrders, /order\["items"\] = \[/)
+})
+
 test('customer branches exclude non-company locations and handle missing media and map URLs', () => {
   const page = source('../src/pages/CustomerBranchesPage.vue')
 

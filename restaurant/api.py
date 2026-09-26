@@ -11530,7 +11530,19 @@ def get_customer_orders(mobile=None, limit=50, start=0, customer_token=None):
 	orders = []
 	for row in rows:
 		try:
-			orders.append(_get_sales_order_payload(row.name).get("order"))
+			payload = _get_sales_order_payload(row.name)
+			order = payload.get("order") or {}
+			order["created_at"] = order.get("placed_at") or str(row.get("creation") or "")
+			order["items"] = [
+				{
+					"menu_item": item.get("menu_item") or "",
+					"title": item.get("title") or item.get("menu_item") or "",
+					"qty": flt(item.get("qty") or 0),
+					"line_total": flt(item.get("line_total") or 0),
+				}
+				for item in (payload.get("items") or [])
+			]
+			orders.append(order)
 		except Exception:
 			continue
 	return {"orders": [o for o in orders if o]}
