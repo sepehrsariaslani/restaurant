@@ -16,6 +16,9 @@ const products = source('../src/pages/management/catalog/ManagementProductsPage.
 const customers = source('../src/pages/management/customers/ManagementCustomersPage.vue')
 const orders = source('../src/pages/management/sales/ManagementOrdersPage.vue')
 const reservations = source('../src/pages/management/customers/ManagementReservationsPage.vue')
+const branches = source('../src/pages/management/operations/ManagementBranchesPage.vue')
+const couriers = source('../src/pages/management/operations/ManagementCouriersPage.vue')
+const reports = source('../src/pages/management/finance/ManagementReportsIndexPage.vue')
 const saveBar = source('../src/components/management/notion/NotionSaveBar.vue')
 const viewSystem = source('../src/utils/viewSystem.js')
 
@@ -31,8 +34,8 @@ test('management pages share a responsive semantic scaffold inside the common wo
   assert.match(layout, /max-width: 1440px/)
 })
 
-test('reusable collection toolbar powers product, customer, order, and reservation collections', () => {
-  for (const [name, page] of Object.entries({ products, customers, orders, reservations })) {
+test('reusable collection toolbar powers the main sales and operations collections', () => {
+  for (const [name, page] of Object.entries({ products, customers, orders, reservations, branches, couriers, reports })) {
     assert.match(page, /ManagementCollectionToolbar/, `${name} must use the shared collection toolbar`)
   }
   assert.match(toolbar, /update:search/)
@@ -41,6 +44,15 @@ test('reusable collection toolbar powers product, customer, order, and reservati
   assert.match(toolbar, /primaryLabel/)
   assert.match(toolbar, /min-height: 44px/)
   assert.match(toolbar, /max-width: 760px/)
+})
+
+test('branch and report collections search real data fields and keep the report description contract aligned', () => {
+  assert.match(branches, /:rows="filteredBranches"/)
+  assert.match(branches, /const filteredBranches = computed/)
+  assert.match(couriers, /@search="loadCouriers"/)
+  assert.match(reports, /description: desc/)
+  assert.match(reports, /:rows="filteredReports"/)
+  assert.match(reports, /report\.description/)
 })
 
 test('settings hub exposes all seven categories and preserves legacy settings URLs', () => {

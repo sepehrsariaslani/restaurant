@@ -1,9 +1,14 @@
 <template>
   <ManagementPageScaffold title="گزارش‌های مدیریتی" subtitle="انتخاب سریع نوع گزارش با جدول مشترک و مسیر جزئیات">
     <ManagementSurfaceCard tone="soft">
+      <ManagementCollectionToolbar
+        v-model:search="search"
+        search-label="جستجوی گزارش‌ها"
+        search-placeholder="نام گزارش یا توضیحات..."
+      />
       <ManagementListView
         :columns="reportColumns"
-        :rows="reports"
+        :rows="filteredReports"
         row-key="key"
         :row-clickable="true"
         @row-click="openReport"
@@ -24,7 +29,9 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 
@@ -69,7 +76,14 @@ const reports = [
   { key: 'branch-performance', title: 'عملکرد شعب', desc: 'مقایسه فروش و رشد شعب در بازه' },
   { key: 'vendor-sales', title: 'فروش غرفه‌ها', desc: 'فروش و کمیسیون غرفه‌داران و همکاران' },
   { key: 'receipt-payment-balance', title: 'تراز دریافت و پرداخت', desc: 'جریان نقد، بانک و آمار دریافتی‌ها' },
-]
+].map(({ desc, ...report }) => ({ ...report, description: desc }))
+
+const search = ref('')
+const filteredReports = computed(() => {
+  const query = search.value.trim().toLocaleLowerCase('fa-IR')
+  if (!query) return reports
+  return reports.filter((report) => `${report.title} ${report.description}`.toLocaleLowerCase('fa-IR').includes(query))
+})
 
 function openReport(row) {
   if (row?.key) window.location.href = `/management/reports/${encodeURIComponent(row.key)}`

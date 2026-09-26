@@ -374,7 +374,7 @@ test('survey questions and responses use shared list patterns', () => {
 
 test('branch management uses the shared responsive list pattern and keeps native actions', () => {
   assert.match(branchesSource, /ManagementListView/)
-  assert.match(branchesSource, /:rows="branches"/)
+  assert.match(branchesSource, /:rows="(?:branches|filteredBranches)"/)
   assert.match(branchesSource, /branchColumns/)
   assert.match(branchesSource, /openForm\(row\)/)
   assert.match(branchesSource, /toggleBranch\(row\)/)

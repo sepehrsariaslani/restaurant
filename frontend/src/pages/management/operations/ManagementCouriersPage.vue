@@ -56,15 +56,15 @@
     <section v-if="activeTab === 'couriers'" class="panel-grid">
       <div class="courier-workbench">
         <ManagementSurfaceCard title="لیست پیک‌ها" subtitle="برای دیدن و ویرایش جزئیات، یک پیک را انتخاب کنید">
-          <div class="toolbar-row">
-            <input
-              v-model.trim="courierSearch"
-              class="input"
-              placeholder="جستجو بر اساس نام، کد، موبایل، پلاک یا زون"
-              @keyup.enter="loadCouriers"
-            />
-            <button class="secondary-btn" type="button" @click="resetCourierForm">پیک جدید</button>
-          </div>
+          <ManagementCollectionToolbar
+            v-model:search="courierSearch"
+            search-label="جستجوی پیک‌ها"
+            search-placeholder="نام، کد، موبایل، پلاک یا زون..."
+            primary-label="پیک جدید"
+            :disabled="loading"
+            @search="loadCouriers"
+            @primary="resetCourierForm"
+          />
 
           <ManagementListView
             :columns="courierColumns"
@@ -435,6 +435,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementDataTable from '@/components/management/ManagementDataTable.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'

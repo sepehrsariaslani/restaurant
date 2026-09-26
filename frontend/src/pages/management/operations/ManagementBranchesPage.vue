@@ -2,7 +2,6 @@
   <ManagementPageScaffold title="شعب" subtitle="گزارش تجمیعی و تفکیکی هر شعبه، فروش/مشتری امروز و انتقال مشتری بین شعب">
     <template #actions>
       <button type="button" class="secondary-btn" @click="reload" :disabled="loading">{{ loading ? '...' : 'بروزرسانی' }}</button>
-      <button type="button" class="primary-btn" @click="openForm()">شعبه جدید</button>
     </template>
 
     <div class="totals-grid">
@@ -12,17 +11,28 @@
     </div>
 
     <ManagementSurfaceCard title="گزارش تفکیکی شعب" subtitle="فروش، سفارش و مشتریان هر شعبه — گزارش عملکرد کامل در مرکز گزارش‌ها">
-      <div class="toolbar">
-        <label class="check-row"><input type="checkbox" v-model="showActiveOnly" @change="reload" /> فقط شعب فعال</label>
-        <a class="link-btn" href="/management/reports/branch-performance">گزارش عملکرد شعب (BI)</a>
-      </div>
+      <ManagementCollectionToolbar
+        v-model:search="branchSearch"
+        search-label="جستجوی شعب"
+        search-placeholder="نام، شرکت، اختصار، آدرس یا تلفن شعبه..."
+        primary-label="شعبه جدید"
+        :disabled="loading"
+        @primary="openForm()"
+      >
+        <template #filters>
+          <label class="check-row"><input type="checkbox" v-model="showActiveOnly" @change="reload" /> فقط شعب فعال</label>
+        </template>
+        <template #secondary>
+          <a class="link-btn" href="/management/reports/branch-performance">گزارش عملکرد شعب (BI)</a>
+        </template>
+      </ManagementCollectionToolbar>
       <p class="muted" v-if="loading">در حال دریافت...</p>
       <p class="error" v-if="error">{{ error }}</p>
       <p class="success-msg" v-if="message">{{ message }}</p>
       <ManagementListView
         v-if="!loading"
         :columns="branchColumns"
-        :rows="branches"
+        :rows="filteredBranches"
         row-key="name"
         :row-clickable="true"
         @row-click="openForm"
@@ -105,6 +115,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import AddressPickerMap from '@/components/checkout/AddressPickerMap.vue'
 import {
@@ -122,6 +133,7 @@ const loading = ref(false)
 const error = ref('')
 const message = ref('')
 const showActiveOnly = ref(false)
+const branchSearch = ref('')
 const form = ref(null)
 const branchLocation = computed({
   get: () => ({ lat: form.value?.restaurant_branch_lat ?? '', lng: form.value?.restaurant_branch_lng ?? '' }),
@@ -152,6 +164,13 @@ const branchColumns = [
 ]
 
 const activeBranches = computed(() => branches.value.filter((b) => b.is_active))
+const filteredBranches = computed(() => {
+  const query = branchSearch.value.trim().toLocaleLowerCase('fa-IR')
+  if (!query) return branches.value
+  return branches.value.filter((branch) => [
+    branch.name, branch.label, branch.company_name, branch.abbr, branch.address, branch.phone,
+  ].filter(Boolean).join(' ').toLocaleLowerCase('fa-IR').includes(query))
+})
 
 function formatQty(v) { return Number(v || 0).toLocaleString('fa-IR') }
 function formatMoneyValue(v) { return formatMoneyUtil(Number(v || 0)) }
