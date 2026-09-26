@@ -139,6 +139,27 @@
             </ManagementSurfaceCard>
           </section>
 
+          <ManagementSurfaceCard title="نوار فهرست مدیریت" subtitle="جستجو و اقدام اصلی در همه مجموعه‌های مناسب از یک جزء مشترک استفاده می‌کنند.">
+            <ManagementCollectionToolbar
+              v-model:search="collectionPreviewSearch"
+              search-label="جستجوی نمونه فهرست"
+              search-placeholder="نام مشتری، کالا یا سند..."
+              primary-label="رکورد جدید"
+              @search="collectionPreviewMessage = collectionPreviewSearch ? `جستجو: ${collectionPreviewSearch}` : 'همه رکوردها'"
+              @primary="collectionPreviewMessage = 'اقدام نمونه اجرا شد'"
+            >
+              <template #filters>
+                <select class="input ds-toolbar-filter" aria-label="فیلتر نمونه">
+                  <option>همه وضعیت‌ها</option>
+                  <option>فعال</option>
+                  <option>پیش‌نویس</option>
+                </select>
+              </template>
+              <template #secondary><span class="ds-toolbar-note">فیلترهای اضافه اختیاری‌اند</span></template>
+              <template #below><p v-if="collectionPreviewMessage" class="ds-toolbar-message" role="status">{{ collectionPreviewMessage }}</p></template>
+            </ManagementCollectionToolbar>
+          </ManagementSurfaceCard>
+
           <ManagementSurfaceCard title="خودرو مشتری" subtitle="نمونهٔ نمایشی بدون ذخیره؛ فرم مشترک حساب و تحویل درب ماشین">
             <CustomerVehiclePicker v-model="vehiclePreview" />
           </ManagementSurfaceCard>
@@ -294,6 +315,7 @@ import { computed, ref } from 'vue'
 import { CircleHelp, Package, Search, Sparkles } from 'lucide-vue-next'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementEditableTable from '@/components/management/ManagementEditableTable.vue'
 import ManagementSmartDataTable from '@/components/management/ManagementSmartDataTable.vue'
 import ManagementProductReadinessPanel from '@/components/management/catalog/ManagementProductReadinessPanel.vue'
@@ -315,6 +337,8 @@ const previewMode = ref('light')
 const selectedPresetId = ref(themePresets[0]?.id || 'nooshyar-brown')
 const previewSettings = ref({ ...defaultThemeSettings })
 const patternSearch = ref('')
+const collectionPreviewSearch = ref('')
+const collectionPreviewMessage = ref('')
 const editableTablePreviewRows = ref([
   { name: 'کاسه نودل بیف', amount: 285000, status: 'فعال' },
   { name: 'برگر مخصوص', amount: 320000, status: 'پیش‌نویس' },

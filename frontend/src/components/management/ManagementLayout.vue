@@ -120,13 +120,15 @@
 			</header>
 
 			<!-- Mobile Content -->
-			<main class="mobile-main module-content">
+			<main class="mobile-main module-content" :class="{ 'mobile-main--fullbleed': isPosPage || isKitchenPage }">
 				<div v-if="authLoading" class="auth-gate-card">
 					<ManagementBearLoader :size="188" :brand="brandName" label="در حال همگام‌سازی نشست..." />
 					<p class="auth-gate-title">در حال بروزرسانی نشست کاربر...</p>
 					<p class="auth-card-muted">کمی صبر کنید.</p>
 				</div>
-				<slot v-else />
+				<div v-else class="management-workspace" :class="{ 'management-workspace--fullbleed': isPosPage || isKitchenPage }">
+					<slot />
+				</div>
 			</main>
 
 			<!-- Mobile Sidebar Overlay -->
@@ -279,7 +281,9 @@
 						<p class="auth-card-muted">کمی صبر کنید.</p>
 					</section>
 
-					<slot v-else />
+					<div v-else class="management-workspace" :class="{ 'management-workspace--fullbleed': isPosPage || isKitchenPage }">
+						<slot />
+					</div>
 				</main>
 			</div>
 		</div>
@@ -819,11 +823,11 @@ const navLinks = computed(() => {
 		},
 		{
 			key: "management-settings",
-			label: "تنظیمات پنل",
+			label: "تنظیمات",
 			shortLabel: "تنظیمات",
-			caption: "تم، رنگ و ظاهر",
+			caption: "سایت، ظاهر، فروش و دسترسی",
 			iconComponent: SlidersIcon,
-			url: "/management/site-settings?stage=theme",
+			url: "/management/settings",
 			group: "settings",
 		},
 		{
@@ -837,11 +841,23 @@ const navLinks = computed(() => {
 		},
 	];
 
+	// Child settings stay available through the tabbed settings hub.
+	const settingsChildKeys = new Set([
+		"management-pos-profile",
+		"management-pos-defaults",
+		"management-users",
+		"management-print-formats",
+		"management-home-builder",
+		"management-site-settings",
+		"management-snappfood",
+	]);
+	const visibleLinks = links.filter((link) => !settingsChildKeys.has(link.key));
+
 	// Hide BOM/formula section from non-staff users
 	if (!isStaff) {
-		return links.filter((link) => link.key !== "management-boms");
+		return visibleLinks.filter((link) => link.key !== "management-boms");
 	}
-	return links;
+	return visibleLinks;
 });
 
 const menuGroups = computed(() => [
@@ -2058,20 +2074,30 @@ onBeforeUnmount(() => {
 		overflow-y: auto;
 	}
 
+	.mobile-main--fullbleed { padding: 0; }
+
+	.management-workspace {
+		width: 100%;
+		max-width: 1440px;
+		min-width: 0;
+		margin-inline: auto;
+		display: grid;
+		align-content: start;
+		gap: var(--ds-space-4, 1rem);
+	}
+
+	.management-workspace--fullbleed { display: block; max-width: none; }
+
 	.desktop-main {
 		flex: 1;
 		padding: 1rem 1.1rem;
 		overflow-y: auto;
 	}
 
-	.desktop-main > :deep(*) {
-		max-width: 1400px;
-		margin-inline: auto;
-	}
+	.desktop-main > :deep(.management-workspace) { max-width: 1440px; margin-inline: auto; }
 
 	.desktop-main--fullbleed { padding: 0; }
-	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
-	.desktop-main--fullbleed > :deep(*) { max-width: 100%; margin: 0; }
+	.desktop-main--fullbleed > :deep(.management-workspace) { max-width: 100%; margin: 0; }
 
 	
 		

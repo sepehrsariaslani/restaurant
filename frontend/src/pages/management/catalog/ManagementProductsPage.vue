@@ -10,25 +10,15 @@
   >
     <template #toolbar>
     <ManagementSurfaceCard tone="accent" class="products-filter-card">
-      <!-- تولبار تمیز: سرچ + کالای جدید -->
-      <div class="toolbar toolbar--clean">
-        <div class="toolbar-search">
-          <Search :size="15" class="toolbar-search-icon" />
-          <input
-            class="input toolbar-search-input"
-            v-model="search"
-            placeholder="جستجو محصول..."
-            @keydown.enter.prevent="loadProducts"
-          />
-          <button v-if="search" type="button" class="toolbar-search-clear" @click="search = ''; loadProducts()">
-            <X :size="13" />
-          </button>
-        </div>
-        <button class="primary-btn toolbar-new-btn" type="button" @click="openCreatePopup">
-          <Plus :size="15" /> کالای جدید
-        </button>
-      </div>
-
+      <ManagementCollectionToolbar
+        v-model:search="search"
+        search-label="جستجو در کالاها"
+        search-placeholder="نام، کد یا دسته کالا..."
+        primary-label="کالای جدید"
+        @search="loadProducts"
+        @primary="openCreatePopup"
+      >
+      <template #below>
       <div class="notion-view-bar">
         <NotionViewTabs
           :views="viewSys.views.value"
@@ -61,11 +51,12 @@
             :visible="viewSys.isCurrentViewDirty.value"
             :view-name="viewSys.currentView.value?.name"
             @save-self="viewSys.saveForSelf()"
-            @save-all="viewSys.saveForEveryone()"
             @discard="viewSys.resetView(viewSys.currentViewId.value)"
           />
         </div>
       </div>
+      </template>
+      </ManagementCollectionToolbar>
     </ManagementSurfaceCard>
     </template>
 
@@ -530,6 +521,7 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import NotionViewTabs from '@/components/management/notion/NotionViewTabs.vue'

@@ -10,23 +10,20 @@
       <button type="button" class="nsb-btn" @click="$emit('save-self')">
         <User :size="13" /> ذخیره برای خودم
       </button>
-      <button type="button" class="nsb-btn nsb-btn--success" @click="$emit('save-all')">
-        <Users :size="13" /> ذخیره برای همه
-      </button>
       <button type="button" class="nsb-btn nsb-btn--ghost" @click="$emit('discard')">انصراف</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { Save, User, Users } from "lucide-vue-next";
+import { Save, User } from "lucide-vue-next";
 
 defineProps({
   visible: { type: Boolean, default: false },
   viewName: { type: String, default: "" },
 });
 
-defineEmits(["save-self", "save-all", "discard"]);
+defineEmits(["save-self", "discard"]);
 </script>
 
 <style scoped>
@@ -85,17 +82,6 @@ defineEmits(["save-self", "save-all", "discard"]);
 .nsb-btn:hover {
   border-color: color-mix(in srgb, var(--mg-primary) 40%, var(--mg-border-light));
   color: var(--mg-primary);
-}
-
-.nsb-btn--success {
-  background: var(--mg-success);
-  border-color: var(--mg-success);
-  color: #fff;
-}
-
-.nsb-btn--success:hover {
-  background: color-mix(in srgb, var(--mg-success) 85%, #000);
-  color: #fff;
 }
 
 .nsb-btn--ghost {

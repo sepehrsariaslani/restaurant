@@ -219,12 +219,6 @@ export function useViewSystem({ storageKey, defaultViews = null }) {
     markSaved(id || currentViewId.value);
   }
 
-  // ذخیره برای همه — در این محیط local است ولی snapshot را به‌روز می‌کند
-  function saveForEveryone(id) {
-    markSaved(id || currentViewId.value);
-    persist();
-  }
-
   function addView(name = "") {
     const view = createDefaultView({
       name: String(name || "").trim() || `نمای ${views.value.length + 1}`,
@@ -302,7 +296,6 @@ export function useViewSystem({ storageKey, defaultViews = null }) {
     isCurrentViewDirty,
     isViewDirty,
     saveForSelf,
-    saveForEveryone,
     addView,
     duplicateView,
     renameView,

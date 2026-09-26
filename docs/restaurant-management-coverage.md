@@ -187,17 +187,18 @@
 | صفحه | مسیر | منبع | ترکیب UI | فهرست/جزئیات | وضعیت |
 |---|---|---|---|---|---|
 | `ManagementUsersPage` | `/management/users` | ERPNext User/Role | Scaffold/Card | list-detail اختصاصی دسترسی | native ownership حفظ شده |
-| `ManagementSiteSettingsPage` | `/management/site-settings` | Restaurant site settings + page builder | Scaffold/Card/List + builder workspace | تب‌های سایت، theme و builder | بررسی منبع؛ API حفظ شده |
+| `ManagementSiteSettingsPage` | `/management/settings` و مسیرهای قبلی سایت | Restaurant site settings + page builder | settings hub + workflow صفحات سایت | تنظیمات سایت، ظاهر، محتوا و انتشار | در هاب تب‌دار؛ API و پیش‌نویس/انتشار حفظ شده |
+| `ManagementPosShiftSettingsPage` | `/management/settings?tab=sales&view=shift` | Restaurant POS shift settings API | Scaffold/Card در هاب فروش | تنظیم افتتاحیه و اختتامیه | منتقل شد از داشبورد؛ API حفظ شده |
 | `ManagementPrintFormatsPage` | `/management/print-formats` | ERPNext Print Format | Scaffold/Card | gallery/preview اختصاصی | بررسی منبع؛ preview و print حفظ شده |
 | `ManagementHelpPage` | `/management/help` | navigation/help content | Scaffold/Card | راهنما و quick links | بررسی منبع؛ read-only |
-| `ManagementSettingsPage` | internal compatibility | تنظیمات قدیمی مدیریت | Scaffold | wrapper سابق theme/settings | compatibility؛ مسیر active از SiteSettings عبور می‌کند |
+| `ManagementSettingsPage` | internal compatibility | تنظیمات قدیمی مدیریت | compatibility wrapper | مسیرهای قدیمی به هاب تنظیمات می‌رسند | wrapper برای مصرف‌کننده‌های قدیمی باقی است |
 | `ManagementZarinpalSettingsPage` | `/management/zarinpal-settings` | قرارداد backend اختصاصی هنوز موجود نیست | صفحهٔ وضعیت ساده | بدون فرم جعلی | placeholder آگاهانه؛ تا قرارداد API واقعی تغییر نمی‌کند |
 
 ### builder، dashboard و design-system
 
 | صفحه | مسیر | منبع | ترکیب UI | فهرست/جزئیات | وضعیت |
 |---|---|---|---|---|---|
-| `ManagementDashboardPage` | `/management` | dashboard/report APIs Restaurant/ERPNext | Scaffold/Card + DataTable | KPI، هشدار، مشتری، سفارش و چیدمان | بررسی منبع؛ dashboard عمومی مدیریت |
+| `ManagementDashboardPage` | `/management` | dashboard/report APIs Restaurant/ERPNext | Scaffold/Card + DataTable | KPI، هشدار، مشتری، سفارش و چیدمان | فرم تنظیمات شیفت و منو از داشبورد جدا شد |
 | `ManagementBuilderTemplatesPage` | `/management/builder-templates` | Restaurant customization templates | Scaffold/Card + DataTable | فهرست قالب‌ها → ویرایش | بررسی منبع؛ API حفظ شده |
 | `ManagementBuilderTemplatePage` | `/management/builder-template/edit/:id` یا `new` | Restaurant customization templates | Scaffold/Card | فرم detail و steps | بررسی منبع؛ save/delete حفظ شده |
 | `ManagementHomeBuilderPage` | internal compatibility | Restaurant page layout | builder workspace اختصاصی | drag/drop block editor | legacy compatibility؛ مسیر فعال از SiteSettings عبور می‌کند |
@@ -255,3 +256,12 @@
 - restart سرویس‌های web/socketio/worker: موفق.
 - browser smoke احراز‌شده: مسیرهای اصلی تمام ماژول‌ها، aliasهای مستقیم، صفحات create/detail و گزارش‌های `sales-summary`، `menu-engineering`، `tax-reconciliation`، `branch-performance`، `vendor-sales` و `receipt-payment-balance` بدون 404 یا خطای runtime تأیید شدند.
 - Graphify/remote update: اجرا نشد؛ خارج از دامنهٔ این ممیزی باقی مانده است.
+
+## یکپارچه‌سازی قالب مدیریت — ۱۴۰۵/۰۷/۰۴
+
+- پوستهٔ همهٔ مسیرهای مدیریت، محتوای صفحه را داخل workspace با عرض خوانا و فاصلهٔ یکسان قرار می‌دهد؛ POS و آشپزخانه همچنان برای نمایش عملیاتی تمام‌عرض هستند.
+- `ManagementPageScaffold` عنوان اصلی، اقدام‌ها، breadcrumb، نوار فهرست و پیام وضعیت را با توکن‌های دیزاین سیستم عرضه می‌کند. `ManagementSurfaceCard` هم از سطح‌ها و رنگ‌های semantic مشترک استفاده می‌کند.
+- `ManagementCollectionToolbar` در فهرست کالا، مشتریان، سفارش‌ها و رزروها جستجو، فیلترها، اقدام‌های فرعی و اقدام اصلی را یک‌جا و واکنش‌گرا نگه می‌دارد. مرجع زندهٔ این الگو در صفحهٔ دیزاین سیستم اضافه شده است.
+- `/management/settings` هفت تب سایت، ظاهر، محتوا و انتشار، فروش و صندوق، اتصال و پرداخت، دسترسی و چاپ دارد. URLهای قبلی تنظیمات به تب/مرحلهٔ متناظر می‌رسند. تنظیم شیفت صندوق از داشبورد به صفحهٔ تنظیمات POS منتقل شد و API موجود را به کار می‌گیرد؛ پیش‌نویس تم و انتشار سایت از مسیر قبلی خود استفاده می‌کنند.
+- گزینهٔ گمراه‌کنندهٔ «ذخیره برای همه» حذف شد؛ ذخیرهٔ نمای کاربر با متن «ذخیره برای خودم» باقی است.
+- این مرحله تغییر زیرساخت یا schema ندارد. build، restart، migrate، Graphify و بررسی زندهٔ احراز‌شده عمداً اجرا نشده‌اند. آزمون‌های source و parse کامپوننت‌ها وضعیت رابط و قراردادها را پوشش می‌دهند، نه فعال‌شدن آن روی سایت.

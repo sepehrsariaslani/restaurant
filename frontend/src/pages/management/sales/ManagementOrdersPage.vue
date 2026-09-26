@@ -1,65 +1,25 @@
 <template>
-  <ManagementPageScaffold title="" subtitle="" :show-title="false">
-    
-    <div v-if="!detailOnly" class="workspace-header">
-      <div class="header-intro">
-        <h1 class="page-title">مدیریت سفارش‌ها</h1>
-        <p class="page-subtitle">پایش لحظه‌ای سفارش‌ها، وضعیت پرداخت و پیشرفت تولید</p>
-      </div>
-
-      <div class="header-actions">
-        <div class="search-box">
-          <Search :size="18" class="search-icon" />
-          <input
-            v-model.trim="search"
-            class="search-input"
-            placeholder="جستجو (کد سفارش، مشتری، موبایل...)"
-            @keyup.enter="loadOrders"
-          />
-        </div>
-        <button class="refresh-btn" type="button" :disabled="loading" @click="loadOrders" title="بروزرسانی اطلاعات">
-          <RefreshCcw :size="18" :class="{ 'is-spinning': loading }" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Composed KPI Strip -->
-    <div v-if="!detailOnly" class="kpi-strip">
-      <div class="kpi-hero">
-        <div class="kpi-hero-val">{{ toFaDigits(orders.length) }}</div>
-        <div class="kpi-hero-label">کل سفارش‌ها</div>
-      </div>
-      <div class="kpi-tiles">
-        <div class="kpi-tile">
-          <span class="kpi-dot new"></span>
-          <div class="kpi-info">
-            <span class="kpi-val">{{ toFaDigits(getTabCount('new')) }}</span>
-            <span class="kpi-label">جدید</span>
-          </div>
-        </div>
-        <div class="kpi-tile">
-          <span class="kpi-dot preparing"></span>
-          <div class="kpi-info">
-            <span class="kpi-val">{{ toFaDigits(getTabCount('preparing')) }}</span>
-            <span class="kpi-label">در حال تولید</span>
-          </div>
-        </div>
-        <div class="kpi-tile">
-          <span class="kpi-dot ready"></span>
-          <div class="kpi-info">
-            <span class="kpi-val">{{ toFaDigits(getTabCount('ready')) }}</span>
-            <span class="kpi-label">آماده تحویل</span>
-          </div>
-        </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi-tile">
-          <div class="kpi-info">
-            <span class="kpi-val">{{ toFaDigits(getTabCount('unpaid')) }}</span>
-            <span class="kpi-label">پرداخت نشده</span>
-          </div>
-        </div>
-      </div>
-    </div>
+  <ManagementPageScaffold :title="detailOnly ? '' : 'مدیریت سفارش‌ها'" :subtitle="detailOnly ? '' : 'پایش سفارش‌ها، پرداخت و پیشرفت آماده‌سازی'">
+    <template v-if="!detailOnly" #toolbar>
+      <ManagementCollectionToolbar
+        v-model:search="search"
+        search-label="جستجو در سفارش‌ها"
+        search-placeholder="کد سفارش، نام مشتری یا شماره همراه..."
+        :disabled="loading"
+        @search="loadOrders"
+      >
+        <template #filters>
+          <button class="floor-chip" :class="{ active: !filters.source }" type="button" @click="filters.source = ''; loadOrders()">همه منابع</button>
+          <button class="floor-chip" :class="{ active: filters.source === 'web' }" type="button" @click="filters.source = 'web'; loadOrders()">آنلاین</button>
+          <button class="floor-chip" :class="{ active: filters.source === 'table' }" type="button" @click="filters.source = 'table'; loadOrders()">سالن</button>
+        </template>
+        <template #secondary>
+          <button class="secondary-btn" type="button" :disabled="loading" @click="loadOrders" title="بروزرسانی اطلاعات">
+            <RefreshCcw :size="16" :class="{ 'is-spinning': loading }" /> بروزرسانی
+          </button>
+        </template>
+      </ManagementCollectionToolbar>
+    </template>
 
     <div v-if="!detailOnly" class="workspace-tabs-container">
       <div class="workspace-tabs" role="tablist">
@@ -87,13 +47,6 @@
     <template v-if="!loading || orders.length">
       <section class="workspace-floor">
         <div v-if="!detailOnly" class="floor-grid-area">
-          <div class="floor-filters">
-            <span class="floor-filter-label">فیلتر منبع:</span>
-            <button class="floor-chip" :class="{ active: !filters.source }" @click="filters.source = ''; loadOrders()">همه</button>
-            <button class="floor-chip" :class="{ active: filters.source === 'web' }" @click="filters.source = 'web'; loadOrders()">آنلاین</button>
-            <button class="floor-chip" :class="{ active: filters.source === 'table' }" @click="filters.source = 'table'; loadOrders()">سالن</button>
-          </div>
-
           <ManagementListView
             :columns="orderColumns"
             :rows="displayOrders"
@@ -264,7 +217,8 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { AlertCircle, CheckCheck, ClipboardList, Clock3, CreditCard, FileText, RefreshCcw, Search, Store, X } from 'lucide-vue-next'
+import { AlertCircle, CheckCheck, ClipboardList, Clock3, CreditCard, FileText, RefreshCcw, Store, X } from 'lucide-vue-next'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'

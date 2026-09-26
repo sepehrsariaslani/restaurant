@@ -1,5 +1,5 @@
 <template>
-  <ManagementPageScaffold title="تنظیمات سایت" subtitle="مدیریت محتوای صفحات عمومی مثل FAQ، درباره ما و اسلایدهای هدر">
+  <ManagementPageScaffold :title="pageTitle" :subtitle="pageSubtitle">
     <ManagementSurfaceCard tone="accent">
       <div class="toolbar">
         <template v-if="!['theme', 'layout'].includes(activeStage)">
@@ -15,7 +15,7 @@
       </div>
     </ManagementSurfaceCard>
 
-    <ManagementSurfaceCard tone="soft" title="فرآیند ویرایش سایت" subtitle="تم را انتخاب کن، ظاهر هر صفحه را مشخص کن، بعد چیدمان و محتوا را نهایی کن.">
+    <ManagementSurfaceCard v-if="!hubMode" tone="soft" title="فرآیند ویرایش سایت" subtitle="تم را انتخاب کن، ظاهر هر صفحه را مشخص کن، بعد چیدمان و محتوا را نهایی کن.">
       <div class="workflow-stages">
         <button
           v-for="stage in workflowStages"
@@ -1501,6 +1501,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  hubMode: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const loading = ref(false)
@@ -1511,6 +1515,15 @@ const activeStage = ref('identity')
 const activeTab = ref('general')
 const activeBuilderPage = ref('home')
 const activeLayoutPanel = ref('builder')
+const hubStageCopy = {
+  identity: ['تنظیمات سایت', 'برند، اطلاعات پایه و تنظیم منوی عمومی'],
+  theme: ['ظاهر و تم', 'رنگ‌ها و هویت بصری سایت مشتریان'],
+  layout: ['چیدمان و کامپوننت‌ها', 'ساختار صفحات عمومی و کنترل‌های بصری'],
+  content: ['محتوا و انتشار', 'مدیریت محتوا، بازبینی و انتشار تغییرات سایت'],
+  review: ['بازبینی و انتشار', 'پیش‌نمایش تغییرات و انتشار نسخهٔ آماده'],
+}
+const pageTitle = computed(() => props.hubMode ? hubStageCopy[activeStage.value]?.[0] || 'تنظیمات سایت' : 'تنظیمات سایت')
+const pageSubtitle = computed(() => props.hubMode ? hubStageCopy[activeStage.value]?.[1] || 'مدیریت تنظیمات سایت' : 'مدیریت محتوای صفحات عمومی مثل FAQ، درباره ما و اسلایدهای هدر')
 
 const workflowStages = [
   { value: 'identity', label: 'هویت سایت', caption: 'برند، متن‌های پایه و Loader' },
@@ -1814,6 +1827,7 @@ function syncSiteSettingsRoute() {
   url.searchParams.delete('tab')
 
   window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  window.dispatchEvent(new Event('restaurant:management-settings-route-change'))
 }
 
 function applyRouteState() {

@@ -11,14 +11,19 @@
     </div>
 
     <ManagementSurfaceCard title="فیلتر رزروها" subtitle="جستجو بر اساس تاریخ، جایگاه و وضعیت">
-      <div class="toolbar">
-        <label class="date-label">از تاریخ<input class="input" type="date" v-model="filters.date_from" @change="loadList" /></label>
-        <label class="date-label">تا تاریخ<input class="input" type="date" v-model="filters.date_to" @change="loadList" /></label>
-        <SearchableDropdown v-model="filters.status" :options="statusOptions" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="loadList" />
-        <SearchableDropdown v-model="filters.table" :options="tableOptions" placeholder="همه جایگاه‌ها" search-placeholder="جستجوی میز یا سالن..." @update:model-value="loadList" />
-        <input class="input" v-model.trim="filters.search" placeholder="جستجوی نام یا موبایل..." @keyup.enter="loadList" />
-        <button type="button" class="secondary-btn" @click="loadList">جستجو</button>
-      </div>
+      <ManagementCollectionToolbar
+        v-model:search="filters.search"
+        search-label="جستجو در رزروها"
+        search-placeholder="نام یا شماره همراه مهمان..."
+        @search="loadList"
+      >
+        <template #filters>
+          <label class="date-label">از تاریخ<input class="input" type="date" v-model="filters.date_from" @change="loadList" /></label>
+          <label class="date-label">تا تاریخ<input class="input" type="date" v-model="filters.date_to" @change="loadList" /></label>
+          <SearchableDropdown v-model="filters.status" :options="statusOptions" placeholder="همه وضعیت‌ها" search-placeholder="جستجوی وضعیت..." @update:model-value="loadList" />
+          <SearchableDropdown v-model="filters.table" :options="tableOptions" placeholder="همه جایگاه‌ها" search-placeholder="جستجوی میز یا سالن..." @update:model-value="loadList" />
+        </template>
+      </ManagementCollectionToolbar>
       <p class="muted hint-line">
         لینک رزرو آنلاین برای مشتریان: <code class="link-code">{{ publicUrl }}</code> —
         یادآوری پیامکی {{ boot.settings?.reminder_hours || 2 }} ساعت قبل از رزرو به‌صورت خودکار ارسال می‌شود (در تنظیمات رزرو).
@@ -97,6 +102,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'

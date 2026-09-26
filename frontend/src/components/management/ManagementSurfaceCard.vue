@@ -34,25 +34,26 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 <style scoped>
 .surface-card {
-  border-radius: 16px;
-  border: 1px solid var(--border, var(--mg-border-light));
-  background: var(--bg-card, #fff);
-  box-shadow: var(--shadow-sm, 0 12px 30px rgb(15 23 42 / 0.05));
+  min-width: 0;
+  border-radius: var(--ds-radius-md, 16px);
+  border: 1px solid var(--ds-color-border, var(--border, var(--mg-border-light)));
+  background: var(--ds-color-surface, var(--bg-card, #fff));
+  box-shadow: var(--ds-shadow-sm, var(--shadow-sm, 0 8px 24px rgb(52 38 31 / 0.06)));
   overflow: visible;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition: border-color var(--ds-motion-fast, 160ms) ease, box-shadow var(--ds-motion-fast, 160ms) ease;
 }
 
 .surface-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.8rem;
+  gap: var(--ds-space-3, .75rem);
+  margin-bottom: var(--ds-space-3, .75rem);
 }
 
 .surface-head h3 {
   margin: 0;
-  color: var(--text-primary, var(--mg-text-main));
+  color: var(--ds-color-text-primary, var(--text-primary, var(--mg-text-main)));
   font-size: 1rem;
   font-weight: 900;
   line-height: 1.45;
@@ -60,24 +61,27 @@ const toneClass = computed(() => `tone-${props.tone || 'base'}`)
 
 .surface-head p {
   margin: 0.2rem 0 0;
-  color: var(--text-muted, var(--mg-text-muted));
+  color: var(--ds-color-text-muted, var(--text-muted, var(--mg-text-muted)));
   font-size: 0.82rem;
   line-height: 1.65;
 }
 
 .tone-soft {
-  background: color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, var(--mg-bg-page)));
+  background: var(--ds-color-surface-muted, color-mix(in srgb, var(--bg-card, #fff) 88%, var(--bg-soft, var(--mg-bg-page))));
 }
 
 .tone-accent {
-  background: linear-gradient(180deg, var(--bg-card, #fff), color-mix(in srgb, var(--bg-card, #fff) 86%, var(--module-50, rgb(139 94 52 / 0.075))));
-  border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.16);
+  background: var(--ds-color-surface, var(--bg-card, #fff));
+  border-color: color-mix(in srgb, var(--ds-color-action-primary, var(--mg-primary)) 28%, var(--ds-color-border, var(--mg-border-light)));
 }
 
 @media (hover: hover) {
   .surface-card:hover {
-    border-color: rgb(var(--palette-deep-sapphire-rgb, 139 94 52) / 0.18);
-    box-shadow: 0 18px 42px rgb(15 23 42 / 0.08);
+    border-color: color-mix(in srgb, var(--ds-color-action-primary, var(--mg-primary)) 38%, var(--ds-color-border, var(--mg-border-light)));
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-card { transition: none; }
 }
 </style>

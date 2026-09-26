@@ -60,7 +60,7 @@
       <ManagementAccountingPage v-else-if="page === 'management-accounting'" />
       <ManagementHelpPage v-else-if="page === 'management-help'" />
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
-      <ManagementSiteSettingsPage v-else-if="page === 'management-settings'" entry-mode="theme-settings" />
+      <ManagementSettingsHubPage v-else-if="page === 'management-settings'" />
       <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
       <ManagementSnappfoodPage v-else-if="page === 'management-snappfood'" />
       <section v-else-if="page === 'management-login'" class="management-login-placeholder"></section>
@@ -215,6 +215,7 @@ import ManagementMenuDesignerPage from './pages/management/catalog/ManagementMen
 import ManagementMenuGroupsPage from './pages/management/catalog/ManagementMenuGroupsPage.vue'
 import ManagementMenuGroupDetailPage from './pages/management/catalog/ManagementMenuGroupDetailPage.vue'
 import ManagementSiteSettingsPage from './pages/management/settings/ManagementSiteSettingsPage.vue'
+import ManagementSettingsHubPage from './pages/management/settings/ManagementSettingsHubPage.vue'
 import ManagementBomsPage from './pages/management/catalog/ManagementBomsPage.vue'
 import ManagementBomDetailPage from './pages/management/catalog/ManagementBomDetailPage.vue'
 import ManagementProductDetailPage from './pages/management/catalog/ManagementProductDetailPage.vue'
@@ -271,6 +272,16 @@ function resolveInitialPage() {
     const variantStudioMode = ['1', 'true', 'yes'].includes(String(params.get('variant_studio') || '').toLowerCase())
 
     if (pathname.startsWith('/management/login')) return 'management-login'
+    const settingsAliases = [
+      '/management/settings', '/management/site-settings', '/management/site_settings',
+      '/management/home-builder', '/management/home_builder',
+      '/management/pos-defaults', '/management/pos_defaults', '/management/pos-profile', '/management/pos_profile',
+      '/management/snappfood', '/management/snapp-food',
+      '/management/zarinpal-settings', '/management/zarinpal_settings',
+      '/management/users', '/management/user-access', '/management/user',
+      '/management/print-formats', '/management/print_formats',
+    ]
+    if (settingsAliases.some((route) => pathname === route || pathname.startsWith(`${route}/`))) return 'management-settings'
     if (pathname === '/management' || pathname === '/management/') return 'management-dashboard'
     if (pathname.startsWith('/management/dashboard')) return 'management-dashboard'
     if (pathname.startsWith('/management/sales')) return 'management-sales-dashboard'

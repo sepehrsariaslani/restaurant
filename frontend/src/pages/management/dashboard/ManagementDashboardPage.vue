@@ -35,22 +35,6 @@
         </label>
       </div>
 
-      <div class="menu-highlight-control">
-        <label class="check-row">
-          <input type="checkbox" v-model="menuHighlightEnabled" :disabled="menuHighlightLoading || menuHighlightSaving" />
-          فعال بودن سکشن «ویژه و پرفروش» در منوی عمومی
-        </label>
-        <button
-          type="button"
-          class="secondary-btn"
-          :disabled="menuHighlightLoading || menuHighlightSaving"
-          @click="saveMenuHighlightSettings"
-        >
-          {{ menuHighlightSaving ? 'در حال ذخیره...' : 'ذخیره تنظیم سکشن منو' }}
-        </button>
-        <span class="hint-line" v-if="menuHighlightMessage">{{ menuHighlightMessage }}</span>
-        <span class="error" v-if="menuHighlightError">{{ menuHighlightError }}</span>
-      </div>
     </ManagementSurfaceCard>
 
     <p class="muted" v-if="loading">در حال بارگذاری داشبورد...</p>
@@ -58,78 +42,6 @@
     <p class="hint" v-if="warningText">{{ warningText }}</p>
 
     <template v-if="!loading && !error">
-      <ManagementSurfaceCard
-        title="تنظیمات افتتاحیه/اختتامیه POS"
-        subtitle="تنظیم پیش‌فرض‌های شروع و پایان شیفت صندوق"
-        v-if="widgetState.pos_shift"
-      >
-        <div class="pos-shift-grid">
-          <article class="pos-shift-box">
-            <h4>افتتاحیه POS</h4>
-            <label class="check-row">
-              <input type="checkbox" v-model="posShiftForm.opening.enabled" />
-              فعال بودن فرآیند افتتاحیه
-            </label>
-            <label>
-              ساعت پیش‌فرض افتتاحیه
-              <input class="input" type="time" v-model="posShiftForm.opening.time" />
-            </label>
-            <label>
-              موجودی اولیه صندوق
-              <input class="input" type="number" min="0" v-model.number="posShiftForm.opening.cash_float" />
-            </label>
-            <label class="check-row">
-              <input type="checkbox" v-model="posShiftForm.opening.checklist_required" />
-              چک‌لیست افتتاحیه اجباری باشد
-            </label>
-            <ManagementNoteField
-              v-model="posShiftForm.opening.note_template"
-              label="متن پیش‌فرض افتتاحیه"
-              rows="3"
-              placeholder="متن چاپ یا توضیح افتتاحیه..."
-            />
-          </article>
-
-          <article class="pos-shift-box">
-            <h4>اختتامیه POS</h4>
-            <label class="check-row">
-              <input type="checkbox" v-model="posShiftForm.closing.enabled" />
-              فعال بودن فرآیند اختتامیه
-            </label>
-            <label>
-              ساعت پیش‌فرض اختتامیه
-              <input class="input" type="time" v-model="posShiftForm.closing.time" />
-            </label>
-            <label>
-              موجودی هدف اختتامیه
-              <input class="input" type="number" min="0" v-model.number="posShiftForm.closing.expected_cash" />
-            </label>
-            <label>
-              تلرانس اختلاف صندوق
-              <input class="input" type="number" min="0" v-model.number="posShiftForm.closing.tolerance" />
-            </label>
-            <label class="check-row">
-              <input type="checkbox" v-model="posShiftForm.closing.checklist_required" />
-              چک‌لیست اختتامیه اجباری باشد
-            </label>
-            <ManagementNoteField
-              v-model="posShiftForm.closing.note_template"
-              label="متن پیش‌فرض اختتامیه"
-              rows="3"
-              placeholder="متن چاپ یا توضیح اختتامیه..."
-            />
-          </article>
-        </div>
-
-        <div class="pos-shift-actions">
-          <button type="button" class="primary-btn" :disabled="posShiftSaving" @click="savePosShiftSettings">
-            {{ posShiftSaving ? 'در حال ذخیره...' : 'ذخیره تنظیمات شیفت POS' }}
-          </button>
-          <span class="hint-line" v-if="posShiftMessage">{{ posShiftMessage }}</span>
-          <span class="error" v-if="posShiftError">{{ posShiftError }}</span>
-        </div>
-      </ManagementSurfaceCard>
-
       <section class="kpi-grid" v-if="widgetState.kpis">
         <ManagementSurfaceCard class="kpi-card" tone="soft" v-for="kpi in kpis" :key="kpi.key">
           <small>{{ kpi.label }}</small>
@@ -395,7 +307,6 @@ import ManagementDataTable from '@/components/management/ManagementDataTable.vue
 import ManagementLineChart from '@/components/management/bi/ManagementLineChart.vue'
 import ManagementBarList from '@/components/management/bi/ManagementBarList.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
-import ManagementNoteField from '@/components/management/ManagementNoteField.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import {
   getManagementDashboard,
@@ -403,7 +314,6 @@ import {
   getManagementInventoryAlertsSummary,
   setManagementDashboardLayout,
   getManagementPOSBoot,
-  getManagementPOSShiftSettings,
   getManagementReportCashierPerformance,
   getManagementReportCancellations,
   getManagementReportChannelSplit,
@@ -411,12 +321,9 @@ import {
   getManagementReportSalesHourly,
   getManagementReportSalesTrend,
   getManagementReportTopProducts,
-  getManagementSiteSettings,
   listManagementCustomers,
   listManagementOrders,
   listManagementProducts,
-  setManagementPOSShiftSettings,
-  setManagementSiteSettings,
 } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 import {
@@ -447,7 +354,6 @@ const filters = reactive({
 })
 
 const widgetState = reactive({
-  pos_shift: true,
   kpis: true,
   sales_financial: true,
   time_trend: true,
@@ -461,7 +367,6 @@ const widgetState = reactive({
 })
 
 const widgetOptions = [
-  { key: 'pos_shift', label: 'تنظیمات شیفت POS' },
   { key: 'kpis', label: 'KPI ها' },
   { key: 'sales_financial', label: 'فروش/هزینه' },
   { key: 'time_trend', label: 'روند زمانی فروش' },
@@ -554,31 +459,6 @@ const menuColumns = [
 ]
 
 const warningText = computed(() => warnings.value.join(' | '))
-const posShiftSaving = ref(false)
-const posShiftMessage = ref('')
-const posShiftError = ref('')
-const menuHighlightEnabled = ref(true)
-const menuHighlightLoading = ref(false)
-const menuHighlightSaving = ref(false)
-const menuHighlightError = ref('')
-const menuHighlightMessage = ref('')
-const posShiftForm = reactive({
-  opening: {
-    enabled: true,
-    time: '08:00',
-    cash_float: 0,
-    checklist_required: true,
-    note_template: '',
-  },
-  closing: {
-    enabled: true,
-    time: '23:00',
-    expected_cash: 0,
-    tolerance: 0,
-    checklist_required: true,
-    note_template: '',
-  },
-})
 
 const todayLabel = computed(() => {
   try {
@@ -755,117 +635,6 @@ function formatPersianDate(value) {
   }
 }
 
-function normalizeTimeInput(value, fallback = '00:00') {
-  const raw = String(value || '').trim()
-  if (!raw) {
-    return fallback
-  }
-  const parts = raw.split(':')
-  if (parts.length < 2) {
-    return fallback
-  }
-  const hour = String(parts[0] || '').padStart(2, '0')
-  const minute = String(parts[1] || '').padStart(2, '0')
-  return `${hour}:${minute}`
-}
-
-function normalizeTimePayload(value, fallback = '00:00:00') {
-  const raw = String(value || '').trim()
-  if (!raw) {
-    return fallback
-  }
-  if (/^\d{2}:\d{2}:\d{2}$/.test(raw)) {
-    return raw
-  }
-  if (/^\d{2}:\d{2}$/.test(raw)) {
-    return `${raw}:00`
-  }
-  return fallback
-}
-
-function applyPosShiftSettings(payload = {}) {
-  const opening = payload?.opening || {}
-  const closing = payload?.closing || {}
-
-  posShiftForm.opening.enabled = Boolean(opening.enabled)
-  posShiftForm.opening.time = normalizeTimeInput(opening.time, '08:00')
-  posShiftForm.opening.cash_float = Number(opening.cash_float || 0)
-  posShiftForm.opening.checklist_required = Boolean(opening.checklist_required)
-  posShiftForm.opening.note_template = String(opening.note_template || '')
-
-  posShiftForm.closing.enabled = Boolean(closing.enabled)
-  posShiftForm.closing.time = normalizeTimeInput(closing.time, '23:00')
-  posShiftForm.closing.expected_cash = Number(closing.expected_cash || 0)
-  posShiftForm.closing.tolerance = Number(closing.tolerance || 0)
-  posShiftForm.closing.checklist_required = Boolean(closing.checklist_required)
-  posShiftForm.closing.note_template = String(closing.note_template || '')
-}
-
-async function savePosShiftSettings() {
-  posShiftSaving.value = true
-  posShiftError.value = ''
-  posShiftMessage.value = ''
-  try {
-    const payload = {
-      opening: {
-        enabled: posShiftForm.opening.enabled ? 1 : 0,
-        time: normalizeTimePayload(posShiftForm.opening.time, '08:00:00'),
-        cash_float: Math.max(Number(posShiftForm.opening.cash_float || 0), 0),
-        checklist_required: posShiftForm.opening.checklist_required ? 1 : 0,
-        note_template: String(posShiftForm.opening.note_template || '').trim(),
-      },
-      closing: {
-        enabled: posShiftForm.closing.enabled ? 1 : 0,
-        time: normalizeTimePayload(posShiftForm.closing.time, '23:00:00'),
-        expected_cash: Math.max(Number(posShiftForm.closing.expected_cash || 0), 0),
-        tolerance: Math.max(Number(posShiftForm.closing.tolerance || 0), 0),
-        checklist_required: posShiftForm.closing.checklist_required ? 1 : 0,
-        note_template: String(posShiftForm.closing.note_template || '').trim(),
-      },
-    }
-    const result = await setManagementPOSShiftSettings(payload)
-    applyPosShiftSettings(result)
-    posShiftMessage.value = 'تنظیمات افتتاحیه/اختتامیه با موفقیت ذخیره شد.'
-  } catch (saveErr) {
-    posShiftError.value = saveErr.message || 'ذخیره تنظیمات شیفت POS ناموفق بود.'
-  } finally {
-    posShiftSaving.value = false
-  }
-}
-
-async function loadMenuHighlightSettings() {
-  menuHighlightLoading.value = true
-  menuHighlightError.value = ''
-  menuHighlightMessage.value = ''
-  try {
-    const payload = await getManagementSiteSettings()
-    const settings = payload?.web_settings || {}
-    menuHighlightEnabled.value = Number(settings.restaurant_menu_highlight_enabled || 0) === 1
-  } catch (loadErr) {
-    menuHighlightError.value = loadErr.message || 'خواندن تنظیم سکشن ویژه/پرفروش ناموفق بود.'
-  } finally {
-    menuHighlightLoading.value = false
-  }
-}
-
-async function saveMenuHighlightSettings() {
-  menuHighlightSaving.value = true
-  menuHighlightError.value = ''
-  menuHighlightMessage.value = ''
-  try {
-    await setManagementSiteSettings({
-      web_settings: {
-        restaurant_menu_highlight_enabled: menuHighlightEnabled.value ? 1 : 0,
-      },
-    })
-    menuHighlightMessage.value = 'تنظیم سکشن ویژه/پرفروش ذخیره شد.'
-  } catch (saveErr) {
-    menuHighlightError.value = saveErr.message || 'ذخیره تنظیم سکشن ویژه/پرفروش ناموفق بود.'
-  } finally {
-    menuHighlightSaving.value = false
-  }
-}
-
 function formatKpiValue(kpi) {
   if (kpi.value === null || kpi.value === undefined || kpi.value === '') {
     return 'ناموجود'
@@ -937,7 +706,6 @@ async function loadDashboard() {
       ordersPrevPayload,
       customersCurrent,
       posBoot,
-      posShiftBoot,
       managementProducts,
     ] = await Promise.all([
       safeCall(getManagementDashboard, { date_from: filters.date_from, date_to: filters.date_to }, {}, localWarnings),
@@ -954,7 +722,6 @@ async function loadDashboard() {
       safeCall(listManagementOrders, prevRange, { orders: [] }, localWarnings),
       safeCall(listManagementCustomers, { date_from: filters.date_from, date_to: filters.date_to }, { customers: [] }, localWarnings),
       safeCall(getManagementPOSBoot, {}, { items: [], currency: 'IRR' }, localWarnings),
-      safeCall(getManagementPOSShiftSettings, {}, { opening: {}, closing: {} }, localWarnings),
       safeCall(listManagementProducts, {}, { products: [] }, localWarnings),
     ])
 
@@ -998,8 +765,6 @@ async function loadDashboard() {
       }
     }
     productCategoryMap.value = map
-    applyPosShiftSettings(posShiftBoot || {})
-    posShiftError.value = ''
 
     kpis.value = buildKpiSet({
       orders: currentOrders,
@@ -1082,7 +847,7 @@ watch(widgetState, () => {
 })
 
 async function initDashboardPage() {
-  await Promise.all([loadDashboard(), loadMenuHighlightSettings(), loadDashboardLayoutPreferences(), loadInventoryAlerts()])
+  await Promise.all([loadDashboard(), loadDashboardLayoutPreferences(), loadInventoryAlerts()])
 }
 
 initDashboardPage()
@@ -1136,23 +901,6 @@ initDashboardPage()
   font-size: 0.78rem;
 }
 
-.menu-highlight-control {
-  margin-top: 0.7rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.16);
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.menu-highlight-control .check-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.38rem;
-  font-size: 0.78rem;
-}
-
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1201,46 +949,6 @@ initDashboardPage()
   justify-self: start;
   font-size: 0.72rem;
   color: var(--accent);
-}
-
-.pos-shift-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
-}
-
-.pos-shift-box {
-  border: 1px solid rgb(var(--palette-deep-sapphire-rgb) / 0.17);
-  border-radius: 14px;
-  background: rgb(var(--palette-eggshell-rgb) / 0.52);
-  padding: 0.6rem;
-  display: grid;
-  gap: 0.42rem;
-}
-
-.pos-shift-box h4 {
-  margin: 0;
-  font-size: 0.88rem;
-}
-
-.pos-shift-box label {
-  display: grid;
-  gap: 0.18rem;
-  font-size: 0.76rem;
-}
-
-.pos-shift-box .check-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.38rem;
-}
-
-.pos-shift-actions {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.58rem;
 }
 
 .panel-grid,
@@ -1393,7 +1101,6 @@ initDashboardPage()
   .crm-grid,
   .menu-grid,
   .nutrition-summary-grid,
-  .pos-shift-grid,
   .widget-toggle-grid,
   .lost-kpis,
   .mini-matrix {

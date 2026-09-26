@@ -18,55 +18,25 @@
           </p>
         </div>
 
-        <div class="hero-badges" v-if="!isDetailView">
-          <span class="hero-badge">
-            <strong>{{ customers.length.toLocaleString('fa-IR') }}</strong>
-            <small>مشتری</small>
-          </span>
-          <span class="hero-badge">
-            <strong>{{ totalOrders.toLocaleString('fa-IR') }}</strong>
-            <small>سفارش</small>
-          </span>
-          <span class="hero-badge">
-            <strong>{{ formatMoney(totalSpent, currency) }}</strong>
-            <small>کل خرید</small>
-          </span>
-        </div>
       </div>
 
-      <div v-if="!isDetailView" class="toolbar-grid">
-        <label class="field">
-          <span>جستجو مشتری</span>
-          <input
-            class="input search-field"
-            v-model.trim="search"
-            placeholder="نام یا موبایل..."
-            @keyup.enter="loadCustomers"
-          />
-        </label>
-
-        <label class="field">
-          <span>از تاریخ</span>
-          <PersianDateInput v-model="filters.date_from" />
-        </label>
-
-        <label class="field">
-          <span>تا تاریخ</span>
-          <PersianDateInput v-model="filters.date_to" />
-        </label>
-
-        <div class="toolbar-actions">
-          <button class="primary-btn" type="button" @click="loadCustomers">
-            جستجو
-          </button>
-          <button class="secondary-btn" type="button" @click="resetCustomerFilters">
-            ریست فیلتر
-          </button>
-          <button class="primary-btn" type="button" @click="openAddCustomerModal">
-            + افزودن مشتری
-          </button>
-        </div>
-      </div>
+      <ManagementCollectionToolbar
+        v-if="!isDetailView"
+        v-model:search="search"
+        search-label="جستجو در مشتریان"
+        search-placeholder="نام یا شماره همراه مشتری..."
+        primary-label="افزودن مشتری"
+        @search="loadCustomers"
+        @primary="openAddCustomerModal"
+      >
+        <template #filters>
+          <label class="field compact"><span>از تاریخ</span><PersianDateInput v-model="filters.date_from" /></label>
+          <label class="field compact"><span>تا تاریخ</span><PersianDateInput v-model="filters.date_to" /></label>
+        </template>
+        <template #secondary>
+          <button class="secondary-btn" type="button" @click="resetCustomerFilters">پاک‌کردن فیلتر</button>
+        </template>
+      </ManagementCollectionToolbar>
 
       <div v-else class="detail-toolbar">
         <a class="secondary-btn" href="/management/customers">بازگشت به لیست مشتریان</a>
@@ -124,10 +94,6 @@
           <article class="summary-card">
             <small>کل خرید</small>
             <strong>{{ formatMoney(customerSummary.spent, currency) }}</strong>
-          </article>
-          <article class="summary-card">
-            <small>میانگین خرید</small>
-            <strong>{{ formatMoney(customerSummary.avgSpent, currency) }}</strong>
           </article>
         </div>
       </ManagementSurfaceCard>
@@ -366,6 +332,7 @@ import ManagementGalleryView from '@/components/management/ManagementGalleryView
 import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ReportChartRenderer from '@/components/management/bi/ReportChartRenderer.vue'
 import ReportKpiGrid from '@/components/management/bi/ReportKpiGrid.vue'
 import { addManagementCustomer, getManagementCustomerDetail, listManagementCustomers } from '@/utils/api'
@@ -768,40 +735,6 @@ onMounted(() => {
   font-size: 0.78rem;
 }
 
-.hero-badges {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.hero-badge {
-  min-width: 5.8rem;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.95rem;
-  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
-  display: grid;
-  gap: 0.08rem;
-  text-align: center;
-  box-shadow: var(--shadow-sm);
-}
-
-.hero-badge strong {
-  font-size: 0.8rem;
-}
-
-.hero-badge small {
-  color: var(--mg-text-muted);
-  font-size: 0.64rem;
-}
-
-.toolbar-grid {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr auto;
-  gap: 0.7rem;
-  align-items: end;
-}
-
 .field {
   display: grid;
   gap: 0.28rem;
@@ -817,11 +750,6 @@ onMounted(() => {
   min-width: 170px;
 }
 
-.search-field {
-  width: 100%;
-}
-
-.toolbar-actions,
 .detail-toolbar-filters {
   display: flex;
   gap: 0.5rem;
@@ -874,7 +802,7 @@ onMounted(() => {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
@@ -1130,14 +1058,6 @@ onMounted(() => {
 }
 
 @media (max-width: 1100px) {
-  .toolbar-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .toolbar-actions {
-    grid-column: 1 / -1;
-  }
-
   .summary-grid,
   .customer-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1149,7 +1069,6 @@ onMounted(() => {
 }
 
 @media (max-width: 720px) {
-  .toolbar-grid,
   .summary-grid,
   .customer-kpis,
   .customer-grid-view {
@@ -1170,14 +1089,6 @@ onMounted(() => {
 
   .hero-header {
     flex-direction: column;
-  }
-
-  .hero-badges {
-    width: 100%;
-  }
-
-  .hero-badge {
-    flex: 1;
   }
 
   .customer-list-meta {

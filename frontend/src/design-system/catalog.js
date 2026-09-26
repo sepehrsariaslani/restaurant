@@ -65,6 +65,7 @@ export const designSystemCatalog = Object.freeze({
     { id: 'management-product-stock-ledger', title: 'دفتر گردش مستقل کالا', description: 'جدول کامل و صفحه‌بندی‌شده گردش کالا با فیلتر تاریخ، انبار و سند.', source: 'pages/management/inventory/ManagementProductStockLedgerPage.vue', kind: 'reference' },
     { id: 'readiness', title: 'آمادگی محصول', description: 'چک‌لیست تکمیل محصول قبل از انتشار در منو.', source: 'components/management/catalog/ManagementProductReadinessPanel.vue', kind: 'domain' },
     { id: 'management-list', title: 'فهرست مدیریتی', description: 'جدول واکنش‌گرا با حالت خالی، انتخاب سطر و نمایش موبایل.', source: 'components/management/ManagementListView.vue', kind: 'domain' },
+    { id: 'management-collection-toolbar', title: 'نوار جستجو و اقدام فهرست', description: 'جستجو، فیلترهای اختیاری، اقدام اصلی و حالت واکنش‌گرا با حداقل هدف تعاملی ۴۴ پیکسل.', source: 'components/management/ManagementCollectionToolbar.vue', kind: 'domain' },
     { id: 'management-collection', title: 'مجموعه چندنما', description: 'کنترل مشترک نماهای جدول، لیست، گالری، کانبان، شیت، تقویم و درخت.', source: 'components/management/ManagementCollectionView.vue', kind: 'domain' },
     { id: 'management-smart-table', title: 'جدول هوشمند', description: 'آداپتر جدول جستجوپذیر با تم Restaurant برای ledger، اسناد و گزارش‌ها.', source: 'components/management/ManagementSmartDataTable.vue', kind: 'domain' },
     { id: 'management-editable-table', title: 'جدول قابل ویرایش', description: 'جدول child-row با ویرایش پنجره‌ای، اعتبارسنجی، تنظیمات ستون و همان قرارداد جدول هوشمند.', source: 'components/management/ManagementEditableTable.vue', kind: 'domain' },
@@ -92,6 +93,7 @@ export const designSystemCatalog = Object.freeze({
     { id: 'searchable-create-drawer', title: 'ایجاد سریع گزینه مرجع', description: 'وقتی نتیجه پیدا نشد، فرم ایجاد همان رکورد در پنل کناری باز می‌شود و نتیجه به فهرست برمی‌گردد.' },
     { id: 'product-detail-shell', title: 'قالب قاب جزئیات محصول', description: 'ترکیب breadcrumb، hero، navigation، وضعیت async و بخش‌های جزئیات با slot.' },
     { id: 'management-list-detail', title: 'فهرست به جزئیات', description: 'انتخاب یک رکورد از فهرست و نمایش جزئیات و عملیات همان رکورد در کنار آن.' },
+    { id: 'management-settings-hub', title: 'مرکز تنظیمات تب‌دار', description: 'تنظیمات سایت، ظاهر، محتوا، فروش، اتصال‌ها، دسترسی و چاپ را در یک مسیر با تب‌های موضوعی گرد می‌آورد.' },
     { id: 'separate-detail-route', title: 'مسیر جزئیات مستقل', description: 'کلیک روی ردیف به صفحه جزئیات مستقل می‌رود و فهرست context خود را حفظ می‌کند.' },
     { id: 'order-fulfillment', title: 'چرخه سفارش', description: 'فهرست سفارش، جزئیات انتخاب‌شده، پرداخت، تکمیل و تخصیص پیک با متن وضعیت فارسی.' },
     { id: 'inventory-document-register', title: 'دفتر اسناد خرید و انبار', description: 'فاکتور خرید، رسید خرید و انتقال انبار از DocTypeهای native ERPNext در یک رجیستری واحد.' },
@@ -106,6 +108,7 @@ export const designSystemCatalog = Object.freeze({
     { id: 'async-feedback', title: 'بازخورد عملیات', description: 'بارگذاری، خطا، موفقیت و retry در همان context عملیاتی.' },
   ]),
   templates: Object.freeze([
+    { id: 'management-settings-hub', title: 'تمپلیت مرکز تنظیمات', description: 'هاب تب‌دار برای تنظیمات سایت، ظاهر، محتوا، صندوق، اتصال‌ها، دسترسی و چاپ.', source: 'pages/management/settings/ManagementSettingsHubPage.vue', href: '/management/settings' },
     { id: 'products-list', title: 'تمپلیت مدیریت محصولات', description: 'صفحه مرجع برای جستجو، نماها و مدیریت جمعی.', source: 'pages/management/catalog/ManagementProductsPage.vue', href: '/management/products' },
     { id: 'management-pos', title: 'تمپلیت صندوق فروش POS', description: 'محصولات، مشتری، سبد سفارش و عملیات فروش با همان کارت‌ها و دکمه‌های Design System.', source: 'pages/management/sales/ManagementPosPage.vue', href: '/management/pos' },
     { id: 'products-collection-shell', title: 'تمپلیت مجموعه محصول قابل استفاده مجدد', description: 'قاب مشترک صفحه‌ی لیست محصولات برای انتقال به مجموعه‌های مدیریتی دیگر.', source: 'components/management/catalog/ManagementProductCollectionShell.vue', href: '/management/products' },
