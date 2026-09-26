@@ -25,7 +25,17 @@ import frappe
 from frappe import _
 
 PAGE_LAYOUT_KEY_PREFIX = "restaurant_page_layout_v1"
-SUPPORTED_PAGES = {"home", "homev2", "about", "faq", "product_groups"}
+PUBLIC_EXTENSION_PAGES = {
+	"blog", "blog-post", "menu", "item", "cart", "customize", "bom-preview",
+	"payment", "payment-callback", "order-success", "order-start", "order-type",
+	"order-dine-in", "order-pickup", "order-delivery", "customer-login", "survey",
+	"customer-dashboard", "customer-referrals", "customer-collaboration",
+	"customer-recurring-orders", "customer-nutrition", "customer-profile",
+	"customer-vehicles", "customer-wallet", "customer-addresses", "customer-branches",
+	"customer-orders", "customer-order-detail", "customer-delivery",
+	"customer-table-reservation", "customer-table-select", "checkout", "payment-fail",
+}
+SUPPORTED_PAGES = {"home", "homev2", "about", "faq", "product_groups", *PUBLIC_EXTENSION_PAGES}
 DEFAULT_PAGE = "home"
 
 # Block types the backend is willing to store. Kept in sync with the
@@ -172,10 +182,12 @@ def get_boot_page_layout(company=None):
 	fallback (buildLegacyLayout) still kicks in for undesigned pages.
 	"""
 	out = {}
+	doc = _load_layout_doc(company)
 	for page in SUPPORTED_PAGES:
-		layout = get_page_layout(page, company=company)
-		if layout.get("blocks"):
-			out[page] = {"blocks": layout["blocks"]}
+		page_doc = doc.get(page) if isinstance(doc, dict) else None
+		blocks = _sanitize_blocks((page_doc or {}).get("blocks")) if isinstance(page_doc, dict) else []
+		if blocks:
+			out[page] = {"blocks": blocks}
 	return out
 
 

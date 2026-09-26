@@ -484,9 +484,25 @@ const PAGE_ALIASES = {
 	"product-groups": "product_groups",
 };
 
+const PUBLIC_PAGE_LAYOUT_KEYS = [
+	"blog", "blog-post", "menu", "item", "cart", "customize", "bom-preview",
+	"payment", "payment-callback", "order-success", "order-start", "order-type",
+	"order-dine-in", "order-pickup", "order-delivery", "customer-login", "survey",
+	"customer-dashboard", "customer-referrals", "customer-collaboration",
+	"customer-recurring-orders", "customer-nutrition", "customer-profile",
+	"customer-vehicles", "customer-wallet", "customer-addresses", "customer-branches",
+	"customer-orders", "customer-order-detail", "customer-delivery",
+	"customer-table-reservation", "customer-table-select", "checkout", "payment-fail",
+];
+PUBLIC_PAGE_LAYOUT_KEYS.forEach((page) => { PAGE_ALIASES[page] = page; });
+
 export function normalizePageBuilderKey(page = "home") {
 	return PAGE_ALIASES[String(page || "").trim()] || "home";
 }
+
+const editorialPageBlocks = ["hero", "features", "banner"];
+const workflowPageBlocks = ["banner"];
+const editorialPageKeys = new Set(["blog", "blog-post", "menu", "item"]);
 
 export const PAGE_BLOCK_CATALOGS = {
 	home: ["hero", "categories", "products", "popular", "features", "about", "faq", "banner"],
@@ -494,6 +510,10 @@ export const PAGE_BLOCK_CATALOGS = {
 	about: ["hero", "about", "banner"],
 	faq: ["hero", "faq", "banner"],
 	product_groups: ["hero", "categories", "banner"],
+	...Object.fromEntries(PUBLIC_PAGE_LAYOUT_KEYS.map((page) => [
+		page,
+		editorialPageKeys.has(page) ? editorialPageBlocks : workflowPageBlocks,
+	])),
 };
 
 export function getPageBlockCatalog(page = "home") {

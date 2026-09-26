@@ -87,6 +87,7 @@
       class="app-main"
       :class="{ 'app-main--no-offset': useNoHeaderOffset }"
     >
+      <PublicPageLayoutSlot v-if="publicPageLayoutKey" :page="publicPageLayoutKey" :boot="boot" />
       <RestaurantLandingPage v-if="page === 'landing' || page === 'homev2'" :boot="boot" :page="page" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
@@ -162,6 +163,7 @@ import PublicHeader from './components/PublicHeader.vue'
 import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 import SiteFooter from './components/SiteFooter.vue'
 import SiteFooterMinimal from './components/SiteFooterMinimal.vue'
+import PublicPageLayoutSlot from './components/blocks/PublicPageLayoutSlot.vue'
 import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'
 import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
@@ -393,6 +395,17 @@ function resolveInitialPage() {
 }
 
 const page = resolveInitialPage()
+const publicPageLayoutKeys = new Set([
+  'blog', 'blog-post', 'menu', 'item', 'cart', 'customize', 'bom-preview', 'payment',
+  'payment-callback', 'order-success', 'order-start', 'order-type', 'order-dine-in',
+  'order-pickup', 'order-delivery', 'customer-login', 'survey', 'customer-dashboard',
+  'customer-referrals', 'customer-collaboration', 'customer-recurring-orders',
+  'customer-nutrition', 'customer-profile', 'customer-vehicles', 'customer-wallet',
+  'customer-addresses', 'customer-branches', 'customer-orders', 'customer-order-detail',
+  'customer-delivery', 'customer-table-reservation', 'customer-table-select', 'checkout',
+  'payment-fail',
+])
+const publicPageLayoutKey = computed(() => publicPageLayoutKeys.has(page) ? page : '')
 const { openSearch } = useSearchModal()
 onMounted(() => {
   if (window.location.pathname.startsWith('/search')) {
