@@ -116,6 +116,7 @@ website_route_rules = [
 	{"from_route": "/customer/wallet", "to_route": "restaurant/index"},
 	{"from_route": "/customer/addresses", "to_route": "restaurant/index"},
 	{"from_route": "/customer/branches", "to_route": "restaurant/index"},
+	{"from_route": "/customer/nutrition", "to_route": "restaurant/index"},
 	{"from_route": "/customer/orders", "to_route": "customer/orders"},
 	{"from_route": "/customer/orders/<order_code>", "to_route": "customer/orders"},
 	# Management routes
@@ -282,6 +283,7 @@ doc_events = {
 	},
 	"Item": {
 		"before_validate": "restaurant.api.normalize_item_builder_modes",
+		"validate": "restaurant.api_meal_planning.invalidate_item_nutrition_reviews",
 		"on_update": "restaurant.api.sync_item_image_from_attachment",
 		"on_insert": "restaurant.api.sync_item_image_from_attachment",
 	},

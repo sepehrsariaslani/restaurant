@@ -92,6 +92,12 @@ export function createInitialProductSettingsForm() {
 		restaurant_nutrition_carb_g: 0,
 		restaurant_nutrition_sugar_g: 0,
 		restaurant_nutrition_fat_g: 0,
+		restaurant_allergen_tags: "",
+		restaurant_allergen_reviewed: false,
+		restaurant_ingredient_tags: "",
+		restaurant_ingredients_reviewed: false,
+		restaurant_meal_slots: "",
+		restaurant_nutrition_verified: false,
 		show_in_print: false,
 		restaurant_enabled: false,
 		restaurant_is_featured: false,
@@ -165,6 +171,12 @@ export function hydrateProductSettingsForm(form, payload = {}, tagOptions = []) 
 	form.restaurant_nutrition_fat_g = Number(
 		item.restaurant_nutrition_fat_g || item.nutrition?.fat_g || 0,
 	);
+	form.restaurant_allergen_tags = item.restaurant_allergen_tags || (item.allergens || []).join(", ");
+	form.restaurant_allergen_reviewed = Number(item.restaurant_allergen_reviewed || item.allergen_reviewed || 0) === 1;
+	form.restaurant_ingredient_tags = item.restaurant_ingredient_tags || (item.ingredient_tags || []).join(", ");
+	form.restaurant_ingredients_reviewed = Number(item.restaurant_ingredients_reviewed || item.ingredients_reviewed || 0) === 1;
+	form.restaurant_meal_slots = item.restaurant_meal_slots || (item.meal_slots || []).join(", ");
+	form.restaurant_nutrition_verified = Number(item.restaurant_nutrition_verified || item.nutrition_verified || 0) === 1;
 	form.show_in_print = Number(item.show_in_print ?? item.show_in_website ?? 0) === 1;
 	form.restaurant_enabled = Number(item.restaurant_enabled || 0) === 1;
 	form.restaurant_is_featured = Number(item.restaurant_is_featured || 0) === 1;
@@ -226,6 +238,12 @@ export function serializeProductSettingsState(form, builderConfig = null) {
 		restaurant_nutrition_carb_g: Number(form.restaurant_nutrition_carb_g || 0),
 		restaurant_nutrition_sugar_g: Number(form.restaurant_nutrition_sugar_g || 0),
 		restaurant_nutrition_fat_g: Number(form.restaurant_nutrition_fat_g || 0),
+		restaurant_allergen_tags: String(form.restaurant_allergen_tags || "").trim(),
+		restaurant_allergen_reviewed: form.restaurant_allergen_reviewed ? 1 : 0,
+		restaurant_ingredient_tags: String(form.restaurant_ingredient_tags || "").trim(),
+		restaurant_ingredients_reviewed: form.restaurant_ingredients_reviewed ? 1 : 0,
+		restaurant_meal_slots: String(form.restaurant_meal_slots || "").trim(),
+		restaurant_nutrition_verified: form.restaurant_nutrition_verified ? 1 : 0,
 		show_in_print: form.show_in_print ? 1 : 0,
 		restaurant_enabled: form.restaurant_enabled ? 1 : 0,
 		restaurant_is_featured: form.restaurant_is_featured ? 1 : 0,

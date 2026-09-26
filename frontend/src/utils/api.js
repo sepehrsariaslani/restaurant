@@ -4108,6 +4108,33 @@ export function exportManagementOrgOrdersExcel({ organization = "", date_from = 
 export function createManagementOrgInvoice(payload = {}) {
 	return callRestaurantAPI("create_management_org_invoice", { payload });
 }
+export function getMyNutritionWorkspace(branch = "") {
+	return callMethodByPath("restaurant.api_meal_planning.get_my_nutrition_workspace", { customer_token: customerEditToken(), branch });
+}
+
+export function saveMyNutritionProfile(payload = {}) {
+	return callMethodByPath("restaurant.api_meal_planning.save_my_nutrition_profile", { customer_token: customerEditToken(), payload });
+}
+
+export function deleteMyNutritionProfile() {
+	return callMethodByPath("restaurant.api_meal_planning.delete_my_nutrition_profile", { customer_token: customerEditToken() });
+}
+
+export function suggestMyMealPlans(branch = "") {
+	return callMethodByPath("restaurant.api_meal_planning.suggest_my_meal_plans", { customer_token: customerEditToken(), branch });
+}
+
+export function saveMyMealPlan(payload = {}) {
+	return callMethodByPath("restaurant.api_meal_planning.save_my_meal_plan", { customer_token: customerEditToken(), payload });
+}
+
+export function deleteMyMealPlan(name = "") {
+	return callMethodByPath("restaurant.api_meal_planning.delete_my_meal_plan", { customer_token: customerEditToken(), name });
+}
+
+export function prepareMyMealPlanOrder(name = "", branch = "") {
+	return callMethodByPath("restaurant.api_meal_planning.prepare_my_meal_plan_order", { customer_token: customerEditToken(), name, branch });
+}
 
 // ---------------------------------------------------------------------------
 // Ops extras: route optimization, proforma, waiter report

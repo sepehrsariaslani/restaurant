@@ -46,6 +46,7 @@
       <nav class="account-shortcuts customer-glass-card" aria-label="مدیریت حساب">
         <a href="/order/type"><ShoppingBag :size="22" /><span><strong>شروع سفارش</strong><small>انتخاب روش دریافت و غذا</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/orders"><ReceiptText :size="22" /><span><strong>سفارش‌های من</strong><small>پیگیری و سفارش دوباره</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/nutrition"><CalendarDays :size="22" /><span><strong>برنامهٔ غذایی من</strong><small>هدف روزانه، حساسیت‌ها و انتخاب وعده‌ها</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/addresses"><MapPin :size="22" /><span><strong>آدرس‌های من</strong><small>خانه، محل کار و نشانی‌های ذخیره‌شده</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/vehicles"><CarFront :size="22" /><span><strong>خودروهای من</strong><small>تحویل راحت درب ماشین</small></span><ChevronLeft :size="18" /></a>
         <a href="/table-reservation"><CalendarDays :size="22" /><span><strong>رزرو میز</strong><small>انتخاب روز، ساعت و میز</small></span><ChevronLeft :size="18" /></a>

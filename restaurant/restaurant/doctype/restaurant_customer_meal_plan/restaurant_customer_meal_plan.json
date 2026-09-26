@@ -1,0 +1,19 @@
+{
+  "doctype": "DocType",
+  "name": "Restaurant Customer Meal Plan",
+  "module": "Restaurant",
+  "autoname": "format:MP-{YYYY}-{#####}",
+  "engine": "InnoDB",
+  "track_changes": 0,
+  "field_order": ["customer", "title", "branch", "weekdays_json", "active", "last_cart_prepared_date", "items"],
+  "fields": [
+    {"fieldname":"customer","fieldtype":"Link","options":"Customer","label":"مشتری","reqd":1,"in_list_view":1},
+    {"fieldname":"title","fieldtype":"Data","label":"نام برنامه","reqd":1,"in_list_view":1},
+    {"fieldname":"branch","fieldtype":"Data","label":"شعبهٔ مرجع","reqd":1},
+    {"fieldname":"weekdays_json","fieldtype":"Long Text","label":"روزهای هفته (JSON)"},
+    {"fieldname":"active","fieldtype":"Check","label":"فعال","default":"1"},
+    {"fieldname":"last_cart_prepared_date","fieldtype":"Date","label":"آخرین تاریخ ارسال به سبد"},
+    {"fieldname":"items","fieldtype":"Table","options":"Restaurant Customer Meal Plan Item","label":"وعده‌ها"}
+  ],
+  "permissions": []
+}

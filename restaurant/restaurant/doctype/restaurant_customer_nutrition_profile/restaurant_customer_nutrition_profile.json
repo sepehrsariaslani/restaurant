@@ -1,0 +1,30 @@
+{
+  "doctype": "DocType",
+  "name": "Restaurant Customer Nutrition Profile",
+  "module": "Restaurant",
+  "autoname": "field:customer",
+  "engine": "InnoDB",
+  "track_changes": 0,
+  "field_order": ["customer", "age_years", "formula_sex", "height_cm", "weight_kg", "goal_weight_kg", "activity_level", "goal", "calorie_target", "protein_target_g", "needs_specialist", "specialist_reason", "allergens_json", "liked_items_json", "disliked_items_json", "liked_ingredients_json", "disliked_ingredients_json", "consent"],
+  "fields": [
+    {"fieldname":"customer","fieldtype":"Link","options":"Customer","label":"مشتری","reqd":1,"unique":1},
+    {"fieldname":"age_years","fieldtype":"Int","label":"سن","min_value":0,"max_value":120},
+    {"fieldname":"formula_sex","fieldtype":"Select","label":"گزینهٔ محاسبهٔ انرژی","options":"\nزن\nمرد\nترجیح می‌دهم انتخاب نکنم"},
+    {"fieldname":"height_cm","fieldtype":"Float","label":"قد (سانتی‌متر)"},
+    {"fieldname":"weight_kg","fieldtype":"Float","label":"وزن فعلی (کیلوگرم)"},
+    {"fieldname":"goal_weight_kg","fieldtype":"Float","label":"وزن هدف (کیلوگرم)"},
+    {"fieldname":"activity_level","fieldtype":"Select","label":"سطح فعالیت","options":"\nکم‌تحرک\nفعالیت سبک\nفعالیت متوسط\nفعالیت زیاد"},
+    {"fieldname":"goal","fieldtype":"Select","label":"هدف","options":"\nکاهش وزن\nافزایش وزن\nحفظ وزن"},
+    {"fieldname":"calorie_target","fieldtype":"Int","label":"هدف کالری دستی (اختیاری)"},
+    {"fieldname":"protein_target_g","fieldtype":"Float","label":"هدف پروتئین دستی (اختیاری)"},
+    {"fieldname":"needs_specialist","fieldtype":"Check","label":"نیازمند مشورت متخصص","default":"0"},
+    {"fieldname":"specialist_reason","fieldtype":"Small Text","label":"شرایط نیازمند مشورت"},
+    {"fieldname":"allergens_json","fieldtype":"Long Text","label":"حساسیت‌ها (JSON)"},
+    {"fieldname":"liked_items_json","fieldtype":"Long Text","label":"غذاهای دلخواه (JSON)"},
+    {"fieldname":"disliked_items_json","fieldtype":"Long Text","label":"غذاهای نامطلوب (JSON)"},
+    {"fieldname":"liked_ingredients_json","fieldtype":"Long Text","label":"مواد دلخواه (JSON)"},
+    {"fieldname":"disliked_ingredients_json","fieldtype":"Long Text","label":"مواد نامطلوب (JSON)"},
+    {"fieldname":"consent","fieldtype":"Check","label":"رضایت برای ذخیرهٔ اطلاعات تغذیه‌ای","reqd":1,"default":"0"}
+  ],
+  "permissions": []
+}

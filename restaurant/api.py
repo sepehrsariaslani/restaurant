@@ -3671,6 +3671,12 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"nutrition_sugar_g": nutrition.get("sugar_g"),
 		"nutrition_fat_g": nutrition.get("fat_g"),
 		"nutrition_protein_percent": nutrition.get("protein_percent"),
+		"nutrition_verified": cint(row.get("restaurant_nutrition_verified") or 0),
+		"allergens": _split_tags(row.get("restaurant_allergen_tags") or ""),
+		"allergen_reviewed": cint(row.get("restaurant_allergen_reviewed") or 0),
+		"meal_slots": _split_tags(row.get("restaurant_meal_slots") or ""),
+		"ingredient_tags": _split_tags(row.get("restaurant_ingredient_tags") or ""),
+		"ingredients_reviewed": cint(row.get("restaurant_ingredients_reviewed") or 0),
 		"has_customization": cint(row.get("has_customization") or 0),
 		"has_bom": cint(row.get("has_bom") or 0),
 		"restaurant_is_customizable": cint(row.get("restaurant_is_customizable") or 0),
@@ -4463,6 +4469,16 @@ def _get_core_menu_items(
 	for fieldname in nutrition_fields:
 		if fieldname not in item_fields:
 			item_fields.append(fieldname)
+	for fieldname in (
+		"restaurant_allergen_tags",
+		"restaurant_nutrition_verified",
+		"restaurant_allergen_reviewed",
+		"restaurant_meal_slots",
+		"restaurant_ingredient_tags",
+		"restaurant_ingredients_reviewed",
+	):
+		if _has_column("Item", fieldname) and fieldname not in item_fields:
+			item_fields.append(fieldname)
 	if _has_column("Item", "restaurant_coming_soon"):
 		item_fields.append("restaurant_coming_soon")
 	if _has_column("Item", "restaurant_restock_date"):
@@ -5033,6 +5049,12 @@ def _get_core_item_detail(item_slug, branch=None, bom_name=None):
 		"nutrition_sugar_g": item_nutrition.get("sugar_g"),
 		"nutrition_fat_g": item_nutrition.get("fat_g"),
 		"nutrition_protein_percent": item_nutrition.get("protein_percent"),
+		"nutrition_verified": cint(doc.get("restaurant_nutrition_verified") or 0),
+		"allergens": _split_tags(doc.get("restaurant_allergen_tags") or ""),
+		"allergen_reviewed": cint(doc.get("restaurant_allergen_reviewed") or 0),
+		"meal_slots": _split_tags(doc.get("restaurant_meal_slots") or ""),
+		"ingredient_tags": _split_tags(doc.get("restaurant_ingredient_tags") or ""),
+		"ingredients_reviewed": cint(doc.get("restaurant_ingredients_reviewed") or 0),
 		"variant_of": template_doc.name if template_doc.name != doc.name else "",
 		"variant_fixed_attributes": fixed_attribute_values if fixed_attribute_values else {},
 		"variant_attributes": _variant_attribute_public_payload(doc.name),
@@ -5940,6 +5962,10 @@ def refresh_item_nutrition_for_bom(doc, method=None):
 		return
 	_upsert_bom_nutrition_fields(doc)
 	_refresh_item_nutrition_from_bom(item_code)
+	# Recipe edits invalidate all manager-reviewed menu-health claims.
+	for review_field in ("restaurant_nutrition_verified", "restaurant_ingredients_reviewed", "restaurant_allergen_reviewed"):
+		if _has_column("Item", review_field):
+			frappe.db.set_value("Item", item_code, review_field, 0, update_modified=False)
 
 
 def _deactivate_item_if_possible(item_code):
@@ -19632,6 +19658,12 @@ def get_management_product_detail(item_name, date_from=None, date_to=None):
 			"restaurant_allow_direct_add": cint(item_doc.get("restaurant_allow_direct_add") or 0),
 			"restaurant_show_nutrition_summary": cint(item_doc.get("restaurant_show_nutrition_summary") or 0),
 			"restaurant_show_allergen_warnings": cint(item_doc.get("restaurant_show_allergen_warnings") or 0),
+			"restaurant_allergen_tags": item_doc.get("restaurant_allergen_tags") or "",
+			"restaurant_allergen_reviewed": cint(item_doc.get("restaurant_allergen_reviewed") or 0),
+			"restaurant_ingredient_tags": item_doc.get("restaurant_ingredient_tags") or "",
+			"restaurant_ingredients_reviewed": cint(item_doc.get("restaurant_ingredients_reviewed") or 0),
+			"restaurant_meal_slots": item_doc.get("restaurant_meal_slots") or "",
+			"restaurant_nutrition_verified": cint(item_doc.get("restaurant_nutrition_verified") or 0),
 			"restaurant_kitchen_print_mode": _normalize_management_kitchen_print_mode(
 				item_doc.get("restaurant_kitchen_print_mode"),
 				fallback_to_default=True,
@@ -19728,6 +19760,9 @@ def update_management_product_settings(payload=None):
 		"restaurant_restock_date",
 		"restaurant_out_of_stock_until",
 		"restaurant_item_tags",
+		"restaurant_allergen_tags",
+		"restaurant_ingredient_tags",
+		"restaurant_meal_slots",
 	}
 	int_fields = {
 		"disabled",
@@ -19745,6 +19780,9 @@ def update_management_product_settings(payload=None):
 		"restaurant_allow_direct_add",
 		"restaurant_show_nutrition_summary",
 		"restaurant_show_allergen_warnings",
+		"restaurant_allergen_reviewed",
+		"restaurant_ingredients_reviewed",
+		"restaurant_nutrition_verified",
 		"restaurant_out_of_stock",
 		"restaurant_kitchen_ticket",
 	}

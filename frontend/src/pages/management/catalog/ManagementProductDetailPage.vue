@@ -124,25 +124,45 @@
             <div class="nutrition-grid">
               <label>
                 کالری
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" />
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_kcal" :allow-float="true" :min="0" @update:modelValue="settingsForm.restaurant_nutrition_verified = false" />
               </label>
               <label>
                 پروتئین (گرم)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" />
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_protein_g" :allow-float="true" :min="0" @update:modelValue="settingsForm.restaurant_nutrition_verified = false" />
               </label>
               <label>
                 کربوهیدرات (گرم)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" />
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_carb_g" :allow-float="true" :min="0" @update:modelValue="settingsForm.restaurant_nutrition_verified = false" />
               </label>
               <label>
                 قند (گرم)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" />
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_sugar_g" :allow-float="true" :min="0" @update:modelValue="settingsForm.restaurant_nutrition_verified = false" />
               </label>
               <label>
                 چربی (گرم)
-                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" />
+                <PersianNumberInput v-model="settingsForm.restaurant_nutrition_fat_g" :allow-float="true" :min="0" @update:modelValue="settingsForm.restaurant_nutrition_verified = false" />
               </label>
             </div>
+            <div class="nutrition-review-grid">
+              <label>
+                وعده‌های مناسب (با ویرگول جدا کنید)
+                <input v-model="settingsForm.restaurant_meal_slots" class="input" placeholder="صبحانه، ناهار، شام، میان‌وعده" />
+              </label>
+              <label>
+                مواد تشکیل‌دهنده (با ویرگول جدا کنید)
+                <input v-model="settingsForm.restaurant_ingredient_tags" class="input" placeholder="مرغ، برنج، زعفران" @input="settingsForm.restaurant_ingredients_reviewed = false" />
+              </label>
+              <label>
+                مواد حساسیت‌زا (با ویرگول جدا کنید)
+                <input v-model="settingsForm.restaurant_allergen_tags" class="input" placeholder="لبنیات، گلوتن، مغزها" @input="settingsForm.restaurant_allergen_reviewed = false" />
+              </label>
+            </div>
+            <div class="nutrition-review-switches">
+              <ManagementToggleSwitch v-model="settingsForm.restaurant_nutrition_verified" label="اطلاعات تغذیه بازبینی شد" hint="فقط با فعال‌بودن این گزینه، محصول در پیشنهاد برنامه غذایی می‌آید." />
+              <ManagementToggleSwitch v-model="settingsForm.restaurant_ingredients_reviewed" label="مواد تشکیل‌دهنده بازبینی شد" hint="مواد ثبت‌شده با دستور تهیهٔ فعلی تطبیق داده شده‌اند." />
+              <ManagementToggleSwitch v-model="settingsForm.restaurant_allergen_reviewed" label="حساسیت‌زاها بازبینی شد" hint="اگر حساسیت‌زایی ندارد، فهرست را خالی بگذارید و بازبینی را فعال کنید." />
+            </div>
+            <p class="field-help nutrition-review-note">با تغییر مقادیر یا دستور تهیه، بازبینی مربوطه را دوباره انجام دهید. تماس متقاطع در آشپزخانه همچنان ممکن است.</p>
           </section>
         </ManagementSurfaceCard>
 
@@ -4314,6 +4334,11 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.38rem;
 }
+.nutrition-review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.nutrition-review-grid label { display: grid; gap: 6px; color: var(--ds-color-text-secondary); font-size: 12px; font-weight: 800; }
+.nutrition-review-grid .input { min-height: 42px; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); padding: 8px 10px; background: var(--ds-color-surface); color: var(--ds-color-text-primary); font: inherit; }
+.nutrition-review-switches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.nutrition-review-note { display: block; margin-top: 10px; }
 
 .nutrition-grid label {
   display: grid;
@@ -4723,6 +4748,7 @@ Promise.all([loadBuilderItemOptions(), loadTagOptions(), loadDetail()])
   .nutrition-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .nutrition-review-grid, .nutrition-review-switches { grid-template-columns: 1fr; }
 
   /* کارت فشرده اطلاعات کلی: یکردیفه می‌ماند (عکس + قیمت + سوییچ‌ها) */
   .product-general-card--compact .product-general-layout {
