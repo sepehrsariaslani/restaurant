@@ -5767,13 +5767,22 @@ def _create_sales_order(
 			branch=order_context.get("branch") or "",
 		)
 	verified_customer = bool(coach_referral_customer and coach_referral_customer == customer)
-	group_discount_percent = api_club._club_customer_group_discount_percent(customer) if verified_customer else 0
+	configured_group_discount_percent = api_club._club_customer_group_discount_percent(customer)
+	group_discount_percent = configured_group_discount_percent if verified_customer else 0
 	coach_terms = api_club._club_partner_order_terms(customer, subtotal) if verified_customer else {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
 	coupon_amount = flt(server_coupon.get("discount_amount") or 0)
-	manual_discount_active = cint(financial_modifiers.get("manual_discount") or 0) == 1
 	manual_discount_type = str(financial_modifiers.get("discount_type") or "fixed").strip().lower()
 	manual_discount_value = flt(financial_modifiers.get("discount_value") or 0)
-	from restaurant.pricing_policy import calculate_manual_discount_amount, coach_commission_amount, select_order_discount
+	from restaurant.pricing_policy import (
+		calculate_manual_discount_amount,
+		coach_commission_amount,
+		resolve_manual_discount_active,
+		select_order_discount,
+	)
+	manual_discount_active = resolve_manual_discount_active(
+		financial_modifiers,
+		group_percent=configured_group_discount_percent,
+	)
 	manual_discount_amount = calculate_manual_discount_amount(
 		subtotal,
 		manual_discount_type,

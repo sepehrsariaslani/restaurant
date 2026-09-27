@@ -17,6 +17,27 @@ def calculate_manual_discount_amount(subtotal, discount_type="fixed", discount_v
 	return min(subtotal, value)
 
 
+def resolve_manual_discount_active(financial_modifiers=None, group_percent=0):
+	"""Resolve explicit and legacy POS discount intent without trusting totals."""
+	modifiers = financial_modifiers if isinstance(financial_modifiers, dict) else {}
+	if "manual_discount" in modifiers:
+		return str(modifiers.get("manual_discount") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+	value = _money(modifiers.get("discount_value"))
+	if value <= 0:
+		return False
+	source = str(modifiers.get("discount_source") or "").strip().casefold()
+	type_name = str(modifiers.get("discount_type") or "fixed").strip().casefold()
+	known_group_sources = {"customer_group", "group", "گروه مشتری"}
+	if source in known_group_sources and type_name == "percent":
+		try:
+			if abs(value - max(float(group_percent or 0), 0)) <= 0.0001:
+				return False
+		except (TypeError, ValueError):
+			pass
+	return True
+
+
 def select_order_discount(
 	subtotal,
 	group_percent=0,

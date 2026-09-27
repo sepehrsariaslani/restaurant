@@ -4,6 +4,7 @@ from restaurant.pricing_policy import (
 	allocate_return_amount_by_order,
 	calculate_manual_discount_amount,
 	coach_commission_amount,
+	resolve_manual_discount_active,
 	select_order_discount,
 )
 
@@ -51,6 +52,20 @@ class TestCustomerPricingPolicy(unittest.TestCase):
 		result = select_order_discount(1000, group_percent=10, manual_discount_active=False)
 		self.assertEqual(result["discount_source"], "customer_group")
 		self.assertEqual(result["discount_amount"], 100)
+
+	def test_legacy_pos_payload_infers_manual_discount_when_it_differs_from_group(self):
+		self.assertTrue(
+			resolve_manual_discount_active(
+				{"discount_type": "percent", "discount_value": 10},
+				group_percent=9,
+			)
+		)
+		self.assertFalse(
+			resolve_manual_discount_active(
+				{"discount_type": "percent", "discount_value": 9, "discount_source": "customer_group"},
+				group_percent=9,
+			)
+		)
 
 	def test_invoice_return_is_allocated_by_each_linked_order_amount(self):
 		result = allocate_return_amount_by_order(100, {"SO-1": 100, "SO-2": 300})
