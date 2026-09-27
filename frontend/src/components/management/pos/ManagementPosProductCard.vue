@@ -153,7 +153,7 @@ const displayQuantity = computed(() => {
 	overflow: hidden;
 }
 
-.pos-product-card__image { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center; }
+.pos-product-card__image { width: 100%; height: 100%; display: block; object-fit: contain; object-position: center; }
 .pos-product-card__image-placeholder {
 	display: grid;
 	place-items: center;
