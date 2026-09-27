@@ -1,0 +1,39 @@
+{
+ "doctype": "DocType",
+ "name": "Restaurant Blog Product",
+ "module": "Restaurant",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": [
+  "item_code",
+  "custom_label",
+  "note",
+  "image_override"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "label": "محصول",
+   "fieldtype": "Link",
+   "options": "Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "custom_label",
+   "label": "عنوان نمایشی",
+   "fieldtype": "Data",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "note",
+   "label": "توضیح کوتاه",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "image_override",
+   "label": "تصویر جایگزین",
+   "fieldtype": "Attach Image"
+  }
+ ]
+}

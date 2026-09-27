@@ -51,15 +51,13 @@
    "fieldname": "vehicle_type",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Vehicle Type",
-   "reqd": 1
+   "label": "Vehicle Type"
   },
   {
    "fieldname": "plate_number",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Plate Number",
-   "reqd": 1
+   "label": "Plate Number"
   },
   {
    "fieldname": "zone",

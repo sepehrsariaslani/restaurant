@@ -24,6 +24,67 @@
         </article>
       </section>
 
+      <section class="wallet-charge-card customer-glass-card" aria-labelledby="wallet-charge-title">
+        <div class="wallet-section-head">
+          <div>
+            <h2 id="wallet-charge-title">شارژ کیف پول</h2>
+            <p>شارژ آنلاین هنوز فعال نیست؛ درخواست دستی ثبت کنید تا پس از بررسی پرداخت به موجودی قابل برداشت اضافه شود.</p>
+          </div>
+          <ArrowUpRight :size="21" aria-hidden="true" />
+        </div>
+
+        <template v-if="charge.enabled">
+          <div v-if="charge.iban || charge.card_number || charge.bank_name || charge.account_holder" class="charge-payment-details">
+            <article v-if="charge.bank_name"><small>بانک</small><strong>{{ charge.bank_name }}</strong></article>
+            <article v-if="charge.account_holder"><small>صاحب حساب</small><strong>{{ charge.account_holder }}</strong></article>
+            <article v-if="charge.iban" class="charge-copy-row"><span><small>شماره شبا</small><strong dir="ltr">{{ charge.iban }}</strong></span><button type="button" class="wallet-copy-button" @click="copyChargeDetail('شبا', charge.iban)">کپی</button></article>
+            <article v-if="charge.card_number" class="charge-copy-row"><span><small>شماره کارت</small><strong dir="ltr">{{ charge.card_number }}</strong></span><button type="button" class="wallet-copy-button" @click="copyChargeDetail('شماره کارت', charge.card_number)">کپی</button></article>
+          </div>
+          <p class="charge-instructions">{{ charge.instructions || (charge.iban || charge.card_number ? 'مبلغ را به حساب بالا واریز کنید و شماره پیگیری را در فرم وارد کنید.' : 'اطلاعات واریز هنوز ثبت نشده است. درخواست را ثبت کنید تا پشتیبانی روش پرداخت را به شما اعلام کند.') }}</p>
+          <p v-if="copyMessage" class="wallet-success" role="status">{{ copyMessage }}</p>
+          <form class="charge-form" @submit.prevent="submitChargeRequest">
+            <label class="customer-field">مبلغ شارژ ({{ currencyLabel }})
+              <input v-model.number="chargeForm.amount" class="customer-input" type="number" min="1" step="1" required inputmode="numeric" />
+            </label>
+            <label class="customer-field">شماره پیگیری پرداخت (اختیاری)
+              <input v-model.trim="chargeForm.payment_reference" class="customer-input" maxlength="120" autocomplete="off" placeholder="اگر واریز کرده‌اید، وارد کنید" />
+            </label>
+            <label class="customer-field charge-form__note">توضیح (اختیاری)
+              <input v-model.trim="chargeForm.note" class="customer-input" maxlength="240" placeholder="" />
+            </label>
+            <button class="withdraw-submit" type="submit" :disabled="chargeSaving || Number(chargeForm.amount) <= 0">
+              {{ chargeSaving ? 'در حال ثبت…' : 'ثبت درخواست شارژ' }}
+            </button>
+          </form>
+          <p class="wallet-footnote">ثبت درخواست به‌تنهایی موجودی را زیاد نمی‌کند؛ بعد از بررسی و تأیید پرداخت توسط پشتیبانی، مبلغ در کیف پول ثبت می‌شود.</p>
+        </template>
+        <p v-else class="wallet-empty">درخواست شارژ در حال حاضر غیرفعال است؛ برای راهنمایی با پشتیبانی تماس بگیرید.</p>
+      </section>
+
+      <section class="wallet-history customer-glass-card">
+        <div class="wallet-section-head"><div><h2>درخواست‌های شارژ</h2><p>وضعیت درخواست و پرداخت‌های قبلی</p></div><History :size="20" /></div>
+        <div v-if="chargeRequests.length" class="wallet-request-list">
+          <article v-for="row in chargeRequests" :key="row.name" class="wallet-charge-request-row">
+            <div class="charge-request-summary">
+              <strong>{{ formatMoney(row.amount, currency) }}</strong>
+              <small>{{ row.name }} · {{ formatDate(row.creation) }}</small>
+              <small v-if="row.payment_reference">شماره پیگیری: {{ row.payment_reference }}</small>
+              <small v-if="row.review_note">پاسخ پشتیبانی: {{ row.review_note }}</small>
+            </div>
+            <span class="request-status" :class="statusClass(row.status)">{{ row.status }}</span>
+            <form v-if="row.status === 'در انتظار پرداخت'" class="charge-reference-form" @submit.prevent="submitChargeReference(row)">
+              <label class="customer-field">شماره پیگیری واریز
+                <input v-model.trim="chargeReferences[row.name]" class="customer-input" maxlength="120" required autocomplete="off" />
+              </label>
+              <button class="wallet-copy-button" type="submit" :disabled="chargeReferenceSaving === row.name || !chargeReferences[row.name]?.trim()">
+                {{ chargeReferenceSaving === row.name ? 'در حال ثبت…' : 'ارسال برای بررسی' }}
+              </button>
+            </form>
+          </article>
+        </div>
+        <p v-else class="wallet-empty">هنوز درخواست شارژی ثبت نکرده‌اید.</p>
+      </section>
+
       <section class="wallet-rules customer-glass-card">
         <div><Gift :size="19" /><h2>قانون بازگشت وجه خرید</h2></div>
         <p v-if="rules.club_enabled && Number(rules.cashback_percent) > 0">
@@ -86,7 +147,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ArrowDownLeft, ArrowDownToLine, ArrowUpRight, Banknote, Gift, History, Landmark, Wallet } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
-import { getMenuBoot, getMyWallet, requestMyWalletWithdrawal } from '@/utils/api'
+import { getMenuBoot, getMyWallet, requestMyWalletCharge, requestMyWalletWithdrawal, submitMyWalletChargeReference } from '@/utils/api'
 import { formatMoney } from '@/utils/format'
 
 const AUTH_KEY = 'restaurant-customer-auth-v1'
@@ -94,10 +155,15 @@ let auth = {}
 try { auth = JSON.parse(localStorage.getItem(AUTH_KEY) || '{}') } catch {}
 const wallet = ref({ withdrawable_balance: 0, cashback_balance: 0 })
 const rules = ref({})
+const charge = ref({ enabled: true })
 const transactions = ref([])
 const withdrawalRequests = ref([])
+const chargeRequests = ref([])
 const loading = ref(false), saving = ref(false), error = ref(''), message = ref(''), currency = ref('IRR')
 const form = reactive({ amount: '', bank_iban: '', account_holder: auth.customer_name || '' , note: '' })
+const chargeForm = reactive({ amount: '', payment_reference: '', note: '' })
+const chargeReferences = reactive({})
+const chargeSaving = ref(false), chargeReferenceSaving = ref(''), copyMessage = ref('')
 const currencyLabel = computed(() => ['TOMAN', 'IRT'].includes(currency.value) ? 'تومان' : 'ریال')
 
 function formatDate(value = '') {
@@ -105,7 +171,7 @@ function formatDate(value = '') {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' })
 }
-function statusClass(value) { return value === 'پرداخت شد' ? 'is-paid' : value === 'رد شد' ? 'is-rejected' : 'is-pending' }
+function statusClass(value) { return ['پرداخت شد', 'تأیید شد'].includes(value) ? 'is-paid' : value === 'رد شد' ? 'is-rejected' : 'is-pending' }
 
 async function loadWallet() {
   loading.value = true; error.value = ''
@@ -113,10 +179,54 @@ async function loadWallet() {
     const data = await getMyWallet()
     wallet.value = data?.wallet || wallet.value
     rules.value = data?.rules || {}
+    charge.value = data?.charge || charge.value
     transactions.value = data?.transactions || []
     withdrawalRequests.value = data?.withdrawal_requests || []
+    chargeRequests.value = data?.charge_requests || []
   } catch (err) { error.value = err?.message || 'کیف پول دریافت نشد.' }
   finally { loading.value = false }
+}
+
+async function copyChargeDetail(label, value) {
+  try {
+    await navigator.clipboard.writeText(String(value || ''))
+    copyMessage.value = `${label} کپی شد.`
+    window.setTimeout(() => { copyMessage.value = '' }, 2200)
+  } catch {
+    copyMessage.value = 'کپی خودکار در دسترس نیست؛ اطلاعات را دستی انتخاب کنید.'
+  }
+}
+
+async function submitChargeRequest() {
+  if (chargeSaving.value || Number(chargeForm.amount) <= 0) return
+  chargeSaving.value = true; error.value = ''; message.value = ''
+  try {
+    const hasReference = Boolean(chargeForm.payment_reference.trim())
+    await requestMyWalletCharge({
+      amount: chargeForm.amount,
+      payment_reference: chargeForm.payment_reference,
+      note: chargeForm.note,
+    })
+    message.value = hasReference
+      ? 'درخواست شارژ و شماره پیگیری برای بررسی ارسال شد؛ موجودی پس از تأیید به‌روزرسانی می‌شود.'
+      : 'درخواست شارژ ثبت شد. پس از واریز، شماره پیگیری را در درخواست ثبت کنید.'
+    chargeForm.amount = ''; chargeForm.payment_reference = ''; chargeForm.note = ''
+    await loadWallet()
+  } catch (err) { error.value = err?.message || 'ثبت درخواست شارژ انجام نشد.' }
+  finally { chargeSaving.value = false }
+}
+
+async function submitChargeReference(row) {
+  const reference = String(chargeReferences[row.name] || '').trim()
+  if (!reference || chargeReferenceSaving.value) return
+  chargeReferenceSaving.value = row.name; error.value = ''; message.value = ''
+  try {
+    await submitMyWalletChargeReference({ request_name: row.name, payment_reference: reference })
+    message.value = 'شماره پیگیری برای بررسی پشتیبانی ارسال شد.'
+    delete chargeReferences[row.name]
+    await loadWallet()
+  } catch (err) { error.value = err?.message || 'ارسال شماره پیگیری انجام نشد.' }
+  finally { chargeReferenceSaving.value = '' }
 }
 
 async function submitWithdrawal() {
@@ -147,18 +257,34 @@ onMounted(async () => {
 .wallet-balance-card p, .wallet-rules p, .wallet-section-head p, .wallet-footnote { margin: 0; color: var(--ds-color-text-muted); font-size: .84rem; line-height: 1.8; }
 .wallet-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 14px; background: var(--ds-color-action-primary-soft); color: var(--ds-color-action-primary); }
 .wallet-balance-card--cashback .wallet-icon { background: var(--ds-color-action-accent-soft); color: var(--ds-color-action-accent-foreground); }
-.wallet-rules, .withdraw-card, .wallet-history { padding: 1.2rem; }
+.wallet-rules, .withdraw-card, .wallet-history, .wallet-charge-card { padding: 1.2rem; }
 .wallet-rules > div, .wallet-section-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-bottom: .7rem; }
 .wallet-rules > div { justify-content: flex-start; color: var(--ds-color-action-accent-foreground); }
 .wallet-rules h2, .wallet-section-head h2 { margin: 0; font-size: 1.02rem; color: var(--ds-color-text-primary); }
 .wallet-rules-note { margin-top: .4rem !important; }
 .wallet-section-head > div { display: grid; gap: .2rem; }
+.wallet-charge-card > .wallet-section-head > svg { flex: 0 0 auto; color: var(--ds-color-action-accent); }
+.charge-payment-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: .65rem; margin-block: 1rem .7rem; }
+.charge-payment-details article { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .6rem; padding: .75rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface); }
+.charge-payment-details article > span { display: grid; min-width: 0; gap: .25rem; }
+.charge-payment-details small { color: var(--ds-color-text-muted); font-size: .76rem; }
+.charge-payment-details strong { overflow-wrap: anywhere; color: var(--ds-color-text-primary); font-size: .9rem; }
+.charge-instructions { margin: .4rem 0 1rem; color: var(--ds-color-text-secondary); font-size: .86rem; line-height: 1.8; }
+.charge-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; align-items: end; margin-top: 1rem; }
+.charge-form__note { grid-column: 1 / -1; }
 .withdraw-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-top: 1rem; }
 .withdraw-submit { min-height: 48px; align-self: end; border: 0; border-radius: var(--ds-radius-md); background: var(--ds-color-action-primary); color: var(--ds-color-action-primary-foreground); font: inherit; font-weight: 800; cursor: pointer; }
 .withdraw-submit:disabled { opacity: .55; cursor: not-allowed; }
 .wallet-footnote { margin-top: .8rem; }
 .wallet-request-list, .wallet-transaction-list { display: grid; }
 .wallet-request-row, .wallet-transaction-row { display: flex; align-items: center; gap: .75rem; justify-content: space-between; padding: .85rem 0; border-top: 1px solid var(--ds-color-border); }
+.wallet-charge-request-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .65rem 1rem; padding: .9rem 0; border-top: 1px solid var(--ds-color-border); }
+.charge-request-summary { display: grid; min-width: 0; gap: .25rem; }
+.charge-request-summary small { color: var(--ds-color-text-muted); font-size: .78rem; overflow-wrap: anywhere; }
+.charge-reference-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .65rem; grid-column: 1 / -1; }
+.wallet-copy-button { min-height: 44px; padding: .5rem .9rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.wallet-copy-button:disabled { opacity: .55; cursor: not-allowed; }
+.wallet-copy-button:focus-visible, .withdraw-submit:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 2px; }
 .wallet-request-row > div { display: grid; min-width: 0; gap: .25rem; }
 .wallet-request-row small, .transaction-description small { color: var(--ds-color-text-muted); font-size: .78rem; overflow-wrap: anywhere; }
 .request-status { flex: 0 0 auto; border-radius: 999px; padding: .32rem .65rem; font-size: .75rem; font-weight: 700; background: var(--ds-color-surface); }
@@ -174,5 +300,5 @@ onMounted(async () => {
 .wallet-error { color: var(--ds-color-status-danger); line-height: 1.8; }
 .wallet-error button { color: inherit; font: inherit; border: 0; background: transparent; text-decoration: underline; }
 .wallet-success { color: var(--ds-color-status-success); }
-@media (max-width: 640px) { .wallet-balances, .withdraw-form { grid-template-columns: 1fr; } .wallet-balance-card, .wallet-rules, .withdraw-card, .wallet-history { padding: 1rem; } .withdraw-submit { min-height: 50px; } }
+@media (max-width: 640px) { .wallet-balances, .withdraw-form, .charge-form { grid-template-columns: 1fr; } .charge-form__note { grid-column: auto; } .wallet-charge-request-row, .charge-reference-form { grid-template-columns: 1fr; } .charge-reference-form { grid-column: auto; } .wallet-balance-card, .wallet-rules, .withdraw-card, .wallet-history, .wallet-charge-card { padding: 1rem; } .withdraw-submit { min-height: 50px; } }
 </style>

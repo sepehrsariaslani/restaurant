@@ -369,7 +369,8 @@ test('survey questions and responses use shared list patterns', () => {
   assert.match(surveysSource, /:rows="questions"/)
   assert.match(surveysSource, /:rows="filteredResponses"/)
   assert.match(surveysSource, /openQuestionForm\(row\)/)
-  assert.match(surveysSource, /starString\(row\.overall_rating\)/)
+  assert.match(surveysSource, /row\.overall_rating >= 7/)
+  assert.match(surveysSource, /formatQty\(row\.overall_rating\)\s*\}\}\s*\/ ۱۰/)
 })
 
 test('branch management uses the shared responsive list pattern and keeps native actions', () => {

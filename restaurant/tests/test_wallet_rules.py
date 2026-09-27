@@ -1,6 +1,12 @@
 import unittest
 
-from restaurant.wallet_rules import allocate_wallet_payment, normalize_iranian_iban, split_legacy_wallet_ledger
+from restaurant.wallet_rules import (
+	allocate_wallet_payment,
+	normalize_iranian_iban,
+	split_legacy_wallet_ledger,
+	validate_wallet_charge_amount,
+	wallet_charge_request_status,
+)
 
 
 def iranian_iban(body):
@@ -47,6 +53,14 @@ class WalletRuleTests(unittest.TestCase):
 		self.assertEqual(normalize_iranian_iban(f" {valid[:8]} {valid[8:]} "), valid)
 		self.assertEqual(normalize_iranian_iban(valid[:-1] + ("0" if valid[-1] != "0" else "1")), "")
 		self.assertEqual(normalize_iranian_iban("123456"), "")
+
+	def test_manual_charge_requests_never_turn_pending_payment_into_wallet_credit(self):
+		self.assertEqual(validate_wallet_charge_amount("12500.50"), 12500.5)
+		self.assertEqual(wallet_charge_request_status(""), "در انتظار پرداخت")
+		self.assertEqual(wallet_charge_request_status("TRX-123"), "در انتظار بررسی")
+		for invalid in (0, -1, "nan", "Infinity", "not-a-number"):
+			with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+				validate_wallet_charge_amount(invalid)
 
 
 if __name__ == "__main__":

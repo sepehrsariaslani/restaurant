@@ -41,6 +41,13 @@
         </article>
       </section>
 
+      <CustomerOrderSurveySummary
+        :summary="surveySummary"
+        :requesting="requestingSurvey"
+        @request="requestSurvey"
+      />
+      <p v-if="surveyError" class="state error" role="alert">{{ surveyError }}</p>
+
       <section v-if="timeline.length" class="timeline-card customer-glass-card">
         <h3><Clock3 :size="19" /> روند سفارش</h3>
         <ol class="timeline">
@@ -103,9 +110,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { Clock3, MapPin, PackageCheck, ReceiptText, RotateCcw, Search, ShoppingBag } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
-import { computeBuilderPrice, getItemDetail, getOrder } from '@/utils/api'
+import CustomerOrderSurveySummary from '@/components/customer/CustomerOrderSurveySummary.vue'
+import { computeBuilderPrice, getItemDetail, getMyOrderSurveySummaries, getOrder, requestMyOrderSurvey } from '@/utils/api'
 import { cartState, saveOrderContext, upsertLine } from '@/stores/cartStore'
 import { buildCustomerReorderLine } from '@/utils/customerOrderRepeat'
+import { hasCustomerSession } from '@/utils/customerAuth'
 import { formatMoney, formatStatus, normalizeMobile, parseQuery } from '@/utils/format'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
@@ -118,6 +127,9 @@ const error = ref('')
 const currency = ref('TOMAN')
 const reordering = ref(false)
 const reorderReport = ref(null)
+const surveySummary = ref(null)
+const requestingSurvey = ref(false)
+const surveyError = ref('')
 const mobileInput = ref(query.mobile || readAuth().mobile || '')
 
 const orderCode = computed(() => resolveOrderCode())
@@ -165,10 +177,36 @@ async function loadOrder() {
     timeline.value = Array.isArray(data?.status_timeline) ? data.status_timeline : []
     reorderReport.value = null
     if (data?.currency) currency.value = data.currency
+    surveySummary.value = null
+    surveyError.value = ''
+    if (hasCustomerSession()) {
+      try {
+        const orderName = String(order.value?.name || '')
+        if (orderName) {
+          const payload = await getMyOrderSurveySummaries([orderName])
+          surveySummary.value = payload?.summaries?.[orderName] || null
+        }
+      } catch (_) {}
+    }
   } catch (err) {
     error.value = err?.message || 'دریافت جزئیات سفارش ناموفق بود.'
   } finally {
     loading.value = false
+  }
+}
+
+async function requestSurvey() {
+  const orderName = String(order.value?.name || '')
+  if (!orderName || requestingSurvey.value) return
+  requestingSurvey.value = true
+  surveyError.value = ''
+  try {
+    const result = await requestMyOrderSurvey(orderName)
+    if (result?.href) window.location.assign(result.href)
+  } catch (err) {
+    surveyError.value = err?.message || 'آماده‌سازی فرم نظرخواهی انجام نشد.'
+  } finally {
+    requestingSurvey.value = false
   }
 }
 
@@ -279,6 +317,11 @@ onMounted(() => {
 .empty-card h3, .empty-card p { margin: 0; }
 .empty-card p { color: var(--ds-color-text-secondary); }
 .bottom-spacer { height: 2rem; }
+.survey-detail-cta { display: flex; align-items: center; gap: .7rem; margin: 0 1rem 1rem; padding: .8rem .9rem; border: 1px solid color-mix(in srgb, var(--ds-color-action-accent) 36%, var(--ds-color-border)); border-radius: 18px; background: var(--ds-color-action-accent-soft); color: var(--ds-color-text-primary); text-decoration: none; }
+.survey-detail-cta > span:first-child { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border-radius: 13px; background: var(--ds-color-surface); color: var(--ds-color-action-primary); }
+.survey-detail-cta > span:nth-child(2) { display: grid; flex: 1; gap: .18rem; }
+.survey-detail-cta strong { font-size: .84rem; }
+.survey-detail-cta small { color: var(--ds-color-text-muted); font-size: .73rem; }
 @media (min-width: 720px) { .order-detail-page { max-width: 760px; margin: 0 auto; } .code-card, .lookup-card, .timeline-card, .items-card, .address-card, .empty-card { margin-inline: 0; } .facts-grid, .actions-row, .reorder-report { margin-inline: 0; } }
 @media (max-width: 430px) { .actions-row { grid-template-columns: 1fr; } .status-pill { font-size: .72rem; } }
 </style>

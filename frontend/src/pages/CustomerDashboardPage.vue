@@ -43,14 +43,70 @@
         </div>
       </section>
 
+      <section class="customer-section customer-glass-card wallet-overview" aria-labelledby="wallet-overview-title">
+        <div class="wallet-overview__heading">
+          <span class="customer-icon-badge wallet-overview__icon"><Wallet :size="20" aria-hidden="true" /></span>
+          <div>
+            <h2 id="wallet-overview-title">کیف پول من</h2>
+            <p>موجودی قابل برداشت و اعتبار خریدتان را جداگانه ببینید.</p>
+          </div>
+        </div>
+        <p v-if="walletSummaryLoading" class="customer-section__hint" role="status">در حال دریافت موجودی کیف پول…</p>
+        <div v-else-if="walletSummaryError" class="wallet-overview__error" role="alert">
+          <span>{{ walletSummaryError }}</span>
+          <button type="button" @click="loadWalletSummary">تلاش دوباره</button>
+        </div>
+        <div v-else class="wallet-overview__balances">
+          <div><small>قابل برداشت</small><strong>{{ Number(walletSummary.withdrawable_balance || 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong></div>
+          <div><small>اعتبار خرید (کش‌بک)</small><strong>{{ Number(walletSummary.cashback_balance || 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong></div>
+        </div>
+        <a class="wallet-overview__link" href="/customer/wallet">مشاهده جزئیات و شارژ کیف پول <ChevronLeft :size="17" aria-hidden="true" /></a>
+      </section>
+
+      <section v-if="surveyInvitations.length" class="customer-section survey-invitations" aria-labelledby="survey-invitation-title">
+        <div class="survey-invitations__heading">
+          <span class="customer-icon-badge survey-invitations__icon"><MessageCircle :size="20" aria-hidden="true" /></span>
+          <div>
+            <h2 id="survey-invitation-title">تجربهٔ سفارشتان را ثبت کنید</h2>
+            <p>امتیاز شما به بهترشدن غذاها و خدمات ویدرخت کمک می‌کند.</p>
+          </div>
+        </div>
+        <a v-for="invite in surveyInvitations" :key="invite.name" class="survey-invitation-row" :href="invite.href || surveyHref(invite)">
+          <span><strong>سفارش {{ invite.order_code }}</strong><small>فرم کوتاه نظرخواهی غذا و خدمات</small></span>
+          <span class="survey-invitation-action">ثبت نظر <ChevronLeft :size="16" /></span>
+        </a>
+      </section>
+
+      <section v-if="feedbackReplies.length" class="customer-section customer-glass-card survey-replies" aria-labelledby="survey-replies-title">
+        <div class="customer-section__head">
+          <div>
+            <h2 id="survey-replies-title">پاسخ تیم ویدرخت به نظر شما</h2>
+            <p>پاسخ‌های مدیر دربارهٔ بازخوردهای ثبت‌شده.</p>
+          </div>
+        </div>
+        <article v-for="review in feedbackReplies" :key="review.name" class="survey-reply-row">
+          <img v-if="review.image" :src="review.image" :alt="review.item_title" loading="lazy" />
+          <span v-else class="survey-reply-placeholder"><Utensils :size="17" aria-hidden="true" /></span>
+          <div>
+            <strong>{{ review.item_title }} · {{ Number(review.score_10 || 0).toLocaleString('fa-IR') }} از ۱۰</strong>
+            <p>{{ review.manager_reply }}</p>
+            <small>نظر شما: {{ review.moderation_status }}</small>
+          </div>
+        </article>
+      </section>
+
       <nav class="account-shortcuts customer-glass-card" aria-label="مدیریت حساب">
         <a href="/order/type"><ShoppingBag :size="22" /><span><strong>شروع سفارش</strong><small>انتخاب روش دریافت و غذا</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/orders"><ReceiptText :size="22" /><span><strong>سفارش‌های من</strong><small>پیگیری و سفارش دوباره</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/wallet"><Wallet :size="22" /><span><strong>کیف پول</strong><small>موجودی، شارژ و کش‌بک</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/referrals"><Handshake :size="22" /><span><strong>معرفی و دعوت اعضا</strong><small>کد شخصی، پیوند دعوت و باشگاه مربی‌گری</small></span><ChevronLeft :size="18" /></a>
+        <a href="/customer/recurring-orders"><CalendarDays :size="22" /><span><strong>برنامهٔ سفارش تکراری</strong><small>مدیریت وعده‌های زمان‌بندی‌شده</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/nutrition"><CalendarDays :size="22" /><span><strong>برنامهٔ غذایی من</strong><small>هدف روزانه، حساسیت‌ها و انتخاب وعده‌ها</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/addresses"><MapPin :size="22" /><span><strong>آدرس‌های من</strong><small>خانه، محل کار و نشانی‌های ذخیره‌شده</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/vehicles"><CarFront :size="22" /><span><strong>خودروهای من</strong><small>تحویل راحت درب ماشین</small></span><ChevronLeft :size="18" /></a>
         <a href="/table-reservation"><CalendarDays :size="22" /><span><strong>رزرو میز</strong><small>انتخاب روز، ساعت و میز</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/branches"><Store :size="22" /><span><strong>شعبه‌ها</strong><small>نشانی و ساعت کار</small></span><ChevronLeft :size="18" /></a>
+        <a href="/cooperation"><Handshake :size="22" /><span><strong>درخواست همکاری</strong><small>برای سازمان، باشگاه یا مربی‌ها</small></span><ChevronLeft :size="18" /></a>
       </nav>
       <p v-if="profileLoading" class="customer-section__hint" role="status">در حال دریافت اطلاعات حساب…</p>
       <p v-if="profileError" class="customer-danger-text" role="alert">{{ profileError }}</p>
@@ -64,14 +120,6 @@
           </div>
         </div>
         <div class="club-summary__stats">
-          <article class="club-stat">
-            <small>موجودی قابل برداشت</small>
-            <strong>{{ (club.withdrawable_balance ?? club.wallet_balance ?? 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong>
-          </article>
-          <article class="club-stat">
-            <small>اعتبار خرید (کش‌بک)</small>
-            <strong>{{ (club.cashback_balance || 0).toLocaleString('fa-IR') }} <small>{{ currencyLabel }}</small></strong>
-          </article>
           <article class="club-stat">
             <small>امتیاز وفاداری</small>
             <strong>{{ (club.points_balance || 0).toLocaleString('fa-IR') }}</strong>
@@ -95,7 +143,32 @@
             {{ redeemBusy ? 'در حال تبدیل...' : 'تبدیل امتیاز به اعتبار' }}
           </button>
         </div>
-        <a class="customer-page__ghost-action club-wallet-link" href="/customer/wallet"><Wallet :size="16" /> جزئیات کیف پول و درخواست برداشت</a>
+        <a class="customer-page__ghost-action club-wallet-link" href="/customer/wallet"><Wallet :size="16" /> شارژ و جزئیات کیف پول</a>
+      </section>
+
+      <section v-if="club?.coach_invites_enabled" class="customer-section customer-glass-card coach-invites">
+        <div class="coach-invites__copy">
+          <span class="customer-icon-badge coach-badge"><Handshake :size="21" /></span>
+          <div>
+            <h2>دعوت شاگردها</h2>
+            <p>شاگردها با این پیوند عضو گروه شما می‌شوند و هنگام سفارش از تخفیف استفاده می‌کنند.</p>
+          </div>
+        </div>
+        <div class="coach-invites__terms">
+          <span><strong>{{ Number(club.coach_discount_percent || 0).toLocaleString('fa-IR') }}٪</strong> تخفیف شاگرد</span>
+          <span><strong>{{ Number(club.coach_commission_percent || 0).toLocaleString('fa-IR') }}٪</strong> سهم کیف پول شما</span>
+          <span><strong>{{ Number(club.coach_members_count || 0).toLocaleString('fa-IR') }}</strong> عضو</span>
+        </div>
+        <label class="coach-invites__label" for="coach-invite-link">پیوند دعوت اختصاصی</label>
+        <div class="coach-invites__link-row">
+          <input id="coach-invite-link" :value="coachInviteUrl" readonly dir="ltr" aria-label="پیوند دعوت شاگردها" />
+          <button type="button" class="coach-invites__copy-btn" :disabled="!coachInviteUrl" @click="copyCoachInvite">
+            <Check v-if="inviteCopied" :size="16" />
+            <Copy v-else :size="16" />
+            {{ inviteCopied ? 'کپی شد' : 'کپی پیوند' }}
+          </button>
+        </div>
+        <p v-if="inviteCopyError" class="club-msg err" role="alert">{{ inviteCopyError }}</p>
       </section>
 
       <section class="customer-section customer-glass-card customer-list-card recent-orders-section">
@@ -133,9 +206,14 @@ import { computed, onMounted, ref } from 'vue'
 import {
   CarFront,
   CalendarDays,
+  Check,
   ChevronLeft,
+  Copy,
   LogOut,
+  Handshake,
+  HeartPulse,
   MapPin,
+  MessageCircle,
   Pencil,
   ReceiptText,
   ShoppingBag,
@@ -143,9 +221,10 @@ import {
   Star,
   Store,
   UserRound,
+  Utensils,
   Wallet,
 } from 'lucide-vue-next'
-import { customerLogout, getCustomerProfile, getMenuItems, getMyWallet, redeemMyPoints } from '@/utils/api'
+import { customerLogout, getCustomerProfile, getMenuBoot, getMySurveyInvitations, getMyWallet, listMyCustomerReviews, redeemMyPoints } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 import { hasCustomerSession } from '@/utils/customerAuth'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
@@ -153,10 +232,26 @@ import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const customer = ref({ name: '', mobile: '' })
 const club = ref(null)
+const walletSummary = ref({ withdrawable_balance: 0, cashback_balance: 0 })
+const walletSummaryLoading = ref(false)
+const walletSummaryError = ref('')
 const redeemBusy = ref(false)
 const clubMessage = ref('')
 const clubError = ref('')
 const currencyLabel = computed(() => (currency.value === 'TOMAN' || currency.value === 'IRT' ? 'تومان' : 'ریال'))
+
+async function loadWalletSummary() {
+  walletSummaryLoading.value = true
+  walletSummaryError.value = ''
+  try {
+    const payload = await getMyWallet()
+    walletSummary.value = payload?.wallet || { withdrawable_balance: 0, cashback_balance: 0 }
+  } catch (err) {
+    walletSummaryError.value = err?.message || 'موجودی کیف پول دریافت نشد.'
+  } finally {
+    walletSummaryLoading.value = false
+  }
+}
 const canRedeemPoints = computed(() => {
   if (!club.value || !club.value.points_enabled) return false
   const balance = Number(club.value.points_balance) || 0
@@ -196,15 +291,37 @@ async function redeemAllPoints() {
 const profileLoading = ref(false)
 const profileError = ref('')
 const orders = ref([])
-const currency = ref('TOMAN')
+const surveyInvitations = ref([])
+const feedbackReplies = ref([])
+const currency = ref('IRR')
 
 const customerName = computed(() => customer.value.name || 'مهمان عزیز')
 const customerMobile = computed(() => normalizeMobile(customer.value.mobile || ''))
+const coachInviteUrl = computed(() => {
+  const code = String(club.value?.referral_code || '').trim()
+  return code && typeof window !== 'undefined'
+    ? `${window.location.origin}/customer/login?ref=${encodeURIComponent(code)}`
+    : ''
+})
+const inviteCopied = ref(false)
+const inviteCopyError = ref('')
 const recentOrders = computed(() => orders.value.slice(0, 3))
 const avatarLetter = computed(() => {
   const name = customerName.value
   return name !== 'مهمان عزیز' ? name.slice(0, 1) : 'ک'
 })
+
+async function copyCoachInvite() {
+  if (!coachInviteUrl.value) return
+  inviteCopyError.value = ''
+  try {
+    await navigator.clipboard.writeText(coachInviteUrl.value)
+    inviteCopied.value = true
+    window.setTimeout(() => { inviteCopied.value = false }, 2200)
+  } catch {
+    inviteCopyError.value = 'کپی خودکار در دسترس نیست؛ پیوند را انتخاب و دستی کپی کنید.'
+  }
+}
 
 function readAuth() {
   try {
@@ -240,6 +357,10 @@ function orderDetailUrl(order = {}) {
   return `/customer/orders/${code}?mobile=${encodeURIComponent(customerMobile.value)}`
 }
 
+function surveyHref(invite = {}) {
+  return '/survey?invitation=' + encodeURIComponent(invite.name || '')
+}
+
 async function logout() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید خارج شوید؟')) return
   try { await customerLogout() } catch {}
@@ -257,7 +378,17 @@ onMounted(async () => {
     return
   }
   customer.value = { name: auth.name, mobile: auth.mobile }
+  getMenuBoot('').then((boot) => { if (boot?.currency) currency.value = boot.currency }).catch(() => {})
+  void loadWalletSummary()
   if (auth.mobile) {
+    const [invitationResult, reviewResult] = await Promise.allSettled([
+      getMySurveyInvitations(),
+      listMyCustomerReviews(),
+    ])
+    if (invitationResult.status === 'fulfilled') surveyInvitations.value = invitationResult.value?.invitations || []
+    if (reviewResult.status === 'fulfilled') {
+      feedbackReplies.value = (reviewResult.value?.reviews || []).filter((review) => String(review.manager_reply || '').trim()).slice(0, 5)
+    }
     profileLoading.value = true
     try {
       const profile = await getCustomerProfile({ mobile: auth.mobile })
@@ -280,6 +411,32 @@ onMounted(async () => {
 .account-shortcuts span { display: grid; gap: .25rem; flex: 1; }
 .account-shortcuts strong { color: var(--ds-color-text-primary); font-size: .95rem; }
 .account-shortcuts small { color: var(--ds-color-text-muted); font-size: .8rem; }
+
+.survey-invitations {
+  display: grid;
+  gap: .7rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-accent) 36%, var(--ds-color-border));
+  border-radius: var(--ds-radius-lg);
+  background: linear-gradient(135deg, var(--ds-color-action-accent-soft), var(--ds-color-surface-raised) 62%);
+}
+.survey-invitations__heading { display: flex; align-items: flex-start; gap: .7rem; }
+.survey-invitations__icon { flex: 0 0 auto; background: var(--ds-color-action-accent-soft); color: var(--ds-color-action-accent-foreground); }
+.survey-invitations__heading h2, .survey-replies h2 { margin: 0; font-size: .98rem; }
+.survey-invitations__heading p, .survey-replies .customer-section__head p { margin: .2rem 0 0; color: var(--ds-color-text-muted); font-size: .78rem; line-height: 1.7; }
+.survey-invitation-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; min-height: 58px; padding: .65rem .75rem; border: 1px solid var(--ds-color-border); border-radius: 14px; background: var(--ds-color-surface); color: inherit; text-decoration: none; }
+.survey-invitation-row > span:first-child { display: grid; gap: .18rem; }
+.survey-invitation-row strong { font-size: .82rem; }
+.survey-invitation-row small { color: var(--ds-color-text-muted); font-size: .72rem; }
+.survey-invitation-action { display: inline-flex; align-items: center; gap: .2rem; flex: 0 0 auto; color: var(--ds-color-action-primary); font-size: .76rem; font-weight: 800; }
+.survey-replies { display: grid; gap: .55rem; padding: 1rem; }
+.survey-reply-row { display: flex; align-items: flex-start; gap: .65rem; padding: .7rem 0; border-top: 1px solid var(--ds-color-border); }
+.survey-reply-row img, .survey-reply-placeholder { flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px; object-fit: cover; background: var(--ds-color-action-primary-soft); color: var(--ds-color-action-primary); }
+.survey-reply-placeholder { display: grid; place-items: center; }
+.survey-reply-row > div { min-width: 0; }
+.survey-reply-row strong { font-size: .8rem; }
+.survey-reply-row p { margin: .25rem 0; color: var(--ds-color-text-secondary); font-size: .83rem; line-height: 1.8; }
+.survey-reply-row small { color: var(--ds-color-text-muted); font-size: .7rem; }
 
 .dashboard-page {
   padding-bottom: 8rem;
@@ -330,6 +487,22 @@ onMounted(async () => {
   display: grid;
   gap: 0.9rem;
 }
+
+.wallet-overview { display: grid; gap: .85rem; padding: 1rem; border-color: color-mix(in srgb, var(--ds-color-action-primary) 24%, var(--ds-color-border)); }
+.wallet-overview__heading { display: flex; align-items: center; gap: .7rem; }
+.wallet-overview__heading h2 { margin: 0; font-size: .98rem; }
+.wallet-overview__heading p { margin: .2rem 0 0; color: var(--ds-color-text-muted); font-size: .76rem; line-height: 1.7; }
+.wallet-overview__icon { flex: 0 0 auto; color: var(--ds-color-action-primary); background: var(--ds-color-action-primary-soft); }
+.wallet-overview__balances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.wallet-overview__balances > div { display: grid; gap: .35rem; min-width: 0; padding: .8rem; border: 1px solid var(--ds-color-border); border-radius: 14px; background: var(--ds-color-surface); }
+.wallet-overview__balances > div small { color: var(--ds-color-text-muted); font-size: .73rem; }
+.wallet-overview__balances strong { color: var(--ds-color-text-primary); font-size: .94rem; overflow-wrap: anywhere; }
+.wallet-overview__balances strong small { font-weight: 500; }
+.wallet-overview__link { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 44px; color: var(--ds-color-action-primary); font-size: .82rem; font-weight: 800; text-decoration: none; }
+.wallet-overview__link:focus-visible, .wallet-overview__error button:focus-visible { outline: 3px solid var(--ds-color-action-accent); outline-offset: 3px; border-radius: 8px; }
+.wallet-overview__error { display: flex; align-items: center; justify-content: space-between; gap: .75rem; color: var(--ds-color-text-secondary); font-size: .82rem; }
+.wallet-overview__error button { border: 0; background: transparent; color: var(--ds-color-action-primary); font: inherit; font-weight: 800; cursor: pointer; }
+@media (max-width: 480px) { .wallet-overview__balances { grid-template-columns: 1fr; } }
 
 .club-summary {
   padding: 1rem;
@@ -417,6 +590,103 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.coach-invites {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.coach-invites__copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.coach-invites__copy h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.coach-invites__copy p {
+  margin: 0.3rem 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.coach-badge {
+  flex: 0 0 auto;
+  background: var(--ds-color-action-accent-soft, rgb(236 128 53 / 0.14));
+  color: var(--ds-color-action-accent, #b8722d);
+}
+
+.coach-invites__terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.coach-invites__terms span {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 999px;
+  background: var(--surface-soft, rgba(255, 255, 255, 0.55));
+  color: var(--ds-color-text-muted);
+  font-size: 0.75rem;
+}
+
+.coach-invites__terms strong {
+  color: var(--ds-color-text-primary);
+}
+
+.coach-invites__label {
+  margin-bottom: -0.55rem;
+  color: var(--ds-color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.coach-invites__link-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.coach-invites__link-row input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 12px;
+  background: var(--surface-soft, rgba(255, 255, 255, 0.55));
+  color: var(--ds-color-text-primary);
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.coach-invites__copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ds-color-action-accent, #b8722d);
+  color: var(--ds-color-action-accent-foreground, #fff);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.coach-invites__copy-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .club-redeem-btn {
@@ -570,6 +840,10 @@ onMounted(async () => {
 @media (max-width: 480px) {
   .account-action-grid {
     grid-template-columns: 1fr;
+  }
+
+  .coach-invites__link-row {
+    flex-direction: column;
   }
 }
 </style>

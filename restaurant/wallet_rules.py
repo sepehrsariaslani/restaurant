@@ -1,6 +1,7 @@
 """Pure balance rules shared by customer wallet endpoints and tests."""
 
 import re
+from decimal import Decimal, InvalidOperation
 
 
 PROMOTIONAL_CREDIT_KINDS = frozenset({"کش‌بک", "پاداش معرف", "تبدیل امتیاز"})
@@ -56,3 +57,24 @@ def normalize_iranian_iban(value):
 	for char in numeric:
 		remainder = (remainder * 10 + int(char)) % 97
 	return iban if remainder == 1 else ""
+
+
+def validate_wallet_charge_amount(value):
+	"""Accept a finite positive amount without silently booking an estimate."""
+	try:
+		amount = Decimal(str(value or "0").strip())
+	except (InvalidOperation, TypeError, ValueError):
+		raise ValueError("مبلغ شارژ معتبر نیست.")
+	if not amount.is_finite():
+		raise ValueError("مبلغ شارژ معتبر نیست.")
+	if amount <= 0:
+		raise ValueError("مبلغ شارژ باید بزرگ‌تر از صفر باشد.")
+	try:
+		return float(amount.quantize(Decimal("0.01")))
+	except InvalidOperation:
+		raise ValueError("مبلغ شارژ معتبر نیست.")
+
+
+def wallet_charge_request_status(payment_reference):
+	"""A wallet is credited only after staff verify a real bank transfer."""
+	return "در انتظار بررسی" if str(payment_reference or "").strip() else "در انتظار پرداخت"

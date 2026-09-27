@@ -7,7 +7,9 @@
         <a href="/" class="sfm-link">خانه</a>
         <a href="/menu" class="sfm-link">منو</a>
         <a href="/cart" class="sfm-link">سبد</a>
+        <a href="/blog" class="sfm-link">مجله</a>
         <a href="/about-us" class="sfm-link">درباره ما</a>
+        <a href="/cooperation" class="sfm-link">درخواست همکاری</a>
       </nav>
     </div>
   </footer>

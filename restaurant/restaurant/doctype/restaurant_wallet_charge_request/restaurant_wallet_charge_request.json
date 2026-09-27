@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:WCR-{YYYY}-{#####}",
+ "creation": "2026-09-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "wallet",
+  "amount",
+  "status",
+  "payment_reference",
+  "note",
+  "transaction",
+  "reviewed_by",
+  "reviewed_at",
+  "review_note"
+ ],
+ "fields": [
+  {"fieldname": "customer", "fieldtype": "Link", "in_list_view": 1, "label": "Customer", "options": "Customer", "reqd": 1},
+  {"fieldname": "wallet", "fieldtype": "Link", "label": "Wallet", "options": "Restaurant Customer Wallet", "reqd": 1},
+  {"fieldname": "amount", "fieldtype": "Currency", "in_list_view": 1, "label": "Amount", "reqd": 1},
+  {"fieldname": "status", "fieldtype": "Select", "default": "در انتظار پرداخت", "in_list_view": 1, "label": "Status", "options": "در انتظار پرداخت\nدر انتظار بررسی\nتأیید شد\nرد شد", "reqd": 1},
+  {"fieldname": "payment_reference", "fieldtype": "Data", "label": "Payment Reference"},
+  {"fieldname": "note", "fieldtype": "Small Text", "label": "Note"},
+  {"fieldname": "transaction", "fieldtype": "Link", "label": "Wallet Transaction", "options": "Restaurant Wallet Transaction"},
+  {"fieldname": "reviewed_by", "fieldtype": "Link", "label": "Reviewed By", "options": "User"},
+  {"fieldname": "reviewed_at", "fieldtype": "Datetime", "label": "Reviewed At"},
+  {"fieldname": "review_note", "fieldtype": "Small Text", "label": "Review Note"}
+ ],
+ "links": [],
+ "modified": "2026-09-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Wallet Charge Request",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

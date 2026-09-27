@@ -1,0 +1,26 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:COI-{YYYY}-{#####}",
+ "creation": "2026-09-26 00:00:00.000000",
+ "doctype": "DocType",
+ "name": "Restaurant Coach Invitation",
+ "engine": "InnoDB",
+ "field_order": ["naming_series", "coach", "mobile", "email", "status", "reason", "invited_by", "customer", "claimed_at"],
+ "fields": [
+  {"fieldname":"naming_series","fieldtype":"Select","hidden":1,"label":"Series","options":"COI-{YYYY}-{#####}"},
+  {"fieldname":"coach","fieldtype":"Link","in_list_view":1,"label":"مربی","options":"Customer","reqd":1},
+  {"fieldname":"mobile","fieldtype":"Data","in_list_view":1,"label":"شماره همراه","reqd":1},
+  {"fieldname":"email","fieldtype":"Data","label":"ایمیل ثبت‌نام (برای اتصال امن)","reqd":1},
+  {"fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"وضعیت","options":"در انتظار ثبت‌نام\nثبت‌نام و اتصال‌شده\nلغوشده","default":"در انتظار ثبت‌نام","reqd":1},
+  {"fieldname":"reason","fieldtype":"Small Text","label":"دلیل ثبت دعوت"},
+  {"fieldname":"invited_by","fieldtype":"Link","label":"ثبت‌کننده","options":"User"},
+  {"fieldname":"customer","fieldtype":"Link","label":"مشتری متصل‌شده","options":"Customer"},
+  {"fieldname":"claimed_at","fieldtype":"Datetime","label":"زمان اتصال"}
+ ],
+ "module":"Restaurant",
+ "permissions":[{"role":"System Manager","read":1,"write":1,"create":1,"delete":1,"report":1,"export":1,"print":1,"share":1}],
+ "sort_field":"creation",
+ "sort_order":"DESC",
+ "track_changes":1
+}

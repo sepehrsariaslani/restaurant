@@ -30,10 +30,6 @@ class RestaurantCourier(Document):
 			frappe.throw("Courier code is required.")
 		if len(self.mobile) < 10:
 			frappe.throw("A valid mobile number is required.")
-		if not self.vehicle_type:
-			frappe.throw("Vehicle type is required.")
-		if not self.plate_number:
-			frappe.throw("Vehicle plate number is required.")
 
 
 def cint(value):
@@ -41,4 +37,3 @@ def cint(value):
 		return int(value)
 	except Exception:
 		return 0
-

@@ -1,0 +1,29 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:CSV-{YYYY}-{#####}",
+ "creation": "2026-09-26 00:00:00.000000",
+ "doctype": "DocType",
+ "name": "Restaurant Customer Signup Verification",
+ "engine": "InnoDB",
+ "field_order": ["naming_series", "user", "email", "mobile", "customer_name", "referral_code", "token_hash", "expires_at", "status", "customer", "requested_at", "verified_at"],
+ "fields": [
+  {"fieldname":"naming_series","fieldtype":"Select","hidden":1,"label":"Series","options":"CSV-{YYYY}-{#####}"},
+  {"fieldname":"user","fieldtype":"Link","label":"مستخدم وب‌سایت","options":"User","reqd":1},
+  {"fieldname":"email","fieldtype":"Data","in_list_view":1,"label":"ایمیل","reqd":1},
+  {"fieldname":"mobile","fieldtype":"Data","label":"شماره همراه","reqd":1},
+  {"fieldname":"customer_name","fieldtype":"Data","label":"نام مشتری","reqd":1},
+  {"fieldname":"referral_code","fieldtype":"Data","label":"کد معرفی"},
+  {"fieldname":"token_hash","fieldtype":"Data","label":"هش پیوند تأیید","unique":1,"reqd":1},
+  {"fieldname":"expires_at","fieldtype":"Datetime","label":"انقضا","reqd":1},
+  {"fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"وضعیت","options":"در انتظار تأیید\nتأییدشده\nمنقضی","default":"در انتظار تأیید","reqd":1},
+  {"fieldname":"customer","fieldtype":"Link","label":"مشتری متصل‌شده","options":"Customer"},
+  {"fieldname":"requested_at","fieldtype":"Datetime","label":"زمان درخواست"},
+  {"fieldname":"verified_at","fieldtype":"Datetime","label":"زمان تأیید"}
+ ],
+ "module":"Restaurant",
+ "permissions":[{"role":"System Manager","read":1,"write":1,"create":1,"delete":1,"report":1,"export":1,"print":1,"share":1}],
+ "sort_field":"creation",
+ "sort_order":"DESC",
+ "track_changes":1
+}

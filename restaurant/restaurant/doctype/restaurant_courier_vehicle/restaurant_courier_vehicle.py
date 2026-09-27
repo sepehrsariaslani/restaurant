@@ -9,6 +9,20 @@ class RestaurantCourierVehicle(Document):
 		self.vehicle_type = (self.vehicle_type or "").strip()
 		self.plate_number = (self.plate_number or "").strip()
 		self.notes = (self.notes or "").strip()
+		fleet_vehicle = (self.get("fleet_vehicle") or "").strip()
+
+		if fleet_vehicle:
+			vehicle = frappe.db.get_value(
+				"Vehicle", fleet_vehicle, ["license_plate", "make", "model"], as_dict=True
+			)
+			if not vehicle:
+				frappe.throw("Select an existing ERPNext Fleet Vehicle.")
+			if not (vehicle.get("license_plate") or "").strip():
+				frappe.throw("The selected Fleet Vehicle needs a license plate.")
+			self.plate_number = vehicle.license_plate.strip()
+			self.vehicle_type = self.vehicle_type or " ".join(
+				part for part in (vehicle.get("make"), vehicle.get("model")) if part
+			) or "Fleet Vehicle"
 
 		if not self.courier:
 			frappe.throw("Courier is required.")
@@ -40,4 +54,3 @@ def cint(value):
 		return int(value)
 	except Exception:
 		return 0
-

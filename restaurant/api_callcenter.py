@@ -254,7 +254,7 @@ def _cc_customer_profile(customer):
 		survey_hit = frappe.db.sql(
 			"""
 			SELECT COUNT(*) AS c FROM `tabRestaurant Survey Response`
-			WHERE customer = %(c)s AND overall_rating <= 2 AND creation >= %(df)s
+			WHERE customer = %(c)s AND overall_rating <= 4 AND creation >= %(df)s
 			""",
 			{"c": customer, "df": add_days(now_datetime(), -90)},
 			as_dict=True,

@@ -5,12 +5,15 @@
  "creation": "2026-07-28 22:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
-  "naming_series",
-  "question",
-  "answer_type",
-  "sort_order",
-  "is_active"
+  "field_order": [
+    "naming_series",
+    "question",
+    "answer_type",
+    "scope",
+    "target_item_group",
+    "target_item",
+    "sort_order",
+    "is_active"
  ],
  "fields": [
   {
@@ -31,9 +34,31 @@
    "fieldname": "answer_type",
    "fieldtype": "Select",
    "label": "Answer Type",
-   "options": "امتیاز ۱ تا ۵\nبله/خیر\nمتن آزاد",
-   "default": "امتیاز ۱ تا ۵",
+   "options": "امتیاز ۱ تا ۱۰\nبله/خیر\nمتن آزاد\nویژگی خوب/بد",
+   "default": "امتیاز ۱ تا ۱۰",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "scope",
+   "fieldtype": "Select",
+   "label": "دامنهٔ پرسش",
+   "options": "سفارش\nگروه غذا\nمحصول",
+   "default": "سفارش",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "target_item_group",
+   "fieldtype": "Link",
+   "label": "گروه غذا",
+   "options": "Item Group",
+   "depends_on": "eval:doc.scope == 'گروه غذا'"
+  },
+  {
+   "fieldname": "target_item",
+   "fieldtype": "Link",
+   "label": "محصول",
+   "options": "Item",
+   "depends_on": "eval:doc.scope == 'محصول'"
   },
   {
    "fieldname": "sort_order",

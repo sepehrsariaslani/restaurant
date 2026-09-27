@@ -3,6 +3,24 @@ import { cartState, defaultOrderContext, saveOrderContext } from '@/stores/cartS
 import { formatMoney } from '@/utils/format'
 
 export const ORDER_FLOW_CURRENCY_FALLBACK = 'IRR'
+const ORDER_SETUP_RETURN_KEY = 'restaurant-nutrition-schedule-return-v1'
+
+export function rememberNutritionScheduleReturn(path = '/customer/recurring-orders') {
+  if (typeof window === 'undefined') return
+  if (!/^\/customer\/recurring-orders(?:\?|$)/.test(String(path || ''))) return
+  try { window.sessionStorage.setItem(ORDER_SETUP_RETURN_KEY, JSON.stringify({ path, expiresAt: Date.now() + 30 * 60 * 1000 })) } catch (error) {}
+}
+
+export function consumeNutritionScheduleReturn() {
+  if (typeof window === 'undefined') return ''
+  try {
+    const stored = window.sessionStorage.getItem(ORDER_SETUP_RETURN_KEY)
+    window.sessionStorage.removeItem(ORDER_SETUP_RETURN_KEY)
+    const intent = stored ? JSON.parse(stored) : null
+    if (Number(intent?.expiresAt) < Date.now() || !/^\/customer\/recurring-orders(?:\?|$)/.test(String(intent?.path || ''))) return ''
+    return intent.path
+  } catch (error) { return '' }
+}
 
 export function orderContextChangeUrl(context = cartState.orderContext || {}) {
   if (context.order_type === 'delivery') return '/order/delivery'

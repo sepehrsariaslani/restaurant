@@ -162,6 +162,7 @@ import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import AddressPickerMap from '@/components/checkout/AddressPickerMap.vue'
 import BranchMapPicker from '@/components/checkout/BranchMapPicker.vue'
 import { cartState, saveCheckoutDraft, saveOrderContext } from '@/stores/cartStore'
+import { consumeNutritionScheduleReturn } from '@/utils/orderFlow'
 import { formatMoney, normalizeMobile as normalizeMobileUtil } from '@/utils/format'
 import { isCustomerDeliveryCompany, resolveDeliveryCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getCustomerCheckoutProfile, getMenuBoot, saveCustomerDeliveryAddress } from '@/utils/api'
@@ -398,7 +399,7 @@ async function continueToMenu() {
   }
   persistContext()
   if (hasCartLines.value) {
-    window.location.href = '/checkout'
+    window.location.href = consumeNutritionScheduleReturn() || '/checkout'
     return
   }
   const branch = selectedCompany.value?.id || selectedCompany.value?.name || ''

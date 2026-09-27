@@ -27,6 +27,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { Armchair, CalendarDays, ChevronLeft } from 'lucide-vue-next'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
+import { consumeNutritionScheduleReturn } from '@/utils/orderFlow'
 import { isCustomerCompany } from '@/utils/orderBranches'
 import { getAvailableTables, getBranches, getMenuBoot } from '@/utils/api'
 import { customerTableAreaLabel } from '@/utils/customerTableAreas'
@@ -55,7 +56,7 @@ async function load() {
   } catch (err) { error.value = err.message || 'دریافت میزها ناموفق بود.' }
   finally { loading.value = false }
 }
-function continueToMenu() { if (!canContinue.value) return; persist(); window.location.href = cartState.lines.length ? '/checkout' : `/menu?branch=${encodeURIComponent(branch.value)}&table=${encodeURIComponent(selectedTable.value.id)}&order_type=dine_in` }
+function continueToMenu() { if (!canContinue.value) return; persist(); window.location.href = cartState.lines.length ? (consumeNutritionScheduleReturn() || '/checkout') : `/menu?branch=${encodeURIComponent(branch.value)}&table=${encodeURIComponent(selectedTable.value.id)}&order_type=dine_in` }
 onMounted(load)
 </script>
 <style scoped>

@@ -313,6 +313,9 @@ def org_validate_order(order_context, customer_name, amount, delivery_address_na
 
 	if not organization and customer_name and _has_column("Customer", "restaurant_organization"):
 		organization = (frappe.db.get_value("Customer", customer_name, "restaurant_organization") or "").strip()
+	if not organization and customer_name and _has_column("Customer", "restaurant_customer_kind"):
+		if frappe.db.get_value("Customer", customer_name, "restaurant_customer_kind") == "سازمانی":
+			organization = customer_name
 	if not organization and customer_name:
 		member_name = _org_resolve_member_for_customer(customer_name)
 		if member_name:

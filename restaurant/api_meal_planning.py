@@ -1,6 +1,7 @@
 """Customer nutrition estimates and saved meal plans over native restaurant Items."""
 
 import json
+import math
 
 import frappe
 from frappe import _
@@ -186,7 +187,104 @@ def _get_catalog(branch):
 	for page in range(2, total_pages + 1):
 		result = get_menu_items(branch=branch, page=page, page_size=200) or {}
 		items.extend(result.get("items") or [])
+	return _attach_direct_bom_ingredients(items)
+
+
+def _attach_direct_bom_ingredients(items, boms=None, bom_items=None, ingredient_items=None):
+	"""Expose first-level recipe ingredients without walking nested BOMs."""
+	if not items:
+		return items
+	if boms is None or bom_items is None or ingredient_items is None:
+		parent_codes = list(dict.fromkeys(str(item.get("name") or "").strip() for item in items if item.get("name")))
+		if not parent_codes:
+			return items
+		try:
+			boms = frappe.get_all(
+				"BOM",
+				filters={"item": ["in", parent_codes], "docstatus": 1, "is_active": 1},
+				fields=["name", "item", "is_default", "is_active", "docstatus", "modified"],
+				order_by="is_default desc, modified desc",
+				limit_page_length=5000,
+				ignore_permissions=True,
+			)
+			bom_names = list(dict.fromkeys(str(row.get("name") or "") for row in boms if row.get("name")))
+			bom_items = frappe.get_all(
+				"BOM Item",
+				filters={"parent": ["in", bom_names]},
+				fields=["parent", "item_code", "item_name", "idx"],
+				order_by="parent asc, idx asc",
+				limit_page_length=20000,
+				ignore_permissions=True,
+			) if bom_names else []
+			ingredient_codes = list(dict.fromkeys(str(row.get("item_code") or "") for row in bom_items if row.get("item_code")))
+			component_fields = ["name", "item_name"]
+			if frappe.db.has_column("Item", "restaurant_nutrition_kcal"):
+				component_fields.append("restaurant_nutrition_kcal")
+			if frappe.db.has_column("Item", "restaurant_allergen_tags"):
+				component_fields.append("restaurant_allergen_tags")
+			ingredient_items = frappe.get_all(
+				"Item",
+				filters={"name": ["in", ingredient_codes]},
+				fields=component_fields,
+				limit_page_length=20000,
+				ignore_permissions=True,
+			) if ingredient_codes else []
+		except Exception:
+			# A menu still works if recipe metadata is unavailable on a site.
+			return items
+
+	selected_bom_by_product = {}
+	for bom in sorted(
+		boms or [],
+		key=lambda row: (cint(row.get("is_default")), str(row.get("modified") or ""), str(row.get("name") or "")),
+		reverse=True,
+	):
+		if cint(bom.get("docstatus")) != 1 or cint(bom.get("is_active")) != 1:
+			continue
+		product_code = str(bom.get("item") or "").strip()
+		if product_code and product_code not in selected_bom_by_product:
+			selected_bom_by_product[product_code] = str(bom.get("name") or "")
+
+	component_rows_by_bom = {}
+	for row in bom_items or []:
+		component_rows_by_bom.setdefault(str(row.get("parent") or ""), []).append(row)
+	component_by_code = {str(row.get("name") or ""): row for row in ingredient_items or [] if row.get("name")}
+
+	for product in items:
+		product_code = str(product.get("name") or "").strip()
+		bom_name = selected_bom_by_product.get(product_code)
+		if not bom_name:
+			product.setdefault("nutrition_ingredient_tags", [])
+			product.setdefault("ingredient_composition_available", False)
+			continue
+		all_direct_tags = _clean_tags(product.get("ingredient_tags") or [])
+		nutrition_tags = []
+		component_allergens = _clean_tags(product.get("allergen_ingredient_tags") or [])
+		for component in component_rows_by_bom.get(bom_name, []):
+			component_code = str(component.get("item_code") or "").strip()
+			master = component_by_code.get(component_code, {})
+			label = str(master.get("item_name") or component.get("item_name") or component_code).strip()
+			if label and label not in all_direct_tags:
+				all_direct_tags.append(label)
+			component_allergens.extend(_split_stored_tags(master.get("restaurant_allergen_tags")))
+			try:
+				kcal = float(master.get("restaurant_nutrition_kcal"))
+			except (TypeError, ValueError, OverflowError):
+				kcal = 0
+			if label and math.isfinite(kcal) and kcal > 0 and label not in nutrition_tags:
+				nutrition_tags.append(label)
+		product["ingredient_tags"] = all_direct_tags
+		product["nutrition_ingredient_tags"] = nutrition_tags
+		product["allergen_ingredient_tags"] = _clean_tags(component_allergens)
+		product["allergens"] = _clean_tags((product.get("allergens") or []) + component_allergens)
+		product["ingredient_composition_available"] = bool(component_rows_by_bom.get(bom_name))
 	return items
+
+
+def _split_stored_tags(value):
+	if isinstance(value, list):
+		return _clean_tags(value)
+	return _clean_tags([part.strip() for part in str(value or "").replace("\n", ",").split(",")])
 
 
 def _valid_customer_branch(branch):
@@ -206,20 +304,92 @@ def _valid_customer_branch(branch):
 
 
 def _recommendation_block_reason(item, allergens, disliked_items, disliked_ingredients):
-	nutrition = item.get("nutrition") or {}
 	product_allergens = {str(tag).casefold() for tag in (item.get("allergens") or [])}
 	product_ingredients = {str(tag).casefold() for tag in (item.get("ingredient_tags") or [])}
-	if not item.get("nutrition_verified") or nutrition.get("kcal") is None or nutrition.get("protein_g") is None:
-		return "اطلاعات تغذیه‌ای کامل و تأییدشده نیست."
-	if not item.get("allergen_reviewed") or not item.get("ingredients_reviewed"):
-		return "اطلاعات حساسیت‌زا و مواد تشکیل‌دهنده بازبینی نشده است."
-	if item.get("out_of_stock") or flt(item.get("base_price") or 0) <= 0:
-		return "قیمت یا موجودی فعلی محصول در دسترس نیست."
-	if allergens & product_allergens:
+	if not _nutrition_is_complete(item):
+		if _is_beverage(item):
+			return "نوشیدنیِ بدون کالریِ قابل استفاده وارد ترکیب غذایی نمی‌شود."
+		return "مقدار کالری و پروتئین قابل استفاده برای محاسبهٔ ترکیب ثبت نشده است."
+	if allergens & (product_allergens | product_ingredients):
 		return "با حساسیت ثبت‌شدهٔ مشتری تطابق دارد."
+	# Unknown safety data cannot be treated as safe when the customer has declared
+	# restrictions. A selected direct BOM gives us the known first-level recipe;
+	# items without either source remain excluded. The UI still discloses review state.
+	if allergens and not item.get("allergen_reviewed") and not item.get("ingredient_composition_available"):
+		return "اطلاعات حساسیت‌زای محصول برای بررسی حساسیت شما بازبینی نشده است."
 	if item.get("name") in disliked_items or disliked_ingredients & product_ingredients:
 		return "با انتخاب‌های نامطلوب مشتری تطابق دارد."
+	if disliked_ingredients and not item.get("ingredients_reviewed") and not item.get("ingredient_composition_available"):
+		return "مواد تشکیل‌دهنده برای بررسی انتخاب‌های نامطلوب شما بازبینی نشده است."
 	return ""
+
+
+def _nutrition_is_complete(item):
+	nutrition = item.get("nutrition") or {}
+	kcal = nutrition.get("kcal")
+	protein = nutrition.get("protein_g")
+	if kcal in (None, "") or protein in (None, ""):
+		return False
+	try:
+		kcal = float(kcal)
+		protein = float(protein)
+	except (TypeError, ValueError, OverflowError):
+		return False
+	return math.isfinite(kcal) and kcal > 0 and math.isfinite(protein) and protein >= 0
+
+
+def _item_description(item):
+	values = [
+		item.get("title"), item.get("name"), item.get("category_title"), item.get("subcategory_title"),
+		item.get("category"), item.get("subcategory"), item.get("item_group_path"),
+	]
+	values.extend(item.get("tags") or [])
+	values.extend(item.get("meal_slots") or [])
+	return " ".join(str(value or "") for value in values).casefold().replace("ي", "ی").replace("ك", "ک")
+
+
+def _is_beverage(item):
+	beverage_groups = {"بار", "بار سرد", "بار گرم", "سردنوش", "دم‌نوش", "دمنوش", "آبمیوه", "نوشیدنی"}
+	category_values = {
+		str(item.get(field) or "").strip().casefold().replace("ي", "ی").replace("ك", "ک")
+		for field in ("category_title", "subcategory_title", "category", "subcategory")
+	}
+	if category_values & beverage_groups:
+		return True
+	text = _item_description(item)
+	return any(token in text for token in (
+		"بار سرد", "بار گرم", "سردنوش", "گرم نوش", "گرم‌نوش", "دم‌نوش", "دمنوش",
+		"آبمیوه", "آب میوه", "اسموتی", "میلک شیک", "آیس تی", "ماچا", "نوشیدنی", "کافه",
+		"آب معدنی", "آب واتا", "واتا", "نوشابه", "دلستر", "دوغ", "شربت", "موهیتو", "لیموناد", "قهوه", "چای",
+		"اسپرسو", "آمریکانو", "لته", "موکاچینو", "water", "beverage", "drink", "espresso", "americano", "latte", "coffee", "tea",
+	))
+
+
+def _infer_meal_slots(item):
+	if _is_beverage(item):
+		# Calorie-bearing drinks such as smoothies and milk-based drinks can be
+		# considered for a snack. Zero-calorie water/tea remains outside meals.
+		return ["میان‌وعده"] if _nutrition_is_complete(item) else []
+	explicit = [str(slot).strip() for slot in (item.get("meal_slots") or []) if str(slot).strip() in MEAL_SLOTS]
+	if explicit:
+		return explicit
+	text = _item_description(item)
+	if any(token in text for token in ("صبحانه", "املت", "نیمرو", "عدسی", "پنکیک", "اوتمیل", "تخم مرغ", "تخممرغ")):
+		return ["صبحانه"]
+	if any(token in text for token in ("میان وعده", "میان‌وعده", "اسنک", "دسر", "میوه", "کیک", "کوکی", "شیرینی", "آجیل")):
+		return ["میان‌وعده"]
+	if "ناهار" in text:
+		return ["ناهار"]
+	if "شام" in text:
+		return ["شام"]
+	# An unclassified, nutritionally reviewed main dish can fit lunch or dinner;
+	# it must never be assigned to breakfast/snack solely because it lacks tags.
+	return ["ناهار", "شام"]
+
+
+def _suggestion_candidates_for_slot(items, slot):
+	"""Use configured meal slots or conservative food-category inference."""
+	return [item for item in items if slot in _infer_meal_slots(item)]
 
 
 def _order_block_reason(item, allergens, disliked_items, disliked_ingredients):
@@ -227,9 +397,9 @@ def _order_block_reason(item, allergens, disliked_items, disliked_ingredients):
 	product_ingredients = {str(tag).casefold() for tag in (item.get("ingredient_tags") or [])}
 	if item.get("name") in disliked_items or disliked_ingredients & product_ingredients:
 		return "این محصول با انتخاب‌های نامطلوب ثبت‌شدهٔ شما تطابق دارد."
-	if allergens & product_allergens:
+	if allergens & (product_allergens | product_ingredients):
 		return "با حساسیت ثبت‌شدهٔ شما تطابق دارد."
-	if not item.get("allergen_reviewed"):
+	if not item.get("allergen_reviewed") and not item.get("ingredient_composition_available"):
 		return "اطلاعات حساسیت‌زای این محصول بازبینی نشده است."
 	return ""
 
@@ -399,12 +569,22 @@ def suggest_my_meal_plans(customer_token=None, branch=""):
 	liked_items = set(_json(profile_doc.liked_items_json, []))
 	liked_ingredients = {str(tag).casefold() for tag in _json(profile_doc.liked_ingredients_json, [])}
 	eligible = []
+	blocked_for_safety = 0
 	for item in catalog:
 		if _recommendation_block_reason(item, allergens, disliked_items, disliked_ingredients):
+			if allergens and not item.get("allergen_reviewed"):
+				blocked_for_safety += 1
 			continue
 		eligible.append(item)
 	if not eligible:
-		return {"suggestions": [], "reason": "هنوز محصولی با اطلاعات تغذیه و مواد بازبینی‌شده در این شعبه پیدا نشد."}
+		if blocked_for_safety:
+			return {"suggestions": [], "reason": "برای رعایت حساسیت ثبت‌شدهٔ شما، محصولات این شعبه باید ابتدا از نظر آلرژن بازبینی شوند."}
+		if catalog:
+			return {
+				"suggestions": [],
+				"reason": "در منوی این شعبه محصولی با کالریِ بیشتر از صفر و مقدار پروتئین ثبت‌شده پیدا نشد؛ نوشیدنیِ بدون کالری وارد وعده نمی‌شود.",
+			}
+		return {"suggestions": [], "reason": "منوی فعالی برای این شعبه پیدا نشد."}
 	targets = profile_payload["targets"]
 	target_kcal = float(targets.get("calorie_target_kcal") or 0)
 	if not target_kcal:
@@ -416,27 +596,81 @@ def suggest_my_meal_plans(customer_token=None, branch=""):
 		chosen_codes = set()
 		chosen_ingredients = set()
 		for slot, share in slot_shares:
-			candidates = [item for item in eligible if slot in (item.get("meal_slots") or [])]
+			candidates = _suggestion_candidates_for_slot(eligible, slot)
+			unused_candidates = [item for item in candidates if item.get("name") not in chosen_codes]
+			if unused_candidates:
+				candidates = unused_candidates
 			if not candidates:
 				continue
 			protein_target = float(targets.get("protein_reference_g") or 0) * share
-			candidates.sort(key=lambda item: (
-				abs(float(item.get("nutrition", {}).get("kcal") or 0) - target_kcal * share)
-				+ 2 * abs(float(item.get("nutrition", {}).get("protein_g") or 0) - protein_target)
-				+ (500 if item.get("name") in chosen_codes else 0)
-				+ 15 * len({str(tag).casefold() for tag in item.get("ingredient_tags", [])} & chosen_ingredients)
-				- (120 if item.get("name") in liked_items else 0)
-				- (30 if liked_ingredients & {str(tag).casefold() for tag in item.get("ingredient_tags", [])} else 0),
-				str(item.get("name") or ""),
-			))
+			def score(item):
+				nutrition = item.get("nutrition") or {}
+				nutrition_score = (
+					abs(float(nutrition["kcal"]) - target_kcal * share)
+					+ 2 * abs(float(nutrition["protein_g"]) - protein_target)
+					if _nutrition_is_complete(item)
+					else 250
+				)
+				ingredients = {str(tag).casefold() for tag in item.get("ingredient_tags", [])}
+				return (
+					nutrition_score
+					+ (500 if item.get("name") in chosen_codes else 0)
+					+ 15 * len(ingredients & chosen_ingredients)
+					- (120 if item.get("name") in liked_items else 0)
+					- (30 if liked_ingredients & ingredients else 0),
+					str(item.get("name") or ""),
+				)
+			candidates.sort(key=score)
 			item = candidates[min(variant, len(candidates) - 1)]
 			chosen_codes.add(item.get("name"))
 			chosen_ingredients.update(str(tag).casefold() for tag in item.get("ingredient_tags", []))
-			chosen.append({"meal_slot": slot, "source_type": "وی‌درخت", "item_code": item.get("name"), "qty": 1, "customization": {}})
+			chosen.append({
+				"meal_slot": slot,
+				"source_type": "وی‌درخت",
+				"item_code": item.get("name"),
+				"qty": 1,
+				"customization": {},
+				"nutrition_known": _nutrition_is_complete(item),
+				"nutrition_verified": bool(item.get("nutrition_verified")),
+				"allergen_reviewed": bool(item.get("allergen_reviewed")),
+				"ingredients_reviewed": bool(item.get("ingredients_reviewed")),
+			})
 		if not chosen:
 			continue
-		suggestions.append({"title": ["ترکیب روز متعادل", "ترکیب دوم", "ترکیب سوم"][variant], "branch": branch, "items": chosen})
-	return {"suggestions": suggestions, "reason": "پیشنهادها از اقلام بازبینی‌شدهٔ همین شعبه ساخته شده‌اند و قابل ویرایش هستند."}
+		covered_slots = list(dict.fromkeys(row["meal_slot"] for row in chosen))
+		full_day = len(covered_slots) == len(slot_shares)
+		suggestion_title = ["ترکیب متناسب با کالری", "ترکیب دوم", "ترکیب سوم"][variant]
+		if not full_day:
+			suggestion_title = f"{suggestion_title} · {len(covered_slots)} وعده"
+			suggestions.append({
+			"title": suggestion_title,
+			"branch": branch,
+			"nutrition_complete": all(row["nutrition_known"] for row in chosen),
+			"nutrition_reviewed": all(row["nutrition_verified"] for row in chosen),
+			"covered_slots": covered_slots,
+			"full_day": full_day,
+			"items": chosen,
+		})
+	has_unknown_nutrition = any(not suggestion["nutrition_complete"] for suggestion in suggestions)
+	has_unreviewed_nutrition = any(not suggestion["nutrition_reviewed"] for suggestion in suggestions)
+	has_unknown_safety = any(
+		any(not row["allergen_reviewed"] or not row["ingredients_reviewed"] for row in suggestion["items"])
+		for suggestion in suggestions
+	)
+	missing_slots = [slot for slot, _share in slot_shares if not any(slot in suggestion["covered_slots"] for suggestion in suggestions)]
+	messages = []
+	if has_unknown_nutrition:
+		messages.append("کالری بعضی اقلام نامشخص است؛ جمع فقط از اطلاعات موجود محاسبه می‌شود.")
+	if has_unreviewed_nutrition:
+		messages.append("ترکیب بر پایهٔ کالری و پروتئین ثبت‌شدهٔ محصولات ساخته شده؛ بعضی مقادیر هنوز توسط مدیریت بازبینی نشده‌اند.")
+	if has_unknown_safety:
+		messages.append("اطلاعات آلرژن یا مواد اولیهٔ بعضی اقلام کامل نیست و پیش از سفارش دوباره بررسی می‌شود.")
+	if missing_slots:
+		messages.append(f"برای این شعبه غذای مناسبِ «{'، '.join(missing_slots)}» پیدا نشد، پس ترکیب همهٔ وعده‌های روز را پوشش نمی‌دهد.")
+	if not messages:
+		messages.append("هر چهار وعده با مقادیر تغذیه‌ای ثبت‌شده و متناسب با هدف روزانه چیده شده‌اند.")
+	reason = " ".join(messages)
+	return {"suggestions": suggestions, "reason": reason}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -478,13 +712,16 @@ def save_my_meal_plan(customer_token=None, payload=None):
 		product = catalog_by_code.get(row.get("item_code"))
 		if not product:
 			frappe.throw(_("یک محصول در شعبهٔ انتخابی موجود نیست؛ شعبه یا اقلام را بازبینی کنید."))
-		if profile_allergens & {str(tag).casefold() for tag in (product.get("allergens") or [])}:
+		if profile_allergens & (
+			{str(tag).casefold() for tag in (product.get("allergens") or [])}
+			| {str(tag).casefold() for tag in (product.get("ingredient_tags") or [])}
+		):
 			frappe.throw(_("این برنامه شامل محصولی با حساسیت ثبت‌شدهٔ شماست."))
 		nutrition = product.get("nutrition") or {}
-		row["kcal"] = nutrition.get("kcal") if product.get("nutrition_verified") else None
-		row["protein_g"] = nutrition.get("protein_g") if product.get("nutrition_verified") else None
-		row["carb_g"] = nutrition.get("carb_g") if product.get("nutrition_verified") else None
-		row["fat_g"] = nutrition.get("fat_g") if product.get("nutrition_verified") else None
+		row["kcal"] = nutrition.get("kcal")
+		row["protein_g"] = nutrition.get("protein_g")
+		row["carb_g"] = nutrition.get("carb_g")
+		row["fat_g"] = nutrition.get("fat_g")
 	if name:
 		doc = existing_doc
 	else:
@@ -512,7 +749,7 @@ def delete_my_meal_plan(customer_token=None, name=""):
 
 
 @frappe.whitelist(allow_guest=True)
-def prepare_my_meal_plan_order(customer_token=None, name="", branch=""):
+def prepare_my_meal_plan_order(customer_token=None, name="", branch="", for_schedule=0, order_now=0):
 	identity = _identity(customer_token)
 	_owned_plan(name, identity["customer"], active=1)
 	frappe.db.sql("select name from `tabRestaurant Customer Meal Plan` where name=%s and customer=%s for update", (name, identity["customer"]))
@@ -521,8 +758,17 @@ def prepare_my_meal_plan_order(customer_token=None, name="", branch=""):
 	if not profile or not profile.consent:
 		frappe.throw(_("پروفایل تغذیه‌ای یا رضایت ذخیره‌سازی شما موجود نیست."))
 	today = getdate()
-	today_weekday = WEEKDAYS[(today.weekday() + 2) % 7]
-	_validate_plan_run(doc, today, today_weekday)
+	for_schedule = cint(for_schedule)
+	order_now = cint(order_now)
+	if not for_schedule:
+		if order_now:
+			if not cint(doc.active):
+				frappe.throw(_("برنامهٔ فعال پیدا نشد."))
+			if str(doc.last_cart_prepared_date or "") == str(today):
+				frappe.throw(_("این برنامه امروز پیش‌تر به سبد فرستاده شده است."))
+		else:
+			today_weekday = WEEKDAYS[(today.weekday() + 2) % 7]
+			_validate_plan_run(doc, today, today_weekday)
 	branch = str(branch or doc.branch or "").strip()
 	if not _valid_customer_branch(branch):
 		frappe.throw(_("شعبهٔ انتخاب‌شده معتبر یا فعال نیست."))
@@ -534,6 +780,8 @@ def prepare_my_meal_plan_order(customer_token=None, name="", branch=""):
 	warnings = []
 	for row in doc.get("items", []):
 		if row.source_type != "وی‌درخت":
+			if row.source_type == "ثبت دستی":
+				warnings.append({"item_code": "", "item_title": row.manual_name or "خوراک ثبت‌شده", "reason": "این قلم بیرون از منو ثبت شده و برای سفارش باید از محصولات شعبه انتخاب شود."})
 			continue
 		product = catalog.get(row.item_code)
 		if not product or product.get("out_of_stock"):
@@ -557,10 +805,10 @@ def prepare_my_meal_plan_order(customer_token=None, name="", branch=""):
 		"base_price": flt(product.get("base_price")),
 		})
 	can_order = bool(order_items) and not warnings
-	if can_order:
+	if can_order and not for_schedule:
 		doc.last_cart_prepared_date = str(today)
 		doc.save(ignore_permissions=True)
-	return {"branch": branch, "original_branch": doc.branch, "plan_title": doc.title, "run_date": str(today), "items": order_items, "warnings": warnings, "can_order": can_order}
+	return {"branch": branch, "original_branch": doc.branch, "plan_title": doc.title, "run_date": str(today), "items": order_items, "warnings": warnings, "can_order": can_order, "prepared_for_schedule": bool(for_schedule), "ordered_outside_plan_weekday": bool(order_now)}
 
 
 def invalidate_item_nutrition_reviews(doc, method=None):

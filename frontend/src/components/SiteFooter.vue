@@ -25,7 +25,9 @@
           <a href="/">خانه</a>
           <a href="/menu">منو</a>
           <a href="/cart">سبد سفارش</a>
+          <a href="/blog">مجله و مقاله‌ها</a>
           <a href="/about-us">درباره ما</a>
+          <a href="/cooperation">درخواست همکاری</a>
           <a href="/faq">سوالات متداول</a>
         </nav>
 

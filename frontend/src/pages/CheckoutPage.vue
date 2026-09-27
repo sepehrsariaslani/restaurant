@@ -100,13 +100,18 @@
           </div>
         </section>
 
-            <section class="order-flow-card checkout-confirmation-card">
+        <section class="order-flow-card checkout-confirmation-card">
           <h2>کد تخفیف</h2>
+          <p v-if="groupDiscountPercent > 0 || coachDiscountPercent > 0" class="coach-discount-note" role="status">
+            <template v-if="winningDiscountSource === 'customer_group'">تخفیف گروه مشتری شما با نرخ {{ groupDiscountPercent.toLocaleString('fa-IR') }}٪ برای این سفارش در نظر گرفته شده است.</template>
+            <template v-else-if="winningDiscountSource === 'coach'">تخفیف شاگرد شما با نرخ {{ coachDiscountPercent.toLocaleString('fa-IR') }}٪ برای این سفارش در نظر گرفته شده است.</template>
+            <template v-else>تخفیف‌های گروه و مربی با کد انتخاب‌شده جمع نمی‌شوند؛ بیشترین تخفیف معتبر اعمال خواهد شد.</template>
+          </p>
           <div class="order-flow-inline-actions">
             <input class="order-flow-input" style="flex:1" v-model="couponCode" dir="ltr" placeholder="کد تخفیف" @keydown.enter="applyCoupon" />
             <button class="order-flow-secondary" type="button" :disabled="couponLoading || !couponCode.trim()" @click="applyCoupon">{{ couponLoading ? '...' : 'اعمال' }}</button>
           </div>
-          <p v-if="couponResult" class="order-flow-alert">{{ couponResult.message || 'کد تخفیف اعمال شد.' }}</p>
+          <p v-if="couponResult" class="order-flow-alert">{{ couponMessage }}</p>
           <p v-if="couponError" class="order-flow-alert danger">{{ couponError }}</p>
         </section>
 
@@ -126,7 +131,7 @@
 
       <OrderContextSummary next-step="ثبت سفارش" :currency="currency">
         <div class="checkout-total-row"><span>جمع اقلام</span><strong>{{ formatMoney(totals.subtotal, currency) }}</strong></div>
-        <div class="checkout-total-row" v-if="totals.discount"><span>تخفیف</span><strong>-{{ formatMoney(totals.discount, currency) }}</strong></div>
+        <div class="checkout-total-row" v-if="discountAmount"><span>{{ winningDiscountLabel }}</span><strong>-{{ formatMoney(discountAmount, currency) }}</strong></div>
         <div class="checkout-total-row" v-if="totals.delivery_fee"><span>ارسال</span><strong>{{ formatMoney(totals.delivery_fee, currency) }}</strong></div>
         <div class="checkout-total-row checkout-total-row--grand"><span>مبلغ سفارش</span><strong>{{ formatMoney(totals.grand_total, currency) }}</strong></div>
         <p class="payment-note">{{ paymentNote }}</p>
@@ -179,6 +184,8 @@ const couponCode = ref('')
 const couponLoading = ref(false)
 const couponError = ref('')
 const couponResult = ref(null)
+const coachDiscountPercent = ref(0)
+const groupDiscountPercent = ref(0)
 const submitting = ref(false)
 const submitError = ref('')
 const paymentMethod = ref('')
@@ -187,7 +194,30 @@ const context = computed(() => cartState.orderContext || {})
 const hasContext = computed(() => Boolean(context.value.order_type))
 const orderReviewStep = computed(() => context.value.order_type === 'pickup' ? '۵' : '۴')
 const cartLines = computed(() => cartState.lines)
-const discountAmount = computed(() => Number(couponResult.value?.discount_amount || 0))
+const baseSubtotal = computed(() => Number(calculateOrderTotals({ lines: cartLines.value, context: context.value, discount: 0 }).subtotal) || 0)
+const couponDiscountAmount = computed(() => Number(couponResult.value?.discount_amount || 0))
+const coachDiscountAmount = computed(() => Math.min(
+  Math.max(0, baseSubtotal.value),
+  Math.max(0, baseSubtotal.value) * Math.max(0, coachDiscountPercent.value) / 100,
+))
+const groupDiscountAmount = computed(() => Math.min(
+  Math.max(0, baseSubtotal.value),
+  Math.max(0, baseSubtotal.value) * Math.max(0, groupDiscountPercent.value) / 100,
+))
+const winningDiscountSource = computed(() => {
+  const candidates = [
+    { source: 'customer_group', amount: groupDiscountAmount.value },
+    { source: 'coach', amount: coachDiscountAmount.value },
+    { source: 'coupon', amount: couponDiscountAmount.value },
+  ]
+  return candidates.reduce((winner, candidate) => candidate.amount > winner.amount ? candidate : winner, candidates[0]).source
+})
+const discountAmount = computed(() => Math.max(groupDiscountAmount.value, coachDiscountAmount.value, couponDiscountAmount.value))
+const winningDiscountLabel = computed(() => ({ customer_group: 'تخفیف گروه مشتری', coach: 'تخفیف شاگرد', coupon: 'تخفیف کد' }[winningDiscountSource.value] || 'تخفیف'))
+const couponMessage = computed(() => {
+  if (winningDiscountSource.value !== 'coupon' && couponDiscountAmount.value > 0) return `کد معتبر است؛ ${winningDiscountLabel.value} مبلغ بیشتری دارد و فقط همان اعمال می‌شود.`
+  return couponResult.value?.message || 'کد تخفیف اعمال شد.'
+})
 const totals = computed(() => calculateOrderTotals({ lines: cartLines.value, context: context.value, discount: discountAmount.value }))
 const deliveryFeeText = computed(() => totals.value.delivery_fee ? formatMoney(totals.value.delivery_fee, currency.value) : 'هزینه نهایی پس از تایید شعبه')
 const productImage = (line = {}) => String(line.item_image || line.image || line.item?.image || '').trim() || 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=240&auto=format&fit=crop&q=60'
@@ -373,6 +403,8 @@ onMounted(async () => {
       form.customer_name = customer.name || form.customer_name || 'مشتری'
       form.mobile = customer.mobile || form.mobile
       customerVehicles.value = Array.isArray(profile.vehicles) ? profile.vehicles : []
+      coachDiscountPercent.value = Math.min(50, Math.max(0, Number(profile.coach_discount_percent) || 0))
+      groupDiscountPercent.value = Math.min(50, Math.max(0, Number(profile.group_discount_percent) || 0))
       if (!vehicleForm.type && !selectedVehicleId.value && customerVehicles.value.length && pickupMethod.value === 'car') {
         selectVehicle(customerVehicles.value[0])
       }
@@ -424,6 +456,17 @@ onMounted(async () => {
 .payment-method-list {
   display: grid;
   gap: 0.65rem;
+}
+
+.coach-discount-note {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--ds-color-action-accent) 28%, var(--ds-color-border));
+  border-radius: var(--ds-radius-sm);
+  background: color-mix(in srgb, var(--ds-color-action-accent) 8%, var(--ds-color-surface-raised));
+  color: var(--ds-color-text-primary);
+  font-size: 0.79rem;
+  line-height: 1.7;
 }
 
 .payment-method-card {

@@ -52,14 +52,14 @@
           <section class="nutrition-panel">
             <div class="nutrition-section-head"><div><p class="nutrition-eyebrow">گام دوم</p><h2>سلیقه و حساسیت‌ها</h2><p>این گزینه‌ها برای فیلتر پیشنهادها استفاده می‌شوند.</p></div><span class="nutrition-step">۲</span></div>
             <div class="nutrition-filter-grid">
-              <fieldset><legend>حساسیت غذایی</legend><div v-if="allergenOptions.length" class="nutrition-chips"><label v-for="tag in allergenOptions" :key="tag" class="nutrition-chip" :class="{ selected: profile.allergens.includes(tag) }"><input v-model="profile.allergens" type="checkbox" :value="tag" /><span>{{ tag }}</span></label></div><p v-else class="nutrition-muted">برچسب حساسیت محصولات پس از ثبت و بازبینی مدیریت نمایش داده می‌شود.</p></fieldset>
-              <fieldset><legend>موادی که دوست نداری</legend><div v-if="ingredientOptions.length" class="nutrition-chips"><label v-for="tag in ingredientOptions" :key="tag" class="nutrition-chip" :class="{ selected: profile.disliked_ingredients.includes(tag) }"><input v-model="profile.disliked_ingredients" type="checkbox" :value="tag" /><span>{{ tag }}</span></label></div><p v-else class="nutrition-muted">مواد تشکیل‌دهندهٔ تأییدشده هنوز در منوی این شعبه ثبت نشده‌اند.</p></fieldset>
-              <fieldset><legend>مواد دلخواه</legend><div v-if="ingredientOptions.length" class="nutrition-chips"><label v-for="tag in ingredientOptions" :key="tag" class="nutrition-chip" :class="{ selected: profile.liked_ingredients.includes(tag) }"><input v-model="profile.liked_ingredients" type="checkbox" :value="tag" /><span>{{ tag }}</span></label></div><p v-else class="nutrition-muted">پس از ثبت مواد محصولات، این فهرست قابل انتخاب می‌شود.</p></fieldset>
+              <fieldset><legend>حساسیت غذایی</legend><div v-if="allergenOptions.length" class="nutrition-chips"><label v-for="tag in allergenOptions" :key="tag" class="nutrition-chip" :class="{ selected: profile.allergens.includes(tag) }"><input v-model="profile.allergens" type="checkbox" :value="tag" /><span>{{ tag }}</span></label></div><p v-else class="nutrition-muted">{{ selectedBranch ? 'در دستورهای ساخت فعال این شعبه مادهٔ اولیهٔ کالری‌دار پیدا نشد.' : 'برای دیدن مواد اولیهٔ منو، ابتدا شعبه را انتخاب کن.' }}</p></fieldset>
+              <fieldset><legend>موادی که دوست نداری</legend><div v-if="ingredientOptions.length" class="nutrition-chips"><label v-for="tag in ingredientOptions" :key="tag" class="nutrition-chip" :class="{ selected: profile.disliked_ingredients.includes(tag) }"><input v-model="profile.disliked_ingredients" type="checkbox" :value="tag" /><span>{{ tag }}</span></label></div><p v-else class="nutrition-muted">مواد اولیهٔ سطح اولِ دستور ساخت که کالری دارند، در اینجا نمایش داده می‌شوند.</p></fieldset>
+              <fieldset><legend>مواد دلخواه</legend><div v-if="ingredientOptions.length" class="nutrition-chips"><label v-for="tag in ingredientOptions" :key="tag" class="nutrition-chip" :class="{ selected: profile.liked_ingredients.includes(tag) }"><input v-model="profile.liked_ingredients" type="checkbox" :value="tag" /><span>{{ tag }}</span></label></div><p v-else class="nutrition-muted">در دستورهای ساخت فعال این شعبه، مادهٔ اولیهٔ کالری‌دار پیدا نشد.</p></fieldset>
               <fieldset class="nutrition-product-preferences"><legend>غذاهای دلخواه</legend><div v-if="catalog.length" class="nutrition-choice-list"><label v-for="item in catalog" :key="item.name" class="nutrition-choice" :class="{ selected: profile.liked_items.includes(item.name) }"><input v-model="profile.liked_items" type="checkbox" :value="item.name" /><span>{{ item.title || item.name }}</span></label></div><p v-else class="nutrition-muted">برای انتخاب غذاهای دلخواه، ابتدا شعبهٔ منو را انتخاب کن.</p></fieldset>
               <fieldset class="nutrition-product-preferences"><legend>غذاهای نامطلوب</legend><div v-if="catalog.length" class="nutrition-choice-list"><label v-for="item in catalog" :key="item.name" class="nutrition-choice" :class="{ selected: profile.disliked_items.includes(item.name) }"><input v-model="profile.disliked_items" type="checkbox" :value="item.name" /><span>{{ item.title || item.name }}</span></label></div><p v-else class="nutrition-muted">برای انتخاب غذاهای نامطلوب، ابتدا شعبهٔ منو را انتخاب کن.</p></fieldset>
             </div>
             <label class="nutrition-branch"><span><Store :size="17" /> شعبهٔ منو</span><select v-model="selectedBranch" class="nutrition-input" @change="loadCatalog"><option value="">انتخاب شعبه</option><option v-for="branch in branches" :key="branch.id || branch.name" :value="branch.id || branch.name">{{ branch.title || branch.name }}</option></select></label>
-            <p class="nutrition-note">برای ثبت حساسیت‌های شدید، پیش از سفارش با کارکنان شعبه هماهنگ کن. آلودگی متقاطع در آماده‌سازی آشپزخانه ممکن است.</p>
+            <p class="nutrition-note">مواد از جزءهای مستقیمِ دستور ساخت انتخاب می‌شوند؛ دستورهای تودرتو باز نمی‌شوند. این فهرست جای بررسی حساسیت شدید با کارکنان شعبه را نمی‌گیرد و آلودگی متقاطع ممکن است.</p>
             <button class="nutrition-secondary" type="button" :disabled="savingProfile || !profile.consent" @click="saveProfile">ذخیرهٔ سلیقه و حساسیت‌ها</button>
           </section>
 
@@ -69,14 +69,15 @@
             <div class="nutrition-builder-top"><label><span>نام برنامه</span><input v-model.trim="builder.title" class="nutrition-input" maxlength="120" placeholder="مثلاً برنامهٔ روز تمرین" /></label><div class="nutrition-day-picker"><span>روزهای هفته</span><div><label v-for="day in weekdays" :key="day" :class="{ selected: builder.weekdays.includes(day) }"><input v-model="builder.weekdays" type="checkbox" :value="day" /><span>{{ day.slice(0, 1) }}</span></label></div></div></div>
 
             <div class="nutrition-suggestion-row"><button class="nutrition-secondary" type="button" :disabled="suggesting || !selectedBranch || !targets.estimate_available" @click="loadSuggestions"><Sparkles :size="16" />{{ suggesting ? 'در حال ساخت پیشنهاد…' : 'پیشنهاد چند ترکیب' }}</button><small v-if="suggestionMessage">{{ suggestionMessage }}</small></div>
-            <div v-if="suggestions.length" class="nutrition-suggestions"><button v-for="suggestion in suggestions" :key="suggestion.title" type="button" @click="useSuggestion(suggestion)"><strong>{{ suggestion.title }}</strong><small>{{ suggestion.items.length.toLocaleString('fa-IR') }} محصول پیشنهادی</small><ArrowLeft :size="16" /></button></div>
+            <p v-if="suggestions.length" class="nutrition-note">این چند ترکیب از میان {{ nutritionProductCount.toLocaleString('fa-IR') }} محصول منو با کالری و پروتئین ثبت‌شده انتخاب شده‌اند. برای دیدن و افزودن گزینه‌های دیگر، «افزودن» همان وعده را بزن؛ موجودی و قیمت پیش از سفارش دوباره بررسی می‌شوند.</p>
+            <div v-if="suggestions.length" class="nutrition-suggestions"><button v-for="suggestion in suggestions" :key="suggestion.title" type="button" @click="useSuggestion(suggestion)"><strong>{{ suggestion.title }}</strong><small>{{ suggestionSummary(suggestion) }}</small><em v-if="!suggestion.full_day">این ترکیب وعده‌های بدون غذای مناسب را پوشش نمی‌دهد.</em><em v-else-if="!suggestion.nutrition_complete">کالری بعضی غذاها نامشخص است.</em><em v-else-if="!suggestion.nutrition_reviewed">مقادیر تغذیه‌ای ثبت شده‌اند، اما هنوز بازبینی نشده‌اند.</em><ArrowLeft :size="16" /></button></div>
 
             <div class="nutrition-slot-list">
               <section v-for="slot in mealSlots" :key="slot" class="nutrition-slot">
                 <header><div><span class="nutrition-slot__icon"><component :is="slotIcon(slot)" :size="17" /></span><h3>{{ slot }}</h3><small>{{ itemsForSlot(slot).length.toLocaleString('fa-IR') }} قلم</small></div><button type="button" class="nutrition-add-button" :disabled="!selectedBranch" @click="openPicker(slot)"><Plus :size="16" /> افزودن</button></header>
                 <div v-if="itemsForSlot(slot).length" class="nutrition-line-list">
                   <article v-for="(row, index) in itemsForSlot(slot)" :key="`${slot}-${index}`" class="nutrition-line">
-                    <div class="nutrition-line__copy"><strong>{{ row.source_type === 'ثبت دستی' ? row.manual_name : productFor(row.item_code)?.title || row.item_code }}</strong><small v-if="row.source_type === 'ثبت دستی'">{{ row.manual_quantity || 'مقدار ثبت‌شده' }} · ثبت‌شده توسط شما · {{ formatNumber(lineNutrition(row, 'kcal')) }} kcal برای این تعداد</small><small v-else>{{ formatNumber(lineNutrition(row, 'kcal')) }} کیلوکالری · {{ formatNumber(lineNutrition(row, 'protein_g')) }} گرم پروتئین برای این تعداد</small></div>
+                    <div class="nutrition-line__copy"><strong>{{ row.source_type === 'ثبت دستی' ? row.manual_name : productFor(row.item_code)?.title || row.item_code }}</strong><small v-if="row.source_type === 'ثبت دستی'">{{ row.manual_quantity || 'مقدار ثبت‌شده' }} · ثبت‌شده توسط شما · {{ formatNumber(lineNutrition(row, 'kcal')) }} kcal برای این تعداد</small><small v-else>{{ formatNumber(lineNutrition(row, 'kcal')) }} کیلوکالری · {{ formatNumber(lineNutrition(row, 'protein_g')) }} گرم پروتئین برای این تعداد<span v-if="lineNutritionNotice(row)"> · {{ lineNutritionNotice(row) }}</span></small></div>
                     <div class="nutrition-line__controls"><select v-model="row.meal_slot" class="nutrition-meal-select" :aria-label="`وعدهٔ ${row.manual_name || productFor(row.item_code)?.title || 'قلم'}`"><option v-for="targetSlot in mealSlots" :key="targetSlot">{{ targetSlot }}</option></select><button type="button" :aria-label="`کم‌کردن تعداد ${row.manual_name || productFor(row.item_code)?.title || 'قلم'}`" @click="changeQty(row, -1)"><Minus :size="15" /></button><span>{{ Number(row.qty || 1).toLocaleString('fa-IR') }}</span><button type="button" :aria-label="`زیادکردن تعداد ${row.manual_name || productFor(row.item_code)?.title || 'قلم'}`" @click="changeQty(row, 1)"><Plus :size="15" /></button><button class="remove" type="button" aria-label="حذف قلم" @click="removeLine(row)"><Trash2 :size="15" /></button></div>
                   </article>
                 </div>
@@ -91,14 +92,14 @@
             <section class="nutrition-picker" role="dialog" aria-modal="true" aria-label="انتخاب محصول منو">
               <header><div><p class="nutrition-eyebrow">{{ pickerSlot }}</p><h2>انتخاب از منوی {{ branchTitle }}</h2></div><button class="nutrition-icon-button" type="button" aria-label="بستن" @click="pickerSlot = ''"><X :size="18" /></button></header>
               <label class="nutrition-search"><Search :size="17" /><input v-model="productSearch" type="search" placeholder="جستجوی غذا" /></label>
-              <div v-if="!safePickerProducts.length" class="nutrition-empty-small">در این شعبه محصول آمادهٔ پیشنهاد پیدا نشد. محصولات باید اطلاعات تغذیه و حساسیت‌زای بازبینی‌شده داشته باشند.</div>
-              <div v-else class="nutrition-picker-list"><article v-for="product in safePickerProducts" :key="product.name"><div><strong>{{ product.title }}</strong><small>{{ formatNumber(product.nutrition?.kcal) }} kcal · {{ formatNumber(product.nutrition?.protein_g) }}g پروتئین · {{ formatPrice(product.base_price) }}</small></div><button type="button" class="nutrition-add-button" @click="addProduct(product)"><Plus :size="16" /> افزودن</button></article></div>
+              <div v-if="!pickerProducts.length" class="nutrition-empty-small">غذایی با این نام در منوی شعبه پیدا نشد. واژهٔ دیگری جستجو کن یا نام غذا را کوتاه‌تر بنویس.</div>
+              <div v-else class="nutrition-picker-list"><article v-for="product in pickerProducts" :key="product.name"><div><strong>{{ product.title || product.name }}</strong><small>{{ productMenuSummary(product) }}</small><small v-if="productMenuNotice(product)" class="nutrition-product-notice">{{ productMenuNotice(product) }}</small><small v-if="productAllergenBlockReason(product)" class="nutrition-product-blocked">{{ productAllergenBlockReason(product) }}</small></div><button type="button" class="nutrition-add-button" :disabled="Boolean(productAllergenBlockReason(product))" @click="addProduct(product)"><Plus :size="16" /> افزودن</button></article></div>
             </section>
           </div>
 
           <section v-if="todayPlan" class="nutrition-panel nutrition-today" aria-labelledby="nutrition-today-title">
             <div class="nutrition-section-head"><div><p class="nutrition-eyebrow">برنامهٔ هفتگی</p><h2 id="nutrition-today-title">برنامهٔ امروز · {{ todayWeekday }}</h2><p>{{ todayPlan.title }} · شعبهٔ مرجع {{ todayPlan.branch }}</p></div><span class="nutrition-today__badge"><Check :size="15" /> امروز</span></div>
-            <div class="nutrition-today__items"><div v-for="(row, index) in todayPlan.items" :key="`${todayPlan.name}-${index}`"><span><strong>{{ row.source_type === 'ثبت دستی' ? row.manual_name : productFor(row.item_code)?.title || row.item_code }}</strong><small>{{ row.meal_slot }} · {{ row.source_type === 'ثبت دستی' ? 'ثبت‌شده توسط شما' : `تعداد ${Number(row.qty || 1).toLocaleString('fa-IR')}` }}</small></span><b>{{ formatNumber(lineNutrition(row, 'kcal')) }} kcal</b></div></div>
+            <div class="nutrition-today__items"><div v-for="(row, index) in todayPlan.items" :key="`${todayPlan.name}-${index}`"><span><strong>{{ row.source_type === 'ثبت دستی' ? row.manual_name : productFor(row.item_code)?.title || row.item_code }}</strong><small>{{ row.meal_slot }} · {{ row.source_type === 'ثبت دستی' ? 'ثبت‌شده توسط شما' : `تعداد ${Number(row.qty || 1).toLocaleString('fa-IR')}` }}<template v-if="lineNutritionNotice(row)"> · {{ lineNutritionNotice(row) }}</template></small></span><b>{{ formatNumber(lineNutrition(row, 'kcal')) }} kcal</b></div></div>
             <div class="nutrition-today__totals"><span><small>کالری برنامه</small><strong>{{ formatNumber(todayPlanTotals.totals.kcal) }} kcal</strong></span><span><small>پروتئین</small><strong>{{ formatNumber(todayPlanTotals.totals.protein_g) }} g</strong></span><span><small>قیمت اقلام وی‌درخت</small><strong>{{ planPriceLabel(todayPlanTotals) }}</strong></span></div>
             <p v-if="todayPlan.branch !== selectedBranch" class="nutrition-note">سبد فعلی روی شعبهٔ {{ branchTitle || 'دیگر' }} تنظیم شده است. پیش از افزودن، موجودی و قیمت همان شعبه بررسی می‌شود.</p>
             <p v-if="!todayPlanTotals.complete" class="nutrition-note">بخشی از اطلاعات تغذیه‌ای ثبت نشده است؛ جمع بالا فقط مقادیر معلوم را نشان می‌دهد.</p>
@@ -108,7 +109,7 @@
           <section class="nutrition-panel nutrition-saved-plans">
             <div class="nutrition-section-head"><div><h2>برنامه‌های ذخیره‌شده</h2><p>برای هر روز فقط یک برنامهٔ فعال نگه داشته می‌شود.</p></div><span class="nutrition-step"><Bookmark :size="15" /></span></div>
             <p v-if="planError" class="nutrition-error" role="alert">{{ planError }}</p><p v-if="planMessage" class="nutrition-success" role="status">{{ planMessage }}</p>
-            <div v-if="plans.length" class="nutrition-plan-list"><article v-for="plan in plans" :key="plan.name" :class="{ today: isTodayPlan(plan) }"><div class="nutrition-plan-list__main"><strong>{{ plan.title }}</strong><small>{{ plan.weekdays.length ? plan.weekdays.join('، ') : 'بدون زمان‌بندی هفتگی' }} · {{ plan.items.length.toLocaleString('fa-IR') }} قلم</small><small>جمع فعلی: {{ formatNumber(planTotals(plan).totals.kcal) }} kcal · {{ planPriceLabel(planTotals(plan)) }}</small><small v-if="plan.last_cart_prepared_date === todayDate">امروز به سبد فرستاده شده</small></div><div class="nutrition-plan-actions"><button v-if="isTodayPlan(plan) && plan.last_cart_prepared_date !== todayDate" type="button" class="nutrition-primary nutrition-primary--small" :disabled="savingProfile || orderingPlan === plan.name" @click="orderPlan(plan)">{{ orderingPlan === plan.name ? 'در حال بررسی…' : 'افزودن برنامهٔ امروز به سبد' }}<ArrowLeft :size="15" /></button><button type="button" class="nutrition-secondary nutrition-secondary--small" @click="editPlan(plan)"><Pencil :size="15" /> ویرایش</button><button type="button" class="nutrition-icon-button" :aria-label="`حذف ${plan.title}`" @click="deletePlan(plan)"><Trash2 :size="16" /></button></div></article></div>
+            <div v-if="plans.length" class="nutrition-plan-list"><article v-for="plan in plans" :key="plan.name" :class="{ today: isTodayPlan(plan) }"><div class="nutrition-plan-list__main"><strong>{{ plan.title }}</strong><small>{{ plan.weekdays.length ? plan.weekdays.join('، ') : 'بدون زمان‌بندی هفتگی' }} · {{ plan.items.length.toLocaleString('fa-IR') }} قلم</small><small>جمع فعلی: {{ formatNumber(planTotals(plan).totals.kcal) }} kcal · {{ planPriceLabel(planTotals(plan)) }}</small><small v-if="plan.last_cart_prepared_date === todayDate">امروز به سبد فرستاده شده</small></div><div class="nutrition-plan-actions"><button v-if="plan.active && plan.last_cart_prepared_date !== todayDate" type="button" class="nutrition-primary nutrition-primary--small" :disabled="savingProfile || orderingPlan === plan.name" @click="orderPlan(plan, false, true)">{{ orderingPlan === plan.name && !schedulingPlan ? 'در حال بررسی…' : 'افزودن برنامه به سبد' }}<ArrowLeft :size="15" /></button><button v-if="plan.active" type="button" class="nutrition-secondary nutrition-secondary--small" :disabled="savingProfile || orderingPlan === plan.name" @click="orderPlan(plan, true)"><CalendarClock :size="15" />{{ orderingPlan === plan.name ? (schedulingPlan ? 'در حال آماده‌سازی…' : 'در حال بررسی…') : 'زمان‌بندی سفارش' }}</button><button type="button" class="nutrition-secondary nutrition-secondary--small" @click="editPlan(plan)"><Pencil :size="15" /> ویرایش</button><button type="button" class="nutrition-icon-button" :aria-label="`حذف ${plan.title}`" @click="deletePlan(plan)"><Trash2 :size="16" /></button></div></article></div>
             <div v-else class="nutrition-empty-small">هنوز برنامه‌ای ذخیره نشده است.</div>
           </section>
 
@@ -116,7 +117,9 @@
             <div class="nutrition-summary__head"><div><small>جمع برنامهٔ در حال ویرایش</small><strong>{{ builder.title || 'برنامهٔ روزانه' }}</strong></div><span class="nutrition-summary__branch"><Store :size="14" />{{ branchTitle || 'شعبه انتخاب نشده' }}</span></div>
             <div class="nutrition-summary__stats"><span><small>کالری برنامه</small><strong>{{ formatNumber(builderTotals.totals.kcal) }} <small>kcal</small></strong></span><span><small>پروتئین برنامه</small><strong>{{ formatNumber(builderTotals.totals.protein_g) }} <small>g</small></strong></span><span><small>قیمت سفارش‌پذیر</small><strong>{{ planPriceLabel(builderTotals) }}</strong></span></div>
             <p v-if="!builderTotals.complete" class="nutrition-summary__warning"><CircleAlert :size="14" /> بعضی اقلام اطلاعات تغذیه‌ای کامل ندارند؛ عدد نمایش‌داده‌شده جمع اقلام معلوم است.</p>
-            <div class="nutrition-summary__compare" v-if="targets.calorie_target_kcal"><span>هدف کالری روزانه</span><div><i :style="{ width: `${calorieProgress}%` }"></i></div><strong>{{ calorieProgress }}٪</strong></div>
+            <p v-if="builderTotals.unreviewedNutrition.length" class="nutrition-summary__warning"><CircleAlert :size="14" /> کالری و پروتئین ثبت‌شدهٔ بعضی محصولات هنوز توسط مدیریت بازبینی نشده است.</p>
+            <p v-if="builderNeedsSafetyReview" class="nutrition-summary__warning"><CircleAlert :size="14" /> پیش از سفارش، اطلاعات آلرژن بعضی غذاها باید توسط شعبه بازبینی شود.</p>
+            <div class="nutrition-summary__compare" v-if="targets.calorie_target_kcal && builderTotals.complete"><span>هدف کالری روزانه</span><div><i :style="{ width: `${calorieProgress}%` }"></i></div><strong>{{ calorieProgress }}٪</strong></div>
             <div class="nutrition-summary__actions"><button class="nutrition-primary" type="button" :disabled="savingProfile || savingPlan || !profileExists || !profile.consent || !selectedBranch || !builder.items.length" @click="savePlan">{{ savingPlan ? 'در حال ذخیره…' : editingPlanName ? 'ذخیرهٔ تغییرات' : 'ذخیرهٔ برنامه' }}<Save :size="16" /></button><button v-if="editingPlanName" class="nutrition-text-button" type="button" @click="resetBuilder">برنامهٔ تازه</button></div>
             <p v-if="!profileExists" class="nutrition-note">برای ذخیرهٔ برنامه، ابتدا اطلاعات و رضایت را در گام اول ثبت کن.</p>
           </aside>
@@ -128,13 +131,16 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ArrowLeft, Bookmark, Check, CircleAlert, Coffee, HeartPulse, LoaderCircle, Moon, Pencil, Plus, Save, Search, Sparkles, Store, Trash2, UserRound, Utensils, X, Minus } from 'lucide-vue-next'
+import { ArrowLeft, Bookmark, CalendarClock, Check, CircleAlert, Coffee, HeartPulse, LoaderCircle, Moon, Pencil, Plus, Save, Search, Sparkles, Store, Trash2, UserRound, Utensils, X, Minus } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
 import { cartState, clearCart, saveOrderContext, upsertLine } from '@/stores/cartStore'
 import { hasCustomerSession } from '@/utils/customerAuth'
 import { isCustomerCompany } from '@/utils/orderBranches'
-import { calculateNutritionTargets, calculatePlanTotals, NUTRITION_MEAL_SLOTS, NUTRITION_WEEKDAYS, localWeekdayIndex } from '@/utils/nutritionPlanning'
-import { deleteMyMealPlan, deleteMyNutritionProfile, getBranches, getMyNutritionWorkspace, prepareMyMealPlanOrder, saveMyMealPlan, saveMyNutritionProfile, suggestMyMealPlans } from '@/utils/api'
+import { vehicleComplete } from '@/utils/customerOrderValidation'
+import { formatMoney } from '@/utils/format'
+import { rememberNutritionScheduleReturn } from '@/utils/orderFlow'
+import { buildCalorieAwareMealSuggestions, calculateNutritionTargets, calculatePlanTotals, filterNutritionMenuProducts, hasNutritionValues, NUTRITION_MEAL_SLOTS, NUTRITION_WEEKDAYS, localWeekdayIndex } from '@/utils/nutritionPlanning'
+import { deleteMyMealPlan, deleteMyNutritionProfile, getBranches, getMyNutritionWorkspace, prepareMyMealPlanOrder, saveMyMealPlan, saveMyNutritionProfile } from '@/utils/api'
 
 const signedIn = ref(hasCustomerSession())
 const loading = ref(false)
@@ -159,6 +165,7 @@ const planError = ref('')
 const pickerSlot = ref('')
 const productSearch = ref('')
 const orderingPlan = ref('')
+const schedulingPlan = ref(false)
 const manualFood = reactive({ name: '', quantity: '', slot: 'میان‌وعده', kcal: '', protein_g: '', qty: 1 })
 const weekdays = NUTRITION_WEEKDAYS
 const mealSlots = NUTRITION_MEAL_SLOTS
@@ -167,19 +174,13 @@ const todayWeekday = ref(weekdays[localWeekdayIndex()])
 const targets = computed(() => calculateNutritionTargets(profile))
 const catalogByCode = computed(() => Object.fromEntries(catalog.value.map((item) => [item.name, item])))
 const builderTotals = computed(() => calculatePlanTotals(builder.items, catalogByCode.value))
+const builderNeedsSafetyReview = computed(() => builder.items.some((row) => row.source_type !== 'ثبت دستی' && !productFor(row.item_code)?.allergen_reviewed))
 const todayPlan = computed(() => plans.value.find((plan) => isTodayPlan(plan)) || null)
 const todayPlanTotals = computed(() => todayPlan.value ? calculatePlanTotals(todayPlan.value.items || [], catalogByCode.value) : calculatePlanTotals())
-const allergenOptions = computed(() => uniqueTags(catalog.value.flatMap((item) => item.allergens || [])))
-const ingredientOptions = computed(() => uniqueTags(catalog.value.filter((item) => item.ingredients_reviewed).flatMap((item) => item.ingredient_tags || [])))
-const safePickerProducts = computed(() => catalog.value.filter((item) => {
-  if (!item.nutrition_verified || !item.allergen_reviewed || !item.ingredients_reviewed || item.out_of_stock || !Number(item.base_price)) return false
-  if (pickerSlot.value && !(item.meal_slots || []).includes(pickerSlot.value)) return false
-  if (profile.allergens.some((tag) => (item.allergens || []).some((allergen) => sameTag(tag, allergen)))) return false
-  if (profile.disliked_items.includes(item.name)) return false
-  if (profile.disliked_ingredients.some((tag) => (item.ingredient_tags || []).some((ingredient) => sameTag(tag, ingredient)))) return false
-  const query = productSearch.value.trim().toLocaleLowerCase('fa-IR')
-  return !query || String(item.title || '').toLocaleLowerCase('fa-IR').includes(query)
-}))
+const ingredientOptions = computed(() => uniqueTags(catalog.value.flatMap((item) => item.nutrition_ingredient_tags || [])))
+const allergenOptions = ingredientOptions
+const pickerProducts = computed(() => filterNutritionMenuProducts(catalog.value, productSearch.value))
+const nutritionProductCount = computed(() => catalog.value.filter((item) => hasNutritionValues(item) && Number(item.nutrition?.kcal) > 0).length)
 const branchTitle = computed(() => branches.value.find((row) => (row.id || row.name) === selectedBranch.value)?.title || branches.value.find((row) => (row.id || row.name) === selectedBranch.value)?.name || selectedBranch.value)
 const bmiLabel = computed(() => {
   if (Number(profile.age_years) > 0 && Number(profile.age_years) < 18) return 'نمایش BMI بزرگسالان برای زیر ۱۸ سال مناسب نیست'
@@ -195,18 +196,62 @@ const calorieProgress = computed(() => targets.value.calorie_target_kcal ? Math.
 function sameTag(a, b) { return String(a || '').trim().toLocaleLowerCase('fa-IR') === String(b || '').trim().toLocaleLowerCase('fa-IR') }
 function uniqueTags(values) { return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fa')) }
 function formatNumber(value) { return value === null || value === undefined || value === '' ? '—' : Math.round(Number(value)).toLocaleString('fa-IR') }
-function formatPrice(value) { return `${Math.round(Number(value || 0)).toLocaleString('fa-IR')} تومان` }
+function formatPrice(value) { return formatMoney(value, 'TOMAN') }
 function planPriceLabel(summary) { return !summary.restaurantItems ? 'بدون قلم وی‌درخت' : summary.priceComplete ? formatPrice(summary.totals.price) : 'قیمت پس از بررسی شعبه' }
 function lineNutrition(row, key) {
   const product = row.source_type === 'ثبت دستی' ? null : productFor(row.item_code)
-  if (row.source_type !== 'ثبت دستی' && !product?.nutrition_verified) return null
+  if (row.source_type !== 'ثبت دستی' && ['kcal', 'protein_g'].includes(key) && !hasNutritionValues(product)) return null
   const value = row.source_type === 'ثبت دستی' ? row.nutrition?.[key] : product?.nutrition?.[key]
   return value === null || value === undefined || value === '' ? null : Number(value) * Number(row.qty || 1)
+}
+function lineNutritionNotice(row) {
+  if (row.source_type === 'ثبت دستی') return ''
+  const product = productFor(row.item_code)
+  const notices = []
+  if (!hasNutritionValues(product)) notices.push('اطلاعات کالری و پروتئین ناقص یا ثبت‌نشده')
+  else if (Number(product.nutrition_verified) !== 1) notices.push('مقدار ثبت‌شده، بازبینی‌نشده')
+  if (product?.out_of_stock) notices.push('فعلاً ناموجود؛ هنگام سفارش دوباره بررسی می‌شود')
+  if (!(Number(product?.base_price) > 0)) notices.push('قیمت شعبه هنگام سفارش بررسی می‌شود')
+  return notices.join(' · ')
+}
+function productHasAllergenConflict(product) {
+  return profile.allergens.some((tag) => [...(product.allergens || []), ...(product.ingredient_tags || [])].some((allergen) => sameTag(tag, allergen)))
+}
+function productAllergenBlockReason(product) {
+  if (productHasAllergenConflict(product)) return 'با حساسیت ثبت‌شدهٔ شما تطابق دارد و قابل افزودن نیست.'
+  if (profile.allergens.length && !product.allergen_reviewed && !product.ingredient_composition_available) return 'مواد تشکیل‌دهندهٔ این محصول برای بررسی حساسیت شما در دسترس نیست.'
+  if (profile.disliked_ingredients.some((tag) => (product.ingredient_tags || []).some((ingredient) => sameTag(tag, ingredient)))) return 'این محصول یکی از مواد نامطلوب شما را دارد.'
+  if (profile.disliked_ingredients.length && !product.ingredients_reviewed && !product.ingredient_composition_available) return 'مواد تشکیل‌دهندهٔ این محصول برای بررسی انتخاب شما در دسترس نیست.'
+  return ''
+}
+function productMenuSummary(product) {
+  const nutrition = product.nutrition || {}
+  const nutritionSummary = hasNutritionValues(product)
+    ? `${formatNumber(nutrition.kcal)} kcal · ${formatNumber(nutrition.protein_g)}g پروتئین${Number(product.nutrition_verified) === 1 ? ' · بازبینی‌شده' : ' · ثبت‌شده، بازبینی‌نشده'}`
+    : 'اطلاعات کالری و پروتئین ناقص یا ثبت‌نشده'
+  const priceSummary = Number(product.base_price) > 0 ? formatPrice(product.base_price) : 'قیمت شعبه نامشخص'
+  return `${nutritionSummary} · ${priceSummary}`
+}
+function productMenuNotice(product) {
+  const notices = []
+  if (!product.allergen_reviewed) notices.push('حساسیت‌زاها بازبینی نشده')
+  if (!product.ingredients_reviewed) notices.push('مواد اولیه بازبینی نشده')
+  if (product.out_of_stock) notices.push('فعلاً ناموجود؛ موجودی هنگام سفارش دوباره بررسی می‌شود')
+  return notices.join(' · ')
 }
 function slotIcon(slot) { return slot === 'صبحانه' ? Coffee : slot === 'شام' ? Moon : Utensils }
 function productFor(code) { return catalogByCode.value[code] }
 function itemsForSlot(slot) { return builder.items.filter((row) => row.meal_slot === slot) }
 function planTotals(plan) { return calculatePlanTotals(plan.items || [], catalogByCode.value) }
+function suggestionSummary(suggestion) {
+  const totals = calculatePlanTotals(suggestion.items || [], catalogByCode.value)
+  const calorieLabel = totals.complete ? `${formatNumber(totals.totals.kcal)} kcal` : 'کالری نامشخص'
+  const needsAvailabilityCheck = (suggestion.items || []).some((row) => {
+    const product = catalogByCode.value[row.item_code]
+    return !product || product.out_of_stock || !(Number(product.base_price) > 0)
+  })
+  return `${(suggestion.covered_slots || []).length.toLocaleString('fa-IR')} وعده · ${suggestion.items.length.toLocaleString('fa-IR')} قلم · ${calorieLabel}${needsAvailabilityCheck ? ' · موجودی و قیمت پیش از سفارش بررسی می‌شود' : ''}`
+}
 function isTodayPlan(plan) { return Boolean(plan.active && (plan.weekdays || []).includes(todayWeekday.value)) }
 
 function applyProfile(source = {}) {
@@ -292,7 +337,18 @@ async function loadSuggestions() {
     await saveProfile()
     if (profileError.value) throw new Error(profileError.value)
     if (!profileExists.value) throw new Error(profileError.value || 'ابتدا پروفایل را ذخیره کن.')
-    const payload = await suggestMyMealPlans(selectedBranch.value)
+    if (!catalog.value.length) await loadCatalog()
+    const payload = buildCalorieAwareMealSuggestions({
+      branch: selectedBranch.value,
+      catalog: catalog.value,
+      calorieTarget: targets.value.calorie_target_kcal,
+      proteinTarget: targets.value.protein_reference_g,
+      allergens: profile.allergens,
+      dislikedItems: profile.disliked_items,
+      dislikedIngredients: profile.disliked_ingredients,
+      likedItems: profile.liked_items,
+      likedIngredients: profile.liked_ingredients,
+    })
     suggestions.value = payload?.suggestions || []
     suggestionMessage.value = payload?.reason || ''
   } catch (error) { suggestionMessage.value = error?.message || 'ساخت پیشنهاد انجام نشد.' }
@@ -355,9 +411,9 @@ async function deletePlan(plan) {
   try { await deleteMyMealPlan(plan.name); plans.value = plans.value.filter((row) => row.name !== plan.name); if (editingPlanName.value === plan.name) resetBuilder(); planMessage.value = 'برنامه حذف شد.' }
   catch (error) { planError.value = error?.message || 'حذف برنامه انجام نشد.' }
 }
-async function orderPlan(plan) {
+async function orderPlan(plan, forSchedule = false, orderNow = false) {
   if (savingProfile.value || orderingPlan.value) return
-  orderingPlan.value = plan.name; planError.value = ''
+  orderingPlan.value = plan.name; schedulingPlan.value = forSchedule; planError.value = ''
   try {
     if (!profile.consent) throw new Error('برای استفاده از حساسیت‌ها و برنامهٔ خصوصی، رضایت ذخیره‌سازی را تأیید کن یا اطلاعات را حذف کن.')
     const requestedBranch = selectedBranch.value || plan.branch
@@ -365,9 +421,9 @@ async function orderPlan(plan) {
     if (cartState.lines.length && !window.confirm('سبد فعلی جایگزین اقلام برنامهٔ امروز شود؟')) return
     await saveProfile()
     if (profileError.value) throw new Error(profileError.value)
-    const payload = await prepareMyMealPlanOrder(plan.name, requestedBranch)
+    const payload = await prepareMyMealPlanOrder(plan.name, requestedBranch, forSchedule, orderNow)
     if (payload?.warnings?.length) {
-      planError.value = payload.warnings.map((row) => `${productFor(row.item_code)?.title || row.item_code}: ${row.reason}`).join(' ')
+      planError.value = payload.warnings.map((row) => `${productFor(row.item_code)?.title || row.item_title || row.item_code || 'قلم سفارش'}: ${row.reason}`).join(' ')
       return
     }
     if (!payload?.can_order || !payload.items?.length) throw new Error('در این برنامه محصول سفارش‌پذیری وجود ندارد.')
@@ -375,11 +431,25 @@ async function orderPlan(plan) {
     for (const item of payload.items) upsertLine({ item_slug: item.item_slug, item_title: item.item_title, base_price: item.base_price, qty: item.qty, unit_price_preview: item.base_price, line_total_preview: item.base_price * item.qty, customization: item.customization })
     const branchRow = branches.value.find((row) => (row.id || row.name) === payload.branch)
     saveOrderContext({ branch: payload.branch, branch_title: branchRow?.title || branchRow?.name || payload.branch })
+    if (forSchedule) {
+      const search = new URLSearchParams({ source: 'nutrition', title: plan.title || 'برنامهٔ غذایی' })
+      if (plan.weekdays?.length) search.set('weekdays', plan.weekdays.join('|'))
+      const scheduleUrl = `/customer/recurring-orders?${search.toString()}`
+      const context = cartState.orderContext
+      let setupUrl = ''
+      if (!context.order_type) setupUrl = '/order/type'
+      else if (context.order_type === 'delivery' && (!context.address?.address_line || context.address?.lat == null || context.address?.lng == null || context.out_of_range)) setupUrl = '/order/delivery'
+      else if (context.order_type === 'pickup' && context.pickup_method === 'car' && !vehicleComplete(context.pickup_vehicle || {})) setupUrl = '/order/pickup?method=car'
+      else if (context.order_type === 'dine_in' && !context.table) setupUrl = '/order/dine-in'
+      if (setupUrl) rememberNutritionScheduleReturn(scheduleUrl)
+      window.location.assign(setupUrl || scheduleUrl)
+      return
+    }
     const savedPlan = plans.value.find((row) => row.name === plan.name)
     if (savedPlan) savedPlan.last_cart_prepared_date = payload.run_date || todayDate.value
     window.location.assign(cartState.orderContext.order_type ? '/cart' : '/order/type')
   } catch (error) { planError.value = error?.message || 'آماده‌سازی سفارش انجام نشد.' }
-  finally { orderingPlan.value = '' }
+  finally { orderingPlan.value = ''; schedulingPlan.value = false }
 }
 
 watch(selectedBranch, () => { suggestions.value = [] })
@@ -474,5 +544,11 @@ onMounted(async () => {
 .nutrition-today__totals strong { font-size: .73rem; }
 .nutrition-today__actions { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; margin-top: .65rem; }
 .nutrition-today__actions .nutrition-primary { min-height: 42px; }
+.nutrition-suggestions button em { grid-column: 1; color: var(--ds-color-status-warning); font-size: .62rem; font-style: normal; }
+.nutrition-suggestions button svg { grid-row: 1 / 4; }
+.nutrition-picker-list article > div { min-width: 0; }
+.nutrition-picker-list .nutrition-product-notice { color: var(--ds-color-status-warning); }
+.nutrition-picker-list .nutrition-product-blocked { color: var(--ds-color-status-danger); }
+.nutrition-picker .nutrition-add-button:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 720px) { .nutrition-today__totals { grid-template-columns: 1fr; } }
 </style>

@@ -13,7 +13,12 @@ the bottom of ``api.py`` and are called by the SPA as
 """
 
 import json
+import hashlib
+import hmac
 import random
+import re
+import secrets
+from datetime import timedelta
 
 import frappe
 from frappe import _
@@ -31,7 +36,7 @@ from restaurant.api import (
 __all__ = [
 	"CLUB_REPORT_KEYS",
 	"club_build_report_bi",
-	"DEFAULT_SMS_TEMPLATES",
+ "DEFAULT_SMS_TEMPLATES",
 	"CUSTOMER_KINDS",
 	"VOICE_TYPES",
 	"VOICE_STATUSES",
@@ -68,8 +73,23 @@ __all__ = [
 	"redeem_management_points",
 	"adjust_management_points",
 	"redeem_my_points",
+	"bind_my_coach_invite",
+	"bind_my_referral_code",
+	"get_my_referral_profile",
+	"set_my_referral_code",
+	"list_management_customer_groups",
+	"save_management_customer_group_discount",
+	"get_management_coach_workbench",
+	"save_management_coach_profile",
+	"assign_management_coach_student",
+	"sync_customer_group_discount",
+	"apply_customer_discount_policy",
+	"coach_payment_settled",
+	"reverse_coach_commission_for_sales_order",
 	"get_customer_club_summary",
 	"get_my_wallet",
+	"request_my_wallet_charge",
+	"submit_my_wallet_charge_reference",
 	"request_my_wallet_withdrawal",
 	# wallet
 	"list_management_wallets",
@@ -79,6 +99,8 @@ __all__ = [
 	"adjust_management_wallet",
 	"list_management_wallet_withdrawal_requests",
 	"review_management_wallet_withdrawal_request",
+	"list_management_wallet_charge_requests",
+	"review_management_wallet_charge_request",
 	# referral
 	"get_management_referral_summary",
 	# campaigns
@@ -107,11 +129,14 @@ __all__ = [
 CLUB_DOCTYPES = {
 	"wallet": "Restaurant Customer Wallet",
 	"wallet_txn": "Restaurant Wallet Transaction",
+	"coach_invite": "Restaurant Coach Invitation",
 	"wallet_withdrawal": "Restaurant Wallet Withdrawal Request",
+	"wallet_charge": "Restaurant Wallet Charge Request",
 	"sms": "Restaurant SMS Message",
 	"campaign": "Restaurant Campaign",
 	"survey_question": "Restaurant Survey Question",
 	"survey_response": "Restaurant Survey Response",
+	"survey_invitation": "Restaurant Survey Invitation",
 	"voice": "Restaurant Customer Voice",
 	"point_entry": "Restaurant Loyalty Point Entry",
 }
@@ -129,11 +154,11 @@ SMS_KIND_CLASSES = {
 	"اطلاع‌رسانی": ["دستی", "خوش‌آمدگویی", "تبریک تولد"],
 	"یادآوری": ["یادآوری خرید"],
 }
-SMS_KINDS = ["دستی", "انبوه", "تبریک تولد", "خوش‌آمدگویی", "یادآوری خرید", "کمپین"]
+SMS_KINDS = ["دستی", "انبوه", "تبریک تولد", "خوش‌آمدگویی", "یادآوری خرید", "کمپین", "نظرسنجی سفارش"]
 SMS_STATUS = ["در صف", "ارسال‌شده", "ناموفق", "بدون درگاه"]
 CAMPAIGN_STATUSES = ["پیش‌نویس", "فعال", "متوقف", "پایان‌یافته"]
 CAMPAIGN_BONUS_TYPES = ["تخفیف", "کش‌بک", "امتیاز"]
-WALLET_KINDS = ["شارژ", "پرداخت", "کش‌بک", "پاداش معرف", "انتقال ارسال", "انتقال دریافت", "تعدیل دستی", "تبدیل امتیاز", "درخواست برداشت", "بازگشت درخواست برداشت"]
+WALLET_KINDS = ["شارژ", "پرداخت", "کش‌بک", "پاداش معرف", "کمیسیون مربی", "بازگشت کمیسیون مربی", "انتقال ارسال", "انتقال دریافت", "تعدیل دستی", "تبدیل امتیاز", "درخواست برداشت", "بازگشت درخواست برداشت"]
 CLUB_REPORT_KEYS = {
 	"customer-analytics",
 	"campaign-performance",
@@ -148,6 +173,7 @@ DEFAULT_SMS_TEMPLATES = {
 	"birthday": "{name} عزیز، تولدتان مبارک! اعضای باشگاه مشتریان ما امروز یک هدیه ویژه برای شما دارند.",
 	"inactive": "{name} عزیز، مدتی است که ندیدیمتان! برای بازگشت شما پیشنهاد ویژه داریم.",
 	"bulk_default": "سلام {name} عزیز، {message}",
+	"survey_invite": "{name} عزیز، سفارش {order} چطور بود؟ تجربه‌تان را اینجا ثبت کنید: {link}",
 }
 
 
@@ -212,9 +238,18 @@ def _club_ensure_customer_fields():
 			{"fieldname": "restaurant_customer_tier", "label": _("سطح مشتری"), "fieldtype": "Select", "options": "\n" + "\n".join(CUSTOMER_TIERS)},
 			{"fieldname": "restaurant_customer_segment", "label": _("خوشه رفتاری"), "fieldtype": "Select", "options": "\n" + "\n".join(CUSTOMER_SEGMENTS), "in_list_view": 0},
 			{"fieldname": "restaurant_referral_code", "label": _("کد معرف"), "fieldtype": "Data", "unique": 1},
+			{"fieldname": "restaurant_referral_code_alias", "label": _("کد معرف قبلی"), "fieldtype": "Data", "read_only": 1, "hidden": 1},
+			{"fieldname": "restaurant_referral_code_customized", "label": _("کد معرف دلخواه تنظیم شده"), "fieldtype": "Check", "default": "0", "read_only": 1, "hidden": 1},
 			{"fieldname": "restaurant_referred_by", "label": _("معرف (مشتری)"), "fieldtype": "Link", "options": "Customer"},
+			{"fieldname": "restaurant_referral_relation_kind", "label": _("نوع ارتباط معرفی"), "fieldtype": "Select", "options": "\nعمومی\nمربی", "hidden": 1},
+			{"fieldname": "restaurant_coach_since", "label": _("شروع عضویت زیرمجموعه مربی"), "fieldtype": "Date", "hidden": 1},
 			{"fieldname": "restaurant_customer_kind", "label": _("نوع مشتری"), "fieldtype": "Select", "options": "\n" + "\n".join(CUSTOMER_KINDS)},
 			{"fieldname": "restaurant_organization", "label": _("سازمان مادر"), "fieldtype": "Link", "options": "Customer"},
+			{"fieldname": "restaurant_collaboration_type", "label": _("نوع همکاری"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_collaboration_status", "label": _("وضعیت همکاری"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_coach_invites_enabled", "label": _("دعوت شاگرد فعال است"), "fieldtype": "Check", "default": "0"},
+			{"fieldname": "restaurant_coach_discount_percent", "label": _("تخفیف شاگرد (%)"), "fieldtype": "Percent", "default": "5"},
+			{"fieldname": "restaurant_coach_commission_percent", "label": _("سهم کیف پول مربی (%)"), "fieldtype": "Percent", "default": "5"},
 			{"fieldname": "restaurant_loyalty_points", "label": _("امتیاز وفاداری"), "fieldtype": "Int", "read_only": 1},
 		],
 		anchor_candidates=["customer_details", "mobile_no", "customer_name"],
@@ -227,16 +262,60 @@ def _club_ensure_sales_order_fields():
 		"Sales Order",
 		[
 			{"fieldname": "restaurant_referral_code", "label": _("کد معرف استفاده‌شده"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_referral_relation_kind_snapshot", "label": _("نوع معرفی در زمان سفارش"), "fieldtype": "Data", "hidden": 1},
 			{"fieldname": "restaurant_cashback_credited", "label": _("کش‌بک اعمال شد"), "fieldtype": "Check"},
 			{"fieldname": "restaurant_kitchen_started_at", "label": _("شروع آماده‌سازی"), "fieldtype": "Datetime"},
 			{"fieldname": "restaurant_kitchen_ready_at", "label": _("آماده شد"), "fieldtype": "Datetime"},
 			{"fieldname": "restaurant_points_earned", "label": _("امتیاز کسب‌شده"), "fieldtype": "Int"},
 			{"fieldname": "restaurant_organization", "label": _("سازمان"), "fieldtype": "Link", "options": "Customer"},
 			{"fieldname": "restaurant_org_member", "label": _("معین سازمانی"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_coach_customer", "label": _("مربی معرف"), "fieldtype": "Link", "options": "Customer"},
+			{"fieldname": "restaurant_coach_discount_amount", "label": _("تخفیف شاگرد"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_coach_commission_amount", "label": _("سهم مربی"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_coach_credited", "label": _("سهم مربی واریز شد"), "fieldtype": "Check"},
+			{"fieldname": "restaurant_coach_reversed_amount", "label": _("سهم برگشتی مربی"), "fieldtype": "Currency", "default": "0"},
+			{"fieldname": "restaurant_coach_recovery_due", "label": _("بازیابی سهم مربی در انتظار"), "fieldtype": "Currency", "default": "0", "hidden": 1},
+			{"fieldname": "restaurant_group_discount_amount", "label": _("تخفیف گروه مشتری"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_discount_source", "label": _("تخفیف منتخب"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_discount_policy_applied", "label": _("سیاست تخفیف محاسبه شد"), "fieldtype": "Check", "hidden": 1},
 			{"fieldname": "restaurant_waiter", "label": _("گارسون"), "fieldtype": "Link", "options": "User"},
 			{"fieldname": "restaurant_waiter_name", "label": _("نام گارسون"), "fieldtype": "Data"},
 		],
 		anchor_candidates=["restaurant_packaging_fee", "restaurant_status"],
+	)
+	_club_fp_call(
+		"_fp_ensure_custom_fields",
+		"Sales Invoice",
+		[
+			{"fieldname": "restaurant_coach_customer", "label": _("مربی معرف"), "fieldtype": "Link", "options": "Customer"},
+			{"fieldname": "restaurant_coach_commission_amount", "label": _("سهم مربی"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_coach_credited", "label": _("سهم مربی واریز شد"), "fieldtype": "Check"},
+			{"fieldname": "restaurant_coach_reversed_amount", "label": _("سهم برگشتی مربی"), "fieldtype": "Currency", "default": "0"},
+			{"fieldname": "restaurant_coach_recovery_due", "label": _("بازیابی سهم مربی در انتظار"), "fieldtype": "Currency", "default": "0", "hidden": 1},
+			{"fieldname": "restaurant_group_discount_amount", "label": _("تخفیف گروه مشتری"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_coach_discount_amount", "label": _("تخفیف شاگرد"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_discount_source", "label": _("تخفیف منتخب"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_discount_policy_applied", "label": _("سیاست تخفیف محاسبه شد"), "fieldtype": "Check", "hidden": 1},
+			{"fieldname": "restaurant_coach_return_reversal_json", "label": _("جزئیات جبران سهم مربی در مرجوعی"), "fieldtype": "Long Text", "hidden": 1},
+			{"fieldname": "restaurant_coach_return_reversal_reinstated", "label": _("جبران مرجوعی لغوشده انجام شد"), "fieldtype": "Check", "default": "0", "hidden": 1},
+		],
+		anchor_candidates=["additional_discount_percentage", "discount_amount", "items"],
+	)
+	_club_fp_call(
+		"_fp_ensure_custom_fields",
+		"Customer Group",
+		[
+			{"fieldname": "restaurant_default_discount_percent", "label": _("تخفیف پیش‌فرض گروه مشتری (%)"), "fieldtype": "Percent", "default": "10"},
+		],
+		anchor_candidates=["default_price_list", "parent_customer_group"],
+	)
+	_club_fp_call(
+		"_fp_ensure_custom_fields",
+		"Pricing Rule",
+		[
+			{"fieldname": "restaurant_generated_customer_group", "label": _("گروه مشتری مرتبط با تخفیف رستوران"), "fieldtype": "Link", "options": "Customer Group", "hidden": 1},
+		],
+		anchor_candidates=["customer_group", "customer"],
 	)
 
 
@@ -249,12 +328,19 @@ def _club_ensure_settings_fields():
 			{"fieldname": "restaurant_club_enabled", "label": _("باشگاه مشتریان فعال است"), "fieldtype": "Check", "default": "1"},
 			{"fieldname": "restaurant_cashback_percent", "label": _("درصد کش‌بک خرید"), "fieldtype": "Percent"},
 			{"fieldname": "restaurant_cashback_min_order", "label": _("حداقل فاکتور برای کش‌بک"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_wallet_charge_enabled", "label": _("درخواست شارژ دستی کیف پول فعال است"), "fieldtype": "Check", "default": "1"},
+			{"fieldname": "restaurant_wallet_charge_bank_name", "label": _("نام بانک شارژ کیف پول"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_wallet_charge_account_holder", "label": _("نام صاحب حساب شارژ کیف پول"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_wallet_charge_iban", "label": _("شبای دریافت شارژ کیف پول"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_wallet_charge_card_number", "label": _("شماره کارت دریافت شارژ کیف پول"), "fieldtype": "Data"},
+			{"fieldname": "restaurant_wallet_charge_instructions", "label": _("راهنمای پرداخت شارژ کیف پول"), "fieldtype": "Long Text"},
 			{"fieldname": "restaurant_wallet_mode_of_payment", "label": _("روش پرداخت کیف پول"), "fieldtype": "Link", "options": "Mode of Payment"},
 			{"fieldname": "restaurant_referral_referrer_reward", "label": _("پاداش معرف"), "fieldtype": "Currency"},
 			{"fieldname": "restaurant_referral_referee_reward", "label": _("پاداش شخص معرفی‌شده"), "fieldtype": "Currency"},
 			{"fieldname": "restaurant_sms_enabled", "label": _("ارسال پیامک فعال است"), "fieldtype": "Check"},
 			{"fieldname": "restaurant_sms_templates_json", "label": _("قالب‌های پیامک (JSON)"), "fieldtype": "Long Text"},
-			{"fieldname": "restaurant_survey_alert_threshold", "label": _("آستانه هشدار نارضایتی (امتیاز)"), "fieldtype": "Int", "default": "3"},
+			{"fieldname": "restaurant_survey_delay_minutes", "label": _("تأخیر پیامک نظرسنجی (دقیقه)"), "fieldtype": "Int", "default": "60"},
+			{"fieldname": "restaurant_survey_alert_threshold", "label": _("آستانه هشدار نارضایتی (امتیاز از ۱۰)"), "fieldtype": "Int", "default": "6"},
 			{"fieldname": "restaurant_survey_alert_users_json", "label": _("کاربران دریافت‌کننده هشدار نظرسنجی (JSON)"), "fieldtype": "Long Text"},
 			{"fieldname": "restaurant_points_section", "label": _("سیستم امتیازدهی وفاداری"), "fieldtype": "Section Break"},
 			{"fieldname": "restaurant_points_enabled", "label": _("امتیازدهی فعال است"), "fieldtype": "Check"},
@@ -274,6 +360,14 @@ def _club_ensure_ops_ready():
 	_club_ensure_customer_fields()
 	_club_ensure_sales_order_fields()
 	_club_ensure_settings_fields()
+	_club_fp_call(
+		"_fp_ensure_custom_fields",
+		CLUB_DOCTYPES["wallet"],
+		[
+			{"fieldname": "restaurant_coach_recovery_due", "label": _("بدهی بازیابی سهم مربی"), "fieldtype": "Currency", "default": "0", "hidden": 1},
+		],
+		anchor_candidates=["cashback_balance", "withdrawable_balance"],
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +377,8 @@ def _club_ensure_ops_ready():
 
 def _club_setting(fieldname, default=""):
 	try:
-		return frappe.db.get_single_value("Restaurant Web Settings", fieldname) or default
+		value = frappe.db.get_single_value("Restaurant Web Settings", fieldname)
+		return default if value is None or value == "" else value
 	except Exception:
 		return default
 
@@ -305,16 +400,27 @@ def _club_get_sms_templates():
 
 def _club_club_settings():
 	alert_users = _club_parse_json(_club_setting("restaurant_survey_alert_users_json", ""), [])
+	try:
+		survey_delay = frappe.db.get_single_value("Restaurant Web Settings", "restaurant_survey_delay_minutes")
+	except Exception:
+		survey_delay = None
 	return {
 		"club_enabled": cint(_club_setting("restaurant_club_enabled", 1)) == 1,
 		"cashback_percent": flt(_club_setting("restaurant_cashback_percent", 0)),
 		"cashback_min_order": flt(_club_setting("restaurant_cashback_min_order", 0)),
+		"wallet_charge_enabled": cint(_club_setting("restaurant_wallet_charge_enabled", 1)) == 1,
+		"wallet_charge_bank_name": str(_club_setting("restaurant_wallet_charge_bank_name", "") or "").strip(),
+		"wallet_charge_account_holder": str(_club_setting("restaurant_wallet_charge_account_holder", "") or "").strip(),
+		"wallet_charge_iban": str(_club_setting("restaurant_wallet_charge_iban", "") or "").strip(),
+		"wallet_charge_card_number": str(_club_setting("restaurant_wallet_charge_card_number", "") or "").strip(),
+		"wallet_charge_instructions": str(_club_setting("restaurant_wallet_charge_instructions", "") or "").strip(),
 		"wallet_mode_of_payment": (_club_setting("restaurant_wallet_mode_of_payment", "") or "").strip(),
 		"referral_referrer_reward": flt(_club_setting("restaurant_referral_referrer_reward", 0)),
 		"referral_referee_reward": flt(_club_setting("restaurant_referral_referee_reward", 0)),
 		"sms_enabled": cint(_club_setting("restaurant_sms_enabled", 0)) == 1,
 		"sms_templates": _club_get_sms_templates(),
-		"survey_alert_threshold": cint(_club_setting("restaurant_survey_alert_threshold", 3)) or 3,
+		"survey_delay_minutes": max(0, min(cint(60 if survey_delay is None else survey_delay), 10080)),
+		"survey_alert_threshold": max(1, min(cint(_club_setting("restaurant_survey_alert_threshold", 6)) or 6, 10)),
 		"survey_alert_users": alert_users if isinstance(alert_users, list) else [],
 		"points_enabled": cint(_club_setting("restaurant_points_enabled", 0)) == 1,
 		"points_rial_per_point": flt(_club_setting("restaurant_points_rial_per_point", 100000)) or 100000,
@@ -335,6 +441,12 @@ _SAVEABLE_CLUB_SETTINGS = [
 	"restaurant_club_enabled",
 	"restaurant_cashback_percent",
 	"restaurant_cashback_min_order",
+	"restaurant_wallet_charge_enabled",
+	"restaurant_wallet_charge_bank_name",
+	"restaurant_wallet_charge_account_holder",
+	"restaurant_wallet_charge_iban",
+	"restaurant_wallet_charge_card_number",
+	"restaurant_wallet_charge_instructions",
 	"restaurant_wallet_mode_of_payment",
 	"restaurant_referral_referrer_reward",
 	"restaurant_points_enabled",
@@ -348,6 +460,7 @@ _SAVEABLE_CLUB_SETTINGS = [
 	"restaurant_referral_referee_reward",
 	"restaurant_sms_enabled",
 	"restaurant_survey_alert_threshold",
+	"restaurant_survey_delay_minutes",
 ]
 
 
@@ -375,9 +488,18 @@ def _club_customer_extra_fields():
 		"restaurant_customer_tier",
 		"restaurant_customer_segment",
 		"restaurant_referral_code",
+		"restaurant_referral_code_alias",
+		"restaurant_referral_code_customized",
 		"restaurant_referred_by",
+		"restaurant_referral_relation_kind",
+		"restaurant_coach_since",
 		"restaurant_customer_kind",
 		"restaurant_organization",
+		"restaurant_collaboration_type",
+		"restaurant_collaboration_status",
+		"restaurant_coach_invites_enabled",
+		"restaurant_coach_discount_percent",
+		"restaurant_coach_commission_percent",
 		"mobile_no",
 		"customer_primary_mobile",
 	):
@@ -412,6 +534,534 @@ def _club_assign_referral_code(customer_name):
 		code = _club_unique_code("REF", "restaurant_referral_code")
 		frappe.db.set_value("Customer", customer_name, "restaurant_referral_code", code, update_modified=False)
 	return code
+
+
+def _club_find_referral_owner(code):
+	code = re.sub(r"\s+", "", str(code or "")).upper()
+	if not code or not _has_column("Customer", "restaurant_referral_code"):
+		return ""
+	owner = frappe.db.get_value("Customer", {"restaurant_referral_code": code}, "name")
+	if not owner and _has_column("Customer", "restaurant_referral_code_alias"):
+		owner = frappe.db.get_value("Customer", {"restaurant_referral_code_alias": code}, "name")
+	return owner or ""
+
+
+def _club_customer_referral_code_is_taken(code, exclude_customer=""):
+	filters = {"restaurant_referral_code": code}
+	owner = frappe.db.get_value("Customer", filters, "name")
+	if owner and owner != exclude_customer:
+		return True
+	if _has_column("Customer", "restaurant_referral_code_alias"):
+		owner = frappe.db.get_value("Customer", {"restaurant_referral_code_alias": code}, "name")
+		if owner and owner != exclude_customer:
+			return True
+	return False
+
+
+def _club_customer_group_discount_percent(customer):
+	if not customer or not _has_column("Customer", "customer_group") or not _has_column("Customer Group", "restaurant_default_discount_percent"):
+		return 0.0
+	group = frappe.db.get_value("Customer", customer, "customer_group")
+	if not group:
+		return 0.0
+	return min(max(flt(frappe.db.get_value("Customer Group", group, "restaurant_default_discount_percent") or 0), 0), 50)
+
+
+def sync_customer_group_discount(doc, method=None):
+	"""Mirror a native Customer Group percentage into one native ERPNext Pricing Rule."""
+	group_name = getattr(doc, "name", None) or (doc.get("name") if isinstance(doc, dict) else "")
+	if not group_name or not frappe.db.exists("DocType", "Pricing Rule"):
+		return
+	_club_ensure_ops_ready()
+	percent = min(max(flt(frappe.db.get_value("Customer Group", group_name, "restaurant_default_discount_percent") or 0), 0), 50)
+	filters = {"restaurant_generated_customer_group": group_name}
+	rule_name = frappe.db.get_value("Pricing Rule", filters, "name")
+	if percent <= 0:
+		if rule_name:
+			frappe.db.set_value("Pricing Rule", rule_name, "disable", 1, update_modified=False)
+		return
+	values = {
+		"title": _("تخفیف گروه رستوران: {0}").format(group_name),
+		"apply_on": "Transaction",
+		"price_or_product_discount": "Price",
+		"selling": 1,
+		"buying": 0,
+		"applicable_for": "Customer Group",
+		"customer_group": group_name,
+		"rate_or_discount": "Discount Percentage",
+		"discount_percentage": percent,
+		"apply_discount_on": "Net Total",
+		"is_cumulative": 0,
+		"coupon_code_based": 0,
+		"apply_multiple_pricing_rules": 0,
+		"disable": 0,
+		"restaurant_generated_customer_group": group_name,
+	}
+	if rule_name:
+		rule = frappe.get_doc("Pricing Rule", rule_name)
+		for field, value in values.items():
+			setattr(rule, field, value)
+		rule.save(ignore_permissions=True)
+	else:
+		frappe.get_doc({"doctype": "Pricing Rule", **values}).insert(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def list_management_customer_groups():
+	_ensure_management_access()
+	_club_ensure_ops_ready()
+	rows = frappe.get_all(
+		"Customer Group",
+		filters={"is_group": 0},
+		fields=["name", "customer_group_name", "parent_customer_group", "restaurant_default_discount_percent"],
+		order_by="lft asc",
+		limit_page_length=0,
+	)
+	return {"groups": rows}
+
+
+@frappe.whitelist()
+def save_management_customer_group_discount(customer_group="", discount_percent=0):
+	_ensure_management_access()
+	_club_ensure_ops_ready()
+	group_name = str(customer_group or "").strip()
+	if not group_name or not frappe.db.exists("Customer Group", group_name):
+		frappe.throw(_("گروه مشتری معتبر نیست."))
+	if cint(frappe.db.get_value("Customer Group", group_name, "is_group")):
+		frappe.throw(_("برای تخفیف، یک گروه نهایی انتخاب کنید."))
+	percent = flt(discount_percent)
+	if percent < 0 or percent > 50:
+		frappe.throw(_("درصد تخفیف باید بین صفر تا ۵۰ باشد."))
+	frappe.db.set_value("Customer Group", group_name, "restaurant_default_discount_percent", percent, update_modified=True)
+	sync_customer_group_discount({"name": group_name})
+	return {"status": "success", "customer_group": group_name, "discount_percent": percent}
+
+
+def _club_native_coupon_amount(doc, subtotal):
+	coupon_code = str(doc.get("coupon_code") or "").strip()
+	if not coupon_code or not frappe.db.exists("DocType", "Coupon Code"):
+		return 0.0
+	coupon = frappe.db.get_value(
+		"Coupon Code",
+		{"coupon_code": coupon_code},
+		["name", "coupon_code", "coupon_type", "customer", "pricing_rule", "valid_from", "valid_upto", "maximum_use", "used"],
+		as_dict=True,
+	)
+	if not coupon and frappe.db.exists("Coupon Code", coupon_code):
+		coupon = frappe.db.get_value(
+			"Coupon Code",
+			coupon_code,
+			["name", "coupon_code", "coupon_type", "customer", "pricing_rule", "valid_from", "valid_upto", "maximum_use", "used"],
+			as_dict=True,
+		)
+	if not coupon or coupon_code not in {coupon.name, coupon.coupon_code}:
+		return 0.0
+	if coupon.valid_from and getdate(coupon.valid_from) > getdate(today()):
+		return 0.0
+	if coupon.valid_upto and getdate(coupon.valid_upto) < getdate(today()):
+		return 0.0
+	if cint(coupon.maximum_use or 0) and cint(coupon.used or 0) >= cint(coupon.maximum_use or 0):
+		return 0.0
+	if coupon.coupon_type == "Gift Card" and coupon.customer and coupon.customer != doc.get("customer"):
+		return 0.0
+	rule_name = coupon.pricing_rule
+	if not rule_name or not frappe.db.exists("Pricing Rule", rule_name):
+		return 0.0
+	rule = frappe.db.get_value("Pricing Rule", rule_name, ["rate_or_discount", "discount_percentage", "discount_amount", "disable", "selling", "valid_from", "valid_upto"], as_dict=True)
+	if not rule or cint(rule.disable) or not cint(rule.selling):
+		return 0.0
+	if rule.valid_from and getdate(rule.valid_from) > getdate(today()):
+		return 0.0
+	if rule.valid_upto and getdate(rule.valid_upto) < getdate(today()):
+		return 0.0
+	if rule.rate_or_discount == "Discount Percentage":
+		return flt(subtotal * flt(rule.discount_percentage or 0) / 100, 2)
+	if rule.rate_or_discount == "Discount Amount":
+		return flt(rule.discount_amount or 0, 2)
+	return 0.0
+
+
+def _club_strip_managed_pricing_rules(doc):
+	"""Let the shared max-discount policy choose group/coupon offers exactly once."""
+	if not frappe.db.exists("DocType", "Pricing Rule"):
+		return False
+	managed = set()
+	customer_group = frappe.db.get_value("Customer", doc.customer, "customer_group") if doc.get("customer") else ""
+	if customer_group and _has_column("Pricing Rule", "restaurant_generated_customer_group"):
+		group_rule = frappe.db.get_value("Pricing Rule", {"restaurant_generated_customer_group": customer_group}, "name")
+		if group_rule:
+			managed.add(group_rule)
+	coupon_code = str(doc.get("coupon_code") or "").strip()
+	if coupon_code and frappe.db.exists("DocType", "Coupon Code"):
+		coupon_name = frappe.db.get_value("Coupon Code", {"coupon_code": coupon_code}, "name") or coupon_code
+		coupon_rule = frappe.db.get_value("Coupon Code", coupon_name, "pricing_rule")
+		if coupon_rule:
+			managed.add(coupon_rule)
+	if not managed:
+		return False
+	changed = False
+	for item in doc.get("items") or []:
+		applied = set(_club_list(item.get("pricing_rules")))
+		if not applied.intersection(managed):
+			continue
+		# ERPNext's non-cumulative rule selection gives one effective rate per
+		# row. Restore that base rate, then let the document policy pick one offer.
+		if item.get("price_list_rate") not in (None, ""):
+			item.rate = flt(item.price_list_rate)
+			item.discount_percentage = 0
+			item.discount_amount = 0
+			item.pricing_rules = ""
+			changed = True
+	if changed and doc.get("pricing_rules"):
+		doc.set("pricing_rules", [row for row in doc.get("pricing_rules") if row.get("pricing_rule") not in managed])
+		doc.calculate_taxes_and_totals()
+	return changed
+
+
+def _club_copy_sales_order_discount_policy_to_invoice(doc):
+	"""Carry the already-selected Sales Order policy onto invoices without discounting twice."""
+	if doc.doctype != "Sales Invoice" or cint(doc.get("is_return")) or not frappe.db.exists("DocType", "Sales Invoice Item"):
+		return False
+	if not frappe.db.has_column("Sales Invoice Item", "sales_order"):
+		return False
+	rows = [
+		{"sales_order": item.get("sales_order"), "net_amount": item.get("net_amount"), "amount": item.get("amount")}
+		for item in (doc.get("items") or [])
+		if item.get("sales_order")
+	]
+	if not rows and doc.name:
+		rows = frappe.get_all(
+			"Sales Invoice Item",
+			filters={"parent": doc.name, "sales_order": ["!=", ""]},
+			fields=["sales_order", "net_amount", "amount"],
+			limit_page_length=0,
+			ignore_permissions=True,
+		)
+	by_order = {}
+	for row in rows:
+		by_order[row.sales_order] = by_order.get(row.sales_order, 0) + flt(row.get("net_amount") or row.get("amount") or 0)
+	if not by_order:
+		return False
+	total_discount = total_group_discount = total_coach_discount = total_commission = 0.0
+	coaches = set()
+	sources = set()
+	found_policy = False
+	for order_name, invoice_net in by_order.items():
+		if not frappe.db.exists("Sales Order", order_name) or not _has_column("Sales Order", "restaurant_discount_policy_applied"):
+			continue
+		policy = frappe.db.get_value(
+			"Sales Order",
+			order_name,
+			["restaurant_discount_policy_applied", "net_total", "discount_amount", "restaurant_group_discount_amount", "restaurant_coach_discount_amount", "restaurant_coach_commission_amount", "restaurant_coach_customer", "restaurant_discount_source"],
+			as_dict=True,
+		)
+		if not policy or not cint(policy.restaurant_discount_policy_applied) or flt(policy.net_total) <= 0:
+			continue
+		found_policy = True
+		ratio = min(max(flt(invoice_net) / flt(policy.net_total), 0), 1)
+		total_discount += flt(policy.discount_amount) * ratio
+		total_group_discount += flt(policy.restaurant_group_discount_amount) * ratio
+		total_coach_discount += flt(policy.restaurant_coach_discount_amount) * ratio
+		total_commission += flt(policy.restaurant_coach_commission_amount) * ratio
+		if policy.restaurant_coach_customer:
+			coaches.add(policy.restaurant_coach_customer)
+		if policy.restaurant_discount_source:
+			sources.add(policy.restaurant_discount_source)
+	if not found_policy:
+		return False
+	doc.apply_discount_on = "Net Total"
+	doc.additional_discount_percentage = 0
+	doc.discount_amount = flt(total_discount, 2)
+	doc.set("restaurant_group_discount_amount", flt(total_group_discount, 2))
+	doc.set("restaurant_coach_discount_amount", flt(total_coach_discount, 2))
+	doc.set("restaurant_coach_commission_amount", flt(total_commission, 2))
+	doc.set("restaurant_coach_customer", next(iter(coaches)) if len(coaches) == 1 else "")
+	doc.set("restaurant_discount_source", next(iter(sources)) if len(sources) == 1 else (_("چند سفارش فروش") if sources else ""))
+	doc.set("restaurant_discount_policy_applied", 1)
+	doc.calculate_taxes_and_totals()
+	return True
+
+
+def apply_customer_discount_policy(doc, method=None):
+	"""Reconcile native ERPNext group/student/coupon discounts to the highest one."""
+	if not getattr(doc, "customer", None):
+		return
+	_club_ensure_ops_ready()
+	if not frappe.db.exists("Customer", doc.customer):
+		return
+	# This must run even for checkout documents that already carry a server-side
+	# preview. ERPNext applies Transaction Pricing Rules inside the controller's
+	# validate() before doc_events run, which can overwrite that preview. Rebuild
+	# the same max-one policy last so group, coach, and coupon discounts cannot
+	# stack or replace one another depending on the sales channel.
+	if _club_copy_sales_order_discount_policy_to_invoice(doc):
+		return
+	_club_strip_managed_pricing_rules(doc)
+	base = flt(doc.get("net_total") or doc.get("total") or 0)
+	if base <= 0:
+		return
+	group_percent = _club_customer_group_discount_percent(doc.customer)
+	coach_terms = _club_partner_order_terms(doc.customer, base)
+	coach_percent = (flt(coach_terms.get("discount") or 0) / base * 100) if coach_terms.get("discount") else 0
+	coupon_amount = _club_native_coupon_amount(doc, base)
+	if not (group_percent or coach_percent or coupon_amount):
+		return
+	from restaurant.pricing_policy import select_order_discount, coach_commission_amount
+
+	policy = select_order_discount(base, group_percent, coach_percent, coupon_amount)
+	# Keep native transaction-level discounts from stacking with the generated policy.
+	doc.apply_discount_on = "Net Total"
+	doc.additional_discount_percentage = 0
+	doc.discount_amount = policy["discount_amount"]
+	if _has_column(doc.doctype, "restaurant_group_discount_amount"):
+		doc.set("restaurant_group_discount_amount", policy["group_discount"] if policy["discount_source"] == "customer_group" else 0)
+	if _has_column(doc.doctype, "restaurant_coach_discount_amount"):
+		doc.set("restaurant_coach_discount_amount", policy["coach_discount"] if policy["discount_source"] == "coach" else 0)
+	if _has_column(doc.doctype, "restaurant_discount_source"):
+		source_label = {"customer_group": "گروه مشتری", "coach": "تخفیف شاگرد", "coupon": "کد تخفیف"}.get(policy["discount_source"], "")
+		doc.set("restaurant_discount_source", source_label)
+	if _has_column(doc.doctype, "restaurant_coach_customer"):
+		doc.set("restaurant_coach_customer", coach_terms.get("coach") or "")
+	if _has_column(doc.doctype, "restaurant_coach_commission_amount"):
+		doc.set("restaurant_coach_commission_amount", coach_commission_amount(policy["net_items"], coach_terms.get("commission_percent") or 0))
+	if _has_column(doc.doctype, "restaurant_coach_credited") and not doc.get("restaurant_coach_credited"):
+		doc.set("restaurant_coach_credited", 0)
+	if _has_column(doc.doctype, "restaurant_referral_code") and coach_terms.get("coach"):
+		doc.set("restaurant_referral_code", _club_assign_referral_code(coach_terms["coach"]))
+	if doc.doctype == "Sales Order" and _has_column("Sales Order", "restaurant_referral_relation_kind_snapshot") and not doc.get("restaurant_referral_relation_kind_snapshot"):
+		relation_kind = frappe.db.get_value("Customer", doc.customer, "restaurant_referral_relation_kind") or ""
+		doc.set("restaurant_referral_relation_kind_snapshot", "مربی" if coach_terms.get("coach") else relation_kind)
+		if relation_kind == "عمومی" and _has_column("Sales Order", "restaurant_referral_code") and not doc.get("restaurant_referral_code"):
+			referrer = frappe.db.get_value("Customer", doc.customer, "restaurant_referred_by") or ""
+			if referrer and referrer != doc.customer:
+				doc.set("restaurant_referral_code", _club_assign_referral_code(referrer))
+	doc.set("restaurant_discount_policy_applied", 1)
+	doc.calculate_taxes_and_totals()
+
+
+def _club_set_coach_membership(customer, coach, reason, source="مدیر"):
+	if customer == coach:
+		frappe.throw(_("مربی نمی‌تواند شاگرد خودش باشد."))
+	if not cint(frappe.db.get_value("Customer", coach, "restaurant_coach_invites_enabled")) or frappe.db.get_value("Customer", coach, "restaurant_collaboration_status") != "تأییدشده":
+		frappe.throw(_("مربی باید تأییدشده و فعال باشد."))
+	old_coach = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
+	old_kind = frappe.db.get_value("Customer", customer, "restaurant_referral_relation_kind") or ""
+	if old_coach == coach and old_kind == "مربی":
+		return {"status": "already_linked", "coach": coach}
+	if old_coach and old_coach != coach and not str(reason or "").strip():
+		frappe.throw(_("برای انتقال شاگرد، دلیل تغییر را ثبت کنید."))
+	frappe.db.set_value(
+		"Customer",
+		customer,
+		{
+			"restaurant_referred_by": coach,
+			"restaurant_referral_relation_kind": "مربی",
+			"restaurant_coach_since": today(),
+		},
+		update_modified=False,
+	)
+	if frappe.db.exists("DocType", "Comment"):
+		customer_label = frappe.db.get_value("Customer", customer, "customer_name") or customer
+		coach_label = frappe.db.get_value("Customer", coach, "customer_name") or coach
+		content = _("ارتباط مربی تغییر کرد از {0} به {1}. ثبت‌کننده: {2}. دلیل: {3}").format(
+			frappe.utils.escape_html(old_coach or "بدون مربی"),
+			frappe.utils.escape_html(coach_label),
+			frappe.utils.escape_html(source),
+			frappe.utils.escape_html(str(reason or "ثبت‌نام با کد دعوت")),
+		)
+		frappe.get_doc({"doctype": "Comment", "comment_type": "Info", "reference_doctype": "Customer", "reference_name": customer, "content": content}).insert(ignore_permissions=True)
+	return {"status": "success", "coach": coach, "previous_coach": old_coach, "customer": customer}
+
+
+@frappe.whitelist()
+def get_management_coach_workbench():
+	_ensure_management_access()
+	_club_ensure_ops_ready()
+	coaches = frappe.get_all(
+		"Customer",
+		filters={"disabled": 0, "restaurant_coach_invites_enabled": 1, "restaurant_collaboration_status": "تأییدشده"},
+		fields=["name", "customer_name", "customer_group", "restaurant_coach_discount_percent", "restaurant_coach_commission_percent", "restaurant_referral_code"],
+		order_by="customer_name asc",
+		limit_page_length=500,
+	)
+	for coach in coaches:
+		coach["students"] = frappe.get_all(
+			"Customer",
+			filters={"restaurant_referred_by": coach.name, "restaurant_referral_relation_kind": "مربی", "disabled": 0},
+			fields=["name", "customer_name", "mobile_no", "email_id", "restaurant_coach_since"],
+			order_by="customer_name asc",
+			limit_page_length=1000,
+		)
+	pending = frappe.get_all(
+		CLUB_DOCTYPES["coach_invite"],
+		filters={"status": "در انتظار ثبت‌نام"},
+		fields=["name", "coach", "mobile", "email", "creation"],
+		order_by="creation desc",
+		limit_page_length=500,
+		ignore_permissions=True,
+	) if frappe.db.exists("DocType", CLUB_DOCTYPES["coach_invite"]) else []
+	return {"coaches": coaches, "pending_invites": pending}
+
+
+@frappe.whitelist()
+def search_management_coach_customers(search=""):
+	_ensure_management_access()
+	query = str(search or "").strip()
+	if len(query) < 2:
+		return {"customers": []}
+	filters = {"disabled": 0}
+	rows = frappe.get_all(
+		"Customer",
+		filters=filters,
+		or_filters=[
+			["Customer", "customer_name", "like", "%{0}%".format(query)],
+			["Customer", "mobile_no", "like", "%{0}%".format(query)],
+			["Customer", "email_id", "like", "%{0}%".format(query)],
+			["Customer", "name", "like", "%{0}%".format(query)],
+		],
+		fields=["name", "customer_name", "mobile_no", "email_id", "customer_group", "restaurant_coach_invites_enabled", "restaurant_collaboration_status"],
+		order_by="customer_name asc",
+		limit_page_length=40,
+		ignore_permissions=True,
+	)
+	return {"customers": rows}
+
+
+@frappe.whitelist()
+def assign_management_coach_student(coach="", mobile="", email="", reason=""):
+	_ensure_management_access()
+	_club_ensure_ops_ready()
+	coach = str(coach or "").strip()
+	mobile = _ensure_mobile(mobile, allow_empty=False)
+	reason = str(reason or "").strip()[:1000]
+	if not reason:
+		frappe.throw(_("دلیل افزودن یا انتقال شاگرد را وارد کنید."))
+	if not frappe.db.exists("Customer", coach):
+		frappe.throw(_("مربی یافت نشد."))
+	customers = frappe.get_all("Customer", filters={"disabled": 0}, fields=["name", "mobile_no", "customer_primary_mobile"], limit_page_length=0)
+	matches = [row.name for row in customers if _ensure_mobile(row.mobile_no or row.customer_primary_mobile, allow_empty=True) == mobile]
+	if len(matches) > 1:
+		frappe.throw(_("چند حساب با این شماره پیدا شد؛ ابتدا اطلاعات مشتری را یکپارچه کنید."))
+	if matches:
+		result = _club_set_coach_membership(matches[0], coach, reason, source=frappe.session.user)
+		pending_names = frappe.get_all(CLUB_DOCTYPES["coach_invite"], filters={"coach": coach, "mobile": mobile, "status": "در انتظار ثبت‌نام"}, pluck="name", limit_page_length=0, ignore_permissions=True) if frappe.db.exists("DocType", CLUB_DOCTYPES["coach_invite"]) else []
+		for invite_name in pending_names:
+			frappe.db.set_value(CLUB_DOCTYPES["coach_invite"], invite_name, {"status": "ثبت‌نام و اتصال‌شده", "customer": matches[0], "claimed_at": now_datetime()}, update_modified=False)
+		return {**result, "pending": False}
+	email = str(email or "").strip().lower()
+	if not email:
+		frappe.throw(_("برای دعوت فرد ثبت‌نام‌نکرده، ایمیل ثبت‌نام او را هم وارد کنید تا اتصال پس از تأیید هویت انجام شود."))
+	frappe.utils.validate_email_address(email, throw=True)
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["coach_invite"]):
+		frappe.throw(_("ساخت دعوت در انتظار نیازمند به‌روزرسانی ساختار است."))
+	if frappe.db.exists(CLUB_DOCTYPES["coach_invite"], {"coach": coach, "mobile": mobile, "status": "در انتظار ثبت‌نام"}):
+		return {"status": "success", "pending": True, "duplicate": True}
+	doc = frappe.get_doc({
+		"doctype": CLUB_DOCTYPES["coach_invite"],
+		"coach": coach,
+		"mobile": mobile,
+		"email": email,
+		"status": "در انتظار ثبت‌نام",
+		"reason": reason,
+		"invited_by": frappe.session.user,
+	}).insert(ignore_permissions=True)
+	return {"status": "success", "pending": True, "invitation": doc.name}
+
+
+@frappe.whitelist()
+def save_management_coach_profile(coach="", customer_group="", discount_percent=5, commission_percent=5):
+	"""Promote or update an existing native Customer as a verified coach."""
+	_ensure_management_access()
+	_club_ensure_ops_ready()
+	coach = str(coach or "").strip()
+	customer_group = str(customer_group or "").strip()
+	if not frappe.db.exists("Customer", coach):
+		frappe.throw(_("مشتری مربی پیدا نشد."))
+	if not customer_group or not frappe.db.exists("Customer Group", customer_group) or cint(frappe.db.get_value("Customer Group", customer_group, "is_group")):
+		frappe.throw(_("گروه نهایی مشتری را انتخاب کنید."))
+	discount = flt(discount_percent)
+	commission = flt(commission_percent)
+	if not 0 <= discount <= 50 or not 0 <= commission <= 50:
+		frappe.throw(_("درصد تخفیف و سهم مربی باید بین صفر و ۵۰ باشند."))
+	frappe.db.set_value("Customer", coach, {
+		"customer_group": customer_group,
+		"restaurant_coach_invites_enabled": 1,
+		"restaurant_coach_discount_percent": discount,
+		"restaurant_coach_commission_percent": commission,
+		"restaurant_collaboration_type": "مربی و شاگردان",
+		"restaurant_collaboration_status": "تأییدشده",
+	}, update_modified=True)
+	if frappe.db.exists("DocType", "Comment"):
+		frappe.get_doc({
+			"doctype": "Comment",
+			"comment_type": "Info",
+			"reference_doctype": "Customer",
+			"reference_name": coach,
+			"content": _("مربی تأیید/به‌روزرسانی شد. گروه مشتری: {0}، تخفیف شاگرد: {1}٪، سهم کش‌بک: {2}٪. ثبت‌کننده: {3}.").format(
+				frappe.utils.escape_html(customer_group), discount, commission, frappe.utils.escape_html(frappe.session.user)
+			),
+		}).insert(ignore_permissions=True)
+	return {"status": "success", "coach": coach, "customer_group": customer_group, "discount_percent": discount, "commission_percent": commission, "referral_code": _club_assign_referral_code(coach)}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_my_referral_profile(customer_token=None):
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	_club_ensure_customer_fields()
+	code = _club_assign_referral_code(customer)
+	referred_by = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
+	kind = frappe.db.get_value("Customer", customer, "restaurant_referral_relation_kind") or ""
+	is_coach = bool(cint(frappe.db.get_value("Customer", customer, "restaurant_coach_invites_enabled")) and frappe.db.get_value("Customer", customer, "restaurant_collaboration_status") == "تأییدشده")
+	students = []
+	if is_coach:
+		students = frappe.get_all(
+			"Customer",
+			filters={"restaurant_referred_by": customer, "restaurant_referral_relation_kind": "مربی", "disabled": 0},
+			fields=["customer_name", "mobile_no", "email_id", "restaurant_coach_since"],
+			order_by="customer_name asc",
+			limit_page_length=1000,
+		)
+	wallet = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer}, ["cashback_balance"], as_dict=True) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]) else None
+	return {
+		"referral_code": code,
+		"old_code": frappe.db.get_value("Customer", customer, "restaurant_referral_code_alias") or "",
+		"can_customize_code": not cint(frappe.db.get_value("Customer", customer, "restaurant_referral_code_customized") or 0),
+		"referral_relation": kind,
+		"coach_name": frappe.db.get_value("Customer", referred_by, "customer_name") or "" if referred_by and kind == "مربی" else "",
+		"is_coach": is_coach,
+		"coach_discount_percent": flt(frappe.db.get_value("Customer", customer, "restaurant_coach_discount_percent") or 0) if is_coach else 0,
+		"coach_commission_percent": flt(frappe.db.get_value("Customer", customer, "restaurant_coach_commission_percent") or 0) if is_coach else 0,
+		"students": students,
+		"cashback_balance": flt((wallet or {}).get("cashback_balance") or 0),
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def set_my_referral_code(customer_token=None, code=""):
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	_club_ensure_customer_fields()
+	if cint(frappe.db.get_value("Customer", customer, "restaurant_referral_code_customized") or 0):
+		frappe.throw(_("کد معرفی دلخواه فقط یک بار قابل تغییر است."))
+	code = re.sub(r"\s+", "", str(code or "")).upper()
+	if not re.fullmatch(r"[A-Z0-9]{4,20}", code):
+		frappe.throw(_("کد باید ۴ تا ۲۰ حرف یا عدد انگلیسی باشد."))
+	if _club_customer_referral_code_is_taken(code, exclude_customer=customer):
+		frappe.throw(_("این کد قبلاً استفاده شده است."))
+	old_code = _club_assign_referral_code(customer)
+	if old_code == code:
+		frappe.throw(_("کد جدید باید با کد فعلی تفاوت داشته باشد."))
+	frappe.db.set_value("Customer", customer, {
+		"restaurant_referral_code": code,
+		"restaurant_referral_code_alias": old_code,
+		"restaurant_referral_code_customized": 1,
+	}, update_modified=True)
+	return {"status": "success", "referral_code": code, "old_code": old_code}
 
 
 def _club_customer_stats_batch(customer_names):
@@ -461,7 +1111,9 @@ def _club_wallet_map(customer_names):
 @frappe.whitelist()
 def get_management_club_boot():
 	_ensure_management_access()
-	_club_ensure_ops_ready()
+	# This is a read-only boot endpoint. Custom fields and tables must be
+	# installed by the app migration, never created as a side effect of opening
+	# the customer page.
 
 	customers_total = frappe.db.count("Customer", {"disabled": 0}) or 0
 	members = 0
@@ -472,7 +1124,7 @@ def get_management_club_boot():
 
 	wallet_balance = 0.0
 	wallets_count = 0
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]):
+	if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]) and _has_column(CLUB_DOCTYPES["wallet"], "balance"):
 		row = frappe.db.sql(
 			"SELECT COUNT(*) AS count, COALESCE(SUM(balance),0) AS balance FROM `tabRestaurant Customer Wallet`",
 			as_dict=True,
@@ -482,7 +1134,11 @@ def get_management_club_boot():
 
 	sms_sent_month = 0
 	sms_failed_month = 0
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["sms"]):
+	if (
+		frappe.db.exists("DocType", CLUB_DOCTYPES["sms"])
+		and _has_column(CLUB_DOCTYPES["sms"], "sent_at")
+		and _has_column(CLUB_DOCTYPES["sms"], "status")
+	):
 		rows = frappe.get_all(
 			CLUB_DOCTYPES["sms"],
 			filters={"sent_at": [">=", add_days(today(), -30)]},
@@ -495,11 +1151,16 @@ def get_management_club_boot():
 			elif row.get("status") in ("ناموفق", "بدون درگاه"):
 				sms_failed_month += cint(row.get("count"))
 
-	active_campaigns = frappe.db.count(CLUB_DOCTYPES["campaign"], {"status": "فعال"}) or 0
+	if frappe.db.exists("DocType", CLUB_DOCTYPES["campaign"]) and _has_column(CLUB_DOCTYPES["campaign"], "status"):
+		active_campaigns = frappe.db.count(CLUB_DOCTYPES["campaign"], {"status": "فعال"}) or 0
 
 	survey_avg = 0.0
 	survey_count = 0
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["survey_response"]):
+	if (
+		frappe.db.exists("DocType", CLUB_DOCTYPES["survey_response"])
+		and _has_column(CLUB_DOCTYPES["survey_response"], "overall_rating")
+		and _has_column(CLUB_DOCTYPES["survey_response"], "entry_date")
+	):
 		row = frappe.db.sql(
 			"""
 			SELECT COUNT(*) AS count, COALESCE(AVG(overall_rating),0) AS avg_rating
@@ -514,14 +1175,18 @@ def get_management_club_boot():
 
 	voices_open = 0
 	voices_total_month = 0
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["voice"]):
+	if (
+		frappe.db.exists("DocType", CLUB_DOCTYPES["voice"])
+		and _has_column(CLUB_DOCTYPES["voice"], "status")
+		and _has_column(CLUB_DOCTYPES["voice"], "creation")
+	):
 		voices_open = frappe.db.count(CLUB_DOCTYPES["voice"], {"status": ["in", ["جدید", "در حال رسیدگی"]]}) or 0
 		voices_total_month = frappe.db.count(
 			CLUB_DOCTYPES["voice"], {"creation": [">=", add_days(now_datetime(), -30)]}
 		) or 0
 
 	points_outstanding = 0
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["point_entry"]):
+	if frappe.db.exists("DocType", CLUB_DOCTYPES["point_entry"]) and _has_column(CLUB_DOCTYPES["point_entry"], "points"):
 		row = frappe.db.sql(
 			"SELECT COALESCE(SUM(points),0) AS balance FROM `tabRestaurant Loyalty Point Entry`",
 			as_dict=True,
@@ -575,10 +1240,12 @@ def update_management_club_settings(payload=None):
 		if key not in payload:
 			continue
 		value = payload.get(key)
-		if key in ("restaurant_club_enabled", "restaurant_sms_enabled", "restaurant_points_enabled"):
+		if key in ("restaurant_club_enabled", "restaurant_wallet_charge_enabled", "restaurant_sms_enabled", "restaurant_points_enabled"):
 			value = cint(value)
 		elif key == "restaurant_survey_alert_threshold":
-			value = min(max(cint(value), 1), 5) or 3
+			value = min(max(cint(value), 1), 10) or 6
+		elif key == "restaurant_survey_delay_minutes":
+			value = min(max(cint(value), 0), 10080)
 		elif key in ("restaurant_cashback_percent", "restaurant_cashback_min_order", "restaurant_referral_referrer_reward", "restaurant_referral_referee_reward", "restaurant_points_rial_per_point", "restaurant_points_rial_value"):
 			value = flt(value)
 		elif key in ("restaurant_points_expiry_days", "restaurant_points_min_redeem", "restaurant_points_gold_threshold", "restaurant_points_silver_threshold", "restaurant_points_bronze_threshold"):
@@ -587,6 +1254,28 @@ def update_management_club_settings(payload=None):
 			value = (value or "").strip()
 			if value and not frappe.db.exists("Mode of Payment", value):
 				frappe.throw(_("روش پرداخت یافت نشد: {0}").format(value))
+		elif key in ("restaurant_wallet_charge_bank_name", "restaurant_wallet_charge_account_holder", "restaurant_wallet_charge_iban", "restaurant_wallet_charge_card_number", "restaurant_wallet_charge_instructions"):
+			value = str(value or "").strip()
+			limits = {
+				"restaurant_wallet_charge_bank_name": 120,
+				"restaurant_wallet_charge_account_holder": 140,
+				"restaurant_wallet_charge_iban": 26,
+				"restaurant_wallet_charge_card_number": 19,
+				"restaurant_wallet_charge_instructions": 1200,
+			}
+			if len(value) > limits[key]:
+				frappe.throw(_("اطلاعات حساب بیش از حد طولانی است."))
+			if key == "restaurant_wallet_charge_iban" and value:
+				from restaurant.wallet_rules import normalize_iranian_iban
+
+				value = normalize_iranian_iban(value)
+				if not value:
+					frappe.throw(_("شماره شبای حساب دریافت معتبر نیست."))
+			if key == "restaurant_wallet_charge_card_number" and value:
+				value = value.translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+				value = re.sub(r"[\s-]+", "", value)
+				if not re.fullmatch(r"\d{16}", value):
+					frappe.throw(_("شماره کارت دریافت باید ۱۶ رقم باشد."))
 		_club_set_setting(key, value)
 		collected[key] = value
 	if "restaurant_survey_alert_users_json" in payload:
@@ -969,23 +1658,29 @@ def _club_send_sms_now(mobile, message):
 		return "ناموفق", str(exc)[:160]
 
 
-def _club_render_sms(template, customer_name="", membership_code="", message=""):
+def _club_render_sms(template, customer_name="", membership_code="", message="", order="", link=""):
 	text = template or ""
 	return (
 		text.replace("{name}", customer_name or "")
 		.replace("{membership_code}", membership_code or "")
 		.replace("{message}", message or "")
+		.replace("{order}", order or "")
+		.replace("{link}", link or "")
 		.strip()
 	)
 
 
-def _club_log_sms(*, mobile, message, kind, customer="", template_key="", campaign="", status_note=("در صف", "")):
+def _club_log_sms(*, mobile, message, kind, customer="", template_key="", campaign="", status_note=("در صف", ""), reference_doctype="", reference_name=""):
 	doc = frappe.new_doc(CLUB_DOCTYPES["sms"])
 	doc.customer = customer or None
 	doc.mobile = mobile
 	doc.kind = kind
 	doc.template_key = template_key or ""
 	doc.campaign = campaign or None
+	if _has_column(CLUB_DOCTYPES["sms"], "reference_doctype"):
+		doc.reference_doctype = reference_doctype or ""
+	if _has_column(CLUB_DOCTYPES["sms"], "reference_name"):
+		doc.reference_name = reference_name or ""
 	doc.message = message
 	status, note = status_note
 	doc.status = status
@@ -1262,15 +1957,22 @@ def list_management_customer_voices(type="", status="", date_from="", date_to=""
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", CLUB_DOCTYPES["voice"]):
 		return {"voices": [], "count": 0, "summary": {"by_type": {}, "by_status": {}}}
+	missing_required = [field for field in ("type", "status", "subject") if not _has_column(CLUB_DOCTYPES["voice"], field)]
+	if missing_required:
+		frappe.throw(
+			_("ساختار «صدای مشتری» کامل نیست ({0}). پس از اعمال تغییرات برنامه، دوباره تلاش کنید.").format(", ".join(missing_required)),
+			frappe.ValidationError,
+		)
 	filters = {}
 	if type and type in VOICE_TYPES:
 		filters["type"] = type
 	if status and status in VOICE_STATUSES:
 		filters["status"] = status
+	all_fields = ["name", "customer", "customer_name", "mobile", "sales_order", "order_code", "type", "subject", "message", "status", "response", "responded_by", "responded_at", "creation"]
 	rows = frappe.get_all(
 		CLUB_DOCTYPES["voice"],
 		filters=filters,
-		fields=["name", "customer", "customer_name", "mobile", "sales_order", "order_code", "type", "subject", "message", "status", "response", "responded_by", "responded_at", "creation"],
+		fields=[field for field in all_fields if field in {"name", "creation"} or _has_column(CLUB_DOCTYPES["voice"], field)],
 		order_by="creation desc",
 		limit_start=cint(offset) or 0,
 		limit_page_length=min(max(cint(limit) or 100, 1), 400),
@@ -1296,7 +1998,7 @@ def list_management_customer_voices(type="", status="", date_from="", date_to=""
 		CLUB_DOCTYPES["voice"],
 		fields=["type", "status", "COUNT(*) AS count"],
 		group_by="type, status",
-	)
+	) if _has_column(CLUB_DOCTYPES["voice"], "type") and _has_column(CLUB_DOCTYPES["voice"], "status") else []
 	by_type = {}
 	by_status = {}
 	for row in summary_rows:
@@ -1588,15 +2290,22 @@ def list_management_point_entries(customer="", kind="", date_from="", date_to=""
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", CLUB_DOCTYPES["point_entry"]):
 		return {"entries": [], "count": 0}
+	missing_required = [field for field in ("customer", "points") if not _has_column(CLUB_DOCTYPES["point_entry"], field)]
+	if missing_required:
+		frappe.throw(
+			_("ساختار «دفتر امتیاز» کامل نیست ({0}). پس از اعمال تغییرات برنامه، دوباره تلاش کنید.").format(", ".join(missing_required)),
+			frappe.ValidationError,
+		)
 	filters = {}
 	if customer:
 		filters["customer"] = customer
-	if kind and kind in POINT_KINDS:
+	if kind and kind in POINT_KINDS and _has_column(CLUB_DOCTYPES["point_entry"], "kind"):
 		filters["kind"] = kind
+	all_fields = ["name", "customer", "points", "kind", "note", "sales_order", "expiry_date", "creation"]
 	rows = frappe.get_all(
 		CLUB_DOCTYPES["point_entry"],
 		filters=filters,
-		fields=["name", "customer", "points", "kind", "note", "sales_order", "expiry_date", "creation"],
+		fields=[field for field in all_fields if field in {"name", "creation"} or _has_column(CLUB_DOCTYPES["point_entry"], field)],
 		order_by="creation desc",
 		limit_start=cint(offset) or 0,
 		limit_page_length=min(max(cint(limit) or 100, 1), 400),
@@ -1711,6 +2420,10 @@ def club_apply_fulfillment_effects(so_name):
 		club_apply_settle_effects(so_name, None, None)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Restaurant club fulfillment effects failed")
+	try:
+		_club_process_coach_commission(so_name)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Restaurant coach commission failed")
 
 
 def get_customer_club_summary(customer_name):
@@ -1734,7 +2447,125 @@ def get_customer_club_summary(customer_name):
 		info = _club_points_map([customer_name]).get(customer_name, {})
 		out["points_balance"] = cint(info.get("balance", 0))
 		out["loyalty_tier"] = info.get("loyalty_tier", "")
+	if _has_column("Customer", "restaurant_coach_invites_enabled") and cint(frappe.db.get_value("Customer", customer_name, "restaurant_coach_invites_enabled")):
+		out["coach_invites_enabled"] = True
+		out["referral_code"] = _club_assign_referral_code(customer_name)
+		out["coach_discount_percent"] = flt(frappe.db.get_value("Customer", customer_name, "restaurant_coach_discount_percent") or 0)
+		out["coach_commission_percent"] = flt(frappe.db.get_value("Customer", customer_name, "restaurant_coach_commission_percent") or 0)
+		out["coach_members_count"] = frappe.db.count("Customer", {"restaurant_referred_by": customer_name, "restaurant_referral_relation_kind": "مربی"}) if _has_column("Customer", "restaurant_referred_by") else 0
+	out["group_discount_percent"] = _club_customer_group_discount_percent(customer_name)
 	return out
+
+
+@frappe.whitelist(allow_guest=True)
+def bind_my_coach_invite(customer_token=None, referral_code=""):
+	"""Backward-compatible coach-only referral binder."""
+	owner = _club_find_referral_owner(referral_code)
+	if not owner or not cint(frappe.db.get_value("Customer", owner, "restaurant_coach_invites_enabled")):
+		frappe.throw(_("این کد متعلق به مربی تأییدشده نیست."))
+	return bind_my_referral_code(customer_token=customer_token, referral_code=referral_code)
+
+
+@frappe.whitelist(allow_guest=True)
+def bind_my_referral_code(customer_token=None, referral_code=""):
+	"""Bind a verified account to an ordinary referrer or an approved coach."""
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	code = (referral_code or "").strip().upper()
+	if not code:
+		return {"status": "skipped"}
+	if not _has_column("Customer", "restaurant_coach_invites_enabled") or not _has_column("Customer", "restaurant_referred_by"):
+		frappe.throw(_("معرفی مشتری هنوز در سیستم فعال نشده است."))
+	referrer = _club_find_referral_owner(code)
+	if not referrer or referrer == identity.get("customer"):
+		frappe.throw(_("کد معرفی معتبر نیست."))
+	customer = identity["customer"]
+	current_referrer = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
+	if current_referrer:
+		if current_referrer == referrer:
+			return {"status": "already_linked"}
+		frappe.throw(_("این حساب قبلاً به یک معرف متصل شده است؛ برای انتقال با پشتیبانی تماس بگیرید."))
+	if frappe.db.count("Sales Order", {"customer": customer, "docstatus": 1}):
+		frappe.throw(_("اتصال با کد معرفی فقط پیش از ثبت اولین سفارش ممکن است."))
+	is_coach = bool(
+		cint(frappe.db.get_value("Customer", referrer, "restaurant_coach_invites_enabled"))
+		and frappe.db.get_value("Customer", referrer, "restaurant_collaboration_status") == "تأییدشده"
+	)
+	frappe.db.set_value("Customer", customer, {
+		"restaurant_referred_by": referrer,
+		"restaurant_referral_relation_kind": "مربی" if is_coach else "عمومی",
+		"restaurant_coach_since": today() if is_coach else None,
+	}, update_modified=False)
+	return {
+		"status": "success",
+		"relation": "coach" if is_coach else "referral",
+		"coach_name": frappe.db.get_value("Customer", referrer, "customer_name") or referrer,
+	}
+
+
+def _club_partner_order_terms(customer, subtotal):
+	"""Return the active coach relationship and its student discount/commission rates."""
+	if not customer or not _has_column("Customer", "restaurant_referred_by") or not _has_column("Customer", "restaurant_coach_invites_enabled"):
+		return {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
+	if frappe.db.get_value("Customer", customer, "restaurant_referral_relation_kind") != "مربی":
+		return {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
+	coach = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
+	if not coach or not cint(frappe.db.get_value("Customer", coach, "restaurant_coach_invites_enabled")) or frappe.db.get_value("Customer", coach, "restaurant_collaboration_status") != "تأییدشده":
+		return {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
+	discount_percent = min(max(flt(frappe.db.get_value("Customer", coach, "restaurant_coach_discount_percent") or 0), 0), 50)
+	commission_percent = min(max(flt(frappe.db.get_value("Customer", coach, "restaurant_coach_commission_percent") or 0), 0), 50)
+	return {
+		"coach": coach,
+		"discount_percent": discount_percent,
+		"discount": flt(flt(subtotal) * discount_percent / 100, 2),
+		"commission_percent": commission_percent,
+		"commission": flt(flt(subtotal) * commission_percent / 100, 2),
+	}
+
+
+def coach_payment_settled(so_name):
+	if not so_name or not frappe.db.exists("Sales Order", so_name):
+		return False
+	try:
+		from restaurant.api import _get_sales_order_payment_status
+
+		if _get_sales_order_payment_status(so_name) == "paid":
+			return True
+	except Exception:
+		pass
+	if not frappe.db.exists("DocType", "Sales Invoice Item"):
+		return False
+	# A paid partial invoice does not settle the whole order. ERPNext's
+	# per_billed is the authoritative measure for invoices linked to a Sales
+	# Order; wait until every item has been billed before releasing commission.
+	if frappe.db.has_column("Sales Order", "per_billed"):
+		billed_percent = flt(frappe.db.get_value("Sales Order", so_name, "per_billed") or 0)
+		if billed_percent < 99.99:
+			return False
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT si.name, si.outstanding_amount, si.docstatus, si.is_return
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+		WHERE sii.sales_order = %s AND si.docstatus = 1 AND COALESCE(si.is_return, 0) = 0
+		""",
+		so_name,
+		as_dict=True,
+	)
+	return bool(rows) and all(flt(row.get("outstanding_amount") or 0) <= 0.01 for row in rows)
+
+
+def _club_process_coach_commission(so_name):
+	from restaurant.coach_rewards import process_sales_order
+
+	return process_sales_order(so_name)
+
+
+def reverse_coach_commission_for_sales_order(so_name, amount=None, note=None):
+	from restaurant.coach_rewards import reverse_sales_order
+
+	return reverse_sales_order(so_name, amount=amount, note=note)
 
 
 def _wallet_withdrawal_payload(row):
@@ -1746,6 +2577,18 @@ def _wallet_withdrawal_payload(row):
 		"status": row.get("status") or "در انتظار بررسی",
 		"payment_reference": row.get("payment_reference") or "",
 		"note": row.get("note") or "",
+		"creation": str(row.get("creation") or ""),
+	}
+
+
+def _wallet_charge_payload(row):
+	return {
+		"name": row.get("name") or "",
+		"amount": flt(row.get("amount") or 0),
+		"status": row.get("status") or "در انتظار پرداخت",
+		"payment_reference": row.get("payment_reference") or "",
+		"note": row.get("note") or "",
+		"review_note": row.get("review_note") or "",
 		"creation": str(row.get("creation") or ""),
 	}
 
@@ -1778,6 +2621,14 @@ def get_my_wallet(customer_token=None):
 		limit_page_length=30,
 		ignore_permissions=True,
 	) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_withdrawal"]) else []
+	charge_rows = frappe.get_all(
+		CLUB_DOCTYPES["wallet_charge"],
+		filters={"customer": customer},
+		fields=["name", "amount", "status", "payment_reference", "note", "review_note", "creation"],
+		order_by="creation desc",
+		limit_page_length=30,
+		ignore_permissions=True,
+	) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_charge"]) else []
 	settings = _club_club_settings()
 	return {
 		"wallet": {
@@ -1791,12 +2642,102 @@ def get_my_wallet(customer_token=None):
 			for row in txns
 		],
 		"withdrawal_requests": [_wallet_withdrawal_payload(row) for row in withdrawal_rows],
+		"charge_requests": [_wallet_charge_payload(row) for row in charge_rows],
+		"charge": {
+			"enabled": settings["wallet_charge_enabled"],
+			"bank_name": settings["wallet_charge_bank_name"],
+			"account_holder": settings["wallet_charge_account_holder"],
+			"iban": settings["wallet_charge_iban"],
+			"card_number": settings["wallet_charge_card_number"],
+			"instructions": settings["wallet_charge_instructions"],
+		},
 		"rules": {
 			"cashback_percent": settings["cashback_percent"],
 			"cashback_min_order": settings["cashback_min_order"],
 			"club_enabled": settings["club_enabled"],
 		},
 	}
+
+
+@frappe.whitelist(allow_guest=True)
+def request_my_wallet_charge(customer_token=None, amount=0, payment_reference="", note=""):
+	"""Create a pending manual top-up request; never credit before staff approval."""
+	from restaurant.customer_account import _require_customer
+	from restaurant.wallet_rules import validate_wallet_charge_amount, wallet_charge_request_status
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	if not cint(_club_setting("restaurant_wallet_charge_enabled", 1)):
+		frappe.throw(_("درخواست شارژ کیف پول در حال حاضر غیرفعال است."))
+	try:
+		amount = validate_wallet_charge_amount(amount)
+	except ValueError as exc:
+		frappe.throw(_(str(exc)))
+	payment_reference = str(payment_reference or "").strip()
+	note = str(note or "").strip()
+	if len(payment_reference) > 120 or len(note) > 240:
+		frappe.throw(_("شماره پیگیری یا توضیح بیش از حد طولانی است."))
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_charge"]):
+		frappe.throw(_("ساختار درخواست شارژ آماده نیست؛ با پشتیبانی تماس بگیرید."))
+	if payment_reference and frappe.db.exists(
+		CLUB_DOCTYPES["wallet_charge"],
+		{"payment_reference": payment_reference},
+	):
+		frappe.throw(_("این شماره پیگیری قبلاً برای شارژ کیف پول ثبت شده است."))
+	wallet = _club_get_or_create_wallet(customer)
+	if wallet.get("status") != "فعال":
+		frappe.throw(_("کیف پول این مشتری مسدود است."))
+	request = frappe.new_doc(CLUB_DOCTYPES["wallet_charge"])
+	request.customer = customer
+	request.wallet = wallet.name
+	request.amount = amount
+	request.payment_reference = payment_reference
+	request.note = note
+	request.status = wallet_charge_request_status(payment_reference)
+	request.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "request": _wallet_charge_payload(request.as_dict())}
+
+
+@frappe.whitelist(allow_guest=True)
+def submit_my_wallet_charge_reference(customer_token=None, request_name="", payment_reference="", note=""):
+	"""Attach a transfer reference to an owned request and send it for review."""
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	request_name = str(request_name or "").strip()
+	payment_reference = str(payment_reference or "").strip()
+	note = str(note or "").strip()
+	if not request_name or len(payment_reference) < 3 or len(payment_reference) > 120:
+		frappe.throw(_("شماره پیگیری معتبر وارد کنید."))
+	if len(note) > 240:
+		frappe.throw(_("توضیح بیش از حد طولانی است."))
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_charge"]):
+		frappe.throw(_("ساختار درخواست شارژ آماده نیست؛ با پشتیبانی تماس بگیرید."))
+	request = frappe.db.get_value(
+		CLUB_DOCTYPES["wallet_charge"],
+		{"name": request_name, "customer": customer},
+		["name", "status"],
+		as_dict=True,
+	)
+	if not request:
+		frappe.throw(_("درخواست شارژ پیدا نشد."), frappe.PermissionError)
+	if request.status != "در انتظار پرداخت":
+		frappe.throw(_("این درخواست دیگر در انتظار پرداخت نیست."))
+	if frappe.db.exists(
+		CLUB_DOCTYPES["wallet_charge"],
+		{"payment_reference": payment_reference},
+	):
+		frappe.throw(_("این شماره پیگیری قبلاً ثبت شده است."))
+	doc = frappe.get_doc(CLUB_DOCTYPES["wallet_charge"], request_name)
+	doc.payment_reference = payment_reference
+	if note:
+		doc.note = "\n".join(filter(None, [str(doc.note or "").strip(), note]))[:480]
+	doc.status = "در انتظار بررسی"
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "request": _wallet_charge_payload(doc.as_dict())}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1933,7 +2874,7 @@ def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", refe
 	)
 	if bucket_fields_ready:
 		wallet = _club_reconcile_wallet_buckets(wallet)
-		bucket = bucket or ("کش‌بک" if kind in {"کش‌بک", "پاداش معرف", "تبدیل امتیاز"} else "کیف پول")
+		bucket = bucket or ("کش‌بک" if kind in {"کش‌بک", "پاداش معرف", "کمیسیون مربی", "بازگشت کمیسیون مربی", "تبدیل امتیاز"} else "کیف پول")
 		if bucket not in {"کیف پول", "کش‌بک"}:
 			frappe.throw(_("نوع موجودی کیف پول معتبر نیست."))
 		balance_field = "cashback_balance" if bucket == "کش‌بک" else "withdrawable_balance"
@@ -1953,6 +2894,7 @@ def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", refe
 		"انتقال دریافت": None,
 		"کش‌بک": "total_rewards",
 		"پاداش معرف": "total_rewards",
+		"کمیسیون مربی": "total_rewards",
 	}
 	counter_field = field_map.get(kind)
 	if counter_field:
@@ -2140,6 +3082,91 @@ def review_management_wallet_withdrawal_request(request_name="", action="", paym
 	request.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"success": True, "request": _wallet_withdrawal_payload(request.as_dict())}
+
+
+@frappe.whitelist()
+def list_management_wallet_charge_requests(status="", limit=100, offset=0):
+	_ensure_management_access()
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_charge"]):
+		return {"requests": [], "count": 0}
+	filters = {}
+	allowed_statuses = {"در انتظار پرداخت", "در انتظار بررسی", "تأیید شد", "رد شد"}
+	if status in allowed_statuses:
+		filters["status"] = status
+	else:
+		filters["status"] = ["in", ["در انتظار پرداخت", "در انتظار بررسی"]]
+	rows = frappe.get_all(
+		CLUB_DOCTYPES["wallet_charge"],
+		filters=filters,
+		fields=["name", "customer", "wallet", "amount", "status", "payment_reference", "note", "review_note", "transaction", "creation"],
+		order_by="creation desc",
+		limit_start=max(cint(offset), 0),
+		limit_page_length=min(max(cint(limit) or 100, 1), 400),
+		ignore_permissions=True,
+	)
+	for row in rows:
+		row["customer_name"] = frappe.db.get_value("Customer", row.get("customer"), "customer_name") or row.get("customer") or ""
+		row["amount"] = flt(row.get("amount") or 0)
+		row["creation"] = str(row.get("creation") or "")
+	return {"requests": rows, "count": len(rows)}
+
+
+@frappe.whitelist()
+def review_management_wallet_charge_request(request_name="", action="", payment_reference="", note=""):
+	_ensure_management_access()
+	request_name = str(request_name or "").strip()
+	if not request_name or not frappe.db.exists(CLUB_DOCTYPES["wallet_charge"], request_name):
+		frappe.throw(_("درخواست شارژ پیدا نشد."))
+	frappe.db.sql(
+		"select name from `tabRestaurant Wallet Charge Request` where name = %s for update",
+		request_name,
+	)
+	request = frappe.get_doc(CLUB_DOCTYPES["wallet_charge"], request_name)
+	if request.status not in {"در انتظار پرداخت", "در انتظار بررسی"}:
+		frappe.throw(_("این درخواست قبلاً بررسی شده است."))
+	if action not in {"approve", "reject"}:
+		frappe.throw(_("وضعیت بررسی معتبر نیست."))
+	if action == "approve":
+		payment_reference = str(payment_reference or request.payment_reference or "").strip()
+		if len(payment_reference) < 3 or len(payment_reference) > 120:
+			frappe.throw(_("شماره پیگیری واقعی واریز را وارد کنید."))
+		duplicate = frappe.db.sql(
+			"""SELECT name FROM `tabRestaurant Wallet Charge Request`
+			WHERE payment_reference = %s AND name != %s LIMIT 1""",
+			(payment_reference, request_name),
+		)
+		if duplicate:
+			frappe.throw(_("این شماره پیگیری قبلاً برای شارژ دیگری تأیید شده است."))
+		wallet = _club_get_or_create_wallet(request.customer)
+		frappe.db.sql(
+			"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+			wallet.name,
+		)
+		wallet = frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name)
+		if wallet.get("status") != "فعال":
+			frappe.throw(_("کیف پول این مشتری مسدود است."))
+		txn = _club_wallet_txn(
+			wallet=wallet,
+			customer=request.customer,
+			kind="شارژ",
+			direction="واریز",
+			amount=flt(request.amount),
+			bucket="کیف پول",
+			note=_("تأیید شارژ دستی درخواست {0}").format(request.name),
+			reference_doctype=CLUB_DOCTYPES["wallet_charge"],
+			reference_name=request.name,
+		)
+		request.transaction = txn.name
+		request.payment_reference = payment_reference
+		request.status = "تأیید شد"
+	else:
+		request.status = "رد شد"
+	request.review_note = str(note or "").strip()[:480]
+	request.reviewed_by = frappe.session.user
+	request.reviewed_at = now_datetime()
+	request.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "request": _wallet_charge_payload(request.as_dict())}
 
 
 @frappe.whitelist()
@@ -2333,6 +3360,7 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 
 		# 3) Loyalty points earn on settled/fulfilled amount
 		_club_process_points_earning(so_name)
+		_club_process_coach_commission(so_name)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Restaurant club settle effects failed")
 
@@ -2388,26 +3416,42 @@ def _club_process_referral_reward(so_name):
 	code, customer, status = frappe.db.get_value(
 		"Sales Order", so_name, ["restaurant_referral_code", "customer", "restaurant_status"], as_dict=False
 	) if frappe.db.exists("Sales Order", so_name) else ("", "", "")
-	code = (code or "").strip()
-	if not code or not customer:
+	code = (code or "").strip().upper()
+	if not customer:
 		return False
-	if status not in ("delivered", "served", "ready"):
+	if status not in ("delivered", "served"):
 		return False
 	if not _has_column("Customer", "restaurant_referral_code"):
 		return False
-	referrer = frappe.db.get_value("Customer", {"restaurant_referral_code": code}, "name")
+	relation_kind = (
+		frappe.db.get_value("Sales Order", so_name, "restaurant_referral_relation_kind_snapshot")
+		if _has_column("Sales Order", "restaurant_referral_relation_kind_snapshot")
+		else ""
+	) or (frappe.db.get_value("Customer", customer, "restaurant_referral_relation_kind") if _has_column("Customer", "restaurant_referral_relation_kind") else "")
+	if relation_kind == "مربی":
+		return False
+	referrer = _club_find_referral_owner(code) if code else ""
+	if not referrer and relation_kind == "عمومی" and _has_column("Customer", "restaurant_referred_by"):
+		referrer = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
+		code = _club_assign_referral_code(referrer) if referrer else ""
 	if not referrer or referrer == customer:
 		return False
-	# only the referee's FIRST delivered order counts
-	prev = frappe.db.count(
-		"Sales Order",
-		{
-			"customer": customer,
-			"docstatus": 1,
-			"name": ["!=", so_name],
-			"restaurant_referral_code": code,
-		},
-	)
+	if relation_kind and relation_kind != "عمومی":
+		return False
+	# A referrer's code may be customized after earlier successful referrals;
+	# a change of code must never make the fixed reward payable twice.
+	conditions = ["customer = %s", "docstatus = 1", "name != %s", "COALESCE(restaurant_referral_code, '') != ''"]
+	params = [customer, so_name]
+	if _has_column("Sales Order", "restaurant_status"):
+		conditions.append("restaurant_status IN ('delivered', 'served')")
+	elif _has_column("Sales Order", "per_delivered"):
+		conditions.append("per_delivered >= 99.99")
+	else:
+		conditions.append("0 = 1")
+	prev = cint(frappe.db.sql(
+		"SELECT COUNT(*) FROM `tabSales Order` WHERE {0}".format(" AND ".join(conditions)),
+		params,
+	)[0][0])
 	if prev:
 		return False
 	already = frappe.db.exists(CLUB_DOCTYPES["wallet_txn"], {"reference_name": so_name, "kind": "پاداش معرف"})
@@ -2437,10 +3481,11 @@ def _club_process_referral_reward(so_name):
 			reference_doctype="Sales Order",
 			reference_name=so_name,
 		)
-	if _has_column("Customer", "restaurant_referred_by"):
-		referred_by = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
-		if not referred_by:
-			frappe.db.set_value("Customer", customer, "restaurant_referred_by", referrer, update_modified=False)
+	if _has_column("Customer", "restaurant_referred_by") and not frappe.db.get_value("Customer", customer, "restaurant_referred_by"):
+		frappe.db.set_value("Customer", customer, {
+			"restaurant_referred_by": referrer,
+			"restaurant_referral_relation_kind": "عمومی",
+		}, update_modified=False)
 	return True
 
 
@@ -2595,49 +3640,23 @@ def get_management_campaign_stats(name=""):
 
 @frappe.whitelist()
 def list_management_survey_questions(include_inactive=0):
-	_ensure_management_access()
-	filters = {} if cint(include_inactive) else {"is_active": 1}
-	rows = frappe.get_all(
-		CLUB_DOCTYPES["survey_question"],
-		filters=filters,
-		fields=["name", "question", "answer_type", "sort_order", "is_active"],
-		order_by="sort_order asc, creation asc",
-		limit_page_length=200,
-	)
-	return {"questions": rows, "count": len(rows)}
+	from restaurant.api_survey import list_management_survey_questions as list_questions
+
+	return list_questions(include_inactive=include_inactive)
 
 
 @frappe.whitelist()
 def save_management_survey_question(payload=None):
-	_ensure_management_access()
-	payload = _club_parse_json(payload, {})
-	name = (payload.get("name") or "").strip()
-	question = (payload.get("question") or "").strip()
-	if not question:
-		frappe.throw(_("متن سوال الزامی است."))
-	if name and frappe.db.exists(CLUB_DOCTYPES["survey_question"], name):
-		doc = frappe.get_doc(CLUB_DOCTYPES["survey_question"], name)
-	else:
-		doc = frappe.new_doc(CLUB_DOCTYPES["survey_question"])
-	doc.question = question
-	answer_type = (payload.get("answer_type") or "امتیاز ۱ تا ۵").strip()
-	doc.answer_type = answer_type if answer_type in ("امتیاز ۱ تا ۵", "بله/خیر", "متن آزاد") else "امتیاز ۱ تا ۵"
-	doc.sort_order = cint(payload.get("sort_order"))
-	doc.is_active = cint(payload.get("is_active", 1))
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
-	return {"status": "success", "name": doc.name}
+	from restaurant.api_survey import save_management_survey_question as save_question
+
+	return save_question(payload=payload)
 
 
 @frappe.whitelist()
 def delete_management_survey_question(name=""):
-	_ensure_management_access()
-	name = (name or "").strip()
-	if not frappe.db.exists(CLUB_DOCTYPES["survey_question"], name):
-		frappe.throw(_("سوال یافت نشد: {0}").format(name or "-"))
-	frappe.delete_doc(CLUB_DOCTYPES["survey_question"], name, ignore_permissions=True)
-	frappe.db.commit()
-	return {"status": "success"}
+	from restaurant.api_survey import delete_management_survey_question as delete_question
+
+	return delete_question(name=name)
 
 
 def _club_verify_survey_order(order_code, mobile):
@@ -2669,70 +3688,19 @@ def _club_verify_survey_order(order_code, mobile):
 
 
 @frappe.whitelist(allow_guest=True)
-def get_public_survey(order_code="", mobile=""):
-	"""Public per-order survey form context (guest)."""
-	match = _club_verify_survey_order(order_code, mobile)
-	if not match:
-		return {"valid": 0, "message": _("سفارش با این کد و شماره موبایل یافت نشد.")}
-	answered = frappe.db.exists(
-		CLUB_DOCTYPES["survey_response"],
-		{"sales_order": match["sales_order"], "mobile": mobile},
-	)
-	questions = frappe.get_all(
-		CLUB_DOCTYPES["survey_question"],
-		filters={"is_active": 1},
-		fields=["name", "question", "answer_type", "sort_order"],
-		order_by="sort_order asc, creation asc",
-		limit_page_length=100,
-	)
-	return {
-		"valid": 1,
-		"answered": 1 if answered else 0,
-		"sales_order": match["sales_order"],
-		"customer_name": frappe.db.get_value("Customer", match["customer"], "customer_name") if match["customer"] else "",
-		"questions": questions,
-	}
+def get_public_survey(token="", **kwargs):
+	"""Only high-entropy invitation links may open a public survey."""
+	from restaurant.api_survey import get_public_survey as get_survey
+
+	return get_survey(token=token)
 
 
 @frappe.whitelist(allow_guest=True)
 def submit_public_survey(payload=None):
-	"""Submit a guest survey per order; instant-alert managers on dissatisfaction."""
-	payload = _club_parse_json(payload, {}) if isinstance(payload, str) else _club_parse_payload(payload)
-	order_code = (payload.get("order_code") or "").strip()
-	mobile = (payload.get("mobile") or "").strip()
-	match = _club_verify_survey_order(order_code, mobile)
-	if not match:
-		frappe.throw(_("سفارش با این کد و شماره موبایل یافت نشد."))
-	so_name = match["sales_order"]
-	if frappe.db.exists(CLUB_DOCTYPES["survey_response"], {"sales_order": so_name, "mobile": mobile}):
-		frappe.throw(_("برای این سفارش قبلاً نظرسنجی ثبت شده است. متشکریم!"))
+	"""Submit only against a signed-in customer invitation or private token."""
+	from restaurant.api_survey import submit_public_survey as submit_survey
 
-	answers = payload.get("answers") or []
-	overall = cint(payload.get("overall_rating"))
-	if not overall:
-		rated = [cint(a.get("value")) for a in answers if str(a.get("answer_type", "")).startswith("امتیاز") and cint(a.get("value"))]
-		overall = round(sum(rated) / len(rated)) if rated else 0
-
-	doc = frappe.new_doc(CLUB_DOCTYPES["survey_response"])
-	doc.order_code = order_code
-	doc.sales_order = so_name
-	doc.customer = match["customer"] or None
-	doc.mobile = mobile
-	doc.overall_rating = max(1, min(5, overall or 1))
-	doc.answers_json = json.dumps(answers, ensure_ascii=False)
-	doc.comment = (payload.get("comment") or "").strip()
-	doc.entry_date = now_datetime()
-	doc.insert(ignore_permissions=True)
-
-	settings = _club_club_settings()
-	alerted = 0
-	if doc.overall_rating <= settings["survey_alert_threshold"]:
-		alerted = _club_alert_dissatisfaction(doc, threshold=settings["survey_alert_threshold"], users=settings["survey_alert_users"])
-	doc.dissatisfaction_alerted = alerted
-	if alerted:
-		doc.save(ignore_permissions=True)
-	frappe.db.commit()
-	return {"status": "success", "name": doc.name, "alerted": alerted}
+	return submit_survey(payload=payload)
 
 
 def _club_alert_dissatisfaction(doc, threshold=3, users=None):
@@ -2775,50 +3743,9 @@ def _club_alert_dissatisfaction(doc, threshold=3, users=None):
 
 @frappe.whitelist()
 def list_management_survey_responses(date_from="", date_to="", search="", min_rating=0, max_rating=0):
-	_ensure_management_access()
-	filters = {}
-	rows = frappe.get_all(
-		CLUB_DOCTYPES["survey_response"],
-		filters=filters,
-		fields=["name", "order_code", "sales_order", "customer", "mobile", "overall_rating", "comment", "dissatisfaction_alerted", "entry_date", "answers_json"],
-		order_by="creation desc",
-		limit_page_length=500,
-	)
-	search = (search or "").strip().lower()
-	min_rating = cint(min_rating)
-	max_rating = cint(max_rating)
-	items = []
-	for row in rows:
-		entry = str(row.get("entry_date") or "")[:10]
-		if date_from and entry < str(date_from):
-			continue
-		if date_to and entry > str(date_to):
-			continue
-		if min_rating and cint(row.get("overall_rating")) < min_rating:
-			continue
-		if max_rating and cint(row.get("overall_rating")) > max_rating:
-			continue
-		try:
-			answers = json.loads(row.get("answers_json") or "[]")
-		except Exception:
-			answers = []
-		customer_name = frappe.db.get_value("Customer", row["customer"], "customer_name") if row.get("customer") else ""
-		if search:
-			haystack = " ".join(
-				str(part or "")
-				for part in (row.get("order_code"), row.get("mobile"), customer_name, row.get("comment"))
-			).lower()
-			if search not in haystack:
-				continue
-		items.append(
-			{
-				**{k: v for k, v in row.items() if k != "answers_json"},
-				"customer_name": customer_name or row.get("customer") or "",
-				"entry_date": str(row.get("entry_date") or ""),
-				"answers": answers,
-			}
-		)
-	return {"responses": items, "count": len(items)}
+	from restaurant.api_survey import list_management_survey_responses as list_responses
+
+	return list_responses(date_from=date_from, date_to=date_to, search=search, min_rating=min_rating, max_rating=max_rating)
 
 
 # ---------------------------------------------------------------------------
@@ -2828,12 +3755,20 @@ def list_management_survey_responses(date_from="", date_to="", search="", min_ra
 
 def run_daily_customer_club_jobs():
 	"""Daily: birthday greetings, welcome SMS, inactive reminders, referral rewards."""
+	coach_rewards_count = 0
+	try:
+		from restaurant.coach_rewards import process_pending_coach_rewards
+
+		coach_rewards_count = process_pending_coach_rewards()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Restaurant coach settlement sweep failed")
 	settings = _club_club_settings()
 	if not settings["club_enabled"]:
-		return
+		frappe.db.commit()
+		return {"coach_rewards": coach_rewards_count}
 	_club_ensure_ops_ready()
 	templates = settings["sms_templates"]
-	date_map = {"birthdays": 0, "welcomes": 0, "reminders": 0, "referrals": 0}
+	date_map = {"birthdays": 0, "welcomes": 0, "reminders": 0, "referrals": 0, "coach_rewards": coach_rewards_count}
 	today_ = getdate(today())
 
 	if _has_column("Customer", "restaurant_birth_date"):
@@ -2937,7 +3872,6 @@ def run_daily_customer_club_jobs():
 					date_map["referrals"] += 1
 			except Exception:
 				frappe.log_error(frappe.get_traceback(), f"Referral reward failed for {so_name}")
-
 	try:
 		date_map["points_expired"] = cint(_club_expire_points())
 	except Exception:
@@ -3146,12 +4080,13 @@ def get_management_report_care_feedback(date_from=None, date_to=None):
 		return _compose_management_report("care-feedback", "Site Feedback", {}, [], date_from=date_from, date_to=date_to, source="all", orders=[])
 	date_to = str(date_to or today())
 	date_from = str(date_from or add_days(date_to, -29))
+	score_expr = "COALESCE(NULLIF(score_10,0), rating * 2)" if _has_column("Restaurant Customer Review", "score_10") else "rating * 2"
 	rows = frappe.db.sql(
-		"""
-		SELECT item, item_slug, COUNT(*) AS count, AVG(rating) AS avg_rating,
-			   MIN(rating) AS min_rating, MAX(rating) AS max_rating
+		f"""
+		SELECT item, item_slug, COUNT(*) AS count, AVG({score_expr}) AS avg_rating,
+			   MIN({score_expr}) AS min_rating, MAX({score_expr}) AS max_rating
 		FROM `tabRestaurant Customer Review`
-		WHERE creation BETWEEN %(df)s AND %(dt)s + INTERVAL 1 DAY
+		WHERE is_approved=1 AND creation BETWEEN %(df)s AND %(dt)s + INTERVAL 1 DAY
 		GROUP BY item, item_slug
 		ORDER BY count DESC
 		""",
@@ -3320,7 +4255,7 @@ def club_build_report_bi(report_key, title, summary, rows, orders, previous_orde
 	elif report_key == "care-feedback":
 		kpis = [
 			_bi_kpi("reviews", _("نظرات ثبت‌شده"), cint(summary.get("reviews")), "count", 0),
-			_bi_kpi("avg_rating", _("میانگین امتیاز"), flt(summary.get("avg_rating")), "number", 0),
+			_bi_kpi("avg_rating", _("میانگین امتیاز از ۱۰"), flt(summary.get("avg_rating")), "number", 0),
 			_bi_kpi("items", _("اقلام دارای نظر"), cint(summary.get("items")), "count", 0),
 		]
 		if rows:
@@ -3335,14 +4270,14 @@ def club_build_report_bi(report_key, title, summary, rows, orders, previous_orde
 					"series": [{"key": "count", "label": _("نظر"), "color": "#2f6f5c", "values": [cint(r.get("count")) for r in rows[:10]]}],
 				}
 			]
-			worst = min(rows, key=lambda r: r.get("avg_rating") or 5) if rows else None
+			worst = min(rows, key=lambda r: r.get("avg_rating") or 10) if rows else None
 			if worst:
-				insights.append({"key": "lowest-rated", "severity": "warn", "text": _("کمترین میانگین امتیاز: «{0}» ({1}).").format(worst.get("item"), worst.get("avg_rating"))})
+				insights.append({"key": "lowest-rated", "severity": "warn", "text": _("کمترین میانگین از ۱۰: «{0}» ({1}).").format(worst.get("item"), worst.get("avg_rating"))})
 
 	elif report_key == "survey-analytics":
 		kpis = [
 			_bi_kpi("responses", _("پاسخ‌ها"), cint(summary.get("responses")), "count", 0),
-			_bi_kpi("avg_rating", _("میانگین رضایت"), flt(summary.get("avg_rating")), "number", 0),
+			_bi_kpi("avg_rating", _("میانگین رضایت از ۱۰"), flt(summary.get("avg_rating")), "number", 0),
 			_bi_kpi("unhappy", _("ناراضی‌ها"), cint(summary.get("unhappy")), "count", 0),
 		]
 		if rows:
@@ -3353,7 +4288,7 @@ def club_build_report_bi(report_key, title, summary, rows, orders, previous_orde
 					"type": "line",
 					"unit": "number",
 					"labels": [row.get("day") for row in rows],
-					"series": [{"key": "avg", "label": _("میانگین امتیاز"), "color": "#2f6f5c", "values": [flt(r.get("avg_rating")) for r in rows]}],
+					"series": [{"key": "avg", "label": _("میانگین امتیاز از ۱۰"), "color": "#2f6f5c", "values": [flt(r.get("avg_rating")) for r in rows]}],
 				}
 			]
 

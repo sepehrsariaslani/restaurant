@@ -13,7 +13,7 @@
       <div class="total-box"><small>موجودی کل کیف‌ها</small><strong>{{ formatMoneyValue(boot.kpis.wallet_balance_total) }}</strong></div>
       <div class="total-box"><small>پیامک ۳۰ روز</small><strong>{{ formatQty(boot.kpis.sms_sent_30d) }}<small v-if="boot.kpis.sms_failed_30d" class="warn-text"> ({{ formatQty(boot.kpis.sms_failed_30d) }} ناموفق)</small></strong></div>
       <div class="total-box"><small>کمپین فعال</small><strong>{{ formatQty(boot.kpis.active_campaigns) }}</strong></div>
-      <div class="total-box"><small>میانگین نظرسنجی ۳۰ روز</small><strong :class="boot.kpis.survey_avg_30d && boot.kpis.survey_avg_30d <= 3 ? 'warn-text' : 'ok-text'">{{ boot.kpis.survey_avg_30d ? boot.kpis.survey_avg_30d + ' / ۵' : '—' }}</strong></div>
+      <div class="total-box"><small>میانگین نظرسنجی ۳۰ روز</small><strong :class="boot.kpis.survey_avg_30d && boot.kpis.survey_avg_30d <= 6 ? 'warn-text' : 'ok-text'">{{ boot.kpis.survey_avg_30d ? boot.kpis.survey_avg_30d + ' / ۱۰' : '—' }}</strong></div>
     </div>
 
     <nav class="tabs-bar">
@@ -548,6 +548,29 @@
         </ManagementListView>
       </ManagementSurfaceCard>
 
+      <ManagementSurfaceCard title="درخواست‌های شارژ دستی" subtitle="هیچ درخواستی پیش از تطبیق با گردش بانکی به کیف پول مشتری اضافه نمی‌شود.">
+        <div class="btn-row">
+          <button type="button" class="secondary-btn" @click="loadWalletChargeRequests" :disabled="walletChargeRequestsLoading">{{ walletChargeRequestsLoading ? 'در حال دریافت…' : 'بروزرسانی درخواست‌ها' }}</button>
+        </div>
+        <p v-if="walletChargeRequestsError" class="error" role="alert">{{ walletChargeRequestsError }}</p>
+        <p v-if="walletChargeRequestsLoading" class="muted" role="status">در حال دریافت درخواست‌های شارژ…</p>
+        <ManagementListView v-else :columns="walletChargeRequestColumns" :rows="walletChargeRequests" row-key="name">
+          <template #cell-customer_name="{ row }"><strong>{{ row.customer_name }}</strong><small class="muted d-block">{{ row.customer }}</small></template>
+          <template #cell-amount="{ row }"><strong>{{ formatMoneyValue(row.amount) }}</strong></template>
+          <template #cell-status="{ row }"><span class="pill" :class="{ ok: row.status === 'تأیید شد', warn: row.status === 'در انتظار بررسی' || row.status === 'در انتظار پرداخت' }">{{ row.status }}</span></template>
+          <template #cell-payment_reference="{ value }"><span dir="ltr">{{ value || 'ثبت نشده' }}</span></template>
+          <template #cell-creation="{ value }"><small class="muted">{{ value }}</small></template>
+          <template #cell-actions="{ row }">
+            <div v-if="['در انتظار پرداخت', 'در انتظار بررسی'].includes(row.status)" class="row-actions">
+              <button type="button" class="tertiary-btn" @click="openWalletChargeReview(row, 'approve')">تطبیق و شارژ</button>
+              <button type="button" class="tertiary-btn" @click="openWalletChargeReview(row, 'reject')">رد درخواست</button>
+            </div>
+            <small v-else>{{ row.review_note || row.transaction || '—' }}</small>
+          </template>
+          <template #empty>درخواست شارژ در انتظار بررسی وجود ندارد.</template>
+        </ManagementListView>
+      </ManagementSurfaceCard>
+
       <ManagementSurfaceCard title="درخواست‌های برداشت" subtitle="موجودی هنگام ثبت درخواست رزرو می‌شود؛ پرداخت بانکی را پس از انتقال واقعی تأیید کنید.">
         <p v-if="withdrawalsError" class="error" role="alert">{{ withdrawalsError }}</p>
         <p v-if="withdrawalsLoading" class="muted">در حال دریافت درخواست‌ها…</p>
@@ -680,6 +703,26 @@
               {{ withdrawalReviewSaving ? 'در حال ثبت…' : withdrawalAction.action === 'paid' ? 'ثبت واریز انجام‌شده' : 'رد و بازگرداندن موجودی' }}
             </button>
             <button type="button" class="tertiary-btn" :disabled="withdrawalReviewSaving" @click="withdrawalAction = null">انصراف</button>
+          </div>
+        </form>
+      </div>
+
+      <div v-if="walletChargeReviewAction" class="popup-backdrop" @click.self="walletChargeReviewAction = null">
+        <form class="popup" @submit.prevent="saveWalletChargeReview">
+          <h3>{{ walletChargeReviewAction.action === 'approve' ? 'تأیید شارژ کیف پول' : 'رد درخواست شارژ' }}</h3>
+          <p class="muted">{{ walletChargeReviewAction.request.customer_name }} · {{ formatMoneyValue(walletChargeReviewAction.request.amount) }}</p>
+          <p v-if="walletChargeReviewAction.request.payment_reference"><strong>شماره پیگیری ثبت‌شده:</strong> <span dir="ltr">{{ walletChargeReviewAction.request.payment_reference }}</span></p>
+          <p v-if="walletChargeReviewAction.action === 'approve'" class="muted">فقط پس از تطبیق مبلغ واریزی در حساب بانکی، درخواست را تأیید کنید.</p>
+          <label v-if="walletChargeReviewAction.action === 'approve'" class="withdrawal-reference-field">شماره پیگیری واریز تأییدشده <span class="req">*</span>
+            <input class="input" v-model.trim="walletChargeReviewAction.payment_reference" required maxlength="120" autocomplete="off" />
+          </label>
+          <ManagementNoteField v-model="walletChargeReviewAction.note" label="یادداشت بررسی" :multiline="false" placeholder="اختیاری؛ برای مشتری قابل مشاهده است" />
+          <p v-if="walletChargeRequestsError" class="error" role="alert">{{ walletChargeRequestsError }}</p>
+          <div class="btn-row">
+            <button type="submit" class="primary-btn" :disabled="walletChargeReviewSaving || (walletChargeReviewAction.action === 'approve' && !walletChargeReviewAction.payment_reference.trim())">
+              {{ walletChargeReviewSaving ? 'در حال ثبت…' : walletChargeReviewAction.action === 'approve' ? 'تأیید پرداخت و افزودن به کیف پول' : 'رد درخواست شارژ' }}
+            </button>
+            <button type="button" class="tertiary-btn" :disabled="walletChargeReviewSaving" @click="walletChargeReviewAction = null">انصراف</button>
           </div>
         </form>
       </div>
@@ -860,13 +903,22 @@
               <option v-for="m in modeOfPayments" :key="m" :value="m">{{ m }}</option>
             </select>
           </label>
-          <label>آستانه هشدار نارضایتی (امتیاز ≤)
-            <select class="input" v-model.number="settingsForm.restaurant_survey_alert_threshold">
-              <option :value="1">۱</option><option :value="2">۲</option><option :value="3">۳</option><option :value="4">۴</option>
-            </select>
+          <label class="check-row full-row"><input type="checkbox" v-model="settingsForm.restaurant_wallet_charge_enabled" /> درخواست شارژ دستی برای مشتری فعال است</label>
+          <label>نام بانک دریافت‌کننده<input class="input" v-model.trim="settingsForm.restaurant_wallet_charge_bank_name" maxlength="120" /></label>
+          <label>نام صاحب حساب<input class="input" v-model.trim="settingsForm.restaurant_wallet_charge_account_holder" maxlength="140" /></label>
+          <label>شماره شبای دریافت<input class="input" v-model.trim="settingsForm.restaurant_wallet_charge_iban" dir="ltr" maxlength="26" placeholder="IR…" /></label>
+          <label>شماره کارت دریافت<input class="input" v-model.trim="settingsForm.restaurant_wallet_charge_card_number" dir="ltr" inputmode="numeric" maxlength="19" placeholder="اختیاری" /></label>
+          <label class="full-row">راهنمای پرداخت برای مشتری
+            <textarea class="input wallet-charge-instructions-input" v-model.trim="settingsForm.restaurant_wallet_charge_instructions" maxlength="1200" rows="3" placeholder="مثلاً پس از واریز، شماره پیگیری را در صفحه کیف پول ثبت کنید." />
+          </label>
+          <label>آستانه هشدار نارضایتی (از ۱۰)
+            <input class="input" type="number" min="1" max="10" v-model.number="settingsForm.restaurant_survey_alert_threshold" />
+          </label>
+          <label>تأخیر دعوت نظرسنجی پس از تحویل (دقیقه)
+            <input class="input" type="number" min="0" max="10080" v-model.number="settingsForm.restaurant_survey_delay_minutes" />
           </label>
         </div>
-        <p class="muted hint-line">برای پرداخت با کیف پول در صندوق، ابتدا یک «روش پرداخت» (Mode of Payment) مثل «کیف پول» در ERPNext بسازید و اینجا انتخابش کنید. کش‌بک بعد از تسویه به اعتبار خرید جداگانه افزوده می‌شود و قابل برداشت بانکی نیست.</p>
+        <p class="muted hint-line">برای پرداخت با کیف پول در صندوق، ابتدا یک «روش پرداخت» (Mode of Payment) در ERPNext انتخاب کنید. شارژ دستی پس از تطبیق واریز توسط پشتیبانی به موجودی قابل برداشت افزوده می‌شود. کش‌بک بعد از تسویهٔ سفارش واجد شرایط ثبت می‌شود و فقط برای خرید قابل مصرف است.</p>
         <div class="btn-row">
           <button type="button" class="primary-btn" @click="saveSettings" :disabled="settingsSaving">{{ settingsSaving ? '...' : 'ذخیره تنظیمات' }}</button>
         </div>
@@ -918,6 +970,8 @@ import {
   getManagementWalletDetail,
   listManagementWalletWithdrawalRequests,
   reviewManagementWalletWithdrawalRequest,
+  listManagementWalletChargeRequests,
+  reviewManagementWalletChargeRequest,
   chargeManagementWallet,
   transferManagementWallet,
   adjustManagementWallet,
@@ -994,8 +1048,15 @@ async function loadBoot() {
         restaurant_club_enabled: !!boot.value.settings.club_enabled,
         restaurant_cashback_percent: boot.value.settings.cashback_percent,
         restaurant_cashback_min_order: boot.value.settings.cashback_min_order,
+        restaurant_wallet_charge_enabled: boot.value.settings.wallet_charge_enabled !== false,
+        restaurant_wallet_charge_bank_name: boot.value.settings.wallet_charge_bank_name || '',
+        restaurant_wallet_charge_account_holder: boot.value.settings.wallet_charge_account_holder || '',
+        restaurant_wallet_charge_iban: boot.value.settings.wallet_charge_iban || '',
+        restaurant_wallet_charge_card_number: boot.value.settings.wallet_charge_card_number || '',
+        restaurant_wallet_charge_instructions: boot.value.settings.wallet_charge_instructions || '',
         restaurant_wallet_mode_of_payment: boot.value.settings.wallet_mode_of_payment,
         restaurant_survey_alert_threshold: boot.value.settings.survey_alert_threshold,
+        restaurant_survey_delay_minutes: boot.value.settings.survey_delay_minutes ?? 60,
         restaurant_points_enabled: !!boot.value.settings.points_enabled,
         restaurant_points_rial_per_point: boot.value.settings.points_rial_per_point,
         restaurant_points_rial_value: boot.value.settings.points_rial_value,
@@ -1019,7 +1080,7 @@ function setActiveTab(key) {
   loadedTabs[key] = true
   if (key === 'customers') loadCustomers()
   if (key === 'sms') { loadSmsTemplates(); loadSmsHistory(); loadSmsKindStats(); if (!campaigns.value.length) loadCampaigns() }
-  if (key === 'wallet') { loadWallets(); loadWalletWithdrawalRequests() }
+  if (key === 'wallet') { loadWallets(); loadWalletWithdrawalRequests(); loadWalletChargeRequests() }
   if (key === 'referral') loadReferral()
   if (key === 'campaigns') { loadCampaigns(); loadCoupons() }
   if (key === 'voice') loadVoices()
@@ -1281,6 +1342,11 @@ const withdrawalsLoading = ref(false)
 const withdrawalsError = ref('')
 const withdrawalAction = ref(null)
 const withdrawalReviewSaving = ref(false)
+const walletChargeRequests = ref([])
+const walletChargeRequestsLoading = ref(false)
+const walletChargeRequestsError = ref('')
+const walletChargeReviewAction = ref(null)
+const walletChargeReviewSaving = ref(false)
 const walletActionTitles = { charge: 'شارژ کیف پول', transfer: 'انتقال اعتبار', adjust: 'تعدیل دستی' }
 const walletColumns = [
   { key: 'customer_label', label: 'مشتری' },
@@ -1319,6 +1385,59 @@ const withdrawalColumns = [
   { key: 'creation', label: 'زمان' },
   { key: 'actions', label: 'بررسی' },
 ]
+const walletChargeRequestColumns = [
+  { key: 'customer_name', label: 'مشتری' },
+  { key: 'amount', label: 'مبلغ' },
+  { key: 'status', label: 'وضعیت' },
+  { key: 'payment_reference', label: 'شماره پیگیری' },
+  { key: 'creation', label: 'زمان' },
+  { key: 'actions', label: 'بررسی' },
+]
+
+async function loadWalletChargeRequests() {
+  walletChargeRequestsLoading.value = true
+  walletChargeRequestsError.value = ''
+  try {
+    const result = await listManagementWalletChargeRequests()
+    walletChargeRequests.value = result?.requests || []
+  } catch (err) {
+    walletChargeRequests.value = []
+    walletChargeRequestsError.value = err?.message || 'درخواست‌های شارژ دریافت نشدند.'
+  } finally {
+    walletChargeRequestsLoading.value = false
+  }
+}
+
+function openWalletChargeReview(request, action) {
+  walletChargeRequestsError.value = ''
+  walletChargeReviewAction.value = {
+    request,
+    action,
+    payment_reference: request.payment_reference || '',
+    note: '',
+  }
+}
+
+async function saveWalletChargeReview() {
+  const form = walletChargeReviewAction.value
+  if (!form || walletChargeReviewSaving.value) return
+  walletChargeReviewSaving.value = true
+  walletChargeRequestsError.value = ''
+  try {
+    await reviewManagementWalletChargeRequest({
+      request_name: form.request.name,
+      action: form.action,
+      payment_reference: form.payment_reference,
+      note: form.note,
+    })
+    walletChargeReviewAction.value = null
+    await Promise.all([loadWalletChargeRequests(), loadWallets()])
+  } catch (err) {
+    walletChargeRequestsError.value = err?.message || 'بررسی درخواست شارژ انجام نشد.'
+  } finally {
+    walletChargeReviewSaving.value = false
+  }
+}
 
 async function loadWalletWithdrawalRequests() {
   withdrawalsLoading.value = true
@@ -1587,8 +1706,15 @@ async function saveSettings() {
       restaurant_club_enabled: settingsForm.value.restaurant_club_enabled ? 1 : 0,
       restaurant_cashback_percent: settingsForm.value.restaurant_cashback_percent,
       restaurant_cashback_min_order: settingsForm.value.restaurant_cashback_min_order,
+      restaurant_wallet_charge_enabled: settingsForm.value.restaurant_wallet_charge_enabled ? 1 : 0,
+      restaurant_wallet_charge_bank_name: settingsForm.value.restaurant_wallet_charge_bank_name,
+      restaurant_wallet_charge_account_holder: settingsForm.value.restaurant_wallet_charge_account_holder,
+      restaurant_wallet_charge_iban: settingsForm.value.restaurant_wallet_charge_iban,
+      restaurant_wallet_charge_card_number: settingsForm.value.restaurant_wallet_charge_card_number,
+      restaurant_wallet_charge_instructions: settingsForm.value.restaurant_wallet_charge_instructions,
       restaurant_wallet_mode_of_payment: settingsForm.value.restaurant_wallet_mode_of_payment,
       restaurant_survey_alert_threshold: settingsForm.value.restaurant_survey_alert_threshold,
+      restaurant_survey_delay_minutes: settingsForm.value.restaurant_survey_delay_minutes,
       restaurant_points_enabled: settingsForm.value.restaurant_points_enabled ? 1 : 0,
       restaurant_points_rial_per_point: settingsForm.value.restaurant_points_rial_per_point,
       restaurant_points_rial_value: settingsForm.value.restaurant_points_rial_value,

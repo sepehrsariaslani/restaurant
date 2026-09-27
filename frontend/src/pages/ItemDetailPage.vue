@@ -94,9 +94,9 @@
         <!-- Rating -->
         <div class="rating-row" v-if="reviewCount > 0">
           <div class="stars-display">
-            <span v-for="s in 5" :key="s" class="star" :class="{ filled: s <= Math.round(averageRating) }">★</span>
+            <span v-for="s in 5" :key="s" class="star" :class="{ filled: s <= Math.round(averageRating / 2) }">★</span>
           </div>
-          <span class="rating-num">{{ averageRating }}</span>
+          <span class="rating-num">{{ Number(averageRating).toLocaleString('fa-IR', { maximumFractionDigits: 1 }) }} / ۱۰</span>
           <span class="rating-count">({{ reviewCount }} نظر)</span>
         </div>
 
@@ -216,12 +216,18 @@
                 <div class="review-meta">
                   <strong class="review-author">{{ rv.author || 'کاربر' }}</strong>
                   <div class="review-stars">
-                    <span v-for="s in 5" :key="s" class="star sm" :class="{ filled: s <= rv.rating }">★</span>
+                    <span v-for="s in 5" :key="s" class="star sm" :class="{ filled: s <= Math.round(rv.rating / 2) }">★</span>
                   </div>
                 </div>
+                <span class="review-score">{{ rv.rating }} / ۱۰</span>
                 <span class="review-date">{{ formatReviewDate(rv.date) }}</span>
               </div>
               <p class="review-comment" v-if="rv.comment">{{ rv.comment }}</p>
+              <div v-if="rv.strengths.length || rv.weaknesses.length" class="review-aspects">
+                <span v-for="tag in rv.strengths" :key="`good-${tag}`" class="review-aspect review-aspect--good">{{ tag }}</span>
+                <span v-for="tag in rv.weaknesses" :key="`improve-${tag}`" class="review-aspect review-aspect--improve">{{ tag }}</span>
+              </div>
+              <p class="review-reply" v-if="rv.manager_reply"><strong>پاسخ رستوران:</strong> {{ rv.manager_reply }}</p>
             </div>
             <button
               v-if="reviews.length > 3 && !showAllReviews"
@@ -233,41 +239,9 @@
             </button>
           </div>
 
-          <p class="no-reviews" v-else>هنوز نظری ثبت نشده. اولین نفر باشید!</p>
+          <p class="no-reviews" v-else>پس از ثبت و تحویل سفارش می‌توانید نظر خود را از بخش سفارش‌های من ثبت کنید.</p>
 
-          <div class="add-review">
-            <h4>ثبت نظر</h4>
-            <div class="star-picker">
-              <button
-                v-for="s in 5"
-                :key="s"
-                type="button"
-                class="star-btn"
-                :class="{ filled: s <= newReview.rating }"
-                @click="newReview.rating = s"
-              >★</button>
-            </div>
-            <input
-              class="review-input"
-              v-model.trim="newReview.author"
-              placeholder="نام شما (اختیاری)"
-            />
-            <textarea
-              class="review-textarea"
-              v-model.trim="newReview.comment"
-              placeholder="نظر خود را بنویسید..."
-              rows="3"
-              maxlength="500"
-            ></textarea>
-            <div class="review-form-footer">
-              <span class="char-counter" :class="{ near: newReview.comment.length > 450 }">{{ newReview.comment.length }}/۵۰۰</span>
-              <button class="submit-review-btn" type="button" @click="submitReview" :disabled="reviewSubmitting">
-                {{ reviewSubmitting ? 'در حال ثبت...' : 'ثبت نظر' }}
-              </button>
-            </div>
-            <p class="review-error" v-if="reviewError">{{ reviewError }}</p>
-            <p class="review-success" v-if="reviewSubmitted">✓ نظر شما ثبت شد. ممنون!</p>
-          </div>
+          <a class="review-order-link" href="/customer/orders">دیدن سفارش‌ها و ثبت نظر پس از خرید</a>
         </div>
 
         <!-- Common customization (always visible) -->
@@ -339,9 +313,9 @@
             <!-- Rating -->
             <div class="rating-row" v-if="reviewCount > 0">
               <div class="stars-display">
-                <span v-for="s in 5" :key="s" class="star" :class="{ filled: s <= Math.round(averageRating) }">★</span>
+                <span v-for="s in 5" :key="s" class="star" :class="{ filled: s <= Math.round(averageRating / 2) }">★</span>
               </div>
-              <span class="rating-num">{{ averageRating }}</span>
+              <span class="rating-num">{{ Number(averageRating).toLocaleString('fa-IR', { maximumFractionDigits: 1 }) }} / ۱۰</span>
               <span class="rating-count">({{ reviewCount }} نظر)</span>
             </div>
 
@@ -456,12 +430,18 @@
                     <div class="review-meta">
                       <strong class="review-author">{{ rv.author || 'کاربر' }}</strong>
                       <div class="review-stars">
-                        <span v-for="s in 5" :key="s" class="star sm" :class="{ filled: s <= rv.rating }">★</span>
+                        <span v-for="s in 5" :key="s" class="star sm" :class="{ filled: s <= Math.round(rv.rating / 2) }">★</span>
                       </div>
                     </div>
+                    <span class="review-score">{{ rv.rating }} / ۱۰</span>
                     <span class="review-date">{{ formatReviewDate(rv.date) }}</span>
                   </div>
                   <p class="review-comment" v-if="rv.comment">{{ rv.comment }}</p>
+                  <div v-if="rv.strengths.length || rv.weaknesses.length" class="review-aspects">
+                    <span v-for="tag in rv.strengths" :key="`good-${tag}`" class="review-aspect review-aspect--good">{{ tag }}</span>
+                    <span v-for="tag in rv.weaknesses" :key="`improve-${tag}`" class="review-aspect review-aspect--improve">{{ tag }}</span>
+                  </div>
+                  <p class="review-reply" v-if="rv.manager_reply"><strong>پاسخ رستوران:</strong> {{ rv.manager_reply }}</p>
                 </div>
                 <button
                   v-if="reviews.length > 3 && !showAllReviews"
@@ -473,41 +453,9 @@
                 </button>
               </div>
 
-              <p class="no-reviews" v-else>هنوز نظری ثبت نشده. اولین نفر باشید!</p>
+              <p class="no-reviews" v-else>پس از ثبت و تحویل سفارش می‌توانید نظر خود را از بخش سفارش‌های من ثبت کنید.</p>
 
-              <div class="add-review">
-                <h4>ثبت نظر</h4>
-                <div class="star-picker">
-                  <button
-                    v-for="s in 5"
-                    :key="s"
-                    type="button"
-                    class="star-btn"
-                    :class="{ filled: s <= newReview.rating }"
-                    @click="newReview.rating = s"
-                  >★</button>
-                </div>
-                <input
-                  class="review-input"
-                  v-model.trim="newReview.author"
-                  placeholder="نام شما (اختیاری)"
-                />
-                <textarea
-                  class="review-textarea"
-                  v-model.trim="newReview.comment"
-                  placeholder="نظر خود را بنویسید..."
-                  rows="3"
-                  maxlength="500"
-                ></textarea>
-                <div class="review-form-footer">
-                  <span class="char-counter" :class="{ near: newReview.comment.length > 450 }">{{ newReview.comment.length }}/۵۰۰</span>
-                  <button class="submit-review-btn" type="button" @click="submitReview" :disabled="reviewSubmitting">
-                    {{ reviewSubmitting ? 'در حال ثبت...' : 'ثبت نظر' }}
-                  </button>
-                </div>
-                <p class="review-error" v-if="reviewError">{{ reviewError }}</p>
-                <p class="review-success" v-if="reviewSubmitted">✓ نظر شما ثبت شد. ممنون!</p>
-              </div>
+              <a class="review-order-link" href="/customer/orders">دیدن سفارش‌ها و ثبت نظر پس از خرید</a>
             </section>
 
             <!-- Common customization (always visible) -->
@@ -672,11 +620,10 @@ import ProductBuilderWizard from '@/components/ProductBuilderWizard.vue'
 import CartActionFeedback from '@/components/customer/CartActionFeedback.vue'
 import ShareWebsiteButton from '@/components/customer/ShareWebsiteButton.vue'
 import OrderContextStrip from '@/components/OrderContextStrip.vue'
-import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, submitReview as submitItemReview, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
-import { formatMoney, normalizeMobile, parseQuery } from '@/utils/format'
+import { getItemDetail, getRelatedItems, getItemReviews as fetchItemReviews, getBuilderTemplate, computeBuilderPrice } from '@/utils/api'
+import { formatMoney, parseQuery } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
 import { cartState, getLineById, upsertLine } from '@/stores/cartStore'
-import { getItemReviews as getLocalItemReviews, addItemReview, getAverageRating as getLocalAverageRating, getReviewCount as getLocalReviewCount } from '@/utils/reviewsStore'
 
 const props = defineProps({
   boot: { type: Object, default: () => ({}) },
@@ -824,18 +771,6 @@ function addRelatedItem(source = {}) {
   showCartActionFeedback(`${source.title || 'محصول'} به سبد سفارش اضافه شد.`)
 }
 
-// ─── Review validation ───────────────────────────────────────────────
-const reviewSubmitting = ref(false)
-const reviewError = ref('')
-const REVIEW_MAX_CHARS = 500
-function validateReview() {
-  if (!newReview.value.comment.trim()) { reviewError.value = 'لطفا نظر خود را بنویسید'; return false }
-  if (newReview.value.comment.trim().length < 3) { reviewError.value = 'نظر باید حداقل ۳ کاراکتر باشد'; return false }
-  if (newReview.value.comment.length > REVIEW_MAX_CHARS) { reviewError.value = `نظر نمی‌تواند بیشتر از ${REVIEW_MAX_CHARS} کاراکتر باشد`; return false }
-  if (newReview.value.author.length > 50) { reviewError.value = 'نام نمی‌تواند بیشتر از ۵۰ کاراکتر باشد'; return false }
-  reviewError.value = ''
-  return true
-}
 const galleryIndex = ref(0)
 const userUploadedImages = ref([])
 const USER_IMAGES_KEY = 'restaurant_user_images_'
@@ -951,20 +886,6 @@ const reviews = ref([])
 const showAllReviews = ref(false)
 const averageRating = ref(0)
 const reviewCount = ref(0)
-const newReview = ref({ author: '', rating: 5, comment: '' })
-const reviewSubmitted = ref(false)
-
-function readCustomerAuth() {
-  try {
-    const auth = JSON.parse(localStorage.getItem('restaurant-customer-auth-v1') || '{}')
-    return {
-      mobile: auth.mobile || localStorage.getItem('customer_phone') || '',
-      name: auth.customer_name || localStorage.getItem('customer_name') || '',
-    }
-  } catch {
-    return { mobile: '', name: '' }
-  }
-}
 
 function normalizeReviewRows(rows = []) {
   return (Array.isArray(rows) ? rows : []).map((row) => ({
@@ -972,6 +893,9 @@ function normalizeReviewRows(rows = []) {
     author: row.author || row.customer_name || 'مشتری',
     rating: Number(row.rating || 0),
     comment: row.comment || '',
+    strengths: Array.isArray(row.strengths) ? row.strengths : [],
+    weaknesses: Array.isArray(row.weaknesses) ? row.weaknesses : [],
+    manager_reply: row.manager_reply || '',
     date: row.date || row.created_at || row.creation || '',
   }))
 }
@@ -985,49 +909,9 @@ async function refreshReviews() {
     averageRating.value = Number(payload?.average_rating || 0)
     reviewCount.value = Number(payload?.count || reviews.value.length || 0)
   } catch (_) {
-    reviews.value = getLocalItemReviews(slug)
-    averageRating.value = getLocalAverageRating(slug)
-    reviewCount.value = getLocalReviewCount(slug)
-  }
-}
-
-async function submitReview() {
-  if (!validateReview()) return
-  const slug = item.value?.slug || ''
-  if (!slug) return
-  reviewSubmitting.value = true
-  try {
-    const auth = readCustomerAuth()
-    const customerName = newReview.value.author.trim() || auth.name || 'مشتری'
-    const mobile = normalizeMobile(auth.mobile || localStorage.getItem('customer_phone') || '')
-    if (!mobile) {
-      reviewError.value = 'برای ثبت نظر، ابتدا با شماره موبایل وارد شوید.'
-      window.setTimeout(() => { window.location.href = `/customer/login?redirect=${encodeURIComponent(window.location.pathname)}` }, 900)
-      return
-    }
-    await submitItemReview({
-      customer_name: customerName,
-      mobile,
-      item_slug: slug,
-      rating: newReview.value.rating,
-      comment: newReview.value.comment,
-    })
-    await refreshReviews()
-    newReview.value = { author: '', rating: 5, comment: '' }
-    reviewSubmitted.value = true
-    setTimeout(() => { reviewSubmitted.value = false }, 3000)
-  } catch (err) {
-    try {
-      addItemReview(slug, { ...newReview.value })
-      await refreshReviews()
-      newReview.value = { author: '', rating: 5, comment: '' }
-      reviewSubmitted.value = true
-      setTimeout(() => { reviewSubmitted.value = false }, 3000)
-    } catch (_) {
-      reviewError.value = err?.message || 'ثبت نظر ناموفق بود. لطفا دوباره تلاش کنید.'
-    }
-  } finally {
-    reviewSubmitting.value = false
+    reviews.value = []
+    averageRating.value = 0
+    reviewCount.value = 0
   }
 }
 
@@ -2093,6 +1977,13 @@ onUnmounted(() => {
 .review-stars { display: flex; gap: 0.05rem; }
 .review-date { font-size: 0.72rem; color: var(--text-muted, #846b58); white-space: nowrap; }
 .review-comment { margin: 0; font-size: 0.84rem; color: var(--text-secondary, #654a38); line-height: 1.55; }
+.review-score { color: var(--ds-color-action-primary, #55715b); font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.review-reply { margin: 0; padding: .65rem .8rem; border-radius: 12px; background: var(--ds-color-surface-raised, #f6f2e9); color: var(--ds-color-text-secondary, #654a38); font-size: .82rem; line-height: 1.55; }
+.review-aspects { display: flex; flex-wrap: wrap; gap: .35rem; }
+.review-aspect { border-radius: 999px; padding: .18rem .55rem; font-size: .72rem; }
+.review-aspect--good { background: color-mix(in srgb, var(--ds-color-status-success, #55715b) 12%, white); color: var(--ds-color-status-success, #55715b); }
+.review-aspect--improve { background: color-mix(in srgb, var(--ds-color-status-warning, #a8682d) 12%, white); color: var(--ds-color-status-warning, #955924); }
+.review-order-link { display: inline-flex; justify-content: center; align-items: center; min-height: 42px; padding: 0 .9rem; border-radius: 999px; background: var(--ds-color-action-primary-soft, #edf0e9); color: var(--ds-color-action-primary, #55715b); font-size: .84rem; font-weight: 700; text-decoration: none; }
 
 .show-more-btn {
   background: none;

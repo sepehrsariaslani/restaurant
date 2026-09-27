@@ -53,6 +53,25 @@ test('customer order history shows order dates and item lines on warm readable s
   assert.match(customerOrders, /order\["items"\] = \[/)
 })
 
+test('customer order history exposes verified per-order feedback and edit actions', () => {
+  const page = source('../src/pages/CustomerOrdersPage.vue')
+  const details = source('../src/pages/CustomerOrderDetailPage.vue')
+  const summary = source('../src/components/customer/CustomerOrderSurveySummary.vue')
+  const survey = source('../src/pages/OrderSurveyPage.vue')
+  const backend = readFileSync(new URL('../../restaurant/api_survey.py', import.meta.url), 'utf8')
+
+  assert.match(page, /getMyOrderSurveySummaries\(orderNames\)/)
+  assert.match(page, /requestMyOrderSurvey\(orderName\)/)
+  assert.match(details, /CustomerOrderSurveySummary/)
+  assert.match(summary, /review\.manager_reply/)
+  assert.match(summary, /ویرایش نظرها/)
+  assert.match(survey, /getMyOrderSurvey\(invitation, \{ edit: editMode \}\)/)
+  assert.match(backend, /def get_my_order_survey_summaries\(/)
+  assert.match(backend, /def request_my_order_survey\(/)
+  assert.match(backend, /def _order_owned_by_identity\(/)
+  assert.match(backend, /ویرایش نظر فقط از حساب مشتری انجام می‌شود/)
+})
+
 test('customer branches exclude non-company locations and handle missing media and map URLs', () => {
   const page = source('../src/pages/CustomerBranchesPage.vue')
 
@@ -142,7 +161,7 @@ test('mobile browsing uses one shared bottom bar and opens the extra links as an
   assert.match(app, /\.desktop-public-header\s*\{\s*display:\s*none;/)
   assert.match(app, /\.order-flow-page--mobile-cta\)\s*\{\s*padding-bottom:\s*calc\(150px/s)
   assert.match(app, /\.order-mobile-cta\)\s*\{\s*bottom:\s*calc\(4\.8rem/s)
-  assert.match(app, /v-if="page !== 'kitchen'"/)
+  assert.match(app, /v-if="page !== 'kitchen' && page !== 'survey'"/)
   assert.match(nav, /aria-label="ناوبری اصلی"/)
   assert.match(nav, /<small>بیشتر<\/small>/)
   assert.match(nav, /role="dialog" aria-modal="true"/)
@@ -251,5 +270,5 @@ test('cart page keeps one page title row alongside the shared mobile navigation'
 
   assert.match(cart, /<header class="cart-heading">[\s\S]*?aria-label="بازگشت به منو"[\s\S]*?<h1>سبد سفارش<\/h1>[\s\S]*?class="cart-count-label"/)
   assert.doesNotMatch(cart, /class="top-row"|<p>سبد خرید<\/p>/)
-  assert.match(app, /<MobileBottomNav\s+v-if="page !== 'kitchen'"/)
+  assert.match(app, /<MobileBottomNav\s+v-if="page !== 'kitchen' && page !== 'survey'"/)
 })

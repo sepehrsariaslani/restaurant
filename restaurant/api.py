@@ -1611,6 +1611,13 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 		frappe.db.set_value(
 			"Sales Order", order_name, "restaurant_status", normalized_next, update_modified=False
 		)
+		if normalized_next == "delivered":
+			try:
+				from restaurant.api_survey import queue_order_survey_invitation
+
+				queue_order_survey_invitation(order_name)
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), "Restaurant survey invitation hook failed")
 		return normalized_next
 
 	if current == normalized_next:
@@ -1630,6 +1637,12 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 			club_apply_fulfillment_effects(order_name)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "Restaurant delivered club effects failed")
+		try:
+			from restaurant.api_survey import queue_order_survey_invitation
+
+			queue_order_survey_invitation(order_name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Restaurant survey invitation hook failed")
 	return normalized_next
 
 
@@ -5403,6 +5416,7 @@ def _create_sales_order(
 	totals=None,
 	commit=True,
 	secondary_customer="",
+	coach_referral_customer="",
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5422,6 +5436,8 @@ def _create_sales_order(
 	delivery_payload = delivery_payload if isinstance(delivery_payload, dict) else {}
 	coupon = coupon if isinstance(coupon, dict) else {}
 	_ensure_checkout_sales_order_fields()
+	from restaurant import api_club
+	api_club._club_ensure_ops_ready()
 
 	doc_payload = {
 		"doctype": "Sales Order",
@@ -5449,6 +5465,10 @@ def _create_sales_order(
 		doc_payload["restaurant_include_service_items"] = cint(include_service_items)
 	if _has_column("Sales Order", "restaurant_order_context_json"):
 		doc_payload["restaurant_order_context_json"] = frappe.as_json(order_context)
+	if order_context.get("recurring_schedule") and _has_column("Sales Order", "restaurant_recurring_schedule"):
+		doc_payload["restaurant_recurring_schedule"] = order_context["recurring_schedule"]
+	if order_context.get("recurring_run_date") and _has_column("Sales Order", "restaurant_recurring_run_date"):
+		doc_payload["restaurant_recurring_run_date"] = order_context["recurring_run_date"]
 	if _has_column("Sales Order", "restaurant_branch"):
 		doc_payload["restaurant_branch"] = order_context.get("branch") or ""
 	if _has_column("Sales Order", "restaurant_table"):
@@ -5472,6 +5492,7 @@ def _create_sales_order(
 	payload_snapshot = []
 	selected_branches = set()
 	packaging_qty_map = {}
+	stock_demand = {}
 
 	for cart_line in cart_items:
 		menu_doc = _get_item_doc_by_payload(cart_line)
@@ -5496,8 +5517,11 @@ def _create_sales_order(
 			or order_context.get("branch")
 			or menu_doc.get("restaurant_branch")
 			or "DEFAULT"
-		).strip() or "DEFAULT"
+	).strip() or "DEFAULT"
 		selected_branches.add(branch)
+		if _has_column("Item", "is_stock_item") and cint(menu_doc.get("is_stock_item") or 0):
+			stock_key = (menu_doc.item_code or menu_doc.name, branch)
+			stock_demand[stock_key] = stock_demand.get(stock_key, 0.0) + flt(cart_line.get("qty") or 0)
 		markup_percent = _get_branch_pricing_markup_percent(branch)
 		line_calc = _recalculate_line(
 			menu_doc, cart_line.get("qty"), customization, branch_markup_percent=markup_percent
@@ -5605,6 +5629,11 @@ def _create_sales_order(
 				"requires_production": cint(line_requires_production),
 			}
 		)
+
+	for (stock_item_code, stock_branch), requested_qty in stock_demand.items():
+		if not _branch_stock_available(stock_item_code, stock_branch, requested_qty):
+			item_label = frappe.db.get_value("Item", stock_item_code, "item_name") or stock_item_code
+			frappe.throw(_("موجودی {0} در شعبهٔ انتخاب‌شده برای این تعداد کافی نیست.").format(item_label))
 
 	if include_service_items:
 		for service_item in _get_auto_order_service_items(branches=selected_branches):
@@ -5723,18 +5752,76 @@ def _create_sales_order(
 
 	financial_modifiers = financial_modifiers or {}
 	totals_data = totals or {}
-	
-	frontend_discount_amount = flt(totals_data.get("discountAmount") or 0)
-	applied_coupon_code = coupon.get("code") if coupon else financial_modifiers.get("coupon_code")
-	
+	# The browser only previews discounts. Rebuild every eligible amount from
+	# current server data and apply the single largest discount (never stack).
+	applied_coupon_code = str((coupon or {}).get("code") or financial_modifiers.get("coupon_code") or "").strip()
+	server_coupon = {}
+	if applied_coupon_code:
+		coupon_doc = _find_coupon_doc(applied_coupon_code)
+		if not coupon_doc:
+			frappe.throw(_("Coupon not found."), frappe.DoesNotExistError)
+		server_coupon = _build_coupon_result(
+			coupon_doc,
+			subtotal,
+			mobile=mobile,
+			branch=order_context.get("branch") or "",
+		)
+	verified_customer = bool(coach_referral_customer and coach_referral_customer == customer)
+	group_discount_percent = api_club._club_customer_group_discount_percent(customer) if verified_customer else 0
+	coach_terms = api_club._club_partner_order_terms(customer, subtotal) if verified_customer else {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
+	coupon_amount = flt(server_coupon.get("discount_amount") or 0)
+	from restaurant.pricing_policy import select_order_discount, coach_commission_amount
+
+	discount_policy = select_order_discount(
+		subtotal,
+		group_discount_percent,
+		coach_terms.get("discount_percent") or 0,
+		coupon_amount,
+	)
+	frontend_discount_amount = flt(discount_policy["discount_amount"])
+	coach_commission = coach_commission_amount(
+		discount_policy["net_items"], coach_terms.get("commission_percent") or 0
+	)
+	if coach_terms.get("coach") and _has_column("Sales Order", "restaurant_coach_customer"):
+		doc_payload["restaurant_coach_customer"] = coach_terms["coach"]
+	if _has_column("Sales Order", "restaurant_coach_discount_amount"):
+		doc_payload["restaurant_coach_discount_amount"] = discount_policy["coach_discount"] if discount_policy["discount_source"] == "coach" else 0
+	if _has_column("Sales Order", "restaurant_group_discount_amount"):
+		doc_payload["restaurant_group_discount_amount"] = discount_policy["group_discount"] if discount_policy["discount_source"] == "customer_group" else 0
+	if _has_column("Sales Order", "restaurant_coach_commission_amount"):
+		doc_payload["restaurant_coach_commission_amount"] = coach_commission
+	if _has_column("Sales Order", "restaurant_discount_source"):
+		doc_payload["restaurant_discount_source"] = {
+			"customer_group": "گروه مشتری",
+			"coach": "تخفیف شاگرد",
+			"coupon": "کد تخفیف",
+		}.get(discount_policy["discount_source"], "")
+	if _has_column("Sales Order", "restaurant_discount_policy_applied"):
+		doc_payload["restaurant_discount_policy_applied"] = 1
+	if coach_terms.get("coach"):
+		if _has_column("Sales Order", "restaurant_referral_code"):
+			doc_payload["restaurant_referral_code"] = api_club._club_assign_referral_code(coach_terms["coach"])
+		if _has_column("Sales Order", "restaurant_referral_relation_kind_snapshot"):
+			doc_payload["restaurant_referral_relation_kind_snapshot"] = "مربی"
+	elif verified_customer:
+		relation_kind = frappe.db.get_value("Customer", customer, "restaurant_referral_relation_kind") or ""
+		if _has_column("Sales Order", "restaurant_referral_relation_kind_snapshot"):
+			doc_payload["restaurant_referral_relation_kind_snapshot"] = relation_kind
+		if relation_kind == "عمومی" and _has_column("Sales Order", "restaurant_referral_code"):
+			referrer = frappe.db.get_value("Customer", customer, "restaurant_referred_by") or ""
+			if referrer and referrer != customer:
+				doc_payload["restaurant_referral_code"] = api_club._club_assign_referral_code(referrer)
 	if frontend_discount_amount > 0:
-		doc_payload["apply_discount_on"] = "Grand Total"
-		doc_payload["discount_amount"] = min(frontend_discount_amount, subtotal)
-		
-		if applied_coupon_code:
-			coupon_note = _("Coupon {0}: {1}").format(applied_coupon_code, frontend_discount_amount)
-			doc_payload["customer_note"] = (doc_payload.get("customer_note") or "") + coupon_note
-			payload_snapshot.append({"coupon": applied_coupon_code, "discount_amount": frontend_discount_amount})
+		doc_payload["apply_discount_on"] = "Net Total"
+		doc_payload["discount_amount"] = frontend_discount_amount
+		payload_snapshot.append({
+			"discount_source": discount_policy["discount_source"],
+			"discount_amount": frontend_discount_amount,
+			"group_discount_amount": discount_policy["group_discount"],
+			"coach_discount_amount": discount_policy["coach_discount"],
+			"coupon": applied_coupon_code if discount_policy["discount_source"] == "coupon" else "",
+			"coach_customer": coach_terms.get("coach") or "",
+		})
 				
 	# Apply Service Charge & Taxes & Tip
 	doc_payload["taxes"] = []
@@ -5841,8 +5928,8 @@ def _create_sales_order(
 	if _has_column("Sales Order", "restaurant_payload_json"):
 		so_doc.db_set("restaurant_payload_json", frappe.as_json(payload_snapshot))
 
-	if frontend_discount_amount > 0 and coupon.get("name"):
-		_mark_coupon_used(coupon.get("name"))
+	if discount_policy["discount_source"] == "coupon" and server_coupon.get("name"):
+		_mark_coupon_used(server_coupon.get("name"))
 
 	so_doc.submit()
 	so_doc.db_set("customer_name", customer_name, update_modified=False)
@@ -8912,7 +8999,18 @@ def _template_display_variants(template_doc, branch=None):
 		"restaurant_subcategory",
 		"restaurant_sort_order",
 		*_core_item_image_select_fields(),
+		*_available_item_nutrition_fields(),
 	]
+	for fieldname in (
+		"restaurant_nutrition_verified",
+		"restaurant_allergen_tags",
+		"restaurant_allergen_reviewed",
+		"restaurant_meal_slots",
+		"restaurant_ingredient_tags",
+		"restaurant_ingredients_reviewed",
+	):
+		if _has_column("Item", fieldname) and fieldname not in variant_fields:
+			variant_fields.append(fieldname)
 	if _has_column("Item", "restaurant_is_customizable"):
 		variant_fields.append("restaurant_is_customizable")
 
@@ -10865,7 +10963,7 @@ def _cart_item_branch_availability(line, branch):
 
 	normalized_slug = _normalize_slug(slug) or slug
 	filters = {"restaurant_slug": normalized_slug} if _has_column("Item", "restaurant_slug") else {"name": slug}
-	fields = ["name", "item_name", "disabled"]
+	fields = ["name", "item_code", "item_name", "disabled", "is_stock_item"]
 	for fieldname in ("restaurant_slug", "restaurant_enabled", "restaurant_branch", "restaurant_out_of_stock", "variant_of"):
 		if _has_column("Item", fieldname) and fieldname not in fields:
 			fields.append(fieldname)
@@ -10902,6 +11000,7 @@ def _cart_item_branch_availability(line, branch):
 	if not branch_matches:
 		return {"available": False, "reason": "not_in_branch"}
 
+	stock_shortage = False
 	for row in branch_matches:
 		if cint(row.get("disabled") or 0):
 			continue
@@ -10909,8 +11008,49 @@ def _cart_item_branch_availability(line, branch):
 			continue
 		if cint(row.get("restaurant_out_of_stock") or 0) or cint(row.get("_parent_out_of_stock") or 0):
 			continue
+		if cint(row.get("is_stock_item") or 0) and not _branch_stock_available(
+			row.get("item_code") or row.name, branch, flt(line.get("qty") or 1)
+		):
+			stock_shortage = True
+			continue
 		return {"available": True, "reason": ""}
-	return {"available": False, "reason": "out_of_stock"}
+	return {"available": False, "reason": "stock_shortage" if stock_shortage else "out_of_stock"}
+
+
+def _branch_stock_available(item_code, branch, qty):
+	"""Check stock items against mapped ERPNext warehouses for this branch."""
+	item_code = str(item_code or "").strip()
+	branch = str(branch or "").strip()
+	qty = max(flt(qty or 0), 0)
+	if not item_code or qty <= 0 or not frappe.db.exists("DocType", "Bin"):
+		return True
+	if not _has_column("Warehouse", "restaurant_branch"):
+		return True
+	warehouses = frappe.get_all(
+		"Warehouse",
+		filters={"restaurant_branch": branch, "is_group": 0, "disabled": 0},
+		pluck="name",
+		limit_page_length=0,
+		ignore_permissions=True,
+	)
+	# Keep the existing menu availability switch authoritative until a branch
+	# warehouse is mapped; an unconfigured inventory is not equivalent to zero.
+	if not warehouses:
+		return True
+	bins = frappe.get_all(
+		"Bin",
+		filters={"item_code": item_code, "warehouse": ["in", warehouses]},
+		fields=["actual_qty", "reserved_qty", "reserved_qty_for_production"],
+		limit_page_length=0,
+		ignore_permissions=True,
+	)
+	available = sum(
+		flt(row.get("actual_qty") or 0)
+		- flt(row.get("reserved_qty") or 0)
+		- flt(row.get("reserved_qty_for_production") or 0)
+		for row in bins
+	)
+	return available + 1e-8 >= qty
 
 
 def _check_cart_branch_availability(items, branch):
@@ -11419,46 +11559,7 @@ def _resolve_review_item(item_slug="", item=""):
 
 @frappe.whitelist(allow_guest=True)
 def submit_review(payload=None, **kwargs):
-	if not _restaurant_doctype_exists("Restaurant Customer Review"):
-		frappe.throw(_("Restaurant Customer Review doctype is not installed."))
-	data = _parse_json(payload, {}) if payload is not None else {}
-	if not isinstance(data, dict):
-		data = {}
-	data.update({k: v for k, v in kwargs.items() if v is not None})
-
-	customer_name = (data.get("customer_name") or data.get("name") or "").strip()
-	if not customer_name:
-		frappe.throw(_("Customer name is required."))
-	mobile = _ensure_mobile(data.get("mobile") or data.get("phone"))
-	rating = flt(data.get("rating") or 0)
-	if rating < 1 or rating > 5:
-		frappe.throw(_("Rating must be between 1 and 5."))
-	item_slug = _normalize_slug(data.get("item_slug") or data.get("slug") or "")
-	item_name = _resolve_review_item(item_slug=item_slug, item=data.get("item"))
-	order_code = (data.get("order_code") or "").strip()
-	sales_order = _resolve_sales_order_name(order_code) if order_code else ""
-
-	doc = frappe.get_doc(
-		{
-			"doctype": "Restaurant Customer Review",
-			"customer_name": customer_name,
-			"mobile": mobile,
-			"item": item_name,
-			"item_slug": item_slug,
-			"sales_order": sales_order,
-			"order_code": order_code,
-			"rating": rating,
-			"title": data.get("title") or "",
-			"comment": data.get("comment") or "",
-			"is_approved": cint(data.get("is_approved") if data.get("is_approved") not in (None, "") else 0),
-		}
-	)
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
-	return {
-		"success": True,
-		"review": {"name": doc.name, "rating": rating, "is_approved": cint(doc.is_approved)},
-	}
+	frappe.throw(_("نظر محصول فقط از فرم نظرسنجی سفارش دریافت‌شده ثبت می‌شود."), frappe.PermissionError)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -11473,32 +11574,49 @@ def get_item_reviews(item_slug=None, item=None, page=1, page_size=20):
 		filters["item_slug"] = _normalize_slug(item_slug)
 	page = max(cint(page), 1)
 	page_size = min(max(cint(page_size), 1), MAX_PAGE_SIZE)
+	review_fields = ["name", "customer_name", "rating", "title", "comment", "creation"]
+	if _has_column("Restaurant Customer Review", "score_10"):
+		review_fields.append("score_10")
+	if _has_column("Restaurant Customer Review", "strengths_json"):
+		review_fields.extend(["strengths_json", "weaknesses_json", "manager_reply"])
 	rows = frappe.get_all(
 		"Restaurant Customer Review",
 		filters=filters,
-		fields=["name", "customer_name", "rating", "title", "comment", "creation"],
+		fields=review_fields,
 		order_by="creation desc",
 		start=(page - 1) * page_size,
 		limit_page_length=page_size,
 		ignore_permissions=True,
 	)
-	all_ratings = frappe.get_all(
-		"Restaurant Customer Review",
-		filters=filters,
-		fields=["rating"],
-		limit_page_length=1000,
-		ignore_permissions=True,
+	where = "is_approved=1"
+	params = []
+	if item_name:
+		where += " AND item=%s"
+		params.append(item_name)
+	elif item_slug:
+		where += " AND item_slug=%s"
+		params.append(_normalize_slug(item_slug))
+	if _has_column("Restaurant Customer Review", "score_10"):
+		score_expr = "AVG(CASE WHEN COALESCE(score_10,0) > 0 THEN score_10 ELSE rating * 2 END)"
+	else:
+		score_expr = "AVG(rating * 2)"
+	stats = frappe.db.sql(
+		f"SELECT COUNT(*) AS count, {score_expr} AS average FROM `tabRestaurant Customer Review` WHERE {where}",
+		params, as_dict=True,
 	)
-	count = len(all_ratings)
-	average = flt(sum(flt(r.get("rating") or 0) for r in all_ratings) / count) if count else 0
+	count = cint(stats[0].get("count")) if stats else 0
+	average = flt(stats[0].get("average"), 1) if stats else 0
 	return {
 		"reviews": [
 			{
 				"name": row.name,
 				"customer_name": row.customer_name,
-				"rating": flt(row.rating),
+				"rating": cint(row.get("score_10") or flt(row.rating) * 2),
 				"title": row.title,
 				"comment": row.comment,
+				"strengths": _parse_json(row.get("strengths_json"), []) if row.get("strengths_json") else [],
+				"weaknesses": _parse_json(row.get("weaknesses_json"), []) if row.get("weaknesses_json") else [],
+				"manager_reply": row.get("manager_reply") or "",
 				"created_at": str(row.creation),
 			}
 			for row in rows
@@ -11605,6 +11723,17 @@ def get_customer_checkout_profile(mobile=None, customer_name=None, customer_toke
 			resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
 		addresses = _list_customer_delivery_addresses(customer_docname)
 		vehicles = _list_customer_vehicles(customer_name=customer_docname)
+	coach_discount_percent = 0.0
+	group_discount_percent = 0.0
+	if customer_docname:
+		try:
+			from restaurant.api_club import _club_customer_group_discount_percent, _club_partner_order_terms
+
+			coach_discount_percent = flt(_club_partner_order_terms(customer_docname, 100).get("discount_percent") or 0)
+			group_discount_percent = _club_customer_group_discount_percent(customer_docname)
+		except Exception:
+			coach_discount_percent = 0.0
+			group_discount_percent = 0.0
 
 	return {
 		"customer": {
@@ -11615,6 +11744,8 @@ def get_customer_checkout_profile(mobile=None, customer_name=None, customer_toke
 		},
 		"addresses": addresses,
 		"vehicles": vehicles,
+		"coach_discount_percent": coach_discount_percent,
+		"group_discount_percent": group_discount_percent,
 	}
 
 
@@ -11725,6 +11856,7 @@ def place_order(
 	totals=None,
 	commit=True,
 	secondary_customer="",
+	customer_token=None,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -11738,6 +11870,8 @@ def place_order(
 		frappe.throw(_("Customer name is required."))
 
 	mobile = _ensure_mobile(customer_info.get("mobile") or customer_info.get("phone"))
+	customer_identity = _customer_session_identity(customer_token, mobile=mobile) if customer_token else None
+	coach_referral_customer = (customer_identity or {}).get("customer") or ""
 	note = (note or "").strip()
 	include_service_items = cint(include_service_items)
 	coupon_code = (coupon_code or "").strip()
@@ -11847,6 +11981,7 @@ def place_order(
 		totals=totals,
 		commit=commit,
 		secondary_customer=(secondary_customer or "").strip(),
+		coach_referral_customer=coach_referral_customer,
 	)
 
 
@@ -20881,6 +21016,7 @@ def _serialize_management_courier_vehicle(row, courier_map=None):
 		"title": (row.get("title") or "").strip(),
 		"courier": courier_name,
 		"courier_label": (courier_row.get("courier_name") or courier_name).strip(),
+		"fleet_vehicle": (row.get("fleet_vehicle") or "").strip(),
 		"vehicle_type": (row.get("vehicle_type") or "").strip(),
 		"plate_number": (row.get("plate_number") or "").strip(),
 		"is_primary": cint(row.get("is_primary") or 0),
@@ -21068,19 +21204,22 @@ def list_management_courier_vehicles(search=None, courier=None, active_only=None
 			"plate_number": ["like", f"%{search_text}%"],
 			"vehicle_type": ["like", f"%{search_text}%"],
 		}
+	vehicle_fields = [
+		"name",
+		"title",
+		"courier",
+		"vehicle_type",
+		"plate_number",
+		"is_primary",
+		"is_active",
+		"notes",
+		"modified",
+	]
+	if _has_column("Restaurant Courier Vehicle", "fleet_vehicle"):
+		vehicle_fields.insert(3, "fleet_vehicle")
 	rows = frappe.get_all(
 		"Restaurant Courier Vehicle",
-		fields=[
-			"name",
-			"title",
-			"courier",
-			"vehicle_type",
-			"plate_number",
-			"is_primary",
-			"is_active",
-			"notes",
-			"modified",
-		],
+		fields=vehicle_fields,
 		filters=filters,
 		or_filters=or_filters,
 		order_by="is_primary desc, modified desc",
@@ -21111,10 +21250,31 @@ def save_management_courier_vehicle(payload=None):
 		doc = frappe.get_doc("Restaurant Courier Vehicle", docname)
 	else:
 		doc = frappe.new_doc("Restaurant Courier Vehicle")
-	for fieldname in ("courier", "title", "vehicle_type", "plate_number", "is_primary", "is_active", "notes"):
+	for fieldname in ("courier", "fleet_vehicle", "title", "vehicle_type", "plate_number", "is_primary", "is_active", "notes"):
 		if fieldname in data:
+			if fieldname == "fleet_vehicle" and not _has_column("Restaurant Courier Vehicle", "fleet_vehicle"):
+				frappe.throw(_("پیوند به ناوگان ERPNext هنوز با migrate فعال نشده است."))
 			doc.set(fieldname, data.get(fieldname))
+	if doc.get("fleet_vehicle"):
+		vehicle = frappe.db.get_value(
+			"Vehicle", doc.fleet_vehicle, ["license_plate", "make", "model"], as_dict=True
+		)
+		if not vehicle:
+			frappe.throw(_("خودروی انتخاب‌شده در ناوگان ERPNext پیدا نشد."), frappe.DoesNotExistError)
+		if not (vehicle.get("license_plate") or "").strip():
+			frappe.throw(_("برای خودروی انتخاب‌شده در ناوگان، پلاک ثبت نشده است."))
+		doc.plate_number = vehicle.license_plate.strip()
+		doc.vehicle_type = doc.vehicle_type or " ".join(
+			part for part in (vehicle.get("make"), vehicle.get("model")) if part
+		) or "Fleet Vehicle"
 	doc.save(ignore_permissions=True)
+	if cint(doc.is_primary) and frappe.db.exists("Restaurant Courier", doc.courier):
+		frappe.db.set_value(
+			"Restaurant Courier",
+			doc.courier,
+			{"vehicle_type": doc.vehicle_type, "plate_number": doc.plate_number},
+			update_modified=False,
+		)
 	frappe.db.commit()
 	return {
 		"status": "success",
@@ -22518,6 +22678,13 @@ def _set_table_order_status(order_name, target_status, allowed_from):
 	order_doc.status = target_status
 	order_doc.save(ignore_permissions=True)
 	_refresh_session_total_confirmed_amount(order_doc.session)
+	if target_status == "paid":
+		try:
+			from restaurant.api_survey import queue_table_order_survey_invitation
+
+			queue_table_order_survey_invitation(order_doc.name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Restaurant table survey invitation hook failed")
 	return order_doc
 
 
@@ -26453,6 +26620,7 @@ def get_management_csrf_token():
 from restaurant.api_feature_pack import *  # noqa: F401,F403,E402
 from restaurant.api_inventory import *  # noqa: F401,F403,E402
 from restaurant.api_club import *  # noqa: F401,F403,E402
+from restaurant.api_survey import *  # noqa: F401,F403,E402
 from restaurant.api_ops import *  # noqa: F401,F403,E402
 from restaurant.api_menueng import *  # noqa: F401,F403,E402
 from restaurant.api_reserve import *  # noqa: F401,F403,E402
@@ -26462,3 +26630,5 @@ from restaurant.api_callcenter import *  # noqa: F401,F403,E402
 from restaurant.api_kiosk import *  # noqa: F401,F403,E402
 from restaurant.api_accounting import *  # noqa: F401,F403,E402
 from restaurant.api_org import *  # noqa: F401,F403,E402
+from restaurant.api_collaboration import *  # noqa: F401,F403,E402
+from restaurant.api_recurring import *  # noqa: F401,F403,E402

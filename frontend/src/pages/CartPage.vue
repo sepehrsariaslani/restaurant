@@ -68,6 +68,7 @@
           <a class="checkout-btn" :class="{ disabled: !cartState.lines.length }" href="/checkout" @click.prevent="openCheckout">
             {{ checkingCheckout ? 'در حال بررسی شعبه…' : hasContext ? 'ادامه سفارش' : 'انتخاب روش دریافت' }}
           </a>
+          <a v-if="hasContext" class="repeat-order-link" :href="recurringOrdersHref"><CalendarClock :size="17" /> تنظیم تکرار همین سفارش</a>
           <p class="error" v-if="error">{{ error }}</p>
           </section>
         </div>
@@ -92,7 +93,7 @@
 </template>
 
 <script setup>
-import { ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-vue-next'
+import { CalendarClock, ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import CartLineEditor from '@/components/CartLineEditor.vue'
 import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
@@ -104,6 +105,7 @@ import { orderContextIssue } from '@/utils/customerOrderValidation'
 import { buildEditedCartLine } from '@/utils/cartEditPayload'
 import { calculateOrderTotals, orderContextChangeUrl, ORDER_FLOW_CURRENCY_FALLBACK } from '@/utils/orderFlow'
 import { useBranchCartAvailability } from '@/composables/useBranchCartAvailability'
+import { customerAccountHref } from '@/utils/customerAuth'
 
 const currency = ref(ORDER_FLOW_CURRENCY_FALLBACK)
 const error = ref('')
@@ -120,6 +122,7 @@ const {
 
 const totalQty = computed(() => cartState.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0))
 const hasContext = computed(() => Boolean(cartState.orderContext?.order_type))
+const recurringOrdersHref = customerAccountHref('/customer/recurring-orders')
 const activeLine = computed(() => getLineById(activeLineId.value) || null)
 const editorItem = computed(() => activeLine.value ? {
   slug: activeLine.value.item_slug,
@@ -380,6 +383,20 @@ onMounted(async () => {
 .checkout-btn {
   width: 100%;
   margin-top: 0.55rem;
+}
+
+.repeat-order-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 44px;
+  margin-top: .35rem;
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-color-action-primary);
+  font-size: .83rem;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .checkout-btn.disabled {

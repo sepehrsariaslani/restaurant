@@ -128,6 +128,7 @@ import BranchMapPicker from '@/components/checkout/BranchMapPicker.vue'
 import { vehicleComplete } from '@/utils/customerOrderValidation'
 import OrderContextSummary from '@/components/OrderContextSummary.vue'
 import { cartState, saveOrderContext } from '@/stores/cartStore'
+import { consumeNutritionScheduleReturn } from '@/utils/orderFlow'
 import { isCustomerPickupCompany, resolvePickupCompanySelection } from '@/utils/orderBranches'
 import { getBranches, getMenuBoot } from '@/utils/api'
 import { useBranchCartAvailability } from '@/composables/useBranchCartAvailability'
@@ -219,7 +220,7 @@ function continueToMenu() {
   if (!canContinue.value) return
   persistPickup()
   if (hasCartLines.value) {
-    window.location.href = '/checkout'
+    window.location.href = consumeNutritionScheduleReturn() || '/checkout'
     return
   }
   window.location.href = `/menu?branch=${encodeURIComponent(branchKey(selectedBranch.value))}`

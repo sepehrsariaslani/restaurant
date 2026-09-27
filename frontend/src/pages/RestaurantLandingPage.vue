@@ -28,6 +28,7 @@
         <a v-if="cartCount" class="home-shortcuts__cart" href="/cart">سبد من <span>{{ cartCount.toLocaleString('fa-IR') }}</span></a>
       </div>
       <HomePageRenderer :boot="boot" :page="page" @quick-add="quickAdd" />
+      <BlogHighlights v-if="!previewMode" />
     </div>
 
     <CartActionFeedback :message="toastMessage" />
@@ -69,6 +70,7 @@ import MenuQuickAddSheet from '@/components/MenuQuickAddSheet.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteFooterMinimal from '@/components/SiteFooterMinimal.vue'
 import HomePageRenderer from '@/components/blocks/HomePageRenderer.vue'
+import BlogHighlights from '@/components/blog/BlogHighlights.vue'
 import { resolveBranding, resolveSiteComponents } from '@/utils/siteComponents'
 import { useSearchModal } from '@/composables/useSearchModal'
 const { openSearch } = useSearchModal()

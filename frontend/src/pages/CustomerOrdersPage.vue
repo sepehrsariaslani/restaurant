@@ -42,12 +42,13 @@
       <p v-else-if="error" class="state customer-danger-text">{{ error }}</p>
 
       <section v-else-if="orders.length" class="customer-stack">
-        <a
+        <p v-if="surveyActionError" class="state customer-danger-text" role="alert">{{ surveyActionError }}</p>
+        <article
           v-for="order in orders"
           :key="order.order_code || order.name"
           class="order-card customer-glass-card"
-          :href="orderDetailUrl(order)"
         >
+          <a class="order-card__main" :href="orderDetailUrl(order)">
           <div class="order-card__top">
             <div>
               <small>کد سفارش</small>
@@ -77,7 +78,13 @@
             <span>{{ order.channel || order.delivery_mode || 'آنلاین' }}</span>
             <span class="order-card__more">مشاهده جزئیات <ChevronLeft :size="16" /></span>
           </div>
-        </a>
+          </a>
+          <CustomerOrderSurveySummary
+            :summary="surveySummaries[order.name || order.order_code]"
+            :requesting="requestingOrder === String(order.name || order.order_code || '')"
+            @request="requestSurvey(order)"
+          />
+        </article>
       </section>
 
       <section v-else class="customer-glass-card customer-empty">
@@ -94,13 +101,17 @@
 import { computed, onMounted, ref } from 'vue'
 import { CalendarDays, ChevronLeft, ReceiptText, RefreshCcw } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
-import { getCustomerOrders } from '@/utils/api'
+import CustomerOrderSurveySummary from '@/components/customer/CustomerOrderSurveySummary.vue'
+import { getCustomerOrders, getMyOrderSurveySummaries, requestMyOrderSurvey } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const loading = ref(false)
 const error = ref('')
 const orders = ref([])
+const surveySummaries = ref({})
+const requestingOrder = ref('')
+const surveyActionError = ref('')
 const currency = ref('TOMAN')
 const auth = ref(readAuth())
 
@@ -144,10 +155,35 @@ async function loadOrders() {
     const data = await getCustomerOrders({ mobile: mobile.value, limit: 50, start: 0 })
     orders.value = Array.isArray(data?.orders) ? data.orders : Array.isArray(data) ? data : []
     if (data?.currency) currency.value = data.currency
+    surveySummaries.value = {}
+    const orderNames = orders.value.map((order) => String(order.name || '')).filter(Boolean)
+    if (orderNames.length) {
+      try {
+        const surveyData = await getMyOrderSurveySummaries(orderNames)
+        surveySummaries.value = surveyData?.summaries || {}
+      } catch (_) {
+        // Order history remains usable if survey summary data is temporarily unavailable.
+      }
+    }
   } catch (err) {
     error.value = err?.message || 'دریافت تاریخچه سفارش‌ها ناموفق بود.'
   } finally {
     loading.value = false
+  }
+}
+
+async function requestSurvey(order) {
+  const orderName = String(order?.name || order?.order_code || '')
+  if (!orderName || requestingOrder.value) return
+  requestingOrder.value = orderName
+  surveyActionError.value = ''
+  try {
+    const result = await requestMyOrderSurvey(orderName)
+    if (result?.href) window.location.assign(result.href)
+  } catch (err) {
+    surveyActionError.value = err?.message || 'آماده‌سازی فرم نظرخواهی انجام نشد.'
+  } finally {
+    requestingOrder.value = ''
   }
 }
 
@@ -228,6 +264,9 @@ onMounted(() => {
   text-decoration: none;
   border-color: color-mix(in srgb, var(--ds-color-action-accent) 24%, var(--ds-color-border));
 }
+
+.order-card__main { display: block; color: inherit; text-decoration: none; }
+.order-card__main:focus-visible { outline: 3px solid var(--ds-color-focus-ring); outline-offset: 3px; border-radius: var(--ds-radius-md); }
 
 .order-card__top,
 .order-card__meta,
@@ -366,4 +405,6 @@ onMounted(() => {
 .empty-cta {
   display: inline-flex;
 }
+
+.order-card { display: grid; gap: .85rem; }
 </style>

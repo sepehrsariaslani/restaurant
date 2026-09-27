@@ -7,6 +7,8 @@
  "engine": "InnoDB",
  "field_order": [
   "customer",
+  "reference_doctype",
+  "reference_name",
   "mobile",
   "kind",
   "template_key",
@@ -24,6 +26,17 @@
    "options": "Customer"
   },
   {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Select",
+   "label": "Reference Type",
+   "options": "\nRestaurant Survey Invitation\nSales Order\nRestaurant Table Order"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "label": "Reference Name"
+  },
+  {
    "fieldname": "mobile",
    "fieldtype": "Data",
    "label": "Mobile",
@@ -34,7 +47,7 @@
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
-   "options": "دستی\nانبوه\nتبریک تولد\nخوش‌آمدگویی\nیادآوری خرید\nکمپین",
+  "options": "دستی\nانبوه\nتبریک تولد\nخوش‌آمدگویی\nیادآوری خرید\nکمپین\nنظرسنجی سفارش",
    "reqd": 1,
    "in_list_view": 1
   },

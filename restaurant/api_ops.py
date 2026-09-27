@@ -37,6 +37,7 @@ __all__ = [
 	"delete_management_delivery_zone",
 	"check_management_delivery_point",
 	# courier assignment & app
+	"list_management_delivery_orders",
 	"assign_management_order_courier",
 	"courier_app_login",
 	"courier_app_deliveries",
@@ -334,6 +335,35 @@ def _ops_customer_mobile(customer_name):
 			if value:
 				return (value or "").strip()
 	return ""
+
+
+@frappe.whitelist()
+def list_management_delivery_orders(search="", limit=100):
+	"""List open native Sales Orders for courier assignment."""
+	_ensure_management_access()
+	if not frappe.has_permission("Sales Order", "read"):
+		frappe.throw(_("اجازهٔ مشاهده سفارش‌های فروش را ندارید."), frappe.PermissionError)
+	limit = min(max(cint(limit) or 100, 1), 250)
+	filters = {"docstatus": 1, "status": ["not in", ["Completed", "Closed", "Cancelled"]]}
+	if _has_column("Sales Order", "per_delivered"):
+		filters["per_delivered"] = ["<", 100]
+	fields = ["name", "customer", "customer_name", "transaction_date", "delivery_date", "status", "grand_total"]
+	for fieldname in ("per_delivered", "restaurant_status", "restaurant_order_type", "restaurant_courier"):
+		if _has_column("Sales Order", fieldname):
+			fields.append(fieldname)
+	search_text = str(search or "").strip()
+	or_filters = None
+	if search_text:
+		or_filters = [[fieldname, "like", f"%{search_text}%"] for fieldname in ("name", "customer_name", "customer")]
+	rows = frappe.get_list(
+		"Sales Order",
+		filters=filters,
+		or_filters=or_filters,
+		fields=fields,
+		order_by="transaction_date desc, modified desc",
+		limit_page_length=limit,
+	)
+	return {"orders": rows, "count": len(rows)}
 
 
 @frappe.whitelist()

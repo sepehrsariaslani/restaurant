@@ -52,6 +52,8 @@
       <ManagementInventoryCostsPage v-else-if="page === 'management-inventory-costs'" />
       <ManagementInventoryPage v-else-if="page === 'management-inventory'" />
       <ManagementClubPage v-else-if="page === 'management-club'" />
+      <ManagementCollaborationRequestsPage v-else-if="page === 'management-collaboration-requests'" />
+      <ManagementCoachesPage v-else-if="page === 'management-coaches'" />
       <ManagementSurveysPage v-else-if="page === 'management-surveys'" />
       <ManagementCostControlPage v-else-if="page === 'management-cost-control'" />
       <ManagementReservationsPage v-else-if="page === 'management-reservations'" />
@@ -60,6 +62,7 @@
       <ManagementAccountingPage v-else-if="page === 'management-accounting'" />
       <ManagementHelpPage v-else-if="page === 'management-help'" />
       <ManagementPrintFormatsPage v-else-if="page === 'management-print-formats'" />
+      <ManagementBlogPage v-else-if="page === 'management-blog'" />
       <ManagementSettingsHubPage v-else-if="page === 'management-settings'" />
       <ManagementZarinpalSettingsPage v-else-if="page === 'management-zarinpal-settings'" />
       <ManagementSnappfoodPage v-else-if="page === 'management-snappfood'" />
@@ -70,7 +73,7 @@
 
   <div class="app-layout" :class="`page-${page}`" v-else>
     <div
-      v-if="page !== 'landing' && page !== 'homev2' && !isCustomerPage && page !== 'checkout' && page !== 'payment-fail' && page !== 'not-found' && page !== 'kitchen'"
+      v-if="page !== 'landing' && page !== 'homev2' && !isCustomerPage && page !== 'checkout' && page !== 'payment-fail' && page !== 'not-found' && page !== 'kitchen' && page !== 'survey'"
       class="desktop-public-header"
     >
       <PublicHeader
@@ -89,6 +92,8 @@
     >
       <PublicPageLayoutSlot v-if="publicPageLayoutKey" :page="publicPageLayoutKey" :boot="boot" />
       <RestaurantLandingPage v-if="page === 'landing' || page === 'homev2'" :boot="boot" :page="page" />
+      <BlogIndexPage v-else-if="page === 'blog'" :boot="boot" />
+      <BlogPostPage v-else-if="page === 'blog-post'" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
       <FaqPage v-else-if="page === 'faq'" :boot="boot" />
       <MenuPage v-else-if="page === 'menu'" :boot="boot" />
@@ -106,7 +111,11 @@
       <OrderPickupPage v-else-if="page === 'order-pickup'" />
       <OrderDeliveryPage v-else-if="page === 'order-delivery'" />
       <CustomerLoginPage v-else-if="page === 'customer-login'" :boot="boot" />
+      <OrderSurveyPage v-else-if="page === 'survey'" />
       <CustomerDashboardPage v-else-if="page === 'customer-dashboard'" />
+      <CustomerReferralPage v-else-if="page === 'customer-referrals'" />
+      <CustomerCollaborationPage v-else-if="page === 'customer-collaboration'" />
+      <CustomerRecurringOrdersPage v-else-if="page === 'customer-recurring-orders'" />
       <CustomerNutritionPlanPage v-else-if="page === 'customer-nutrition'" />
       <CustomerProfilePage v-else-if="page === 'customer-profile'" />
       <CustomerVehiclesPage v-else-if="page === 'customer-vehicles'" />
@@ -143,13 +152,13 @@
     />
 
     <MobileBottomNav
-      v-if="page !== 'kitchen'"
+      v-if="page !== 'kitchen' && page !== 'survey'"
       :page="page"
       :cart-count="cartCount"
       :has-last-order="hasLastOrder"
       :last-order-url="lastOrderUrl"
     />
-    <PwaInstallPrompt />
+    <PwaInstallPrompt v-if="page !== 'survey'" />
   </div>
 
   <SiteLoaderOverlay v-if="!isManagement && !isCustomerPage && !isFullscreenPage" :settings="loaderSettings" />
@@ -165,6 +174,9 @@ import SiteFooter from './components/SiteFooter.vue'
 import SiteFooterMinimal from './components/SiteFooterMinimal.vue'
 import PublicPageLayoutSlot from './components/blocks/PublicPageLayoutSlot.vue'
 import RestaurantLandingPage from './pages/RestaurantLandingPage.vue'
+import BlogIndexPage from './pages/BlogIndexPage.vue'
+import BlogPostPage from './pages/BlogPostPage.vue'
+import ManagementBlogPage from './pages/management/content/ManagementBlogPage.vue'
 import AboutUsPage from './pages/AboutUsPage.vue'
 import FaqPage from './pages/FaqPage.vue'
 import MenuPage from './pages/MenuPage.vue'
@@ -183,7 +195,11 @@ import OrderDineInPage from './pages/OrderDineInPage.vue'
 import OrderPickupPage from './pages/OrderPickupPage.vue'
 import OrderDeliveryPage from './pages/OrderDeliveryPage.vue'
 import CustomerLoginPage from './pages/CustomerLoginPage.vue'
+import OrderSurveyPage from './pages/OrderSurveyPage.vue'
 import CustomerDashboardPage from './pages/CustomerDashboardPage.vue'
+import CustomerReferralPage from './pages/CustomerReferralPage.vue'
+import CustomerCollaborationPage from './pages/CustomerCollaborationPage.vue'
+import CustomerRecurringOrdersPage from './pages/CustomerRecurringOrdersPage.vue'
 import CustomerNutritionPlanPage from './pages/CustomerNutritionPlanPage.vue'
 import CustomerProfilePage from './pages/CustomerProfilePage.vue'
 import CustomerVehiclesPage from './pages/CustomerVehiclesPage.vue'
@@ -251,6 +267,8 @@ import ManagementInventoryCountPage from './pages/management/inventory/Managemen
 import ManagementInventoryCountDetailPage from './pages/management/inventory/ManagementInventoryCountDetailPage.vue'
 import ManagementInventoryCostsPage from './pages/management/inventory/ManagementInventoryCostsPage.vue'
 import ManagementClubPage from './pages/management/customers/ManagementClubPage.vue'
+import ManagementCollaborationRequestsPage from './pages/management/customers/ManagementCollaborationRequestsPage.vue'
+import ManagementCoachesPage from './pages/management/customers/ManagementCoachesPage.vue'
 import ManagementSurveysPage from './pages/management/customers/ManagementSurveysPage.vue'
 import ManagementCostControlPage from './pages/management/finance/ManagementCostControlPage.vue'
 import ManagementReservationsPage from './pages/management/customers/ManagementReservationsPage.vue'
@@ -332,6 +350,8 @@ function resolveInitialPage() {
     if (pathname === '/management/inventory' || pathname === '/management/inventory/') return 'management-inventory-dashboard'
     if (pathname.startsWith('/management/inventory')) return 'management-inventory'
     if (pathname.startsWith('/management/club')) return 'management-club'
+    if (pathname.startsWith('/management/cooperation-requests')) return 'management-collaboration-requests'
+    if (pathname.startsWith('/management/coaches')) return 'management-coaches'
   if (pathname.startsWith('/management/surveys')) return 'management-surveys'
   if (pathname.startsWith('/management/cost-control')) return 'management-cost-control'
   if (pathname.startsWith('/management/reservations')) return 'management-reservations'
@@ -350,6 +370,8 @@ function resolveInitialPage() {
 
     if (pathname === '/' || pathname === '') return 'landing'
     if (pathname === '/homev2' || pathname === '/homev2/') return 'homev2'
+    if (pathname === '/blog' || pathname === '/blog/') return 'blog'
+    if (pathname.startsWith('/blog/')) return 'blog-post'
     if (pathname.startsWith('/product-groups') || pathname.startsWith('/product_groups') || pathname.startsWith('/groups')) return 'product-groups'
     if (pathname.startsWith('/menu')) return 'menu'
     if (pathname.startsWith('/search')) return 'menu'
@@ -365,13 +387,18 @@ function resolveInitialPage() {
     if (pathname.startsWith('/order/delivery')) return 'order-delivery'
     if (pathname.startsWith('/customize/')) return 'customize'
     if (pathname.startsWith('/customer/login')) return 'customer-login'
+    if (pathname === '/survey' || pathname.startsWith('/survey/')) return 'survey'
     if (pathname.startsWith('/customer/dashboard')) return 'customer-dashboard'
+    if (pathname.startsWith('/customer/referrals')) return 'customer-referrals'
+    if (pathname.startsWith('/customer/cooperation')) return 'customer-collaboration'
+    if (pathname.startsWith('/customer/recurring-orders')) return 'customer-recurring-orders'
     if (pathname.startsWith('/customer/nutrition')) return 'customer-nutrition'
     if (pathname.startsWith('/customer/profile')) return 'customer-profile'
     if (pathname.startsWith('/customer/vehicles')) return 'customer-vehicles'
     if (pathname.startsWith('/customer/wallet')) return 'customer-wallet'
     if (pathname.startsWith('/customer/addresses')) return 'customer-addresses'
     if (pathname.startsWith('/customer/branches')) return 'customer-branches'
+    if (pathname.startsWith('/cooperation')) return 'customer-collaboration'
     if (pathname.startsWith('/customer/orders/')) return 'customer-order-detail'
     if (pathname.startsWith('/customer/orders')) return 'customer-orders'
     if (pathname.startsWith('/delivery')) {
@@ -443,7 +470,7 @@ const hasLastOrder = computed(() => Boolean(cartState.lastOrder?.order_code && c
 const isOrderFlowPage = page.startsWith('order-') && page !== 'order-success'
 const isCustomerPage = page.startsWith('customer-') || page === 'customer-delivery' || page === 'customer-table-reservation' || page === 'customer-table-select'
 
-const isFullscreenPage = page === 'checkout' || isOrderFlowPage || page === 'payment-fail' || page === 'not-found' || page === 'kitchen'
+const isFullscreenPage = page === 'checkout' || isOrderFlowPage || page === 'payment-fail' || page === 'not-found' || page === 'kitchen' || page === 'survey'
 
 const useNoHeaderOffset = computed(() => {
   return page === 'landing' || page === 'homev2' || isCustomerPage || isFullscreenPage

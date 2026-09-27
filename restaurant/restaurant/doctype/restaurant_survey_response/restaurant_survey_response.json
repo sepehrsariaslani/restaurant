@@ -6,17 +6,23 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "invitation",
+  "source_key",
   "order_code",
   "sales_order",
+  "table_order",
   "customer",
   "mobile",
   "overall_rating",
+  "service_rating",
   "answers_json",
   "comment",
   "dissatisfaction_alerted",
   "entry_date"
  ],
  "fields": [
+  {"fieldname": "invitation", "fieldtype": "Link", "label": "دعوت نظرسنجی", "options": "Restaurant Survey Invitation", "read_only": 1},
+  {"fieldname": "source_key", "fieldtype": "Data", "label": "کلید سفارش", "unique": 1, "read_only": 1},
   {
    "fieldname": "order_code",
    "fieldtype": "Data",
@@ -30,6 +36,7 @@
    "options": "Sales Order",
    "in_list_view": 1
   },
+  {"fieldname": "table_order", "fieldtype": "Link", "label": "سفارش میز", "options": "Restaurant Table Order"},
   {
    "fieldname": "customer",
    "fieldtype": "Link",
@@ -48,6 +55,7 @@
    "default": "0",
    "in_list_view": 1
   },
+  {"fieldname": "service_rating", "fieldtype": "Int", "label": "امتیاز خدمت‌رسانی از ۱۰", "default": "0"},
   {
    "fieldname": "answers_json",
    "fieldtype": "Long Text",

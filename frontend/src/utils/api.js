@@ -1368,7 +1368,7 @@ export function saveCustomerVehicle({ customer_info = {}, vehicle_info = {} } = 
 }
 
 export function placeOrder(payload) {
-	return callRestaurantAPI("place_order", payload);
+	return callRestaurantAPI("place_order", { ...payload, customer_token: payload?.customer_token || customerEditToken() });
 }
 
 export function getOrder(order_code, mobile) {
@@ -3550,13 +3550,34 @@ export async function customerLoginPassword(identifier, password) {
 	return callMethodByPath("restaurant.customer_account.customer_login_password", { identifier, password });
 }
 
-export async function customerRegisterPassword({ customer_token = "", name = "", email = "", password = "" } = {}) {
+export async function customerRegisterPassword({ customer_token = "", name = "", email = "", password = "", referral_code = "" } = {}) {
 	return callMethodByPath("restaurant.customer_account.customer_register_password", {
 		customer_token,
 		name,
 		email,
 		password,
+		referral_code,
 	});
+}
+
+export async function customerRegisterWithEmail({ name = "", email = "", mobile = "", password = "", referral_code = "" } = {}) {
+	return callMethodByPath("restaurant.customer_account.customer_register_email", { name, email, mobile, password, referral_code });
+}
+
+export async function customerVerifyEmailRegistration(token = "") {
+	return callMethodByPath("restaurant.customer_account.customer_verify_email", { token });
+}
+
+export function getMyReferralProfile() {
+	return callRestaurantAPI("get_my_referral_profile", { customer_token: customerEditToken() });
+}
+
+export function setMyReferralCode(code = "") {
+	return callRestaurantAPI("set_my_referral_code", { customer_token: customerEditToken(), code });
+}
+
+export function bindMyCoachInvite(referral_code = "", customer_token = customerEditToken()) {
+	return callRestaurantAPI("bind_my_coach_invite", { customer_token, referral_code });
 }
 
 export async function customerLogout() {
@@ -3849,8 +3870,24 @@ export function getMyWallet() {
 	return callRestaurantAPI("get_my_wallet", { customer_token: customerEditToken() });
 }
 
+export function requestMyWalletCharge({ amount = 0, payment_reference = "", note = "" } = {}) {
+	return callRestaurantAPI("request_my_wallet_charge", { customer_token: customerEditToken(), amount, payment_reference, note });
+}
+
+export function submitMyWalletChargeReference({ request_name = "", payment_reference = "", note = "" } = {}) {
+	return callRestaurantAPI("submit_my_wallet_charge_reference", { customer_token: customerEditToken(), request_name, payment_reference, note });
+}
+
 export function requestMyWalletWithdrawal({ amount = 0, bank_iban = "", account_holder = "", note = "" } = {}) {
 	return callRestaurantAPI("request_my_wallet_withdrawal", { customer_token: customerEditToken(), amount, bank_iban, account_holder, note });
+}
+
+export function listManagementWalletChargeRequests({ status = "", limit = 100, offset = 0 } = {}) {
+	return callRestaurantAPI("list_management_wallet_charge_requests", { status, limit, offset });
+}
+
+export function reviewManagementWalletChargeRequest({ request_name = "", action = "", payment_reference = "", note = "" } = {}) {
+	return callRestaurantAPI("review_management_wallet_charge_request", { request_name, action, payment_reference, note });
 }
 
 export function getManagementReferralSummary() {
@@ -3885,8 +3922,56 @@ export function deleteManagementSurveyQuestion(name = "") {
 	return callRestaurantAPI("delete_management_survey_question", { name });
 }
 
+export function listManagementSurveyTargets() {
+	return callRestaurantAPI("list_management_survey_targets", {});
+}
+
 export function listManagementSurveyResponses({ date_from = "", date_to = "", search = "", min_rating = 0, max_rating = 0 } = {}) {
 	return callRestaurantAPI("list_management_survey_responses", { date_from, date_to, search, min_rating, max_rating });
+}
+
+export function getPublicSurvey(token = "") {
+	return callRestaurantAPI("get_public_survey", { token });
+}
+
+export function getMyOrderSurvey(invitation = "", { edit = false } = {}) {
+	return callRestaurantAPI("get_my_order_survey", { invitation_name: invitation, customer_token: customerEditToken(), edit: edit ? 1 : 0 });
+}
+
+export function getMyOrderSurveySummaries(order_names = []) {
+	return callRestaurantAPI("get_my_order_survey_summaries", { order_names, customer_token: customerEditToken() });
+}
+
+export function requestMyOrderSurvey(order_name = "") {
+	return callRestaurantAPI("request_my_order_survey", { order_name, customer_token: customerEditToken() });
+}
+
+export function getMySurveyInvitations() {
+	return callRestaurantAPI("get_my_survey_invitations", { customer_token: customerEditToken() });
+}
+
+export function submitPublicSurvey(payload = {}) {
+	return callRestaurantAPI("submit_public_survey", { payload: { ...payload, customer_token: payload?.customer_token || customerEditToken() } });
+}
+
+export function listMyCustomerReviews() {
+	return callRestaurantAPI("list_my_customer_reviews", { customer_token: customerEditToken() });
+}
+
+export function listManagementSurveyInvitations({ limit = 100 } = {}) {
+	return callRestaurantAPI("list_management_survey_invitations", { limit });
+}
+
+export function retryManagementSurveyInvitation(name = "") {
+	return callRestaurantAPI("retry_management_survey_invitation", { name });
+}
+
+export function listManagementCustomerReviews({ status = "", search = "", limit = 200 } = {}) {
+	return callRestaurantAPI("list_management_customer_reviews", { status, search, limit });
+}
+
+export function reviewManagementCustomerReview({ name = "", moderation_status = "", manager_reply = undefined } = {}) {
+	return callRestaurantAPI("review_management_customer_review", { name, moderation_status, manager_reply });
 }
 
 export function getManagementReportCustomerAnalytics({ date_from = "", date_to = "" } = {}) {
@@ -4108,6 +4193,63 @@ export function exportManagementOrgOrdersExcel({ organization = "", date_from = 
 export function createManagementOrgInvoice(payload = {}) {
 	return callRestaurantAPI("create_management_org_invoice", { payload });
 }
+
+export function submitPublicCollaborationRequest(payload = {}) {
+	return callRestaurantAPI("submit_public_collaboration_request", { payload });
+}
+
+export function listManagementCollaborationRequests({ status = "", limit = 100 } = {}) {
+	return callRestaurantAPI("list_management_collaboration_requests", { status, limit });
+}
+
+export function reviewManagementCollaborationRequest({ name, decision, note = "", coach_discount_percent = 5, coach_commission_percent = 5, customer_group = "", customer = "" } = {}) {
+	return callRestaurantAPI("review_management_collaboration_request", { name, decision, note, coach_discount_percent, coach_commission_percent, customer_group, customer });
+}
+
+export function listManagementCustomerGroups() {
+	return callRestaurantAPI("list_management_customer_groups");
+}
+
+export function saveManagementCustomerGroupDiscount({ customer_group = "", discount_percent = 0 } = {}) {
+	return callRestaurantAPI("save_management_customer_group_discount", { customer_group, discount_percent });
+}
+
+export function getManagementCoachWorkbench() {
+	return callRestaurantAPI("get_management_coach_workbench");
+}
+
+export function searchManagementCoachCustomers(search = "") {
+	return callRestaurantAPI("search_management_coach_customers", { search });
+}
+
+export function saveManagementCoachProfile({ coach = "", customer_group = "", discount_percent = 5, commission_percent = 5 } = {}) {
+	return callRestaurantAPI("save_management_coach_profile", { coach, customer_group, discount_percent, commission_percent });
+}
+
+export function assignManagementCoachStudent({ coach = "", mobile = "", email = "", reason = "" } = {}) {
+	return callRestaurantAPI("assign_management_coach_student", { coach, mobile, email, reason });
+}
+
+export function createMyRecurringOrder(payload = {}) {
+	return callRestaurantAPI("create_my_recurring_order", { customer_token: customerEditToken(), payload });
+}
+
+export function listMyRecurringOrders() {
+	return callRestaurantAPI("list_my_recurring_orders", { customer_token: customerEditToken() });
+}
+
+export function pauseMyRecurringOrder(name = "") {
+	return callRestaurantAPI("pause_my_recurring_order", { customer_token: customerEditToken(), name });
+}
+
+export function placeMyRecurringOrder(name = "", branch = "") {
+	return callRestaurantAPI("place_my_recurring_order", { customer_token: customerEditToken(), name, branch });
+}
+
+export function skipMyRecurringOrder(name = "") {
+	return callRestaurantAPI("skip_my_recurring_order", { customer_token: customerEditToken(), name });
+}
+
 export function getMyNutritionWorkspace(branch = "") {
 	return callMethodByPath("restaurant.api_meal_planning.get_my_nutrition_workspace", { customer_token: customerEditToken(), branch });
 }
@@ -4132,8 +4274,8 @@ export function deleteMyMealPlan(name = "") {
 	return callMethodByPath("restaurant.api_meal_planning.delete_my_meal_plan", { customer_token: customerEditToken(), name });
 }
 
-export function prepareMyMealPlanOrder(name = "", branch = "") {
-	return callMethodByPath("restaurant.api_meal_planning.prepare_my_meal_plan_order", { customer_token: customerEditToken(), name, branch });
+export function prepareMyMealPlanOrder(name = "", branch = "", forSchedule = false, orderNow = false) {
+	return callMethodByPath("restaurant.api_meal_planning.prepare_my_meal_plan_order", { customer_token: customerEditToken(), name, branch, for_schedule: forSchedule ? 1 : 0, order_now: orderNow ? 1 : 0 });
 }
 
 // ---------------------------------------------------------------------------
@@ -4265,4 +4407,28 @@ export function saveCustomerProfile({ name = '', email = '' } = {}) {
 }
 export function archiveCustomerAddress(address_id) {
   return callMethodByPath('restaurant.customer_account.archive_address', { customer_token: customerEditToken(), address_id })
+}
+
+
+// Restaurant blog: public reading and permission-checked editorial management.
+export function getPublicBlogPosts({ limit = 12, category } = {}) {
+	return callMethodByPathGET("restaurant.api_blog.get_public_blog_posts", { limit, category });
+}
+export function getPublicBlogPost({ route = "" } = {}) {
+	return callMethodByPathGET("restaurant.api_blog.get_public_blog_post", { route });
+}
+export function getManagementBlogPosts({ search = "" } = {}) {
+	return callMethodByPath("restaurant.api_blog.get_management_blog_posts", { search });
+}
+export function getManagementBlogPost({ name = "" } = {}) {
+	return callMethodByPath("restaurant.api_blog.get_management_blog_post", { name });
+}
+export function saveManagementBlogPost({ payload = {} } = {}) {
+	return callMethodByPath("restaurant.api_blog.save_management_blog_post", { payload: JSON.stringify(payload) });
+}
+export function deleteManagementBlogPost({ name = "" } = {}) {
+	return callMethodByPath("restaurant.api_blog.delete_management_blog_post", { name });
+}
+export function searchManagementBlogProducts({ query = "" } = {}) {
+	return callMethodByPath("restaurant.api_blog.search_management_blog_products", { query });
 }

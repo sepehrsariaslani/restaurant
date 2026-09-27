@@ -77,6 +77,8 @@
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |
 | کاربران و دسترسی | `/management/users` | ERPNext User/Role | native access surface با shell مشترک | مالکیت حفظ شده؛ بررسی دیداری بعدی |
 | باشگاه مشتریان | `/management/club` | Restaurant CRM روی Customer و اسناد فروش ERPNext | تب‌های مشتری، سازمان، کیف پول، صدای مشتری و کمپین با فهرست مشترک برای مشتریان | مشتری، سازمان، کیف پول، پیامک، صدا، معرف و کمپین تراز شده؛ browser smoke باقی است |
+| درخواست‌های همکاری | `/management/cooperation-requests` | درخواست همکاری Restaurant؛ تبدیل تأییدشده به ERPNext Customer | فهرست مشترک + جزئیات و گردش بررسی/تأیید/رد | intake عمومی و صف بررسی پیاده‌سازی شد؛ build و migration لازم و انجام‌نشده است |
+| سفارش‌های تکرارشونده مشتری | `/customer/recurring-orders` | Restaurant Recurring Order برای برنامه؛ ERPNext Sales Order برای هر نوبت | ساخت از سبد فعال، تناوب/روز/ساعت، توقف و ادامه، تأیید هر نوبت یا فاکتور ماهانهٔ قرارداد سازمانی | هر دو روش تسویه و اتصال به مسیر عادی ثبت سفارش پیاده‌سازی شد؛ build و migration لازم و انجام‌نشده است |
 | رزرواسیون | `/management/reservations` | Reservation و Table context رستوران | فیلتر تاریخ/جایگاه/وضعیت، فهرست واکنش‌گرا و فرم ایجاد/ویرایش با چرخه وضعیت | تراز شده در این مرحله؛ تست source و SFC موفق |
 | نظرسنجی | `/management/surveys` | Survey Question/Response رستوران | مدیریت سؤال و پاسخ با فیلتر بازه/امتیاز و هشدار نارضایتی در فهرست مشترک | تراز شده در این مرحله؛ تست source و SFC موفق |
 | شعب | `/management/branches` | Company/Customer و KPIهای شعب ERPNext | شاخص‌های شعب، فهرست واکنش‌گرا، ویرایش/فعال‌سازی و انتقال مشتری | تراز شده در این مرحله؛ تست source و SFC موفق |
@@ -256,6 +258,14 @@
 - restart سرویس‌های web/socketio/worker: موفق.
 - browser smoke احراز‌شده: مسیرهای اصلی تمام ماژول‌ها، aliasهای مستقیم، صفحات create/detail و گزارش‌های `sales-summary`، `menu-engineering`، `tax-reconciliation`، `branch-performance`، `vendor-sales` و `receipt-payment-balance` بدون 404 یا خطای runtime تأیید شدند.
 - Graphify/remote update: اجرا نشد؛ خارج از دامنهٔ این ممیزی باقی مانده است.
+
+
+## مجلهٔ مشتریان
+
+- `/blog` و `/blog/<route>` برای فهرست و جزئیات نوشته‌های منتشرشده به صفحهٔ Vue رستوران متصل شده‌اند؛ صفحهٔ اصلی سه نوشتهٔ تازه را نمایش می‌دهد و هر دو نوع فوتر لینک مجله دارند.
+- `/management/blog` برای ساخت، ویرایش، پیش‌نویس، انتشار، تصویر شاخص، متن قالب‌بندی‌شده و پیوند چند `Item` در هر مقاله اضافه شده است.
+- نوشته و جدول محصولات مرتبط از DocTypeهای Restaurant استفاده می‌کنند؛ مشخصات و قیمت محصول کپی نمی‌شوند. API مدیریتی دسترسی نقش‌های مجاز مدیریت را بررسی می‌کند و بدنهٔ HTML پیش از نمایش عمومی پاک‌سازی می‌شود.
+- وضعیت این تغییر: source آماده است؛ build، migrate، restart و browser smoke در این نوبت اجرا نشده‌اند. برای فعال شدن DocTypeها روی سایت، migrate لازم است و عمداً اجرا نشده است.
 
 ## یکپارچه‌سازی قالب مدیریت — ۱۴۰۵/۰۷/۰۴
 

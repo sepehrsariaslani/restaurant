@@ -7,6 +7,7 @@
   "engine": "InnoDB",
   "field_order": [
     "courier",
+    "fleet_vehicle",
     "title",
     "vehicle_type",
     "plate_number",
@@ -16,6 +17,7 @@
   ],
   "fields": [
     {"fieldname": "courier", "fieldtype": "Link", "in_list_view": 1, "label": "Courier", "options": "Restaurant Courier", "reqd": 1},
+    {"fieldname": "fleet_vehicle", "fieldtype": "Link", "in_list_view": 1, "label": "ERPNext Fleet Vehicle", "options": "Vehicle"},
     {"fieldname": "title", "fieldtype": "Data", "in_list_view": 1, "label": "Title"},
     {"fieldname": "vehicle_type", "fieldtype": "Data", "in_list_view": 1, "label": "Vehicle Type", "reqd": 1},
     {"fieldname": "plate_number", "fieldtype": "Data", "in_list_view": 1, "label": "Plate Number", "reqd": 1, "unique": 1},
