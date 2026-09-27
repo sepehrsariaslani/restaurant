@@ -68,7 +68,16 @@ def execute():
 				WHERE COALESCE(scope, '') = ''"""
 			)
 
-	threshold = frappe.db.get_single_value("Restaurant Web Settings", "restaurant_survey_alert_threshold") if frappe.db.exists("DocType", "Restaurant Web Settings") and frappe.db.has_column("Restaurant Web Settings", "restaurant_survey_alert_threshold") else None
+	settings_meta = (
+		frappe.get_meta("Restaurant Web Settings")
+		if frappe.db.exists("DocType", "Restaurant Web Settings")
+		else None
+	)
+	threshold = (
+		frappe.db.get_single_value("Restaurant Web Settings", "restaurant_survey_alert_threshold")
+		if settings_meta and settings_meta.has_field("restaurant_survey_alert_threshold")
+		else None
+	)
 	if threshold and 1 <= int(threshold) <= 5:
 		frappe.db.set_single_value("Restaurant Web Settings", "restaurant_survey_alert_threshold", int(threshold) * 2)
 
