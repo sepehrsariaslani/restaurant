@@ -559,6 +559,8 @@ def _club_customer_referral_code_is_taken(code, exclude_customer=""):
 
 
 def _club_customer_group_discount_percent(customer):
+	if str(customer or "").strip().casefold() == "pos customer":
+		return 0.0
 	if not customer or not _has_column("Customer", "customer_group") or not _has_column("Customer Group", "restaurant_default_discount_percent"):
 		return 0.0
 	group = frappe.db.get_value("Customer", customer, "customer_group")
@@ -739,7 +741,10 @@ def _club_copy_sales_order_discount_policy_to_invoice(doc):
 		)
 	by_order = {}
 	for row in rows:
-		by_order[row.sales_order] = by_order.get(row.sales_order, 0) + flt(row.get("net_amount") or row.get("amount") or 0)
+		sales_order = row.get("sales_order")
+		if not sales_order:
+			continue
+		by_order[sales_order] = by_order.get(sales_order, 0) + flt(row.get("net_amount") or row.get("amount") or 0)
 	if not by_order:
 		return False
 	total_discount = total_group_discount = total_coach_discount = total_commission = 0.0
