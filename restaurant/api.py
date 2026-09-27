@@ -10468,11 +10468,16 @@ def send_otp(mobile, customer_name=None):
 		result["debug_otp"] = otp
 	else:
 		try:
-			has_sms_gateway = bool(frappe.db.get_single_value("SMS Settings", "sms_gateway_url"))
-			if not has_sms_gateway:
-				frappe.throw(_("درگاه پیامک برای ارسال کد تأیید تنظیم نشده است."))
-			sms_module = frappe.get_module("frappe.core.doctype.sms_settings.sms_settings")
-			sms_module.send_sms([normalized_mobile], _("کد تأیید حساب مشتری شما: {0}").format(otp), success_msg=False)
+			from accounts.sms_ir_customer import send_customer_otp, sms_ir_customer_otp_enabled
+
+			if sms_ir_customer_otp_enabled():
+				send_customer_otp(normalized_mobile, otp)
+			else:
+				has_sms_gateway = bool(frappe.db.get_single_value("SMS Settings", "sms_gateway_url"))
+				if not has_sms_gateway:
+					frappe.throw(_("درگاه پیامک برای ارسال کد تأیید تنظیم نشده است."))
+				sms_module = frappe.get_module("frappe.core.doctype.sms_settings.sms_settings")
+				sms_module.send_sms([normalized_mobile], _("کد تأیید حساب مشتری شما: {0}").format(otp), success_msg=False)
 		except Exception as exc:
 			cache.delete_value(_otp_cache_key(normalized_mobile))
 			if isinstance(exc, frappe.ValidationError):
