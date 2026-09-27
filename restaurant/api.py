@@ -5770,13 +5770,23 @@ def _create_sales_order(
 	group_discount_percent = api_club._club_customer_group_discount_percent(customer) if verified_customer else 0
 	coach_terms = api_club._club_partner_order_terms(customer, subtotal) if verified_customer else {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
 	coupon_amount = flt(server_coupon.get("discount_amount") or 0)
-	from restaurant.pricing_policy import select_order_discount, coach_commission_amount
+	manual_discount_active = cint(financial_modifiers.get("manual_discount") or 0) == 1
+	manual_discount_type = str(financial_modifiers.get("discount_type") or "fixed").strip().lower()
+	manual_discount_value = flt(financial_modifiers.get("discount_value") or 0)
+	from restaurant.pricing_policy import calculate_manual_discount_amount, coach_commission_amount, select_order_discount
+	manual_discount_amount = calculate_manual_discount_amount(
+		subtotal,
+		manual_discount_type,
+		manual_discount_value,
+	)
 
 	discount_policy = select_order_discount(
 		subtotal,
 		group_discount_percent,
 		coach_terms.get("discount_percent") or 0,
 		coupon_amount,
+		manual_discount_amount=manual_discount_amount,
+		manual_discount_active=manual_discount_active,
 	)
 	frontend_discount_amount = flt(discount_policy["discount_amount"])
 	coach_commission = coach_commission_amount(
@@ -5795,6 +5805,7 @@ def _create_sales_order(
 			"customer_group": "گروه مشتری",
 			"coach": "تخفیف شاگرد",
 			"coupon": "کد تخفیف",
+			"manual": "manual",
 		}.get(discount_policy["discount_source"], "")
 	if _has_column("Sales Order", "restaurant_discount_policy_applied"):
 		doc_payload["restaurant_discount_policy_applied"] = 1
@@ -5817,8 +5828,8 @@ def _create_sales_order(
 		payload_snapshot.append({
 			"discount_source": discount_policy["discount_source"],
 			"discount_amount": frontend_discount_amount,
-			"group_discount_amount": discount_policy["group_discount"],
-			"coach_discount_amount": discount_policy["coach_discount"],
+			"group_discount_amount": discount_policy["group_discount"] if discount_policy["discount_source"] == "customer_group" else 0,
+			"coach_discount_amount": discount_policy["coach_discount"] if discount_policy["discount_source"] == "coach" else 0,
 			"coupon": applied_coupon_code if discount_policy["discount_source"] == "coupon" else "",
 			"coach_customer": coach_terms.get("coach") or "",
 		})
@@ -20866,6 +20877,8 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		fields.append("mobile_no")
 	if _has_column("Customer", "customer_primary_mobile"):
 		fields.append("customer_primary_mobile")
+	if _has_column("Customer", "customer_group"):
+		fields.append("customer_group")
 		
 	filters = {"disabled": 0}
 	or_filters = {}
@@ -20889,6 +20902,21 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 	if or_filters:
 		get_all_kwargs["or_filters"] = or_filters
 	customer_docs = frappe.get_all(**get_all_kwargs)
+	group_discount_by_name = {}
+	if _has_column("Customer", "customer_group") and _has_column("Customer Group", "restaurant_default_discount_percent"):
+		group_names = sorted({(doc.get("customer_group") or "").strip() for doc in customer_docs if doc.get("customer_group")})
+		if group_names:
+			group_rows = frappe.get_all(
+				"Customer Group",
+				filters={"name": ["in", group_names]},
+				fields=["name", "restaurant_default_discount_percent"],
+				ignore_permissions=True,
+				limit_page_length=0,
+			)
+			group_discount_by_name = {
+				row.get("name"): min(max(flt(row.get("restaurant_default_discount_percent") or 0), 0), 50)
+				for row in group_rows
+			}
 	
 	grouped = {}
 	name_key_map = {}
@@ -20901,6 +20929,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		grouped[key] = {
 			"customer_name": customer_name,
 			"mobile": mobile,
+			"group_discount_percent": group_discount_by_name.get(doc.get("customer_group"), 0),
 			"orders_count": 0,
 			"total_spent": 0.0,
 			"last_order_at": None,
@@ -20939,6 +20968,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 				{
 					"customer_name": customer_name,
 					"mobile": mobile,
+					"group_discount_percent": 0,
 					"orders_count": 0,
 					"total_spent": 0.0,
 					"last_order_at": None,
@@ -20958,6 +20988,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 				{
 					"customer_name": secondary_name,
 					"mobile": "",
+					"group_discount_percent": 0,
 					"orders_count": 0,
 					"total_spent": 0.0,
 					"last_order_at": None,
@@ -20979,6 +21010,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			{
 				"customer_name": row.get("customer_name") or "",
 				"mobile": row.get("mobile") or "",
+				"group_discount_percent": min(max(flt(row.get("group_discount_percent") or 0), 0), 50),
 				"orders_count": cint(row.get("orders_count")),
 				"total_spent": flt(row.get("total_spent")),
 				"last_order_at": _json_safe_datetime(row.get("last_order_at")),

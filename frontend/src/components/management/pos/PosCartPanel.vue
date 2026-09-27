@@ -172,6 +172,12 @@
 						</button>
 					</div>
 				</div>
+				<div v-if="Number(groupDiscountPercent || 0) > 0" class="fin-discount-hint">
+					<span v-if="!financial.manualDiscountActive">
+						تخفیف گروه مشتری: {{ toPersianNumber(Number(groupDiscountPercent || 0)) }}٪
+					</span>
+					<span v-else>تخفیف دستی جایگزین تخفیف گروه مشتری شده است.</span>
+				</div>
 				<div class="fin-row">
 					<div class="fin-control">
 						<input
@@ -565,6 +571,10 @@ const props = defineProps({
 	financial: {
 		type: Object,
 		default: () => ({}),
+	},
+	groupDiscountPercent: {
+		type: Number,
+		default: 0,
 	},
 	totals: {
 		type: Object,
@@ -1341,6 +1351,13 @@ defineExpose({
 	gap: 0.42rem;
 	padding: 0.22rem 0.5rem;
 	min-height: 30px;
+}
+
+.fin-discount-hint {
+	padding: 0.22rem 0.6rem 0.32rem;
+	font-size: 0.67rem;
+	color: var(--mg-primary);
+	font-weight: 600;
 }
 
 .fin-label {

@@ -559,8 +559,6 @@ def _club_customer_referral_code_is_taken(code, exclude_customer=""):
 
 
 def _club_customer_group_discount_percent(customer):
-	if str(customer or "").strip().casefold() == "pos customer":
-		return 0.0
 	if not customer or not _has_column("Customer", "customer_group") or not _has_column("Customer Group", "restaurant_default_discount_percent"):
 		return 0.0
 	group = frappe.db.get_value("Customer", customer, "customer_group")
@@ -800,6 +798,10 @@ def apply_customer_discount_policy(doc, method=None):
 	# the same max-one policy last so group, coach, and coupon discounts cannot
 	# stack or replace one another depending on the sales channel.
 	if _club_copy_sales_order_discount_policy_to_invoice(doc):
+		return
+	# A cashier-entered POS discount is an explicit final decision. Do not let
+	# the customer-group hook replace it during Sales Order/Invoice validation.
+	if str(doc.get("restaurant_discount_source") or "").strip().casefold() == "manual":
 		return
 	_club_strip_managed_pricing_rules(doc)
 	base = flt(doc.get("net_total") or doc.get("total") or 0)

@@ -149,8 +149,30 @@ def run_sales_invoice_discount_policy_dict_smoke():
 	return {"status": "ok", "discount_amount": 100}
 
 
+def run_manual_discount_policy_smoke():
+	"""A manually entered discount must not be replaced by the customer-group hook."""
+	doc = FakeSalesDocument(
+		doctype="Sales Order",
+		customer="TEST-CUSTOMER",
+		net_total=1000,
+		discount_amount=50,
+		restaurant_discount_source="manual",
+	)
+	with (
+		patch.object(api_club, "_club_ensure_ops_ready"),
+		patch.object(api_club.frappe.db, "exists", return_value=True),
+		patch.object(api_club, "_club_copy_sales_order_discount_policy_to_invoice", return_value=False),
+		patch.object(api_club, "_club_strip_managed_pricing_rules") as strip_rules,
+	):
+		api_club.apply_customer_discount_policy(doc)
+	strip_rules.assert_not_called()
+	assert doc.get("discount_amount") == 50, repr(doc.values)
+	assert doc.get("restaurant_discount_source") == "manual", repr(doc.values)
+	return {"status": "ok", "discount_amount": 50, "source": "manual"}
+
+
 def run_pos_customer_group_discount_smoke():
-	"""The generic POS customer must not receive a loyalty/customer-group discount."""
+	"""The generic POS customer receives its configured customer-group discount."""
 	with (
 		patch.object(api_club, "_has_column", return_value=True),
 		patch.object(
@@ -159,9 +181,9 @@ def run_pos_customer_group_discount_smoke():
 			side_effect=lambda doctype, name, fieldname: "Government" if doctype == "Customer" else 10,
 		) as get_value,
 	):
-		assert api_club._club_customer_group_discount_percent("POS Customer") == 0
+		assert api_club._club_customer_group_discount_percent("POS Customer") == 10
 
-	get_value.assert_not_called()
+	get_value.assert_called()
 
 	with (
 		patch.object(api_club, "_has_column", return_value=True),
@@ -173,4 +195,4 @@ def run_pos_customer_group_discount_smoke():
 	):
 		assert api_club._club_customer_group_discount_percent("CUST-TEST") == 10
 
-	return {"status": "ok", "pos_customer_discount_percent": 0}
+	return {"status": "ok", "pos_customer_discount_percent": 10}

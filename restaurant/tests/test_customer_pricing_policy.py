@@ -1,6 +1,11 @@
 import unittest
 
-from restaurant.pricing_policy import allocate_return_amount_by_order, coach_commission_amount, select_order_discount
+from restaurant.pricing_policy import (
+	allocate_return_amount_by_order,
+	calculate_manual_discount_amount,
+	coach_commission_amount,
+	select_order_discount,
+)
 
 
 class TestCustomerPricingPolicy(unittest.TestCase):
@@ -24,6 +29,28 @@ class TestCustomerPricingPolicy(unittest.TestCase):
 	def test_ties_are_stable(self):
 		result = select_order_discount(100, group_percent=5, coach_percent=5, coupon_amount=5)
 		self.assertEqual(result["discount_source"], "customer_group")
+
+	def test_manual_discount_replaces_group_discount_even_when_smaller(self):
+		result = select_order_discount(
+			1000,
+			group_percent=20,
+			coupon_amount=180,
+			manual_discount_amount=50,
+			manual_discount_active=True,
+		)
+		self.assertEqual(result["discount_amount"], 50)
+		self.assertEqual(result["discount_source"], "manual")
+		self.assertEqual(result["group_discount"], 200)
+		self.assertEqual(result["net_items"], 950)
+
+	def test_manual_percent_and_fixed_amount_are_bounded(self):
+		self.assertEqual(calculate_manual_discount_amount(1000, "percent", 7.5), 75)
+		self.assertEqual(calculate_manual_discount_amount(1000, "fixed", 1200), 1000)
+
+	def test_clearing_manual_discount_allows_group_discount_to_return(self):
+		result = select_order_discount(1000, group_percent=10, manual_discount_active=False)
+		self.assertEqual(result["discount_source"], "customer_group")
+		self.assertEqual(result["discount_amount"], 100)
 
 	def test_invoice_return_is_allocated_by_each_linked_order_amount(self):
 		result = allocate_return_amount_by_order(100, {"SO-1": 100, "SO-2": 300})

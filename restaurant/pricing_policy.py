@@ -8,27 +8,47 @@ def _money(value):
 		return 0.0
 
 
-def select_order_discount(subtotal, group_percent=0, coach_percent=0, coupon_amount=0):
+def calculate_manual_discount_amount(subtotal, discount_type="fixed", discount_value=0):
+	"""Calculate one bounded manual discount from the POS modifier fields."""
+	subtotal = _money(subtotal)
+	value = _money(discount_value)
+	if str(discount_type or "").strip().lower() == "percent":
+		value = _money(subtotal * min(value, 100) / 100)
+	return min(subtotal, value)
+
+
+def select_order_discount(
+	subtotal,
+	group_percent=0,
+	coach_percent=0,
+	coupon_amount=0,
+	manual_discount_amount=0,
+	manual_discount_active=False,
+):
 	"""Choose one valid discount and calculate coach cashback on the remaining items."""
 	subtotal = _money(subtotal)
 	group_amount = min(subtotal, _money(subtotal * max(float(group_percent or 0), 0) / 100))
 	coach_amount = min(subtotal, _money(subtotal * max(float(coach_percent or 0), 0) / 100))
 	coupon_amount = min(subtotal, _money(coupon_amount))
+	manual_amount = min(subtotal, _money(manual_discount_amount))
 	candidates = [
 		{"source": "customer_group", "amount": group_amount},
 		{"source": "coach", "amount": coach_amount},
 		{"source": "coupon", "amount": coupon_amount},
 	]
 	# max() preserves the first candidate on a tie: group, then coach, then coupon.
-	winner = max(candidates, key=lambda candidate: candidate["amount"])
+	winner = {"source": "manual", "amount": manual_amount} if manual_discount_active else max(
+		candidates, key=lambda candidate: candidate["amount"]
+	)
 	net_items = max(subtotal - winner["amount"], 0)
 	return {
 		"subtotal": subtotal,
 		"group_discount": group_amount,
 		"coach_discount": coach_amount,
 		"coupon_discount": coupon_amount,
+		"manual_discount": manual_amount,
 		"discount_amount": winner["amount"],
-		"discount_source": winner["source"] if winner["amount"] > 0 else "",
+		"discount_source": winner["source"] if manual_discount_active or winner["amount"] > 0 else "",
 		"net_items": round(net_items, 2),
 	}
 
