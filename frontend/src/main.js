@@ -17,7 +17,7 @@ if (initialPage.startsWith("management-")) {
 	hydrateThemeSettingsFromServer();
 }
 
-if ("serviceWorker" in navigator) {
+if (window.location.pathname !== "/design-preview" && "serviceWorker" in navigator) {
 	window.addEventListener("load", () => {
 		navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
 			console.info("[PWA] Service worker registration skipped:", error);
@@ -25,4 +25,13 @@ if ("serviceWorker" in navigator) {
 	});
 }
 
-createApp(App).mount("#app");
+const path = window.location.pathname;
+const isDesignPreview = path === "/design-preview";
+const isCustomPage = path.startsWith("/p/") || window._PAGE === "custom-design-page";
+if (isDesignPreview || isCustomPage) {
+	import("./pages/design/RestaurantDesignSurface.vue").then(({ default: Surface }) => {
+		createApp(Surface, { preview: isDesignPreview }).mount("#app");
+	});
+} else {
+	createApp(App).mount("#app");
+}

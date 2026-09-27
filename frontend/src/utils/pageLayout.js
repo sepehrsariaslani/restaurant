@@ -44,6 +44,7 @@ function normalizeBlock(raw, index, page = "home") {
 	const def = getBlockType(raw && raw.type);
 	if (!def || !isBlockAllowedOnPage(page, def.type)) return null;
 	return {
+		...raw,
 		id: String(raw.id || makeBlockId(def.type)),
 		type: def.type,
 		variant: String(raw.variant || def.defaultVariant).trim() || def.defaultVariant,
@@ -56,7 +57,7 @@ function normalizeBlock(raw, index, page = "home") {
 export function hasStoredPageLayout(boot = {}, page = "home") {
 	const pageKey = normalizePageBuilderKey(page);
 	const stored = boot?.page_layout?.[pageKey];
-	return Array.isArray(stored?.blocks) && stored.blocks.length > 0;
+	return Array.isArray(stored?.blocks);
 }
 
 export function resolvePageLayout(boot = {}, page = "home") {
@@ -64,7 +65,7 @@ export function resolvePageLayout(boot = {}, page = "home") {
 	const stored = boot?.page_layout?.[pageKey];
 	const storedBlocks = asArray(stored?.blocks);
 
-	if (storedBlocks.length) {
+	if (Array.isArray(stored?.blocks)) {
 		return storedBlocks
 			.map((block, index) => normalizeBlock(block, index, pageKey))
 			.filter(Boolean)
@@ -88,7 +89,8 @@ export function buildLegacyPageLayout(boot = {}, page = "home") {
 		faq: buildLegacyFaqLayout,
 		product_groups: buildLegacyProductGroupsLayout,
 	};
-	const build = builders[pageKey] || buildLegacyHomeLayout;
+	const build = builders[pageKey];
+	if (!build) return [];
 	return build(boot).map((block, index) => ({ ...block, order: index }));
 }
 

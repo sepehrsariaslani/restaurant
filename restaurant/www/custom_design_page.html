@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ design_title or 'طراحی سایت' }}</title>
+  <meta name="description" content="{{ design_description or '' }}" />
+  <script type="module" crossorigin src="/assets/restaurant/frontend/assets/index.js?v={{ frontend_version }}"></script>
+  <link rel="stylesheet" href="/assets/restaurant/frontend/assets/index.css?v={{ frontend_version }}" />
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window._PAGE = 'custom-design-page';
+    window._BOOT = {{ (boot or {}) | tojson }};
+    window._DESIGN_PAGE = {{ (design_page or {}) | tojson }};
+  </script>
+</body>
+</html>

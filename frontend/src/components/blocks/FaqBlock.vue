@@ -18,18 +18,18 @@
         :class="{ open: openIndex === idx }"
       >
         <button class="faq-acc__trigger" type="button" @click="toggle(idx)" :aria-expanded="openIndex === idx">
-          <span>{{ row.question }}</span>
+          <span data-design-collection="faq_items" :data-design-index="row.__designIndex" data-design-site-key="question">{{ row.question }}</span>
           <ChevronDown class="faq-acc__icon" :size="18" stroke-width="2.2" />
         </button>
-        <div v-show="openIndex === idx" class="faq-acc__answer">{{ row.answer }}</div>
+        <div v-show="openIndex === idx" class="faq-acc__answer" data-design-collection="faq_items" :data-design-index="row.__designIndex" data-design-site-key="answer">{{ row.answer }}</div>
       </article>
     </div>
 
     <!-- GRID -->
     <div v-else class="faq-grid">
       <article v-for="(row, idx) in normalizedFaqs" :key="row.name || idx" class="faq-grid__item">
-        <h3>{{ row.question }}</h3>
-        <p>{{ row.answer }}</p>
+        <h3 data-design-collection="faq_items" :data-design-index="row.__designIndex" data-design-site-key="question">{{ row.question }}</h3>
+        <p data-design-collection="faq_items" :data-design-index="row.__designIndex" data-design-site-key="answer">{{ row.answer }}</p>
       </article>
     </div>
   </section>
@@ -56,7 +56,7 @@ const openIndex = ref(0)
 const normalizedFaqs = computed(() =>
   (props.faqs || [])
     .filter((row) => Number(row?.is_active ?? 1) !== 0)
-    .map((row) => normalizeFaqPublicRow(row)),
+    .map((row) => ({ ...normalizeFaqPublicRow(row), __designIndex: props.faqs.indexOf(row) })),
 )
 
 function toggle(index) {

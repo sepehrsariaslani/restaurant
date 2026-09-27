@@ -16,12 +16,12 @@
           <AboutMedia :image="s.image" :alt="s.title" :title="s.title" />
         </div>
         <div class="about-card__body">
-          <h3>{{ s.title }}</h3>
-          <p v-if="s.subtitle" class="about-card__sub">{{ s.subtitle }}</p>
-          <p class="about-card__text">{{ excerpt(s.body_text) }}</p>
+          <h3 data-design-collection="about_sections" :data-design-index="sections.indexOf(s)" data-design-site-key="title">{{ s.title }}</h3>
+          <p v-if="s.subtitle" class="about-card__sub" data-design-collection="about_sections" :data-design-index="sections.indexOf(s)" data-design-site-key="subtitle">{{ s.subtitle }}</p>
+          <p class="about-card__text" data-design-collection="about_sections" :data-design-index="sections.indexOf(s)" data-design-site-key="body_text">{{ excerpt(s.body_text) }}</p>
           <div v-if="s.stat_value || s.stat_label" class="about-card__stat">
-            <strong>{{ s.stat_value }}</strong>
-            <small>{{ s.stat_label }}</small>
+            <strong data-design-collection="about_sections" :data-design-index="sections.indexOf(s)" data-design-site-key="stat_value">{{ s.stat_value }}</strong>
+            <small data-design-collection="about_sections" :data-design-index="sections.indexOf(s)" data-design-site-key="stat_label">{{ s.stat_label }}</small>
           </div>
         </div>
       </article>
@@ -33,9 +33,9 @@
         <AboutMedia :image="primary.image" :alt="primary.title" :title="primary.title" variant="story" />
       </div>
       <div class="about-story__body">
-        <h3>{{ primary.title }}</h3>
-        <p v-if="primary.subtitle" class="about-card__sub">{{ primary.subtitle }}</p>
-        <p class="about-story__text">{{ primary.body_text }}</p>
+        <h3 data-design-collection="about_sections" :data-design-index="sections.indexOf(primary)" data-design-site-key="title">{{ primary.title }}</h3>
+        <p v-if="primary.subtitle" class="about-card__sub" data-design-collection="about_sections" :data-design-index="sections.indexOf(primary)" data-design-site-key="subtitle">{{ primary.subtitle }}</p>
+        <p class="about-story__text" data-design-collection="about_sections" :data-design-index="sections.indexOf(primary)" data-design-site-key="body_text">{{ primary.body_text }}</p>
       </div>
     </div>
 

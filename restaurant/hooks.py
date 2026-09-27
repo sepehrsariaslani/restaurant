@@ -79,6 +79,7 @@ homepage = "restaurant"
 # website_generators = ["Web Page"]
 
 website_route_rules = [
+	{"from_route": "/p/<slug>", "to_route": "custom_design_page"},
 	# Root redirect → restaurant landing
 	{"from_route": "/", "to_route": "restaurant/index"},
 	{"from_route": "/homev2", "to_route": "homev2"},

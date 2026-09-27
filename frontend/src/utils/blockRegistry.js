@@ -471,6 +471,20 @@ export const BLOCK_TYPES = {
 	},
 };
 
+const SiteElementBlock = markRaw(defineAsyncComponent(() => import("@/components/blocks/SiteElementBlock.vue")));
+const elementField = (key, label, type = "text", value = "", extra = {}) => ({ key, label, type, default: value, ...extra });
+Object.assign(BLOCK_TYPES, {
+  section: { type: "section", label: "بخش و گروه", variants: [{ value: "stack", label: "عمودی" }, { value: "grid", label: "شبکه" }, { value: "row", label: "ردیفی" }], defaultVariant: "stack", props: [] },
+  text: { type: "text", label: "عنوان و متن", variants: [{ value: "default", label: "متن" }], props: [elementField("title", "عنوان", "text", "عنوان تازه"), elementField("body", "متن", "textarea", "متن خود را بنویسید."), elementField("level", "نوع عنوان", "select", "h2", { options: ["h1", "h2", "h3", "h4"].map((value, i) => ({ value, label: `عنوان سطح ${i + 1}` })) })] },
+  image: { type: "image", label: "تصویر", variants: [{ value: "default", label: "تصویر" }], props: [elementField("image", "تصویر", "image"), elementField("alt", "توضیح دسترس‌پذیر تصویر"), elementField("caption", "زیرنویس")] },
+  button: { type: "button", label: "دکمه و پیوند", variants: [{ value: "solid", label: "رنگی" }, { value: "outline", label: "خطی" }, { value: "text", label: "متنی" }], props: [elementField("label", "متن دکمه", "text", "مشاهده بیشتر"), elementField("href", "نشانی مقصد", "link", "/menu")] },
+  spacer: { type: "spacer", label: "فاصله", variants: [{ value: "default", label: "فاصله" }], props: [elementField("height", "ارتفاع", "number", 32)] },
+  divider: { type: "divider", label: "جداکننده", variants: [{ value: "default", label: "خط" }], props: [] },
+});
+for (const kind of ["text", "image", "button", "spacer", "divider"]) {
+  Object.assign(BLOCK_TYPES[kind], { component: SiteElementBlock, defaultVariant: BLOCK_TYPES[kind].variants[0].value, toProps: block => ({ ...block.props, kind, variant: block.variant }) });
+}
+
 export const BLOCK_TYPE_LIST = Object.values(BLOCK_TYPES);
 
 const PAGE_ALIASES = {
@@ -497,7 +511,8 @@ const PUBLIC_PAGE_LAYOUT_KEYS = [
 PUBLIC_PAGE_LAYOUT_KEYS.forEach((page) => { PAGE_ALIASES[page] = page; });
 
 export function normalizePageBuilderKey(page = "home") {
-	return PAGE_ALIASES[String(page || "").trim()] || "home";
+	const key = String(page || "").trim();
+	return /^custom:[a-z0-9][a-z0-9-]{0,79}$/.test(key) ? key : PAGE_ALIASES[key] || "home";
 }
 
 const editorialPageBlocks = ["hero", "features", "banner"];
@@ -517,7 +532,7 @@ export const PAGE_BLOCK_CATALOGS = {
 };
 
 export function getPageBlockCatalog(page = "home") {
-	return PAGE_BLOCK_CATALOGS[normalizePageBuilderKey(page)] || PAGE_BLOCK_CATALOGS.home;
+	return Object.keys(BLOCK_TYPES);
 }
 
 export function getPageBlockPalette(page = "home") {
