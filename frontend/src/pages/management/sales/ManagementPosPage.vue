@@ -54,7 +54,11 @@
           :currency="currency"
           :customer-query="form.customer_query"
           :customer-options="customerOptions"
+          :secondary-customer="form.secondary_customer"
+          :secondary-customer-visible="isSecondaryCustomerFieldVisible"
           @update:customer-query="setCustomerQuery"
+          @update:secondary-customer="form.secondary_customer = $event"
+          @secondary-query="onSecondaryCustomerQuery"
           @select-customer="selectCustomerFromHistory"
           @create-customer="createCustomerFromQuery"
           @add-customer="addQuickCustomer"
@@ -77,15 +81,6 @@
             :order-mode="form.order_mode"
             :place="form.place"
             :place-options="placeOptions"
-            :customer-options="customerOptions"
-            :customer-search-fn="searchCustomers"
-            :secondary-customer="form.secondary_customer"
-            :secondary-customer-visible="isSecondaryCustomerFieldVisible"
-            :mobile="form.mobile"
-            :guest-count="form.guest_count"
-            :waiter="form.waiter"
-            :waiter-options="waiterOptions"
-            :waiter-loading="waiterبارگذاری"
             :table-orders="selectedDineInOrders"
             :table-preview-loading="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
@@ -103,10 +98,6 @@
             @update:selected-line-id="selectedCartLineId = $event"
             @update:order-mode="setOrderMode"
             @update:place="form.place = $event"
-            @update:mobile="form.mobile = $event"
-            @update:secondary-customer="form.secondary_customer = $event"
-            @update:guest-count="form.guest_count = Math.max(Number($event || 1), 1)"
-            @update:waiter="onCartWaiterChange"
             @update:note="form.note = $event"
             @update:payment-method="payment.method = $event"
             @update:payment-reference="payment.reference_no = $event"
@@ -519,15 +510,6 @@
             :order-mode="form.order_mode"
             :place="form.place"
             :place-options="placeOptions"
-            :customer-options="customerOptions"
-            :customer-search-fn="searchCustomers"
-            :secondary-customer="form.secondary_customer"
-            :secondary-customer-visible="isSecondaryCustomerFieldVisible"
-            :mobile="form.mobile"
-            :guest-count="form.guest_count"
-            :waiter="form.waiter"
-            :waiter-options="waiterOptions"
-            :waiter-loading="waiterبارگذاری"
             :table-orders="selectedDineInOrders"
             :table-preview-loading="tablePreviewبارگذاری"
             :selected-table-label="selectedDineInTable?.label || ''"
@@ -544,10 +526,6 @@
             @update:selected-line-id="selectedCartLineId = $event"
             @update:order-mode="setOrderMode"
             @update:place="form.place = $event"
-            @update:mobile="form.mobile = $event"
-            @update:secondary-customer="form.secondary_customer = $event"
-            @update:guest-count="form.guest_count = Math.max(Number($event || 1), 1)"
-            @update:waiter="onCartWaiterChange"
             @update:note="form.note = $event"
             @update:payment-method="payment.method = $event"
             @update:payment-reference="payment.reference_no = $event"
@@ -1185,6 +1163,7 @@ function defaultFinancialState() {
     taxExempt: false,
     taxType: 'percent',
     taxValue: 0,
+    tipAmount: 0,
     serviceType: 'percent',
     serviceValue: 0,
     printProduction: true,
@@ -1497,6 +1476,14 @@ const paymentBoot = reactive({
   provider_label: 'حالت دستی',
   terminal_id: '',
   methods: [],
+})
+
+const packagingSettings = reactive({
+  enabled: false,
+  flat_fee: 0,
+  per_item: true,
+  apply_modes: [],
+  label: 'هزینه بسته‌بندی',
 })
 
 const printFontSettings = reactive({
@@ -1884,6 +1871,7 @@ async function printOrderReceipt(order) {
       discountAmount: 0,
       walletApplied: 0,
       taxAmount: 0,
+      tipAmount: 0,
       serviceAmount: 0,
       payableAmount: Number(total || 0),
     })
@@ -2073,6 +2061,26 @@ function paymentMethodDisplayLabel(value) {
   return String(value || '').trim() || '-'
 }
 
+const packagingAmount = computed(() => {
+  if (!packagingSettings.enabled) {
+    return 0
+  }
+  const mode = String(form.order_mode || '').trim()
+  if (!packagingSettings.apply_modes.includes(mode)) {
+    return 0
+  }
+  let fee = Number(packagingSettings.flat_fee || 0)
+  if (packagingSettings.per_item) {
+    for (const line of cart) {
+      const perItemPrice = Number(line?.packaging_price || 0)
+      if (perItemPrice > 0) {
+        fee += perItemPrice * Number(line?.qty || 0)
+      }
+    }
+  }
+  return Math.max(fee, 0)
+})
+
 const totals = computed(() =>
   calculatePosTotals({
     cartLines: cart.map((line) => ({
@@ -2085,6 +2093,8 @@ const totals = computed(() =>
     serviceValue: financial.serviceValue,
     taxType: financial.taxExempt ? 'fixed' : financial.taxType,
     taxValue: financial.taxExempt ? 0 : financial.taxValue,
+    tipAmount: financial.tipAmount,
+    packagingAmount: packagingAmount.value,
     useWallet: financial.useWallet,
     walletBalance: financial.walletBalance,
     targetPayableAmount: financial.targetAmount,
@@ -2367,7 +2377,7 @@ function setFinalAmount(value) {
   financial.targetServiceSnapshot = null
   financial.targetAmount = null
   financial.discountType = 'fixed'
-  financial.discountValue = null
+  financial.discountValue = 0
 }
 
 function applyPOSProfileSummary(summary = {}) {
@@ -2509,11 +2519,6 @@ async function loadWaitersOnce() {
 
 function onWaiterChange(event) {
   const userName = String(event?.target?.value || '').trim()
-  onCartWaiterChange(userName)
-}
-
-function onCartWaiterChange(value) {
-  const userName = String(value || '').trim()
   const found = waiterOptions.value.find((row) => row.name === userName)
   form.waiter = userName
   form.waiter_name = found ? found.label : ''
@@ -2852,9 +2857,17 @@ async function loadCustomers(search = '') {
   }
 }
 
-async function searchCustomers(search = '') {
-  await loadCustomers(search)
-  return customerOptions.value
+// جستجوی مشتری‌ها از داخل فیلد «مشتری ثانویه» — تا لیست کشویی آن هم از مشتری‌های موجود پر شود
+let secondaryCustomerSearchTimeout = null
+function onSecondaryCustomerQuery(value) {
+  const text = String(value || '').trim()
+  if (!text || text.length < 2) {
+    return
+  }
+  if (secondaryCustomerSearchTimeout) clearTimeout(secondaryCustomerSearchTimeout)
+  secondaryCustomerSearchTimeout = setTimeout(() => {
+    loadCustomers(text)
+  }, 350)
 }
 
 function buildCustomerOptions(orders = []) {
@@ -3208,6 +3221,9 @@ async function selectAndLoadInvoice(invoice) {
       financial.serviceValue = Number(fm.service_value || order.service_amount || 0)
       financial.serviceType = fm.service_type === 'percent' ? 'percent' : 'fixed'
     }
+    if (fm.tip_amount > 0 || order.tip_amount > 0) {
+      financial.tipAmount = Number(fm.tip_amount || order.tip_amount || 0)
+    }
     if (fm.coupon_code || order.coupon_code) {
       financial.couponCode = String(fm.coupon_code || order.coupon_code || '').trim()
     }
@@ -3553,6 +3569,7 @@ function currentOrderDraftSignature() {
       serviceValue: totals.value.automaticService ? Number(totals.value.serviceAmount || 0) : Number(financial.serviceValue || 0),
       taxType: financial.taxExempt ? 'fixed' : financial.taxType,
       taxValue: financial.taxExempt ? 0 : Number(financial.taxValue || 0),
+      tipAmount: Number(financial.tipAmount || 0),
       couponCode: String(financial.couponCode || '').trim(),
       creditCardCode: String(financial.creditCardCode || '').trim(),
       taxExempt: Boolean(financial.taxExempt),
@@ -3601,7 +3618,7 @@ function resetFinalAmountTarget() {
   financial.targetServiceSnapshot = null
   financial.targetAmount = null
   financial.discountType = 'percent'
-  financial.discountValue = null
+  financial.discountValue = 0
 }
 
 function setCartQty(line, qty) {
@@ -3669,6 +3686,7 @@ function addToCart(item, qty = 1, customizationPayload = null, hasCustomization 
     qty: Number(Number(qty || 1).toFixed(3)),
     price: Number(unitPrice ?? item.base_price ?? item.standard_rate ?? item.price ?? 0),
     item_code: item.name,
+    packaging_price: Number(item.packaging_price || 0),
     category: String(item.category || '').trim(),
     category_title: String(item.category_title || item.category || '').trim(),
     note: '',
@@ -4963,8 +4981,22 @@ function buildReceiptTotalsRowsHtml(totalValues = totals.value) {
       className: '',
     },
     {
+      label: 'انعام',
+      value: totalValues.tipAmount || 0,
+      always: false,
+      negative: false,
+      className: '',
+    },
+    {
       label: 'حق سرویس',
       value: totalValues.serviceAmount || 0,
+      always: false,
+      negative: false,
+      className: '',
+    },
+    {
+      label: packagingSettings.label || 'بسته‌بندی',
+      value: totalValues.packagingAmount || 0,
       always: false,
       negative: false,
       className: '',
@@ -5091,6 +5123,7 @@ function buildConfirmedTableReceiptContext() {
       discountAmount: 0,
       walletApplied: 0,
       taxAmount: 0,
+      tipAmount: 0,
       serviceAmount: 0,
       payableAmount: payable,
     }),
@@ -5335,6 +5368,7 @@ async function loadOrderPrintData(order) {
     discountAmount: 0,
     walletApplied: 0,
     taxAmount: 0,
+    tipAmount: 0,
     serviceAmount: 0,
     payableAmount: Number(total || 0),
   })
@@ -5715,6 +5749,7 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
       tax_type: financial.taxExempt ? 'fixed' : financial.taxType,
       tax_value: financial.taxExempt ? 0 : financial.taxValue,
       tax_amount: totals.value.taxAmount || 0,
+      tip_amount: financial.tipAmount,
       use_wallet: financial.useWallet,
       wallet_applied: totals.value.walletApplied,
       coupon_code: financial.couponCode,
@@ -5905,6 +5940,13 @@ async function loadPOSBoot() {
     categories.value = payload.categories || []
     currency.value = payload.currency || 'IRR'
     applyPOSProfileSummary(payload.pos_profile || {})
+
+    const bootPackaging = payload.packaging || {}
+    packagingSettings.enabled = Boolean(bootPackaging.enabled)
+    packagingSettings.flat_fee = Number(bootPackaging.flat_fee || 0)
+    packagingSettings.per_item = bootPackaging.per_item !== false
+    packagingSettings.apply_modes = Array.isArray(bootPackaging.apply_modes) ? bootPackaging.apply_modes : []
+    packagingSettings.label = bootPackaging.label || 'هزینه بسته‌بندی'
 
     const bootPrintFont = payload.print_font || {}
     printFontSettings.font_family = bootPrintFont.font_family || 'Peyda'
@@ -6232,7 +6274,7 @@ watch(
   (length) => {
     if (length !== 0) return
     financial.discountType = 'percent'
-    financial.discountValue = null
+    financial.discountValue = 0
     financial.targetAmount = null
     financial.targetServiceSnapshot = null
     financial.couponCode = ''

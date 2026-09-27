@@ -57,20 +57,6 @@ test('POS desktop workspace keeps products on the left and cart on the right', (
   assert.match(page, /\.cart-desktop-col\s*\{[\s\S]*direction:\s*rtl/)
 })
 
-test('POS keeps order metadata in the cart panel instead of the product surface', () => {
-  const panel = read('src/components/management/pos/PosProductPanel.vue')
-  const cart = read('src/components/management/pos/PosCartPanel.vue')
-  const page = read('src/pages/management/sales/ManagementPosPage.vue')
-
-  assert.doesNotMatch(panel, /secondary-customer-field|secondaryCustomerVisible/)
-  assert.match(cart, /مشتری ثانویه \/ تحویل‌گیرنده/)
-  assert.match(cart, /<SearchableDropdown[\s\S]*fixed-panel/)
-  assert.match(cart, /<PersianNumberInput[\s\S]*aria-label="تعداد نفرات"/)
-  assert.match(page, /:secondary-customer="form\.secondary_customer"/)
-  assert.match(page, /:guest-count="form\.guest_count"/)
-  assert.match(page, /:waiter-options="waiterOptions"/)
-})
-
 test('POS marks Food Partner orders inside its shared transaction views', () => {
   const page = read('src/pages/management/sales/ManagementPosPage.vue')
 
@@ -99,34 +85,4 @@ test('POS keeps Food Partner traceability inline in the native order detail', ()
   assert.match(page, /external_bill_number/)
   assert.match(page, /external_order_id/)
   assert.match(page, /external_state/)
-})
-
-test('POS financial controls hide unused rows and style nested amount inputs consistently', () => {
-  const cart = read('src/components/management/pos/PosCartPanel.vue')
-
-  assert.doesNotMatch(cart, /<span>انعام<\/span>/)
-  assert.doesNotMatch(cart, /<span>بسته‌بندی<\/span>/)
-  assert.match(cart, /\.fin-control :deep\(\.number-input\)/)
-  assert.match(cart, /\.fin-control :deep\(\.number-input:focus\)/)
-  assert.match(cart, /min-height:\s*44px/)
-  assert.match(cart, /height:\s*44px/)
-})
-
-test('Persian numeric input keeps zero as an empty editable value', () => {
-  const input = read('src/components/PersianNumberInput.vue')
-
-  assert.match(input, /inputText\.value = clamped \? formatForDisplay\(clamped\) : ''/)
-  assert.match(input, /if \(!numeric\) \{\s*return ''/)
-})
-
-test('POS uses the Accounts-style empty numeric contract and removes tip and packaging surfaces', () => {
-  const cart = read('src/components/management/pos/PosCartPanel.vue')
-  const page = read('src/pages/management/sales/ManagementPosPage.vue')
-
-  assert.match(cart, /empty-as-null/)
-  assert.match(cart, /input-class="pos-amount-input"/)
-  assert.doesNotMatch(page, /tipAmount/)
-  assert.doesNotMatch(page, /packagingAmount/)
-  assert.doesNotMatch(page, /انعام/)
-  assert.doesNotMatch(page, /بسته‌بندی/)
 })

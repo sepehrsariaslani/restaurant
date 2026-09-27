@@ -29,65 +29,6 @@
 			/>
 		</div>
 
-		<div class="cart-customer-fields">
-			<label class="cart-customer-field">
-				<span>شماره همراه</span>
-				<input
-					class="input dark-input"
-					:value="mobile"
-					inputmode="tel"
-					placeholder="اختیاری"
-					@input="$emit('update:mobile', $event.target.value)"
-				/>
-			</label>
-			<label v-if="secondaryCustomerVisible" class="cart-customer-field">
-				<span>مشتری ثانویه / تحویل‌گیرنده</span>
-				<SearchableDropdown
-					:model-value="secondaryCustomer"
-					:options="customerOptions"
-					:search-fn="customerSearchFn"
-					label-key="label"
-					value-key="label"
-					placeholder="انتخاب یا ثبت نام"
-					search-placeholder="جستجوی مشتری ثانویه..."
-					allow-create
-					clearable
-					fixed-panel
-					@update:model-value="$emit('update:secondaryCustomer', $event)"
-				/>
-			</label>
-			<label class="cart-customer-field">
-				<span>تعداد نفرات</span>
-				<div class="cart-guest-control">
-					<button type="button" aria-label="کم کردن تعداد نفرات" @click="$emit('update:guestCount', Math.max(Number(guestCount || 1) - 1, 1))">−</button>
-					<PersianNumberInput
-						:model-value="guestCount"
-						:min="1"
-						:allow-float="false"
-						input-class="cart-guest-input"
-						aria-label="تعداد نفرات"
-						@update:model-value="$emit('update:guestCount', $event)"
-					/>
-					<button type="button" aria-label="افزودن تعداد نفرات" @click="$emit('update:guestCount', Number(guestCount || 1) + 1)">+</button>
-				</div>
-			</label>
-			<label v-if="waiterOptions.length || waiterLoading" class="cart-customer-field">
-				<span>گارسون</span>
-				<SearchableDropdown
-					:model-value="waiter"
-					:options="waiterOptions"
-					label-key="label"
-					value-key="name"
-					placeholder="بدون گارسون"
-					search-placeholder="جستجوی گارسون..."
-					include-empty-option
-					empty-label="بدون گارسون"
-					fixed-panel
-					@update:model-value="$emit('update:waiter', $event)"
-				/>
-			</label>
-		</div>
-
 		<!-- Cart -->
 		<div class="cart-section">
 			<header class="cart-head">
@@ -213,8 +154,7 @@
 						/>
 						<PersianNumberInput
 							:model-value="financial.targetAmount != null ? totals.discountAmount : financial.discountValue"
-							input-class="pos-amount-input"
-							empty-as-null
+							input-class="fin-input"
 							:placeholder="discountPlaceholder"
 							:min="0"
 							:disabled="financial.targetAmount != null"
@@ -256,8 +196,7 @@
 						/>
 						<PersianNumberInput
 							:model-value="financial.serviceValue"
-							input-class="pos-amount-input"
-							empty-as-null
+							input-class="fin-input"
 							:placeholder="servicePlaceholder"
 							:min="0"
 							@update:model-value="patchFinancial({ serviceValue: $event })"
@@ -283,8 +222,7 @@
 						/>
 						<PersianNumberInput
 							:model-value="financial.taxValue"
-							input-class="pos-amount-input"
-							empty-as-null
+							input-class="fin-input"
 							:placeholder="taxPlaceholder"
 							:min="0"
 							:disabled="Boolean(financial.taxExempt)"
@@ -310,9 +248,17 @@
 				<span>مالیات</span>
 				<strong>{{ formatMoney(totals.taxAmount || 0, currency) }}</strong>
 			</div>
+			<div class="sum-line" v-if="isNonZero(totals.tipAmount)">
+				<span>انعام</span>
+				<strong>{{ formatMoney(totals.tipAmount || 0, currency) }}</strong>
+			</div>
 			<div class="sum-line" v-if="isNonZero(totals.serviceAmount)">
 				<span>حق سرویس</span>
 				<strong>{{ formatMoney(totals.serviceAmount || 0, currency) }}</strong>
+			</div>
+			<div class="sum-line" v-if="isNonZero(totals.packagingAmount)">
+				<span>بسته‌بندی</span>
+				<strong>{{ formatMoney(totals.packagingAmount || 0, currency) }}</strong>
 			</div>
 			<div class="sum-line payable">
 				<span>مبلغ قابل پرداخت</span>
@@ -436,8 +382,7 @@
 							</select>
 							<PersianNumberInput
 								:model-value="split.amount"
-								input-class="pos-amount-input"
-								empty-as-null
+								input-class="pay-amount-input"
 								placeholder="مبلغ"
 								:min="0"
 								:max="Math.max(Number(totals.payableAmount || 0), 0)"
@@ -577,42 +522,6 @@ const props = defineProps({
 		type: Array,
 		default: () => [],
 	},
-	customerOptions: {
-		type: Array,
-		default: () => [],
-	},
-	customerSearchFn: {
-		type: Function,
-		default: null,
-	},
-	secondaryCustomer: {
-		type: String,
-		default: "",
-	},
-	secondaryCustomerVisible: {
-		type: Boolean,
-		default: false,
-	},
-	mobile: {
-		type: String,
-		default: "",
-	},
-	guestCount: {
-		type: Number,
-		default: 1,
-	},
-	waiter: {
-		type: String,
-		default: "",
-	},
-	waiterOptions: {
-		type: Array,
-		default: () => [],
-	},
-	waiterLoading: {
-		type: Boolean,
-		default: false,
-	},
 	tableOrders: {
 		type: Array,
 		default: () => [],
@@ -675,10 +584,6 @@ const emit = defineEmits([
 	"update:selectedLineId",
 	"update:orderMode",
 	"update:place",
-	"update:mobile",
-	"update:secondaryCustomer",
-	"update:guestCount",
-	"update:waiter",
 	"update:note",
 	"set-final-amount",
 	"update:paymentMethod",
@@ -1133,59 +1038,6 @@ defineExpose({
 	flex-shrink: 0;
 }
 
-.cart-customer-fields {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.55rem;
-	padding: 0.65rem 0.8rem;
-	border-bottom: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
-	background: color-mix(in srgb, var(--mg-bg-page) 35%, var(--mg-bg-surface) 65%);
-}
-
-.cart-customer-field {
-	display: grid;
-	gap: 0.28rem;
-	min-width: 0;
-	font-size: 0.7rem;
-	font-weight: 700;
-	color: var(--mg-text-muted);
-}
-
-.cart-customer-field > .searchable-dropdown,
-.cart-customer-field > .input,
-.cart-guest-control,
-.cart-guest-control :deep(.persian-number-input) {
-	min-width: 0;
-	width: 100%;
-}
-
-.cart-guest-control {
-	display: grid;
-	grid-template-columns: 30px minmax(0, 1fr) 30px;
-	gap: 0.25rem;
-	align-items: center;
-}
-
-.cart-guest-control > button {
-	width: 30px;
-	height: 34px;
-	border: 1px solid var(--mg-border-light);
-	border-radius: 9px;
-	background: var(--mg-bg-surface);
-	color: var(--mg-primary);
-	font: inherit;
-	font-weight: 800;
-	cursor: pointer;
-}
-
-.cart-guest-control > button:hover {
-	background: color-mix(in srgb, var(--mg-primary) 8%, var(--mg-bg-surface));
-}
-
-@media (max-width: 560px) {
-	.cart-customer-fields { grid-template-columns: 1fr; }
-}
-
 /* ─── Cart Section ─── */
 .cart-section {
 	flex: 1;
@@ -1568,48 +1420,29 @@ defineExpose({
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 10%, transparent);
 }
 
-.fin-control > .fin-input,
-.fin-control :deep(.number-input) {
+.fin-input {
 	flex: 1;
 	min-width: 0;
 	width: 100%;
-	min-height: 44px;
-	height: 44px;
-	box-sizing: border-box;
 	border: 1px solid color-mix(in srgb, var(--mg-border-light) 95%, transparent);
 	background: var(--mg-bg-page);
 	color: var(--mg-text-main);
 	border-radius: 7px;
-	padding: 0.55rem 0.75rem;
-	font-size: 0.88rem;
-	line-height: 1.2;
+	padding: 0.1rem 0.45rem;
+	font-size: 0.74rem;
 	font-family: inherit;
+	height: 22px;
 	outline: none;
 	transition: all 0.15s ease;
 }
 
-.fin-control :deep(.pos-amount-input),
-.pay-split-controls :deep(.pos-amount-input) {
-	min-height: 56px;
-	height: 56px;
-	border-radius: 12px;
-	padding: 0.75rem 1rem;
-	font-size: 1.12rem;
-	font-weight: 800;
-	line-height: 1.25;
-	text-align: right;
-}
-
-.fin-control > .fin-input:focus,
-.fin-control :deep(.number-input:focus) {
+.fin-input:focus {
 	border-color: color-mix(in srgb, var(--mg-primary) 42%, var(--mg-border-light) 58%);
 	background: var(--mg-bg-surface);
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 6%, transparent);
-	outline: none;
 }
 
-.fin-control > .fin-input:disabled,
-.fin-control :deep(.number-input:disabled) {
+.fin-input:disabled {
 	opacity: 0.68;
 	cursor: not-allowed;
 }
@@ -2006,16 +1839,12 @@ defineExpose({
 	height: 44px;
 }
 
-.pay-split-controls :deep(.persian-number-input),
-.pay-split-controls :deep(.persian-number-input .input-wrap) {
-	width: 100%;
-	min-width: 0;
-}
-
-.pay-split-controls :deep(.pos-amount-input:focus) {
-	border-color: var(--mg-primary);
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-primary) 12%, transparent);
-	outline: none;
+.pay-amount-input {
+	border-radius: 9px;
+	padding: 0.6rem 0.7rem;
+	font-size: 0.85rem;
+	text-align: left;
+	min-height: 44px;
 }
 
 .pay-split-remove {
