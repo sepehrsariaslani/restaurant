@@ -6964,7 +6964,7 @@ onBeforeUnmount(() => {
 	min-height: 0;
 	flex: 1;
 	overflow: hidden;
-	direction: ltr;
+	direction: rtl;
 }
 
 .cart-desktop-col {

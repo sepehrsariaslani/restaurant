@@ -49,10 +49,10 @@ test('POS reference surfaces are discoverable in the design system catalog', () 
   assert.match(catalog, /pos-workspace/)
 })
 
-test('POS desktop workspace keeps products on the left and cart on the right', () => {
+test('POS desktop workspace keeps cart on the left and products on the right', () => {
   const page = read('src/pages/management/sales/ManagementPosPage.vue')
 
-  assert.match(page, /\.pos-main-grid\s*\{[\s\S]*direction:\s*ltr/)
+  assert.match(page, /\.pos-main-grid\s*\{[\s\S]*direction:\s*rtl/)
   assert.match(page, /\.products-col\s*\{[\s\S]*direction:\s*rtl/)
   assert.match(page, /\.cart-desktop-col\s*\{[\s\S]*direction:\s*rtl/)
 })
