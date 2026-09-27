@@ -10459,7 +10459,13 @@ def send_otp(mobile, customer_name=None):
 	cache = frappe.cache()
 	cooldown_key = _otp_cooldown_key(normalized_mobile)
 	if cache.get_value(cooldown_key):
-		frappe.throw(_("برای ارسال دوباره کد، کمی صبر کنید."))
+		return {
+			"success": False,
+			"sent": 0,
+			"cooldown": True,
+			"retry_after": 60,
+			"message": _("برای ارسال دوباره کد، کمی صبر کنید."),
+		}
 
 	otp = "".join(random.choices(string.digits, k=6))
 	cache.set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)

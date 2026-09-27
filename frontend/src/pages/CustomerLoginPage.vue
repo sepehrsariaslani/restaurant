@@ -262,13 +262,17 @@ async function sendOtp() {
   try {
     const fullPhone = `0${normalizeMobile(phone.value)}`
     const result = await sendOtpAPI({ mobile: fullPhone })
+    if (result?.cooldown) {
+      error.value = result.message || 'برای ارسال دوباره کد، کمی صبر کنید.'
+      return
+    }
     if (result?.debug_otp) console.info('[Restaurant OTP]', result.debug_otp)
     step.value = 'otp'
     otpDigits.value = ['', '', '', '', '', '']
     startCountdown(120)
     setTimeout(() => otpRefs.value[0]?.focus(), 100)
   } catch (e) {
-    error.value = 'خطا در ارسال کد. لطفاً دوباره تلاش کنید.'
+    error.value = String(e?.message || '').trim() || 'خطا در ارسال کد. لطفاً دوباره تلاش کنید.'
   } finally {
     sending.value = false
   }
