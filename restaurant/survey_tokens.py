@@ -32,11 +32,25 @@ def _invitation_for_digest(digest):
 	return invitation if hmac.compare_digest(stored_digest, digest) else None
 
 
+def _canonical_order_identity(order_name):
+	"""Load the same canonical Sales Order identity used by survey APIs."""
+	try:
+		from restaurant.api_survey import _read_order_identity
+	except (ImportError, AttributeError) as exc:
+		raise ValueError("امکان اعتبارسنجی سفارش نظرسنجی فراهم نیست") from exc
+
+	identity = _read_order_identity("Sales Order", order_name)
+	if not identity or not identity.get("mobile"):
+		raise ValueError("سفارش معتبر یا شماره موبایل معتبر برای نظرسنجی پیدا نشد")
+	return identity
+
+
 def issue_token(order_name, customer, mobile, expires_at):
 	"""Create or refresh the secure invitation for a Sales Order."""
 	order_name = str(order_name or "").strip()
 	if not order_name:
 		raise ValueError("Sales Order is required for a survey token")
+	identity = _canonical_order_identity(order_name)
 
 	key = f"Sales Order:{order_name}"
 	name = frappe.db.get_value(INVITATION, {"order_key": key}, "name")
@@ -48,9 +62,10 @@ def issue_token(order_name, customer, mobile, expires_at):
 	invitation.reference_doctype = "Sales Order"
 	invitation.reference_name = order_name
 	invitation.sales_order = order_name
-	invitation.customer = customer or None
-	invitation.mobile = str(mobile or "").strip()
-	invitation.order_code = order_name
+	invitation.customer = identity.get("customer") or None
+	invitation.customer_name = identity.get("customer_name") or ""
+	invitation.mobile = str(identity["mobile"]).strip()
+	invitation.order_code = identity.get("order_code") or order_name
 	invitation.due_at = now
 	invitation.expires_at = get_datetime(expires_at)
 	invitation.token_hash = token_digest(token)
