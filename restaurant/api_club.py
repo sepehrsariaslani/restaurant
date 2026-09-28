@@ -119,6 +119,10 @@ __all__ = [
 	"get_public_survey",
 	"submit_public_survey",
 	"list_management_survey_responses",
+	"list_management_survey_invitations",
+	"retry_management_survey_invitation",
+	"list_management_customer_reviews",
+	"review_management_customer_review",
 	# reports
 	"get_management_report_customer_analytics",
 	"get_management_report_campaign_performance",
@@ -3825,6 +3829,34 @@ def list_management_survey_responses(date_from="", date_to="", search="", min_ra
 	from restaurant.api_survey import list_management_survey_responses as list_responses
 
 	return list_responses(date_from=date_from, date_to=date_to, search=search, min_rating=min_rating, max_rating=max_rating)
+
+
+@frappe.whitelist()
+def list_management_survey_invitations(limit=100):
+	from restaurant.api_survey import list_management_survey_invitations as list_invitations
+
+	return list_invitations(limit=limit)
+
+
+@frappe.whitelist()
+def retry_management_survey_invitation(name=""):
+	from restaurant.api_survey import retry_management_survey_invitation as retry_invitation
+
+	return retry_invitation(name=name)
+
+
+@frappe.whitelist()
+def list_management_customer_reviews(status="", search="", limit=200):
+	from restaurant.api_survey import list_management_customer_reviews as list_reviews
+
+	return list_reviews(status=status, search=search, limit=limit)
+
+
+@frappe.whitelist()
+def review_management_customer_review(name="", moderation_status="", manager_reply=None):
+	from restaurant.api_survey import review_management_customer_review as review_customer_review
+
+	return review_customer_review(name=name, moderation_status=moderation_status, manager_reply=manager_reply)
 
 
 # ---------------------------------------------------------------------------
