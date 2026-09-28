@@ -95,6 +95,68 @@
         </article>
       </section>
 
+      <section v-if="customerMobile" class="customer-section customer-glass-card customer-voice" aria-labelledby="customer-voice-title">
+        <div class="customer-section__head">
+          <div>
+            <h2 id="customer-voice-title">پیشنهادها و انتقادهای من</h2>
+            <p>اگر پیشنهادی، انتقادی یا درخواستی دارید، از همین‌جا برای تیم ویدرخت بفرستید.</p>
+          </div>
+          <MessageCircle :size="22" class="customer-voice__icon" aria-hidden="true" />
+        </div>
+
+        <form class="customer-voice__form" @submit.prevent="submitVoice">
+          <label>
+            نوع پیام
+            <select v-model="voiceForm.type" required>
+              <option v-for="type in customerVoiceTypes" :key="type" :value="type">{{ type }}</option>
+            </select>
+          </label>
+          <label>
+            موضوع
+            <input v-model.trim="voiceForm.subject" type="text" maxlength="140" required placeholder="مثلاً پیشنهاد برای منوی صبحانه" />
+          </label>
+          <label>
+            کد سفارش (اختیاری)
+            <input v-model.trim="voiceForm.order_code" type="text" maxlength="140" dir="ltr" placeholder="مثلاً SAL-ORD-2026-00001" />
+          </label>
+          <label class="customer-voice__message-field">
+            متن پیام
+            <textarea v-model.trim="voiceForm.message" rows="4" maxlength="2000" required placeholder="پیام خود را برای ما بنویسید…"></textarea>
+          </label>
+          <p v-if="voiceError" class="customer-voice__feedback customer-voice__feedback--error" role="alert">{{ voiceError }}</p>
+          <p v-if="voiceMessage" class="customer-voice__feedback customer-voice__feedback--success" role="status">{{ voiceMessage }}</p>
+          <button class="customer-page__primary-action customer-voice__submit" type="submit" :disabled="voiceSaving">
+            {{ voiceSaving ? 'در حال ارسال…' : 'ارسال پیام' }}
+          </button>
+        </form>
+
+        <div class="customer-voice__history">
+          <div class="customer-voice__history-head">
+            <h3>پیام‌های قبلی</h3>
+            <button type="button" class="customer-page__ghost-action" :disabled="voiceLoading" @click="loadCustomerVoices">
+              {{ voiceLoading ? 'در حال دریافت…' : 'به‌روزرسانی' }}
+            </button>
+          </div>
+          <p v-if="voiceLoading && !customerVoices.length" class="customer-section__hint" role="status">در حال دریافت پیام‌های شما…</p>
+          <p v-else-if="!customerVoices.length" class="customer-voice__empty">هنوز پیامی ثبت نکرده‌اید.</p>
+          <article v-for="voice in customerVoices" :key="voice.name" class="customer-voice__item">
+            <div class="customer-voice__item-head">
+              <div>
+                <strong>{{ voice.subject }}</strong>
+                <small>{{ voice.type }} · {{ formatDate(voice.creation) }}</small>
+              </div>
+              <span class="customer-voice__status">{{ voice.status || 'جدید' }}</span>
+            </div>
+            <p>{{ voice.message }}</p>
+            <small v-if="voice.order_code" class="customer-voice__order">سفارش مرتبط: {{ voice.order_code }}</small>
+            <div v-if="voice.response" class="customer-voice__response">
+              <strong>پاسخ تیم ویدرخت</strong>
+              <p>{{ voice.response }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <nav class="account-shortcuts customer-glass-card" aria-label="مدیریت حساب">
         <a href="/order/type"><ShoppingBag :size="22" /><span><strong>شروع سفارش</strong><small>انتخاب روش دریافت و غذا</small></span><ChevronLeft :size="18" /></a>
         <a href="/customer/orders"><ReceiptText :size="22" /><span><strong>سفارش‌های من</strong><small>پیگیری و سفارش دوباره</small></span><ChevronLeft :size="18" /></a>
@@ -224,7 +286,7 @@ import {
   Utensils,
   Wallet,
 } from 'lucide-vue-next'
-import { customerLogout, getCustomerProfile, getMenuBoot, getMySurveyInvitations, getMyWallet, listMyCustomerReviews, redeemMyPoints } from '@/utils/api'
+import { customerLogout, getCustomerProfile, getMenuBoot, getMySurveyInvitations, getMyWallet, listMyCustomerReviews, listMyCustomerVoices, redeemMyPoints, submitMyCustomerVoice } from '@/utils/api'
 import { formatMoney, formatStatus, normalizeMobile } from '@/utils/format'
 import { hasCustomerSession } from '@/utils/customerAuth'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
@@ -293,6 +355,13 @@ const profileError = ref('')
 const orders = ref([])
 const surveyInvitations = ref([])
 const feedbackReplies = ref([])
+const customerVoices = ref([])
+const voiceLoading = ref(false)
+const voiceSaving = ref(false)
+const voiceError = ref('')
+const voiceMessage = ref('')
+const customerVoiceTypes = ['شکایت', 'انتقاد', 'پیشنهاد', 'درخواست', 'تقدیر']
+const voiceForm = ref({ type: 'پیشنهاد', subject: '', order_code: '', message: '' })
 const currency = ref('IRR')
 
 const customerName = computed(() => customer.value.name || 'مهمان عزیز')
@@ -361,6 +430,37 @@ function surveyHref(invite = {}) {
   return '/survey?invitation=' + encodeURIComponent(invite.name || '')
 }
 
+async function loadCustomerVoices() {
+  if (!customerMobile.value) return
+  voiceLoading.value = true
+  voiceError.value = ''
+  try {
+    const result = await listMyCustomerVoices()
+    customerVoices.value = result?.voices || []
+  } catch (err) {
+    voiceError.value = err?.message || 'پیام‌های شما دریافت نشد.'
+  } finally {
+    voiceLoading.value = false
+  }
+}
+
+async function submitVoice() {
+  if (voiceSaving.value || !voiceForm.value.subject || !voiceForm.value.message) return
+  voiceSaving.value = true
+  voiceError.value = ''
+  voiceMessage.value = ''
+  try {
+    await submitMyCustomerVoice({ ...voiceForm.value })
+    voiceForm.value = { type: 'پیشنهاد', subject: '', order_code: '', message: '' }
+    voiceMessage.value = 'پیام شما با موفقیت ثبت شد.'
+    await loadCustomerVoices()
+  } catch (err) {
+    voiceError.value = err?.message || 'ثبت پیام انجام نشد؛ دوباره تلاش کنید.'
+  } finally {
+    voiceSaving.value = false
+  }
+}
+
 async function logout() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید خارج شوید؟')) return
   try { await customerLogout() } catch {}
@@ -381,14 +481,16 @@ onMounted(async () => {
   getMenuBoot('').then((boot) => { if (boot?.currency) currency.value = boot.currency }).catch(() => {})
   void loadWalletSummary()
   if (auth.mobile) {
-    const [invitationResult, reviewResult] = await Promise.allSettled([
+    const [invitationResult, reviewResult, voiceResult] = await Promise.allSettled([
       getMySurveyInvitations(),
       listMyCustomerReviews(),
+      listMyCustomerVoices(),
     ])
     if (invitationResult.status === 'fulfilled') surveyInvitations.value = invitationResult.value?.invitations || []
     if (reviewResult.status === 'fulfilled') {
       feedbackReplies.value = (reviewResult.value?.reviews || []).filter((review) => String(review.manager_reply || '').trim()).slice(0, 5)
     }
+    if (voiceResult.status === 'fulfilled') customerVoices.value = voiceResult.value?.voices || []
     profileLoading.value = true
     try {
       const profile = await getCustomerProfile({ mobile: auth.mobile })
@@ -437,6 +539,35 @@ onMounted(async () => {
 .survey-reply-row strong { font-size: .8rem; }
 .survey-reply-row p { margin: .25rem 0; color: var(--ds-color-text-secondary); font-size: .83rem; line-height: 1.8; }
 .survey-reply-row small { color: var(--ds-color-text-muted); font-size: .7rem; }
+
+.customer-voice { display: grid; gap: 1rem; padding: 1rem; }
+.customer-voice__icon { color: var(--ds-color-action-accent); }
+.customer-voice__form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.customer-voice__form label { display: grid; gap: .35rem; color: var(--ds-color-text-secondary); font-size: .78rem; font-weight: 700; }
+.customer-voice__form input, .customer-voice__form select, .customer-voice__form textarea { width: 100%; min-height: 44px; padding: .65rem .75rem; border: 1px solid var(--ds-color-border); border-radius: 12px; background: var(--ds-color-surface); color: var(--ds-color-text-primary); font: inherit; font-size: .82rem; }
+.customer-voice__form textarea { min-height: 108px; resize: vertical; line-height: 1.8; }
+.customer-voice__form input:focus, .customer-voice__form select:focus, .customer-voice__form textarea:focus { outline: 3px solid color-mix(in srgb, var(--ds-color-action-accent) 28%, transparent); border-color: var(--ds-color-action-accent); }
+.customer-voice__message-field, .customer-voice__submit, .customer-voice__feedback { grid-column: 1 / -1; }
+.customer-voice__submit { justify-self: start; min-width: 148px; }
+.customer-voice__feedback { margin: 0; font-size: .78rem; }
+.customer-voice__feedback--error { color: var(--ds-color-status-danger); }
+.customer-voice__feedback--success { color: var(--ds-color-status-success); }
+.customer-voice__history { display: grid; gap: .65rem; padding-top: .9rem; border-top: 1px solid var(--ds-color-border); }
+.customer-voice__history-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.customer-voice__history-head h3 { margin: 0; font-size: .92rem; }
+.customer-voice__history-head button { min-height: 36px; padding: .35rem .65rem; font-size: .72rem; }
+.customer-voice__empty { margin: 0; color: var(--ds-color-text-muted); font-size: .8rem; }
+.customer-voice__item { display: grid; gap: .45rem; padding: .8rem; border: 1px solid var(--ds-color-border); border-radius: 14px; background: var(--ds-color-surface); }
+.customer-voice__item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .7rem; }
+.customer-voice__item-head > div { display: grid; gap: .2rem; min-width: 0; }
+.customer-voice__item-head strong { font-size: .83rem; overflow-wrap: anywhere; }
+.customer-voice__item-head small, .customer-voice__order { color: var(--ds-color-text-muted); font-size: .7rem; }
+.customer-voice__status { flex: 0 0 auto; padding: .25rem .5rem; border-radius: 999px; background: var(--ds-color-action-primary-soft); color: var(--ds-color-action-primary); font-size: .68rem; font-weight: 800; }
+.customer-voice__item > p { margin: 0; color: var(--ds-color-text-secondary); font-size: .8rem; line-height: 1.8; white-space: pre-wrap; }
+.customer-voice__response { display: grid; gap: .2rem; margin-top: .2rem; padding: .6rem .7rem; border-right: 3px solid var(--ds-color-action-accent); background: var(--ds-color-action-accent-soft); border-radius: 10px; }
+.customer-voice__response strong { font-size: .75rem; }
+.customer-voice__response p { margin: 0; color: var(--ds-color-text-secondary); font-size: .78rem; line-height: 1.8; white-space: pre-wrap; }
+@media (max-width: 600px) { .customer-voice__form { grid-template-columns: 1fr; } .customer-voice__message-field, .customer-voice__submit, .customer-voice__feedback { grid-column: auto; } .customer-voice__submit { width: 100%; } }
 
 .dashboard-page {
   padding-bottom: 8rem;

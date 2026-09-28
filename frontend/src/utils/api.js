@@ -4124,6 +4124,14 @@ export function listManagementCustomerVoices({ type = "", status = "", date_from
 	return callRestaurantAPI("list_management_customer_voices", { type, status, date_from, date_to, search, limit, offset });
 }
 
+export function submitMyCustomerVoice(payload = {}) {
+	return callRestaurantAPI("submit_my_customer_voice", { customer_token: customerEditToken(), payload });
+}
+
+export function listMyCustomerVoices() {
+	return callRestaurantAPI("list_my_customer_voices", { customer_token: customerEditToken() });
+}
+
 export function saveManagementCustomerVoice(payload = {}) {
 	return callRestaurantAPI("save_management_customer_voice", { payload });
 }

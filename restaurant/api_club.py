@@ -68,6 +68,8 @@ __all__ = [
 	"update_management_customer_voice_status",
 	"delete_management_customer_voice",
 	"submit_public_voice",
+	"submit_my_customer_voice",
+	"list_my_customer_voices",
 	# loyalty points
 	"list_management_point_entries",
 	"redeem_management_points",
@@ -2137,6 +2139,76 @@ def submit_public_voice(payload=None):
 	doc.save()
 	frappe.db.commit()
 	return {"status": "success", "voice": doc.name}
+
+
+def _club_my_customer_identity(customer_token):
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	customer = str(identity.get("customer") or "").strip()
+	mobile = _ensure_mobile(identity.get("mobile"), allow_empty=False)
+	if not customer or not mobile:
+		frappe.throw(_("حساب مشتری شماره موبایل معتبر ندارد."), frappe.PermissionError)
+	return identity, customer, mobile
+
+
+@frappe.whitelist(allow_guest=True)
+def submit_my_customer_voice(customer_token=None, payload=None):
+	"""Register a complaint, suggestion, request, or praise from an owned account."""
+	identity, customer, mobile = _club_my_customer_identity(customer_token)
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["voice"]):
+		frappe.throw(_("در حال حاضر امکان ثبت پیام وجود ندارد."))
+	payload = _club_parse_json(payload, {})
+	type_ = str(payload.get("type") or "").strip()
+	subject = str(payload.get("subject") or "").strip()
+	message = str(payload.get("message") or "").strip()
+	if type_ not in VOICE_TYPES:
+		frappe.throw(_("نوع پیام نامعتبر است."))
+	if not subject:
+		frappe.throw(_("موضوع پیام الزامی است."))
+	if not message:
+		frappe.throw(_("متن پیام الزامی است."))
+
+	order_code = str(payload.get("order_code") or "").strip()[:140]
+	sales_order = ""
+	if order_code:
+		match = _club_verify_survey_order(order_code, mobile)
+		if not match or match.get("customer") != customer:
+			frappe.throw(_("کد سفارش با حساب شما تطابق ندارد."), frappe.PermissionError)
+		sales_order = match.get("sales_order") or ""
+
+	doc = frappe.new_doc(CLUB_DOCTYPES["voice"])
+	doc.customer = customer
+	doc.customer_name = identity.get("customer_name") or frappe.db.get_value("Customer", customer, "customer_name") or customer
+	doc.mobile = mobile
+	doc.sales_order = sales_order
+	doc.order_code = sales_order or order_code
+	doc.type = type_
+	doc.subject = subject[:140]
+	doc.message = message[:2000]
+	doc.status = "جدید"
+	doc.flags.ignore_permissions = True
+	doc.save()
+	frappe.db.commit()
+	return {"status": "success", "voice": _serialize_voice(doc.as_dict())}
+
+
+@frappe.whitelist(allow_guest=True)
+def list_my_customer_voices(customer_token=None):
+	"""Return only voice messages owned by the authenticated customer account."""
+	_, customer, _ = _club_my_customer_identity(customer_token)
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["voice"]):
+		return {"voices": [], "count": 0}
+	rows = frappe.get_all(
+		CLUB_DOCTYPES["voice"],
+		filters={"customer": customer},
+		fields=["name", "customer", "customer_name", "mobile", "sales_order", "order_code", "type", "subject", "message", "status", "response", "responded_by", "responded_at", "creation"],
+		order_by="creation desc",
+		limit_page_length=200,
+		ignore_permissions=True,
+	)
+	voices = [_serialize_voice(row) for row in rows]
+	return {"voices": voices, "count": len(voices)}
 
 
 # ---------------------------------------------------------------------------
