@@ -66,6 +66,35 @@
           <p class="customer-success-text save-success" v-if="saved">پروفایل با موفقیت ذخیره شد.</p>
         </div>
       </section>
+
+      <section v-if="isLoggedIn" class="customer-section customer-glass-card customer-list-card password-section">
+        <div class="customer-section__head">
+          <div>
+            <h2>تغییر رمز عبور</h2>
+            <p>برای امنیت حساب، رمز فعلی و رمز جدید را وارد کنید.</p>
+          </div>
+        </div>
+        <div class="customer-stack">
+          <div class="customer-field">
+            <label>رمز عبور فعلی</label>
+            <input class="customer-input" v-model="passwordForm.current" type="password" autocomplete="current-password" />
+          </div>
+          <div class="customer-field">
+            <label>رمز عبور جدید</label>
+            <input class="customer-input" v-model="passwordForm.next" type="password" minlength="8" autocomplete="new-password" />
+          </div>
+          <div class="customer-field">
+            <label>تکرار رمز عبور جدید</label>
+            <input class="customer-input" v-model="passwordForm.confirm" type="password" minlength="8" autocomplete="new-password" />
+          </div>
+          <button class="customer-primary-cta save-cta" :disabled="changingPassword" @click="changePassword">
+            <LoaderCircle v-if="changingPassword" :size="18" class="spin" />
+            <Save v-else :size="18" />
+            <span>{{ changingPassword ? 'در حال تغییر...' : 'تغییر رمز عبور' }}</span>
+          </button>
+          <p class="customer-success-text save-success" v-if="passwordSaved">رمز عبور با موفقیت تغییر کرد.</p>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -74,11 +103,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { LayoutDashboard, LoaderCircle, Save, UserRound } from 'lucide-vue-next'
 import CustomerPageHeader from '@/components/customer/CustomerPageHeader.vue'
-import { getCustomerProfile, saveCustomerProfile } from '@/utils/api'
+import { changeCustomerPassword, getCustomerProfile, saveCustomerProfile } from '@/utils/api'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
 const saving = ref(false)
 const saved = ref(false)
+const changingPassword = ref(false)
+const passwordSaved = ref(false)
 const loading = ref(false)
 const error = ref('')
 const needsSignIn = computed(() => { try { return !JSON.parse(localStorage.getItem(CUSTOMER_AUTH_KEY) || '{}').customer_token } catch { return true } })
@@ -88,6 +119,7 @@ const form = ref({
   phone: '',
   email: '',
 })
+const passwordForm = ref({ current: '', next: '', confirm: '' })
 
 function readAuth() {
   try {
@@ -141,6 +173,27 @@ async function saveProfile() {
   } catch (err) { error.value = err.message || 'ذخیره اطلاعات حساب انجام نشد.' } finally {
     saving.value = false
   }
+}
+
+async function changePassword() {
+  if (changingPassword.value) return
+  error.value = ''
+  passwordSaved.value = false
+  if (!passwordForm.value.current) { error.value = 'رمز عبور فعلی را وارد کنید.'; return }
+  if (passwordForm.value.next.length < 8) { error.value = 'رمز عبور جدید باید دست‌کم ۸ نویسه باشد.'; return }
+  if (passwordForm.value.next !== passwordForm.value.confirm) { error.value = 'تکرار رمز عبور جدید با رمز واردشده یکسان نیست.'; return }
+  changingPassword.value = true
+  try {
+    const result = await changeCustomerPassword({
+      current_password: passwordForm.value.current,
+      new_password: passwordForm.value.next,
+      confirm_password: passwordForm.value.confirm,
+    })
+    if (!result?.success) throw new Error('تغییر رمز عبور تأیید نشد؛ دوباره تلاش کنید.')
+    passwordForm.value = { current: '', next: '', confirm: '' }
+    passwordSaved.value = true
+    setTimeout(() => { passwordSaved.value = false }, 3000)
+  } catch (err) { error.value = err.message || 'تغییر رمز عبور انجام نشد.' } finally { changingPassword.value = false }
 }
 
 onMounted(async () => {

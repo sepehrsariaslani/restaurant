@@ -15,8 +15,6 @@
         <button type="button" :class="{ active: authMethod === 'otp' }" :aria-pressed="authMethod === 'otp'" @click="selectAuthMethod('otp')">کد پیامکی</button>
       </div>
 
-      <div v-if="emailVerificationLoading" class="email-verification-state" role="status">در حال بررسی پیوند و فعال‌سازی حساب شما…</div>
-
       <div v-if="authMethod === 'otp' && step === 'phone'">
         <h2 class="card-title">ورود / ثبت‌نام</h2>
         <p class="card-sub">برای دریافت کد تأیید، شماره موبایل‌تان را وارد کنید.</p>
@@ -83,17 +81,27 @@
         </button>
       </div>
 
+      <div v-else-if="authMethod === 'otp' && step === 'register_profile'" class="password-panel">
+        <h2 class="card-title">تکمیل ثبت‌نام</h2>
+        <p class="card-sub">شمارهٔ موبایل شما تأیید شد؛ اطلاعات حساب و رمز عبور را ثبت کنید.</p>
+        <form class="password-form" @submit.prevent="completeOtpRegistration">
+          <label class="auth-field"><span>نام و نام خانوادگی</span><input v-model.trim="registerName" type="text" autocomplete="name" required /></label>
+          <label class="auth-field"><span>ایمیل <small>(اختیاری)</small></span><input v-model.trim="registerEmail" type="email" autocomplete="email" placeholder="name@example.com" /></label>
+          <label class="auth-field"><span>کد معرفی <small>(اختیاری)</small></span><input v-model.trim="referralCode" type="text" autocomplete="off" dir="ltr" placeholder="کد مربی یا دوست شما" /></label>
+          <label class="auth-field"><span>رمز عبور</span><input v-model="registerPassword" type="password" autocomplete="new-password" required /></label>
+          <label class="auth-field"><span>تکرار رمز عبور</span><input v-model="registerPasswordConfirmation" type="password" autocomplete="new-password" required /></label>
+          <button class="primary-btn" type="submit" :disabled="!canStartRegistration || registering">
+            <span v-if="registering" class="spinner"></span>
+            <span v-else>ساخت حساب و ورود</span>
+          </button>
+        </form>
+      </div>
+
       <div v-else class="password-panel">
-        <div v-if="step === 'email_sent'" class="email-verification-state">
-          <h2 class="card-title">پیوند تأیید فرستاده شد</h2>
-          <p class="card-sub">برای فعال‌کردن حساب، صندوق ورودی <strong dir="ltr">{{ verificationEmail }}</strong> را باز کنید و پیوند تأیید را بزنید. بعد از تأیید، حساب شما خودکار وارد می‌شود.</p>
-          <button class="primary-btn" type="button" :disabled="sending" @click="beginPasswordRegistration">{{ sending ? 'در حال ارسال…' : 'ارسال دوبارهٔ پیوند' }}</button>
-          <button class="mode-switch" type="button" @click="setAccountMode('login')">بازگشت به ورود</button>
-        </div>
-        <div v-else-if="step === 'register_otp'">
+        <div v-if="step === 'register_otp'">
           <button class="back-row" type="button" @click="step = 'phone'; otpDigits = ['', '', '', '', '', '']">تغییر اطلاعات ثبت‌نام</button>
           <h2 class="card-title">تأیید شماره</h2>
-          <p class="card-sub">کد شش‌رقمی ارسال‌شده به <strong dir="ltr">{{ registrationDisplayPhone }}</strong> را وارد کنید تا حساب به شمارهٔ خودتان متصل شود.</p>
+          <p class="card-sub">کد شش‌رقمی ارسال‌شده به <strong dir="ltr">{{ registrationDisplayPhone }}</strong> را وارد کنید تا ثبت‌نام شما تکمیل شود.</p>
           <div class="otp-row">
             <input
               v-for="(_, i) in 6"
@@ -137,18 +145,18 @@
 
         <template v-else>
           <h2 class="card-title">ساخت حساب مشتری</h2>
-          <p class="card-sub">پس از تأیید ایمیل، با ایمیل یا شماره موبایل و همین رمز وارد می‌شوید.</p>
+          <p class="card-sub">با تأیید شماره موبایل، حساب شما ساخته می‌شود؛ ایمیل اختیاری است.</p>
           <form class="password-form" @submit.prevent="beginPasswordRegistration">
             <label class="auth-field"><span>نام و نام خانوادگی</span><input v-model.trim="registerName" type="text" autocomplete="name" required /></label>
-            <label class="auth-field"><span>ایمیل <small>(پیوند فعال‌سازی به این نشانی می‌آید)</small></span><input v-model.trim="registerEmail" type="email" autocomplete="email" placeholder="name@example.com" required /></label>
+            <label class="auth-field"><span>ایمیل <small>(اختیاری)</small></span><input v-model.trim="registerEmail" type="email" autocomplete="email" placeholder="name@example.com" /></label>
             <label class="auth-field"><span>شماره موبایل</span><input v-model="registerPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09…" @input="onRegistrationPhoneInput" required /></label>
-            <label class="auth-field"><span>کد معرفی <small>(اختیاری)</small></span><input v-model.trim="registerReferralCode" type="text" autocomplete="off" dir="ltr" placeholder="کد مربی یا دوست شما" /></label>
+            <label class="auth-field"><span>کد معرفی <small>(اختیاری)</small></span><input v-model.trim="referralCode" type="text" autocomplete="off" dir="ltr" placeholder="کد مربی یا دوست شما" /></label>
             <label class="auth-field"><span>رمز عبور</span><input v-model="registerPassword" type="password" autocomplete="new-password" required /></label>
             <label class="auth-field"><span>تکرار رمز عبور</span><input v-model="registerPasswordConfirmation" type="password" autocomplete="new-password" required /></label>
-            <p class="auth-hint">حساب و هرگونه تخفیف یا اتصال به مربی فقط پس از تأیید ایمیل فعال می‌شود.</p>
+            <p class="auth-hint">کد تأیید به شمارهٔ موبایل ارسال می‌شود و ایمیل برای ثبت‌نام لازم نیست.</p>
             <button class="primary-btn" type="submit" :disabled="!canStartRegistration || sending">
               <span v-if="sending" class="spinner"></span>
-              <span v-else>ارسال پیوند تأیید</span>
+              <span v-else>ارسال کد تأیید</span>
             </button>
           </form>
           <button class="mode-switch" type="button" @click="setAccountMode('login')">قبلاً ثبت‌نام کرده‌اید؟ <strong>وارد شوید</strong></button>
@@ -166,15 +174,13 @@ import { Utensils } from 'lucide-vue-next'
 import {
   customerLoginPassword,
   customerRegisterPassword,
-  customerRegisterWithEmail,
-  customerVerifyEmailRegistration,
   sendOtp as sendOtpAPI,
   verifyOtp as verifyOtpAPI,
 } from '@/utils/api'
 import { normalizeMobile } from '@/utils/format'
 
 const CUSTOMER_AUTH_KEY = 'restaurant-customer-auth-v1'
-const referralCode = new URLSearchParams(window.location.search).get('ref') || ''
+const initialReferralCode = new URLSearchParams(window.location.search).get('ref') || ''
 const props = defineProps({
   boot: { type: Object, default: () => ({}) },
 })
@@ -189,19 +195,19 @@ const identifier = ref('')
 const password = ref('')
 const registerName = ref('')
 const registerEmail = ref('')
-const verificationEmail = ref('')
-const registerReferralCode = ref(referralCode)
+const referralCode = ref(initialReferralCode)
 const registerPhone = ref('')
 const registerPassword = ref('')
 const registerPasswordConfirmation = ref('')
-const registrationCustomerToken = ref('')
+const registrationVerificationToken = ref('')
+const registrationChallengeId = ref('')
+const otpChallengeId = ref('')
 const otpDigits = ref(['', '', '', '', '', ''])
 const otpRefs = ref([])
 const sending = ref(false)
 const verifying = ref(false)
 const loggingIn = ref(false)
 const registering = ref(false)
-const emailVerificationLoading = ref(false)
 const error = ref('')
 const countdown = ref(0)
 let countdownTimer = null
@@ -231,7 +237,7 @@ const registrationDisplayPhone = computed(() => registrationMobile.value || regi
 const canLoginWithPassword = computed(() => Boolean(identifier.value.trim() && password.value))
 const canStartRegistration = computed(() => Boolean(
   registerName.value.trim()
-  && registerEmail.value.trim().includes('@')
+  && (!registerEmail.value.trim() || registerEmail.value.trim().includes('@'))
   && registrationMobile.value
   && registerPassword.value.length >= 8
   && registerPassword.value === registerPasswordConfirmation.value,
@@ -266,10 +272,10 @@ async function sendOtp() {
       error.value = result.message || 'برای ارسال دوباره کد، کمی صبر کنید.'
       return
     }
-    if (result?.debug_otp) console.info('[Restaurant OTP]', result.debug_otp)
-    step.value = 'otp'
+    otpChallengeId.value = result?.challenge_id || ''
+	    step.value = 'otp'
     otpDigits.value = ['', '', '', '', '', '']
-    startCountdown(120)
+    startCountdown(result?.retry_after || 60)
     setTimeout(() => otpRefs.value[0]?.focus(), 100)
   } catch (e) {
     error.value = String(e?.message || '').trim() || 'خطا در ارسال کد. لطفاً دوباره تلاش کنید.'
@@ -284,8 +290,18 @@ async function verifyOtp() {
   error.value = ''
   try {
     const fullPhone = `0${normalizeMobile(phone.value)}`
-    const data = await verifyOtpAPI({ mobile: fullPhone, otp: otpCode.value })
-    if (data?.success || data?.verified) {
+    const data = await verifyOtpAPI({ mobile: fullPhone, otp: otpCode.value, challenge_id: otpChallengeId.value })
+    if (data?.success && data?.customer_exists === false && data?.mobile_verification_token) {
+      registerPhone.value = fullPhone
+      registerName.value = ''
+      registerEmail.value = ''
+      registerPassword.value = ''
+      registerPasswordConfirmation.value = ''
+      referralCode.value = initialReferralCode
+      registrationVerificationToken.value = data.mobile_verification_token
+      accountMode.value = 'register'
+      step.value = 'register_profile'
+    } else if ((data?.success || data?.verified) && data?.customer_token) {
       persistCustomerSession(data, fullPhone)
       window.location.href = postLoginDestination()
     } else {
@@ -311,6 +327,7 @@ function persistCustomerSession(data = {}, fallbackMobile = '') {
       customer_token: data.customer_token || '',
     }))
     localStorage.setItem('customer_phone', mobile)
+    localStorage.setItem('customer_email', customer.email || '')
     if (customer.name) localStorage.setItem('customer_name', customer.name)
   } catch {}
 }
@@ -320,7 +337,9 @@ function selectAuthMethod(method) {
   step.value = 'phone'
   error.value = ''
   otpDigits.value = ['', '', '', '', '', '']
-  registrationCustomerToken.value = ''
+  registrationVerificationToken.value = ''
+  registrationChallengeId.value = ''
+  otpChallengeId.value = ''
 }
 
 function setAccountMode(mode) {
@@ -328,7 +347,8 @@ function setAccountMode(mode) {
   step.value = 'phone'
   error.value = ''
   password.value = ''
-  registrationCustomerToken.value = ''
+  registrationVerificationToken.value = ''
+  registrationChallengeId.value = ''
 }
 
 async function loginWithPassword() {
@@ -364,18 +384,18 @@ async function beginPasswordRegistration() {
   sending.value = true
   error.value = ''
   try {
-    const result = await customerRegisterWithEmail({
-      name: registerName.value.trim(),
-      email: registerEmail.value.trim(),
-      mobile: registrationMobile.value,
-      password: registerPassword.value,
-      referral_code: registerReferralCode.value.trim(),
-    })
-    if (result?.status !== 'verification_sent') throw new Error('ارسال پیوند تأیید انجام نشد.')
-    verificationEmail.value = result.email || registerEmail.value.trim()
-    step.value = 'email_sent'
+    const result = await sendOtpAPI({ mobile: registrationMobile.value })
+    if (result?.cooldown) {
+      error.value = result.message || 'برای ارسال دوباره کد، کمی صبر کنید.'
+      return
+    }
+    registrationChallengeId.value = result?.challenge_id || ''
+    step.value = 'register_otp'
+    otpDigits.value = ['', '', '', '', '', '']
+    startCountdown(result?.retry_after || 60)
+    setTimeout(() => otpRefs.value[0]?.focus(), 100)
   } catch (e) {
-    error.value = e.message || 'ارسال پیوند تأیید ناموفق بود؛ ایمیل و اطلاعات ثبت‌نام را بررسی کنید.'
+    error.value = e.message || 'ارسال کد تأیید ناموفق بود؛ شماره موبایل و اطلاعات ثبت‌نام را بررسی کنید.'
   } finally {
     sending.value = false
   }
@@ -386,32 +406,49 @@ async function finishPasswordRegistration() {
   registering.value = true
   error.value = ''
   try {
-    if (!registrationCustomerToken.value) {
+    if (!registrationVerificationToken.value) {
       const verified = await verifyOtpAPI({
         mobile: registrationMobile.value,
         otp: otpCode.value,
-        customer_name: registerName.value.trim(),
+        challenge_id: registrationChallengeId.value,
       })
-      if (!(verified?.success || verified?.verified) || !verified?.customer_token) {
-        throw new Error('کد تأیید معتبر نیست یا منقضی شده است.')
+      if (!(verified?.success || verified?.verified) || verified?.customer_exists !== false || !verified?.mobile_verification_token) {
+        throw new Error('این شماره قبلاً حساب دارد یا کد تأیید معتبر نیست؛ از ورود پیامکی استفاده کنید.')
       }
-      registrationCustomerToken.value = verified.customer_token
+      registrationVerificationToken.value = verified.mobile_verification_token
     }
+    await completeRegistration(registrationVerificationToken.value)
+  } catch (e) {
+    error.value = e.message || 'ساخت حساب ناموفق بود؛ دوباره تلاش کنید.'
+  } finally {
+    registering.value = false
+  }
+}
+
+async function completeOtpRegistration() {
+  if (registering.value || !canStartRegistration.value || !registrationVerificationToken.value) return
+  registering.value = true
+  error.value = ''
+  try {
+    await completeRegistration(registrationVerificationToken.value)
+  } catch (e) {
+    error.value = e.message || 'ساخت حساب ناموفق بود؛ دوباره تلاش کنید.'
+  } finally {
+    registering.value = false
+  }
+}
+
+async function completeRegistration(mobileVerificationToken) {
     const result = await customerRegisterPassword({
-      customer_token: registrationCustomerToken.value,
+      mobile_verification_token: mobileVerificationToken,
       name: registerName.value.trim(),
       email: registerEmail.value.trim(),
       password: registerPassword.value,
-      referral_code: referralCode,
+      referral_code: referralCode.value.trim(),
     })
     if (!result?.success || !result?.customer_token) throw new Error('ساخت حساب انجام نشد؛ دوباره تلاش کنید.')
     persistCustomerSession(result, registrationMobile.value)
     window.location.href = postLoginDestination()
-  } catch (e) {
-    error.value = e.message || 'ساخت حساب ناموفق بود؛ اطلاعات را بررسی کنید.'
-  } finally {
-    registering.value = false
-  }
 }
 
 function onOtpInput(index, event) {
@@ -431,8 +468,8 @@ function onOtpInput(index, event) {
     if (val && index < 5) otpRefs.value[index + 1]?.focus()
   }
   if (otpCode.value.length === 6) {
-    if (authMethod.value === 'otp') verifyOtp()
-    else finishPasswordRegistration()
+    if (authMethod.value === 'otp' && step.value === 'otp') verifyOtp()
+    else if (step.value === 'register_otp') finishPasswordRegistration()
   }
 }
 
@@ -466,20 +503,6 @@ function startCountdown(seconds) {
 }
 
 onMounted(() => {
-  const verificationToken = new URLSearchParams(window.location.search).get('verify_email') || ''
-  if (verificationToken) {
-    emailVerificationLoading.value = true
-    customerVerifyEmailRegistration(verificationToken).then((result) => {
-      if (!result?.success || !result?.customer_token) throw new Error('فعال‌سازی حساب انجام نشد.')
-      persistCustomerSession(result)
-      window.location.replace(postLoginDestination())
-    }).catch((err) => {
-      error.value = err?.message || 'پیوند تأیید معتبر نیست یا منقضی شده است.'
-    }).finally(() => {
-      emailVerificationLoading.value = false
-    })
-    return
-  }
   if (identifierInput.value) identifierInput.value.focus()
   else phoneInput.value?.focus()
 })

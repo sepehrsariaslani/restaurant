@@ -46,9 +46,13 @@ class CustomerAccountTests(unittest.TestCase):
         frappe.cache = lambda: cls.cache
         frappe.conf = {"encryption_key": "test-only-signing-key"}
         frappe.db = types.SimpleNamespace(exists=lambda doctype, name: doctype == "Customer" and name == "CUST-1")
+        rate_limiter = types.ModuleType("frappe.rate_limiter")
+        rate_limiter.rate_limit = lambda *args, **kwargs: (lambda fn: fn)
         cls.frappe = frappe
         cls.original = sys.modules.get("frappe")
+        cls.original_rate_limiter = sys.modules.get("frappe.rate_limiter")
         sys.modules["frappe"] = frappe
+        sys.modules["frappe.rate_limiter"] = rate_limiter
         spec = importlib.util.spec_from_file_location("restaurant.customer_account_test_target", Path(__file__).resolve().parents[1] / "customer_account.py")
         cls.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.module)
@@ -59,6 +63,10 @@ class CustomerAccountTests(unittest.TestCase):
             sys.modules.pop("frappe", None)
         else:
             sys.modules["frappe"] = cls.original
+        if cls.original_rate_limiter is None:
+            sys.modules.pop("frappe.rate_limiter", None)
+        else:
+            sys.modules["frappe.rate_limiter"] = cls.original_rate_limiter
 
     def setUp(self):
         self.cache.values.clear()

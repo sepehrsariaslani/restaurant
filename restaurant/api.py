@@ -1,4 +1,5 @@
 import json
+import hashlib
 import math
 import os
 import random
@@ -16,6 +17,7 @@ from urllib.request import Request, urlopen
 import frappe
 from frappe import _
 from frappe.model.rename_doc import rename_doc
+from frappe.rate_limiter import rate_limit
 from frappe.twofactor import get_qr_svg_code
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
@@ -10451,7 +10453,75 @@ def _otp_cooldown_key(mobile):
 	return "restaurant_customer_otp_cooldown:{0}".format(_ensure_mobile(mobile))
 
 
-@frappe.whitelist(allow_guest=True)
+def _otp_verified_ticket_key(ticket):
+	digest = hashlib.sha256(str(ticket or "").encode("utf-8")).hexdigest()
+	return "restaurant_customer_otp_verified:{0}".format(digest)
+
+
+def _otp_verified_ticket_lock_key(ticket):
+	digest = hashlib.sha256(str(ticket or "").encode("utf-8")).hexdigest()
+	return "restaurant_customer_otp_verified_lock:{0}".format(digest)
+
+
+def _issue_mobile_verification_ticket(mobile):
+	ticket = frappe.generate_hash(length=40)
+	frappe.cache().set_value(
+		_otp_verified_ticket_key(ticket),
+		{"mobile": _ensure_mobile(mobile, allow_empty=False)},
+		expires_in_sec=600,
+	)
+	return ticket
+
+
+def _consume_mobile_verification_ticket(ticket, mobile=None):
+	ticket = str(ticket or "").strip()
+	if not ticket:
+		frappe.throw(_("تأیید شمارهٔ موبایل پیدا نشد؛ دوباره کد بگیرید."), frappe.PermissionError)
+	cache = frappe.cache()
+	lock = cache.lock(cache.make_key(_otp_verified_ticket_lock_key(ticket)), timeout=30, blocking_timeout=5)
+	lock_acquired = False
+	try:
+		lock_acquired = lock.acquire(blocking=True)
+		if not lock_acquired:
+			frappe.throw(_("تأیید شمارهٔ موبایل هم‌زمان در حال استفاده است؛ دوباره تلاش کنید."), frappe.ValidationError)
+		payload = cache.get_value(_otp_verified_ticket_key(ticket), use_local_cache=False)
+		if isinstance(payload, bytes):
+			payload = payload.decode()
+		if isinstance(payload, str):
+			try:
+				payload = json.loads(payload)
+			except (TypeError, ValueError, json.JSONDecodeError):
+				payload = None
+		if not isinstance(payload, dict):
+			frappe.throw(_("تأیید شمارهٔ موبایل منقضی شده است؛ دوباره کد بگیرید."), frappe.PermissionError)
+		verified_mobile = _ensure_mobile(payload.get("mobile"), allow_empty=False)
+		requested_mobile = _ensure_mobile(mobile, allow_empty=True)
+		if requested_mobile and verified_mobile != requested_mobile:
+			frappe.throw(_("شمارهٔ موبایل با تأیید انجام‌شده مطابقت ندارد."), frappe.PermissionError)
+		cache.delete_value(_otp_verified_ticket_key(ticket))
+		return verified_mobile
+	finally:
+		if lock_acquired:
+			lock.release()
+
+
+def _log_customer_otp_event(event_type, mobile, challenge_id="", error=None):
+	try:
+		from frappe.mobile_login import _log_mobile_otp_event
+
+		_log_mobile_otp_event(
+			event_type=event_type,
+			mobile=mobile,
+			challenge_id=challenge_id,
+			send_mode="verify",
+			error=error,
+		)
+	except Exception:
+		return
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=5, seconds=60 * 60)
 def send_otp(mobile, customer_name=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
@@ -10468,34 +10538,57 @@ def send_otp(mobile, customer_name=None):
 		}
 
 	otp = "".join(random.choices(string.digits, k=6))
-	cache.set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)
-	result = {"success": True, "sent": 1, "mobile": normalized_mobile, "expires_in": 300}
-	if cint(frappe.conf.get("developer_mode")):
-		result["debug_otp"] = otp
-	else:
-		try:
-			from accounts.sms_ir_customer import send_customer_otp, sms_ir_customer_otp_enabled
+	challenge_id = frappe.generate_hash(length=24)
+	cache.set_value(
+		_otp_cache_key(normalized_mobile),
+		{"otp": otp, "challenge_id": challenge_id},
+		expires_in_sec=300,
+	)
+	result = {
+		"success": True,
+		"sent": 1,
+		"mobile": normalized_mobile,
+		"expires_in": 300,
+		"challenge_id": challenge_id,
+	}
+	from accounts.sms_ir_client import SmsIrProviderError
 
-			if sms_ir_customer_otp_enabled():
-				send_customer_otp(normalized_mobile, otp)
-			else:
-				has_sms_gateway = bool(frappe.db.get_single_value("SMS Settings", "sms_gateway_url"))
-				if not has_sms_gateway:
-					frappe.throw(_("درگاه پیامک برای ارسال کد تأیید تنظیم نشده است."))
-				sms_module = frappe.get_module("frappe.core.doctype.sms_settings.sms_settings")
-				sms_module.send_sms([normalized_mobile], _("کد تأیید حساب مشتری شما: {0}").format(otp), success_msg=False)
-		except Exception as exc:
+	try:
+		from accounts.sms_ir_customer import send_customer_otp, sms_ir_customer_otp_enabled
+
+		if sms_ir_customer_otp_enabled():
+			send_customer_otp(normalized_mobile, otp, challenge_id=challenge_id)
+		else:
+			has_sms_gateway = bool(frappe.db.get_single_value("SMS Settings", "sms_gateway_url"))
+			if not has_sms_gateway:
+				frappe.throw(_("درگاه پیامک برای ارسال کد تأیید تنظیم نشده است."))
+			sms_module = frappe.get_module("frappe.core.doctype.sms_settings.sms_settings")
+			sms_module.send_sms([normalized_mobile], _("کد تأیید حساب مشتری شما: {0}").format(otp), success_msg=False)
+			_log_customer_otp_event(event_type="sms_sent", mobile=normalized_mobile, challenge_id=challenge_id)
+	except SmsIrProviderError as exc:
+		if (exc.uncertain_delivery and exc.provider_status is None) or (exc.status_code is None and exc.provider_status is None):
+			result.update({
+				"delivery_pending": True,
+				"message": _("درخواست ارسال ثبت شد؛ ممکن است دریافت پیامک چند لحظه طول بکشد."),
+			})
+		else:
 			cache.delete_value(_otp_cache_key(normalized_mobile))
-			if isinstance(exc, frappe.ValidationError):
-				raise
-			frappe.log_error(frappe.get_traceback(), "Restaurant customer OTP send failed")
-			frappe.throw(_("ارسال کد تأیید ناموفق بود؛ تنظیمات پیامک را بررسی کنید."))
+			frappe.throw(str(exc) or _("ارسال کد تأیید ناموفق بود."), frappe.ValidationError)
+	except Exception as exc:
+		_log_customer_otp_event(event_type="sms_failed", mobile=normalized_mobile, challenge_id=challenge_id, error=str(exc))
+		cache.delete_value(_otp_cache_key(normalized_mobile))
+		if isinstance(exc, frappe.ValidationError):
+			raise
+		frappe.log_error(frappe.get_traceback(), "Restaurant customer OTP send failed")
+		frappe.throw(_("ارسال کد تأیید ناموفق بود؛ تنظیمات پیامک را بررسی کنید."))
 	cache.set_value(cooldown_key, 1, expires_in_sec=60)
+	result["retry_after"] = 60
 	return result
 
 
-@frappe.whitelist(allow_guest=True)
-def verify_otp(mobile, otp=None, code=None, customer_name=None):
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=30, seconds=60 * 60)
+def verify_otp(mobile, otp=None, code=None, customer_name=None, challenge_id=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
 		return ""
@@ -10504,30 +10597,59 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 	cached = cache.get_value(_otp_cache_key(normalized_mobile))
 	if isinstance(cached, bytes):
 		cached = cached.decode()
-	if not provided or str(cached or "") != provided:
+	provided_challenge_id = str(challenge_id or "").strip()
+	cached_challenge_id = ""
+	if isinstance(cached, dict):
+		cached_otp = str(cached.get("otp") or "")
+		cached_challenge_id = str(cached.get("challenge_id") or "")
+	else:
+		cached_otp = str(cached or "")
+	if isinstance(cached, str) and cached.startswith("{"):
+		try:
+			cached_payload = json.loads(cached)
+			cached_otp = str(cached_payload.get("otp") or "")
+			cached_challenge_id = str(cached_payload.get("challenge_id") or "")
+		except (TypeError, ValueError, json.JSONDecodeError):
+			pass
+	if provided_challenge_id and cached_challenge_id and provided_challenge_id != cached_challenge_id:
+		_log_customer_otp_event(event_type="otp_failed", mobile=normalized_mobile, challenge_id=cached_challenge_id, error="شناسهٔ چالش OTP مطابقت ندارد.")
+		frappe.throw(_("جلسهٔ تأیید منقضی شده است؛ دوباره کد بگیرید."), frappe.PermissionError)
+	if not provided or cached_otp != provided:
 		attempt_key = _otp_cache_key(normalized_mobile) + ":attempts"
 		attempts = cint(cache.get_value(attempt_key) or 0) + 1
 		cache.set_value(attempt_key, attempts, expires_in_sec=300)
 		if attempts >= 6:
 			cache.delete_value(_otp_cache_key(normalized_mobile))
 			cache.delete_value(attempt_key)
+		_log_customer_otp_event(event_type="otp_failed", mobile=normalized_mobile, challenge_id=cached_challenge_id, error="کد OTP نادرست یا منقضی است.")
 		frappe.throw(_("Invalid or expired OTP."), frappe.PermissionError)
 
 	resolved_name = (customer_name or "").strip()
 	customer_docname = _find_customer_by_mobile(normalized_mobile)
-	if not customer_docname:
-		customer_docname = _ensure_customer(resolved_name or normalized_mobile, normalized_mobile)
-	elif not resolved_name:
-		resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
 	cache.delete_value(_otp_cache_key(normalized_mobile))
 	cache.delete_value(_otp_cache_key(normalized_mobile) + ":attempts")
 	cache.delete_value(_otp_cooldown_key(normalized_mobile))
+	if not customer_docname:
+		_log_customer_otp_event(event_type="otp_verified", mobile=normalized_mobile, challenge_id=cached_challenge_id)
+		return {
+			"success": True,
+			"verified": 1,
+			"mobile_verified": True,
+			"customer_exists": False,
+			"mobile": normalized_mobile,
+			"mobile_verification_token": _issue_mobile_verification_ticket(normalized_mobile),
+			"customer": {"customer_id": "", "name": "", "mobile": normalized_mobile},
+		}
+	elif not resolved_name:
+		resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
 	from restaurant.customer_account import issue_customer_session
 
+	_log_customer_otp_event(event_type="otp_verified", mobile=normalized_mobile, challenge_id=cached_challenge_id)
 	return {
 		"customer_token": issue_customer_session(customer_docname, normalized_mobile),
 		"success": True,
 		"verified": 1,
+		"customer_exists": True,
 		"mobile": normalized_mobile,
 		"customer": {
 			"customer_id": customer_docname,
@@ -10537,14 +10659,14 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 	}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def customer_send_otp(mobile, customer_name=None):
 	return send_otp(mobile=mobile, customer_name=customer_name)
 
 
-@frappe.whitelist(allow_guest=True)
-def customer_verify_otp(mobile, code=None, otp=None, customer_name=None):
-	return verify_otp(mobile=mobile, otp=otp, code=code, customer_name=customer_name)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def customer_verify_otp(mobile, code=None, otp=None, customer_name=None, challenge_id=None):
+	return verify_otp(mobile=mobile, otp=otp, code=code, customer_name=customer_name, challenge_id=challenge_id)
 
 
 def _ensure_company_branch_fields():

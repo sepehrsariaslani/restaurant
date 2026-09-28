@@ -8,6 +8,7 @@ import time
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 CUSTOMER_SESSION_TTL = 7 * 24 * 60 * 60
 
@@ -370,7 +371,8 @@ def customer_verify_email(token=None):
 	return _customer_password_result(customer, verification.mobile, verification.email, token=customer_token)
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=20, seconds=60 * 60)
 def customer_login_password(identifier=None, password=None, mobile=None):
 	"""Authenticate a website customer by their verified email or mobile number."""
 	identifier = str(identifier or mobile or "").strip()
@@ -437,9 +439,84 @@ def customer_login_password(identifier=None, password=None, mobile=None):
 	return _customer_password_result(customer, normalized_mobile, user.email or "")
 
 
-@frappe.whitelist(allow_guest=True)
-def customer_register_password(customer_token=None, name=None, email=None, password=None, referral_code=None):
+def _create_verified_mobile_customer(name, email, mobile):
+	from restaurant.api import _find_customer_by_mobile
+
+	if _find_customer_by_mobile(mobile):
+		frappe.throw(_("این شماره در همین فاصله به حساب دیگری متصل شده است؛ دوباره با کد پیامکی وارد شوید."), frappe.PermissionError)
+	customer_group = frappe.db.get_single_value("Selling Settings", "customer_group") or frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
+	territory = frappe.db.get_single_value("Selling Settings", "territory") or frappe.db.get_value("Territory", {"is_group": 0}, "name")
+	if not customer_group or not territory:
+		frappe.throw(_("گروه مشتری و قلمرو پیش‌فرض فروش باید تنظیم شده باشند."))
+	customer_name = name[:140]
+	if frappe.db.exists("Customer", customer_name):
+		customer_name = "{0} ({1})".format(name[:120], mobile[-4:])
+	return frappe.get_doc({
+		"doctype": "Customer",
+		"customer_name": customer_name,
+		"customer_type": "Individual",
+		"customer_group": customer_group,
+		"territory": territory,
+		"mobile_no": mobile,
+		"email_id": email,
+	}).insert(ignore_permissions=True)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=10, seconds=60 * 60)
+def customer_register_password(customer_token=None, mobile_verification_token=None, name=None, email=None, password=None, referral_code=None):
 	"""Create or update a native website account after mobile OTP verification."""
+	if mobile_verification_token and not customer_token:
+		name = str(name or "").strip()[:140]
+		email = str(email or "").strip().lower()
+		password = str(password or "")
+		referral_code = "".join(str(referral_code or "").upper().split())[:40]
+		if len(name) < 2:
+			frappe.throw(_("نام و نام خانوادگی را وارد کنید."))
+		if email:
+			frappe.utils.validate_email_address(email, throw=True)
+		if len(password) < 8:
+			frappe.throw(_("رمز عبور باید دست‌کم ۸ نویسه باشد."))
+		if frappe.get_system_settings("disable_user_pass_login"):
+			frappe.throw(_("ثبت‌نام با رمز عبور در این سامانه غیرفعال است."))
+		if referral_code:
+			from restaurant.api_club import _club_find_referral_owner
+
+			if not _club_find_referral_owner(referral_code):
+				frappe.throw(_("کد معرفی معتبر نیست."))
+		from restaurant.api import _consume_mobile_verification_ticket
+
+		if email and frappe.db.exists("User", email):
+			frappe.throw(_("این ایمیل قبلاً برای حساب دیگری ثبت شده است."))
+		mobile = _consume_mobile_verification_ticket(mobile_verification_token)
+		resolved_email = email or "customer-{0}@login.invalid".format(mobile)
+		if frappe.db.exists("User", resolved_email):
+			frappe.throw(_("برای این شماره قبلاً حساب کاربری ساخته شده است؛ با کد پیامکی وارد شوید."))
+		customer = _create_verified_mobile_customer(name, email, mobile)
+		customer_token = issue_customer_session(customer.name, mobile)
+		save_profile(customer_token=customer_token, name=name, email=email)
+		customer = frappe.get_doc("Customer", customer.name)
+		if referral_code:
+			from restaurant.api_club import bind_my_referral_code
+
+			bind_my_referral_code(customer_token=customer_token, referral_code=referral_code)
+			customer = frappe.get_doc("Customer", customer.name)
+		user = frappe.get_doc({
+			"doctype": "User",
+			"email": resolved_email,
+			"first_name": name,
+			"mobile_no": mobile,
+			"user_type": "Website User",
+			"enabled": 1,
+			"send_welcome_email": 0,
+			"new_password": password,
+		})
+		user.flags.no_welcome_mail = True
+		user.insert(ignore_permissions=True)
+		customer.append("portal_users", {"user": user.name})
+		customer.save(ignore_permissions=True)
+		return _customer_password_result(customer, mobile, email, token=customer_token)
+
 	identity = _require_customer(customer_token)
 	from restaurant.api import _ensure_mobile
 
@@ -532,6 +609,37 @@ def customer_session(customer_token=None):
 		customer.email_id or "",
 		token=customer_token if token_is_valid else None,
 	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=10, seconds=60 * 60)
+def customer_change_password(customer_token=None, current_password=None, new_password=None, confirm_password=None):
+	identity = _require_customer(customer_token)
+	current_password = str(current_password or "")
+	new_password = str(new_password or "")
+	confirm_password = str(confirm_password or "")
+	if len(new_password) < 8:
+		frappe.throw(_("رمز عبور جدید باید دست‌کم ۸ نویسه باشد."))
+	if new_password != confirm_password:
+		frappe.throw(_("تکرار رمز عبور جدید با رمز واردشده یکسان نیست."))
+	customer = frappe.get_doc("Customer", identity["customer"])
+	linked_users = _customer_password_user(customer)
+	if len(linked_users) != 1:
+		frappe.throw(_("برای این حساب هنوز رمز عبور ساخته نشده است؛ ابتدا ثبت‌نام را کامل کنید."), frappe.PermissionError)
+	user = frappe.get_doc("User", linked_users[0])
+	if user.user_type != "Website User" or not user.enabled:
+		frappe.throw(_("حساب کاربری فعال نیست."), frappe.PermissionError)
+	if not current_password:
+		frappe.throw(_("رمز عبور فعلی را وارد کنید."), frappe.AuthenticationError)
+	from frappe.utils.password import check_password
+
+	try:
+		check_password(user.name, current_password)
+	except frappe.AuthenticationError:
+		frappe.throw(_("رمز عبور فعلی نادرست است."), frappe.AuthenticationError)
+	user.new_password = new_password
+	user.save(ignore_permissions=True)
+	return {"success": True, "message": _("رمز عبور با موفقیت تغییر کرد.")}
 
 
 @frappe.whitelist(allow_guest=True)
