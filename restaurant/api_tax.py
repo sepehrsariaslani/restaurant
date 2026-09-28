@@ -13,7 +13,9 @@ bottom of ``api.py``) and called as ``/api/method/restaurant.api.<endpoint>``.
 """
 
 import json
+import unicodedata
 import urllib.request
+from urllib.parse import urlsplit
 
 import frappe
 from frappe import _
@@ -119,6 +121,17 @@ def _tax_settings():
 	}
 
 
+def _tax_digits(value):
+	output = []
+	for character in str(value or ""):
+		try:
+			output.append(str(unicodedata.digit(character)))
+		except (TypeError, ValueError):
+			if character.isdigit():
+				output.append(character)
+	return "".join(output)
+
+
 # ---------------------------------------------------------------------------
 # Payload builder
 # ---------------------------------------------------------------------------
@@ -129,6 +142,8 @@ def build_tax_invoice_payload(sales_invoice):
 	if not frappe.db.exists("Sales Invoice", sales_invoice):
 		frappe.throw(_("فاکتور یافت نشد: {0}").format(sales_invoice or "-"))
 	si = frappe.get_doc("Sales Invoice", sales_invoice)
+	if cint(si.docstatus) != 1 or cint(si.get("is_return")):
+		frappe.throw(_("فقط فاکتور فروش ثبت‌شده و غیرمرجوعی قابل ارسال است"), frappe.ValidationError)
 	settings = _tax_settings()
 	posting_dt = getdate(si.posting_date) if si.posting_date else getdate(today())
 	import time as _time
@@ -136,7 +151,7 @@ def build_tax_invoice_payload(sales_invoice):
 	ref = frappe.db.get_value(TAX_DOCTYPE, {"sales_invoice": si.name}, "reference_id") if frappe.db.exists("DocType", TAX_DOCTYPE) else None
 	if not ref:
 		serial = "".join(ch for ch in si.name if ch.isdigit())[-7:] or "1"
-		ref = f"{settings['memory_code'] or 'MEM'}{serial}{posting_dt.strftime('%y%m%d')}"
+		ref = f"{settings['memory_code']}{serial}{posting_dt.strftime('%y%m%d')}"
 	tax_total = flt(getattr(si, "total_taxes_and_charges", 0) or sum(flt(t.tax_amount) for t in getattr(si, "taxes", []) or []))
 	net_total = flt(si.net_total or si.total)
 	grand_total = flt(si.grand_total or si.rounded_total)
@@ -222,6 +237,11 @@ def get_management_tax_boot():
 @frappe.whitelist()
 def set_management_tax_settings(payload=None):
 	_ensure_management_access()
+	return _save_tax_settings(payload)
+
+
+def _save_tax_settings(payload=None):
+	"""Persist the existing singleton settings for trusted Accounts/Restaurant facades."""
 	_tax_ensure_ops_ready()
 	payload = _parse_json(payload, {})
 	for key in ("restaurant_tax_enabled", "restaurant_tax_sandbox", "restaurant_tax_auto_submit"):
@@ -294,8 +314,36 @@ def _tax_get_or_create_submission(si_name, payload_json):
 @frappe.whitelist()
 def submit_management_tax_invoice(sales_invoice=""):
 	_ensure_management_access()
+	return _submit_tax_invoice(sales_invoice)
+
+
+def _submit_tax_invoice(sales_invoice=""):
+	"""Run the native invoice payload/submission lifecycle after facade authorization."""
 	sales_invoice = (sales_invoice or "").strip()
 	settings = _tax_settings()
+	if not frappe.db.exists("Sales Invoice", sales_invoice):
+		frappe.throw(_("فاکتور یافت نشد: {0}").format(sales_invoice or "-"))
+	sales_invoice_doc = frappe.get_doc("Sales Invoice", sales_invoice)
+	if cint(sales_invoice_doc.docstatus) != 1 or cint(sales_invoice_doc.get("is_return")):
+		frappe.throw(_("فقط فاکتور فروش ثبت‌شده و غیرمرجوعی قابل ارسال است"), frappe.ValidationError)
+	company_tax_id = _tax_digits(frappe.db.get_value("Company", sales_invoice_doc.company, "tax_id"))
+	economic_code = _tax_digits(settings.get("economic_code"))
+	if not company_tax_id or not economic_code or company_tax_id != economic_code:
+		frappe.throw(_("کد اقتصادی اتصال مؤدیان با Tax ID شرکت فاکتور یکسان نیست"), frappe.ValidationError)
+	company_currency = frappe.db.get_value("Company", sales_invoice_doc.company, "default_currency")
+	if company_currency and sales_invoice_doc.currency != company_currency:
+		frappe.throw(_("ارسال فاکتور ارزی تا پشتیبانی تبدیل و کدگذاری ارز در درگاه فعال نشده است"), frappe.ValidationError)
+	if not settings.get("memory_code"):
+		frappe.throw(_("کد حافظه مالیاتی ثبت نشده است"), frappe.ValidationError)
+	if settings["enabled"]:
+		try:
+			endpoint = urlsplit(str(settings.get("api_url") or ""))
+		except ValueError:
+			endpoint = None
+		if not endpoint or endpoint.scheme.lower() != "https" or not endpoint.hostname or endpoint.username or endpoint.password or endpoint.fragment:
+			frappe.throw(_("برای ارسال واقعی، نشانی HTTPS معتبر سرویس مؤدیان لازم است"), frappe.ValidationError)
+		if not settings.get("token_set"):
+			frappe.throw(_("توکن اتصال مؤدیان ثبت نشده است"), frappe.ValidationError)
 	payload_json = build_tax_invoice_payload(sales_invoice)
 	doc, proceeding = _tax_get_or_create_submission(sales_invoice, payload_json)
 	if not proceeding:
