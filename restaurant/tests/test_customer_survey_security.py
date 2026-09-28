@@ -50,6 +50,17 @@ class SurveySecurityTests(unittest.TestCase):
 		spec = importlib.util.spec_from_file_location("restaurant.api_survey_security_test", target)
 		cls.module = importlib.util.module_from_spec(spec)
 		spec.loader.exec_module(cls.module)
+		cls.original_module_functions = {
+			name: getattr(cls.module, name)
+			for name in (
+				"_invitation_by_token",
+				"_load_order",
+				"_queue_invitation",
+				"_read_order_identity",
+				"_valid_mobile",
+				"now_datetime",
+			)
+		}
 
 		for name, value in originals.items():
 			if value is None:
@@ -64,6 +75,8 @@ class SurveySecurityTests(unittest.TestCase):
 
 	def setUp(self):
 		self.frappe = self.module.frappe
+		for name, value in self.original_module_functions.items():
+			setattr(self.module, name, value)
 		class Data(dict):
 			__getattr__ = dict.__getitem__
 
@@ -152,6 +165,125 @@ class SurveySecurityTests(unittest.TestCase):
 		}
 		with self.assertRaises(PermissionError):
 			self.module.submit_public_survey(payload)
+
+	def test_submitted_sales_order_survey_accepts_all_active_statuses(self):
+		class Order(types.SimpleNamespace):
+			def get(self, key, default=None):
+				return getattr(self, key, default)
+
+		order = Order(
+			name="SO-1",
+			docstatus=1,
+			restaurant_status="confirmed",
+			customer="CUST-1",
+			customer_name="Customer One",
+			restaurant_customer_mobile="09120000000",
+			items=[],
+			creation=datetime(2026, 9, 28, 9, 0),
+		)
+		self.module._valid_mobile = lambda value: str(value or "")
+		self.module.api_club._club_customer_mobile = lambda customer: ""
+		self.frappe.db = types.SimpleNamespace(
+			exists=lambda doctype, name: True,
+			get_value=lambda *args, **kwargs: None,
+		)
+		self.frappe.get_doc = lambda doctype, name: order
+		invitation = types.SimpleNamespace(
+			reference_doctype="Sales Order",
+			reference_name="SO-1",
+			order_code="SO-1",
+			customer_name="Customer One",
+		)
+
+		for status in ("new", "confirmed", "preparing", "ready", "delivered", "served"):
+			with self.subTest(status=status):
+				order.restaurant_status = status
+				self.assertIsNotNone(self.module._read_order_identity("Sales Order", "SO-1"))
+				self.assertIsNotNone(self.module._load_order(invitation))
+
+	def test_invitation_due_time_is_based_on_order_creation_and_never_in_the_past(self):
+		now = datetime(2026, 9, 28, 12, 0)
+		created_at = now - timedelta(hours=2)
+		self.module.now_datetime = lambda: now
+		self.module.api_club._club_club_settings = lambda: {"survey_delay_minutes": 60}
+		self.module._read_order_identity = lambda doctype, name: {
+			"customer": "CUST-1",
+			"customer_name": "Customer One",
+			"mobile": "09120000000",
+			"order_code": "SO-1",
+			"creation": created_at,
+		}
+
+		class Invitation(types.SimpleNamespace):
+			def insert(self, **kwargs):
+				self.insert_kwargs = kwargs
+
+		doc = Invitation()
+		self.frappe.db = types.SimpleNamespace(
+			exists=lambda doctype, name: doctype == "DocType",
+			get_value=lambda *args, **kwargs: None,
+		)
+		self.frappe.new_doc = lambda doctype: doc
+
+		result = self.module._queue_invitation("Sales Order", "SO-1")
+
+		self.assertIs(result, doc)
+		self.assertEqual(doc.due_at, now)
+
+		created_at = now - timedelta(minutes=30)
+		second_doc = Invitation()
+		self.frappe.new_doc = lambda doctype: second_doc
+		result = self.module._queue_invitation("Sales Order", "SO-2")
+
+		self.assertIs(result, second_doc)
+		self.assertEqual(second_doc.due_at, now + timedelta(minutes=30))
+
+	def test_legacy_runner_skips_when_sms_ir_feedback_delivery_exists(self):
+		now = datetime(2026, 9, 28, 12, 0)
+
+		class Invitation(types.SimpleNamespace):
+			def save(self, **kwargs):
+				self.save_kwargs = kwargs
+
+		doc = Invitation(
+			name="RSI-1",
+			reference_doctype="Sales Order",
+			reference_name="SO-1",
+			status="در انتظار ارسال",
+			last_error="",
+		)
+		self.module.now_datetime = lambda: now
+		self.frappe.get_all = lambda *args, **kwargs: [types.SimpleNamespace(name="RSI-1")]
+		self.frappe.get_doc = lambda doctype, name: doc
+
+		def exists(doctype, filters=None):
+			if doctype == "DocType":
+				return True
+			if doctype == "SMS Delivery Log":
+				self.assertEqual(filters["event_key"], "order_feedback_request")
+				self.assertEqual(filters["reference_doctype"], "Sales Order")
+				self.assertEqual(filters["reference_name"], "SO-1")
+				self.assertEqual(
+					filters["status"],
+					["in", ["زمان‌بندی‌شده", "در حال ارسال", "ارسال شد"]],
+				)
+				return "SMS-LOG-1"
+			return False
+
+		self.frappe.db = types.SimpleNamespace(
+			exists=exists,
+			sql=lambda *args, **kwargs: [("RSI-1",)],
+			commit=lambda: None,
+			rollback=lambda: None,
+		)
+		self.module.api_club._club_send_sms_now = lambda *args, **kwargs: self.fail("legacy SMS gateway was called")
+		self.module.api_club._club_log_sms = lambda *args, **kwargs: self.fail("legacy SMS log was created")
+
+		result = self.module.run_due_survey_invitations()
+
+		self.assertEqual(result, {"sent": 0, "skipped": 1, "failed": 0})
+		self.assertEqual(doc.status, "بدون درگاه")
+		self.assertIn("SMS.ir", doc.last_error)
 
 	def test_edit_cannot_use_a_public_sms_token(self):
 		self.module.api_club._club_parse_payload = lambda value: value or {}

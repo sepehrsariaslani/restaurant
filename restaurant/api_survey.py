@@ -18,6 +18,8 @@ REVIEW = "Restaurant Customer Review"
 QUESTION_TYPES = ("امتیاز ۱ تا ۱۰", "بله/خیر", "متن آزاد", "ویژگی خوب/بد")
 QUESTION_SCOPES = ("سفارش", "گروه غذا", "محصول")
 REVIEW_STATES = ("در انتظار بررسی", "تأییدشده", "ردشده")
+SALES_ORDER_SURVEY_STATUSES = ("new", "confirmed", "preparing", "ready", "delivered", "served")
+SMS_IR_FEEDBACK_STATUSES = ("زمان‌بندی‌شده", "در حال ارسال", "ارسال شد")
 
 __all__ = [
 	"queue_order_survey_invitation", "queue_table_order_survey_invitation", "run_due_survey_invitations",
@@ -60,13 +62,13 @@ def _read_order_identity(doctype, name):
 		if not frappe.db.exists(doctype, name):
 			return None
 		order = frappe.get_doc(doctype, name)
-		if cint(order.docstatus) != 1 or (order.get("restaurant_status") or "").strip().lower() not in ("delivered", "served"):
+		if cint(order.docstatus) != 1 or (order.get("restaurant_status") or "").strip().lower() not in SALES_ORDER_SURVEY_STATUSES:
 			return None
 		customer = order.customer or ""
 		mobile = _valid_mobile(order.get("restaurant_customer_mobile") or api_club._club_customer_mobile(customer))
 		return {
 			"customer": customer, "customer_name": order.customer_name or (frappe.db.get_value("Customer", customer, "customer_name") if customer else ""),
-			"mobile": mobile, "order_code": order.name,
+			"mobile": mobile, "order_code": order.name, "creation": order.creation,
 		}
 	if doctype == "Restaurant Table Order":
 		if not frappe.db.exists(doctype, name):
@@ -78,7 +80,7 @@ def _read_order_identity(doctype, name):
 		meta = _extract_table_session_meta(frappe.db.get_value("Restaurant Table Session", order.session, "note") or "")
 		mobile = _valid_mobile(meta.get("customer_mobile"))
 		customer = _customer_for_mobile(mobile)
-		return {"customer": customer, "customer_name": meta.get("customer_name") or (frappe.db.get_value("Customer", customer, "customer_name") if customer else ""), "mobile": mobile, "order_code": order.order_code or order.name}
+		return {"customer": customer, "customer_name": meta.get("customer_name") or (frappe.db.get_value("Customer", customer, "customer_name") if customer else ""), "mobile": mobile, "order_code": order.order_code or order.name, "creation": order.creation}
 	return None
 
 
@@ -94,6 +96,7 @@ def _queue_invitation(doctype, name):
 		return None
 	delay = api_club._club_club_settings()["survey_delay_minutes"]
 	now = now_datetime()
+	created_at = get_datetime(identity.get("creation") or now)
 	doc = frappe.new_doc(INVITATION)
 	doc.order_key = key
 	doc.reference_doctype = doctype
@@ -104,7 +107,7 @@ def _queue_invitation(doctype, name):
 	doc.customer_name = identity.get("customer_name") or ""
 	doc.mobile = identity["mobile"]
 	doc.order_code = identity["order_code"]
-	doc.due_at = now + timedelta(minutes=delay)
+	doc.due_at = max(now, created_at + timedelta(minutes=delay))
 	doc.expires_at = now + timedelta(days=30)
 	doc.status = "در انتظار ارسال"
 	doc.insert(ignore_permissions=True)
@@ -147,7 +150,7 @@ def _load_order(invitation):
 		if not frappe.db.exists("Sales Order", invitation.reference_name):
 			return None
 		order = frappe.get_doc("Sales Order", invitation.reference_name)
-		if cint(order.docstatus) != 1 or (order.get("restaurant_status") or "").strip().lower() not in ("delivered", "served"):
+		if cint(order.docstatus) != 1 or (order.get("restaurant_status") or "").strip().lower() not in SALES_ORDER_SURVEY_STATUSES:
 			return None
 		for row in order.items or []:
 			if cint(row.get("restaurant_is_auto_added")) or not frappe.db.exists("Item", row.item_code):
@@ -180,9 +183,8 @@ def _questions_for(items):
 def _invitation_by_token(token):
 	if not token or not frappe.db.exists("DocType", INVITATION):
 		return None
-	digest = hashlib.sha256(str(token).strip().encode("utf-8")).hexdigest()
-	name = frappe.db.get_value(INVITATION, {"token_hash": digest}, "name")
-	return frappe.get_doc(INVITATION, name) if name else None
+	from restaurant.survey_tokens import resolve_token
+	return resolve_token(token)
 
 
 def _owned_invitation(name, customer_token):
@@ -715,6 +717,19 @@ def list_my_customer_reviews(customer_token=None):
 	return {"reviews": out, "count": len(out)}
 
 
+def _has_sms_ir_feedback_delivery(invitation):
+	if invitation.reference_doctype != "Sales Order":
+		return False
+	if not frappe.db.exists("DocType", "SMS Delivery Log"):
+		return False
+	return bool(frappe.db.exists("SMS Delivery Log", {
+		"event_key": "order_feedback_request",
+		"reference_doctype": "Sales Order",
+		"reference_name": invitation.reference_name,
+		"status": ["in", list(SMS_IR_FEEDBACK_STATUSES)],
+	}))
+
+
 def run_due_survey_invitations(limit=50):
 	if not frappe.db.exists("DocType", INVITATION):
 		return {"sent": 0, "skipped": 0, "failed": 0}
@@ -727,6 +742,13 @@ def run_due_survey_invitations(limit=50):
 			if not locked:
 				continue
 			doc = frappe.get_doc(INVITATION, row.name)
+			if _has_sms_ir_feedback_delivery(doc):
+				doc.status = "بدون درگاه"
+				doc.last_error = _("ارسال قدیمی کنار گذاشته شد؛ دعوت نظرسنجی از مسیر SMS.ir مدیریت می‌شود.")
+				doc.save(ignore_permissions=True)
+				frappe.db.commit()
+				result["skipped"] += 1
+				continue
 			settings = api_club._club_club_settings()
 			if not settings["sms_enabled"]:
 				status, note, text = "بدون درگاه", _("ارسال پیامک غیرفعال است؛ مشتری می‌تواند از حسابش نظر ثبت کند."), ""
