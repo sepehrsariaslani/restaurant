@@ -1964,6 +1964,13 @@ def _serialize_voice(row):
 	}
 
 
+def _serialize_customer_voice(row):
+	"""Serialize a customer's own message without exposing internal staff identity."""
+	entry = _serialize_voice(row)
+	entry.pop("responded_by", None)
+	return entry
+
+
 @frappe.whitelist()
 def list_management_customer_voices(type="", status="", date_from="", date_to="", search="", limit=100, offset=0):
 	"""لیست صدای مشتری (ثبت مراجعه/شکایت/پیشنهاد) با فیلتر و آمار تجمیعی."""
@@ -2194,7 +2201,7 @@ def submit_my_customer_voice(customer_token=None, payload=None):
 	doc.flags.ignore_permissions = True
 	doc.save()
 	frappe.db.commit()
-	return {"status": "success", "voice": _serialize_voice(doc.as_dict())}
+	return {"status": "success", "voice": _serialize_customer_voice(doc.as_dict())}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -2206,12 +2213,12 @@ def list_my_customer_voices(customer_token=None):
 	rows = frappe.get_all(
 		CLUB_DOCTYPES["voice"],
 		filters={"customer": customer},
-		fields=["name", "customer", "customer_name", "mobile", "sales_order", "order_code", "type", "subject", "message", "status", "response", "responded_by", "responded_at", "creation"],
+		fields=["name", "customer", "customer_name", "mobile", "sales_order", "order_code", "type", "subject", "message", "status", "response", "responded_at", "creation"],
 		order_by="creation desc",
 		limit_page_length=200,
 		ignore_permissions=True,
 	)
-	voices = [_serialize_voice(row) for row in rows]
+	voices = [_serialize_customer_voice(row) for row in rows]
 	return {"voices": voices, "count": len(voices)}
 
 

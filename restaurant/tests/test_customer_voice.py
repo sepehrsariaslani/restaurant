@@ -168,6 +168,7 @@ class CustomerVoiceApiTests(unittest.TestCase):
 
 		self.assertEqual(result["count"], 1)
 		self.assertEqual(result["voices"][0]["name"], "CV-1")
+		self.assertNotIn("responded_by", result["voices"][0])
 
 
 if __name__ == "__main__":

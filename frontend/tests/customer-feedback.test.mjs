@@ -19,6 +19,9 @@ test('customer dashboard lets an authenticated customer submit and track feedbac
   assert.match(page, /v-model(?:\.trim)?="voiceForm\.order_code"/)
   assert.match(page, /voice\.status/)
   assert.match(page, /voice\.response/)
+  assert.match(page, /voiceHistoryError/)
+  assert.match(page, /در حال دریافت پیام‌های شما/)
+  assert.match(page, /تاریخچه پیام‌های شما دریافت نشد/)
 })
 
 test('product detail keeps manager replies visible alongside public reviews', () => {

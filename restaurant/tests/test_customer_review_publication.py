@@ -153,6 +153,16 @@ class CustomerReviewPublicationTests(unittest.TestCase):
 		self.assertIn('where = "is_approved=1"', function_source)
 		self.assertIn('"manager_reply": row.get("manager_reply") or ""', function_source)
 
+	def test_editing_a_rejected_review_does_not_publish_it_again(self):
+		source = (ROOT / "restaurant" / "api_survey.py").read_text()
+		tree = ast.parse(source)
+		function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "submit_public_survey")
+		function_source = ast.get_source_segment(source, function)
+
+		self.assertIn("previous_moderation_status", function_source)
+		self.assertIn('if previous_moderation_status == "ردشده":', function_source)
+		self.assertIn("doc.is_approved = 0", function_source)
+
 
 if __name__ == "__main__":
 	unittest.main()

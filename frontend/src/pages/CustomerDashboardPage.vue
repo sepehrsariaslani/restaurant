@@ -138,6 +138,7 @@
             </button>
           </div>
           <p v-if="voiceLoading && !customerVoices.length" class="customer-section__hint" role="status">در حال دریافت پیام‌های شما…</p>
+          <p v-else-if="voiceHistoryError" class="customer-voice__feedback customer-voice__feedback--error" role="alert">{{ voiceHistoryError }}</p>
           <p v-else-if="!customerVoices.length" class="customer-voice__empty">هنوز پیامی ثبت نکرده‌اید.</p>
           <article v-for="voice in customerVoices" :key="voice.name" class="customer-voice__item">
             <div class="customer-voice__item-head">
@@ -359,6 +360,7 @@ const customerVoices = ref([])
 const voiceLoading = ref(false)
 const voiceSaving = ref(false)
 const voiceError = ref('')
+const voiceHistoryError = ref('')
 const voiceMessage = ref('')
 const customerVoiceTypes = ['شکایت', 'انتقاد', 'پیشنهاد', 'درخواست', 'تقدیر']
 const voiceForm = ref({ type: 'پیشنهاد', subject: '', order_code: '', message: '' })
@@ -433,12 +435,12 @@ function surveyHref(invite = {}) {
 async function loadCustomerVoices() {
   if (!customerMobile.value) return
   voiceLoading.value = true
-  voiceError.value = ''
+  voiceHistoryError.value = ''
   try {
     const result = await listMyCustomerVoices()
     customerVoices.value = result?.voices || []
   } catch (err) {
-    voiceError.value = err?.message || 'پیام‌های شما دریافت نشد.'
+    voiceHistoryError.value = err?.message || 'تاریخچه پیام‌های شما دریافت نشد.'
   } finally {
     voiceLoading.value = false
   }
@@ -481,6 +483,8 @@ onMounted(async () => {
   getMenuBoot('').then((boot) => { if (boot?.currency) currency.value = boot.currency }).catch(() => {})
   void loadWalletSummary()
   if (auth.mobile) {
+    voiceLoading.value = true
+    voiceHistoryError.value = ''
     const [invitationResult, reviewResult, voiceResult] = await Promise.allSettled([
       getMySurveyInvitations(),
       listMyCustomerReviews(),
@@ -491,6 +495,8 @@ onMounted(async () => {
       feedbackReplies.value = (reviewResult.value?.reviews || []).filter((review) => String(review.manager_reply || '').trim()).slice(0, 5)
     }
     if (voiceResult.status === 'fulfilled') customerVoices.value = voiceResult.value?.voices || []
+    else voiceHistoryError.value = voiceResult.reason?.message || 'تاریخچه پیام‌های شما دریافت نشد.'
+    voiceLoading.value = false
     profileLoading.value = true
     try {
       const profile = await getCustomerProfile({ mobile: auth.mobile })
