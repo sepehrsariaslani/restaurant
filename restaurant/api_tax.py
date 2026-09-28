@@ -300,6 +300,8 @@ def _tax_get_or_create_submission(si_name, payload_json):
 		doc = frappe.get_doc(TAX_DOCTYPE, existing)
 		if doc.status == "ارسال‌شده":
 			return doc, False
+		if doc.status == "لغوشده":
+			return doc, False
 	else:
 		doc = frappe.new_doc(TAX_DOCTYPE)
 		doc.sales_invoice = si_name
@@ -347,7 +349,13 @@ def _submit_tax_invoice(sales_invoice=""):
 	payload_json = build_tax_invoice_payload(sales_invoice)
 	doc, proceeding = _tax_get_or_create_submission(sales_invoice, payload_json)
 	if not proceeding:
-		return {"status": "already", "submission": doc.name, "tax_id": doc.tax_id}
+		if doc.status == "لغوشده":
+			frappe.throw(_("صورتحساب لغوشده است؛ ارسال مجدد آن تا تعیین تکلیف مالیاتی مجاز نیست"), frappe.ValidationError)
+		return {
+			"status": "already" if doc.status == "ارسال‌شده" else doc.status,
+			"submission": doc.name,
+			"tax_id": doc.tax_id,
+		}
 
 	if not settings["enabled"] or not settings["api_url"]:
 		doc.error = _("درگاه ارسال پیکربندی نشده؛ فاکتور در صف ماند.")
