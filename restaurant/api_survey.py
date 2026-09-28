@@ -543,8 +543,8 @@ def submit_public_survey(payload=None):
 		doc.comment = value["comment"]
 		doc.strengths_json = json.dumps(value["strengths"], ensure_ascii=False)
 		doc.weaknesses_json = json.dumps(value["weaknesses"], ensure_ascii=False)
-		doc.moderation_status = "در انتظار بررسی"
-		doc.is_approved = 0
+		doc.moderation_status = "تأییدشده"
+		doc.is_approved = 1
 		if existing_review_name:
 			doc.save(ignore_permissions=True)
 		else:
