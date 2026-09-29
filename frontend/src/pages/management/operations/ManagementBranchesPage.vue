@@ -38,6 +38,7 @@
         @row-click="openForm"
       >
         <template #cell-branch="{ row }"><strong>{{ row.label || row.company_name }}</strong><br><small class="muted">{{ row.name }} · {{ row.abbr }}</small></template>
+        <template #cell-hours="{ row }"><small>{{ scheduleSummary(row) }}</small></template>
         <template #cell-today_orders="{ value }">{{ formatQty(value) }}</template>
         <template #cell-today_sales="{ value }">{{ formatMoneyValue(value) }}</template>
         <template #cell-customers="{ value }">{{ formatQty(value) }}</template>
@@ -99,6 +100,27 @@
           <label>حداقل زمان ارسال (دقیقه)<input class="input" type="number" min="1" v-model.number="form.restaurant_delivery_eta_min" /></label>
           <label>حداکثر زمان ارسال (دقیقه)<input class="input" type="number" min="1" v-model.number="form.restaurant_delivery_eta_max" /></label>
           <label class="check-row"><input type="checkbox" v-model="form.restaurant_branch_active" :true-value="1" :false-value="0" /> فعال</label>
+          <section class="branch-hours full-row" aria-labelledby="branch-hours-title">
+            <div class="branch-hours__heading">
+              <div>
+                <h4 id="branch-hours-title">زمان پذیرش سفارش در این شعبه</h4>
+                <p>برای روزهای باز، بازهٔ سفارش‌گیری را مشخص کنید؛ ساعت پایان، آخرین زمان ثبت سفارش است. روزهای تعطیل را خاموش کنید.</p>
+              </div>
+            </div>
+            <div class="branch-hours__grid">
+              <article v-for="day in form.weekly_schedule" :key="day.day_of_week" class="branch-hours__day">
+                <label class="check-row branch-hours__toggle">
+                  <input v-model="day.is_open" type="checkbox" :true-value="1" :false-value="0" @change="scheduleDirty = true" />
+                  <strong>{{ dayLabel(day.day_of_week) }}</strong>
+                </label>
+                <div class="branch-hours__times">
+                  <label>شروع سفارش‌گیری<input v-model="day.opening_time" class="input" type="time" :disabled="!day.is_open" @change="scheduleDirty = true" /></label>
+                  <label>آخرین زمان سفارش<input v-model="day.closing_time" class="input" type="time" :disabled="!day.is_open" @change="scheduleDirty = true" /></label>
+                </div>
+                <small v-if="!day.is_open" class="muted">این روز سفارش‌گیری بسته است.</small>
+              </article>
+            </div>
+          </section>
         </div>
         <p class="error" v-if="formError">{{ formError }}</p>
         <div class="btn-row">
@@ -135,6 +157,7 @@ const message = ref('')
 const showActiveOnly = ref(false)
 const branchSearch = ref('')
 const form = ref(null)
+const scheduleDirty = ref(false)
 const branchLocation = computed({
   get: () => ({ lat: form.value?.restaurant_branch_lat ?? '', lng: form.value?.restaurant_branch_lng ?? '' }),
   set: (point = {}) => {
@@ -155,6 +178,7 @@ const branchOptions = computed(() => [
 ])
 const branchColumns = [
   { key: 'branch', label: 'شعبه' },
+  { key: 'hours', label: 'پذیرش سفارش' },
   { key: 'today_orders', label: 'سفارش‌های امروز' },
   { key: 'today_sales', label: 'فروش امروز' },
   { key: 'customers', label: 'مشتریان متصل' },
@@ -164,6 +188,11 @@ const branchColumns = [
 ]
 
 const activeBranches = computed(() => branches.value.filter((b) => b.is_active))
+const dayLabels = {
+  Saturday: 'شنبه', Sunday: 'یکشنبه', Monday: 'دوشنبه', Tuesday: 'سه‌شنبه',
+  Wednesday: 'چهارشنبه', Thursday: 'پنجشنبه', Friday: 'جمعه',
+}
+const scheduleDayOrder = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 const filteredBranches = computed(() => {
   const query = branchSearch.value.trim().toLocaleLowerCase('fa-IR')
   if (!query) return branches.value
@@ -174,6 +203,30 @@ const filteredBranches = computed(() => {
 
 function formatQty(v) { return Number(v || 0).toLocaleString('fa-IR') }
 function formatMoneyValue(v) { return formatMoneyUtil(Number(v || 0)) }
+function dayLabel(day) { return dayLabels[day] || day }
+function scheduleForForm(schedule = []) {
+  const byDay = new Map((Array.isArray(schedule) ? schedule : []).map((row) => [row.day_of_week, row]))
+  return scheduleDayOrder.map((day_of_week) => {
+    const row = byDay.get(day_of_week) || {}
+    return {
+      day_of_week,
+      is_open: Number(row.is_open ?? 1) ? 1 : 0,
+      opening_time: String(row.opening_time || '').slice(0, 5),
+      closing_time: String(row.closing_time || '').slice(0, 5),
+    }
+  })
+}
+function scheduleSummary(branch) {
+  const openDays = (branch.weekly_schedule || []).filter((row) => Number(row.is_open) && row.opening_time && row.closing_time)
+  if (!openDays.length) return 'ساعت سفارش‌گیری تنظیم نشده'
+  const rangeCounts = new Map()
+  openDays.forEach((row) => {
+    const range = `${row.opening_time} تا ${row.closing_time}`
+    rangeCounts.set(range, (rangeCounts.get(range) || 0) + 1)
+  })
+  if (openDays.length === 7 && rangeCounts.size === 1) return `هر روز ${rangeCounts.keys().next().value}`
+  return [...rangeCounts.entries()].map(([range, count]) => `${formatQty(count)} روز: ${range}`).join(' · ')
+}
 
 async function reload() {
   loading.value = true
@@ -189,9 +242,27 @@ async function reload() {
 
 function openForm(b) {
   formError.value = ''
+  scheduleDirty.value = false
   form.value = b
-    ? { name: b.name, company_name: b.company_name, abbr: b.abbr, restaurant_public_title: b.label || '', restaurant_branch_phone: b.phone || '', restaurant_branch_lat: Number(b.lat) === 0 && Number(b.lng) === 0 ? '' : b.lat ?? '', restaurant_branch_lng: Number(b.lat) === 0 && Number(b.lng) === 0 ? '' : b.lng ?? '', restaurant_branch_address: b.address || '', restaurant_branch_active: b.is_active, restaurant_is_branch: 1, restaurant_pickup_available: b.pickup_available, restaurant_delivery_available: b.delivery_available, restaurant_delivery_radius_km: b.delivery_radius_km || 0, restaurant_delivery_fee: b.delivery_fee || 0, restaurant_delivery_eta_min: b.delivery_eta_min || 35, restaurant_delivery_eta_max: b.delivery_eta_max || 45 }
-    : { name: '', company_name: '', abbr: '', restaurant_public_title: '', restaurant_branch_phone: '', restaurant_branch_lat: '', restaurant_branch_lng: '', restaurant_branch_address: '', restaurant_branch_active: 1, restaurant_is_branch: 1, restaurant_pickup_available: 1, restaurant_delivery_available: 1, restaurant_delivery_radius_km: 0, restaurant_delivery_fee: 0, restaurant_delivery_eta_min: 35, restaurant_delivery_eta_max: 45 }
+    ? {
+        name: b.name, company_name: b.company_name, abbr: b.abbr,
+        restaurant_public_title: b.label || '', restaurant_branch_phone: b.phone || '',
+        restaurant_branch_lat: Number(b.lat) === 0 && Number(b.lng) === 0 ? '' : b.lat ?? '',
+        restaurant_branch_lng: Number(b.lat) === 0 && Number(b.lng) === 0 ? '' : b.lng ?? '',
+        restaurant_branch_address: b.address || '', restaurant_branch_active: b.is_active,
+        restaurant_is_branch: 1, restaurant_pickup_available: b.pickup_available,
+        restaurant_delivery_available: b.delivery_available, restaurant_delivery_radius_km: b.delivery_radius_km || 0,
+        restaurant_delivery_fee: b.delivery_fee || 0, restaurant_delivery_eta_min: b.delivery_eta_min || 35,
+        restaurant_delivery_eta_max: b.delivery_eta_max || 45, weekly_schedule: scheduleForForm(b.weekly_schedule),
+      }
+    : {
+        name: '', company_name: '', abbr: '', restaurant_public_title: '', restaurant_branch_phone: '',
+        restaurant_branch_lat: '', restaurant_branch_lng: '', restaurant_branch_address: '',
+        restaurant_branch_active: 1, restaurant_is_branch: 1, restaurant_pickup_available: 1,
+        restaurant_delivery_available: 1, restaurant_delivery_radius_km: 0, restaurant_delivery_fee: 0,
+        restaurant_delivery_eta_min: 35, restaurant_delivery_eta_max: 45,
+        weekly_schedule: scheduleForForm(),
+      }
 }
 
 async function saveForm() {
@@ -199,7 +270,9 @@ async function saveForm() {
   saving.value = true
   formError.value = ''
   try {
-    await saveManagementBranch({ ...form.value })
+    const payload = { ...form.value }
+    if (form.value.name && !scheduleDirty.value) delete payload.weekly_schedule
+    await saveManagementBranch(payload)
     message.value = 'شعبه ذخیره شد.'
     form.value = null
     await reload()
@@ -236,6 +309,9 @@ onMounted(reload)
 </script>
 
 <style scoped>
+.popup-backdrop { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 1rem; background: rgb(19 28 22 / 48%); }
+.popup { display: grid; gap: .65rem; width: min(920px, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; padding: 1rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-lg, 1rem); background: var(--mg-surface, var(--ds-color-surface-raised, #fff)); box-shadow: var(--ds-shadow-lg, 0 18px 56px rgb(20 30 24 / 20%)); }
+.popup h3 { margin: 0; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.75rem; }
 .link-btn { font-size: 0.85rem; color: var(--mg-primary); text-decoration: underline; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.65rem; margin-bottom: 0.7rem; }
@@ -243,6 +319,15 @@ onMounted(reload)
 .full-row { grid-column: 1 / -1; }
 .branch-map-field { display: grid; gap: .35rem; }
 .branch-map-field > small { color: var(--mg-text-muted, var(--ds-color-text-muted)); font-size: .8rem; }
+.branch-hours { display: grid; gap: .65rem; }
+.branch-hours__heading h4 { margin: 0; font-size: .98rem; }
+.branch-hours__heading p { margin: .25rem 0 0; color: var(--mg-text-muted, var(--ds-color-text-muted)); font-size: .82rem; }
+.branch-hours__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: .55rem; }
+.branch-hours__day { display: grid; gap: .55rem; padding: .7rem; border: 1px solid var(--mg-border, var(--ds-color-border)); border-radius: .8rem; background: var(--mg-surface-subtle, var(--ds-color-surface-subtle)); }
+.branch-hours__toggle { display: flex !important; align-items: center; gap: .45rem !important; }
+.branch-hours__times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+.branch-hours__times label { display: grid; gap: .3rem; font-size: .76rem; }
+.branch-hours__times input { direction: ltr; text-align: center; }
 .row-actions { white-space: nowrap; display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .shared-list { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 0.45rem; font-size: 0.88rem; }
 </style>

@@ -13,7 +13,7 @@ bottom of ``api.py``) and called as ``/api/method/restaurant.api.<endpoint>``.
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, today
+from frappe.utils import cint, flt, get_time, today
 
 from restaurant.api import (
 	_bi_kpi,
@@ -40,6 +40,7 @@ __all__ = [
 ]
 
 BRANCH_REPORT_KEYS = {"branch-performance"}
+BRANCH_SCHEDULE_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,9 @@ def _br_sales_by_period(date_from=None, date_to=None):
 def get_management_branch_boot():
 	_ensure_management_access()
 	_br_ensure_ops_ready()
-	branches = [_serialize_branch(row) for row in _br_branch_rows()]
+	branch_rows = _br_branch_rows()
+	schedule_map = _br_week_schedule_map()
+	branches = [_serialize_branch(row, schedule_map) for row in branch_rows]
 	today_sales = _br_sales_by_period(today(), today())
 	for branch in branches:
 		kpi = today_sales.get(branch["name"]) or {}
@@ -189,9 +192,44 @@ def get_management_branch_boot():
 	}
 
 
-def _serialize_branch(row):
+def _br_week_schedule_map():
+	if not frappe.db.exists("DocType", "Restaurant Branch Schedule"):
+		return {}
+	rows = frappe.get_all(
+		"Restaurant Branch Schedule",
+		fields=["branch", "day_of_week", "is_open", "opening_time", "closing_time"],
+		ignore_permissions=True,
+		limit_page_length=2000,
+	)
+	result = {}
+	for row in rows:
+		branch = (row.get("branch") or "").strip()
+		day = (row.get("day_of_week") or "").strip()
+		if branch and day in BRANCH_SCHEDULE_DAYS:
+			result.setdefault(branch, {})[day] = row
+	return result
+
+
+def _br_time_label(value):
+	return str(value or "").strip()[:5]
+
+
+def _serialize_branch(row, schedule_map=None):
+	branch_name = row.get("name")
+	stored_schedule = (schedule_map or {}).get(branch_name, {})
+	weekly_schedule = []
+	for day in BRANCH_SCHEDULE_DAYS:
+		schedule = stored_schedule.get(day) or {}
+		weekly_schedule.append(
+			{
+				"day_of_week": day,
+				"is_open": cint(schedule.get("is_open") if schedule.get("is_open") not in (None, "") else 1),
+				"opening_time": _br_time_label(schedule.get("opening_time")),
+				"closing_time": _br_time_label(schedule.get("closing_time")),
+			}
+		)
 	return {
-		"name": row.get("name"),
+		"name": branch_name,
 		"company_name": row.get("company_name") or row.get("name"),
 		"abbr": row.get("abbr") or "",
 		"label": _br_branch_label(row),
@@ -207,6 +245,7 @@ def _serialize_branch(row):
 		"delivery_eta_max": cint(row.get("restaurant_delivery_eta_max") or 45),
 		"delivery_fee": flt(row.get("restaurant_delivery_fee") or 0),
 		"delivery_radius_km": flt(row.get("restaurant_delivery_radius_km") or 0),
+		"weekly_schedule": weekly_schedule,
 	}
 
 
@@ -214,7 +253,60 @@ def _serialize_branch(row):
 def list_management_branches(active_only=0):
 	_ensure_management_access()
 	rows = _br_branch_rows(active_only=cint(active_only))
-	return {"branches": [_serialize_branch(row) for row in rows], "count": len(rows)}
+	schedule_map = _br_week_schedule_map()
+	return {"branches": [_serialize_branch(row, schedule_map) for row in rows], "count": len(rows)}
+
+
+def _br_normalize_weekly_schedule(value):
+	if value is None:
+		return None
+	if not isinstance(value, list):
+		frappe.throw(_("برنامه هفتگی سفارش‌گیری معتبر نیست."))
+	by_day = {}
+	for row in value:
+		if not isinstance(row, dict):
+			frappe.throw(_("یکی از روزهای برنامه سفارش‌گیری معتبر نیست."))
+		day = str(row.get("day_of_week") or "").strip()
+		if day not in BRANCH_SCHEDULE_DAYS or day in by_day:
+			frappe.throw(_("روزهای برنامه سفارش‌گیری تکراری یا نامعتبر است."))
+		is_open = cint(row.get("is_open") if row.get("is_open") not in (None, "") else 0)
+		opening = _br_time_label(row.get("opening_time"))
+		closing = _br_time_label(row.get("closing_time"))
+		if is_open:
+			if not opening or not closing:
+				frappe.throw(_("برای روزهای فعال، ساعت شروع و پایان سفارش‌گیری را وارد کنید."))
+			try:
+				opening_time = get_time(opening)
+				closing_time = get_time(closing)
+			except Exception:
+				frappe.throw(_("ساعت واردشده معتبر نیست."))
+			if opening_time == closing_time:
+				frappe.throw(_("ساعت شروع و پایان سفارش‌گیری نمی‌تواند یکسان باشد."))
+		else:
+			opening = ""
+			closing = ""
+		by_day[day] = {"day_of_week": day, "is_open": is_open, "opening_time": opening, "closing_time": closing}
+	if len(by_day) != len(BRANCH_SCHEDULE_DAYS):
+		frappe.throw(_("برای هر هفت روز هفته وضعیت سفارش‌گیری را مشخص کنید."))
+	return [by_day[day] for day in BRANCH_SCHEDULE_DAYS]
+
+
+def _br_save_weekly_schedule(branch_name, schedule_rows):
+	if not frappe.db.exists("DocType", "Restaurant Branch Schedule"):
+		frappe.throw(_("جدول ساعت کاری شعبه در این سایت در دسترس نیست."))
+	for row in schedule_rows:
+		existing_name = frappe.db.get_value(
+			"Restaurant Branch Schedule",
+			{"branch": branch_name, "day_of_week": row["day_of_week"]},
+			"name",
+		)
+		doc = frappe.get_doc("Restaurant Branch Schedule", existing_name) if existing_name else frappe.new_doc("Restaurant Branch Schedule")
+		doc.branch = branch_name
+		doc.day_of_week = row["day_of_week"]
+		doc.is_open = row["is_open"]
+		doc.opening_time = row["opening_time"]
+		doc.closing_time = row["closing_time"]
+		doc.save(ignore_permissions=True)
 
 
 @frappe.whitelist()
@@ -223,6 +315,7 @@ def save_management_branch(payload=None):
 	_ensure_management_access()
 	_br_ensure_ops_ready()
 	payload = _parse_json(payload, {})
+	weekly_schedule = _br_normalize_weekly_schedule(payload.get("weekly_schedule")) if "weekly_schedule" in payload else None
 	name = (payload.get("name") or "").strip()
 	company_name = (payload.get("company_name") or "").strip()
 	if not company_name and not name:
@@ -271,8 +364,10 @@ def save_management_branch(payload=None):
 	if payload.get("company_name"):
 		doc.company_name = company_name
 	doc.save(ignore_permissions=True)
+	if weekly_schedule is not None:
+		_br_save_weekly_schedule(doc.name, weekly_schedule)
 	frappe.db.commit()
-	return {"status": "success", "branch": _serialize_branch(doc.as_dict())}
+	return {"status": "success", "branch": _serialize_branch(doc.as_dict(), _br_week_schedule_map())}
 
 
 @frappe.whitelist()

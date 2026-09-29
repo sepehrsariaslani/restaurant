@@ -51,6 +51,7 @@
           </div>
           <strong class="pickup-branch-card__title">{{ branch.title || branch.name }}</strong>
           <span class="pickup-branch-card__address"><MapPin :size="15" />{{ branch.address || 'نشانی شعبه ثبت نشده است.' }}</span>
+          <small v-if="branch.opening_time && branch.closing_time" class="pickup-branch-card__hours">پذیرش سفارش امروز: {{ branch.opening_time }} تا {{ branch.closing_time }}</small>
           <div class="order-flow-branch-meta">
             <span class="order-flow-pill"><Clock3 :size="14" /> حدود {{ branch.prepTime || branch.prep_time_mins || 20 }} دقیقه</span>
             <span class="order-flow-pill">بدون هزینه ارسال</span>
@@ -58,6 +59,12 @@
           <span class="pickup-branch-card__action">{{ selectedBranchId === branchKey(branch) ? 'این شعبه انتخاب شد' : 'انتخاب این شعبه' }}<ChevronLeft :size="16" /></span>
         </button>
           </div>
+        </div>
+
+        <div v-if="selectedBranch && !selectedBranch.isOpen" class="order-flow-alert danger" role="status">
+          <strong>پذیرش سفارش این شعبه اکنون بسته است.</strong>
+          <span v-if="selectedBranch.opening_time && selectedBranch.closing_time">امروز سفارش‌گیری از {{ selectedBranch.opening_time }} تا {{ selectedBranch.closing_time }} است.</span>
+          <button class="order-flow-secondary" type="button" @click="branchPickerOpen = true">انتخاب شعبهٔ باز</button>
         </div>
 
         <div v-if="branchAvailabilityStatus === 'checking' && hasCartLines" class="order-flow-alert" role="status">در حال بررسی اقلام سبد در این شعبه…</div>
@@ -167,7 +174,7 @@ const selectedBranch = computed(() => branches.value.find((branch) => branchKey(
 const hasCartLines = computed(() => cartState.lines.length > 0)
 const continueLabel = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'ادامه به منوی این شعبه')
 const nextStep = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'مشاهده منو و انتخاب غذا')
-const canContinue = computed(() => Boolean(selectedBranch.value && (pickupTimeType.value !== 'scheduled' || pickupTime.value) && (pickupMethod.value !== 'car' || vehicleComplete(vehicle.value)) && (!hasCartLines.value || branchAvailabilityStatus.value === 'available')))
+const canContinue = computed(() => Boolean(selectedBranch.value && selectedBranch.value.isOpen !== false && (pickupTimeType.value !== 'scheduled' || pickupTime.value) && (pickupMethod.value !== 'car' || vehicleComplete(vehicle.value)) && (!hasCartLines.value || branchAvailabilityStatus.value === 'available')))
 
 watch([selectedBranch, pickupTimeType, pickupTime, customerNote, pickupMethod, vehicle], persistPickup, { deep: true })
 

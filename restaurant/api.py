@@ -10874,7 +10874,10 @@ def _is_now_between(opening_time, closing_time):
 def _branch_schedule_map():
 	if not _restaurant_doctype_exists("Restaurant Branch Schedule"):
 		return {}
+	weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 	weekday = _current_weekday_name()
+	day_index = weekdays.index(weekday) if weekday in weekdays else 0
+	previous_weekday = weekdays[(day_index - 1) % len(weekdays)]
 	rows = frappe.get_all(
 		"Restaurant Branch Schedule",
 		fields=[
@@ -10891,11 +10894,42 @@ def _branch_schedule_map():
 			"delivery_fee",
 			"delivery_radius_km",
 		],
-		filters={"day_of_week": weekday},
+		filters={"day_of_week": ["in", [previous_weekday, weekday]]},
 		ignore_permissions=True,
 		limit_page_length=500,
 	)
-	return {(row.get("branch") or "").strip(): row for row in rows if (row.get("branch") or "").strip()}
+	by_branch_day = {}
+	for row in rows:
+		branch = (row.get("branch") or "").strip()
+		if branch:
+			by_branch_day.setdefault(branch, {})[row.get("day_of_week")] = row
+	now_time = now_datetime().time()
+	result = {}
+	for branch, schedule_by_day in by_branch_day.items():
+		current = schedule_by_day.get(weekday)
+		previous = schedule_by_day.get(previous_weekday)
+		if previous and cint(previous.get("is_open") if previous.get("is_open") not in (None, "") else 1):
+			previous_open = previous.get("opening_time")
+			previous_close = previous.get("closing_time")
+			if previous_open and previous_close:
+				try:
+					if get_time(previous_open) > get_time(previous_close) and now_time <= get_time(previous_close):
+						result[branch] = previous
+						continue
+				except Exception:
+					pass
+		if current:
+			current_open = current.get("opening_time")
+			current_close = current.get("closing_time")
+			if current_open and current_close:
+				try:
+					if get_time(current_open) > get_time(current_close) and now_time <= get_time(current_close):
+						current = dict(current)
+						current["is_open"] = 0
+				except Exception:
+					pass
+			result[branch] = current
+	return result
 
 
 def _apply_branch_schedule(payload, schedule=None):
@@ -10908,7 +10942,7 @@ def _apply_branch_schedule(payload, schedule=None):
 	open_label = "باز"
 	if opening or closing:
 		open_label = (
-			f"باز تا {_time_to_label(closing)}"
+			f"پذیرش سفارش تا {_time_to_label(closing)}"
 			if is_open and closing
 			else f"ساعت کاری {_time_to_label(opening)} تا {_time_to_label(closing)}"
 		)
@@ -11293,6 +11327,26 @@ def _validate_customer_delivery_branch(branch_name, delivery_payload):
 	distance_km = 6371 * 2 * math.atan2(math.sqrt(min(1, a)), math.sqrt(max(0, 1 - a)))
 	if distance_km > radius_km:
 		frappe.throw(_("این نشانی خارج از محدوده ارسال شعبه انتخاب‌شده است؛ آدرس یا شعبه را تغییر دهید."))
+
+
+def _validate_customer_branch_ordering_window(branch_name):
+	branch_name = str(branch_name or "").strip()
+	if not branch_name:
+		return
+	branches = get_branches().get("branches") or []
+	branch = next(
+		(row for row in branches if str(row.get("id") or row.get("name") or "").strip() == branch_name),
+		None,
+	)
+	if not branch:
+		return
+	if not cint(branch.get("is_active") if branch.get("is_active") not in (None, "") else 1):
+		frappe.throw(_("شعبه انتخاب‌شده در حال حاضر فعال نیست؛ شعبه دیگری انتخاب کنید."))
+	if branch.get("isOpen") is False:
+		opening = str(branch.get("opening_time") or "").strip()
+		closing = str(branch.get("closing_time") or "").strip()
+		hours = _(" امروز از {0} تا {1}").format(opening, closing) if opening and closing else _(" امروز")
+		frappe.throw(_("پذیرش سفارش شعبه «{0}»{1} فعال نیست.").format(branch.get("title") or branch_name, hours))
 
 
 def _reservation_time_key(value):
@@ -12101,6 +12155,8 @@ def place_order(
 	if not isinstance(order_context, dict):
 		order_context = {}
 	selected_branch = str(order_context.get("branch") or "").strip()
+	if selected_branch:
+		_validate_customer_branch_ordering_window(selected_branch)
 	if selected_branch and cart_items:
 		availability = _check_cart_branch_availability(cart_items, selected_branch)
 		if not availability.get("available"):

@@ -9,8 +9,10 @@
         <section class="order-flow-card">
           <h2>الان در رستوران هستم</h2>
           <p>QR روی میز، میز شما را مستقیم انتخاب می‌کند. انتخاب دستی هم از فهرست زیر ممکن است.</p>
-          <label v-if="branches.length > 1" class="order-flow-field"><span>شعبه</span><select class="order-flow-select" v-model="branch"><option value="">انتخاب شعبه</option><option v-for="row in branches" :key="row.id" :value="row.id">{{ row.title || row.name }}</option></select></label>
+          <label v-if="branches.length > 1" class="order-flow-field"><span>شعبه</span><select class="order-flow-select" v-model="branch"><option value="">انتخاب شعبه</option><option v-for="row in branches" :key="row.id" :value="row.id" :disabled="row.isOpen === false">{{ row.title || row.name }}{{ row.isOpen === false ? ' — سفارش‌گیری بسته' : '' }}</option></select></label>
           <p v-else-if="branches.length">{{ branches[0].title || branches[0].name }}</p>
+          <p v-if="selectedBranch?.opening_time && selectedBranch?.closing_time" class="order-flow-alert">پذیرش سفارش امروز: {{ selectedBranch.opening_time }} تا {{ selectedBranch.closing_time }}</p>
+          <p v-if="selectedBranch && !selectedBranch.isOpen" class="order-flow-alert danger" role="status">پذیرش سفارش این شعبه اکنون بسته است؛ در زمان دیگری سفارش ثبت کنید یا شعبهٔ باز دیگری را برگزینید.</p>
           <div v-for="area in areas" :key="area" class="dine-area"><h3>{{ customerTableAreaLabel(area) }}</h3><div class="dine-table-grid">
             <button v-for="row in tables.filter(t => t.branch === area)" :key="row.id" type="button" :disabled="row.status === 'reserved' && selectedTableId !== row.id" :aria-pressed="selectedTableId === row.id" :class="{ active: selectedTableId === row.id }" @click="selectedTableId = row.id"><Armchair :size="21" /><strong>میز {{ row.label }}</strong><small>{{ row.status === 'reserved' ? 'رزروشده' : 'انتخاب این میز' }}</small></button>
           </div></div>
@@ -38,7 +40,8 @@ const branch = ref(query.get('branch') || cartState.orderContext.branch || '')
 const selectedTableId = ref(query.get('table') || query.get('table_no') || cartState.orderContext.table || window._BOOT?.table_context?.table?.name || '')
 const selectedTable = computed(() => tables.value.find(t => t.id === selectedTableId.value || t.label === selectedTableId.value))
 const areas = computed(() => [...new Set(tables.value.map(t => t.branch || ''))])
-const canContinue = computed(() => Boolean(branch.value && selectedTable.value && !loading.value && !error.value))
+const selectedBranch = computed(() => branches.value.find(row => row.id === branch.value) || null)
+const canContinue = computed(() => Boolean(branch.value && selectedBranch.value?.isOpen !== false && selectedTable.value && !loading.value && !error.value))
 const continueLabel = computed(() => cartState.lines.length ? 'تکمیل سفارش' : 'انتخاب غذا')
 const nextStep = computed(() => cartState.lines.length ? 'تکمیل سفارش' : 'مشاهده منو')
 function persist() {

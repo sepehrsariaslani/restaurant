@@ -153,7 +153,7 @@ function markImageFailed(branch) {
 
 function hoursLabel(branch) {
   if (branch?.opening_time && branch?.closing_time) {
-    return `ساعت کاری ${branch.opening_time} تا ${branch.closing_time}`
+    return `پذیرش سفارش امروز از ${branch.opening_time} تا ${branch.closing_time}`
   }
   return ''
 }

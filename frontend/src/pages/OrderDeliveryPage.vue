@@ -83,7 +83,7 @@
           </div>
           <div v-if="selectedCompany" class="delivery-selected-branch">
             <MapPin :size="19" aria-hidden="true" />
-            <div><strong>{{ selectedCompany.title || selectedCompany.name }}</strong><span>{{ selectedCompany.address || 'نشانی شعبه ثبت نشده است.' }}</span><small v-if="Number(selectedCompany.delivery_radius_km || 0) > 0">ارسال تا {{ selectedCompany.delivery_radius_km }} کیلومتر از شعبه</small></div>
+            <div><strong>{{ selectedCompany.title || selectedCompany.name }}</strong><span>{{ selectedCompany.address || 'نشانی شعبه ثبت نشده است.' }}</span><small v-if="selectedCompany.opening_time && selectedCompany.closing_time">پذیرش سفارش امروز: {{ selectedCompany.opening_time }} تا {{ selectedCompany.closing_time }}</small><small v-if="Number(selectedCompany.delivery_radius_km || 0) > 0">ارسال تا {{ selectedCompany.delivery_radius_km }} کیلومتر از شعبه</small></div>
             <span class="order-flow-pill">{{ deliveryTimeFor(selectedCompany) }}</span>
           </div>
           <p v-else class="order-flow-alert danger">برای ادامه، شعبهٔ ارسال را انتخاب کنید.</p>
@@ -99,13 +99,18 @@
                 @click="selectCompany(company)"
               >
                 <div class="order-flow-card-head">
-                  <div><h3>{{ company.title || company.name }}</h3><p>{{ company.address || 'آدرس شعبه ثبت نشده است.' }}</p></div>
-                  <span class="order-flow-pill">ارسال فعال</span>
+                  <div><h3>{{ company.title || company.name }}</h3><p>{{ company.address || 'آدرس شعبه ثبت نشده است.' }}</p><small v-if="company.opening_time && company.closing_time">پذیرش سفارش امروز: {{ company.opening_time }} تا {{ company.closing_time }}</small></div>
+                  <span class="order-flow-pill" :class="company.isOpen ? '' : 'warning'">{{ company.isOpen ? (company.open_label || 'سفارش‌گیری باز') : 'سفارش‌گیری بسته' }}</span>
                 </div>
                 <div class="order-flow-branch-meta"><span class="order-flow-pill">{{ deliveryTimeFor(company) }}</span><span class="order-flow-pill">{{ deliveryFeeFor(company) }}</span></div>
               </button>
             </div>
           </div>
+          <p v-if="selectedCompany && !selectedCompany.isOpen" class="order-flow-alert danger" role="status">
+            <strong>پذیرش سفارش این شعبه اکنون بسته است.</strong>
+            <span v-if="selectedCompany.opening_time && selectedCompany.closing_time">امروز سفارش‌گیری از {{ selectedCompany.opening_time }} تا {{ selectedCompany.closing_time }} است.</span>
+            <button class="order-flow-secondary" type="button" @click="branchPickerOpen = true">انتخاب شعبهٔ باز</button>
+          </p>
           <p v-if="!deliveryCompanies.length" class="order-flow-alert danger">فعلاً شعبه فعالی برای ارسال وجود ندارد.</p>
           <div v-if="branchAvailabilityStatus === 'checking' && hasCartLines" class="order-flow-alert" role="status">در حال بررسی اقلام سبد در این شعبه…</div>
           <div v-else-if="branchAvailabilityStatus === 'unavailable'" class="order-flow-alert danger" role="alert">
@@ -242,7 +247,7 @@ const etaMax = computed(() => Number(selectedCompany.value?.delivery_eta_max || 
 const deliveryFee = computed(() => Number(selectedCompany.value?.delivery_fee || 0))
 const etaText = computed(() => `${etaMin.value} تا ${etaMax.value} دقیقه`)
 const deliveryFeeText = computed(() => deliveryFee.value ? formatMoney(deliveryFee.value, currency.value) : 'پس از تایید شعبه')
-const canContinue = computed(() => Boolean(address.address_line.trim() && hasCoordinates.value && selectedCompany.value && (!hasCartLines.value || branchAvailabilityStatus.value === 'available')))
+const canContinue = computed(() => Boolean(address.address_line.trim() && hasCoordinates.value && selectedCompany.value && selectedCompany.value.isOpen !== false && (!hasCartLines.value || branchAvailabilityStatus.value === 'available')))
 const hasCartLines = computed(() => cartState.lines.length > 0)
 const continueLabel = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'ادامه به منوی شعبه')
 const nextStep = computed(() => hasCartLines.value ? 'تکمیل سفارش' : 'مشاهده منو و انتخاب غذا')
