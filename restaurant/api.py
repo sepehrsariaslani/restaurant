@@ -19455,6 +19455,40 @@ def _save_management_modifier_item_prices(updates):
 
 
 @frappe.whitelist()
+def save_management_modifier_option_item_price(item_code=None, price_list=None, price_list_rate=None, option_uom=None):
+	"""Save one explicitly requested modifier option rate to native Item Price."""
+	_ensure_management_access()
+	if price_list_rate in (None, ""):
+		frappe.throw(_("Enter an Item Price rate."), frappe.ValidationError)
+	item_name = _management_resolve_item_name(item_code)
+	price_list_name = (price_list or _default_selling_price_list() or "").strip()
+	if not price_list_name:
+		frappe.throw(_("Select an enabled selling Price List."), frappe.ValidationError)
+	saved_count = _save_management_modifier_item_prices(
+		[
+			{
+				"item_code": item_name,
+				"price_list": price_list_name,
+				"price_list_rate": price_list_rate,
+			}
+		]
+	)
+	price_preview = get_management_modifier_option_price_preview(
+		item_code=item_name,
+		option_uom=(option_uom or "").strip(),
+		price_list=price_list_name,
+	)
+	frappe.db.commit()
+	return {
+		"saved": bool(saved_count),
+		"item_code": item_name,
+		"price_list": price_list_name,
+		"price_list_rate": flt(price_list_rate),
+		"price_preview": price_preview,
+	}
+
+
+@frappe.whitelist()
 def save_management_modifier_group(payload=None):
 	_ensure_management_access()
 	parsed_payload = payload
