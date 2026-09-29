@@ -53,6 +53,7 @@ export const designSystemCatalog = Object.freeze({
     { id: 'customer-vehicle-picker', title: 'انتخاب خودرو مشتری', description: 'انتخاب خودرو ذخیره‌شده، ویرایش و ثبت مشخصات برای تحویل درب ماشین.', source: 'components/customer/CustomerVehiclePicker.vue', kind: 'domain' },
     { id: 'customer-address-map', title: 'انتخاب محل تحویل', description: 'نقشه تعاملی با نشانگر قابل جابه‌جایی، مختصات معتبر و پشتیبانی از نشان یا OpenStreetMap.', source: 'components/checkout/AddressPickerMap.vue', kind: 'domain' },
     { id: 'button', title: 'دکمه‌ها', description: 'عمل اصلی، ثانویه، کم‌اهمیت و خطرناک با حالت‌های focus و loading.', kind: 'primitive' },
+    { id: 'management-navbar', title: 'ناوبری پنل مدیریت', description: 'نوار کناری گروه‌بندی‌شده برای دسکتاپ، میان‌برهای موبایل، منوی واکنش‌گرا و حفظ حالت جمع‌شده.', source: 'components/management/ManagementNavbar.vue', kind: 'reference' },
     { id: 'management-pos-product-card', title: 'کارت محصول POS', description: 'کارت محصول مرجع برای نماهای شبکه‌ای، فشرده و لیستی با عکس، قیمت، تعداد و BOM.', source: 'components/management/pos/ManagementPosProductCard.vue', kind: 'reference' },
     { id: 'surface', title: 'سطح و کارت', description: 'سطوح مدیریت با hierarchy مشخص و بدون تزئین اضافه.', kind: 'primitive' },
     { id: 'status', title: 'Badge و وضعیت', description: 'وضعیت موجودی، انتشار، خطا و موفقیت با متن و رنگ معنایی.', kind: 'primitive' },

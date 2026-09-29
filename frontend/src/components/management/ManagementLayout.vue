@@ -30,7 +30,6 @@
 		class="management-layout module-theme"
 		:class="{
 			dark: isDarkMode,
-			'rail-collapsed': isDesktop && isRailCollapsed,
 			'management-layout--pos': isPosPage,
 			'management-layout--kitchen': isKitchenPage,
 		}"
@@ -41,46 +40,15 @@
 		<div class="mobile-layout">
 			<!-- Mobile Header -->
 			<header class="mobile-header">
-				<div class="dfm-wrapper inline-dfm">
-					<button 
-						type="button" 
-						class="dfm-toggle-btn" 
-						:class="{ 'is-open': !isRailCollapsed }" 
-						@click="toggleRailMode" 
-						:title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'"
-					>
-						<span class="dfm-burger">
-							<span class="dfm-line top"></span>
-							<span class="dfm-line mid"></span>
-							<span class="dfm-line bot"></span>
-						</span>
-					</button>
-
-					<Transition name="dfm-anim">
-						<aside v-if="!isRailCollapsed" class="dfm-dropdown">
-							<div class="dfm-brand-block">
-								<a class="dfm-brand" href="/management" @click="toggleRailMode">
-									<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
-									<span class="dfm-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
-								</a>
-							</div>
-							<nav class="accordion-nav dfm-nav">
-								<div v-for="group in menuGroups" :key="group.key" class="nav-group" :class="{ open: isGroupOpen(group.key) }">
-									<div class="group-title-rail">{{ group.title }}</div>
-									<div class="group-items">
-										<a v-for="item in group.items" :key="item.key" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" :title="item.label" @click="toggleRailMode">
-											<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
-											<span class="item-label"><strong>{{ item.label }}</strong></span>
-										</a>
-									</div>
-								</div>
-							</nav>
-						</aside>
-					</Transition>
-					<Transition name="fade">
-						<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
-					</Transition>
-				</div>
+				<button
+					type="button"
+					class="mobile-nav-toggle"
+					aria-label="باز کردن ناوبری"
+					title="باز کردن منو"
+					@click="mobileMenuOpen = true"
+				>
+					<MenuIcon class="icon-md" aria-hidden="true" />
+				</button>
 
 				<a href="/management" class="mobile-brand">
 					<span class="brand-mark">
@@ -131,47 +99,20 @@
 				</div>
 			</main>
 
-			<!-- Mobile Sidebar Overlay -->
-			<Transition name="fade">
-				<div v-if="mobileMenuOpen" class="mobile-overlay" @click="closeMobileMenu" />
-			</Transition>
-
-			<Transition name="slide-right">
-				<aside v-if="mobileMenuOpen" class="mobile-sidebar">
-					<div class="mobile-sidebar-header">
-						<div class="sidebar-title">
-							<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
-							<div><strong>نوش‌یار</strong><small>{{ brandName }}</small></div>
-						</div>
-						<button type="button" class="icon-button" @click="closeMobileMenu"><XIcon class="icon-md" /></button>
-					</div>
-
-					<nav class="accordion-nav">
-						<div v-for="group in menuGroups" :key="`mobile-group-${group.key}`" class="nav-group open">
-							<div class="group-title-rail">{{ group.title }}</div>
-							<div class="group-items">
-								<a v-for="item in group.items" :key="`mobile-item-${item.key}`" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" @click="closeMobileMenu">
-									<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
-									<span>{{ item.label }}</span>
-								</a>
-							</div>
-						</div>
-					</nav>
-
-					<div class="mobile-utility-zone">
-						<a class="utility-link" href="/menu" @click="closeMobileMenu"><ExternalLinkIcon class="icon-sm" /> سایت مشتری</a>
-						<button type="button" class="utility-link" @click="toggleTheme">
-							<component :is="isDarkMode ? SunIcon : MoonIcon" class="icon-sm" /> 
-							{{ isDarkMode ? 'حالت روز' : 'حالت شب' }}
-						</button>
-						<template v-if="!authLoading && !authGuest">
-							<button type="button" class="utility-link text-danger" :disabled="authSubmitting" @click="handleMobileLogout">
-								<UserIcon class="icon-sm" /> {{ authSubmitting ? 'در حال خروج...' : 'خروج از حساب' }}
-							</button>
-						</template>
-					</div>
-				</aside>
-			</Transition>
+			<ManagementNavbar
+				variant="mobile"
+				:groups="menuGroups"
+				:primary-links="mobilePrimaryLinks"
+				:active-key="activeNavigationKey"
+				:active-group-key="activeGroup?.key || ''"
+				:brand-name="brandName"
+				:is-dark-mode="isDarkMode"
+				:auth-submitting="authSubmitting"
+				:show-mobile-bar="!isPosPage && !isKitchenPage"
+				v-model:mobile-open="mobileMenuOpen"
+				@toggle-theme="toggleTheme"
+				@logout="handleMobileLogout"
+			/>
 		</div>
 
 		<!-- Desktop Layout -->
@@ -179,53 +120,18 @@
 			
 
 
+			<ManagementNavbar
+				variant="desktop"
+				:groups="menuGroups"
+				:active-key="activeNavigationKey"
+				:active-group-key="activeGroup?.key || ''"
+				:brand-name="brandName"
+			/>
 			<!-- Main Content -->
 			<div class="desktop-content" :class="{ 'desktop-content--pos': isPosPage }">
-								<header class="desktop-header">
+				<header class="desktop-header">
 					<div class="desktop-header-start">
-<div class="dfm-wrapper inline-dfm">
-							<button 
-								type="button" 
-								class="dfm-toggle-btn" 
-								:class="{ 'is-open': !isRailCollapsed }" 
-								@click="toggleRailMode" 
-								:title="isRailCollapsed ? 'باز کردن منو' : 'بستن منو'"
-							>
-								<span class="dfm-burger">
-									<span class="dfm-line top"></span>
-									<span class="dfm-line mid"></span>
-									<span class="dfm-line bot"></span>
-								</span>
-							</button>
-
-							<Transition name="dfm-anim">
-								<aside v-if="!isRailCollapsed" class="dfm-dropdown">
-									<div class="dfm-brand-block">
-										<a class="dfm-brand" href="/management" @click="toggleRailMode">
-											<span class="brand-mark"><img class="brand-image" src="/NooshYar%20Image.png" alt="NooshYar" /></span>
-											<span class="dfm-brand-text"><strong>نوش‌یار</strong><small>مدیریت عملیاتی</small></span>
-										</a>
-									</div>
-									<nav class="accordion-nav dfm-nav">
-										<div v-for="group in menuGroups" :key="group.key" class="nav-group" :class="{ open: isGroupOpen(group.key) }">
-											<div class="group-title-rail">{{ group.title }}</div>
-											<div class="group-items">
-												<a v-for="item in group.items" :key="item.key" :href="item.url" :target="item.target || '_self'" class="nav-item" :class="{ active: isLinkActive(item.key) }" :title="item.label" @click="toggleRailMode">
-													<span class="item-icon"><component :is="item.iconComponent" class="icon-sm" /></span>
-													<span class="item-label"><strong>{{ item.label }}</strong></span>
-												</a>
-											</div>
-										</div>
-									</nav>
-								</aside>
-							</Transition>
-							<Transition name="fade">
-								<div v-if="!isRailCollapsed" class="dfm-backdrop" @click="toggleRailMode"></div>
-							</Transition>
-						</div>
-					<div class="page-title-wrap">
-						<h1>{{ activeTitle }}</h1>
-					</div>
+						<div class="page-title-wrap"><h1>{{ activeTitle }}</h1></div>
 					</div>
 
 					<div class="desktop-header-actions">
@@ -295,6 +201,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { navbarTitle } from "@/utils/navbarTitle";
 import ManagementBearLoader from "@/components/management/ManagementBearLoader.vue";
 import ManagementLoginGate from "@/components/management/ManagementLoginGate.vue";
+import ManagementNavbar from "@/components/management/ManagementNavbar.vue";
 import { getManagementSessionProfile, logoutManagementUser } from "@/utils/api";
 
 import {
@@ -313,16 +220,11 @@ import {
 	Layers as LayersIcon,
 	Home as HomeIcon,
 	Menu as MenuIcon,
-	X as XIcon,
-	User as UserIcon,
 	ChevronDown as ChevronDownIcon,
-	ChevronLeft as ChevronLeftIcon,
 	ExternalLink as ExternalLinkIcon,
 	LogOut as LogOutIcon,
 	Sun as SunIcon,
 	Moon as MoonIcon,
-	PanelRightClose as PanelRightCloseIcon,
-	PanelRightOpen as PanelRightOpenIcon,
 	SlidersHorizontal as SlidersIcon,
 	Palette as DesignSystemIcon,
 	Store as StoreIcon,
@@ -342,7 +244,6 @@ import {
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
 const ZOOM_STORAGE_KEY = "restaurant.management.desktopScale";
-const RAIL_STORAGE_KEY = "restaurant.management.desktopRailMode";
 const THEME_STORAGE_KEY = "restaurant.management.theme";
 const ZOOM_BASE_FONT_SIZE = 16;
 const MOBILE_BASE_FONT_SIZE = 15;
@@ -371,21 +272,8 @@ const props = defineProps({
 
 const isDesktop = ref(false);
 const desktopScale = ref(1);
-const railMode = ref("icons");
 const mobileMenuOpen = ref(false);
 const userMenuOpen = ref(false);
-const openGroupKey = ref("");
-const openGroups = ref({});
-
-function initOpenGroup() {
-	const active = menuGroups.value.find((group) =>
-		group.items.some((item) => isLinkActive(item.key)),
-	);
-	if (active) {
-		openGroupKey.value = active.key;
-		openMenuGroup(active.key);
-	}
-}
 const isDarkMode = ref(false);
 
 let desktopMedia = null;
@@ -956,9 +844,13 @@ const activeTitle = computed(() => {
 	if (navbarTitle.value) {
 		return navbarTitle.value;
 	}
-	const active = navLinks.value.find((link) => isLinkActive(link.key));
+	const active = navLinks.value.find((link) => link.key === activeNavigationKey.value);
 	return active?.label || "پنل مدیریت";
 });
+
+const activeNavigationKey = computed(() =>
+	navLinks.value.find((link) => isLinkActive(link.key))?.key || "",
+);
 
 const activeGroup = computed(() => {
 	return menuGroups.value.find((group) => group.items.some((item) => isLinkActive(item.key)));
@@ -968,7 +860,6 @@ const canIncrease = computed(() => desktopScale.value < ZOOM_MAX);
 const canDecrease = computed(() => desktopScale.value > ZOOM_MIN);
 const isDefaultScale = computed(() => Math.abs(desktopScale.value - 1) < 0.001);
 const scaleLabel = computed(() => `${Math.round(desktopScale.value * 100)}%`);
-const isRailCollapsed = computed(() => railMode.value === "icons");
 const isLoginPage = computed(() => props.page === "management-login");
 const isPosPage = computed(() => props.page === "management-pos");
 const isKitchenPage = computed(() => props.page === "management-kitchen");
@@ -993,25 +884,6 @@ const moduleThemeVars = computed(() => {
 		"--module-title-dark": "#fff7ed",
 	};
 });
-
-function openMenuGroup(key) {
-	const normalized = String(key || "").trim();
-	if (!normalized) return;
-	openGroupKey.value = normalized;
-	openGroups.value = { ...openGroups.value, [normalized]: true };
-}
-
-function toggleGroup(key) {
-	const normalized = String(key || "").trim();
-	if (!normalized) return;
-	openGroupKey.value = normalized;
-	openGroups.value = { ...openGroups.value, [normalized]: !openGroups.value[normalized] };
-}
-
-function isGroupOpen(key) {
-	const normalized = String(key || "").trim();
-	return Boolean(normalized && openGroups.value[normalized]);
-}
 
 function isLinkActive(key) {
 	const inventoryPageMap = {
@@ -1088,10 +960,6 @@ function unlockBodyScroll() {
 function toggleUserMenu() {
 		userMenuOpen.value = !userMenuOpen.value;
 	}
-
-	function toggleRailMode() {
-	railMode.value = isRailCollapsed.value ? "expanded" : "icons";
-}
 
 function normalizeManagementPath(path, fallback = "/management") {
 	const normalized = String(path || "").trim();
@@ -1292,11 +1160,8 @@ onMounted(() => {
 
 	if (typeof window !== "undefined") {
 		const storedScale = Number.parseFloat(window.localStorage.getItem(ZOOM_STORAGE_KEY) || "");
-		const storedRailMode = window.localStorage.getItem(RAIL_STORAGE_KEY);
 
 		desktopScale.value = normalizeScale(storedScale);
-
-	railMode.value = "icons"; // Default to closed for all pages with floating menu
 
 
 		desktopMedia = window.matchMedia(DESKTOP_MEDIA_QUERY);
@@ -1322,26 +1187,10 @@ onMounted(() => {
 	}
 
 	refreshAuthProfile();
-	initOpenGroup();
 });
-
-watch(
-	activeGroup,
-	(group) => {
-		if (group?.key) {
-			openMenuGroup(group.key);
-		}
-	},
-	{ immediate: true },
-);
 
 watch(desktopScale, () => {
 	applyDesktopScale();
-});
-
-watch(railMode, (value) => {
-	if (typeof window === "undefined") return;
-	window.localStorage.setItem(RAIL_STORAGE_KEY, value);
 });
 
 watch(isDesktop, (desktop) => {
@@ -1418,11 +1267,14 @@ onBeforeUnmount(() => {
 .mobile-layout {
 	display: flex;
 	flex-direction: column;
-	min-height: 100vh;
+	height: 100dvh;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .mobile-header {
 	height: 3.75rem;
+	flex: 0 0 3.75rem;
 	background: var(--mg-bg-surface);
 	border-bottom: 1px solid var(--mg-border-light);
 	display: flex;
@@ -1433,6 +1285,31 @@ onBeforeUnmount(() => {
 	top: 0;
 	z-index: 50;
 }
+
+.mobile-nav-toggle {
+	width: 2.75rem;
+	height: 2.75rem;
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: 0.75rem;
+	background: transparent;
+	color: var(--mg-text-muted);
+	cursor: pointer;
+}
+
+.mobile-nav-toggle:hover { background: var(--mg-bg-page); color: var(--mg-text-main); }
+.mobile-nav-toggle:focus-visible { outline: 3px solid var(--mg-primary); outline-offset: 2px; }
+
+.mobile-main {
+	flex: 1;
+	min-height: 0;
+	padding: 0.7rem 0.8rem;
+	overflow-y: auto;
+}
+
+.mobile-main--fullbleed { padding: 0; }
 
 .mobile-header-actions {
 	display: flex;
@@ -1880,7 +1757,9 @@ onBeforeUnmount(() => {
 	.mobile-layout { display: none; }
 	.desktop-layout {
 		display: flex;
-		min-height: 100vh;
+		height: 100dvh;
+		min-height: 0;
+		overflow: hidden;
 	}
 
 	.desktop-sidebar {
@@ -1925,15 +1804,17 @@ onBeforeUnmount(() => {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
+		min-height: 0;
 	}
 
 	.desktop-header {
-		height: 4.5rem;
-		background: var(--mg-bg-page);
+		height: 3.5rem;
+		flex: 0 0 3.5rem;
+		background: var(--mg-bg-surface);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 2rem;
+		padding: 0 1.25rem;
 		position: sticky;
 		top: 0;
 		z-index: 40;
@@ -1943,7 +1824,7 @@ onBeforeUnmount(() => {
 	.desktop-header-start {
 		display: flex;
 		align-items: center;
-		gap: 1.5rem;
+		gap: 0.75rem;
 	}
 
 	.page-title-wrap h1 {
@@ -1957,7 +1838,7 @@ onBeforeUnmount(() => {
 	.desktop-header-actions {
 		display: flex;
 		align-items: center;
-		gap: 1.25rem;
+		gap: 0.5rem;
 	}
 
 	.utility-icon-btn {
@@ -2097,14 +1978,6 @@ onBeforeUnmount(() => {
 		transform: scale(0.95) translateY(-10px);
 	}
 
-	.mobile-main {
-		flex: 1;
-		padding: 0.7rem 0.8rem calc(0.7rem + env(safe-area-inset-bottom));
-		overflow-y: auto;
-	}
-
-	.mobile-main--fullbleed { padding: 0; }
-
 	.management-workspace {
 		width: 100%;
 		max-width: 1440px;
@@ -2119,6 +1992,7 @@ onBeforeUnmount(() => {
 
 	.desktop-main {
 		flex: 1;
+		min-height: 0;
 		padding: 1rem 1.1rem;
 		overflow-y: auto;
 	}
