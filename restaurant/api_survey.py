@@ -647,7 +647,7 @@ def list_management_survey_responses(date_from="", date_to="", search="", min_ra
 @frappe.whitelist()
 def list_management_survey_invitations(limit=100):
 	api_club._ensure_management_access()
-	rows = frappe.get_all(INVITATION, fields=["name", "order_code", "customer_name", "mobile", "status", "due_at", "attempts", "last_error", "submitted_at", "expires_at"], order_by="creation desc", limit_page_length=min(max(cint(limit), 1), 300))
+	rows = frappe.get_all(INVITATION, fields=["name", "reference_doctype", "reference_name", "sales_order", "table_order", "customer", "order_code", "customer_name", "mobile", "status", "due_at", "attempts", "last_error", "submitted_at", "expires_at", "sms_message"], order_by="creation desc", limit_page_length=min(max(cint(limit), 1), 300))
 	for row in rows:
 		row.can_retry = not row.submitted_at and (not row.expires_at or get_datetime(row.expires_at) >= now_datetime())
 	return {"invitations": rows, "count": len(rows)}
