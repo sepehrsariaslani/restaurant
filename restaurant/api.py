@@ -19328,6 +19328,64 @@ def get_management_modifier_group_usage(group_name):
 	}
 
 
+@frappe.whitelist()
+def add_management_modifier_group_to_bom(bom_name=None, group_name=None):
+	"""Attach this native Modifier Group to a BOM without rewriting its items."""
+	_ensure_management_access()
+	bom_name = (bom_name or "").strip()
+	group_name = (group_name or "").strip()
+	if not bom_name or not frappe.db.exists("BOM", bom_name):
+		frappe.throw(_("Select a valid BOM."), frappe.DoesNotExistError)
+	if not group_name or not frappe.db.exists("Restaurant Modifier Group", group_name):
+		frappe.throw(_("Select a valid Modifier Group."), frappe.DoesNotExistError)
+	if not frappe.db.exists("DocType", "Restaurant BOM Modifier"):
+		frappe.throw(_("Restaurant BOM Modifier is not installed."), frappe.ValidationError)
+
+	bom_doc = frappe.get_doc("BOM", bom_name)
+	if cint(bom_doc.docstatus) == 2:
+		frappe.throw(_("Cancelled BOM cannot be edited."), frappe.ValidationError)
+	if not bom_doc.meta.has_field("restaurant_modifier_rows"):
+		frappe.throw(_("This BOM does not support Restaurant Modifier Groups."), frappe.ValidationError)
+
+	group_doc = frappe.get_doc("Restaurant Modifier Group", group_name)
+	if not any(cint(row.get("is_active") if row.get("is_active") not in (None, "") else 1) for row in group_doc.get("options") or []):
+		frappe.throw(_("Add an active option to this Modifier Group before linking it to a BOM."), frappe.ValidationError)
+
+	if any((row.get("modifier_group") or "").strip() == group_name for row in bom_doc.get("restaurant_modifier_rows") or []):
+		return {
+			"status": "already_linked",
+			"usage": get_management_modifier_group_usage(group_name),
+		}
+
+	modifier_row = {
+		"modifier_group": group_name,
+		"group_key": group_name,
+		"group_title": group_doc.get("title") or group_name,
+		"selection_mode": group_doc.get("selection_mode") or "single",
+		"required": cint(group_doc.get("required")),
+		"min_select": cint(group_doc.get("min_select") or 0),
+		"max_select": max(cint(group_doc.get("max_select") or 1), 1),
+		"modifier_type": "add_on",
+		"option_qty": 1,
+		"price_delta": 0,
+		"is_active": 1,
+	}
+	if _has_column("Restaurant BOM Modifier", "sort_order"):
+		modifier_row["sort_order"] = max(
+			[cint(row.get("sort_order") or row.get("idx") or 0) for row in bom_doc.get("restaurant_modifier_rows") or []]
+			or [0]
+		) + 1
+	bom_doc.append("restaurant_modifier_rows", modifier_row)
+	bom_doc.flags.ignore_validate_update_after_submit = True
+	bom_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	frappe.clear_cache(doctype="BOM")
+	return {
+		"status": "linked",
+		"usage": get_management_modifier_group_usage(group_name),
+	}
+
+
 def _save_management_modifier_item_prices(updates):
 	"""Upsert only explicitly edited native Item Price rows for a selling list."""
 	if not updates:
