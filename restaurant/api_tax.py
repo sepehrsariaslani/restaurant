@@ -28,6 +28,7 @@ from restaurant.api import (
 	_table_columns_from_rows,
 )
 from restaurant.tax_settings import _save_tax_settings, _tax_ensure_ops_ready, _tax_setting, _tax_settings
+from restaurant.tax_response import extract_provider_tax_id
 
 __all__ = [
 	"TAX_REPORT_KEYS",
@@ -307,7 +308,7 @@ def _submit_tax_invoice(sales_invoice=""):
 		data = _parse_json(raw, {})
 		if isinstance(data, dict) and data.get("status") in ("success", "Success", "ok", True):
 			doc.status = "ارسال‌شده"
-			doc.tax_id = str(data.get("tax_id") or data.get("reference") or data.get("id") or "")[:140]
+			doc.tax_id = extract_provider_tax_id(data)
 			doc.response_json = raw[:4000]
 			doc.submitted_at = now_datetime()
 		else:
