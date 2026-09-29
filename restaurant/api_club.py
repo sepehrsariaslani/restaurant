@@ -68,6 +68,8 @@ __all__ = [
 	"update_management_customer_voice_status",
 	"delete_management_customer_voice",
 	"submit_public_voice",
+	"submit_my_customer_voice",
+	"list_my_customer_voices",
 	# loyalty points
 	"list_management_point_entries",
 	"redeem_management_points",
@@ -117,6 +119,10 @@ __all__ = [
 	"get_public_survey",
 	"submit_public_survey",
 	"list_management_survey_responses",
+	"list_management_survey_invitations",
+	"retry_management_survey_invitation",
+	"list_management_customer_reviews",
+	"review_management_customer_review",
 	# reports
 	"get_management_report_customer_analytics",
 	"get_management_report_campaign_performance",
@@ -739,7 +745,10 @@ def _club_copy_sales_order_discount_policy_to_invoice(doc):
 		)
 	by_order = {}
 	for row in rows:
-		by_order[row.sales_order] = by_order.get(row.sales_order, 0) + flt(row.get("net_amount") or row.get("amount") or 0)
+		sales_order = row.get("sales_order")
+		if not sales_order:
+			continue
+		by_order[sales_order] = by_order.get(sales_order, 0) + flt(row.get("net_amount") or row.get("amount") or 0)
 	if not by_order:
 		return False
 	total_discount = total_group_discount = total_coach_discount = total_commission = 0.0
@@ -795,6 +804,10 @@ def apply_customer_discount_policy(doc, method=None):
 	# the same max-one policy last so group, coach, and coupon discounts cannot
 	# stack or replace one another depending on the sales channel.
 	if _club_copy_sales_order_discount_policy_to_invoice(doc):
+		return
+	# A cashier-entered POS discount is an explicit final decision. Do not let
+	# the customer-group hook replace it during Sales Order/Invoice validation.
+	if str(doc.get("restaurant_discount_source") or "").strip().casefold() == "manual":
 		return
 	_club_strip_managed_pricing_rules(doc)
 	base = flt(doc.get("net_total") or doc.get("total") or 0)
@@ -1951,6 +1964,13 @@ def _serialize_voice(row):
 	}
 
 
+def _serialize_customer_voice(row):
+	"""Serialize a customer's own message without exposing internal staff identity."""
+	entry = _serialize_voice(row)
+	entry.pop("responded_by", None)
+	return entry
+
+
 @frappe.whitelist()
 def list_management_customer_voices(type="", status="", date_from="", date_to="", search="", limit=100, offset=0):
 	"""لیست صدای مشتری (ثبت مراجعه/شکایت/پیشنهاد) با فیلتر و آمار تجمیعی."""
@@ -2130,6 +2150,76 @@ def submit_public_voice(payload=None):
 	doc.save()
 	frappe.db.commit()
 	return {"status": "success", "voice": doc.name}
+
+
+def _club_my_customer_identity(customer_token):
+	from restaurant.customer_account import _require_customer
+
+	identity = _require_customer(customer_token)
+	customer = str(identity.get("customer") or "").strip()
+	mobile = _ensure_mobile(identity.get("mobile"), allow_empty=False)
+	if not customer or not mobile:
+		frappe.throw(_("حساب مشتری شماره موبایل معتبر ندارد."), frappe.PermissionError)
+	return identity, customer, mobile
+
+
+@frappe.whitelist(allow_guest=True)
+def submit_my_customer_voice(customer_token=None, payload=None):
+	"""Register a complaint, suggestion, request, or praise from an owned account."""
+	identity, customer, mobile = _club_my_customer_identity(customer_token)
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["voice"]):
+		frappe.throw(_("در حال حاضر امکان ثبت پیام وجود ندارد."))
+	payload = _club_parse_json(payload, {})
+	type_ = str(payload.get("type") or "").strip()
+	subject = str(payload.get("subject") or "").strip()
+	message = str(payload.get("message") or "").strip()
+	if type_ not in VOICE_TYPES:
+		frappe.throw(_("نوع پیام نامعتبر است."))
+	if not subject:
+		frappe.throw(_("موضوع پیام الزامی است."))
+	if not message:
+		frappe.throw(_("متن پیام الزامی است."))
+
+	order_code = str(payload.get("order_code") or "").strip()[:140]
+	sales_order = ""
+	if order_code:
+		match = _club_verify_survey_order(order_code, mobile)
+		if not match or match.get("customer") != customer:
+			frappe.throw(_("کد سفارش با حساب شما تطابق ندارد."), frappe.PermissionError)
+		sales_order = match.get("sales_order") or ""
+
+	doc = frappe.new_doc(CLUB_DOCTYPES["voice"])
+	doc.customer = customer
+	doc.customer_name = identity.get("customer_name") or frappe.db.get_value("Customer", customer, "customer_name") or customer
+	doc.mobile = mobile
+	doc.sales_order = sales_order
+	doc.order_code = sales_order or order_code
+	doc.type = type_
+	doc.subject = subject[:140]
+	doc.message = message[:2000]
+	doc.status = "جدید"
+	doc.flags.ignore_permissions = True
+	doc.save()
+	frappe.db.commit()
+	return {"status": "success", "voice": _serialize_customer_voice(doc.as_dict())}
+
+
+@frappe.whitelist(allow_guest=True)
+def list_my_customer_voices(customer_token=None):
+	"""Return only voice messages owned by the authenticated customer account."""
+	_, customer, _ = _club_my_customer_identity(customer_token)
+	if not frappe.db.exists("DocType", CLUB_DOCTYPES["voice"]):
+		return {"voices": [], "count": 0}
+	rows = frappe.get_all(
+		CLUB_DOCTYPES["voice"],
+		filters={"customer": customer},
+		fields=["name", "customer", "customer_name", "mobile", "sales_order", "order_code", "type", "subject", "message", "status", "response", "responded_at", "creation"],
+		order_by="creation desc",
+		limit_page_length=200,
+		ignore_permissions=True,
+	)
+	voices = [_serialize_customer_voice(row) for row in rows]
+	return {"voices": voices, "count": len(voices)}
 
 
 # ---------------------------------------------------------------------------
@@ -3746,6 +3836,34 @@ def list_management_survey_responses(date_from="", date_to="", search="", min_ra
 	from restaurant.api_survey import list_management_survey_responses as list_responses
 
 	return list_responses(date_from=date_from, date_to=date_to, search=search, min_rating=min_rating, max_rating=max_rating)
+
+
+@frappe.whitelist()
+def list_management_survey_invitations(limit=100):
+	from restaurant.api_survey import list_management_survey_invitations as list_invitations
+
+	return list_invitations(limit=limit)
+
+
+@frappe.whitelist()
+def retry_management_survey_invitation(name=""):
+	from restaurant.api_survey import retry_management_survey_invitation as retry_invitation
+
+	return retry_invitation(name=name)
+
+
+@frappe.whitelist()
+def list_management_customer_reviews(status="", search="", limit=200):
+	from restaurant.api_survey import list_management_customer_reviews as list_reviews
+
+	return list_reviews(status=status, search=search, limit=limit)
+
+
+@frappe.whitelist()
+def review_management_customer_review(name="", moderation_status="", manager_reply=None):
+	from restaurant.api_survey import review_management_customer_review as review_customer_review
+
+	return review_customer_review(name=name, moderation_status=moderation_status, manager_reply=manager_reply)
 
 
 # ---------------------------------------------------------------------------

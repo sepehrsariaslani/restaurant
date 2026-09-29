@@ -1,4 +1,5 @@
 import json
+import hashlib
 import math
 import os
 import random
@@ -16,6 +17,7 @@ from urllib.request import Request, urlopen
 import frappe
 from frappe import _
 from frappe.model.rename_doc import rename_doc
+from frappe.rate_limiter import rate_limit
 from frappe.twofactor import get_qr_svg_code
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
@@ -5767,16 +5769,35 @@ def _create_sales_order(
 			branch=order_context.get("branch") or "",
 		)
 	verified_customer = bool(coach_referral_customer and coach_referral_customer == customer)
-	group_discount_percent = api_club._club_customer_group_discount_percent(customer) if verified_customer else 0
+	configured_group_discount_percent = api_club._club_customer_group_discount_percent(customer)
+	group_discount_percent = configured_group_discount_percent if verified_customer else 0
 	coach_terms = api_club._club_partner_order_terms(customer, subtotal) if verified_customer else {"coach": "", "discount": 0.0, "discount_percent": 0.0, "commission": 0.0, "commission_percent": 0.0}
 	coupon_amount = flt(server_coupon.get("discount_amount") or 0)
-	from restaurant.pricing_policy import select_order_discount, coach_commission_amount
+	manual_discount_type = str(financial_modifiers.get("discount_type") or "fixed").strip().lower()
+	manual_discount_value = flt(financial_modifiers.get("discount_value") or 0)
+	from restaurant.pricing_policy import (
+		calculate_manual_discount_amount,
+		coach_commission_amount,
+		resolve_manual_discount_active,
+		select_order_discount,
+	)
+	manual_discount_active = resolve_manual_discount_active(
+		financial_modifiers,
+		group_percent=configured_group_discount_percent,
+	)
+	manual_discount_amount = calculate_manual_discount_amount(
+		subtotal,
+		manual_discount_type,
+		manual_discount_value,
+	)
 
 	discount_policy = select_order_discount(
 		subtotal,
 		group_discount_percent,
 		coach_terms.get("discount_percent") or 0,
 		coupon_amount,
+		manual_discount_amount=manual_discount_amount,
+		manual_discount_active=manual_discount_active,
 	)
 	frontend_discount_amount = flt(discount_policy["discount_amount"])
 	coach_commission = coach_commission_amount(
@@ -5795,6 +5816,7 @@ def _create_sales_order(
 			"customer_group": "گروه مشتری",
 			"coach": "تخفیف شاگرد",
 			"coupon": "کد تخفیف",
+			"manual": "manual",
 		}.get(discount_policy["discount_source"], "")
 	if _has_column("Sales Order", "restaurant_discount_policy_applied"):
 		doc_payload["restaurant_discount_policy_applied"] = 1
@@ -5817,8 +5839,8 @@ def _create_sales_order(
 		payload_snapshot.append({
 			"discount_source": discount_policy["discount_source"],
 			"discount_amount": frontend_discount_amount,
-			"group_discount_amount": discount_policy["group_discount"],
-			"coach_discount_amount": discount_policy["coach_discount"],
+			"group_discount_amount": discount_policy["group_discount"] if discount_policy["discount_source"] == "customer_group" else 0,
+			"coach_discount_amount": discount_policy["coach_discount"] if discount_policy["discount_source"] == "coach" else 0,
 			"coupon": applied_coupon_code if discount_policy["discount_source"] == "coupon" else "",
 			"coach_customer": coach_terms.get("coach") or "",
 		})
@@ -10431,7 +10453,75 @@ def _otp_cooldown_key(mobile):
 	return "restaurant_customer_otp_cooldown:{0}".format(_ensure_mobile(mobile))
 
 
-@frappe.whitelist(allow_guest=True)
+def _otp_verified_ticket_key(ticket):
+	digest = hashlib.sha256(str(ticket or "").encode("utf-8")).hexdigest()
+	return "restaurant_customer_otp_verified:{0}".format(digest)
+
+
+def _otp_verified_ticket_lock_key(ticket):
+	digest = hashlib.sha256(str(ticket or "").encode("utf-8")).hexdigest()
+	return "restaurant_customer_otp_verified_lock:{0}".format(digest)
+
+
+def _issue_mobile_verification_ticket(mobile):
+	ticket = frappe.generate_hash(length=40)
+	frappe.cache().set_value(
+		_otp_verified_ticket_key(ticket),
+		{"mobile": _ensure_mobile(mobile, allow_empty=False)},
+		expires_in_sec=600,
+	)
+	return ticket
+
+
+def _consume_mobile_verification_ticket(ticket, mobile=None):
+	ticket = str(ticket or "").strip()
+	if not ticket:
+		frappe.throw(_("تأیید شمارهٔ موبایل پیدا نشد؛ دوباره کد بگیرید."), frappe.PermissionError)
+	cache = frappe.cache()
+	lock = cache.lock(cache.make_key(_otp_verified_ticket_lock_key(ticket)), timeout=30, blocking_timeout=5)
+	lock_acquired = False
+	try:
+		lock_acquired = lock.acquire(blocking=True)
+		if not lock_acquired:
+			frappe.throw(_("تأیید شمارهٔ موبایل هم‌زمان در حال استفاده است؛ دوباره تلاش کنید."), frappe.ValidationError)
+		payload = cache.get_value(_otp_verified_ticket_key(ticket), use_local_cache=False)
+		if isinstance(payload, bytes):
+			payload = payload.decode()
+		if isinstance(payload, str):
+			try:
+				payload = json.loads(payload)
+			except (TypeError, ValueError, json.JSONDecodeError):
+				payload = None
+		if not isinstance(payload, dict):
+			frappe.throw(_("تأیید شمارهٔ موبایل منقضی شده است؛ دوباره کد بگیرید."), frappe.PermissionError)
+		verified_mobile = _ensure_mobile(payload.get("mobile"), allow_empty=False)
+		requested_mobile = _ensure_mobile(mobile, allow_empty=True)
+		if requested_mobile and verified_mobile != requested_mobile:
+			frappe.throw(_("شمارهٔ موبایل با تأیید انجام‌شده مطابقت ندارد."), frappe.PermissionError)
+		cache.delete_value(_otp_verified_ticket_key(ticket))
+		return verified_mobile
+	finally:
+		if lock_acquired:
+			lock.release()
+
+
+def _log_customer_otp_event(event_type, mobile, challenge_id="", error=None):
+	try:
+		from frappe.mobile_login import _log_mobile_otp_event
+
+		_log_mobile_otp_event(
+			event_type=event_type,
+			mobile=mobile,
+			challenge_id=challenge_id,
+			send_mode="verify",
+			error=error,
+		)
+	except Exception:
+		return
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=5, seconds=60 * 60)
 def send_otp(mobile, customer_name=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
@@ -10439,32 +10529,66 @@ def send_otp(mobile, customer_name=None):
 	cache = frappe.cache()
 	cooldown_key = _otp_cooldown_key(normalized_mobile)
 	if cache.get_value(cooldown_key):
-		frappe.throw(_("برای ارسال دوباره کد، کمی صبر کنید."))
+		return {
+			"success": False,
+			"sent": 0,
+			"cooldown": True,
+			"retry_after": 60,
+			"message": _("برای ارسال دوباره کد، کمی صبر کنید."),
+		}
 
 	otp = "".join(random.choices(string.digits, k=6))
-	cache.set_value(_otp_cache_key(normalized_mobile), otp, expires_in_sec=300)
-	result = {"success": True, "sent": 1, "mobile": normalized_mobile, "expires_in": 300}
-	if cint(frappe.conf.get("developer_mode")):
-		result["debug_otp"] = otp
-	else:
-		try:
+	challenge_id = frappe.generate_hash(length=24)
+	cache.set_value(
+		_otp_cache_key(normalized_mobile),
+		{"otp": otp, "challenge_id": challenge_id},
+		expires_in_sec=300,
+	)
+	result = {
+		"success": True,
+		"sent": 1,
+		"mobile": normalized_mobile,
+		"expires_in": 300,
+		"challenge_id": challenge_id,
+	}
+	from accounts.sms_ir_client import SmsIrProviderError
+
+	try:
+		from accounts.sms_ir_customer import send_customer_otp, sms_ir_customer_otp_enabled
+
+		if sms_ir_customer_otp_enabled():
+			send_customer_otp(normalized_mobile, otp, challenge_id=challenge_id)
+		else:
 			has_sms_gateway = bool(frappe.db.get_single_value("SMS Settings", "sms_gateway_url"))
 			if not has_sms_gateway:
 				frappe.throw(_("درگاه پیامک برای ارسال کد تأیید تنظیم نشده است."))
 			sms_module = frappe.get_module("frappe.core.doctype.sms_settings.sms_settings")
 			sms_module.send_sms([normalized_mobile], _("کد تأیید حساب مشتری شما: {0}").format(otp), success_msg=False)
-		except Exception as exc:
+			_log_customer_otp_event(event_type="sms_sent", mobile=normalized_mobile, challenge_id=challenge_id)
+	except SmsIrProviderError as exc:
+		if (exc.uncertain_delivery and exc.provider_status is None) or (exc.status_code is None and exc.provider_status is None):
+			result.update({
+				"delivery_pending": True,
+				"message": _("درخواست ارسال ثبت شد؛ ممکن است دریافت پیامک چند لحظه طول بکشد."),
+			})
+		else:
 			cache.delete_value(_otp_cache_key(normalized_mobile))
-			if isinstance(exc, frappe.ValidationError):
-				raise
-			frappe.log_error(frappe.get_traceback(), "Restaurant customer OTP send failed")
-			frappe.throw(_("ارسال کد تأیید ناموفق بود؛ تنظیمات پیامک را بررسی کنید."))
+			frappe.throw(str(exc) or _("ارسال کد تأیید ناموفق بود."), frappe.ValidationError)
+	except Exception as exc:
+		_log_customer_otp_event(event_type="sms_failed", mobile=normalized_mobile, challenge_id=challenge_id, error=str(exc))
+		cache.delete_value(_otp_cache_key(normalized_mobile))
+		if isinstance(exc, frappe.ValidationError):
+			raise
+		frappe.log_error(frappe.get_traceback(), "Restaurant customer OTP send failed")
+		frappe.throw(_("ارسال کد تأیید ناموفق بود؛ تنظیمات پیامک را بررسی کنید."))
 	cache.set_value(cooldown_key, 1, expires_in_sec=60)
+	result["retry_after"] = 60
 	return result
 
 
-@frappe.whitelist(allow_guest=True)
-def verify_otp(mobile, otp=None, code=None, customer_name=None):
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=30, seconds=60 * 60)
+def verify_otp(mobile, otp=None, code=None, customer_name=None, challenge_id=None):
 	normalized_mobile = _ensure_mobile(mobile, allow_empty=True)
 	if not normalized_mobile:
 		return ""
@@ -10473,30 +10597,59 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 	cached = cache.get_value(_otp_cache_key(normalized_mobile))
 	if isinstance(cached, bytes):
 		cached = cached.decode()
-	if not provided or str(cached or "") != provided:
+	provided_challenge_id = str(challenge_id or "").strip()
+	cached_challenge_id = ""
+	if isinstance(cached, dict):
+		cached_otp = str(cached.get("otp") or "")
+		cached_challenge_id = str(cached.get("challenge_id") or "")
+	else:
+		cached_otp = str(cached or "")
+	if isinstance(cached, str) and cached.startswith("{"):
+		try:
+			cached_payload = json.loads(cached)
+			cached_otp = str(cached_payload.get("otp") or "")
+			cached_challenge_id = str(cached_payload.get("challenge_id") or "")
+		except (TypeError, ValueError, json.JSONDecodeError):
+			pass
+	if provided_challenge_id and cached_challenge_id and provided_challenge_id != cached_challenge_id:
+		_log_customer_otp_event(event_type="otp_failed", mobile=normalized_mobile, challenge_id=cached_challenge_id, error="شناسهٔ چالش OTP مطابقت ندارد.")
+		frappe.throw(_("جلسهٔ تأیید منقضی شده است؛ دوباره کد بگیرید."), frappe.PermissionError)
+	if not provided or cached_otp != provided:
 		attempt_key = _otp_cache_key(normalized_mobile) + ":attempts"
 		attempts = cint(cache.get_value(attempt_key) or 0) + 1
 		cache.set_value(attempt_key, attempts, expires_in_sec=300)
 		if attempts >= 6:
 			cache.delete_value(_otp_cache_key(normalized_mobile))
 			cache.delete_value(attempt_key)
+		_log_customer_otp_event(event_type="otp_failed", mobile=normalized_mobile, challenge_id=cached_challenge_id, error="کد OTP نادرست یا منقضی است.")
 		frappe.throw(_("Invalid or expired OTP."), frappe.PermissionError)
 
 	resolved_name = (customer_name or "").strip()
 	customer_docname = _find_customer_by_mobile(normalized_mobile)
-	if not customer_docname:
-		customer_docname = _ensure_customer(resolved_name or normalized_mobile, normalized_mobile)
-	elif not resolved_name:
-		resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
 	cache.delete_value(_otp_cache_key(normalized_mobile))
 	cache.delete_value(_otp_cache_key(normalized_mobile) + ":attempts")
 	cache.delete_value(_otp_cooldown_key(normalized_mobile))
+	if not customer_docname:
+		_log_customer_otp_event(event_type="otp_verified", mobile=normalized_mobile, challenge_id=cached_challenge_id)
+		return {
+			"success": True,
+			"verified": 1,
+			"mobile_verified": True,
+			"customer_exists": False,
+			"mobile": normalized_mobile,
+			"mobile_verification_token": _issue_mobile_verification_ticket(normalized_mobile),
+			"customer": {"customer_id": "", "name": "", "mobile": normalized_mobile},
+		}
+	elif not resolved_name:
+		resolved_name = frappe.db.get_value("Customer", customer_docname, "customer_name") or ""
 	from restaurant.customer_account import issue_customer_session
 
+	_log_customer_otp_event(event_type="otp_verified", mobile=normalized_mobile, challenge_id=cached_challenge_id)
 	return {
 		"customer_token": issue_customer_session(customer_docname, normalized_mobile),
 		"success": True,
 		"verified": 1,
+		"customer_exists": True,
 		"mobile": normalized_mobile,
 		"customer": {
 			"customer_id": customer_docname,
@@ -10506,14 +10659,14 @@ def verify_otp(mobile, otp=None, code=None, customer_name=None):
 	}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def customer_send_otp(mobile, customer_name=None):
 	return send_otp(mobile=mobile, customer_name=customer_name)
 
 
-@frappe.whitelist(allow_guest=True)
-def customer_verify_otp(mobile, code=None, otp=None, customer_name=None):
-	return verify_otp(mobile=mobile, otp=otp, code=code, customer_name=customer_name)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def customer_verify_otp(mobile, code=None, otp=None, customer_name=None, challenge_id=None):
+	return verify_otp(mobile=mobile, otp=otp, code=code, customer_name=customer_name, challenge_id=challenge_id)
 
 
 def _ensure_company_branch_fields():
@@ -20866,6 +21019,8 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		fields.append("mobile_no")
 	if _has_column("Customer", "customer_primary_mobile"):
 		fields.append("customer_primary_mobile")
+	if _has_column("Customer", "customer_group"):
+		fields.append("customer_group")
 		
 	filters = {"disabled": 0}
 	or_filters = {}
@@ -20889,6 +21044,21 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 	if or_filters:
 		get_all_kwargs["or_filters"] = or_filters
 	customer_docs = frappe.get_all(**get_all_kwargs)
+	group_discount_by_name = {}
+	if _has_column("Customer", "customer_group") and _has_column("Customer Group", "restaurant_default_discount_percent"):
+		group_names = sorted({(doc.get("customer_group") or "").strip() for doc in customer_docs if doc.get("customer_group")})
+		if group_names:
+			group_rows = frappe.get_all(
+				"Customer Group",
+				filters={"name": ["in", group_names]},
+				fields=["name", "restaurant_default_discount_percent"],
+				ignore_permissions=True,
+				limit_page_length=0,
+			)
+			group_discount_by_name = {
+				row.get("name"): min(max(flt(row.get("restaurant_default_discount_percent") or 0), 0), 50)
+				for row in group_rows
+			}
 	
 	grouped = {}
 	name_key_map = {}
@@ -20901,6 +21071,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		grouped[key] = {
 			"customer_name": customer_name,
 			"mobile": mobile,
+			"group_discount_percent": group_discount_by_name.get(doc.get("customer_group"), 0),
 			"orders_count": 0,
 			"total_spent": 0.0,
 			"last_order_at": None,
@@ -20939,6 +21110,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 				{
 					"customer_name": customer_name,
 					"mobile": mobile,
+					"group_discount_percent": 0,
 					"orders_count": 0,
 					"total_spent": 0.0,
 					"last_order_at": None,
@@ -20958,6 +21130,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 				{
 					"customer_name": secondary_name,
 					"mobile": "",
+					"group_discount_percent": 0,
 					"orders_count": 0,
 					"total_spent": 0.0,
 					"last_order_at": None,
@@ -20979,6 +21152,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			{
 				"customer_name": row.get("customer_name") or "",
 				"mobile": row.get("mobile") or "",
+				"group_discount_percent": min(max(flt(row.get("group_discount_percent") or 0), 0), 50),
 				"orders_count": cint(row.get("orders_count")),
 				"total_spent": flt(row.get("total_spent")),
 				"last_order_at": _json_safe_datetime(row.get("last_order_at")),

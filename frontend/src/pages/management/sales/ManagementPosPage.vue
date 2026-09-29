@@ -92,6 +92,7 @@
             :payment-boot="paymentBoot"
             :payment-options="posPaymentOptions"
             :financial="financial"
+            :group-discount-percent="financial.groupDiscountPercent"
             :totals="totals"
             :submitting="submitting"
             :undo-line="lastRemovedLine"
@@ -521,6 +522,7 @@
             :payment-boot="paymentBoot"
             :payment-options="posPaymentOptions"
             :financial="financial"
+            :group-discount-percent="financial.groupDiscountPercent"
             :totals="totals"
             :submitting="submitting"
             @update:selected-line-id="selectedCartLineId = $event"
@@ -1116,6 +1118,7 @@ import {
 import { formatMoney, formatStatus, toPersianNumber } from '@/utils/format'
 import { createDefaultCustomization, estimateLine, sanitizeCustomization } from '@/utils/itemConfig'
 import { calculatePosTotals, normalizePosPercentageModifier } from '@/utils/posPricingEngine'
+import { discountInputIsManual, resolvePosDiscount } from '@/utils/posDiscountPolicy'
 
 let bootWalletBalance = 0
 let bootDefaultPaymentMethod = 'cash'
@@ -1158,6 +1161,8 @@ function defaultFinancialState() {
     couponCode: '',
     discountType: 'percent',
     discountValue: 0,
+    groupDiscountPercent: 0,
+    manualDiscountActive: false,
     targetAmount: null,
     targetServiceSnapshot: null,
     taxExempt: false,
@@ -2321,8 +2326,57 @@ function resetCurrentInvoiceState({ preserveFeedback = false } = {}) {
   }
 }
 
+function normalizeGroupDiscountPercent(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 100) : 0
+}
+
+function applyCustomerGroupDiscount(customer = {}) {
+  const groupPercent = normalizeGroupDiscountPercent(customer?.group_discount_percent ?? customer?.groupDiscountPercent)
+  financial.groupDiscountPercent = groupPercent
+  if (financial.manualDiscountActive) {
+    return
+  }
+  const resolved = resolvePosDiscount({ groupDiscountPercent: groupPercent })
+  financial.discountType = resolved.type
+  financial.discountValue = resolved.value
+  financial.targetAmount = null
+  financial.targetServiceSnapshot = null
+}
+
+function restoreAutomaticGroupDiscount() {
+  financial.manualDiscountActive = false
+  const resolved = resolvePosDiscount({ groupDiscountPercent: financial.groupDiscountPercent })
+  financial.discountType = resolved.type
+  financial.discountValue = resolved.value
+  financial.targetAmount = null
+}
+
 function patchFinancial(partial) {
   const next = { ...(partial || {}) }
+
+  const discountTouched = ['discountType', 'discountValue', 'targetAmount'].some((key) =>
+    Object.prototype.hasOwnProperty.call(next, key),
+  )
+  if (discountTouched) {
+    const requestedType = next.discountType !== undefined ? next.discountType : financial.discountType
+    const requestedValue = next.discountValue !== undefined ? next.discountValue : financial.discountValue
+    const requestedTarget = next.targetAmount !== undefined ? next.targetAmount : financial.targetAmount
+    const isManual = discountInputIsManual({
+      discountType: requestedType,
+      discountValue: requestedValue,
+      targetAmount: requestedTarget,
+    })
+    if (isManual) {
+      next.manualDiscountActive = true
+    } else {
+      next.manualDiscountActive = false
+      const resolved = resolvePosDiscount({ groupDiscountPercent: financial.groupDiscountPercent })
+      next.discountType = resolved.type
+      next.discountValue = resolved.value
+      next.targetAmount = null
+    }
+  }
 
   // ── دروازه تخفیف: درصد هرگز بیشتر از ۱۰۰ نمی‌شود ──
   // اگر کاربر در حالت «درصدی» عددی بیشتر از ۱۰۰ وارد کند، خودکار به
@@ -2367,6 +2421,7 @@ function setFinalAmount(value) {
     }
     financial.discountType = 'fixed'
     financial.targetAmount = nextTarget
+    financial.manualDiscountActive = true
     return
   }
 
@@ -2376,8 +2431,7 @@ function setFinalAmount(value) {
   }
   financial.targetServiceSnapshot = null
   financial.targetAmount = null
-  financial.discountType = 'fixed'
-  financial.discountValue = 0
+  restoreAutomaticGroupDiscount()
 }
 
 function applyPOSProfileSummary(summary = {}) {
@@ -2835,6 +2889,7 @@ async function loadCustomers(search = '') {
         orders_count: c.orders_count || 0,
         total_sales: c.total_spent || 0,
         last_order_at: c.last_order_at,
+        group_discount_percent: normalizeGroupDiscountPercent(c.group_discount_percent),
       }
     })
 
@@ -2851,6 +2906,16 @@ async function loadCustomers(search = '') {
       customerOptions.value = existing
     } else {
       customerOptions.value = mapped
+    }
+    const currentName = String(form.customer_name || '').trim().toLowerCase()
+    const currentMobile = String(form.mobile || '').trim()
+    const currentCustomer = customerOptions.value.find((row) => {
+      const rowName = String(row.label || '').trim().toLowerCase()
+      const posAlias = ['مشتری pos', 'pos customer'].includes(currentName) && ['مشتری pos', 'pos customer'].includes(rowName)
+      return (currentMobile && row.mobile === currentMobile) || rowName === currentName || posAlias
+    })
+    if (currentCustomer) {
+      applyCustomerGroupDiscount(currentCustomer)
     }
   } catch (err) {
     console.error('Failed to load customers:', err)
@@ -3388,6 +3453,7 @@ function selectCustomerFromHistory(customer) {
   // با تغییر مشتری اصلی، مشتری ثانویه قبلی پاک می‌شود
   form.secondary_customer = ''
   form.customer_query = customer.mobile ? `${form.customer_name} - ${form.mobile}` : form.customer_name
+  applyCustomerGroupDiscount(customer)
 }
 
 async function createCustomerFromQuery(payload) {
@@ -3441,8 +3507,10 @@ async function createCustomerFromQuery(payload) {
       orders_count: 0,
       total_sales: 0,
       last_order_at: Date.now(),
+      group_discount_percent: 0,
     })
   }
+  applyCustomerGroupDiscount({ group_discount_percent: 0 })
   successMessage.value = 'مشتری جدید انتخاب شد. بعد از ثبت سفارش در تاریخچه هم ذخیره می‌شود.'
   error.value = ''
 }
@@ -3486,8 +3554,10 @@ async function addQuickCustomer() {
         orders_count: 0,
         total_sales: 0,
         last_order_at: Date.now(),
+        group_discount_percent: 0,
       })
     }
+    applyCustomerGroupDiscount({ group_discount_percent: 0 })
     error.value = ''
   } catch (err) {
     error.value = err.message || 'افزودن مشتری ناموفق بود.'
@@ -3565,6 +3635,7 @@ function currentOrderDraftSignature() {
     financial: {
       discountType: financial.targetAmount != null ? 'fixed' : financial.discountType,
       discountValue: financial.targetAmount != null ? Number(totals.value.discountAmount || 0) : Number(financial.discountValue || 0),
+      manualDiscountActive: Boolean(financial.manualDiscountActive),
       serviceType: totals.value.automaticService ? 'fixed' : financial.serviceType,
       serviceValue: totals.value.automaticService ? Number(totals.value.serviceAmount || 0) : Number(financial.serviceValue || 0),
       taxType: financial.taxExempt ? 'fixed' : financial.taxType,
@@ -3616,9 +3687,7 @@ function resetFinalAmountTarget() {
     financial.serviceValue = financial.targetServiceSnapshot.value
   }
   financial.targetServiceSnapshot = null
-  financial.targetAmount = null
-  financial.discountType = 'percent'
-  financial.discountValue = 0
+  restoreAutomaticGroupDiscount()
 }
 
 function setCartQty(line, qty) {
@@ -5744,6 +5813,8 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     financial_modifiers: {
       discount_type: financial.targetAmount != null ? 'fixed' : financial.discountType,
       discount_value: financial.targetAmount != null ? Number(totals.value.discountAmount || 0) : financial.discountValue,
+      manual_discount: financial.manualDiscountActive ? 1 : 0,
+      discount_source: financial.manualDiscountActive ? 'manual' : (financial.groupDiscountPercent > 0 ? 'customer_group' : ''),
       service_type: totals.value.automaticService ? 'fixed' : financial.serviceType,
       service_value: totals.value.automaticService ? Number(totals.value.serviceAmount || 0) : financial.serviceValue,
       tax_type: financial.taxExempt ? 'fixed' : financial.taxType,
@@ -6273,9 +6344,7 @@ watch(
   () => cart.length,
   (length) => {
     if (length !== 0) return
-    financial.discountType = 'percent'
-    financial.discountValue = 0
-    financial.targetAmount = null
+    restoreAutomaticGroupDiscount()
     financial.targetServiceSnapshot = null
     financial.couponCode = ''
   },

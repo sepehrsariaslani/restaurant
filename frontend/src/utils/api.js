@@ -1307,8 +1307,8 @@ export function sendOtp({ mobile = "", customer_name = "" } = {}) {
 	return callRestaurantAPI("send_otp", { mobile, customer_name });
 }
 
-export function verifyOtp({ mobile = "", otp = "", code = "", customer_name = "" } = {}) {
-	return callRestaurantAPI("verify_otp", { mobile, otp, code, customer_name });
+export function verifyOtp({ mobile = "", otp = "", code = "", customer_name = "", challenge_id = "" } = {}) {
+	return callRestaurantAPI("verify_otp", { mobile, otp, code, customer_name, challenge_id });
 }
 
 export function getBranches() {
@@ -3550,9 +3550,10 @@ export async function customerLoginPassword(identifier, password) {
 	return callMethodByPath("restaurant.customer_account.customer_login_password", { identifier, password });
 }
 
-export async function customerRegisterPassword({ customer_token = "", name = "", email = "", password = "", referral_code = "" } = {}) {
+export async function customerRegisterPassword({ customer_token = "", mobile_verification_token = "", name = "", email = "", password = "", referral_code = "" } = {}) {
 	return callMethodByPath("restaurant.customer_account.customer_register_password", {
 		customer_token,
+		mobile_verification_token,
 		name,
 		email,
 		password,
@@ -3586,6 +3587,15 @@ export async function customerLogout() {
 
 export async function customerSession() {
 	return callMethodByPath("restaurant.customer_account.customer_session", { customer_token: customerEditToken() });
+}
+
+export async function changeCustomerPassword({ current_password = "", new_password = "", confirm_password = "" } = {}) {
+	return callMethodByPath("restaurant.customer_account.customer_change_password", {
+		customer_token: customerEditToken(),
+		current_password,
+		new_password,
+		confirm_password,
+	});
 }
 
 // ── Zarinpal Settings API ──────────────────────────────────
@@ -4112,6 +4122,14 @@ export function getManagementSmsKindStats({ date_from = "", date_to = "" } = {})
 
 export function listManagementCustomerVoices({ type = "", status = "", date_from = "", date_to = "", search = "", limit = 100, offset = 0 } = {}) {
 	return callRestaurantAPI("list_management_customer_voices", { type, status, date_from, date_to, search, limit, offset });
+}
+
+export function submitMyCustomerVoice(payload = {}) {
+	return callRestaurantAPI("submit_my_customer_voice", { customer_token: customerEditToken(), payload });
+}
+
+export function listMyCustomerVoices() {
+	return callRestaurantAPI("list_my_customer_voices", { customer_token: customerEditToken() });
 }
 
 export function saveManagementCustomerVoice(payload = {}) {

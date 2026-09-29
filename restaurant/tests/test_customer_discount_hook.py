@@ -1,5 +1,6 @@
 """Bench-executable smoke checks for the final ERPNext discount hook."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -110,3 +111,88 @@ def run_settlement_gate_smoke():
 	):
 		assert api_club.coach_payment_settled("SO-TEST") is True
 	return {"status": "ok", "partial_paid_order_blocked": True, "fully_billed_and_paid_released": True}
+
+
+def run_sales_invoice_discount_policy_dict_smoke():
+	"""A normal dict returned by frappe.get_all must be accepted for invoice rows."""
+	doc = FakeSalesDocument(
+		doctype="Sales Invoice",
+		name="SINV-TEST",
+		items=[],
+	)
+	policy = SimpleNamespace(
+		restaurant_discount_policy_applied=1,
+		net_total=1000,
+		discount_amount=100,
+		restaurant_group_discount_amount=100,
+		restaurant_coach_discount_amount=0,
+		restaurant_coach_commission_amount=0,
+		restaurant_coach_customer="",
+		restaurant_discount_source="گروه مشتری",
+	)
+
+	with (
+		patch.object(api_club.frappe.db, "exists", return_value=True),
+		patch.object(api_club.frappe.db, "has_column", return_value=True),
+		patch.object(
+			api_club.frappe,
+			"get_all",
+			return_value=[{"sales_order": "SO-TEST", "net_amount": 1000, "amount": 1000}],
+		),
+		patch.object(api_club.frappe.db, "get_value", return_value=policy),
+		patch.object(api_club, "_has_column", return_value=True),
+	):
+		assert api_club._club_copy_sales_order_discount_policy_to_invoice(doc) is True
+
+	assert doc.get("discount_amount") == 100, repr(doc.values)
+	assert doc.get("restaurant_discount_policy_applied") == 1
+	return {"status": "ok", "discount_amount": 100}
+
+
+def run_manual_discount_policy_smoke():
+	"""A manually entered discount must not be replaced by the customer-group hook."""
+	doc = FakeSalesDocument(
+		doctype="Sales Order",
+		customer="TEST-CUSTOMER",
+		net_total=1000,
+		discount_amount=50,
+		restaurant_discount_source="manual",
+	)
+	with (
+		patch.object(api_club, "_club_ensure_ops_ready"),
+		patch.object(api_club.frappe.db, "exists", return_value=True),
+		patch.object(api_club, "_club_copy_sales_order_discount_policy_to_invoice", return_value=False),
+		patch.object(api_club, "_club_strip_managed_pricing_rules") as strip_rules,
+	):
+		api_club.apply_customer_discount_policy(doc)
+	strip_rules.assert_not_called()
+	assert doc.get("discount_amount") == 50, repr(doc.values)
+	assert doc.get("restaurant_discount_source") == "manual", repr(doc.values)
+	return {"status": "ok", "discount_amount": 50, "source": "manual"}
+
+
+def run_pos_customer_group_discount_smoke():
+	"""The generic POS customer receives its configured customer-group discount."""
+	with (
+		patch.object(api_club, "_has_column", return_value=True),
+		patch.object(
+			api_club.frappe.db,
+			"get_value",
+			side_effect=lambda doctype, name, fieldname: "Government" if doctype == "Customer" else 10,
+		) as get_value,
+	):
+		assert api_club._club_customer_group_discount_percent("POS Customer") == 10
+
+	get_value.assert_called()
+
+	with (
+		patch.object(api_club, "_has_column", return_value=True),
+		patch.object(
+			api_club.frappe.db,
+			"get_value",
+			side_effect=lambda doctype, name, fieldname: "Government" if doctype == "Customer" else 10,
+		),
+	):
+		assert api_club._club_customer_group_discount_percent("CUST-TEST") == 10
+
+	return {"status": "ok", "pos_customer_discount_percent": 10}

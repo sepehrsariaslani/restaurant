@@ -27,6 +27,15 @@ test('guest profile explains the login requirement and does not expose editable 
   assert.match(source, /if \(!readAuth\(\)\.mobile\)[^]*?customer\/login\?redirect=\/customer\/profile/)
 })
 
+test('customer profile exposes a guarded password-change form', async () => {
+  const source = await page('CustomerProfilePage.vue')
+
+  assert.match(source, /رمز عبور فعلی/)
+  assert.match(source, /رمز عبور جدید/)
+  assert.match(source, /تکرار رمز عبور جدید/)
+  assert.match(source, /changeCustomerPassword/)
+})
+
 test('address saving requires a real server record and preserves manual map recovery', async () => {
   const source = await page('CustomerAddressesPage.vue')
   assert.match(source, /:open="mapStatus === 'error'"/)
