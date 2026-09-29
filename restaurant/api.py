@@ -19087,6 +19087,164 @@ def get_management_modifier_group_detail(group_name):
 
 
 @frappe.whitelist()
+def get_management_modifier_group_usage(group_name):
+	"""Show native BOM and menu records that currently reference a modifier group."""
+	_ensure_management_access()
+	group_name = (group_name or "").strip()
+	if not group_name:
+		frappe.throw(_("Modifier Group name is required."))
+	if not frappe.db.exists("Restaurant Modifier Group", group_name):
+		frappe.throw(_("Modifier Group not found."), frappe.DoesNotExistError)
+
+	bom_rows = []
+	if frappe.db.exists("DocType", "Restaurant BOM Modifier") and frappe.db.exists("DocType", "BOM"):
+		bom_rows = frappe.get_all(
+			"Restaurant BOM Modifier",
+			filters={
+				"modifier_group": group_name,
+				"parenttype": "BOM",
+				"parentfield": "restaurant_modifier_rows",
+			},
+			fields=[
+				"parent",
+				"group_title",
+				"group_key",
+				"selection_mode",
+				"required",
+				"min_select",
+				"max_select",
+				"modifier_type",
+				"option_key",
+				"option_label",
+				"option_item",
+				"replacement_for_item",
+				"alternative_bom",
+				"option_qty",
+				"price_delta",
+				"recipe_multiplier",
+				"is_default",
+				"is_active",
+			],
+			order_by="parent asc, idx asc",
+			ignore_permissions=True,
+			limit_page_length=10000,
+		)
+
+	bom_names = sorted({row.get("parent") for row in bom_rows if row.get("parent")})
+	boms = frappe.get_all(
+		"BOM",
+		filters={"name": ["in", bom_names]} if bom_names else {"name": "__no_modifier_bom__"},
+		fields=["name", "item", "company", "quantity", "is_active", "is_default", "docstatus", "modified"],
+		order_by="modified desc",
+		ignore_permissions=True,
+		limit_page_length=10000,
+	) if bom_names else []
+
+	item_names = sorted({row.get("item") for row in boms if row.get("item")})
+	items = frappe.get_all(
+		"Item",
+		filters={"name": ["in", item_names]} if item_names else {"name": "__no_modifier_item__"},
+		fields=["name", "item_code", "item_name", "disabled"],
+		ignore_permissions=True,
+		limit_page_length=10000,
+	) if item_names else []
+	item_map = {row.name: row for row in items}
+	rows_by_bom = {}
+	for row in bom_rows:
+		rows_by_bom.setdefault(row.get("parent"), []).append(row)
+
+	serialized_boms = []
+	for bom in boms:
+		item = item_map.get(bom.get("item"))
+		serialized_boms.append(
+			{
+				"name": bom.get("name"),
+				"item": bom.get("item") or "",
+				"item_name": (item.get("item_name") if item else "") or bom.get("item") or "",
+				"company": bom.get("company") or "",
+				"quantity": flt(bom.get("quantity") or 0),
+				"is_active": cint(bom.get("is_active") or 0),
+				"is_default": cint(bom.get("is_default") or 0),
+				"item_disabled": cint(item.get("disabled") or 0) if item else 0,
+				"docstatus": cint(bom.get("docstatus") or 0),
+				"modified": bom.get("modified"),
+				"modifier_rows": [
+					{
+						"group_title": row.get("group_title") or "",
+						"group_key": row.get("group_key") or "",
+						"selection_mode": row.get("selection_mode") or "single",
+						"required": cint(row.get("required") or 0),
+						"min_select": cint(row.get("min_select") or 0),
+						"max_select": cint(row.get("max_select") or 1),
+						"modifier_type": row.get("modifier_type") or "add_on",
+						"option_key": row.get("option_key") or "",
+						"option_label": row.get("option_label") or "",
+						"option_item": row.get("option_item") or "",
+						"replacement_for_item": row.get("replacement_for_item") or "",
+						"alternative_bom": row.get("alternative_bom") or "",
+						"option_qty": flt(row.get("option_qty") or 1),
+						"price_delta": flt(row.get("price_delta") or 0),
+						"recipe_multiplier": flt(row.get("recipe_multiplier") or 1),
+						"is_default": cint(row.get("is_default") or 0),
+						"is_active": cint(row.get("is_active") if row.get("is_active") not in (None, "") else 1),
+					}
+					for row in rows_by_bom.get(bom.get("name"), [])
+				],
+			}
+		)
+
+	menu_items = []
+	if frappe.db.exists("DocType", "Restaurant Menu Item Modifier") and frappe.db.exists("DocType", "Restaurant Menu Item"):
+		menu_links = frappe.get_all(
+			"Restaurant Menu Item Modifier",
+			filters={"modifier_group": group_name, "parenttype": "Restaurant Menu Item", "parentfield": "modifier_groups"},
+			fields=["parent", "required", "min_select", "max_select", "sort_order"],
+			order_by="parent asc, idx asc",
+			ignore_permissions=True,
+			limit_page_length=10000,
+		)
+		menu_names = sorted({row.get("parent") for row in menu_links if row.get("parent")})
+		if menu_names:
+			menu_docs = frappe.get_all(
+				"Restaurant Menu Item",
+				filters={"name": ["in", menu_names]},
+				fields=["name", "title", "slug", "category", "base_price", "is_active", "branch"],
+				order_by="title asc",
+				ignore_permissions=True,
+				limit_page_length=10000,
+			)
+			links_by_menu = {}
+			for row in menu_links:
+				links_by_menu.setdefault(row.get("parent"), []).append(row)
+			menu_items = [
+				{
+					**dict(row),
+					"modifier_links": [
+						{
+							"required": cint(link.get("required") or 0),
+							"min_select": cint(link.get("min_select") or 0),
+							"max_select": cint(link.get("max_select") or 1),
+							"sort_order": cint(link.get("sort_order") or 0),
+						}
+						for link in links_by_menu.get(row.get("name"), [])
+					],
+				}
+				for row in menu_docs
+			]
+
+	return {
+		"group_name": group_name,
+		"boms": serialized_boms,
+		"menu_items": menu_items,
+		"summary": {
+			"boms_count": len(serialized_boms),
+			"items_count": len({row.get("item") for row in serialized_boms if row.get("item")}),
+			"menu_items_count": len(menu_items),
+		},
+	}
+
+
+@frappe.whitelist()
 def save_management_modifier_group(payload=None):
 	_ensure_management_access()
 	parsed_payload = payload
