@@ -20945,6 +20945,10 @@ def get_management_bom_doc(bom_name=""):
 	if not frappe.db.exists("BOM", bom_name):
 		frappe.throw(_("BOM not found."), frappe.DoesNotExistError)
 	doc = frappe.get_doc("BOM", bom_name).as_dict()
+	doc["_accounts_custom_field_schemas"] = {
+		"bom": _management_custom_field_schema("BOM", excluded_fields={"restaurant_modifier_rows"}),
+		"bom_item": _management_custom_field_schema("BOM Item"),
+	}
 	item_meta_cache = {}
 	for item_row in doc.get("items") or []:
 		if not isinstance(item_row, dict):
@@ -20966,6 +20970,178 @@ def get_management_bom_doc(bom_name=""):
 	return doc
 
 
+def _management_custom_field_schema(doctype, excluded_fields=None):
+	"""Expose visible native Custom Fields so Accounts can render them by DocField type."""
+	excluded_fields = set(excluded_fields or [])
+	if not frappe.db.exists("DocType", doctype) or not frappe.db.exists("DocType", "Custom Field"):
+		return {"sections": [], "table_schemas": {}}
+
+	custom_names = {
+		str(row.get("fieldname") or "").strip()
+		for row in frappe.get_all(
+			"Custom Field",
+			filters={"dt": doctype},
+			fields=["fieldname"],
+			ignore_permissions=True,
+		)
+		if row.get("fieldname")
+	}
+	layout_types = {"Section Break", "Column Break", "Tab Break", "HTML", "Button", "Fold", "Heading"}
+
+	def serialize_field(field, is_custom_field=False):
+		fieldname = str(getattr(field, "fieldname", "") or "").strip()
+		fieldtype = str(getattr(field, "fieldtype", "Data") or "Data")
+		return {
+			"fieldname": fieldname,
+			"label": getattr(field, "label", "") or fieldname,
+			"fieldtype": fieldtype,
+			"options": getattr(field, "options", "") or "",
+			"reqd": cint(getattr(field, "reqd", 0) or 0),
+			"read_only": cint(getattr(field, "read_only", 0) or 0),
+			"hidden": cint(getattr(field, "hidden", 0) or 0),
+			"precision": getattr(field, "precision", None),
+			"default": getattr(field, "default", None),
+			"description": getattr(field, "description", "") or "",
+			"depends_on": getattr(field, "depends_on", "") or "",
+			"mandatory_depends_on": getattr(field, "mandatory_depends_on", "") or "",
+			"read_only_depends_on": getattr(field, "read_only_depends_on", "") or "",
+			"allow_on_submit": cint(getattr(field, "allow_on_submit", 0) or 0),
+			"is_custom_field": cint(is_custom_field),
+		}
+
+	meta = frappe.get_meta(doctype)
+	fields = []
+	table_schemas = {}
+	for field in meta.fields or []:
+		fieldname = str(getattr(field, "fieldname", "") or "").strip()
+		fieldtype = str(getattr(field, "fieldtype", "") or "")
+		if (
+			fieldname not in custom_names
+			or fieldname in excluded_fields
+			or fieldtype in layout_types
+			or cint(getattr(field, "hidden", 0) or 0)
+		):
+			continue
+		fields.append(serialize_field(field, is_custom_field=True))
+		if fieldtype not in {"Table", "Table MultiSelect"}:
+			continue
+		child_doctype = str(getattr(field, "options", "") or "").strip()
+		if not child_doctype or not frappe.db.exists("DocType", child_doctype):
+			continue
+		child_meta = frappe.get_meta(child_doctype)
+		child_custom_names = {
+			str(row.get("fieldname") or "").strip()
+			for row in frappe.get_all(
+				"Custom Field",
+				filters={"dt": child_doctype},
+				fields=["fieldname"],
+				ignore_permissions=True,
+			)
+			if row.get("fieldname")
+		}
+		table_schemas[fieldname] = {
+			"doctype": child_doctype,
+			"fields": [
+				serialize_field(child_field, is_custom_field=getattr(child_field, "fieldname", "") in child_custom_names)
+				for child_field in child_meta.fields or []
+				if getattr(child_field, "fieldname", "")
+				and getattr(child_field, "fieldtype", "") not in layout_types
+				and not cint(getattr(child_field, "hidden", 0) or 0)
+			],
+		}
+
+	return {
+		"sections": ([{"key": "custom_fields", "label": _("فیلدهای اختصاصی {0}").format(doctype), "fields": fields}] if fields else []),
+		"table_schemas": table_schemas,
+	}
+
+
+def _normalize_management_custom_field_value(field, value):
+	fieldtype = str(getattr(field, "fieldtype", "") or "")
+	if fieldtype == "Check":
+		return cint(value)
+	if fieldtype in {"Int", "Long Int"}:
+		return cint(value or 0)
+	if fieldtype in {"Float", "Currency", "Percent", "Duration"}:
+		return flt(value or 0)
+	return value
+
+
+def _normalize_management_custom_table_rows(field, value):
+	if not isinstance(value, list):
+		frappe.throw(_("Invalid rows for field {0}.").format(getattr(field, "fieldname", "")), frappe.ValidationError)
+	child_doctype = str(getattr(field, "options", "") or "").strip()
+	if not child_doctype or not frappe.db.exists("DocType", child_doctype):
+		frappe.throw(_("The child DocType for field {0} is unavailable.").format(getattr(field, "fieldname", "")), frappe.ValidationError)
+	child_meta = frappe.get_meta(child_doctype)
+	child_fields = {child.fieldname: child for child in (child_meta.fields or []) if getattr(child, "fieldname", None)}
+	normalized_rows = []
+	for raw_row in value:
+		if not isinstance(raw_row, dict):
+			normalized_rows.append({})
+			continue
+		normalized_row = {}
+		for child_fieldname, child_field in child_fields.items():
+			if child_fieldname in {"name", "parent", "parenttype", "parentfield", "idx", "doctype"}:
+				continue
+			if cint(getattr(child_field, "hidden", 0) or 0) or cint(getattr(child_field, "read_only", 0) or 0):
+				continue
+			if child_fieldname in raw_row:
+				normalized_row[child_fieldname] = _normalize_management_custom_field_value(child_field, raw_row.get(child_fieldname))
+		normalized_rows.append(normalized_row)
+	return normalized_rows
+
+
+def _set_management_bom_custom_fields(bom_doc, payload, excluded_fields=None):
+	excluded_fields = set(excluded_fields or [])
+	if not frappe.db.exists("DocType", "Custom Field"):
+		return
+	custom_names = {
+		str(row.get("fieldname") or "").strip()
+		for row in frappe.get_all(
+			"Custom Field",
+			filters={"dt": "BOM"},
+			fields=["fieldname"],
+			ignore_permissions=True,
+		)
+		if row.get("fieldname")
+	}
+	fields_by_name = {field.fieldname: field for field in (bom_doc.meta.fields or []) if getattr(field, "fieldname", None)}
+	for fieldname in custom_names - excluded_fields:
+		if fieldname not in payload or fieldname not in fields_by_name:
+			continue
+		field = fields_by_name[fieldname]
+		if cint(getattr(field, "hidden", 0) or 0) or cint(getattr(field, "read_only", 0) or 0):
+			continue
+		fieldtype = str(getattr(field, "fieldtype", "") or "")
+		value = payload.get(fieldname)
+		if fieldtype in {"Table", "Table MultiSelect"}:
+			normalized_rows = _normalize_management_custom_table_rows(field, value)
+			child_doctype = str(getattr(field, "options", "") or "").strip()
+			child_fields = {child.fieldname: child for child in (frappe.get_meta(child_doctype).fields or []) if getattr(child, "fieldname", None)}
+			existing_rows = {row.name: row for row in bom_doc.get(fieldname) or [] if row.name}
+			for normalized_row, raw_row in zip(normalized_rows, value):
+				if not isinstance(raw_row, dict):
+					continue
+				row_name = str(raw_row.get("name") or "").strip()
+				existing_row = existing_rows.get(row_name) if row_name and not row_name.startswith("new-") else None
+				if existing_row:
+					normalized_row["name"] = existing_row.name
+				for child_fieldname, child_field in child_fields.items():
+					if child_fieldname in {"name", "parent", "parenttype", "parentfield", "idx", "doctype"}:
+						continue
+					if cint(getattr(child_field, "hidden", 0) or 0):
+						continue
+					if cint(getattr(child_field, "read_only", 0) or 0):
+						if existing_row:
+							normalized_row[child_fieldname] = existing_row.get(child_fieldname)
+					elif child_fieldname not in raw_row and existing_row:
+						normalized_row[child_fieldname] = existing_row.get(child_fieldname)
+			bom_doc.set(fieldname, normalized_rows)
+		else:
+			bom_doc.set(fieldname, _normalize_management_custom_field_value(field, value))
+
+
 @frappe.whitelist()
 def save_management_bom(payload=None):
 	_ensure_management_access()
@@ -20985,12 +21161,13 @@ def save_management_bom(payload=None):
 	if cint(bom_doc.docstatus) == 2:
 		frappe.throw(_("Cancelled BOM cannot be edited."))
 
-	for fieldname in ("item", "company", "currency", "rm_cost_as_per", "restaurant_recipe_instruction"):
+	for fieldname in ("item", "company", "currency", "rm_cost_as_per"):
 		if fieldname not in parsed_payload or not _has_column("BOM", fieldname):
 			continue
 		next_value = parsed_payload.get(fieldname)
 		next_value = (next_value or "").strip() if isinstance(next_value, str) else (next_value or "")
 		bom_doc.set(fieldname, next_value)
+	_set_management_bom_custom_fields(bom_doc, parsed_payload, excluded_fields={"restaurant_modifier_rows"})
 
 	for fieldname in ("quantity", *NUTRITION_KEY_FIELD_MAP.values()):
 		if fieldname not in parsed_payload or not _has_column("BOM", fieldname):
@@ -21005,6 +21182,25 @@ def save_management_bom(payload=None):
 	if "items" in parsed_payload:
 		raw_rows = parsed_payload.get("items") if isinstance(parsed_payload.get("items"), list) else []
 		normalized_items = []
+		bom_item_custom_fields = {}
+		if frappe.db.exists("DocType", "Custom Field"):
+			bom_item_custom_names = {
+				str(row.get("fieldname") or "").strip()
+				for row in frappe.get_all(
+					"Custom Field",
+					filters={"dt": "BOM Item"},
+					fields=["fieldname"],
+					ignore_permissions=True,
+				)
+				if row.get("fieldname")
+			}
+			bom_item_custom_fields = {
+				field.fieldname: field
+				for field in (frappe.get_meta("BOM Item").fields or [])
+				if getattr(field, "fieldname", None) in bom_item_custom_names
+				and not cint(getattr(field, "hidden", 0) or 0)
+				and not cint(getattr(field, "read_only", 0) or 0)
+			}
 		for row in raw_rows:
 			if not isinstance(row, dict):
 				continue
@@ -21062,6 +21258,14 @@ def save_management_bom(payload=None):
 			for fieldname in text_fields:
 				if fieldname in row and _has_column("BOM Item", fieldname):
 					item_row[fieldname] = (row.get(fieldname) or "").strip()
+			for fieldname, field in bom_item_custom_fields.items():
+				if fieldname not in row:
+					continue
+				fieldtype = str(getattr(field, "fieldtype", "") or "")
+				if fieldtype in {"Table", "Table MultiSelect"}:
+					item_row[fieldname] = _normalize_management_custom_table_rows(field, row.get(fieldname))
+				else:
+					item_row[fieldname] = _normalize_management_custom_field_value(field, row.get(fieldname))
 
 			normalized_items.append(item_row)
 
