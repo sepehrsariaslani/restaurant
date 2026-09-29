@@ -21078,8 +21078,7 @@ def _normalize_management_custom_table_rows(field, value):
 	normalized_rows = []
 	for raw_row in value:
 		if not isinstance(raw_row, dict):
-			normalized_rows.append({})
-			continue
+			frappe.throw(_("Invalid row for field {0}.").format(getattr(field, "fieldname", "")), frappe.ValidationError)
 		normalized_row = {}
 		for child_fieldname, child_field in child_fields.items():
 			if child_fieldname in {"name", "parent", "parenttype", "parentfield", "idx", "doctype"}:
