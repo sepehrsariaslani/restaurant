@@ -4,6 +4,7 @@
       <Search :size="17" aria-hidden="true" />
       <span class="sr-only">{{ searchLabel }}</span>
       <input
+        ref="searchInputRef"
         type="search"
         :value="search"
         :placeholder="searchPlaceholder"
@@ -41,7 +42,10 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { Plus, Search, X } from 'lucide-vue-next'
+
+const searchInputRef = ref(null)
 
 defineProps({
   search: { type: String, default: '' },
@@ -55,6 +59,13 @@ defineProps({
 })
 
 defineEmits(['update:search', 'search', 'primary'])
+
+defineExpose({
+  focusSearchInput() {
+    searchInputRef.value?.focus?.()
+    searchInputRef.value?.select?.()
+  },
+})
 </script>
 
 <style scoped>

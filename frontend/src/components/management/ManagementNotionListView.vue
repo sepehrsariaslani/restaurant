@@ -29,7 +29,9 @@
           </template>
         </div>
       </div>
-
+      <div v-if="$slots.actions" class="notion-row__actions" @click.stop>
+        <slot name="actions" :row="row" />
+      </div>
     </article>
 
     <div v-if="!rows.length" class="notion-list__empty">
@@ -176,6 +178,27 @@ function handleRowClick(row) {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.notion-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .notion-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .notion-row__actions {
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    padding-inline-start: 1.35rem;
+  }
 }
 
 .notion-row__title-line {

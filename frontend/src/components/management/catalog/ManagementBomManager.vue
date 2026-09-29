@@ -1,141 +1,105 @@
 <template>
   <section class="bom-manager">
-    <div class="toolbar" v-if="!detailOnly">
-      <label v-if="!hasFixedItem" class="field">
-        <span>محصول BOM</span>
-        <SearchableDropdown
-          v-model="selectedItemCode"
-          :options="itemSelectOptions"
-          allow-item-create
-          placeholder="انتخاب محصول"
-          search-placeholder="جستجوی محصول..."
-          include-empty-option
-          empty-label="همه محصولات"
-        />
-      </label>
-
-      <label class="field">
-        <span>جستجو BOM</span>
-        <input ref="searchInputRef" class="input" v-model.trim="searchQuery" placeholder="کد BOM یا نام محصول" @keydown.enter.prevent="loadBoms" />
-      </label>
-
-      <div class="toolbar-actions">
-        <button type="button" class="secondary-btn" @click="loadBoms" :disabled="loading">
-          {{ loading ? 'در حال بارگذاری...' : 'بروزرسانی لیست' }}
-        </button>
-        <button v-if="!readOnly" type="button" class="primary-btn" @click="handleCreateClick">ایجاد BOM جدید</button>
-        <button type="button" class="secondary-btn" @click="shortcutsOpen = true">میانبرها</button>
-      </div>
-    </div>
-
-    <p class="hint" v-if="hasFixedItem">مدیریت BOM فقط برای محصول {{ fixedItemCode }} فعال است.</p>
-    <p class="error" v-if="error">{{ error }}</p>
-    <p class="success" v-if="success">{{ success }}</p>
-
-    <ManagementCollectionView v-if="!detailOnly" v-model="viewMode" :modes="viewModes" class="bom-collection">
-      <template #list>
-        <ManagementListView
-          class="desktop-table"
-          :columns="columns"
-          :rows="boms"
-          row-key="name"
-          :row-clickable="true"
-          @row-click="handleEditClick"
-        >
-          <template #cell-item="{ row }">{{ row.item_name || row.item || '-' }}</template>
-          <template #cell-status="{ row }">
-            <div class="status-pills">
-              <span :class="['pill', Number(row.is_active) ? 'active' : 'inactive']">
-                {{ Number(row.is_active) ? 'فعال' : 'غیرفعال' }}
-              </span>
-              <span class="pill default" v-if="Number(row.is_default)">پیش فرض</span>
-              <span class="pill docstatus" v-if="Number(row.docstatus) === 0">پیش نویس</span>
-              <span class="pill docstatus submitted" v-else-if="Number(row.docstatus) === 1">ثبت شده</span>
-            </div>
-          </template>
-          <template #cell-quantity="{ value }">{{ formatQty(value) }}</template>
-          <template #cell-modified="{ value }">{{ formatDateTime(value) }}</template>
-          <template #cell-actions="{ row }">
-            <div class="row-actions">
-              <button
-                v-if="!readOnly"
-                type="button"
-                class="secondary-btn mini"
-                @click="makeDefault(row)"
-                :disabled="saving || Number(row.is_default)"
-              >
-                پیش فرض
+    <ManagementProductCollectionShell
+      v-if="!detailOnly"
+      class="bom-list-shell"
+      title="فرمول و رسپی محصولات"
+      subtitle="فهرست فرمول‌های ساخت و دستورهای هر محصول"
+      :loading="loading"
+      :error="error"
+      loading-label="در حال بارگذاری فرمول‌ها..."
+      :show-header="false"
+      @retry="loadBoms"
+    >
+      <template #toolbar>
+        <ManagementSurfaceCard tone="accent" class="bom-filter-card">
+          <ManagementCollectionToolbar
+            ref="searchToolbarRef"
+            v-model:search="searchQuery"
+            search-label="جستجو در فرمول‌ها"
+            search-placeholder="کد فرمول یا نام محصول..."
+            :primary-label="readOnly ? '' : 'فرمول جدید'"
+            :disabled="loading"
+            @search="loadBoms"
+            @primary="handleCreateClick"
+          >
+            <template #filters>
+              <label v-if="!hasFixedItem" class="field bom-filter-product">
+                <span>محصول</span>
+                <SearchableDropdown
+                  v-model="selectedItemCode"
+                  :options="itemSelectOptions"
+                  :disabled="loading"
+                  allow-item-create
+                  placeholder="همه محصولات"
+                  search-placeholder="جستجوی محصول..."
+                  include-empty-option
+                  empty-label="همه محصولات"
+                />
+              </label>
+            </template>
+            <template #secondary>
+              <button type="button" class="secondary-btn" @click="loadBoms" :disabled="loading" title="بروزرسانی اطلاعات">
+                {{ loading ? 'در حال بارگذاری...' : 'بروزرسانی' }}
               </button>
-              <button
-                v-if="!readOnly"
-                type="button"
-                class="secondary-btn mini"
-                @click="submitDraft(row)"
-                :disabled="saving || Number(row.docstatus) !== 0"
-              >
-                ثبت BOM
-              </button>
-              <a class="secondary-btn mini" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
-            </div>
-          </template>
-          <template #empty>برای این فیلتر BOMی پیدا نشد.</template>
-        </ManagementListView>
-
-        <ManagementMobileCardList
-          class="mobile-cards"
-          :rows="boms"
-          row-key="name"
-          card-class="bom-card"
-          empty-text="برای این فیلتر BOMی پیدا نشد."
-          :card-clickable="true"
-          @card-click="handleEditClick"
-        >
-          <template #card="{ row }">
-            <div class="bom-card__head">
-              <div class="bom-card__meta">
-                <p class="bom-card__title">{{ row.name || '-' }}</p>
-                <p class="bom-card__sub">{{ row.item_name || row.item || '-' }}</p>
-              </div>
-              <span :class="['pill', Number(row.is_active) ? 'active' : 'inactive']">
-                {{ Number(row.is_active) ? 'فعال' : 'غیرفعال' }}
-              </span>
-            </div>
-
-            <div class="bom-card__totals">
-              <p>تعداد: {{ formatQty(row.quantity) }}</p>
-              <p>بروزرسانی: {{ formatDateTime(row.modified) }}</p>
-            </div>
-
-            <div class="status-pills">
-              <span class="pill default" v-if="Number(row.is_default)">پیش فرض</span>
-              <span class="pill docstatus" v-if="Number(row.docstatus) === 0">پیش نویس</span>
-              <span class="pill docstatus submitted" v-else-if="Number(row.docstatus) === 1">ثبت شده</span>
-            </div>
-
-            <div class="row-actions">
-              <button
-                v-if="!readOnly"
-                type="button"
-                class="secondary-btn mini"
-                @click.stop="makeDefault(row)"
-                :disabled="saving || Number(row.is_default)"
-              >
-                پیش فرض
-              </button>
-              <button
-                v-if="!readOnly"
-                type="button"
-                class="secondary-btn mini"
-                @click.stop="submitDraft(row)"
-                :disabled="saving || Number(row.docstatus) !== 0"
-              >
-                ثبت BOM
-              </button>
-              <a class="secondary-btn mini" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
-            </div>
-          </template>
-        </ManagementMobileCardList>
+              <button type="button" class="secondary-btn" @click="shortcutsOpen = true">میانبرها</button>
+            </template>
+          </ManagementCollectionToolbar>
+        </ManagementSurfaceCard>
       </template>
+
+      <template #status>
+        <p class="hint" v-if="hasFixedItem">مدیریت فرمول فقط برای محصول {{ fixedItemCode }} فعال است.</p>
+        <p class="success" v-if="success">{{ success }}</p>
+      </template>
+
+      <ManagementSurfaceCard
+        class="bom-list-card"
+        title="فرمول‌ها و رسپی‌ها"
+        :subtitle="`${boms.length.toLocaleString('fa-IR')} فرمول در نمای فعلی`"
+      >
+        <ManagementCollectionView v-model="viewMode" :modes="viewModes" class="bom-collection">
+          <template #list>
+            <ManagementNotionListView
+              class="bom-notion-list"
+              :rows="bomListRows"
+              row-key="name"
+              title-key="display_item_name"
+              code-key="name"
+              :row-clickable="true"
+              :show-code="true"
+              :show-tags="false"
+              :properties="bomListProperties"
+              :property-order="bomListPropertyOrder"
+              :chip-renderers="bomChipRenderers"
+              @row-click="handleEditClick"
+            >
+              <template #actions="{ row }">
+                <div class="row-actions">
+                  <button
+                    v-if="!readOnly"
+                    type="button"
+                    class="secondary-btn mini"
+                    @click="makeDefault(row)"
+                    :disabled="saving || Number(row.is_default)"
+                  >
+                    پیش‌فرض
+                  </button>
+                  <button
+                    v-if="!readOnly"
+                    type="button"
+                    class="secondary-btn mini"
+                    @click="submitDraft(row)"
+                    :disabled="saving || Number(row.docstatus) !== 0"
+                  >
+                    ثبت BOM
+                  </button>
+                  <a class="secondary-btn mini" :href="`/app/bom/${encodeURIComponent(row.name)}`" target="_blank" rel="noreferrer">ERP</a>
+                </div>
+              </template>
+              <template #empty>برای این فیلتر فرمولی پیدا نشد.</template>
+            </ManagementNotionListView>
+          </template>
 
       <template #gallery>
         <ManagementGalleryView
@@ -213,9 +177,14 @@
           </template>
         </ManagementTreeView>
       </template>
-    </ManagementCollectionView>
+        </ManagementCollectionView>
+      </ManagementSurfaceCard>
+    </ManagementProductCollectionShell>
 
-    <p class="hint" v-if="detailOnly && loading">در حال بارگذاری جزئیات BOM...</p>
+    <template v-else>
+    <p class="hint" v-if="loading">در حال بارگذاری جزئیات BOM...</p>
+    <p class="error" v-if="error">{{ error }}</p>
+    <p class="success" v-if="success">{{ success }}</p>
 
     <section v-if="editorOpen && !readOnly && detailOnly" class="editor-shell">
       <header class="editor-head">
@@ -333,6 +302,7 @@
         </button>
       </footer>
     </section>
+    </template>
 
     <ManagementPopup
       v-model:open="shortcutsOpen"
@@ -361,8 +331,10 @@ import ManagementCollectionView from '@/components/management/ManagementCollecti
 import ManagementGalleryView from '@/components/management/ManagementGalleryView.vue'
 import ManagementBomItemsTable from '@/components/management/catalog/ManagementBomItemsTable.vue'
 import ManagementBomModifiersTable from '@/components/management/catalog/ManagementBomModifiersTable.vue'
-import ManagementListView from '@/components/management/ManagementListView.vue'
-import ManagementMobileCardList from '@/components/management/ManagementMobileCardList.vue'
+import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
+import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
+import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
+import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementTreeView from '@/components/management/ManagementTreeView.vue'
 import {
   createManagementBom,
@@ -407,7 +379,7 @@ const saving = ref(false)
 const error = ref('')
 const success = ref('')
 const searchQuery = ref('')
-const searchInputRef = ref(null)
+const searchToolbarRef = ref(null)
 const selectedItemCode = ref(String(props.fixedItemCode || props.initialItemCode || '').trim())
 const boms = ref([])
 const itemCatalog = ref([])
@@ -445,15 +417,6 @@ const form = reactive({
   restaurant_modifier_rows: [],
 })
 
-const columns = [
-  { key: 'name', label: 'BOM' },
-  { key: 'item', label: 'محصول' },
-  { key: 'quantity', label: 'تعداد' },
-  { key: 'status', label: 'وضعیت' },
-  { key: 'modified', label: 'آخرین بروزرسانی' },
-  { key: 'actions', label: 'عملیات' },
-]
-
 const viewModes = [
   { value: 'list', label: 'لیست', icon: '≡' },
   { value: 'gallery', label: 'گالری', icon: '▦' },
@@ -472,6 +435,37 @@ const itemSelectOptions = computed(() =>
     label: `${row.item_name || row.item_code || row.name} (${row.item_code || row.name})`,
   })),
 )
+
+const bomListRows = computed(() => boms.value.map((row) => ({
+  ...row,
+  display_item_name: String(row.item_name || row.item || 'محصول نامشخص'),
+})))
+
+const bomListProperties = {
+  quantity: true,
+  is_active: true,
+  is_default: true,
+  docstatus: true,
+  modified: true,
+}
+
+const bomListPropertyOrder = ['quantity', 'is_active', 'is_default', 'docstatus', 'modified']
+
+const bomChipRenderers = {
+  quantity: (row) => ({ text: `تولید: ${formatQty(row.quantity)}` }),
+  is_active: (row) => ({
+    text: Number(row.is_active) ? 'فعال' : 'غیرفعال',
+    cls: Number(row.is_active) ? 'notion-chip--on' : 'notion-chip--off',
+  }),
+  is_default: (row) => (Number(row.is_default) ? { text: 'پیش‌فرض محصول', cls: 'notion-chip--soft' } : null),
+  docstatus: (row) => {
+    const status = Number(row.docstatus)
+    if (status === 0) return { text: 'پیش‌نویس', cls: 'notion-chip--warn' }
+    if (status === 1) return { text: 'ثبت‌شده', cls: 'notion-chip--soft' }
+    return status === 2 ? { text: 'لغوشده', cls: 'notion-chip--off' } : null
+  },
+  modified: (row) => (row.modified ? { text: formatDateTime(row.modified) } : null),
+}
 
 const companyOptions = computed(() =>
   companies.value.map((row) => ({
@@ -694,8 +688,7 @@ function redoFormChanges() {
 }
 
 function focusSearchInput() {
-  searchInputRef.value?.focus?.()
-  searchInputRef.value?.select?.()
+  searchToolbarRef.value?.focusSearchInput?.()
 }
 
 function isTypingTarget(target) {
@@ -835,7 +828,7 @@ async function loadBoms() {
   try {
     const rows = await listManagementBoms({
       item_code: hasFixedItem.value ? props.fixedItemCode : selectedItemCode.value,
-      search: searchQuery.value,
+      search: searchQuery.value.trim(),
       limit: 180,
     })
     boms.value = rows || []
@@ -1224,71 +1217,20 @@ onBeforeUnmount(() => {
   gap: 0.55rem;
 }
 
-.toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 0.45rem;
-  align-items: end;
-}
-
 .field {
   display: grid;
   gap: 0.2rem;
   min-width: 0;
 }
 
+.bom-filter-product {
+  width: min(100%, 18rem);
+  margin: 0;
+}
+
 .field > span {
   font-size: 0.78rem;
   color: var(--text-muted);
-}
-
-.toolbar-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.desktop-table {
-  display: block;
-}
-
-.mobile-cards {
-  display: none;
-}
-
-.bom-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.55rem;
-}
-
-.bom-card__meta {
-  min-width: 0;
-  flex: 1;
-}
-
-.bom-card__title {
-  margin: 0;
-  font-size: 0.86rem;
-  font-weight: 800;
-}
-
-.bom-card__sub {
-  margin: 0.16rem 0 0;
-  font-size: 0.77rem;
-  color: var(--text-muted);
-}
-
-.bom-card__totals {
-  display: grid;
-  gap: 0.12rem;
-  font-size: 0.79rem;
-  color: rgb(16 24 40 / 0.86);
-}
-
-.bom-card__totals p {
-  margin: 0;
 }
 
 .shortcut-list {
@@ -1319,44 +1261,6 @@ onBeforeUnmount(() => {
   line-height: 1.4;
   color: var(--text-primary);
   direction: ltr;
-}
-
-.status-pills {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-}
-
-.pill {
-  border-radius: 999px;
-  padding: 0.12rem 0.46rem;
-  font-size: 0.69rem;
-}
-
-.pill.active {
-  background: rgb(var(--palette-june-bud-rgb) / 0.44);
-  color: var(--accent-green);
-}
-
-.pill.inactive {
-  background: rgb(var(--palette-deep-saffron-rgb) / 0.17);
-  color: var(--accent-gold);
-}
-
-.pill.default {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.14);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 1);
-}
-
-.pill.docstatus {
-  background: rgb(var(--palette-deep-sapphire-rgb) / 0.08);
-  color: var(--text-muted);
-}
-
-.pill.docstatus.submitted {
-  background: rgb(var(--palette-june-bud-rgb) / 0.24);
-  color: rgb(var(--palette-deep-sapphire-rgb) / 0.9);
 }
 
 .row-actions {
@@ -1483,29 +1387,14 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1100px) {
-  .toolbar,
   .editor-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 760px) {
-  .toolbar,
   .editor-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .toolbar-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .desktop-table {
-    display: none;
-  }
-
-  .mobile-cards {
-    display: block;
   }
 }
 </style>

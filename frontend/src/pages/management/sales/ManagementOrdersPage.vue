@@ -1,94 +1,98 @@
 <template>
-  <ManagementPageScaffold :title="detailOnly ? '' : 'مدیریت سفارش‌ها'" :subtitle="detailOnly ? '' : 'پایش سفارش‌ها، پرداخت و پیشرفت آماده‌سازی'">
-    <template v-if="!detailOnly" #toolbar>
-      <ManagementCollectionToolbar
-        v-model:search="search"
-        search-label="جستجو در سفارش‌ها"
-        search-placeholder="کد سفارش، نام مشتری یا شماره همراه..."
-        :disabled="loading"
-        @search="loadOrders"
+  <ManagementPageScaffold title="" subtitle="">
+    <ManagementProductCollectionShell
+      v-if="!detailOnly"
+      class="orders-collection"
+      title="مدیریت سفارش‌ها"
+      subtitle="پایش سفارش‌ها، پرداخت و پیشرفت آماده‌سازی"
+      :loading="loading"
+      :error="error"
+      loading-label="در حال همگام‌سازی سفارش‌ها..."
+      :show-header="false"
+      @retry="loadOrders"
+    >
+      <template #toolbar>
+        <ManagementSurfaceCard tone="accent" class="orders-filter-card">
+          <ManagementCollectionToolbar
+            v-model:search="search"
+            search-label="جستجو در سفارش‌ها"
+            search-placeholder="کد سفارش، نام مشتری یا شماره همراه..."
+            :disabled="loading"
+            @search="loadOrders"
+          >
+            <template #filters>
+              <button class="floor-chip" :class="{ active: !filters.source }" type="button" @click="filters.source = ''; loadOrders()">همه منابع</button>
+              <button class="floor-chip" :class="{ active: filters.source === 'web' }" type="button" @click="filters.source = 'web'; loadOrders()">آنلاین</button>
+              <button class="floor-chip" :class="{ active: filters.source === 'table' }" type="button" @click="filters.source = 'table'; loadOrders()">سالن</button>
+            </template>
+            <template #secondary>
+              <button class="secondary-btn" type="button" :disabled="loading" @click="loadOrders" title="بروزرسانی اطلاعات">
+                <RefreshCcw :size="16" :class="{ 'is-spinning': loading }" /> بروزرسانی
+              </button>
+            </template>
+            <template #below>
+              <div class="workspace-tabs-container">
+                <div class="workspace-tabs" role="tablist" aria-label="فیلتر وضعیت سفارش‌ها">
+                  <button
+                    v-for="tab in mobileTabs"
+                    :key="tab.value"
+                    class="workspace-tab"
+                    :class="{ active: activeTab === tab.value }"
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === tab.value"
+                    @click="activeTab = tab.value"
+                  >
+                    <span>{{ tab.label }}</span>
+                    <span class="tab-badge" v-if="getTabCount(tab.value) > 0">{{ toFaDigits(getTabCount(tab.value)) }}</span>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </ManagementCollectionToolbar>
+        </ManagementSurfaceCard>
+      </template>
+
+      <ManagementSurfaceCard
+        v-if="!loading || orders.length"
+        :title="orderListTitle"
+        :subtitle="orderListSubtitle"
+        class="orders-list-card"
       >
-        <template #filters>
-          <button class="floor-chip" :class="{ active: !filters.source }" type="button" @click="filters.source = ''; loadOrders()">همه منابع</button>
-          <button class="floor-chip" :class="{ active: filters.source === 'web' }" type="button" @click="filters.source = 'web'; loadOrders()">آنلاین</button>
-          <button class="floor-chip" :class="{ active: filters.source === 'table' }" type="button" @click="filters.source = 'table'; loadOrders()">سالن</button>
-        </template>
-        <template #secondary>
-          <button class="secondary-btn" type="button" :disabled="loading" @click="loadOrders" title="بروزرسانی اطلاعات">
-            <RefreshCcw :size="16" :class="{ 'is-spinning': loading }" /> بروزرسانی
-          </button>
-        </template>
-      </ManagementCollectionToolbar>
-    </template>
-
-    <div v-if="!detailOnly" class="workspace-tabs-container">
-      <div class="workspace-tabs" role="tablist">
-        <button
-          v-for="tab in mobileTabs"
-          :key="tab.value"
-          class="workspace-tab"
-          :class="{ active: activeTab === tab.value }"
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === tab.value"
-          @click="activeTab = tab.value"
+        <ManagementNotionListView
+          :rows="orderListRows"
+          row-key="name"
+          title-key="display_customer"
+          code-key="display_code"
+          :row-clickable="true"
+          :show-code="true"
+          :show-tags="false"
+          :properties="orderListProperties"
+          :property-order="orderListPropertyOrder"
+          :chip-renderers="orderChipRenderers"
+          @row-click="openOrderDetail"
         >
-          <span>{{ tab.label }}</span>
-          <span class="tab-badge" v-if="getTabCount(tab.value) > 0">{{ toFaDigits(getTabCount(tab.value)) }}</span>
-        </button>
-      </div>
-    </div>
+          <template #actions="{ row }">
+            <button class="secondary-btn mini-link-btn" type="button" @click.stop="openOrderDetail(row)">جزئیات</button>
+          </template>
+          <template #empty>
+            <div class="empty-state">
+              <div class="empty-icon-wrapper"><ClipboardList :size="32" /></div>
+              <strong>سفارشی یافت نشد</strong>
+              <p>در این نما با فیلترهای فعلی موردی وجود ندارد.</p>
+              <button v-if="filters.source || search || activeTab !== 'all'" class="secondary-btn mt-2" @click="activeTab = 'all'; search = ''; filters.source = ''; loadOrders()">پاک کردن فیلترها</button>
+            </div>
+          </template>
+        </ManagementNotionListView>
+      </ManagementSurfaceCard>
+    </ManagementProductCollectionShell>
 
-    <p class="muted-loading" v-if="loading && !orders.length">در حال همگام‌سازی سفارش‌ها...</p>
-    <div class="workspace-alerts" v-if="error">
+    <p class="muted-loading" v-if="detailOnly && loading && !orders.length">در حال دریافت جزئیات سفارش...</p>
+    <div class="workspace-alerts" v-if="detailOnly && error">
       <p class="error-alert"><AlertCircle :size="16" /> {{ error }}</p>
     </div>
 
-    <template v-if="!loading || orders.length">
-      <section class="workspace-floor">
-        <div v-if="!detailOnly" class="floor-grid-area">
-          <ManagementListView
-            :columns="orderColumns"
-            :rows="displayOrders"
-            row-key="name"
-            :row-clickable="true"
-            @row-click="openOrderDetail"
-          >
-            <template #cell-order_code="{ row }">
-              <div class="order-identity">
-                <strong>{{ row.order_code || row.name }}</strong>
-                <span class="customer-name">{{ row.customer_name || 'مشتری ناشناس' }}</span>
-                <span v-if="row.external_source === 'snapp_food'" class="external-source-badge">اسنپ‌فود</span>
-              </div>
-            </template>
-            <template #cell-channel="{ row }">{{ row.channel || '—' }}</template>
-            <template #cell-status="{ row }">
-              <span class="status-badge" :class="`status-${(row.status || '').toLowerCase()}`">{{ formatStatus(row.status) }}</span>
-            </template>
-            <template #cell-payment="{ row }">
-              <span v-if="row.payment_status" class="payment-badge" :class="`pay-${(row.payment_status || '').toLowerCase()}`">
-                {{ row.payment_status === 'Paid' ? 'پرداخت شده' : 'پرداخت نشده' }}
-              </span>
-              <span v-else>—</span>
-            </template>
-            <template #cell-grand_total="{ row }">
-              <span class="order-total" dir="ltr">{{ formatMoney(row.grand_total, currency) }}</span>
-            </template>
-            <template #cell-created_at="{ row }">{{ formatDateTime(row.created_at) }}</template>
-            <template #cell-actions="{ row }">
-              <button class="secondary-btn mini-link-btn" type="button" @click.stop="openOrderDetail(row)">جزئیات</button>
-            </template>
-            <template #empty>
-              <div class="empty-state">
-                <div class="empty-icon-wrapper"><ClipboardList :size="32" /></div>
-                <strong>سفارشی یافت نشد</strong>
-                <p>در این نما با فیلترهای فعلی موردی وجود ندارد.</p>
-                <button v-if="filters.source || search || activeTab !== 'all'" class="secondary-btn mt-2" @click="activeTab = 'all'; search = ''; filters.source = ''; loadOrders()">پاک کردن فیلترها</button>
-              </div>
-            </template>
-          </ManagementListView>
-        </div>
-
+    <section v-if="detailOnly && (!loading || orders.length)" class="workspace-floor workspace-floor--detail">
         <aside class="floor-detail-area" :class="{ 'floor-detail-area--standalone': detailOnly }">
           <div class="inspection-panel">
             <div v-if="!isOrderDetailView || !selectedOrder" class="inspection-empty">
@@ -211,7 +215,6 @@
           </div>
         </aside>
       </section>
-    </template>
   </ManagementPageScaffold>
 </template>
 
@@ -219,9 +222,10 @@
 import { computed, reactive, ref } from 'vue'
 import { AlertCircle, CheckCheck, ClipboardList, Clock3, CreditCard, FileText, RefreshCcw, Store, X } from 'lucide-vue-next'
 import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
-import ManagementListView from '@/components/management/ManagementListView.vue'
+import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
+import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { completeManagementOrder, getManagementOrderDetail, listManagementOrders, markManagementOrderPaid, listManagementCouriers, assignManagementOrderCourier, createManagementOrderProforma } from '@/utils/api'
 import { formatMoney, formatStatus, parseQuery } from '@/utils/format'
@@ -331,17 +335,6 @@ const mobileTabs = [
   { value: 'cancelled', label: 'لغو شده' },
 ]
 
-const orderColumns = [
-  { key: 'order_code', label: 'کد' },
-  { key: 'customer_name', label: 'مشتری' },
-  { key: 'channel', label: 'کانال' },
-  { key: 'status', label: 'وضعیت' },
-  { key: 'payment', label: 'پرداخت' },
-  { key: 'grand_total', label: 'مبلغ' },
-  { key: 'created_at', label: 'تاریخ' },
-  { key: 'actions', label: 'عملیات' },
-]
-
 const isOrderDetailView = computed(() => Boolean(detailOrderName.value))
 
 const displayOrders = computed(() => {
@@ -369,6 +362,48 @@ const displayOrders = computed(() => {
   }
   return orders.value
 })
+
+const orderListRows = computed(() => displayOrders.value.map((row) => ({
+  ...row,
+  display_customer: String(row.customer_name || 'مشتری ناشناس'),
+  display_code: String(row.order_code || row.name || '—'),
+})))
+
+const orderListTitle = computed(() => {
+  const selectedTab = mobileTabs.find((tab) => tab.value === activeTab.value)
+  const label = selectedTab?.label || 'همه'
+  return label === 'همه' ? 'همه سفارش‌ها' : `سفارش‌های ${label}`
+})
+
+const orderListSubtitle = computed(() => `${toFaDigits(displayOrders.value.length)} سفارش در نمای فعلی`)
+
+const orderListProperties = {
+  channel: true,
+  status: true,
+  payment_status: true,
+  grand_total: true,
+  created_at: true,
+  external_source: true,
+}
+
+const orderListPropertyOrder = ['channel', 'status', 'payment_status', 'grand_total', 'created_at', 'external_source']
+
+const orderChipRenderers = {
+  channel: (row) => ({ text: row.channel || (String(row.source || '').toLowerCase() === 'web' ? 'آنلاین' : 'سالن'), cls: 'notion-chip--soft' }),
+  status: (row) => {
+    const status = String(row.status || '').toLowerCase()
+    const cls = ['delivered', 'ready'].includes(status) ? 'notion-chip--on' : status === 'cancelled' ? 'notion-chip--off' : 'notion-chip--warn'
+    return { text: formatStatus(row.status), cls }
+  },
+  payment_status: (row) => {
+    if (!row.payment_status) return null
+    const paid = String(row.payment_status).toLowerCase() === 'paid'
+    return { text: paid ? 'پرداخت شده' : 'پرداخت نشده', cls: paid ? 'notion-chip--on' : 'notion-chip--off' }
+  },
+  grand_total: (row) => ({ text: formatMoney(row.grand_total, row.currency || currency.value) }),
+  created_at: (row) => (row.created_at ? { text: formatDateTime(row.created_at) } : null),
+  external_source: (row) => (row.external_source === 'snapp_food' ? { text: 'اسنپ‌فود', cls: 'notion-chip--soft' } : null),
+}
 
 function getTabCount(tab) {
   if (tab === 'all') {
@@ -727,6 +762,10 @@ if (isOrderDetailView.value) {
 .workspace-tabs-container {
   display: flex;
   margin-bottom: 2rem;
+}
+
+.orders-collection .workspace-tabs-container {
+  margin: 0;
 }
 
 .workspace-tabs {
