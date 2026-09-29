@@ -27,6 +27,7 @@ from restaurant.api import (
 	_ensure_management_access,
 	_table_columns_from_rows,
 )
+from restaurant.tax_settings import _save_tax_settings, _tax_ensure_ops_ready, _tax_setting, _tax_settings
 
 __all__ = [
 	"TAX_REPORT_KEYS",
@@ -47,20 +48,6 @@ TAX_REPORT_KEYS = {"tax-reconciliation"}
 SUBMISSION_STATUSES = ["در صف", "ارسال‌شده", "خطا", "لغوشده"]
 
 
-# ---------------------------------------------------------------------------
-# Lazy bridge (import-cycle safety)
-# ---------------------------------------------------------------------------
-
-
-def _tax_fp_call(helper_name, *args, **kwargs):
-	from restaurant import api_feature_pack
-
-	fn = getattr(api_feature_pack, helper_name, None)
-	if not callable(fn):
-		raise RuntimeError(f"api_feature_pack helper missing: {helper_name}")
-	return fn(*args, **kwargs)
-
-
 def _parse_json(value, fallback=None):
 	import json as _json
 
@@ -79,48 +66,6 @@ def _parse_json(value, fallback=None):
 # ---------------------------------------------------------------------------
 
 
-def _tax_ensure_ops_ready():
-	try:
-		_tax_fp_call(
-			"_fp_ensure_custom_fields",
-			"Restaurant Web Settings",
-			[
-				{"fieldname": "restaurant_tax_section", "label": "سامانه مودیان", "fieldtype": "Section Break"},
-				{"fieldname": "restaurant_tax_enabled", "label": "اتصال سامانه مودیان فعال", "fieldtype": "Check", "default": "0"},
-				{"fieldname": "restaurant_tax_sandbox", "label": "حالت آزمایشی (محیط تست)", "fieldtype": "Check", "default": "1"},
-				{"fieldname": "restaurant_tax_column", "label": "", "fieldtype": "Column Break"},
-				{"fieldname": "restaurant_tax_api_url", "label": "نشانی سرویس ارسال صورتحساب", "fieldtype": "Data"},
-				{"fieldname": "restaurant_tax_memory_code", "label": "کد حافظه مالیاتی", "fieldtype": "Data"},
-				{"fieldname": "restaurant_tax_auth_token", "label": "توکن احراز هویت", "fieldtype": "Password"},
-				{"fieldname": "restaurant_tax_economic_code", "label": "کد اقتصادی", "fieldtype": "Data"},
-				{"fieldname": "restaurant_tax_auto_submit", "label": "ارسال خودکار روزانه فاکتورها", "fieldtype": "Check", "default": "0"},
-			],
-			anchor_candidates=["restaurant_reservation_section", "restaurant_delivery_section", "restaurant_club_section", "configuration_tab"],
-		)
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "Restaurant tax ensure fields failed")
-
-
-def _tax_setting(fieldname, default=None):
-	try:
-		value = frappe.db.get_single_value("Restaurant Web Settings", fieldname)
-		return default if value in (None, "") else value
-	except Exception:
-		return default
-
-
-def _tax_settings():
-	return {
-		"enabled": cint(_tax_setting("restaurant_tax_enabled", 0)) == 1,
-		"sandbox": cint(_tax_setting("restaurant_tax_sandbox", 1)) == 1,
-		"api_url": (_tax_setting("restaurant_tax_api_url", "") or "").strip(),
-		"memory_code": (_tax_setting("restaurant_tax_memory_code", "") or "").strip(),
-		"token_set": bool((_tax_setting("restaurant_tax_auth_token", "") or "").strip()),
-		"economic_code": (_tax_setting("restaurant_tax_economic_code", "") or "").strip(),
-		"auto_submit": cint(_tax_setting("restaurant_tax_auto_submit", 0)) == 1,
-	}
-
-
 def _tax_digits(value):
 	output = []
 	for character in str(value or ""):
@@ -137,14 +82,14 @@ def _tax_digits(value):
 # ---------------------------------------------------------------------------
 
 
-def build_tax_invoice_payload(sales_invoice):
+def build_tax_invoice_payload(sales_invoice, settings=None):
 	"""Standard electronic-invoice JSON (header/body) for a Sales Invoice."""
 	if not frappe.db.exists("Sales Invoice", sales_invoice):
 		frappe.throw(_("فاکتور یافت نشد: {0}").format(sales_invoice or "-"))
 	si = frappe.get_doc("Sales Invoice", sales_invoice)
 	if cint(si.docstatus) != 1 or cint(si.get("is_return")):
 		frappe.throw(_("فقط فاکتور فروش ثبت‌شده و غیرمرجوعی قابل ارسال است"), frappe.ValidationError)
-	settings = _tax_settings()
+	settings = settings or _tax_settings(company=si.company)
 	posting_dt = getdate(si.posting_date) if si.posting_date else getdate(today())
 	import time as _time
 
@@ -240,22 +185,6 @@ def set_management_tax_settings(payload=None):
 	return _save_tax_settings(payload)
 
 
-def _save_tax_settings(payload=None):
-	"""Persist the existing singleton settings for trusted Accounts/Restaurant facades."""
-	_tax_ensure_ops_ready()
-	payload = _parse_json(payload, {})
-	for key in ("restaurant_tax_enabled", "restaurant_tax_sandbox", "restaurant_tax_auto_submit"):
-		if key in payload:
-			frappe.db.set_single_value("Restaurant Web Settings", key, cint(payload.get(key)), update_modified=False)
-	for key in ("restaurant_tax_api_url", "restaurant_tax_memory_code", "restaurant_tax_economic_code"):
-		if key in payload:
-			frappe.db.set_single_value("Restaurant Web Settings", key, (payload.get(key) or "").strip(), update_modified=False)
-	if "restaurant_tax_auth_token" in payload:
-		frappe.db.set_single_value("Restaurant Web Settings", "restaurant_tax_auth_token", (payload.get("restaurant_tax_auth_token") or "").strip(), update_modified=False)
-	frappe.db.commit()
-	return {"status": "success", "settings": _tax_settings()}
-
-
 @frappe.whitelist()
 def list_management_tax_submissions(status="", date_from="", date_to="", search="", limit=50, offset=0):
 	_ensure_management_access()
@@ -322,10 +251,10 @@ def submit_management_tax_invoice(sales_invoice=""):
 def _submit_tax_invoice(sales_invoice=""):
 	"""Run the native invoice payload/submission lifecycle after facade authorization."""
 	sales_invoice = (sales_invoice or "").strip()
-	settings = _tax_settings()
 	if not frappe.db.exists("Sales Invoice", sales_invoice):
 		frappe.throw(_("فاکتور یافت نشد: {0}").format(sales_invoice or "-"))
 	sales_invoice_doc = frappe.get_doc("Sales Invoice", sales_invoice)
+	settings = _tax_settings(company=sales_invoice_doc.company, include_auth_token=True)
 	if cint(sales_invoice_doc.docstatus) != 1 or cint(sales_invoice_doc.get("is_return")):
 		frappe.throw(_("فقط فاکتور فروش ثبت‌شده و غیرمرجوعی قابل ارسال است"), frappe.ValidationError)
 	company_tax_id = _tax_digits(frappe.db.get_value("Company", sales_invoice_doc.company, "tax_id"))
@@ -346,7 +275,7 @@ def _submit_tax_invoice(sales_invoice=""):
 			frappe.throw(_("برای ارسال واقعی، نشانی HTTPS معتبر سرویس مؤدیان لازم است"), frappe.ValidationError)
 		if not settings.get("token_set"):
 			frappe.throw(_("توکن اتصال مؤدیان ثبت نشده است"), frappe.ValidationError)
-	payload_json = build_tax_invoice_payload(sales_invoice)
+	payload_json = build_tax_invoice_payload(sales_invoice, settings=settings)
 	doc, proceeding = _tax_get_or_create_submission(sales_invoice, payload_json)
 	if not proceeding:
 		if doc.status == "لغوشده":
@@ -369,7 +298,7 @@ def _submit_tax_invoice(sales_invoice=""):
 			data=json.dumps(payload_json, ensure_ascii=False).encode("utf-8"),
 			headers={
 				"Content-Type": "application/json",
-				"Authorization": f"Bearer {_tax_setting('restaurant_tax_auth_token', '')}",
+				"Authorization": f"Bearer {settings.get('auth_token') or ''}",
 			},
 			method="POST",
 		)
@@ -395,30 +324,36 @@ def _submit_tax_invoice(sales_invoice=""):
 
 
 def run_daily_tax_auto_submissions():
-	"""Auto-submit yesterday's invoices when daily auto mode is on."""
-	settings = _tax_settings()
-	if not settings["enabled"] or not settings["api_url"] or not settings["auto_submit"]:
-		return {"status": "skipped", "reason": "disabled"}
+	"""Auto-submit yesterday's invoices only for companies with their own enabled profile."""
 	if not frappe.db.exists("DocType", TAX_DOCTYPE) or not frappe.db.exists("DocType", "Sales Invoice"):
 		return {"status": "skipped", "reason": "doctypes-missing"}
 	yesterday = add_days(today(), -1)
-	sent = frappe.get_all(TAX_DOCTYPE, filters={"status": ["!=", "لغوشده"]}, fields=["sales_invoice"])
-	already = {r["sales_invoice"] for r in sent}
-	invoices = frappe.get_all(
-		"Sales Invoice",
-		filters={"docstatus": 1, "posting_date": yesterday, "is_return": 0},
-		fields=["name"],
-		limit_page_length=200,
-	)
+	companies = frappe.get_all("Company", fields=["name"], limit_page_length=0)
 	done = 0
-	for inv in invoices:
-		if inv["name"] in already:
+	for company in companies:
+		settings = _tax_settings(company=company.name)
+		if not settings.get("enabled") or not settings.get("auto_submit") or not settings.get("token_set"):
 			continue
-		try:
-			submit_management_tax_invoice(inv["name"])
-			done += 1
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Restaurant tax auto submit failed: {inv['name']}")
+		if not settings.get("economic_code_matches_company") or not settings.get("api_url"):
+			continue
+		invoices = frappe.get_all(
+			"Sales Invoice",
+			filters={
+				"company": company.name,
+				"docstatus": 1,
+				"posting_date": yesterday,
+				"is_return": 0,
+			},
+			fields=["name"],
+			limit_page_length=200,
+		)
+		for inv in invoices:
+			try:
+				result = _submit_tax_invoice(inv["name"])
+				if result.get("status") in {"ارسال‌شده", "در صف"}:
+					done += 1
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), f"Restaurant tax auto submit failed: {inv['name']}")
 	return {"status": "success", "submitted": done}
 
 
