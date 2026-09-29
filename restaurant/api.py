@@ -19067,6 +19067,34 @@ def get_management_modifier_groups_context():
 
 
 @frappe.whitelist()
+def get_management_modifier_option_price_preview(item_code=None, option_uom=None, price_list=None):
+	"""Resolve a modifier add-on against native Item Price and Item UOM rules."""
+	_ensure_management_access()
+	item_name = _management_resolve_item_name(item_code)
+	item_doc = frappe.get_doc("Item", item_name)
+	price_list_name = (price_list or _default_selling_price_list() or "").strip()
+	price_lists, default_price_list = _management_list_selling_price_lists()
+	allowed_lists = {row.get("name") for row in price_lists if row.get("name")}
+	if price_list_name and price_list_name not in allowed_lists:
+		frappe.throw(_("Select an enabled selling Price List."), frappe.ValidationError)
+	price_list_name = price_list_name or default_price_list or ""
+
+	pricing = _resolve_default_selling_item_pricing(
+		item_doc.name,
+		1,
+		uom=(option_uom or "").strip() or item_doc.stock_uom,
+		price_list=price_list_name,
+	)
+	return {
+		**pricing,
+		"item_code": item_doc.name,
+		"item_label": item_doc.item_name or item_doc.item_code or item_doc.name,
+		"item_stock_uom": item_doc.stock_uom or "",
+		"default_price_list": default_price_list or "",
+	}
+
+
+@frappe.whitelist()
 def list_management_modifier_groups(search=None, include_inactive=1):
 	_ensure_management_access()
 	search = (search or "").strip()
@@ -19300,6 +19328,74 @@ def get_management_modifier_group_usage(group_name):
 	}
 
 
+def _save_management_modifier_item_prices(updates):
+	"""Upsert only explicitly edited native Item Price rows for a selling list."""
+	if not updates:
+		return 0
+	if not isinstance(updates, list):
+		frappe.throw(_("Invalid modifier Item Price updates."), frappe.ValidationError)
+
+	price_lists, _default_price_list = _management_list_selling_price_lists()
+	allowed_lists = {row.get("name") for row in price_lists if row.get("name")}
+	by_item_and_list = {}
+	for update in updates:
+		if not isinstance(update, dict):
+			frappe.throw(_("Invalid modifier Item Price row."), frappe.ValidationError)
+		item_name = _management_resolve_item_name(update.get("item_code") or update.get("item_name"))
+		item_doc = frappe.get_doc("Item", item_name)
+		if cint(item_doc.get("disabled") or 0):
+			frappe.throw(_("Disabled items cannot be priced as modifier options."), frappe.ValidationError)
+		if cint(item_doc.get("has_variants") or 0):
+			frappe.throw(_("Choose a specific item variant before setting its modifier price."), frappe.ValidationError)
+
+		price_list_name = (update.get("price_list") or "").strip()
+		if price_list_name not in allowed_lists:
+			frappe.throw(_("Select an enabled selling Price List."), frappe.ValidationError)
+		try:
+			rate = flt(update.get("price_list_rate"))
+		except (TypeError, ValueError):
+			frappe.throw(_("Enter a valid Item Price rate."), frappe.ValidationError)
+		if rate < 0:
+			frappe.throw(_("Item Price rate cannot be negative."), frappe.ValidationError)
+
+		key = (item_doc.item_code or item_doc.name, price_list_name)
+		if key in by_item_and_list and by_item_and_list[key]["rate"] != rate:
+			frappe.throw(_("The same item has conflicting modifier prices in one Price List."), frappe.ValidationError)
+		by_item_and_list[key] = {"item": item_doc, "price_list": price_list_name, "rate": rate}
+
+	for row in by_item_and_list.values():
+		item_doc = row["item"]
+		price_list_name = row["price_list"]
+		filters = {
+			"item_code": item_doc.item_code or item_doc.name,
+			"price_list": price_list_name,
+			"selling": 1,
+		}
+		price_name = frappe.db.get_value("Item Price", filters, "name")
+		if price_name:
+			price_doc = frappe.get_doc("Item Price", price_name)
+			price_doc.price_list_rate = row["rate"]
+			if _has_column("Item Price", "uom") and not price_doc.get("uom"):
+				price_doc.uom = item_doc.stock_uom
+			if _has_column("Item Price", "currency"):
+				price_doc.currency = frappe.db.get_value("Price List", price_list_name, "currency") or _get_currency()
+			price_doc.save(ignore_permissions=True)
+		else:
+			price_values = {
+				"doctype": "Item Price",
+				"item_code": item_doc.item_code or item_doc.name,
+				"price_list": price_list_name,
+				"selling": 1,
+				"price_list_rate": row["rate"],
+			}
+			if _has_column("Item Price", "uom"):
+				price_values["uom"] = item_doc.stock_uom
+			if _has_column("Item Price", "currency"):
+				price_values["currency"] = frappe.db.get_value("Price List", price_list_name, "currency") or _get_currency()
+			frappe.get_doc(price_values).insert(ignore_permissions=True)
+	return len(by_item_and_list)
+
+
 @frappe.whitelist()
 def save_management_modifier_group(payload=None):
 	_ensure_management_access()
@@ -19359,6 +19455,9 @@ def save_management_modifier_group(payload=None):
 			),
 			frappe.ValidationError,
 		)
+
+	item_price_updates = parsed_payload.get("item_price_updates") or []
+	_save_management_modifier_item_prices(item_price_updates)
 
 	group_doc.set("options", [])
 	for idx, row in enumerate(normalized_options, start=1):
