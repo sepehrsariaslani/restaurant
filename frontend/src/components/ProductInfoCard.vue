@@ -42,7 +42,7 @@ const props = defineProps({
   item: { type: Object, required: true },
 })
 
-const fallbackImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60'
+const fallbackImage = '/assets/restaurant/images/restaurant-food-placeholder.svg'
 
 const resolvedImage = computed(() => {
   const img = String(props.item?.image || props.item?.item_image || props.item?.website_image || '').trim()

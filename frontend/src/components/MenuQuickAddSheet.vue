@@ -222,7 +222,7 @@ function onOverlayClick(e) {
   emit('close')
 }
 
-const fallbackImage = 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=1000&auto=format&fit=crop&q=60'
+const fallbackImage = '/assets/restaurant/images/restaurant-food-placeholder.svg'
 const selectedItemImage = computed(() => resolveItemImage(selectedItem.value) || fallbackImage)
 
 const preview = computed(() =>

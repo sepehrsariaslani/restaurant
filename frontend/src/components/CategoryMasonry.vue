@@ -39,7 +39,7 @@ const resolvedCategories = computed(() => {
     title: cat.title || 'دسته بندی',
     image:
       cat.image ||
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&auto=format&fit=crop&q=60',
+      '/assets/restaurant/images/restaurant-food-placeholder.svg',
     url: cat.slug ? `/menu?category=${cat.slug}` : '/menu',
     count: cat.items_count || null,
   }))

@@ -28,7 +28,7 @@
         <a v-if="cartCount" class="home-shortcuts__cart" href="/cart">سبد من <span>{{ cartCount.toLocaleString('fa-IR') }}</span></a>
       </div>
       <HomePageRenderer :boot="boot" :page="page" @quick-add="quickAdd" />
-      <BlogHighlights v-if="!previewMode" />
+      <BlogHighlights v-if="!previewMode" :initial-posts="boot.blog_posts || []" :static-only="designStudioPreview" />
     </div>
 
     <CartActionFeedback :message="toastMessage" />
@@ -81,6 +81,10 @@ const props = defineProps({
     default: () => ({}),
   },
   previewMode: {
+    type: Boolean,
+    default: false,
+  },
+  designStudioPreview: {
     type: Boolean,
     default: false,
   },

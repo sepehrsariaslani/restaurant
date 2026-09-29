@@ -220,7 +220,7 @@ const couponMessage = computed(() => {
 })
 const totals = computed(() => calculateOrderTotals({ lines: cartLines.value, context: context.value, discount: discountAmount.value }))
 const deliveryFeeText = computed(() => totals.value.delivery_fee ? formatMoney(totals.value.delivery_fee, currency.value) : 'هزینه نهایی پس از تایید شعبه')
-const productImage = (line = {}) => String(line.item_image || line.image || line.item?.image || '').trim() || 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=240&auto=format&fit=crop&q=60'
+const productImage = (line = {}) => String(line.item_image || line.image || line.item?.image || '').trim() || '/assets/restaurant/images/restaurant-food-placeholder.svg'
 
 const orderTypeLabel = computed(() => ({ dine_in: 'حضوری داخل سالن', pickup: pickupMethod.value === 'car' ? 'درب ماشین' : 'تحویل حضوری', delivery: 'ارسال با پیک' }[context.value.order_type] || 'سفارش'))
 const paymentMethods = computed(() => {

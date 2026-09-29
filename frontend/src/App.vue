@@ -91,7 +91,7 @@
       :class="{ 'app-main--no-offset': useNoHeaderOffset }"
     >
       <PublicPageLayoutSlot v-if="publicPageLayoutKey" :page="publicPageLayoutKey" :boot="boot" />
-      <RestaurantLandingPage v-if="page === 'landing' || page === 'homev2'" :boot="boot" :page="page" />
+      <RestaurantLandingPage v-if="page === 'landing' || page === 'homev2'" :boot="boot" :page="page" :design-studio-preview="isDesignStudioPreview" />
       <BlogIndexPage v-else-if="page === 'blog'" :boot="boot" />
       <BlogPostPage v-else-if="page === 'blog-post'" />
       <AboutUsPage v-else-if="page === 'about-us'" :boot="boot" />
@@ -443,6 +443,7 @@ onMounted(() => {
 })
 const boot = reactive(window._BOOT || {})
 window._BOOT = boot
+const isDesignStudioPreview = Boolean(window.__RESTAURANT_DESIGN_STUDIO_PREVIEW)
 const isManagement = computed(() => String(page || '').startsWith('management-'))
 const isBuilderTemplateEdit = computed(() => {
   if (typeof window === 'undefined') return false

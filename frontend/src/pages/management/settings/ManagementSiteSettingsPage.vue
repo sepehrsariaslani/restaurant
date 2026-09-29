@@ -2820,7 +2820,7 @@ const previewCardItem = computed(() => ({
   short_desc: 'پیتزا با پپرونی تازه و پنیر موزارلا خوشمزه',
   category_title: 'غذای اصلی',
   base_price: 280000,
-  image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=60',
+  image: '/assets/restaurant/images/restaurant-food-placeholder.svg',
   slug: 'sample-item',
   item_code: 'SAMPLE-001',
   tags: ['پرفروش', 'پپرونی'],
@@ -2838,7 +2838,7 @@ const previewHeroCta = computed(() => String(webSettings.hero_section_cta || pre
 const previewHeroImage = computed(() => String(webSettings.hero_image || previewBranding.value.hero_image || '').trim())
 const heroSlidesPreviewItem = computed(() => heroSlides.value.find((row) => Number(row?.is_active || 0) === 1) || heroSlides.value[0] || {})
 const heroSlidesPreviewTitle = computed(() => String(heroSlidesPreviewItem.value.title || 'اسلاید ویژه').trim())
-const heroSlidesPreviewImage = computed(() => String(heroSlidesPreviewItem.value.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=70').trim())
+const heroSlidesPreviewImage = computed(() => String(heroSlidesPreviewItem.value.image || '/assets/restaurant/images/restaurant-food-placeholder.svg').trim())
 
 const heroPreviewComponent = computed(() => {
   if (String(webSettings.hero_section_variant || 'off').trim() === 'fullscreen') {
@@ -3669,7 +3669,7 @@ loadSettings()
 .hcp-media {
   min-height: 470px;
   border-radius: 999px;
-  background: var(--hero-img, url('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=70')) center / cover;
+  background: var(--hero-img, url('/assets/restaurant/images/restaurant-food-placeholder.svg')) center / cover;
   box-shadow: 0 24px 70px rgb(72 44 18 / 0.22);
 }
 

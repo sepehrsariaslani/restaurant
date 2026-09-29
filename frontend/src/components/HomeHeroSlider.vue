@@ -70,7 +70,7 @@ const resolvedSlides = computed(() => {
       subtitle: truncateText(slide.subtitle || 'با مواد تازه و امکان شخصی‌سازی کامل'),
       image:
         slide.image ||
-        'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1400&auto=format&fit=crop&q=60',
+        '/assets/restaurant/images/restaurant-food-placeholder.svg',
       url: slide.item_slug ? `/item/${slide.item_slug}` : slide.cta_url || '/menu',
       ctaLabel: slide.cta_label || 'مشاهده محصول',
     }))
@@ -82,7 +82,7 @@ const resolvedSlides = computed(() => {
     subtitle: truncateText(item.short_desc || 'سفارش سریع با جزئیات کامل'),
     image:
       item.image ||
-      'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=1400&auto=format&fit=crop&q=60',
+      '/assets/restaurant/images/restaurant-food-placeholder.svg',
     url: item.slug ? `/item/${item.slug}` : '/menu',
     ctaLabel: 'مشاهده محصول',
   }))

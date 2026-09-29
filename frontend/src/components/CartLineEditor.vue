@@ -59,7 +59,7 @@ const props = defineProps({
 
 defineEmits(['qty-change', 'remove', 'edit-customization'])
 
-const fallbackImage = 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=500&auto=format&fit=crop&q=60'
+const fallbackImage = '/assets/restaurant/images/restaurant-food-placeholder.svg'
 
 const summary = computed(() =>
   summarizeCustomizationForDisplay(props.line.customization || {}, props.line.ingredient_catalog || []),

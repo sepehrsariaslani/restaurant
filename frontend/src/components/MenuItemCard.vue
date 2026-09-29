@@ -102,7 +102,7 @@ const resolvedVariant = computed(() => {
 })
 
 const resolvedImage = computed(
-  () => props.item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60',
+  () => props.item.image || '/assets/restaurant/images/restaurant-food-placeholder.svg',
 )
 
 const itemTags = computed(() => {

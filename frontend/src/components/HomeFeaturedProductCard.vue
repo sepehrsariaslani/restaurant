@@ -47,7 +47,7 @@ const emit = defineEmits(['quick-add'])
 const justAdded = ref(false)
 let addTimer = null
 
-const fallbackImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=70'
+const fallbackImage = '/assets/restaurant/images/restaurant-food-placeholder.svg'
 const itemUrl = computed(() => `/item/${props.item.slug}`)
 const resolvedImage = computed(() => props.item.image || fallbackImage)
 const formattedPrice = computed(() => formatMoney(props.item.base_price, props.currency))

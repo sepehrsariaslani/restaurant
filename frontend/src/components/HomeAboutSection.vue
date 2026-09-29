@@ -40,7 +40,7 @@ const props = defineProps({
 })
 
 const fallbackImage =
-  'https://images.unsplash.com/photo-1551218808-94e220e084d2?w=900&auto=format&fit=crop&q=60'
+  '/assets/restaurant/images/restaurant-food-placeholder.svg'
 
 const visibleSections = computed(() => (props.sections || []).slice(0, 2))
 

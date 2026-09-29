@@ -265,7 +265,7 @@ const isAdding = ref(false)
 const addSuccess = ref(false)
 const qty = ref(1)
 
-const fallbackImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60'
+const fallbackImage = '/assets/restaurant/images/restaurant-food-placeholder.svg'
 
 const productImage = computed(() => {
   const img = product.value?.image || ''

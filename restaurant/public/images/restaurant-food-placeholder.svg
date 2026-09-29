@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" role="img" aria-labelledby="title desc">
+  <title id="title">تصویر جایگزین غذای رستوران</title>
+  <desc id="desc">بشقابی ساده با سبزی، گوجه و ترکیب غذایی رنگی</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f7eee0"/>
+      <stop offset="1" stop-color="#e9dfcf"/>
+    </linearGradient>
+    <radialGradient id="plate" cx="45%" cy="35%" r="70%">
+      <stop stop-color="#fffefa"/>
+      <stop offset="1" stop-color="#ded8cd"/>
+    </radialGradient>
+  </defs>
+  <rect width="960" height="640" rx="34" fill="url(#bg)"/>
+  <circle cx="480" cy="330" r="236" fill="#c9bda9" opacity=".35"/>
+  <circle cx="480" cy="314" r="222" fill="url(#plate)"/>
+  <circle cx="480" cy="314" r="166" fill="#f5f0e6"/>
+  <path d="M380 365c-47-55-38-119 2-139 27 31 32 77 7 113 43-49 77-56 99-44-10 51-50 88-108 90Z" fill="#54815c"/>
+  <path d="M454 408c-20-64 13-121 57-123 12 40-1 82-35 108 55-35 89-29 104-8-28 45-79 66-126 48Z" fill="#7ea16d"/>
+  <path d="M548 344c-12-57 19-98 56-96 10 34-3 67-31 87 44-27 71-21 83-2-23 37-65 53-104 38Z" fill="#426f52"/>
+  <circle cx="402" cy="284" r="31" fill="#d7654d"/>
+  <circle cx="532" cy="260" r="25" fill="#e57a55"/>
+  <circle cx="462" cy="354" r="22" fill="#e5b65c"/>
+  <path d="M362 424c78 39 165 40 237-4" fill="none" stroke="#c8834a" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="603" cy="399" r="15" fill="#d8ae51"/>
+  <circle cx="338" cy="213" r="8" fill="#fff" opacity=".65"/>
+  <circle cx="653" cy="276" r="11" fill="#fff" opacity=".55"/>
+</svg>

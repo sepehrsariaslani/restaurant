@@ -11084,7 +11084,7 @@ def get_branches():
 				"delivery_radius_km": flt(row.get("restaurant_delivery_radius_km") or 0),
 				"mapUrl": map_url or "https://maps.google.com",
 				"image": row.get("restaurant_branch_image")
-				or "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
+				or "/assets/restaurant/images/restaurant-food-placeholder.svg",
 			},
 			schedules.get(branch_name),
 		)
@@ -11114,7 +11114,7 @@ def get_branches():
 						"prepTime": base.get("prepTime") or 20,
 						"mapUrl": base.get("mapUrl") or "https://maps.google.com",
 						"image": base.get("image")
-						or "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
+						or "/assets/restaurant/images/restaurant-food-placeholder.svg",
 					}
 				)
 				base["isOpen"] = cint(
@@ -11142,7 +11142,7 @@ def get_branches():
 						"is_active": 1,
 						"prepTime": 20,
 						"mapUrl": "https://maps.google.com",
-						"image": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=70",
+						"image": "/assets/restaurant/images/restaurant-food-placeholder.svg",
 					},
 					schedules.get(location),
 				)
@@ -11158,7 +11158,7 @@ def get_branches():
 				"is_active": 1,
 				"prepTime": 20,
 				"mapUrl": "https://maps.google.com",
-				"image": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=70",
+				"image": "/assets/restaurant/images/restaurant-food-placeholder.svg",
 			},
 			schedules.get("DEFAULT"),
 		)

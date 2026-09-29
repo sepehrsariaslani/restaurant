@@ -281,7 +281,7 @@ const copyState = ref('')
 let copyTimer = null
 let abortController = null
 
-const fallbackImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&auto=format&fit=crop&q=60'
+const fallbackImage = '/assets/restaurant/images/restaurant-food-placeholder.svg'
 const item = computed(() => props.item || null)
 const resolvedTitle = computed(() => item.value?.title || product.value?.item_name || 'Preview BOM')
 const resolvedProductImage = computed(() => String(product.value?.image || item.value?.image || item.value?.item_image || item.value?.website_image || '').trim() || fallbackImage)

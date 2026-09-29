@@ -45,7 +45,7 @@ const props = defineProps({
 defineEmits(['quick-add'])
 
 const resolvedImage = computed(
-  () => props.item.image || 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?w=900&auto=format&fit=crop&q=60',
+  () => props.item.image || '/assets/restaurant/images/restaurant-food-placeholder.svg',
 )
 
 const cardStyle = computed(() => ({
