@@ -1,82 +1,81 @@
 <template>
-	<aside
-		v-if="variant === 'desktop'"
-		class="management-navbar management-navbar--desktop"
-		:class="{ 'is-collapsed': isCollapsed }"
-		aria-label="ناوبری مدیریت"
-	>
-		<div class="navbar-brand-row">
-			<a href="/management" class="navbar-brand" :title="isCollapsed ? 'رفتن به داشبورد' : undefined">
-				<span class="navbar-brand-mark">
-					<img src="/NooshYar%20Image.png" alt="" />
-				</span>
-				<span v-if="!isCollapsed" class="navbar-brand-copy">
-					<strong>نوش‌یار</strong>
-					<small>{{ brandName }}</small>
-				</span>
-			</a>
-			<button
-				type="button"
-				class="navbar-collapse-button"
-				:aria-label="isCollapsed ? 'باز کردن نوار ناوبری' : 'جمع کردن نوار ناوبری'"
-				:title="isCollapsed ? 'باز کردن نوار ناوبری' : 'جمع کردن نوار ناوبری'"
-				@click="toggleCollapsed"
-			>
-				<PanelRightOpen v-if="isCollapsed" :size="18" aria-hidden="true" />
-				<PanelRightClose v-else :size="18" aria-hidden="true" />
-			</button>
-		</div>
-
-		<nav v-if="isCollapsed" class="navbar-icon-list" aria-label="دسترسی سریع">
-			<a
-				v-for="item in flatLinks"
-				:key="item.key"
-				:href="item.url"
-				:target="item.target || '_self'"
-				:rel="item.target === '_blank' ? 'noopener noreferrer' : undefined"
-				class="navbar-icon-link"
-				:class="{ active: item.key === activeKey }"
-				:title="item.label"
-				:aria-label="item.label"
-				:aria-current="item.key === activeKey ? 'page' : undefined"
-			>
-				<component :is="item.iconComponent" :size="18" aria-hidden="true" />
-			</a>
-		</nav>
-
-		<nav v-else class="navbar-groups" aria-label="بخش‌های مدیریت">
-			<section v-for="group in groupsWithItems" :key="group.key" class="navbar-group">
+	<template v-if="variant === 'desktop'">
+		<aside
+			id="restaurant-management-navbar"
+			class="management-navbar management-navbar--desktop"
+			:class="{ 'is-collapsed': isCollapsed, 'is-peeking': isPeeking }"
+			aria-label="ناوبری مدیریت"
+			@mouseenter="handleSidebarMouseEnter"
+			@mouseleave="handleSidebarMouseLeave"
+		>
+			<div class="navbar-brand-row">
+				<a href="/management" class="navbar-brand" :title="isCollapsed ? 'رفتن به داشبورد' : undefined">
+					<span class="navbar-brand-mark">
+						<img src="/NooshYar%20Image.png" alt="" />
+					</span>
+					<span v-if="!isCollapsed" class="navbar-brand-copy">
+						<strong>نوش‌یار</strong>
+						<small>{{ brandName }}</small>
+					</span>
+				</a>
 				<button
 					type="button"
-					class="navbar-group-trigger"
-					:aria-expanded="String(isGroupOpen(group.key))"
-					@click="toggleGroup(group.key)"
+					class="navbar-collapse-button"
+					:aria-label="isCollapsed ? 'باز کردن نوار ناوبری' : 'جمع کردن نوار ناوبری'"
+					:title="isCollapsed ? 'باز کردن نوار ناوبری' : 'جمع کردن نوار ناوبری'"
+					@click="toggleCollapsed"
 				>
-					<component :is="group.icon" class="navbar-group-icon" aria-hidden="true" />
-					<span>{{ group.title }}</span>
-					<ChevronDown class="navbar-chevron" :class="{ open: isGroupOpen(group.key) }" :size="15" aria-hidden="true" />
+					<PanelRightOpen v-if="isCollapsed" :size="18" aria-hidden="true" />
+					<PanelRightClose v-else :size="18" aria-hidden="true" />
 				</button>
-				<Transition name="navbar-accordion">
-					<div v-show="isGroupOpen(group.key)" class="navbar-group-links">
-						<a
-							v-for="item in group.items"
-							:key="item.key"
-							:href="item.url"
-							:target="item.target || '_self'"
-							:rel="item.target === '_blank' ? 'noopener noreferrer' : undefined"
-							class="navbar-link"
-							:class="{ active: item.key === activeKey }"
-							:aria-current="item.key === activeKey ? 'page' : undefined"
-						>
-							<component :is="item.iconComponent" class="navbar-link-icon" aria-hidden="true" />
-							<span>{{ item.label }}</span>
-						</a>
-					</div>
-				</Transition>
-			</section>
-		</nav>
-	</aside>
+			</div>
 
+			<nav class="navbar-groups" aria-label="بخش‌های مدیریت">
+				<section v-for="group in groupsWithItems" :key="group.key" class="navbar-group">
+					<button
+						type="button"
+						class="navbar-group-trigger"
+						:aria-expanded="String(isGroupOpen(group.key))"
+						@click="toggleGroup(group.key)"
+					>
+						<component :is="group.icon" class="navbar-group-icon" aria-hidden="true" />
+						<span>{{ group.title }}</span>
+						<ChevronDown class="navbar-chevron" :class="{ open: isGroupOpen(group.key) }" :size="15" aria-hidden="true" />
+					</button>
+					<Transition name="navbar-accordion">
+						<div v-show="isGroupOpen(group.key)" class="navbar-group-links">
+							<a
+								v-for="item in group.items"
+								:key="item.key"
+								:href="item.url"
+								:target="item.target || '_self'"
+								:rel="item.target === '_blank' ? 'noopener noreferrer' : undefined"
+								class="navbar-link"
+								:class="{ active: item.key === activeKey }"
+								:aria-current="item.key === activeKey ? 'page' : undefined"
+							>
+								<component :is="item.iconComponent" class="navbar-link-icon" aria-hidden="true" />
+								<span>{{ item.label }}</span>
+							</a>
+						</div>
+					</Transition>
+				</section>
+			</nav>
+		</aside>
+		<button
+			v-if="isCollapsed"
+			type="button"
+			class="navbar-edge-trigger"
+			aria-label="باز کردن ناوبری مدیریت"
+			aria-controls="restaurant-management-navbar"
+			:aria-expanded="String(isPeeking)"
+			title="برای نمایش منو نشانگر را به لبهٔ راست بیاورید"
+			@mouseenter="openPeek"
+			@focus="openPeek"
+			@click="pinOpen"
+		/>
+
+	</template>
 	<template v-else>
 		<nav v-if="showMobileBar" class="management-mobile-nav" aria-label="دسترسی‌های اصلی مدیریت">
 			<a
@@ -197,11 +196,11 @@ const props = defineProps({
 const emit = defineEmits(['update:mobileOpen', 'toggle-theme', 'logout'])
 const collapsedStorageKey = 'restaurant.management.navbar.collapsed'
 const isCollapsed = ref(false)
+const isPeeking = ref(false)
 const storageReady = ref(false)
 const openGroups = ref({})
 
 const groupsWithItems = computed(() => props.groups.filter((group) => group.items?.length))
-const flatLinks = computed(() => groupsWithItems.value.flatMap((group) => group.items))
 
 function isGroupOpen(key) {
 	return Boolean(openGroups.value[key])
@@ -213,6 +212,24 @@ function toggleGroup(key) {
 
 function toggleCollapsed() {
 	isCollapsed.value = !isCollapsed.value
+	isPeeking.value = false
+}
+
+function openPeek() {
+	if (isCollapsed.value) isPeeking.value = true
+}
+
+function handleSidebarMouseEnter() {
+	openPeek()
+}
+
+function handleSidebarMouseLeave() {
+	if (isCollapsed.value) isPeeking.value = false
+}
+
+function pinOpen() {
+	isCollapsed.value = false
+	isPeeking.value = false
 }
 
 function closeMobileMenu() {
@@ -282,7 +299,41 @@ onBeforeUnmount(() => {
 }
 
 .management-navbar--desktop.is-collapsed {
-	--navbar-width: 4.5rem;
+	--navbar-width: 0px;
+	visibility: hidden;
+	pointer-events: none;
+	border-left-color: transparent;
+}
+
+.management-navbar--desktop.is-collapsed.is-peeking {
+	position: fixed;
+	z-index: 120;
+	inset-block: 0;
+	inset-inline-start: 0;
+	width: 17rem;
+	min-width: 17rem;
+	height: 100dvh;
+	visibility: visible;
+	pointer-events: auto;
+	border-left-color: var(--mg-border-light);
+	box-shadow: var(--mg-shadow-md);
+}
+
+.navbar-edge-trigger {
+	position: fixed;
+	z-index: 121;
+	inset-block: 0;
+	inset-inline-start: 0;
+	width: 0.75rem;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.navbar-edge-trigger:focus-visible {
+	outline: 3px solid var(--mg-primary);
+	outline-offset: -3px;
 }
 
 .navbar-brand-row {
@@ -347,8 +398,7 @@ onBeforeUnmount(() => {
 .navbar-collapse-button:hover,
 .navbar-close-button:hover { background: var(--mg-bg-page); color: var(--mg-text-main); }
 
-.navbar-groups,
-.navbar-icon-list {
+.navbar-groups {
 	min-height: 0;
 	flex: 1;
 	overflow-y: auto;
@@ -410,27 +460,12 @@ onBeforeUnmount(() => {
 .navbar-link.active { background: var(--mg-primary-soft, var(--mg-bg-page)); color: var(--mg-primary); font-weight: 850; }
 .navbar-link-icon { width: 1rem; height: 1rem; flex: 0 0 auto; opacity: 0.82; }
 
-.navbar-icon-list { display: grid; align-content: start; justify-items: center; gap: 0.3rem; padding-inline: 0.5rem; }
-.navbar-icon-link {
-	width: 2.75rem;
-	height: 2.75rem;
-	display: grid;
-	place-items: center;
-	border-radius: 0.85rem;
-	color: var(--mg-text-muted);
-	text-decoration: none;
-	transition: background 160ms ease, color 160ms ease;
-}
-.navbar-icon-link:hover { background: var(--mg-bg-page); color: var(--mg-text-main); }
-.navbar-icon-link.active { background: var(--mg-primary-soft, var(--mg-bg-page)); color: var(--mg-primary); }
-
 .management-mobile-nav,
 .management-mobile-drawer,
 .management-mobile-nav-scrim { display: none; }
 
 .navbar-group-trigger:focus-visible,
 .navbar-link:focus-visible,
-.navbar-icon-link:focus-visible,
 .navbar-collapse-button:focus-visible,
 .navbar-close-button:focus-visible,
 .management-mobile-nav-link:focus-visible,
@@ -446,6 +481,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1023px) {
 	.management-navbar--desktop { display: none; }
+	.navbar-edge-trigger { display: none; }
 	.management-mobile-nav {
 		position: relative;
 		z-index: 50;
@@ -542,7 +578,7 @@ onBeforeUnmount(() => {
 	.navbar-group-trigger,
 	.navbar-chevron,
 	.navbar-link,
-	.navbar-icon-link,
+	.navbar-edge-trigger,
 	.navbar-accordion-enter-active,
 	.navbar-accordion-leave-active,
 	.navbar-fade-enter-active,
