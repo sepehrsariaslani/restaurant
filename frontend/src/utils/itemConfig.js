@@ -477,16 +477,15 @@ export function estimateLine({ basePrice = 0, qty = 1, ingredients = [], modifie
     const conversionFactor = Math.max(numeric(option.conversion_factor, 1), 0)
     const selectedQtyInStock = selectedQty * conversionFactor
     const unitRate = numeric(option.unit_rate, 0)
-    // قیمت «یک سرو» از گزینه: سرور base_price = unit_rate × base_qty_in_stock_uom
-    // می‌فرستد (مثلاً 0.1 کیلو قارچ با نرخ 350,000 → 35,000). اگر موجود بود از
-    // همان استفاده کن؛ در غیر این صورت از unit_rate × base_qty محاسبه می‌شود.
+    // base_price قیمت کل مقدار پایه گزینه است؛ برای مقدار انتخاب‌شده نسبت qty به base_qty را اعمال کن.
+    // unit_rate قیمت هر واحد انبار است و فقط وقتی قیمت سرو موجود نیست مستقیم در مقدار تبدیل‌شده ضرب می‌شود.
     const basePricePerServing = numeric(option.base_price ?? option.price_delta, 0)
     const delta =
-      basePricePerServing > 0
-        ? basePricePerServing * selectedQty
+      basePricePerServing !== 0
+        ? basePricePerServing * (selectedQty / baseQty)
         : unitRate > 0
-          ? unitRate * selectedQtyInStock * (baseQty > 1 ? 1 / baseQty : 1)
-          : basePricePerServing * (selectedQty / baseQty)
+          ? unitRate * selectedQtyInStock
+          : 0
     modifierDeltaTotal += delta
     unit += delta
     const optionQty = Math.max(numeric(option.base_qty ?? option.option_qty, 1), 0)
