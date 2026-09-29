@@ -17,6 +17,7 @@ import math
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, today
+from restaurant.order_review import require_order_approved
 
 from restaurant.api import (
 	_bi_kpi,
@@ -378,6 +379,7 @@ def assign_management_order_courier(payload=None):
 		frappe.throw(_("سفارش انتخاب نشده است."))
 	if not frappe.db.exists("Sales Order", order_name):
 		frappe.throw(_("سفارش یافت نشد: {0}").format(order_name))
+	require_order_approved(order_name)
 	if courier and not frappe.db.exists(COURIER_DOCTYPE, courier):
 		by_code = frappe.db.get_value(COURIER_DOCTYPE, {"courier_code": courier}, "name")
 		by_name = frappe.db.get_value(COURIER_DOCTYPE, {"courier_name": courier}, "name")
@@ -445,6 +447,7 @@ def courier_app_action(mobile="", access_code="", order_name="", action=""):
 	assigned = frappe.db.get_value("Sales Order", order_name, "restaurant_courier") if frappe.db.exists("Sales Order", order_name) else ""
 	if assigned != courier["name"]:
 		frappe.throw(_("این سفارش به شما تخصیص نیافته است."), frappe.PermissionError)
+	require_order_approved(order_name)
 	current = frappe.db.get_value("Sales Order", order_name, "restaurant_status") or ""
 	target = {"pickup": "on_the_way", "deliver": "delivered"}.get(action)
 	if not target:
@@ -505,6 +508,7 @@ def dispatch_management_delivery_provider(payload=None):
 	order_name = (payload.get("order_name") or "").strip()
 	if not frappe.db.exists("Sales Order", order_name):
 		frappe.throw(_("سفارش یافت نشد: {0}").format(order_name or "-"))
+	require_order_approved(order_name)
 
 	settings = get_management_delivery_provider_settings()
 	provider = (payload.get("provider") or settings["provider"] or "").strip()
@@ -683,6 +687,8 @@ def ops_kitchen_mark(so_name, status):
 	"""Stamp prep-time fields on the Sales Order (called from kitchen flows)."""
 	if not frappe.db.exists("Sales Order", so_name):
 		return
+	if status != "new":
+		require_order_approved(so_name)
 	updates = {}
 	if status == "preparing" and _has_column("Sales Order", "restaurant_kitchen_started_at"):
 		if not frappe.db.get_value("Sales Order", so_name, "restaurant_kitchen_started_at"):

@@ -181,6 +181,15 @@
               <button
                 type="button"
                 class="left-tab-btn"
+                :class="{ active: leftPanelTab === 'review' }"
+                @click="setLeftPanelTab('review')"
+              >
+                نیازمند بررسی
+                <span class="count-badge" v-if="reviewOrders.length">{{ toFaDigits(reviewOrders.length) }}</span>
+              </button>
+              <button
+                type="button"
+                class="left-tab-btn"
                 :class="{ active: leftPanelTab === 'invoices' }"
                 @click="setLeftPanelTab('invoices')"
               >
@@ -329,6 +338,65 @@
                   <span class="history-method-badge" v-if="tx.payment_method">
                     {{ paymentMethodDisplayLabel(tx.payment_method) }}
                   </span>
+                </article>
+              </div>
+            </section>
+
+            <section v-if="leftPanelTab === 'review'" class="recent-orders-panel review-orders-panel">
+              <div class="tab-panel-toolbar">
+                <span>سفارش‌های سایت و Food Partner تا تأیید شما وارد فاکتورهای عادی نمی‌شوند.</span>
+                <button type="button" class="icon-refresh-btn" @click="loadReviewOrders(true)" title="بروزرسانی">↻</button>
+              </div>
+              <p class="muted" v-if="reviewOrdersLoading">در حال دریافت سفارش‌های منتظر بررسی...</p>
+              <p class="error" v-else-if="reviewOrdersError">{{ reviewOrdersError }}</p>
+              <p class="muted" v-else-if="!reviewOrders.length">سفارشی برای بررسی وجود ندارد.</p>
+              <div v-else class="history-list">
+                <article v-for="order in reviewOrders" :key="order.name" class="history-card review-order-card">
+                  <div class="history-card-head">
+                    <strong>{{ order.order_code || order.name }}</strong>
+                    <span class="history-time">{{ formatInvoiceDateTime(order.created_at) }}</span>
+                  </div>
+                  <div class="history-card-body">
+                    <span>{{ order.customer_name || 'مشتری ناشناس' }}<small v-if="order.mobile"> · {{ order.mobile }}</small></span>
+                    <strong class="history-amount">{{ formatMoney(order.grand_total || 0, currency) }}</strong>
+                  </div>
+                  <div class="history-card-footer">
+                    <span v-if="isSnappFoodOrder(order)" class="history-source-badge">Food Partner</span>
+                    <span v-else class="history-source-badge">سایت</span>
+                    <span class="order-status-badge status-new">در انتظار بررسی</span>
+                  </div>
+                  <div class="accordion-items review-order-items">
+                    <div v-for="(item, idx) in (order.items || [])" :key="`${order.name}-${idx}`" class="accordion-item">
+                      <div class="accordion-item-main">
+                        <span class="accordion-item-index">{{ toFaDigits(idx + 1) }}</span>
+                        <div class="accordion-item-copy">
+                          <strong class="accordion-item-title">{{ item.title || item.item_name || item.item_code || 'قلم سفارش' }}</strong>
+                          <span class="accordion-item-qty">تعداد {{ formatCompactNumber(item.qty, 2) }}</span>
+                        </div>
+                      </div>
+                      <strong class="accordion-item-total">{{ formatMoney(item.line_total || 0, currency) }}</strong>
+                    </div>
+                  </div>
+                  <p v-if="order.note" class="review-order-note"><strong>یادداشت:</strong> {{ order.note }}</p>
+                  <div class="review-order-actions">
+                    <button
+                      type="button"
+                      class="tbl-btn success settle-btn"
+                      :disabled="Boolean(reviewOrderBusy)"
+                      @click="decideReviewOrder(order, 'approve')"
+                    >
+                      <CheckCheck :size="13" />
+                      {{ reviewOrderBusy === order.name ? 'در حال تأیید...' : 'تأیید و انتقال به فاکتورهای باز' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="tbl-btn danger"
+                      :disabled="Boolean(reviewOrderBusy)"
+                      @click="decideReviewOrder(order, 'reject')"
+                    >
+                      <X :size="13" /> رد سفارش
+                    </button>
+                  </div>
                 </article>
               </div>
             </section>
@@ -1090,6 +1158,7 @@ import {
   listManagementCustomers,
   addManagementCustomer,
   markManagementOrderPaid,
+  reviewManagementOrder,
   createPOSOrder,
   producePOSOrder,
   settlePOSOrder,
@@ -1429,6 +1498,10 @@ const moveTableTarget = ref('')
 const mergeTableTarget = ref('')
 const showSplitBill = ref(false)
 const openInvoices = ref([])
+const reviewOrders = ref([])
+const reviewOrdersLoading = ref(false)
+const reviewOrdersError = ref('')
+const reviewOrderBusy = ref('')
 const openInvoiceSettlementModal = reactive({
   open: false,
   invoice: null,
@@ -1534,6 +1607,8 @@ const leftPanelTabLabel = computed(() => {
       return 'میزها'
     case 'invoices':
       return 'فاکتورهای باز'
+    case 'review':
+      return 'نیازمند بررسی'
     case 'history':
       return 'تراکنش‌های امروز'
     case 'recent':
@@ -2817,6 +2892,9 @@ function onOpenInvoicesDateChange() {
 
 function setLeftPanelTab(tab) {
   leftPanelTab.value = tab
+  if (tab === 'review') {
+    loadReviewOrders(true)
+  }
   if (tab === 'history') {
     loadTodayTransactions()
   }
@@ -3129,6 +3207,46 @@ async function loadOpenInvoices(preserveSelection = true) {
     selectedOpenInvoiceDetail.value = null
   } finally {
     openInvoicesبارگذاری.value = false
+  }
+}
+
+async function loadReviewOrders() {
+  reviewOrdersLoading.value = true
+  reviewOrdersError.value = ''
+  try {
+    const payload = await listManagementOrders({ source: 'web', review_status: 'pending' })
+    reviewOrders.value = Array.isArray(payload?.orders) ? payload.orders : []
+  } catch (err) {
+    reviewOrdersError.value = err?.message || 'بارگذاری سفارش‌های نیازمند بررسی ناموفق بود.'
+    reviewOrders.value = []
+  } finally {
+    reviewOrdersLoading.value = false
+  }
+}
+
+async function decideReviewOrder(order, decision) {
+  const orderName = String(order?.name || '').trim()
+  if (!orderName || reviewOrderBusy.value) return
+  reviewOrderBusy.value = orderName
+  reviewOrdersError.value = ''
+  try {
+    await reviewManagementOrder({ order_name: orderName, decision })
+    if (decision === 'approve') {
+      const orderDate = String(order.created_at || '').slice(0, 10)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) openInvoicesDate.value = orderDate
+      setLeftPanelTab('invoices')
+    }
+    await loadReviewOrders()
+    if (decision === 'approve') {
+      await Promise.allSettled([loadOpenInvoices(true), loadRecentOrders(true)])
+      successMessage.value = 'سفارش تأیید شد و به سفارش‌های عادی و فاکتورهای باز منتقل شد.'
+    } else {
+      successMessage.value = 'سفارش رد شد و از صف بررسی خارج شد.'
+    }
+  } catch (err) {
+    reviewOrdersError.value = err?.message || 'ثبت نتیجه بررسی سفارش ناموفق بود.'
+  } finally {
+    reviewOrderBusy.value = ''
   }
 }
 
@@ -5624,7 +5742,7 @@ function resolveCustomerFromQuery() {
 }
 
 function refreshPOSAfterSubmit() {
-  const requests = [loadOpenInvoices(true)]
+  const requests = [loadOpenInvoices(true), loadReviewOrders(true)]
 
   // The cashier should be ready for the next ticket as soon as the write
   // endpoint succeeds.  History panes are refreshed in the background only
@@ -6379,6 +6497,7 @@ async function refreshSharedPOSLists() {
   sharedPosRefreshInFlight = true
   try {
     const requests = [loadOpenInvoices(true)]
+    requests.push(loadReviewOrders(true))
     if (leftPanelTab.value === 'history' || todayTransactions.value.length) {
       requests.push(loadTodayTransactions(true))
     }
@@ -6432,6 +6551,7 @@ onMounted(async () => {
   window.addEventListener('offline', updateNetworkState)
   document.addEventListener('visibilitychange', handlePOSVisibilityChange)
   hydrateReceiptSettings()
+  void loadReviewOrders()
   await loadPOSBoot()
   loadWaitersOnce()
   saveActiveTicketSnapshot()
@@ -8439,6 +8559,34 @@ kbd {
 .accordion-items {
   display: grid;
   gap: 0.42rem;
+}
+.review-orders-panel .tab-panel-toolbar > span {
+  min-width: 0;
+  color: var(--mg-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+.review-order-items {
+  padding: 0.55rem 0.7rem 0;
+}
+.review-order-note {
+  margin: 0.5rem 0.2rem;
+  color: var(--mg-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.review-order-note strong {
+  color: var(--mg-text-main);
+}
+.review-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.5rem 0.7rem 0.7rem;
+}
+.review-order-actions .tbl-btn {
+  min-height: 40px;
 }
 .accordion-item {
   display: flex;

@@ -27,7 +27,7 @@
               <p class="muted">کد سفارش</p>
               <h2>{{ orderCode }}</h2>
             </div>
-            <span class="status-pill" v-if="order">{{ formatStatus(order.status) }}</span>
+            <span class="status-pill" v-if="order">{{ order.review_status === 'در انتظار بررسی' ? 'در انتظار تأیید رستوران' : formatStatus(order.status) }}</span>
           </div>
 
           <div class="mobile-track" v-if="!hasMobile">
@@ -182,6 +182,7 @@ const pickupVehicleText = computed(() => {
 })
 const nextStepText = computed(() => {
   const ctx = orderContext.value
+  if (order.value?.review_status === 'در انتظار بررسی') return 'سفارش دریافت شد؛ پس از تأیید رستوران، آماده‌سازی آغاز می‌شود.'
   if (ctx.order_type === 'pickup' && ctx.pickup_method === 'car') return 'وقتی وضعیت آماده تحویل شد، به محل دریافت خودرو مراجعه کنید.'
   if (ctx.order_type === 'pickup') return 'وقتی وضعیت آماده تحویل شد، به شرکت مراجعه کنید.'
   if (ctx.order_type === 'delivery') return 'وضعیت پیک را از همین صفحه پیگیری کنید.'

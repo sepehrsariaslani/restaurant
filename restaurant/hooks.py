@@ -307,6 +307,7 @@ doc_events = {
 	},
 	"Sales Order": {
 		"validate": "restaurant.api_club.apply_customer_discount_policy",
+		"before_submit": "restaurant.api_order_review.validate_sales_order_submission",
 		"on_submit": "restaurant.restaurant.doctype.product_builder_selection.product_builder_selection.on_sales_order_submit",
 		"on_update": "restaurant.coach_rewards.sales_order_on_update",
 		"on_update_after_submit": "restaurant.coach_rewards.sales_order_on_update",

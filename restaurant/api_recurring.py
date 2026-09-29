@@ -236,6 +236,7 @@ def pause_my_recurring_order(customer_token=None, name=""):
 
 def _place_schedule_order(doc, run_date, customer_token=None):
 	from restaurant.api import place_order
+	from restaurant.order_review import internal_order_creation
 
 	# Scheduled monthly runs are created by the background worker, so there is
 	# no browser session token to carry through place_order. Issue a short-lived
@@ -262,18 +263,19 @@ def _place_schedule_order(doc, run_date, customer_token=None):
 		context["pickup_time_type"] = "scheduled"
 		context["pickup_time"] = str(doc.delivery_time or "")
 	address = context.get("address") if isinstance(context.get("address"), dict) else {}
-	return place_order(
-		customer_info={"name": doc.customer_name, "mobile": doc.mobile},
-		order_type="delivery" if doc.order_type == "delivery" else "dine_in" if doc.order_type == "dine_in" else "takeaway",
-		items=items,
-		address=address.get("address_line") or address.get("address") or "",
-		note=doc.note or "",
-		delivery_mode="delivery" if doc.order_type == "delivery" else "",
-		delivery_address_snapshot=address if doc.order_type == "delivery" else None,
-		order_context=context,
-		customer_token=customer_token,
-		commit=False,
-	)
+	with internal_order_creation():
+		return place_order(
+			customer_info={"name": doc.customer_name, "mobile": doc.mobile},
+			order_type="delivery" if doc.order_type == "delivery" else "dine_in" if doc.order_type == "dine_in" else "takeaway",
+			items=items,
+			address=address.get("address_line") or address.get("address") or "",
+			note=doc.note or "",
+			delivery_mode="delivery" if doc.order_type == "delivery" else "",
+			delivery_address_snapshot=address if doc.order_type == "delivery" else None,
+			order_context=context,
+			customer_token=customer_token,
+			commit=False,
+		)
 
 
 def _advance(doc, run_date, order_name=""):

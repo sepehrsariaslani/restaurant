@@ -19,6 +19,15 @@ from frappe import _
 from frappe.model.rename_doc import rename_doc
 from frappe.rate_limiter import rate_limit
 from frappe.twofactor import get_qr_svg_code
+from restaurant.order_review import (
+	ORDER_REVIEW_APPROVED,
+	ORDER_REVIEW_FIELD,
+	ORDER_REVIEW_PENDING,
+	ORDER_REVIEW_REJECTED,
+	internal_order_creation,
+	require_order_approved,
+	should_require_customer_order_review,
+)
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
 	add_days,
@@ -1608,6 +1617,8 @@ def _set_restaurant_order_status(order_name, next_status, force=False):
 		current = "new"
 	if current == "cancelled" and not force:
 		return current
+	if normalized_next not in {"new", "cancelled"}:
+		require_order_approved(order_name)
 
 	if force:
 		frappe.db.set_value(
@@ -2114,6 +2125,7 @@ def _create_delivery_note_for_sales_order(
 	so_name, fg_warehouse_map=None, submit_doc=True, allow_negative_stock=False
 ):
 	"""Create Delivery Note from SO - forces qty regardless of delivered_qty"""
+	require_order_approved(so_name)
 	fg_warehouse_map = fg_warehouse_map or {}
 	# Check if a DN already exists
 	if so_name and frappe.db.exists("DocType", "Delivery Note Item"):
@@ -2175,6 +2187,7 @@ def _run_sales_order_auto_flow(
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		return {"status": "skipped", "reason": "order_not_found"}
+	require_order_approved(so_name)
 
 	settings = _production_auto_settings()
 	trigger_name = (trigger or "manual").strip().lower() or "manual"
@@ -2359,6 +2372,7 @@ def _run_sales_order_auto_flow(
 def _save_management_pos_payment(order_name, payment_result, run_auto_flow=True, auto_flow_trigger="payment"):
 	if not order_name or not frappe.db.exists("Sales Order", order_name):
 		return {}
+	require_order_approved(order_name)
 
 	updates = {}
 	if _has_column("Sales Order", "restaurant_payment_method"):
@@ -5419,6 +5433,7 @@ def _create_sales_order(
 	commit=True,
 	secondary_customer="",
 	coach_referral_customer="",
+	requires_review=False,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5463,6 +5478,10 @@ def _create_sales_order(
 		doc_payload["restaurant_note"] = note
 	if _has_column("Sales Order", "restaurant_status"):
 		doc_payload["restaurant_status"] = "new"
+	has_review_status = _has_column("Sales Order", ORDER_REVIEW_FIELD)
+	review_pending = bool(requires_review and has_review_status)
+	if has_review_status:
+		doc_payload[ORDER_REVIEW_FIELD] = ORDER_REVIEW_PENDING if review_pending else ORDER_REVIEW_APPROVED
 	if _has_column("Sales Order", "restaurant_include_service_items"):
 		doc_payload["restaurant_include_service_items"] = cint(include_service_items)
 	if _has_column("Sales Order", "restaurant_order_context_json"):
@@ -5953,9 +5972,10 @@ def _create_sales_order(
 	if discount_policy["discount_source"] == "coupon" and server_coupon.get("name"):
 		_mark_coupon_used(server_coupon.get("name"))
 
-	so_doc.submit()
+	if not review_pending:
+		so_doc.submit()
 	so_doc.db_set("customer_name", customer_name, update_modified=False)
-	if _has_column("Sales Order", "restaurant_status"):
+	if _has_column("Sales Order", "restaurant_status") and not review_pending:
 		so_doc.db_set("restaurant_status", "confirmed", update_modified=False)
 
 	if commit:
@@ -5966,6 +5986,7 @@ def _create_sales_order(
 		"order_id": so_doc.name,
 		"order_code": so_doc.name,
 		"grand_total": flt(so_doc.grand_total or subtotal) + flt(order_context.get("delivery_fee") or 0),
+		"review_status": ORDER_REVIEW_PENDING if review_pending else ORDER_REVIEW_APPROVED,
 		"pricing_breakdown": payload_snapshot,
 	}
 
@@ -6423,6 +6444,7 @@ def _production_skip_payload(row, menu_doc, reason, message=None):
 
 
 def _create_production_for_sales_order(so_doc):
+	require_order_approved(so_doc.name)
 	tickets = []
 	work_orders = []
 	skipped_items = []
@@ -6671,6 +6693,7 @@ def _get_sales_order_payload(so_name):
 		else None,
 		"delivery_details": delivery_details if isinstance(delivery_details, dict) else {},
 		"note": _clean_automatic_pos_note(doc.get("restaurant_note") or ""),
+		"review_status": doc.get(ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED,
 		"include_service_items": cint(doc.get("restaurant_include_service_items") or 1)
 		if _has_column("Sales Order", "restaurant_include_service_items")
 		else 1,
@@ -12010,6 +12033,7 @@ def place_order(
 	commit=True,
 	secondary_customer="",
 	customer_token=None,
+	requires_review=False,
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
@@ -12135,6 +12159,7 @@ def place_order(
 		commit=commit,
 		secondary_customer=(secondary_customer or "").strip(),
 		coach_referral_customer=coach_referral_customer,
+		requires_review=(should_require_customer_order_review() or bool(cint(requires_review))),
 	)
 
 
@@ -12532,8 +12557,12 @@ def sync_order_work_orders(order_name):
 @frappe.whitelist()
 def run_management_order_auto_flow(order_name, trigger="manual", payment_status=None, force=1):
 	_ensure_management_access()
+	so_name = _resolve_sales_order_name(order_name)
+	if not so_name:
+		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	require_order_approved(so_name)
 	result = _run_sales_order_auto_flow(
-		order_name,
+		so_name,
 		trigger=trigger,
 		payment_status=payment_status,
 		force=bool(cint(force)),
@@ -13503,7 +13532,7 @@ def _management_business_datetime(date_value=None, fallback_datetime=None):
 	return fallback_dt
 
 
-def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cashier=None):
+def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cashier=None, review_status=None):
 	if not frappe.db.exists("DocType", "Sales Order"):
 		return []
 
@@ -13531,6 +13560,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 	has_external_bill_number = _has_column("Sales Order", "restaurant_external_bill_number")
 	has_external_state = _has_column("Sales Order", "restaurant_external_state")
 	has_external_payment_method = _has_column("Sales Order", "restaurant_external_payment_method")
+	has_review_status = _has_column("Sales Order", ORDER_REVIEW_FIELD)
 
 	fields = [
 		"name",
@@ -13572,6 +13602,8 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_external_payment_method")
 	if _has_column("Sales Order", "restaurant_status"):
 		fields.append("restaurant_status")
+	if has_review_status:
+		fields.append(ORDER_REVIEW_FIELD)
 	if _has_column("Sales Order", "restaurant_secondary_customer"):
 		fields.append("restaurant_secondary_customer")
 
@@ -13655,6 +13687,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 			)
 
 	normalized_status = (status or "").strip().lower()
+	normalized_review_filter = (review_status or "").strip().lower()
 	
 	# Fetch outstanding amounts in bulk to avoid N+1
 	outstanding_map = {}
@@ -13685,6 +13718,19 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 
 	payload = []
 	for row in rows:
+		order_review_status = (row.get(ORDER_REVIEW_FIELD) if has_review_status else "") or ORDER_REVIEW_APPROVED
+		if normalized_review_filter in {"pending", "pending_review"} and order_review_status != ORDER_REVIEW_PENDING:
+			continue
+		if normalized_review_filter in {"rejected", "reject"} and order_review_status != ORDER_REVIEW_REJECTED:
+			continue
+		if normalized_review_filter in {"approved", "normal"} and order_review_status in {
+			ORDER_REVIEW_PENDING,
+			ORDER_REVIEW_REJECTED,
+		}:
+			continue
+		if not normalized_review_filter and order_review_status in {ORDER_REVIEW_PENDING, ORDER_REVIEW_REJECTED}:
+			continue
+
 		order_status = _core_order_status(row)
 		delivery_exists = bool(delivery_exists_map.get(row.name))
 		if delivery_exists:
@@ -13711,6 +13757,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				or mobile_by_customer.get(row.customer, ""),
 				"channel": (row.restaurant_order_type if has_order_type else "") or "takeaway",
 				"status": order_status,
+				"review_status": order_review_status,
 				"subtotal": flt(row.total or row.net_total),
 				"grand_total": flt(row.grand_total or row.total or row.net_total),
 				"outstanding_amount": flt(outstanding_map.get(row.name, flt(row.grand_total or row.total or row.net_total))),
@@ -13844,6 +13891,7 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 				"table": row.table or "",
 				"table_label": table_label,
 				"status": row.status or "pending",
+				"review_status": ORDER_REVIEW_APPROVED,
 				"subtotal": flt(row.subtotal),
 				"grand_total": flt(row.grand_total),
 				"created_at": _json_safe_datetime(created_at),
@@ -13854,7 +13902,7 @@ def _management_fetch_table_orders(date_from=None, date_to=None, status=None, ca
 	return payload
 
 
-def _management_collect_orders(date_from=None, date_to=None, status=None, source="all", cashier=None, search=None):
+def _management_collect_orders(date_from=None, date_to=None, status=None, source="all", cashier=None, search=None, review_status=None):
 	source = (source or "all").strip().lower()
 	orders = []
 	if source in {"all", "web", "restaurant"}:
@@ -13864,6 +13912,7 @@ def _management_collect_orders(date_from=None, date_to=None, status=None, source
 				date_to=date_to,
 				status=status,
 				cashier=cashier,
+				review_status=review_status,
 			)
 		)
 	if source in {"all", "table"}:
@@ -13875,6 +13924,17 @@ def _management_collect_orders(date_from=None, date_to=None, status=None, source
 				cashier=cashier,
 			)
 		)
+	normalized_review_filter = (review_status or "").strip().lower()
+	if normalized_review_filter in {"pending", "pending_review"}:
+		orders = [order for order in orders if order.get("review_status") == ORDER_REVIEW_PENDING]
+	elif normalized_review_filter in {"rejected", "reject"}:
+		orders = [order for order in orders if order.get("review_status") == ORDER_REVIEW_REJECTED]
+	elif normalized_review_filter in {"approved", "normal"} or not normalized_review_filter:
+		orders = [
+			order
+			for order in orders
+			if order.get("review_status") not in {ORDER_REVIEW_PENDING, ORDER_REVIEW_REJECTED}
+		]
 
 	def _sort_key(order):
 		try:
@@ -15798,7 +15858,7 @@ def get_management_pos_boot(branch=None):
 	}
 
 
-def _create_pos_order_payload(payload, commit=True):
+def _create_pos_order_payload(payload, commit=True, requires_review=False):
     """Create the POS Sales Order and optionally leave the transaction open.
 
     Combined POS actions used to call the public create endpoint first, which
@@ -15838,22 +15898,28 @@ def _create_pos_order_payload(payload, commit=True):
         order_context["table"] = place
     order_context["guest_count"] = guest_count
 
-    result = place_order(
-        customer_info={"name": customer_name, "mobile": mobile},
-        order_type=order_type, items=items,
-        address=address, note=note,
-        include_service_items=1,
-        order_context=order_context,
-        financial_modifiers=financial_modifiers,
-        totals=totals_payload,
-        # The wrapper owns the commit so combined POS actions can include the
-        # Sales Invoice in the same transaction.
-        commit=False,
-        secondary_customer=(payload.get("secondary_customer") or "").strip(),
-    )
+    with internal_order_creation():
+        result = place_order(
+            customer_info={"name": customer_name, "mobile": mobile},
+            order_type=order_type, items=items,
+            address=address, note=note,
+            include_service_items=1,
+            order_context=order_context,
+            financial_modifiers=financial_modifiers,
+            totals=totals_payload,
+            # The wrapper owns the commit so combined POS actions can include the
+            # Sales Invoice in the same transaction.
+            commit=False,
+            secondary_customer=(payload.get("secondary_customer") or "").strip(),
+            requires_review=requires_review,
+        )
     so_name = _resolve_sales_order_name(result.get("order_id") or result.get("name") or "")
-    _set_restaurant_order_status(so_name, "confirmed", force=True)
-    _append_sales_order_note(so_name, "[ORDER] Order created.")
+    review_pending = bool(requires_review and _has_column("Sales Order", ORDER_REVIEW_FIELD))
+    if review_pending:
+        _append_sales_order_note(so_name, "[ORDER] Order imported and is waiting for review.")
+    else:
+        _set_restaurant_order_status(so_name, "confirmed", force=True)
+        _append_sales_order_note(so_name, "[ORDER] Order created.")
     if commit:
         frappe.db.commit()
     return {
@@ -15879,6 +15945,7 @@ def produce_pos_order(order_name):
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    require_order_approved(so_name)
     try:
         auto_result = _run_sales_order_auto_flow(so_name, trigger="order_submit", force=True)
     except Exception:
@@ -16049,6 +16116,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    require_order_approved(so_name)
         
     # Check if order is already invoiced
     _ensure_sales_invoice_secondary_customer_field()
@@ -16603,14 +16671,15 @@ def create_management_pos_order(payload):
 	items = payload.get("items") or []
 	payment = _parse_json(payload.get("payment"), {})
 
-	result = place_order(
-		customer_info={"name": customer_name, "mobile": mobile},
-		order_type=order_type,
-		items=items,
-		address=address,
-		note=note,
-		include_service_items=1,
-	)
+	with internal_order_creation():
+		result = place_order(
+			customer_info={"name": customer_name, "mobile": mobile},
+			order_type=order_type,
+			items=items,
+			address=address,
+			note=note,
+			include_service_items=1,
+		)
 
 	try:
 		result["payment"] = _process_management_pos_payment(result, payment)
@@ -16634,6 +16703,7 @@ def confirm_management_pos_payment(
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	require_order_approved(so_name)
 
 	existing_method = "card"
 	if _has_column("Sales Order", "restaurant_payment_method"):
@@ -16712,6 +16782,7 @@ def mark_management_order_paid(
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	require_order_approved(so_name)
 
 	payment_result = _manual_management_payment_result(
 		so_name=so_name,
@@ -16744,6 +16815,7 @@ def complete_management_order(order_name, reference_no=None, rrn=None, provider_
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	require_order_approved(so_name)
 
 	payment_result = _manual_management_payment_result(
 		so_name=so_name,
@@ -16923,7 +16995,7 @@ def list_management_pos_orders(date_from=None, date_to=None, status=None, cashie
 
 
 @frappe.whitelist()
-def list_management_orders(date_from=None, date_to=None, status=None, source=None, cashier=None, search=None):
+def list_management_orders(date_from=None, date_to=None, status=None, source=None, cashier=None, search=None, review_status=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(
 		date_from=date_from,
@@ -16932,6 +17004,7 @@ def list_management_orders(date_from=None, date_to=None, status=None, source=Non
 		source=source or "all",
 		cashier=cashier,
 		search=search,
+		review_status=review_status,
 	)
 	return {"orders": orders}
 
@@ -17024,6 +17097,10 @@ def get_management_order_detail(order_name, source=None):
 					"place": place_label,
 					"order_context": order_context,
 					"status": order_status,
+					"review_status": doc.get(ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED,
+					"reviewed_by": doc.get("restaurant_order_reviewed_by") or "",
+					"reviewed_at": _json_safe_datetime(doc.get("restaurant_order_reviewed_at")),
+					"review_note": doc.get("restaurant_order_review_note") or "",
 					"subtotal": flt(doc.total or doc.net_total),
 					"grand_total": flt(doc.grand_total or doc.total or doc.net_total),
 					"outstanding_amount": flt(outstanding_amount),
@@ -26555,7 +26632,8 @@ def _resolve_canonical_kitchen_status(so_name, has_restaurant_status=True):
 
 
 def _start_kitchen_production(so_name):
-    # 1. Create tickets and Work Orders if they don't exist
+    require_order_approved(so_name)
+	# 1. Create tickets and Work Orders if they don't exist
     so_doc = frappe.get_doc("Sales Order", so_name)
     has_tickets = False
     if frappe.db.exists("DocType", "Restaurant Production Ticket"):
@@ -26593,6 +26671,7 @@ def _start_kitchen_production(so_name):
         frappe.log_error(frappe.get_traceback(), "Kitchen Mark Preparing")
 
 def _complete_kitchen_production(so_name):
+    require_order_approved(so_name)
     settings = _production_auto_settings()
     if frappe.db.exists("DocType", "Work Order"):
         wos = frappe.get_all("Work Order", filters={"sales_order": so_name, "docstatus": 1})
@@ -26624,12 +26703,15 @@ def get_kitchen_display_orders(limit=50, date=None):
         return {"orders": []}
     
     has_restaurant_status = _has_column("Sales Order", "restaurant_status")
+    has_review_status = _has_column("Sales Order", ORDER_REVIEW_FIELD)
     has_restaurant_note = _has_column("Sales Order Item", "restaurant_note")
     has_order_type = _has_column("Sales Order", "restaurant_order_type")
     has_prod_ticket = frappe.db.exists("DocType", "Restaurant Production Ticket")
     
     # Canonical filter: no pre-filtering on restaurant_status
     filters = {"docstatus": 1, "status": ["!=", "Cancelled"]}
+    if has_review_status:
+        filters[ORDER_REVIEW_FIELD] = ["not in", [ORDER_REVIEW_PENDING, ORDER_REVIEW_REJECTED]]
     
     if date:
         filters["transaction_date"] = date
@@ -26639,6 +26721,8 @@ def get_kitchen_display_orders(limit=50, date=None):
     so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
     if has_order_type:
         so_fields.append("restaurant_order_type")
+    if has_review_status:
+        so_fields.append(ORDER_REVIEW_FIELD)
     has_kitchen_timestamps = _has_column("Sales Order", "restaurant_kitchen_started_at") and _has_column("Sales Order", "restaurant_kitchen_ready_at")
     if has_kitchen_timestamps:
         so_fields.extend(["restaurant_kitchen_started_at", "restaurant_kitchen_ready_at"])
@@ -26737,6 +26821,7 @@ def update_kitchen_order_status(order_name, status):
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    require_order_approved(so_name)
     
     # 1. Execute strictly stage-separated canonical backend action flows FIRST.
     # If any underlying document creation/submission fails, it raises an exception 
@@ -26806,3 +26891,4 @@ from restaurant.api_accounting import *  # noqa: F401,F403,E402
 from restaurant.api_org import *  # noqa: F401,F403,E402
 from restaurant.api_collaboration import *  # noqa: F401,F403,E402
 from restaurant.api_recurring import *  # noqa: F401,F403,E402
+from restaurant.api_order_review import *  # noqa: F401,F403,E402

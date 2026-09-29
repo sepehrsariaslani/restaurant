@@ -54,7 +54,7 @@
               <small>کد سفارش</small>
               <strong>{{ order.order_code || order.name }}</strong>
             </div>
-            <span class="order-status">{{ formatStatus(order.status) }}</span>
+            <span class="order-status">{{ order.review_status === 'در انتظار بررسی' ? 'در انتظار تأیید رستوران' : formatStatus(order.status) }}</span>
           </div>
           <div class="order-card__meta">
             <span class="order-card__date"><CalendarDays :size="15" aria-hidden="true" /> <span>ثبت‌شده در {{ formatDate(order.created_at || order.placed_at || order.transaction_date || order.creation) }}</span></span>

@@ -10,6 +10,13 @@ from pathlib import Path
 import frappe
 import requests
 from frappe.utils import cint, cstr, flt, get_datetime, get_datetime_str, now_datetime, today
+from restaurant.order_review import (
+	ORDER_REVIEW_APPROVED,
+	ORDER_REVIEW_FIELD,
+	ORDER_REVIEW_PENDING,
+	ORDER_REVIEW_REJECTED,
+	order_is_approved,
+)
 
 
 SNAPP_SOURCE = "snapp_food"
@@ -2629,10 +2636,24 @@ def _sync_existing_sales_order(sales_order_name, order_payload, reconcile_lines=
     so_doc = frappe.get_doc("Sales Order", sales_order_name)
 
     updates = {}
+    review_status = (
+        frappe.db.get_value("Sales Order", sales_order_name, ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED
+        if _has_column("Sales Order", ORDER_REVIEW_FIELD)
+        else ORDER_REVIEW_APPROVED
+    )
     if _has_column("Sales Order", "restaurant_external_state"):
         updates["restaurant_external_state"] = order_payload["external_state"]
     if _has_column("Sales Order", "restaurant_status"):
-        updates["restaurant_status"] = order_payload["status"]
+        if order_payload["status"] == "cancelled":
+            updates["restaurant_status"] = "cancelled"
+        elif review_status == ORDER_REVIEW_PENDING:
+            updates["restaurant_status"] = "new"
+        elif review_status == ORDER_REVIEW_REJECTED:
+            updates["restaurant_status"] = "cancelled"
+        else:
+            updates["restaurant_status"] = order_payload["status"]
+    if order_payload["status"] == "cancelled" and review_status == ORDER_REVIEW_PENDING:
+        updates[ORDER_REVIEW_FIELD] = ORDER_REVIEW_REJECTED
     _apply_sales_order_external_fields(updates, order_payload)
     if _has_column("Sales Order", "restaurant_customer_mobile"):
         updates["restaurant_customer_mobile"] = order_payload["mobile"]
@@ -2649,9 +2670,10 @@ def _sync_existing_sales_order(sales_order_name, order_payload, reconcile_lines=
     if reconcile_lines and so_doc.docstatus == 1:
         _update_existing_sales_order_lines(sales_order_name, order_payload)
 
-    if order_payload["status"] == "cancelled" and so_doc.docstatus == 1:
-        so_doc.flags.ignore_permissions = True
-        so_doc.cancel()
+    if order_payload["status"] == "cancelled":
+        if so_doc.docstatus == 1:
+            so_doc.flags.ignore_permissions = True
+            so_doc.cancel()
         return "cancelled"
     return "updated"
 
@@ -2724,6 +2746,7 @@ def _create_sales_order(order_payload):
             "secondary_customer": secondary_customer,
         },
         commit=False,
+        requires_review=True,
     )
     so_name = result.get("order_id") or result.get("name") or ""
     if not so_name:
@@ -2740,7 +2763,11 @@ def _create_sales_order(order_payload):
     if _has_column("Sales Order", "restaurant_note"):
         updates["restaurant_note"] = order_payload["note"]
     if _has_column("Sales Order", "restaurant_status"):
-        updates["restaurant_status"] = order_payload["status"]
+        updates["restaurant_status"] = "cancelled" if order_payload["status"] == "cancelled" else "new"
+    if _has_column("Sales Order", ORDER_REVIEW_FIELD):
+        updates[ORDER_REVIEW_FIELD] = (
+            ORDER_REVIEW_REJECTED if order_payload["status"] == "cancelled" else ORDER_REVIEW_PENDING
+        )
     if secondary_customer and _has_column("Sales Order", "restaurant_secondary_customer"):
         updates["restaurant_secondary_customer"] = secondary_customer
     for fieldname, value in updates.items():
@@ -2794,7 +2821,11 @@ def _create_sales_order(order_payload):
             frappe.db.set_value("Sales Order Item", target.name, line_updates, update_modified=False)
 
     _append_sales_order_note(so_name, f"[FOOD_PARTNER] Imported order {order_payload['order_id']} through POS flow.")
-    _set_restaurant_order_status(so_name, order_payload["status"], force=True)
+    _set_restaurant_order_status(
+        so_name,
+        "cancelled" if order_payload["status"] == "cancelled" else "new",
+        force=True,
+    )
     if order_payload["status"] == "cancelled":
         so_doc = frappe.get_doc("Sales Order", so_name)
         if so_doc.docstatus == 1:
@@ -2806,6 +2837,9 @@ def _create_sales_order(order_payload):
 
 def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     """Create the native Sales Invoice through the existing POS settlement path."""
+    from restaurant.order_review import require_order_approved
+
+    require_order_approved(sales_order_name)
     if not _has_column("Sales Invoice", "restaurant_external_order_id"):
         return {"status": "skipped", "reason": "Sales Invoice integration fields are not migrated."}
 
@@ -3067,7 +3101,7 @@ def sync_snapp_orders(
                         else:
                             result["updated_count"] += 1
 
-                    if settings.get("auto_sync_invoices") and action != "cancelled":
+                    if settings.get("auto_sync_invoices") and action != "cancelled" and order_is_approved(existing):
                         try:
                             invoice_result = _ensure_sales_invoice_for_order(existing, normalized)
                             if invoice_result.get("status") == "created":
@@ -3087,7 +3121,7 @@ def sync_snapp_orders(
                     continue
 
                 sales_order_name, action = _create_sales_order(normalized)
-                if settings.get("auto_sync_invoices") and action != "cancelled":
+                if settings.get("auto_sync_invoices") and action != "cancelled" and order_is_approved(sales_order_name):
                     invoice_result = _ensure_sales_invoice_for_order(sales_order_name, normalized)
                     if invoice_result.get("status") == "created":
                         result.setdefault("invoices_created_count", 0)

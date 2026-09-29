@@ -7,7 +7,7 @@
 
     <section class="code-card customer-glass-card">
       <div><p>کد سفارش</p><h2>{{ orderCode || '-' }}</h2></div>
-      <span v-if="order" class="status-pill">{{ formatStatus(order.status) }}</span>
+      <span v-if="order" class="status-pill">{{ order.review_status === 'در انتظار بررسی' ? 'در انتظار تأیید رستوران' : formatStatus(order.status) }}</span>
     </section>
 
     <section v-if="!mobile" class="lookup-card">
