@@ -27266,7 +27266,13 @@ def _start_kitchen_production(so_name):
             if wo_doc.docstatus == 1:
                 pending_transfer = max(float(wo_doc.qty or 0) - float(wo_doc.material_transferred_for_manufacturing or 0), 0)
                 if settings.get("material_transfer") and pending_transfer > 0 and not int(wo_doc.skip_transfer or 0):
-                    _create_work_order_stock_entry(wo.name, "Material Transfer for Manufacture", pending_transfer, submit_doc=settings.get("submit_stock_entries"))
+                    _create_work_order_stock_entry(
+                        wo.name,
+                        "Material Transfer for Manufacture",
+                        pending_transfer,
+                        submit_doc=settings.get("submit_stock_entries"),
+                        allow_negative_stock=True,
+                    )
                 
                 # Mark ticket in_progress
                 if frappe.db.exists("DocType", "Restaurant Production Ticket"):
@@ -27287,7 +27293,13 @@ def _complete_kitchen_production(so_name):
             wo_doc = frappe.get_doc("Work Order", wo.name)
             pending_manufacture = max(float(wo_doc.qty or 0) - float(wo_doc.produced_qty or 0), 0)
             if settings.get("manufacture") and pending_manufacture > 0:
-                _create_work_order_stock_entry(wo.name, "Manufacture", pending_manufacture, submit_doc=settings.get("submit_stock_entries"))
+                _create_work_order_stock_entry(
+                    wo.name,
+                    "Manufacture",
+                    pending_manufacture,
+                    submit_doc=settings.get("submit_stock_entries"),
+                    allow_negative_stock=True,
+                )
             
             # Mark ticket completed
             if frappe.db.exists("DocType", "Restaurant Production Ticket"):
@@ -27342,8 +27354,22 @@ def get_kitchen_display_orders(limit=50, date=None):
         limit=limit,
         ignore_permissions=True,
     )
+    sales_order_names = [row.name for row in rows]
+    tickets_by_order_item = {}
+    if has_prod_ticket and sales_order_names:
+        ticket_rows = frappe.get_all(
+            "Restaurant Production Ticket",
+            fields=["name", "sales_order", "sales_order_item", "menu_item", "qty", "status", "work_order"],
+            filters={"sales_order": ["in", sales_order_names]},
+            order_by="creation desc",
+            ignore_permissions=True,
+        )
+        for ticket_row in ticket_rows:
+            key = (ticket_row.sales_order, (ticket_row.sales_order_item or "").strip())
+            if key[1] and key not in tickets_by_order_item:
+                tickets_by_order_item[key] = ticket_row
     
-    so_item_fields = ["item_code", "item_name", "qty", "rate", "description"]
+    so_item_fields = ["name", "item_code", "item_name", "qty", "rate", "description"]
     if has_restaurant_note:
         so_item_fields.append("restaurant_note")
     
@@ -27364,7 +27390,7 @@ def get_kitchen_display_orders(limit=50, date=None):
             has_item_image = _has_column("Item", "image")
             has_prep_time = _has_column("Item", "restaurant_prep_time_mins")
             has_vendor = _has_column("Item", "restaurant_vendor")
-            meta_fields = ["name"]
+            meta_fields = ["name", "item_group"]
             if has_item_image:
                 meta_fields.append("image")
             if has_prep_time:
@@ -27378,7 +27404,9 @@ def get_kitchen_display_orders(limit=50, date=None):
                 item_meta = {}
         for item in so_items:
             meta = item_meta.get(item.item_code) or {}
+            ticket = tickets_by_order_item.get((so_name, item.name))
             items.append({
+                "row_name": item.name,
                 "item_code": item.item_code,
                 "title": item.item_name,
                 "description": item.description or "",
@@ -27388,6 +27416,10 @@ def get_kitchen_display_orders(limit=50, date=None):
                 "image": meta.get("image") or "",
                 "prep_time_mins": cint(meta.get("restaurant_prep_time_mins") or 0),
                 "vendor": meta.get("restaurant_vendor") or "",
+                "item_group": meta.get("item_group") or "",
+                "production_ticket": ticket.name if ticket else "",
+                "production_status": ticket.status if ticket else "",
+                "work_order": ticket.work_order if ticket else "",
             })
         
         if has_prod_ticket:
@@ -27417,6 +27449,47 @@ def get_kitchen_display_orders(limit=50, date=None):
         })
 
     return {"orders": orders}
+
+
+@frappe.whitelist()
+def get_kitchen_display_context():
+	"""Return native Item Group options and the current user's station default."""
+	_ensure_management_access()
+	item_groups = frappe.get_all(
+		"Item Group",
+		fields=["name", "parent_item_group", "is_group", "lft"],
+		order_by="lft asc, name asc",
+		ignore_permissions=True,
+	)
+	default_item_group = frappe.defaults.get_user_default("restaurant_kitchen_item_group") or ""
+	if default_item_group and not frappe.db.exists("Item Group", default_item_group):
+		default_item_group = ""
+	return {
+		"item_groups": [
+			{
+				"name": row.name,
+				"parent_item_group": row.parent_item_group or "",
+				"is_group": cint(row.is_group),
+			}
+			for row in item_groups
+			if row.parent_item_group
+		],
+		"default_item_group": default_item_group,
+	}
+
+
+@frappe.whitelist()
+def set_kitchen_display_default_group(item_group=""):
+	"""Save this user's default KDS product group without adding a parallel model."""
+	_ensure_management_access()
+	item_group = (item_group or "").strip()
+	if item_group and not frappe.db.exists("Item Group", item_group):
+		frappe.throw(_("The selected Item Group does not exist."))
+	frappe.defaults.set_user_default(
+		"restaurant_kitchen_item_group", item_group, user=frappe.session.user
+	)
+	frappe.db.commit()
+	return {"success": True, "default_item_group": item_group}
 
 
 @frappe.whitelist()
@@ -27466,6 +27539,99 @@ def update_kitchen_order_status(order_name, status):
     frappe.db.commit()
         
     return {"status": "success"}
+
+
+@frappe.whitelist()
+def update_kitchen_order_item_status(order_name, sales_order_item, status="ready"):
+	"""Complete only the selected Sales Order Item's native production ticket."""
+	_ensure_management_access()
+	if status != "ready":
+		frappe.throw(_("Only the ready status is supported for an individual kitchen item."))
+	if not order_name or not sales_order_item:
+		frappe.throw(_("Order and order item are required."))
+
+	so_name = _resolve_sales_order_name(order_name)
+	if not so_name or not frappe.db.exists("Sales Order", so_name):
+		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	require_order_approved(so_name)
+	if frappe.db.get_value("Sales Order Item", sales_order_item, "parent") != so_name:
+		frappe.throw(_("The selected item does not belong to this order."))
+	if not frappe.db.exists("DocType", "Restaurant Production Ticket") or not frappe.get_meta(
+		"Restaurant Production Ticket"
+	).has_field("sales_order_item"):
+		frappe.throw(_("Individual production status is unavailable for this Restaurant installation."))
+
+	ticket_names = frappe.get_all(
+		"Restaurant Production Ticket",
+		filters={"sales_order": so_name, "sales_order_item": sales_order_item},
+		pluck="name",
+		order_by="creation desc",
+		limit=1,
+		ignore_permissions=True,
+	)
+	if not ticket_names:
+		frappe.throw(_("This order item has no native Restaurant Production Ticket."))
+
+	frappe.db.sql(
+		"select name from `tabRestaurant Production Ticket` where name = %s for update",
+		ticket_names[0],
+	)
+	ticket = frappe.get_doc("Restaurant Production Ticket", ticket_names[0])
+	if (ticket.status or "").strip().lower() == "completed":
+		return {"status": "success", "item_status": "completed", "production_ticket": ticket.name}
+	work_order_name = (ticket.work_order or "").strip()
+	if not work_order_name or not frappe.db.exists("Work Order", work_order_name):
+		frappe.throw(_("No Work Order is linked to this production ticket."))
+
+	frappe.db.sql(
+		"select name from `tabWork Order` where name = %s for update", work_order_name
+	)
+	settings = _production_auto_settings()
+	work_order = frappe.get_doc("Work Order", work_order_name)
+	if cint(work_order.docstatus) == 2:
+		frappe.throw(_("The Work Order for this item is cancelled."))
+	if (work_order.get("sales_order") or "").strip() != so_name:
+		frappe.throw(_("The linked Work Order does not belong to this order."))
+	if cint(work_order.docstatus) == 0:
+		# This is an explicit operator action for this one line, so submit only
+		# its Work Order even when background auto-submission is disabled.
+		work_order.flags.ignore_permissions = True
+		work_order.submit()
+		work_order = frappe.get_doc("Work Order", work_order.name)
+	if cint(work_order.docstatus) != 1:
+		frappe.throw(_("The Work Order for this item is not submitted."))
+
+	if (ticket.status or "").strip().lower() == "planned":
+		ticket.db_set("status", "in_progress", update_modified=False)
+	pending_transfer = max(flt(work_order.qty) - flt(work_order.material_transferred_for_manufacturing), 0)
+	if (
+		settings.get("material_transfer")
+		and pending_transfer > 1e-8
+		and not cint(work_order.skip_transfer)
+	):
+		_create_work_order_stock_entry(
+			work_order.name,
+			"Material Transfer for Manufacture",
+			pending_transfer,
+			submit_doc=settings.get("submit_stock_entries"),
+			allow_negative_stock=True,
+		)
+
+	work_order = frappe.get_doc("Work Order", work_order.name)
+	pending_manufacture = max(flt(work_order.qty) - flt(work_order.produced_qty), 0)
+	if settings.get("manufacture") and pending_manufacture > 1e-8:
+		_create_work_order_stock_entry(
+			work_order.name,
+			"Manufacture",
+			pending_manufacture,
+			submit_doc=settings.get("submit_stock_entries"),
+			allow_negative_stock=True,
+		)
+
+	ticket.db_set("status", "completed", update_modified=False)
+	_append_sales_order_note(so_name, f"[KITCHEN] Item {sales_order_item} marked ready")
+	frappe.db.commit()
+	return {"status": "success", "item_status": "completed", "production_ticket": ticket.name}
 
 # Triggering a direct push for E2E verification as requested
 
