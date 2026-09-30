@@ -519,7 +519,7 @@ def _food_partner_modifier_mapping_index():
         return {}
     rows = frappe.get_all(
         "Item",
-        fields=["name", "item_name", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD],
+        fields=["name", "item_code", "item_name", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD],
         filters={FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD: ["!=", ""]},
         limit_page_length=0,
         ignore_permissions=True,
@@ -544,6 +544,7 @@ def _food_partner_modifier_mapping_index():
                 {
                     **mapping,
                     "parent_item": parent_item,
+                    "parent_item_code": item.get("item_code") or parent_item,
                     "parent_item_name": item.get("item_name") or parent_item,
                     "mapping_mode": str(mapping.get("mapping_mode") or "modifier").strip() or "modifier",
                 }
@@ -806,6 +807,7 @@ def _build_snapp_order_preview(
         mapped_item = (
             {
                 "name": mapped_modifier.get("parent_item") or "",
+                "item_code": mapped_modifier.get("parent_item_code") or mapped_modifier.get("parent_item") or "",
                 "item_name": mapped_modifier.get("parent_item_name") or mapped_modifier.get("parent_item") or "",
             }
             if is_item_modifier_mapping
@@ -829,6 +831,7 @@ def _build_snapp_order_preview(
                 "mapped_modifier": (
                     {
                         "parent_item": mapped_modifier.get("parent_item") or "",
+                        "parent_item_code": mapped_modifier.get("parent_item_code") or mapped_modifier.get("parent_item") or "",
                         "parent_item_name": mapped_modifier.get("parent_item_name") or mapped_modifier.get("parent_item") or "",
                         "group_name": mapped_modifier.get("group_name") or "",
                         "group_title": mapped_modifier.get("group_title") or mapped_modifier.get("group_name") or "",
