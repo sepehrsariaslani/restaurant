@@ -3135,6 +3135,16 @@ def _create_sales_order(order_payload):
         "packagingAmount": flt(order_payload.get("packaging_cost") or 0),
         "tipAmount": flt(order_payload.get("tip") or 0),
     }
+    # The Food Partner discount is authoritative for imported orders. POS also
+    # calculates customer-group, coach, coupon, and manual discounts, so mark
+    # this fixed source discount as the explicit manual winner to prevent any
+    # local discount from stacking with or replacing it.
+    financial_modifiers = {
+        "manual_discount": 1,
+        "discount_type": "fixed",
+        "discount_value": totals["discountAmount"],
+        "discount_source": "food_partner",
+    }
     order_context = {
         "source": SNAPP_SOURCE,
         "external_order_id": order_payload["order_id"],
@@ -3153,6 +3163,7 @@ def _create_sales_order(order_payload):
             "note": order_payload["note"],
             "include_service_items": 1,
             "order_context": order_context,
+            "financial_modifiers": financial_modifiers,
             "totals": totals,
             "secondary_customer": secondary_customer,
         },
