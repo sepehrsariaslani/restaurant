@@ -497,7 +497,7 @@ def _raw_snapp_order_id(raw_order):
     ).strip()
 
 
-def _build_snapp_order_preview(order_payload, existing_order="", existing_invoice=""):
+def _build_snapp_order_preview(order_payload, existing_order="", existing_invoice="", local_items=None):
     """Return a safe, read-only summary suitable for selecting an import."""
     created_at = order_payload.get("created_at")
     if created_at:
@@ -506,6 +506,34 @@ def _build_snapp_order_preview(order_payload, existing_order="", existing_invoic
         except (TypeError, ValueError):
             created_at = str(created_at)
     item_rows = order_payload.get("items") or []
+    preview_items = []
+    for row in item_rows:
+        mapping_identity = {
+            "external_id": str(row.get("menu_item_id") or "").strip(),
+            "menu_item_id": str(row.get("menu_item_id") or "").strip(),
+            "product_id": str(row.get("product_id") or "").strip(),
+            "variation_id": str(row.get("variation_id") or "").strip(),
+            "product_hash_id": str(row.get("product_hash_id") or "").strip(),
+            "variation_hash_id": str(row.get("variation_hash_id") or "").strip(),
+        }
+        mapped_item = _find_mapped_local_item(mapping_identity, local_items or [])
+        preview_items.append(
+            {
+                "title": str(row.get("title") or "Snapp Item").strip(),
+                "qty": flt(row.get("qty") or 0),
+                "unit_price": flt(row.get("unit_price") or 0),
+                **mapping_identity,
+                "mapped_item": (
+                    {
+                        "name": mapped_item.get("name") or "",
+                        "item_code": mapped_item.get("item_code") or "",
+                        "item_name": mapped_item.get("item_name") or mapped_item.get("name") or "",
+                    }
+                    if mapped_item
+                    else None
+                ),
+            }
+        )
     return {
         "order_id": str(order_payload.get("order_id") or "").strip(),
         "bill_number": str(order_payload.get("bill_number") or "").strip(),
@@ -517,14 +545,7 @@ def _build_snapp_order_preview(order_payload, existing_order="", existing_invoic
         "order_type": str(order_payload.get("order_type") or "").strip(),
         "final_amount": flt(order_payload.get("final_amount") or 0),
         "items_count": len(item_rows),
-        "items": [
-            {
-                "title": str(row.get("title") or "Snapp Item").strip(),
-                "qty": flt(row.get("qty") or 0),
-                "unit_price": flt(row.get("unit_price") or 0),
-            }
-            for row in item_rows
-        ],
+        "items": preview_items,
         "already_imported": bool(existing_order),
         "sales_order": existing_order or "",
         "sales_invoice": existing_invoice or "",
@@ -564,6 +585,7 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
     )
     previews = []
     errors = []
+    local_items = _get_local_item_rows(limit_page_length=5000, mapped_only=True)
     for raw_order in fetched.get("orders") or []:
         try:
             normalized = normalize_snapp_order(
@@ -584,7 +606,14 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
                     {"restaurant_external_order_id": normalized["order_id"]},
                     "name",
                 ) or ""
-            previews.append(_build_snapp_order_preview(normalized, existing_order, existing_invoice))
+            previews.append(
+                _build_snapp_order_preview(
+                    normalized,
+                    existing_order,
+                    existing_invoice,
+                    local_items=local_items,
+                )
+            )
         except Exception:
             errors.append({"order_id": _raw_snapp_order_id(raw_order), "error": frappe.get_traceback(with_context=False)})
     return {
@@ -1229,12 +1258,27 @@ def _local_item_fields():
     return fields
 
 
-def _get_local_item_rows(search="", limit_page_length=5000):
+def _get_local_item_rows(search="", limit_page_length=5000, mapped_only=False):
     fields = _local_item_fields()
     filters = {"disabled": 0}
+    mapping_fields = [
+        fieldname
+        for fieldname in (
+            "restaurant_external_menu_item_id",
+            "restaurant_external_product_id",
+            "restaurant_external_variation_id",
+            "restaurant_external_product_hash_id",
+            "restaurant_external_variation_hash_id",
+        )
+        if _has_column("Item", fieldname)
+    ]
+    or_filters = [[fieldname, "!=", ""] for fieldname in mapping_fields] if mapped_only else None
+    if mapped_only and not or_filters:
+        return []
     rows = frappe.get_all(
         "Item",
         filters=filters,
+        or_filters=or_filters,
         fields=fields,
         limit_page_length=min(max(cint(limit_page_length or 5000), 1), 5000),
         ignore_permissions=True,
