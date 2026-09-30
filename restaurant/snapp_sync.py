@@ -32,6 +32,7 @@ MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
 FALLBACK_GUEST_NAME = "Snapp Guest"
+FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD = "restaurant_food_partner_modifier_mappings"
 _REQUIRED_SCHEMA_FIELDS = {
     "Restaurant Web Settings": (
         "snapp_bearer_token",
@@ -497,7 +498,277 @@ def _raw_snapp_order_id(raw_order):
     ).strip()
 
 
-def _build_snapp_order_preview(order_payload, existing_order="", existing_invoice="", local_items=None):
+def _food_partner_mapping_lookup_key(identity):
+    identity = identity or {}
+    for fieldname in (
+        "variation_id",
+        "menu_item_id",
+        "external_id",
+        "variation_hash_id",
+        "product_id",
+        "product_hash_id",
+    ):
+        value = str(identity.get(fieldname) or "").strip()
+        if value:
+            return fieldname, value
+    return "", ""
+
+
+def _food_partner_modifier_mapping_index():
+    if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
+        return {}
+    rows = frappe.get_all(
+        "Item",
+        fields=["name", "item_name", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD],
+        filters={FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD: ["!=", ""]},
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    index = {}
+    for item in rows or []:
+        raw_mappings = item.get(FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD) or "[]"
+        try:
+            mappings = json.loads(raw_mappings) if isinstance(raw_mappings, str) else raw_mappings
+        except (TypeError, ValueError):
+            mappings = []
+        for mapping in mappings if isinstance(mappings, list) else []:
+            if not isinstance(mapping, dict):
+                continue
+            fieldname = str(mapping.get("lookup_field") or "").strip()
+            value = str(mapping.get("lookup_value") or "").strip()
+            parent_item = str(mapping.get("parent_item") or item.get("name") or "").strip()
+            if not fieldname or not value or not parent_item:
+                continue
+            key = (fieldname, value)
+            index.setdefault(key, []).append(
+                {
+                    **mapping,
+                    "parent_item": parent_item,
+                    "parent_item_name": item.get("item_name") or parent_item,
+                }
+            )
+    return index
+
+
+def _find_food_partner_modifier_mapping(identity, mapping_index=None):
+    fieldname, value = _food_partner_mapping_lookup_key(identity)
+    if not fieldname or not value:
+        return None
+    matches = (mapping_index if mapping_index is not None else _food_partner_modifier_mapping_index()).get(
+        (fieldname, value), []
+    )
+    unique = {
+        (row.get("parent_item"), row.get("group_name"), row.get("option_name")): row
+        for row in matches
+    }
+    return next(iter(unique.values())) if len(unique) == 1 else None
+
+
+def _remove_food_partner_modifier_mapping(identity):
+    lookup_field, lookup_value = _food_partner_mapping_lookup_key(identity)
+    if not lookup_field or not lookup_value or not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
+        return
+    rows = frappe.get_all(
+        "Item",
+        fields=["name", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD],
+        filters={FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD: ["!=", ""]},
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    for item in rows or []:
+        raw = item.get(FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD) or "[]"
+        try:
+            mappings = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            mappings = []
+        if not isinstance(mappings, list):
+            continue
+        retained = [
+            row for row in mappings
+            if not (
+                isinstance(row, dict)
+                and row.get("lookup_field") == lookup_field
+                and str(row.get("lookup_value") or "").strip() == lookup_value
+            )
+        ]
+        if len(retained) != len(mappings):
+            frappe.db.set_value(
+                "Item",
+                item.get("name"),
+                FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD,
+                json.dumps(retained, ensure_ascii=False),
+                update_modified=False,
+            )
+
+
+def get_snappfood_modifier_groups(item_name=""):
+    """Return the native modifier groups available on one mapped parent Item."""
+    item_name = str(item_name or "").strip()
+    if not item_name or not frappe.db.exists("Item", item_name):
+        raise frappe.ValidationError("کالای اصلی برای انتخاب Modifier معتبر نیست.")
+    if not frappe.db.exists("DocType", "Restaurant BOM Modifier"):
+        return {"status": "success", "item": item_name, "groups": []}
+
+    from restaurant import api
+
+    item_doc = frappe.get_doc("Item", item_name)
+    primary_bom = api._get_bom_doc(item_doc)
+    modifier_bom = api._get_modifier_source_bom_doc(item_doc, primary_bom_doc=primary_bom)
+    groups, _group_map, _title_map = api._build_modifier_groups(
+        item_doc,
+        primary_bom_doc=modifier_bom,
+    )
+    return {
+        "status": "success",
+        "item": item_name,
+        "item_name": item_doc.get("item_name") or item_name,
+        "groups": [
+            {
+                "name": group.get("group_name") or "",
+                "title": group.get("title") or group.get("group_name") or "",
+                "options": [
+                    {
+                        "name": option.get("name") or "",
+                        "label": option.get("label") or option.get("name") or "",
+                        "price_delta": flt(option.get("price_delta") or option.get("unit_rate") or 0),
+                        "option_qty": flt(option.get("option_qty") or option.get("base_qty") or 1),
+                        "min_qty": flt(option.get("min_qty") or 0),
+                        "max_qty": flt(option.get("max_qty") or 0),
+                        "qty_step": flt(option.get("qty_step") or 1),
+                    }
+                    for option in group.get("options") or []
+                    if option.get("name")
+                ],
+            }
+            for group in groups or []
+            if group.get("group_name")
+        ],
+    }
+
+
+def save_snappfood_modifier_mapping(
+    item_name="",
+    parent_item="",
+    group_name="",
+    option_name="",
+    product_id="",
+    variation_id="",
+    product_hash_id="",
+    variation_hash_id="",
+    menu_item_id="",
+):
+    """Persist one Food Partner menu identity as an option on a native Item."""
+    parent_item = str(parent_item or "").strip()
+    group_name = str(group_name or "").strip()
+    option_name = str(option_name or "").strip()
+    if not parent_item or not frappe.db.exists("Item", parent_item):
+        raise frappe.ValidationError("کالای اصلی Modifier معتبر نیست.")
+    if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
+        raise frappe.ValidationError("ساختار نگاشت Modifier آماده نیست؛ بروزرسانی Restaurant لازم است.")
+
+    identity = {
+        "menu_item_id": str(menu_item_id or "").strip(),
+        "variation_id": str(variation_id or "").strip(),
+        "product_id": str(product_id or "").strip(),
+        "product_hash_id": str(product_hash_id or "").strip(),
+        "variation_hash_id": str(variation_hash_id or "").strip(),
+    }
+    lookup_field, lookup_value = _food_partner_mapping_lookup_key(identity)
+    if not lookup_field or not lookup_value:
+        raise frappe.ValidationError("شناسهٔ این گزینه در پاسخ Food Partner موجود نیست.")
+
+    context = get_snappfood_modifier_groups(parent_item)
+    selected_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
+    selected_option = next(
+        (row for row in (selected_group or {}).get("options") or [] if row.get("name") == option_name),
+        None,
+    )
+    if not selected_group or not selected_option:
+        raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی فرمول فعال این کالا موجود نیست.")
+
+    all_items = frappe.get_all(
+        "Item",
+        fields=["name", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD],
+        filters={FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD: ["!=", ""]},
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    mappings_by_item = {}
+    for row in all_items or []:
+        raw = row.get(FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD) or "[]"
+        try:
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            parsed = []
+        mappings_by_item[row.get("name")] = [entry for entry in parsed if isinstance(entry, dict)] if isinstance(parsed, list) else []
+
+    for name, mappings in mappings_by_item.items():
+        retained = [
+            row for row in mappings
+            if not (
+                row.get("lookup_field") == lookup_field
+                and str(row.get("lookup_value") or "").strip() == lookup_value
+            )
+        ]
+        if len(retained) != len(mappings):
+            frappe.db.set_value(
+                "Item",
+                name,
+                FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD,
+                json.dumps(retained, ensure_ascii=False),
+                update_modified=False,
+            )
+
+    target_mappings = mappings_by_item.get(parent_item, [])
+    target_mappings = [
+        row for row in target_mappings
+        if not (
+            row.get("lookup_field") == lookup_field
+            and str(row.get("lookup_value") or "").strip() == lookup_value
+        )
+    ]
+    target_mappings.append(
+        {
+            "lookup_field": lookup_field,
+            "lookup_value": lookup_value,
+            "identity": identity,
+            "parent_item": parent_item,
+            "group_name": group_name,
+            "group_title": selected_group.get("title") or group_name,
+            "option_name": option_name,
+            "option_label": selected_option.get("label") or option_name,
+            "option_qty": flt(selected_option.get("option_qty") or 1),
+            "min_qty": flt(selected_option.get("min_qty") or 0),
+            "max_qty": flt(selected_option.get("max_qty") or 0),
+            "qty_step": flt(selected_option.get("qty_step") or 1),
+        }
+    )
+    frappe.db.set_value(
+        "Item",
+        parent_item,
+        FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD,
+        json.dumps(target_mappings, ensure_ascii=False),
+        update_modified=True,
+    )
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "parent_item": parent_item,
+        "parent_item_name": context.get("item_name") or parent_item,
+        "group_name": group_name,
+        "group_title": selected_group.get("title") or group_name,
+        "option_name": option_name,
+        "option_label": selected_option.get("label") or option_name,
+    }
+
+
+def _build_snapp_order_preview(
+    order_payload,
+    existing_order="",
+    existing_invoice="",
+    local_items=None,
+    modifier_mapping_index=None,
+):
     """Return a safe, read-only summary suitable for selecting an import."""
     created_at = order_payload.get("created_at")
     if created_at:
@@ -516,7 +787,8 @@ def _build_snapp_order_preview(order_payload, existing_order="", existing_invoic
             "product_hash_id": str(row.get("product_hash_id") or "").strip(),
             "variation_hash_id": str(row.get("variation_hash_id") or "").strip(),
         }
-        mapped_item = _find_mapped_local_item(mapping_identity, local_items or [])
+        mapped_modifier = _find_food_partner_modifier_mapping(mapping_identity, modifier_mapping_index)
+        mapped_item = None if mapped_modifier else _find_mapped_local_item(mapping_identity, local_items or [])
         preview_items.append(
             {
                 "title": str(row.get("title") or "Snapp Item").strip(),
@@ -530,6 +802,18 @@ def _build_snapp_order_preview(order_payload, existing_order="", existing_invoic
                         "item_name": mapped_item.get("item_name") or mapped_item.get("name") or "",
                     }
                     if mapped_item
+                    else None
+                ),
+                "mapped_modifier": (
+                    {
+                        "parent_item": mapped_modifier.get("parent_item") or "",
+                        "parent_item_name": mapped_modifier.get("parent_item_name") or mapped_modifier.get("parent_item") or "",
+                        "group_name": mapped_modifier.get("group_name") or "",
+                        "group_title": mapped_modifier.get("group_title") or mapped_modifier.get("group_name") or "",
+                        "option_name": mapped_modifier.get("option_name") or "",
+                        "option_label": mapped_modifier.get("option_label") or mapped_modifier.get("option_name") or "",
+                    }
+                    if mapped_modifier
                     else None
                 ),
             }
@@ -586,6 +870,7 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
     previews = []
     errors = []
     local_items = _get_local_item_rows(limit_page_length=5000, mapped_only=True)
+    modifier_mapping_index = _food_partner_modifier_mapping_index()
     for raw_order in fetched.get("orders") or []:
         try:
             normalized = normalize_snapp_order(
@@ -612,6 +897,7 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
                     existing_order,
                     existing_invoice,
                     local_items=local_items,
+                    modifier_mapping_index=modifier_mapping_index,
                 )
             )
         except Exception:
@@ -1682,6 +1968,15 @@ def save_snappfood_item_mapping(
         values["restaurant_external_mapping_status"] = "Mapped"
     if not values:
         raise frappe.ValidationError("فیلدهای اتصال اسنپ‌فود هنوز روی Item ساخته نشده‌اند.")
+    _remove_food_partner_modifier_mapping(
+        {
+            "menu_item_id": menu_item_id,
+            "variation_id": variation_id,
+            "product_id": product_id,
+            "product_hash_id": product_hash_id,
+            "variation_hash_id": variation_hash_id,
+        }
+    )
     frappe.db.set_value("Item", item_name, values, update_modified=True)
     if commit:
         frappe.db.commit()
@@ -2743,14 +3038,31 @@ def _create_sales_order(order_payload):
     if not source_items:
         raise frappe.ValidationError(f"Order {order_payload['order_id']} has no valid items.")
     # POS resolves pricing, BOM/customization, service items, taxes and order
-    # context itself. Resolve each mapped Item to the slug/name accepted by it.
+    # context itself. A Food Partner choice mapped to a native modifier is
+    # folded into its parent cart line before calling the native POS builder.
     cart_items = []
     resolved_lines = []
+    pending_modifier_lines = []
+    modifier_mapping_index = _food_partner_modifier_mapping_index()
     for line in source_items:
-        item_code = _resolve_item_code(line)
+        modifier_mapping = _find_food_partner_modifier_mapping(line, modifier_mapping_index)
+        item_code = str(modifier_mapping.get("parent_item") or "").strip() if modifier_mapping else _resolve_item_code(line)
+        if modifier_mapping and not frappe.db.exists("Item", item_code):
+            raise frappe.ValidationError("کالای اصلی نگاشت Modifier دیگر در سیستم موجود نیست.")
         item_slug = (frappe.db.get_value("Item", item_code, "restaurant_slug") or item_code or "").strip()
         if not item_slug:
             raise frappe.ValidationError(f"کد Item برای ردیف سفارش {order_payload['order_id']} خالی است.")
+        resolved_line = {
+            **line,
+            "item_code": item_code,
+            "item_slug": item_slug,
+            "food_partner_modifier_mapping": modifier_mapping,
+            "is_modifier_line": bool(modifier_mapping),
+        }
+        resolved_lines.append(resolved_line)
+        if modifier_mapping:
+            pending_modifier_lines.append(resolved_line)
+            continue
         cart_item = {
             "item_slug": item_slug,
             "qty": max(flt(line.get("qty") or 1), 1),
@@ -2759,7 +3071,62 @@ def _create_sales_order(order_payload):
         if flt(line.get("gross_unit_price") or 0) > 0:
             cart_item["external_unit_price"] = flt(line.get("gross_unit_price"))
         cart_items.append(cart_item)
-        resolved_lines.append({**line, "item_code": item_code, "item_slug": item_slug})
+        resolved_line["cart_item"] = cart_item
+
+    for modifier_line in pending_modifier_lines:
+        mapping = modifier_line.get("food_partner_modifier_mapping") or {}
+        parent_candidates = [
+            row for row in resolved_lines
+            if not row.get("is_modifier_line") and row.get("item_code") == mapping.get("parent_item")
+        ]
+        modifier_qty = max(flt(modifier_line.get("qty") or 1), 1)
+        exact_qty_candidates = [
+            row for row in parent_candidates
+            if abs(flt(row.get("qty") or 1) - modifier_qty) < 1e-8
+        ]
+        if len(exact_qty_candidates) == 1:
+            parent_line = exact_qty_candidates[0]
+        elif len(parent_candidates) == 1:
+            parent_line = parent_candidates[0]
+        elif not parent_candidates:
+            raise frappe.ValidationError(
+                f"گزینهٔ «{modifier_line.get('title') or mapping.get('option_label')}» به Modifier کالای "
+                f"«{mapping.get('parent_item_name') or mapping.get('parent_item')}» نگاشت شده، "
+                "اما همان کالای اصلی در این سفارش نیست."
+            )
+        else:
+            raise frappe.ValidationError(
+                f"چند ردیف از کالای «{mapping.get('parent_item_name') or mapping.get('parent_item')}» "
+                "در سفارش وجود دارد و اتصال این Modifier به ردیف درست مبهم است."
+            )
+
+        parent_cart_item = parent_line.get("cart_item")
+        if not parent_cart_item:
+            raise frappe.ValidationError("ردیف کالای اصلی برای ثبت Modifier آماده نیست.")
+        parent_qty = max(flt(parent_line.get("qty") or 1), 1)
+        selected_qty = max(flt(mapping.get("option_qty") or 1) * modifier_qty / parent_qty, 0.0001)
+        customization = parent_cart_item.setdefault("customization", {})
+        selected_modifiers = customization.setdefault("selected_modifiers", [])
+        selected_modifiers.append(
+            {
+                "group": mapping.get("group_name") or "",
+                "option": mapping.get("option_name") or "",
+                "qty": selected_qty,
+            }
+        )
+
+        modifier_gross_total = flt(
+            modifier_line.get("gross_unit_price") or modifier_line.get("unit_price") or 0
+        ) * modifier_qty
+        parent_gross_unit = flt(
+            parent_cart_item.get("external_unit_price")
+            or parent_line.get("gross_unit_price")
+            or parent_line.get("unit_price")
+            or 0
+        )
+        if modifier_gross_total > 0 or parent_gross_unit > 0:
+            parent_cart_item["external_unit_price"] = parent_gross_unit + modifier_gross_total / parent_qty
+        parent_line.setdefault("mapped_modifier_lines", []).append(modifier_line)
 
     totals = {
         "discountAmount": flt(order_payload.get("discount_amount") or order_payload.get("discount") or 0),
@@ -2828,6 +3195,8 @@ def _create_sales_order(order_payload):
     )
     used_rows = set()
     for line in resolved_lines:
+        if line.get("is_modifier_line"):
+            continue
         target = next(
             (
                 row
