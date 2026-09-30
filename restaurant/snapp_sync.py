@@ -545,6 +545,7 @@ def _food_partner_modifier_mapping_index():
                     **mapping,
                     "parent_item": parent_item,
                     "parent_item_name": item.get("item_name") or parent_item,
+                    "mapping_mode": str(mapping.get("mapping_mode") or "modifier").strip() or "modifier",
                 }
             )
     return index
@@ -558,7 +559,12 @@ def _find_food_partner_modifier_mapping(identity, mapping_index=None):
         (fieldname, value), []
     )
     unique = {
-        (row.get("parent_item"), row.get("group_name"), row.get("option_name")): row
+        (
+            row.get("parent_item"),
+            row.get("group_name"),
+            row.get("option_name"),
+            row.get("mapping_mode") or "modifier",
+        ): row
         for row in matches
     }
     return next(iter(unique.values())) if len(unique) == 1 else None
@@ -651,16 +657,20 @@ def save_snappfood_modifier_mapping(
     parent_item="",
     group_name="",
     option_name="",
+    mapping_mode="modifier",
     product_id="",
     variation_id="",
     product_hash_id="",
     variation_hash_id="",
     menu_item_id="",
 ):
-    """Persist one Food Partner menu identity as an option on a native Item."""
+    """Persist a Food Partner identity as a BOM option on its native base Item."""
     parent_item = str(parent_item or "").strip()
     group_name = str(group_name or "").strip()
     option_name = str(option_name or "").strip()
+    mapping_mode = str(mapping_mode or "modifier").strip().lower()
+    if mapping_mode not in {"modifier", "item_modifier"}:
+        mapping_mode = "modifier"
     if not parent_item or not frappe.db.exists("Item", parent_item):
         raise frappe.ValidationError("کالای اصلی Modifier معتبر نیست.")
     if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
@@ -733,6 +743,7 @@ def save_snappfood_modifier_mapping(
             "lookup_value": lookup_value,
             "identity": identity,
             "parent_item": parent_item,
+            "mapping_mode": mapping_mode,
             "group_name": group_name,
             "group_title": selected_group.get("title") or group_name,
             "option_name": option_name,
@@ -755,6 +766,7 @@ def save_snappfood_modifier_mapping(
         "status": "success",
         "parent_item": parent_item,
         "parent_item_name": context.get("item_name") or parent_item,
+        "mapping_mode": mapping_mode,
         "group_name": group_name,
         "group_title": selected_group.get("title") or group_name,
         "option_name": option_name,
@@ -788,7 +800,17 @@ def _build_snapp_order_preview(
             "variation_hash_id": str(row.get("variation_hash_id") or "").strip(),
         }
         mapped_modifier = _find_food_partner_modifier_mapping(mapping_identity, modifier_mapping_index)
-        mapped_item = None if mapped_modifier else _find_mapped_local_item(mapping_identity, local_items or [])
+        is_item_modifier_mapping = bool(
+            mapped_modifier and mapped_modifier.get("mapping_mode") == "item_modifier"
+        )
+        mapped_item = (
+            {
+                "name": mapped_modifier.get("parent_item") or "",
+                "item_name": mapped_modifier.get("parent_item_name") or mapped_modifier.get("parent_item") or "",
+            }
+            if is_item_modifier_mapping
+            else None if mapped_modifier else _find_mapped_local_item(mapping_identity, local_items or [])
+        )
         preview_items.append(
             {
                 "title": str(row.get("title") or "Snapp Item").strip(),
@@ -812,6 +834,7 @@ def _build_snapp_order_preview(
                         "group_title": mapped_modifier.get("group_title") or mapped_modifier.get("group_name") or "",
                         "option_name": mapped_modifier.get("option_name") or "",
                         "option_label": mapped_modifier.get("option_label") or mapped_modifier.get("option_name") or "",
+                        "mapping_mode": mapped_modifier.get("mapping_mode") or "modifier",
                     }
                     if mapped_modifier
                     else None
@@ -3038,14 +3061,18 @@ def _create_sales_order(order_payload):
     if not source_items:
         raise frappe.ValidationError(f"Order {order_payload['order_id']} has no valid items.")
     # POS resolves pricing, BOM/customization, service items, taxes and order
-    # context itself. A Food Partner choice mapped to a native modifier is
-    # folded into its parent cart line before calling the native POS builder.
+    # context itself. A standalone Food Partner modifier is folded into its
+    # separate parent line; a combined product/variation carries both the
+    # native base Item and selected BOM option in the same cart line.
     cart_items = []
     resolved_lines = []
     pending_modifier_lines = []
     modifier_mapping_index = _food_partner_modifier_mapping_index()
     for line in source_items:
         modifier_mapping = _find_food_partner_modifier_mapping(line, modifier_mapping_index)
+        is_item_modifier_mapping = bool(
+            modifier_mapping and modifier_mapping.get("mapping_mode") == "item_modifier"
+        )
         item_code = str(modifier_mapping.get("parent_item") or "").strip() if modifier_mapping else _resolve_item_code(line)
         if modifier_mapping and not frappe.db.exists("Item", item_code):
             raise frappe.ValidationError("کالای اصلی نگاشت Modifier دیگر در سیستم موجود نیست.")
@@ -3057,10 +3084,11 @@ def _create_sales_order(order_payload):
             "item_code": item_code,
             "item_slug": item_slug,
             "food_partner_modifier_mapping": modifier_mapping,
-            "is_modifier_line": bool(modifier_mapping),
+            "is_modifier_line": bool(modifier_mapping) and not is_item_modifier_mapping,
+            "is_item_modifier_line": is_item_modifier_mapping,
         }
         resolved_lines.append(resolved_line)
-        if modifier_mapping:
+        if modifier_mapping and not is_item_modifier_mapping:
             pending_modifier_lines.append(resolved_line)
             continue
         cart_item = {
@@ -3070,6 +3098,15 @@ def _create_sales_order(order_payload):
         }
         if flt(line.get("gross_unit_price") or 0) > 0:
             cart_item["external_unit_price"] = flt(line.get("gross_unit_price"))
+        if is_item_modifier_mapping:
+            mapping = modifier_mapping or {}
+            cart_item.setdefault("customization", {}).setdefault("selected_modifiers", []).append(
+                {
+                    "group": mapping.get("group_name") or "",
+                    "option": mapping.get("option_name") or "",
+                    "qty": max(flt(mapping.get("option_qty") or 1), 0.0001),
+                }
+            )
         cart_items.append(cart_item)
         resolved_line["cart_item"] = cart_item
 

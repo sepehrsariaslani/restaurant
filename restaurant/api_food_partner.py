@@ -27,6 +27,7 @@ def save_snappfood_modifier_mapping(payload=None):
 		parent_item=payload.get("parent_item") or "",
 		group_name=payload.get("group_name") or "",
 		option_name=payload.get("option_name") or "",
+		mapping_mode=payload.get("mapping_mode") or "modifier",
 		product_id=payload.get("product_id") or "",
 		variation_id=payload.get("variation_id") or "",
 		product_hash_id=payload.get("product_hash_id") or "",
