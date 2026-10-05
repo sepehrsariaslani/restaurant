@@ -48,6 +48,10 @@ __all__ = [
 	# boot
 	"get_management_club_boot",
 	"update_management_club_settings",
+	"list_management_club_accounts",
+	"grant_management_cashback",
+	"list_management_wallet_transactions",
+	"get_management_wallet_report",
 	# customers & membership
 	"list_management_club_customers",
 	"save_management_club_customer",
@@ -334,6 +338,11 @@ def _club_ensure_settings_fields():
 			{"fieldname": "restaurant_club_enabled", "label": _("باشگاه مشتریان فعال است"), "fieldtype": "Check", "default": "1"},
 			{"fieldname": "restaurant_cashback_percent", "label": _("درصد کش‌بک خرید"), "fieldtype": "Percent"},
 			{"fieldname": "restaurant_cashback_min_order", "label": _("حداقل فاکتور برای کش‌بک"), "fieldtype": "Currency"},
+			{"fieldname": "restaurant_cashback_expiry_days", "label": _("مدت اعتبار کش‌بک (روز، ۰ = بدون انقضا)"), "fieldtype": "Int", "default": "180"},
+			{"fieldname": "restaurant_club_company", "label": _("شرکت باشگاه مشتریان"), "fieldtype": "Link", "options": "Company"},
+			{"fieldname": "restaurant_discount_expense_account", "label": _("حساب هزینه تخفیف فروش"), "fieldtype": "Link", "options": "Account"},
+			{"fieldname": "restaurant_cashback_expense_account", "label": _("حساب هزینه کش‌بک"), "fieldtype": "Link", "options": "Account"},
+			{"fieldname": "restaurant_wallet_liability_account", "label": _("حساب بدهی اعتبار کیف پول"), "fieldtype": "Link", "options": "Account"},
 			{"fieldname": "restaurant_wallet_charge_enabled", "label": _("درخواست شارژ دستی کیف پول فعال است"), "fieldtype": "Check", "default": "1"},
 			{"fieldname": "restaurant_wallet_charge_bank_name", "label": _("نام بانک شارژ کیف پول"), "fieldtype": "Data"},
 			{"fieldname": "restaurant_wallet_charge_account_holder", "label": _("نام صاحب حساب شارژ کیف پول"), "fieldtype": "Data"},
@@ -414,6 +423,11 @@ def _club_club_settings():
 		"club_enabled": cint(_club_setting("restaurant_club_enabled", 1)) == 1,
 		"cashback_percent": flt(_club_setting("restaurant_cashback_percent", 0)),
 		"cashback_min_order": flt(_club_setting("restaurant_cashback_min_order", 0)),
+		"cashback_expiry_days": cint(_club_setting("restaurant_cashback_expiry_days", 180)),
+		"company": str(_club_setting("restaurant_club_company", "") or "").strip(),
+		"discount_expense_account": str(_club_setting("restaurant_discount_expense_account", "") or "").strip(),
+		"cashback_expense_account": str(_club_setting("restaurant_cashback_expense_account", "") or "").strip(),
+		"wallet_liability_account": str(_club_setting("restaurant_wallet_liability_account", "") or "").strip(),
 		"wallet_charge_enabled": cint(_club_setting("restaurant_wallet_charge_enabled", 1)) == 1,
 		"wallet_charge_bank_name": str(_club_setting("restaurant_wallet_charge_bank_name", "") or "").strip(),
 		"wallet_charge_account_holder": str(_club_setting("restaurant_wallet_charge_account_holder", "") or "").strip(),
@@ -447,6 +461,11 @@ _SAVEABLE_CLUB_SETTINGS = [
 	"restaurant_club_enabled",
 	"restaurant_cashback_percent",
 	"restaurant_cashback_min_order",
+	"restaurant_cashback_expiry_days",
+	"restaurant_club_company",
+	"restaurant_discount_expense_account",
+	"restaurant_cashback_expense_account",
+	"restaurant_wallet_liability_account",
 	"restaurant_wallet_charge_enabled",
 	"restaurant_wallet_charge_bank_name",
 	"restaurant_wallet_charge_account_holder",
@@ -1234,6 +1253,12 @@ def get_management_club_boot():
 		"campaign_bonus_types": CAMPAIGN_BONUS_TYPES,
 		"wallet_kinds": WALLET_KINDS,
 		"mode_of_payments": frappe.get_all("Mode of Payment", pluck="name", order_by="name", limit_page_length=100),
+		"companies": frappe.get_all("Company", filters={"is_group": 0}, fields=["name", "default_currency"], order_by="name", limit_page_length=200),
+		"default_company": str(
+			_club_setting("restaurant_club_company", "")
+			or frappe.defaults.get_user_default("Company")
+			or ""
+		).strip(),
 	}
 
 
@@ -1255,6 +1280,8 @@ def update_management_club_settings(payload=None):
 		value = payload.get(key)
 		if key in ("restaurant_club_enabled", "restaurant_wallet_charge_enabled", "restaurant_sms_enabled", "restaurant_points_enabled"):
 			value = cint(value)
+		elif key == "restaurant_cashback_expiry_days":
+			value = min(max(cint(value), 0), 3650)
 		elif key == "restaurant_survey_alert_threshold":
 			value = min(max(cint(value), 1), 10) or 6
 		elif key == "restaurant_survey_delay_minutes":
@@ -1267,6 +1294,18 @@ def update_management_club_settings(payload=None):
 			value = (value or "").strip()
 			if value and not frappe.db.exists("Mode of Payment", value):
 				frappe.throw(_("روش پرداخت یافت نشد: {0}").format(value))
+		elif key == "restaurant_club_company":
+			value = (value or "").strip()
+			if value and not frappe.db.exists("Company", value):
+				frappe.throw(_("شرکت انتخاب‌شده یافت نشد: {0}").format(value))
+		elif key in (
+			"restaurant_discount_expense_account",
+			"restaurant_cashback_expense_account",
+			"restaurant_wallet_liability_account",
+		):
+			value = (value or "").strip()
+			if value and not frappe.db.exists("Account", value):
+				frappe.throw(_("حساب انتخاب‌شده یافت نشد: {0}").format(value))
 		elif key in ("restaurant_wallet_charge_bank_name", "restaurant_wallet_charge_account_holder", "restaurant_wallet_charge_iban", "restaurant_wallet_charge_card_number", "restaurant_wallet_charge_instructions"):
 			value = str(value or "").strip()
 			limits = {
@@ -1289,8 +1328,51 @@ def update_management_club_settings(payload=None):
 				value = re.sub(r"[\s-]+", "", value)
 				if not re.fullmatch(r"\d{16}", value):
 					frappe.throw(_("شماره کارت دریافت باید ۱۶ رقم باشد."))
-		_club_set_setting(key, value)
 		collected[key] = value
+	company = collected.get("restaurant_club_company", _club_setting("restaurant_club_company", ""))
+	cashback_percent = flt(collected.get("restaurant_cashback_percent", _club_setting("restaurant_cashback_percent", 0)))
+	cashback_expense = collected.get("restaurant_cashback_expense_account", _club_setting("restaurant_cashback_expense_account", ""))
+	wallet_liability = collected.get("restaurant_wallet_liability_account", _club_setting("restaurant_wallet_liability_account", ""))
+	if cashback_percent > 0 and (not cashback_expense or not wallet_liability):
+		frappe.throw(_("برای فعال‌کردن کش‌بک خودکار، حساب هزینه کش‌بک و حساب بدهی کیف پول را هم انتخاب کنید."))
+	for key in (
+		"restaurant_discount_expense_account",
+		"restaurant_cashback_expense_account",
+		"restaurant_wallet_liability_account",
+	):
+		account = collected.get(key, _club_setting(key, ""))
+		if not account:
+			continue
+		if not company:
+			frappe.throw(_("برای حساب‌های باشگاه ابتدا شرکت را مشخص کنید."))
+		account_doc = frappe.get_doc("Account", account)
+		if account_doc.company != company or cint(account_doc.get("is_group")) or cint(account_doc.get("disabled")):
+			frappe.throw(_("حساب {0} باید حساب فعال و غیرگروهی همان شرکت باشگاه باشد.").format(account))
+		if key == "restaurant_wallet_liability_account" and account_doc.root_type != "Liability":
+			frappe.throw(_("حساب بدهی کیف پول باید از نوع بدهی باشد."))
+		if key == "restaurant_wallet_liability_account" and account_doc.get("account_type") in {"Receivable", "Payable"}:
+			frappe.throw(_("حساب کیف پول نباید حساب دریافتنی یا پرداختنیِ نیازمند طرف حساب باشد."))
+		if key != "restaurant_wallet_liability_account" and account_doc.root_type != "Expense":
+			frappe.throw(_("حساب تخفیف و کش‌بک باید از نوع هزینه باشد."))
+		if key != "restaurant_wallet_liability_account" and account_doc.get("report_type") != "Profit and Loss":
+			frappe.throw(_("حساب هزینهٔ تخفیف و کش‌بک باید در صورت سود و زیان گزارش شود."))
+	wallet_mode = collected.get("restaurant_wallet_mode_of_payment", _club_setting("restaurant_wallet_mode_of_payment", ""))
+	if wallet_mode:
+		if not company or not wallet_liability:
+			frappe.throw(_("برای فعال‌کردن پرداخت کیف پول، شرکت و حساب بدهی کیف پول را هم مشخص کنید."))
+		if not frappe.db.exists("DocType", "Mode of Payment Account"):
+			frappe.throw(_("ساختار حساب روش پرداخت کیف پول در ERPNext در دسترس نیست."))
+		mode_account = frappe.db.get_value(
+			"Mode of Payment Account",
+			{"parent": wallet_mode, "company": company},
+			"default_account",
+		)
+		if not mode_account:
+			frappe.throw(_("برای روش پرداخت کیف پول، حساب پیش‌فرض همین شرکت را در ERPNext تعیین کنید."))
+		if mode_account != wallet_liability:
+			frappe.throw(_("حساب پیش‌فرض روش پرداخت کیف پول باید با حساب بدهی اعتبار کیف پول یکی باشد."))
+	for key, value in collected.items():
+		_club_set_setting(key, value)
 	if "restaurant_survey_alert_users_json" in payload:
 		users = payload.get("restaurant_survey_alert_users_json")
 		if not isinstance(users, list):
@@ -2522,10 +2604,12 @@ def get_customer_club_summary(customer_name):
 	if not customer_name or not frappe.db.exists("Customer", customer_name):
 		return out
 	settings = _club_club_settings()
+	_club_expire_due_cashback(customer_name)
 	out["points_enabled"] = settings["points_enabled"]
 	out["points_rial_value"] = flt(settings["points_rial_value"])
 	out["points_min_redeem"] = cint(settings["points_min_redeem"])
 	out["points_expiry_days"] = cint(settings["points_expiry_days"])
+	out["wallet_mode_of_payment"] = settings.get("wallet_mode_of_payment") or ""
 	if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]):
 		wallet_name = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer_name}, "name")
 		if wallet_name:
@@ -2944,7 +3028,7 @@ def _club_reconcile_wallet_buckets(wallet):
 	return wallet
 
 
-def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", reference_doctype="", reference_name="", bucket=None):
+def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", reference_doctype="", reference_name="", bucket=None, expiry_date=None):
 	amount = flt(amount)
 	if amount <= 0:
 		frappe.throw(_("مبلغ باید بزرگ‌تر از صفر باشد."))
@@ -3007,13 +3091,296 @@ def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", refe
 	txn.reference_name = reference_name or ""
 	txn.note = note or ""
 	txn.entry_date = now_datetime()
+	if expiry_date and _has_column(CLUB_DOCTYPES["wallet_txn"], "expiry_date"):
+		txn.expiry_date = getdate(expiry_date)
 	txn.insert(ignore_permissions=True)
 	return txn
+
+
+def _club_required_accounting_config():
+	settings = _club_club_settings()
+	company = settings.get("company") or frappe.defaults.get_user_default("Company")
+	if not company or not frappe.db.exists("Company", company):
+		frappe.throw(_("شرکت باشگاه مشتریان را در تنظیمات باشگاه مشخص کنید."))
+	expense = settings.get("cashback_expense_account")
+	liability = settings.get("wallet_liability_account")
+	if not expense or not liability:
+		frappe.throw(_("برای ثبت مالی کش‌بک، حساب هزینه کش‌بک و حساب بدهی کیف پول را در تنظیمات تعیین کنید."))
+	company_currency = frappe.db.get_value("Company", company, "default_currency")
+	for account_name, root_type in ((expense, "Expense"), (liability, "Liability")):
+		account = frappe.get_doc("Account", account_name)
+		if account.company != company or cint(account.get("is_group")) or cint(account.get("disabled")) or account.root_type != root_type:
+			frappe.throw(_("حساب {0} با شرکت و نوع حساب تنظیمات باشگاه سازگار نیست.").format(account_name))
+		if root_type == "Expense" and account.get("report_type") != "Profit and Loss":
+			frappe.throw(_("حساب هزینهٔ کش‌بک باید در صورت سود و زیان گزارش شود."))
+		if root_type == "Liability" and account.get("account_type") in {"Receivable", "Payable"}:
+			frappe.throw(_("حساب بدهی کیف پول نباید از نوع دریافتنی یا پرداختنی باشد."))
+		currency = account.get("account_currency") or company_currency
+		if currency != company_currency:
+			frappe.throw(_("حساب‌های کیف پول باید با ارز پایهٔ شرکت ({0}) باشند.").format(company_currency))
+	return company, company_currency, expense, liability
+
+
+def _club_post_cashback_journal(txn, *, reverse=False):
+	"""Post the cashback liability and expense together with its wallet ledger row."""
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "accounting_journal_entry") and txn.get("accounting_journal_entry"):
+		return txn.accounting_journal_entry
+	company, currency, expense, liability = _club_required_accounting_config()
+	amount = flt(txn.get("amount"), 2)
+	if amount <= 0:
+		frappe.throw(_("مبلغ سند کش‌بک معتبر نیست."))
+	journal = frappe.new_doc("Journal Entry")
+	journal.voucher_type = "Journal Entry"
+	journal.company = company
+	journal.posting_date = getdate(txn.get("entry_date") or today())
+	journal.user_remark = _("ثبت کش‌بک کیف پول رستوران؛ تراکنش {0}").format(txn.name)
+	import erpnext
+
+	cost_center = erpnext.get_default_cost_center(company)
+	lines = [
+		(expense, 0 if reverse else amount, amount if reverse else 0),
+		(liability, amount if reverse else 0, 0 if reverse else amount),
+	]
+	for account, debit, credit in lines:
+		row = journal.append("accounts", {})
+		row.account = account
+		row.account_currency = currency
+		row.exchange_rate = 1
+		row.debit_in_account_currency = debit
+		row.credit_in_account_currency = credit
+		row.debit = debit
+		row.credit = credit
+		if cost_center and account == expense:
+			row.cost_center = cost_center
+	journal.flags.ignore_permissions = True
+	journal.insert(ignore_permissions=True)
+	journal.submit()
+	if _has_column(CLUB_DOCTYPES["wallet_txn"], "accounting_journal_entry"):
+		txn.db_set("accounting_journal_entry", journal.name, update_modified=False)
+	return journal.name
+
+
+def _club_expire_due_cashback(customer=None):
+	"""Expire remaining dated cashback lots once, reversing their accrual entry."""
+	doctype = CLUB_DOCTYPES["wallet_txn"]
+	if not frappe.db.exists("DocType", doctype) or not _has_column(doctype, "expiry_date"):
+		return 0
+	filters = {"direction": "واریز", "bucket": "کش‌بک", "expiry_date": ["is", "set"]}
+	if customer:
+		filters["customer"] = customer
+	credits = frappe.get_all(
+		doctype,
+		filters=filters,
+		fields=["name", "wallet", "customer", "amount", "expiry_date", "entry_date", "creation"],
+		order_by="entry_date asc, creation asc",
+		limit_page_length=10000,
+		ignore_permissions=True,
+	)
+	today_date = getdate(today())
+	due_wallets = {row.wallet for row in credits if row.wallet and getdate(row.expiry_date) <= today_date}
+	if not due_wallets:
+		return 0
+	expired_count = 0
+	for wallet_name in due_wallets:
+		# Serialize expiry against checkout and other expiry sweeps, then use a
+		# locking read so the ledger includes any expiry row committed while this
+		# request waited for the wallet lock.
+		frappe.db.sql(
+			"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+			wallet_name,
+		)
+		wallet_rows = frappe.db.sql(
+			"""
+			SELECT name, customer, kind, direction, bucket, amount, expiry_date,
+				reference_doctype, reference_name, entry_date, creation
+			FROM `tabRestaurant Wallet Transaction`
+			WHERE wallet = %s
+			ORDER BY entry_date asc, creation asc
+			FOR UPDATE
+			""",
+			wallet_name,
+			as_dict=True,
+		)
+		lots = []
+		lot_by_name = {}
+		for row in wallet_rows:
+			if row.get("bucket") != "کش‌بک":
+				continue
+			amount = flt(row.get("amount"))
+			if row.get("direction") == "واریز":
+				lot = {"name": row.name, "customer": row.customer, "remaining": amount, "expiry_date": row.get("expiry_date")}
+				lots.append(lot)
+				lot_by_name[row.name] = lot
+			elif row.get("direction") == "برداشت":
+				remaining = amount
+				if row.get("kind") == "انقضای کش‌بک" and row.get("reference_name") in lot_by_name:
+					lot = lot_by_name[row.reference_name]
+					lot["remaining"] = max(0, lot["remaining"] - remaining)
+					continue
+				for lot in lots:
+					if lot.get("expiry_date") and row.get("entry_date") and getdate(row.entry_date) > getdate(lot["expiry_date"]):
+						continue
+					used = min(lot["remaining"], remaining)
+					lot["remaining"] -= used
+					remaining -= used
+					if remaining <= 0.009:
+						break
+		for lot in lots:
+			if not lot.get("expiry_date") or getdate(lot["expiry_date"]) > today_date or lot["remaining"] <= 0.009:
+				continue
+			wallet = _club_get_or_create_wallet(lot["customer"])
+			amount = min(flt(lot["remaining"], 2), flt(wallet.get("cashback_balance") or 0))
+			if amount <= 0.009:
+				continue
+			frappe.db.savepoint("restaurant_cashback_expiry")
+			try:
+				txn = _club_wallet_txn(
+					wallet=wallet,
+					customer=lot["customer"],
+					kind="انقضای کش‌بک",
+					direction="برداشت",
+					amount=amount,
+					bucket="کش‌بک",
+					note=_("انقضای اعتبار کش‌بک {0}").format(lot["name"]),
+					reference_doctype=doctype,
+					reference_name=lot["name"],
+				)
+				_club_post_cashback_journal(txn, reverse=True)
+			except Exception:
+				frappe.db.rollback(save_point="restaurant_cashback_expiry")
+				raise
+			expired_count += 1
+	return expired_count
+
+
+@frappe.whitelist()
+def list_management_club_accounts(search="", company=""):
+	_ensure_management_access()
+	search = str(search or "").strip()
+	filters = {"is_group": 0, "disabled": 0}
+	company = str(company or _club_club_settings().get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	if company:
+		filters["company"] = company
+	or_filters = None
+	if search:
+		or_filters = [["Account", "name", "like", f"%{search}%"], ["Account", "account_name", "like", f"%{search}%"]]
+	rows = frappe.get_all(
+		"Account",
+		filters=filters,
+		or_filters=or_filters,
+		fields=["name", "account_name", "company", "root_type", "account_currency"],
+		order_by="account_name asc",
+		limit_page_length=100,
+	)
+	return {"accounts": rows}
+
+
+@frappe.whitelist()
+def grant_management_cashback(payload=None):
+	"""Quick-entry grant of purchase-only cashback with optional expiry."""
+	_ensure_management_access()
+	payload = _club_parse_json(payload, {})
+	customer = str(payload.get("customer") or "").strip()
+	amount = flt(payload.get("amount"), 2)
+	if not frappe.db.exists("Customer", customer):
+		frappe.throw(_("مشتری را انتخاب کنید."))
+	if amount <= 0:
+		frappe.throw(_("مبلغ کش‌بک باید بیشتر از صفر باشد."))
+	if not _has_column(CLUB_DOCTYPES["wallet_txn"], "expiry_date"):
+		frappe.throw(_("برای ثبت تاریخ اعتبار، ابتدا تغییرات ساختار برنامهٔ رستوران را اعمال کنید."))
+	expiry = str(payload.get("expiry_date") or "").strip()
+	if not expiry:
+		days = cint(_club_club_settings().get("cashback_expiry_days"))
+		expiry = add_days(today(), days) if days > 0 else ""
+	if expiry and getdate(expiry) < getdate(today()):
+		frappe.throw(_("تاریخ انقضای کش‌بک نمی‌تواند در گذشته باشد."))
+	_club_expire_due_cashback(customer)
+	wallet = _club_get_or_create_wallet(customer)
+	txn = _club_wallet_txn(
+		wallet=wallet,
+		customer=customer,
+		kind="کش‌بک",
+		direction="واریز",
+		amount=amount,
+		bucket="کش‌بک",
+		expiry_date=expiry or None,
+		note=str(payload.get("note") or "").strip()[:480],
+	)
+	journal_entry = _club_post_cashback_journal(txn)
+	wallet = frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name)
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"txn": txn.name,
+		"journal_entry": journal_entry,
+		"balance": flt(wallet.balance),
+		"cashback_balance": flt(wallet.get("cashback_balance") or 0),
+		"expiry_date": expiry or None,
+	}
+
+
+@frappe.whitelist()
+def list_management_wallet_transactions(search="", customer="", kind="", direction="", date_from="", date_to="", limit=100, offset=0):
+	_ensure_management_access()
+	_expired = _club_expire_due_cashback()
+	doctype = CLUB_DOCTYPES["wallet_txn"]
+	filters = {}
+	customer = str(customer or "").strip()
+	search = str(search or "").strip()
+	if customer:
+		filters["customer"] = customer
+	if kind:
+		filters["kind"] = kind
+	if direction in ("واریز", "برداشت"):
+		filters["direction"] = direction
+	if date_from and date_to:
+		filters["entry_date"] = ["between", [str(date_from), f"{date_to} 23:59:59"]]
+	elif date_from:
+		filters["entry_date"] = [">=", str(date_from)]
+	elif date_to:
+		filters["entry_date"] = ["<=", f"{date_to} 23:59:59"]
+	or_filters = None
+	if search and not customer:
+		customer_fields = ["name", "customer_name"]
+		if _has_column("Customer", "mobile_no"):
+			customer_fields.append("mobile_no")
+		matches = frappe.get_all(
+			"Customer",
+			or_filters=[[field, "like", f"%{search}%"] for field in customer_fields],
+			pluck="name",
+			limit_page_length=500,
+		)
+		if not matches:
+			return {"transactions": [], "total": 0, "expired_count": _expired}
+		filters["customer"] = ["in", matches]
+	fields = ["name", "wallet", "customer", "kind", "bucket", "direction", "amount", "balance_after", "withdrawable_after", "cashback_after", "reference_doctype", "reference_name", "note", "entry_date"]
+	for fieldname in ("expiry_date", "accounting_journal_entry"):
+		if _has_column(doctype, fieldname):
+			fields.append(fieldname)
+	limit = min(max(cint(limit) or 100, 1), 500)
+	offset = max(cint(offset) or 0, 0)
+	rows = frappe.get_all(
+		doctype,
+		filters=filters,
+		fields=fields,
+		order_by="entry_date desc, creation desc",
+		limit_start=offset,
+		limit_page_length=limit,
+		ignore_permissions=True,
+	)
+	total = frappe.db.count(doctype, filters=filters)
+	customers = {row.customer for row in rows if row.customer}
+	names = frappe.get_all("Customer", filters={"name": ["in", list(customers)]}, fields=["name", "customer_name"]) if customers else []
+	labels = {row.name: row.customer_name for row in names}
+	for row in rows:
+		row["customer_name"] = labels.get(row.customer, row.customer)
+	return {"transactions": rows, "total": cint(total), "expired_count": _expired}
 
 
 @frappe.whitelist()
 def list_management_wallets(search="", limit=100, offset=0):
 	_ensure_management_access()
+	_club_expire_due_cashback()
 	filters = {}
 	fields = ["name", "customer", "balance", "total_charged", "total_spent", "total_rewards", "status", "modified"]
 	for fieldname in ("withdrawable_balance", "cashback_balance"):
@@ -3433,20 +3800,29 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 		if settings["cashback_percent"] > 0 and not credited:
 			if grand_total >= settings["cashback_min_order"] or settings["cashback_min_order"] <= 0:
 				cashback = flt(grand_total * settings["cashback_percent"] / 100.0, 2)
-				if cashback > 0:
-					wallet = _club_get_or_create_wallet(customer)
-					_club_wallet_txn(
-						wallet=wallet,
-						customer=customer,
-						kind="کش‌بک",
-						direction="واریز",
-						amount=cashback,
-						note=_("کش‌بک {0}٪ سفارش {1}").format(flt(settings["cashback_percent"], 1), so_name),
-						reference_doctype="Sales Order",
-						reference_name=so_name,
-					)
-				if _has_column("Sales Order", "restaurant_cashback_credited"):
-					frappe.db.set_value("Sales Order", so_name, "restaurant_cashback_credited", 1, update_modified=False)
+				frappe.db.savepoint("restaurant_cashback_award")
+				try:
+					if cashback > 0:
+						wallet = _club_get_or_create_wallet(customer)
+						expiry_date = add_days(today(), settings["cashback_expiry_days"]) if settings.get("cashback_expiry_days", 0) > 0 else None
+						txn = _club_wallet_txn(
+							wallet=wallet,
+							customer=customer,
+							kind="کش‌بک",
+							direction="واریز",
+							amount=cashback,
+							bucket="کش‌بک",
+							expiry_date=expiry_date,
+							note=_("کش‌بک {0}٪ سفارش {1}").format(flt(settings["cashback_percent"], 1), so_name),
+							reference_doctype="Sales Order",
+							reference_name=so_name,
+						)
+						_club_post_cashback_journal(txn)
+					if _has_column("Sales Order", "restaurant_cashback_credited"):
+						frappe.db.set_value("Sales Order", so_name, "restaurant_cashback_credited", 1, update_modified=False)
+				except Exception:
+					frappe.db.rollback(save_point="restaurant_cashback_award")
+					raise
 
 		# 3) Loyalty points earn on settled/fulfilled amount
 		_club_process_points_earning(so_name)
@@ -3873,6 +4249,11 @@ def review_management_customer_review(name="", moderation_status="", manager_rep
 
 def run_daily_customer_club_jobs():
 	"""Daily: birthday greetings, welcome SMS, inactive reminders, referral rewards."""
+	expired_cashback = 0
+	try:
+		expired_cashback = _club_expire_due_cashback()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Restaurant cashback expiry sweep failed")
 	coach_rewards_count = 0
 	try:
 		from restaurant.coach_rewards import process_pending_coach_rewards
@@ -3883,10 +4264,10 @@ def run_daily_customer_club_jobs():
 	settings = _club_club_settings()
 	if not settings["club_enabled"]:
 		frappe.db.commit()
-		return {"coach_rewards": coach_rewards_count}
+		return {"coach_rewards": coach_rewards_count, "expired_cashback": expired_cashback}
 	_club_ensure_ops_ready()
 	templates = settings["sms_templates"]
-	date_map = {"birthdays": 0, "welcomes": 0, "reminders": 0, "referrals": 0, "coach_rewards": coach_rewards_count}
+	date_map = {"birthdays": 0, "welcomes": 0, "reminders": 0, "referrals": 0, "coach_rewards": coach_rewards_count, "expired_cashback": expired_cashback}
 	today_ = getdate(today())
 
 	if _has_column("Customer", "restaurant_birth_date"):
@@ -4104,6 +4485,126 @@ def get_management_report_campaign_performance(date_from=None, date_to=None):
 		source="all",
 		orders=[],
 	)
+
+
+@frappe.whitelist()
+def get_management_wallet_report(date_from=None, date_to=None):
+	_ensure_management_access()
+	_club_expire_due_cashback()
+	date_to = getdate(date_to or today())
+	date_from = getdate(date_from or add_days(date_to, -29))
+	if date_from > date_to:
+		frappe.throw(_("بازهٔ تاریخ گزارش معتبر نیست."))
+	params = {"date_from": date_from, "date_to": add_days(date_to, 1)}
+	base = """
+		FROM `tabRestaurant Wallet Transaction`
+		WHERE entry_date >= %(date_from)s AND entry_date < %(date_to)s
+	"""
+	rows = frappe.db.sql(
+		"""
+		SELECT kind, bucket, direction, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
+		""" + base + " GROUP BY kind, bucket, direction",
+		params,
+		as_dict=True,
+	)
+	summary = {"transactions": 0, "cashback_granted": 0.0, "cashback_used": 0.0, "cashback_expired": 0.0, "wallet_charged": 0.0, "wallet_used": 0.0}
+	for row in rows:
+		amount = flt(row.get("amount"))
+		summary["transactions"] += cint(row.get("count"))
+		if row.get("bucket") == "کش‌بک" and row.get("direction") == "واریز":
+			summary["cashback_granted"] += amount
+		if row.get("bucket") == "کش‌بک" and row.get("direction") == "برداشت" and row.get("kind") == "پرداخت":
+			summary["cashback_used"] += amount
+		if row.get("kind") == "انقضای کش‌بک":
+			summary["cashback_expired"] += amount
+		if row.get("bucket") == "کیف پول" and row.get("kind") == "شارژ":
+			summary["wallet_charged"] += amount
+		if row.get("bucket") == "کیف پول" and row.get("kind") == "پرداخت" and row.get("direction") == "برداشت":
+			summary["wallet_used"] += amount
+	customers = frappe.db.sql(
+		"""
+		SELECT customer,
+			COALESCE(SUM(CASE WHEN bucket = 'کش‌بک' AND direction = 'واریز' THEN amount ELSE 0 END),0) AS granted,
+			COALESCE(SUM(CASE WHEN bucket = 'کش‌بک' AND direction = 'برداشت' AND kind = 'پرداخت' THEN amount ELSE 0 END),0) AS used,
+			COALESCE(SUM(CASE WHEN kind = 'انقضای کش‌بک' THEN amount ELSE 0 END),0) AS expired,
+			COUNT(*) AS transactions
+		""" + base + " GROUP BY customer ORDER BY granted DESC LIMIT 100",
+		params,
+		as_dict=True,
+	)
+	for row in customers:
+		row["customer_name"] = frappe.db.get_value("Customer", row.customer, "customer_name") or row.customer
+		for key in ("granted", "used", "expired"):
+			row[key] = flt(row.get(key))
+		row["transactions"] = cint(row.get("transactions"))
+	discount_invoices = []
+	discount_total = 0.0
+	discount_invoice_count = 0
+	settings = _club_club_settings()
+	discount_account = settings.get("discount_expense_account")
+	if discount_account and frappe.db.exists("DocType", "Sales Invoice") and _has_column("Sales Invoice", "additional_discount_account"):
+		discount_filters = {
+			"docstatus": 1,
+			"additional_discount_account": discount_account,
+			"posting_date": ["between", [str(date_from), str(date_to)]],
+		}
+		if settings.get("company") and _has_column("Sales Invoice", "company"):
+			discount_filters["company"] = settings["company"]
+		discount_fields = ["name", "customer", "posting_date", "grand_total"]
+		for fieldname in ("discount_amount", "additional_discount_amount"):
+			if _has_column("Sales Invoice", fieldname):
+				discount_fields.append(fieldname)
+		discount_amount_parts = []
+		if "additional_discount_amount" in discount_fields:
+			discount_amount_parts.append("NULLIF(COALESCE(additional_discount_amount, 0), 0)")
+		if "discount_amount" in discount_fields:
+			discount_amount_parts.append("discount_amount")
+		discount_amount_expression = "COALESCE(" + ", ".join(discount_amount_parts + ["0"]) + ")"
+		discount_summary = frappe.db.sql(
+			"""
+			SELECT COUNT(*) AS invoice_count, COALESCE(SUM({amount}), 0) AS discount_total
+			FROM `tabSales Invoice`
+			WHERE docstatus = 1
+				AND additional_discount_account = %(account)s
+				AND posting_date BETWEEN %(date_from)s AND %(date_to)s
+				{company_filter}
+			""".format(
+				amount=discount_amount_expression,
+				company_filter="AND company = %(company)s" if settings.get("company") and _has_column("Sales Invoice", "company") else "",
+			),
+			{
+				"account": discount_account,
+				"date_from": date_from,
+				"date_to": date_to,
+				**({"company": settings["company"]} if settings.get("company") and _has_column("Sales Invoice", "company") else {}),
+			},
+			as_dict=True,
+		)
+		if discount_summary:
+			discount_total = flt(discount_summary[0].get("discount_total"))
+			discount_invoice_count = cint(discount_summary[0].get("invoice_count"))
+		discount_invoices = frappe.get_all(
+			"Sales Invoice",
+			filters=discount_filters,
+			fields=discount_fields,
+			order_by="posting_date desc, name desc",
+			limit_page_length=500,
+		)
+		for invoice in discount_invoices:
+			invoice["customer_name"] = frappe.db.get_value("Customer", invoice.get("customer"), "customer_name") or invoice.get("customer") or ""
+			invoice["discount"] = flt(invoice.get("additional_discount_amount") or invoice.get("discount_amount") or 0)
+	summary["discount_expense"] = flt(discount_total, 2)
+	summary["discount_invoices"] = discount_invoice_count
+	page = list_management_wallet_transactions(date_from=str(date_from), date_to=str(date_to), limit=100, offset=0)
+	return {
+		"date_from": str(date_from),
+		"date_to": str(date_to),
+		"summary": {key: flt(value, 2) if key != "transactions" else cint(value) for key, value in summary.items()},
+		"by_customer": customers,
+		"by_kind": rows,
+		"transactions": page.get("transactions", []),
+		"discount_invoices": discount_invoices,
+	}
 
 
 @frappe.whitelist()

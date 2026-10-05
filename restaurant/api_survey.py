@@ -20,9 +20,11 @@ QUESTION_SCOPES = ("سفارش", "گروه غذا", "محصول")
 REVIEW_STATES = ("در انتظار بررسی", "تأییدشده", "ردشده")
 SALES_ORDER_SURVEY_STATUSES = ("new", "confirmed", "preparing", "ready", "delivered", "served")
 SMS_IR_FEEDBACK_STATUSES = ("زمان‌بندی‌شده", "در حال ارسال", "ارسال شد")
+SURVEY_OPT_OUT_FIELD = "restaurant_survey_opt_out"
 
 __all__ = [
 	"queue_order_survey_invitation", "queue_table_order_survey_invitation", "run_due_survey_invitations",
+	"get_management_customer_survey_preference", "set_management_customer_survey_preference",
 	"get_public_survey", "get_my_order_survey", "get_my_survey_invitations", "submit_public_survey",
 	"get_my_order_survey_summaries", "request_my_order_survey",
 	"list_my_customer_reviews", "list_management_survey_questions", "save_management_survey_question",
@@ -57,6 +59,126 @@ def _valid_mobile(value):
 		return ""
 
 
+def _ensure_survey_customer_preference_field():
+	"""Provision the native Customer preference without adding a parallel DocType."""
+	from restaurant.api_feature_pack import _fp_ensure_custom_fields
+
+	_fp_ensure_custom_fields(
+		"Customer",
+		[
+			{
+				"fieldname": SURVEY_OPT_OUT_FIELD,
+				"label": _("ارسال پیام رضایت متوقف شود"),
+				"fieldtype": "Check",
+				"default": "0",
+			},
+		],
+		anchor_candidates=["mobile_no", "customer_name"],
+	)
+
+
+def _customer_survey_opted_out(customer):
+	if not customer or not frappe.db.exists("Customer", customer):
+		return False
+	try:
+		return bool(cint(frappe.db.get_value("Customer", customer, SURVEY_OPT_OUT_FIELD) or 0))
+	except Exception:
+		return False
+
+
+def _resolve_survey_preference_customer(customer_name="", mobile=""):
+	key = str(customer_name or "").strip()
+	mobile = _valid_mobile(mobile)
+	if key and frappe.db.exists("Customer", key):
+		return key
+
+	mobile_fields = [
+		field for field in ("mobile_no", "customer_primary_mobile")
+		if api_club._has_column("Customer", field)
+	]
+	if key and mobile:
+		phone_filters = [["Customer", field, "=", mobile] for field in mobile_fields]
+		rows = frappe.get_all(
+			"Customer",
+			filters={"customer_name": key},
+			or_filters=phone_filters,
+			fields=["name"],
+			limit_page_length=3,
+			ignore_permissions=True,
+		)
+		if len(rows) == 1:
+			return rows[0].name
+		if len(rows) > 1:
+			frappe.throw(_("برای این نام و شماره همراه بیش از یک مشتری پیدا شد."))
+	elif key:
+		rows = frappe.get_all(
+			"Customer",
+			filters={"customer_name": key},
+			fields=["name"],
+			limit_page_length=3,
+			ignore_permissions=True,
+		)
+		if len(rows) == 1:
+			return rows[0].name
+		if len(rows) > 1:
+			frappe.throw(_("برای این نام چند مشتری پیدا شد؛ شماره همراه را هم انتخاب کنید."))
+	elif mobile and mobile_fields:
+		rows = frappe.get_all(
+			"Customer",
+			or_filters=[["Customer", field, "=", mobile] for field in mobile_fields],
+			fields=["name"],
+			limit_page_length=3,
+			ignore_permissions=True,
+		)
+		if len(rows) == 1:
+			return rows[0].name
+		if len(rows) > 1:
+			frappe.throw(_("برای این شماره همراه بیش از یک مشتری پیدا شد."))
+
+	frappe.throw(_("مشتری انتخاب‌شده در فهرست Customer پیدا نشد."), frappe.DoesNotExistError)
+
+
+@frappe.whitelist()
+def get_management_customer_survey_preference(customer_name="", mobile=""):
+	api_club._ensure_management_access()
+	_ensure_survey_customer_preference_field()
+	customer = _resolve_survey_preference_customer(customer_name, mobile)
+	return {
+		"status": "success",
+		"customer": customer,
+		"opt_out": cint(frappe.db.get_value("Customer", customer, SURVEY_OPT_OUT_FIELD) or 0),
+	}
+
+
+@frappe.whitelist()
+def set_management_customer_survey_preference(customer_name="", mobile="", opt_out=0):
+	api_club._ensure_management_access()
+	_ensure_survey_customer_preference_field()
+	customer = _resolve_survey_preference_customer(customer_name, mobile)
+	opt_out = cint(opt_out)
+	frappe.db.set_value("Customer", customer, SURVEY_OPT_OUT_FIELD, opt_out)
+	if opt_out and frappe.db.exists("DocType", INVITATION):
+		pending = frappe.get_all(
+			INVITATION,
+			filters={"customer": customer, "status": "در انتظار ارسال"},
+			fields=["name"],
+			limit_page_length=0,
+			ignore_permissions=True,
+		)
+		for row in pending:
+			frappe.db.set_value(
+				INVITATION,
+				row.name,
+				{
+					"status": "بدون درگاه",
+					"token_hash": "",
+					"last_error": _("ارسال پیام رضایت برای این مشتری متوقف شده است."),
+				},
+				update_modified=False,
+			)
+	return {"status": "success", "customer": customer, "opt_out": opt_out}
+
+
 def _read_order_identity(doctype, name):
 	if doctype == "Sales Order":
 		if not frappe.db.exists(doctype, name):
@@ -65,6 +187,8 @@ def _read_order_identity(doctype, name):
 		if cint(order.docstatus) != 1 or (order.get("restaurant_status") or "").strip().lower() not in SALES_ORDER_SURVEY_STATUSES:
 			return None
 		customer = order.customer or ""
+		if _customer_survey_opted_out(customer):
+			return None
 		mobile = _valid_mobile(order.get("restaurant_customer_mobile") or api_club._club_customer_mobile(customer))
 		return {
 			"customer": customer, "customer_name": order.customer_name or (frappe.db.get_value("Customer", customer, "customer_name") if customer else ""),
@@ -80,6 +204,8 @@ def _read_order_identity(doctype, name):
 		meta = _extract_table_session_meta(frappe.db.get_value("Restaurant Table Session", order.session, "note") or "")
 		mobile = _valid_mobile(meta.get("customer_mobile"))
 		customer = _customer_for_mobile(mobile)
+		if _customer_survey_opted_out(customer):
+			return None
 		return {"customer": customer, "customer_name": meta.get("customer_name") or (frappe.db.get_value("Customer", customer, "customer_name") if customer else ""), "mobile": mobile, "order_code": order.order_code or order.name, "creation": order.creation}
 	return None
 
@@ -90,7 +216,8 @@ def _queue_invitation(doctype, name):
 	key = _order_key(doctype, name)
 	existing = frappe.db.get_value(INVITATION, {"order_key": key}, "name")
 	if existing:
-		return frappe.get_doc(INVITATION, existing)
+		doc = frappe.get_doc(INVITATION, existing)
+		return None if _customer_survey_opted_out(doc.customer) else doc
 	identity = _read_order_identity(doctype, name)
 	if not identity or not identity.get("mobile"):
 		return None
@@ -649,7 +776,11 @@ def list_management_survey_invitations(limit=100):
 	api_club._ensure_management_access()
 	rows = frappe.get_all(INVITATION, fields=["name", "reference_doctype", "reference_name", "sales_order", "table_order", "customer", "order_code", "customer_name", "mobile", "status", "due_at", "attempts", "last_error", "submitted_at", "expires_at", "sms_message"], order_by="creation desc", limit_page_length=min(max(cint(limit), 1), 300))
 	for row in rows:
-		row.can_retry = not row.submitted_at and (not row.expires_at or get_datetime(row.expires_at) >= now_datetime())
+		row.can_retry = (
+			not row.submitted_at
+			and (not row.expires_at or get_datetime(row.expires_at) >= now_datetime())
+			and not _customer_survey_opted_out(row.customer)
+		)
 	return {"invitations": rows, "count": len(rows)}
 
 
@@ -661,6 +792,8 @@ def retry_management_survey_invitation(name=""):
 	doc = frappe.get_doc(INVITATION, name)
 	if doc.submitted_at or doc.expires_at and get_datetime(doc.expires_at) < now_datetime():
 		frappe.throw(_("دعوت تکمیل شده یا مهلت آن تمام شده است."))
+	if _customer_survey_opted_out(doc.customer):
+		frappe.throw(_("ارسال پیام رضایت برای این مشتری متوقف شده است."))
 	doc.status, doc.due_at, doc.token_hash, doc.last_error = "در انتظار ارسال", now_datetime(), "", ""
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
@@ -747,6 +880,14 @@ def run_due_survey_invitations(limit=50):
 			if not locked:
 				continue
 			doc = frappe.get_doc(INVITATION, row.name)
+			if _customer_survey_opted_out(doc.customer):
+				doc.status = "بدون درگاه"
+				doc.token_hash = ""
+				doc.last_error = _("ارسال پیام رضایت برای این مشتری متوقف شده است.")
+				doc.save(ignore_permissions=True)
+				frappe.db.commit()
+				result["skipped"] += 1
+				continue
 			if _has_sms_ir_feedback_delivery(doc):
 				doc.status = "بدون درگاه"
 				doc.last_error = _("ارسال قدیمی کنار گذاشته شد؛ دعوت نظرسنجی از مسیر SMS.ir مدیریت می‌شود.")

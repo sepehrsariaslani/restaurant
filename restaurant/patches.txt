@@ -53,3 +53,4 @@ restaurant.patches.v2_17.upgrade_customer_surveys_to_ten
 restaurant.patches.v2_18.ensure_coach_referral_fields
 restaurant.patches.v2_19.ensure_company_moadian_settings
 restaurant.patches.v2_20.ensure_order_review_fields
+restaurant.patches.v2_21.ensure_food_partner_modifier_mappings
