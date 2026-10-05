@@ -326,7 +326,9 @@ def update_management_reservation_status(payload=None):
 		frappe.throw(_("وضعیت نامعتبر است: {0}").format(status or "-"))
 	if not frappe.db.exists(RESERVATION_DOCTYPE, name):
 		frappe.throw(_("رزرو یافت نشد: {0}").format(name or "-"))
-	frappe.db.set_value(RESERVATION_DOCTYPE, name, "status", status, update_modified=False)
+	doc = frappe.get_doc(RESERVATION_DOCTYPE, name)
+	doc.status = status
+	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "success"}
 
@@ -410,18 +412,29 @@ def run_reservation_reminders():
 		message = _(
 			"{0} عزیز، رزرو شما برای امروز ساعت {1} به تعداد {2} نفر ثبت است. منتظر حضورتان هستیم."
 		).format(row.get("customer_name"), str(row.get("reservation_time") or "")[:5], cint(row.get("party_size")))
+		use_legacy_sender = True
 		try:
-			send_status, send_note = _rsv_club_call("_club_send_sms_now", row.get("mobile"), message)
-			_rsv_club_call(
-				"_club_log_sms",
-				mobile=row.get("mobile"),
-				message=message,
-				kind="دستی",
-				status_note=(send_status, send_note),
-			)
-			sent += 1
+			from accounts.sms_ir_events import send_reservation_reminder
+			result = send_reservation_reminder(row) or {}
+			if result.get("reason") not in {"disabled", "template_missing"}:
+				use_legacy_sender = False
+				if result.get("sent") or result.get("scheduled"):
+					sent += 1
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), "Restaurant reservation SMS reminder failed")
+			frappe.log_error(frappe.get_traceback(), "Restaurant reservation SMS template dispatch failed")
+		if use_legacy_sender:
+			try:
+				send_status, send_note = _rsv_club_call("_club_send_sms_now", row.get("mobile"), message)
+				_rsv_club_call(
+					"_club_log_sms",
+					mobile=row.get("mobile"),
+					message=message,
+					kind="دستی",
+					status_note=(send_status, send_note),
+				)
+				sent += 1
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), "Restaurant reservation SMS reminder failed")
 		frappe.db.set_value(RESERVATION_DOCTYPE, row["name"], "reminder_sent", 1, update_modified=False)
 	frappe.db.commit()
 	return {"status": "success", "reminded": sent}

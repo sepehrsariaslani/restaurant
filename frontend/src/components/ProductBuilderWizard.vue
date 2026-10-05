@@ -114,7 +114,7 @@
               </button>
 
               <div class="option-qty" v-if="isOptionSelected(option)">
-                <button type="button" @click="changeQty(option, -1)" :disabled="getQty(option) <= 1">
+                <button type="button" @click="changeQty(option, -1)" :disabled="getQty(option) <= minOptionQty(option)">
                   <MinusIcon class="icon-xs" />
                 </button>
                 <span>{{ getQty(option) }}</span>
@@ -245,7 +245,10 @@ const productImage = computed(() => props.product?.image || props.product?.item_
 
 const selectedRows = computed(() => Object.entries(selections)
   .filter(([, row]) => row.qty > 0)
-  .map(([key, row]) => ({
+  .map(([key, row]) => {
+    const priceType = row.option.price_type || 'fixed'
+    const optionPrice = Number(row.option.price_delta || row.option.resolved_price_delta || 0)
+    return ({
     step_key: row.option.parent_step_key,
     step_title: row.option.parent_step_title || '',
     option_key: key,
@@ -257,9 +260,9 @@ const selectedRows = computed(() => Object.entries(selections)
     resolved_stock_qty: Number(row.option.portion_qty || 1) * row.qty * Number(row.option.conversion_factor || 1),
     stock_uom: row.option.stock_uom || '',
     conversion_factor: Number(row.option.conversion_factor || 1),
-    price_delta: Number(row.option.price_delta || row.option.resolved_price_delta || 0),
-    total_price: Number(row.option.price_delta || row.option.resolved_price_delta || 0) * row.qty,
-    price_type: row.option.price_type || 'fixed',
+    price_delta: optionPrice,
+    total_price: priceType === 'fixed' ? optionPrice * row.qty : 0,
+    price_type: priceType,
     price_percentage: Number(row.option.price_percentage || 0),
     unit_rate: Number(row.option.unit_rate || 0),
     price_status: row.option.price_status || 'ok',
@@ -268,7 +271,8 @@ const selectedRows = computed(() => Object.entries(selections)
     item: row.option.item || '',
     item_name: row.option.item_name || '',
     image: row.option.image || '',
-  })))
+  })
+  }))
 
 const optionsTotal = computed(() => selectedRows.value.reduce((sum, row) => {
   if (row.total_price) return sum + row.total_price
@@ -279,7 +283,7 @@ const optionsTotal = computed(() => selectedRows.value.reduce((sum, row) => {
 
 const finalPrice = computed(() => Math.round((props.basePrice || 0) + optionsTotal.value))
 
-const allRequiredComplete = computed(() => steps.value.every((step) => isStepComplete(step) || !step.is_required))
+const allRequiredComplete = computed(() => steps.value.every(isStepComplete))
 
 const nutritionItems = computed(() => {
   const nutrition = props.product?.nutrition || {}
@@ -299,10 +303,10 @@ function shortStepTitle(title = '', index = 0) {
 function stepHelpText(step) {
   const min = Number(step.min_select || 0)
   const max = Number(step.max_select || 0)
-  if (step.selection_mode === 'single') return step.is_required ? 'یک انتخاب انجام دهید' : 'این مرحله اختیاری است'
-  if (max) return `حداقل ${min} و حداکثر ${max} پورشن`
-  if (min) return `حداقل ${min} پورشن انتخاب کنید`
-  return 'بر اساس پورشن انتخاب کنید'
+  if (step.selection_mode === 'single') return min > 0 || step.is_required ? 'یک انتخاب انجام دهید' : 'این مرحله اختیاری است'
+  if (max) return `حداقل ${min} و حداکثر ${max} گزینه`
+  if (min) return `حداقل ${min} گزینه انتخاب کنید`
+  return 'گزینه‌های دلخواه را انتخاب کنید'
 }
 
 function filteredStepOptions(step) {
@@ -314,12 +318,14 @@ function filteredStepOptions(step) {
 
 function isStepComplete(step) {
   const selectedCount = stepSelectionTotal(step)
-  const min = Number(step.min_select || (step.is_required ? 1 : 0))
-  return selectedCount >= min
+  const min = Math.max(Number(step.min_select || 0), step.is_required ? 1 : 0)
+  const max = Number(step.max_select || 0)
+  const singleSelectionValid = step.selection_mode !== 'single' || selectedCount <= 1
+  return selectedCount >= min && (!max || selectedCount <= max) && singleSelectionValid
 }
 
 function stepSelectionTotal(step) {
-  return (step.options || []).reduce((sum, option) => sum + getQty(option), 0)
+  return (step.options || []).reduce((sum, option) => sum + (getQty(option) > 0 ? 1 : 0), 0)
 }
 
 function canGoToStep(index) {
@@ -327,7 +333,7 @@ function canGoToStep(index) {
   if (props.template?.allow_skip_steps) return true
   for (let i = 0; i < index; i += 1) {
     const step = steps.value[i]
-    if (step?.is_required && !isStepComplete(step)) return false
+    if (step && !isStepComplete(step)) return false
   }
   return true
 }
@@ -350,7 +356,7 @@ function getQty(option) {
 }
 
 function maxOptionQty(option) {
-  return Math.max(Number(option.max_portions || option.max_qty || 1), 1)
+  return Math.max(Number(option.max_portions || option.max_qty || 1), 0)
 }
 
 function minOptionQty(option) {
@@ -358,7 +364,7 @@ function minOptionQty(option) {
 }
 
 function optionStep(option) {
-  return Math.max(Number(option.portion_step || 1), 1)
+  return Math.max(Number(option.portion_step || 1), 0.01)
 }
 
 function toggleOption(option, step = currentStep.value) {
@@ -373,15 +379,29 @@ function toggleOption(option, step = currentStep.value) {
     return
   }
 
-  if ((step.selection_mode || 'single') === 'single') {
+  const singleSelection = (step.selection_mode || 'single') === 'single'
+  const min = minOptionQty(option)
+  const optionStepValue = optionStep(option)
+  const max = maxOptionQty(option)
+  const initialQty = min > 0 ? min : optionStepValue
+  if (initialQty > max + 1e-8) {
+    stepError.value = `محدودهٔ انتخاب «${option.option_label}» با گام تنظیم‌شده سازگار نیست.`
+    return
+  }
+  const maxForStep = Number(step.max_select || 0)
+  const currentStepTotal = singleSelection ? 0 : stepSelectionTotal(step)
+  if (maxForStep > 0 && currentStepTotal + 1 > maxForStep) {
+    stepError.value = `حداکثر انتخاب مرحله «${step.step_title}» ${maxForStep} مورد است.`
+    return
+  }
+  if (singleSelection) {
     for (const rowKey of Object.keys(selections)) {
       if (selections[rowKey]?.option?.parent_step_key === option.parent_step_key) {
         selections[rowKey].qty = 0
       }
     }
   }
-
-  selections[key] = { qty: Math.max(minOptionQty(option), 1), option }
+  selections[key] = { qty: initialQty, option }
   emitSelectionChange()
 }
 
@@ -390,15 +410,26 @@ function changeQty(option, delta) {
   if (!selections[key]) selections[key] = { qty: 0, option }
   const step = optionStep(option)
   const current = Number(selections[key].qty || 0)
-  const baseNext = current + (delta * step)
-  const next = Math.min(Math.max(baseNext, 0), maxOptionQty(option))
+  const min = minOptionQty(option)
+  const max = maxOptionQty(option)
+  let next = Number(((current <= 0 && delta > 0 ? (min > 0 ? min : step) : current + (delta * step))).toFixed(8))
+  if (next > 0 && next < min - 1e-8) next = delta < 0 ? 0 : min
+  if (next > max + 1e-8) {
+    stepError.value = `حداکثر مقدار «${option.option_label}» ${max} است.`
+    return
+  }
+  next = Math.max(next, 0)
   const parentStep = steps.value.find((row) => row.step_key === option.parent_step_key)
   if (parentStep) {
     const currentTotal = stepSelectionTotal(parentStep)
-    const proposedTotal = currentTotal - current + next
+    const proposedTotal = currentTotal - (current > 0 ? 1 : 0) + (next > 0 ? 1 : 0)
     const maxForStep = Number(parentStep.max_select || 0)
-    if (maxForStep > 0 && proposedTotal > maxForStep) return
+    if (maxForStep > 0 && proposedTotal > maxForStep) {
+      stepError.value = `حداکثر انتخاب مرحله «${parentStep.step_title}» ${maxForStep} مورد است.`
+      return
+    }
   }
+  stepError.value = ''
   selections[key].qty = next
   emitSelectionChange()
 }
@@ -407,15 +438,21 @@ function emitSelectionChange() {
   emit('selection-change', selectedRows.value)
 }
 
-function firstInvalidRequiredStepIndex() {
-  return steps.value.findIndex((step) => step.is_required && !isStepComplete(step))
+function firstInvalidStepIndex() {
+  return steps.value.findIndex((step) => !isStepComplete(step))
 }
 
 function submitOrder() {
-  const invalidIndex = firstInvalidRequiredStepIndex()
+  const invalidIndex = firstInvalidStepIndex()
   if (invalidIndex >= 0) {
     currentStepIndex.value = invalidIndex
-    stepError.value = `لطفاً مرحله «${steps.value[invalidIndex].step_title}» را کامل کنید.`
+    const step = steps.value[invalidIndex]
+    const total = stepSelectionTotal(step)
+    const min = Math.max(Number(step.min_select || 0), step.is_required ? 1 : 0)
+    const max = Number(step.max_select || 0)
+    stepError.value = total < min
+      ? `برای مرحله «${step.step_title}» حداقل ${min} انتخاب لازم است.`
+      : `برای مرحله «${step.step_title}» حداکثر ${max || 1} انتخاب مجاز است.`
     goToStep(invalidIndex)
     return
   }

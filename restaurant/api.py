@@ -13588,6 +13588,58 @@ def _management_business_datetime(date_value=None, fallback_datetime=None):
 	return fallback_dt
 
 
+def _management_work_orders_by_sales_order(sales_order_names):
+	order_names = sorted({str(name or "").strip() for name in sales_order_names or [] if str(name or "").strip()})
+	work_orders_by_order = {}
+	if (
+		not order_names
+		or not frappe.db.exists("DocType", "Restaurant Production Ticket")
+		or not _has_column("Restaurant Production Ticket", "sales_order")
+		or not _has_column("Restaurant Production Ticket", "work_order")
+		or not frappe.db.exists("DocType", "Work Order")
+	):
+		return work_orders_by_order
+
+	ticket_rows = frappe.get_all(
+		"Restaurant Production Ticket",
+		filters={"sales_order": ["in", order_names]},
+		fields=["sales_order", "work_order"],
+		ignore_permissions=True,
+	)
+	work_order_names = sorted({row.work_order for row in ticket_rows if row.sales_order and row.work_order})
+	if not work_order_names:
+		return work_orders_by_order
+
+	work_order_fields = ["name"]
+	if _has_column("Work Order", "status"):
+		work_order_fields.append("status")
+	if _has_column("Work Order", "docstatus"):
+		work_order_fields.append("docstatus")
+	work_order_filters = {"name": ["in", work_order_names]}
+	if "docstatus" in work_order_fields:
+		work_order_filters["docstatus"] = ["<", 2]
+	work_order_rows = frappe.get_all(
+		"Work Order",
+		filters=work_order_filters,
+		fields=work_order_fields,
+		ignore_permissions=True,
+	)
+	work_order_by_name = {
+		row.name: {
+			"name": row.name,
+			"status": row.get("status") or "",
+			"docstatus": row.get("docstatus"),
+		}
+		for row in work_order_rows
+	}
+	for row in ticket_rows:
+		work_order = work_order_by_name.get(row.work_order)
+		if row.sales_order and work_order:
+			work_orders_by_order.setdefault(row.sales_order, {})[work_order["name"]] = work_order
+
+	return {order_name: list(rows.values()) for order_name, rows in work_orders_by_order.items()}
+
+
 def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cashier=None, review_status=None):
 	if not frappe.db.exists("DocType", "Sales Order"):
 		return []
@@ -13761,16 +13813,19 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				outstanding_map[si_item.sales_order] += si_outstanding.get(si_item.parent, 0.0)
 
 	delivery_exists_map = {}
+	delivery_notes_map = {}
 	if parent_names and frappe.db.exists("DocType", "Delivery Note Item"):
 		dn_items = frappe.get_all(
 			"Delivery Note Item",
 			filters={"against_sales_order": ["in", parent_names], "docstatus": 1},
-			fields=["against_sales_order"],
+			fields=["parent", "against_sales_order"],
 			ignore_permissions=True,
 		)
 		for dn_item in dn_items:
 			if dn_item.against_sales_order:
 				delivery_exists_map[dn_item.against_sales_order] = True
+				delivery_notes_map.setdefault(dn_item.against_sales_order, set()).add(dn_item.parent)
+	work_order_map = _management_work_orders_by_sales_order(parent_names)
 
 	payload = []
 	for row in rows:
@@ -13820,6 +13875,9 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"has_sales_invoice": bool(sales_invoice_map.get(row.name)),
 				"sales_invoices": sorted(sales_invoice_map.get(row.name, [])),
 				"delivery_exists": delivery_exists,
+				"delivery_notes": sorted(delivery_notes_map.get(row.name, [])),
+				"has_work_order": bool(work_order_map.get(row.name)),
+				"work_orders": work_order_map.get(row.name, []),
 				"created_at": _json_safe_datetime(created_at),
 				"cashier": row.owner or "",
 				"note": _clean_automatic_pos_note(row.restaurant_note) if has_note else "",
@@ -16153,6 +16211,7 @@ def _validate_pos_wallet_tender(so_name, splits):
     customer = frappe.db.get_value("Sales Order", so_name, "customer")
     if not customer:
         frappe.throw(_("برای پرداخت با کیف پول، مشتری سفارش مشخص نیست."))
+    api_club._club_expire_due_cashback(customer)
     wallet = api_club._club_get_or_create_wallet(customer)
     frappe.db.sql(
         "select name from `tabRestaurant Customer Wallet` where name = %s for update",
@@ -16232,6 +16291,21 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
             else:
                 si_doc = frappe.get_doc({"doctype": "Sales Invoice"})
                 si_doc.is_pos = 0 if credit_only else 1
+
+            # Keep invoice discounts in the club's configured ERPNext expense
+            # account so the native Sales Invoice remains the accounting source.
+            from restaurant import api_club
+
+            discount_account = api_club._club_club_settings().get("discount_expense_account")
+            invoice_discount = flt(si_doc.get("discount_amount") or si_doc.get("additional_discount_amount") or 0)
+            if discount_account and invoice_discount > 0 and si_doc.meta.has_field("additional_discount_account"):
+                si_doc.additional_discount_account = discount_account
+                # ERPNext posts the account-level discount GL row when either
+                # discount accounting is enabled globally or this is marked as
+                # a cash/non-trade discount. Keep this Restaurant discount
+                # traceable without changing the site's global Selling Setting.
+                if si_doc.meta.has_field("is_cash_or_non_trade_discount"):
+                    si_doc.is_cash_or_non_trade_discount = 1
 
             # Allow Food Partner credit corrections to retain the original
             # invoice accounting date/time when replacing a wrongly paid POS SI.
@@ -17099,14 +17173,22 @@ def get_management_order_detail(order_name, source=None):
 						ignore_permissions=True,
 					)
 					outstanding_amount = sum(flt(row.outstanding_amount) for row in si_docs)
-			delivery_exists = False
+			delivery_notes = []
 			if frappe.db.exists("DocType", "Delivery Note Item"):
-				delivery_exists = bool(
-					frappe.db.exists(
-						"Delivery Note Item",
-						{"against_sales_order": so_name, "docstatus": 1},
-					)
+				delivery_notes = sorted(
+					{
+						row.parent
+						for row in frappe.get_all(
+							"Delivery Note Item",
+							filters={"against_sales_order": so_name, "docstatus": 1},
+							fields=["parent"],
+							ignore_permissions=True,
+						)
+						if row.parent
+					}
 				)
+			delivery_exists = bool(delivery_notes)
+			work_orders = _management_work_orders_by_sales_order([so_name]).get(so_name, [])
 			order_status = _core_order_status(doc)
 			if delivery_exists:
 				order_status = "delivered"
@@ -17163,6 +17245,9 @@ def get_management_order_detail(order_name, source=None):
 					"has_sales_invoice": bool(sales_invoice_names),
 					"sales_invoices": sales_invoice_names,
 					"delivery_exists": delivery_exists,
+					"delivery_notes": delivery_notes,
+					"has_work_order": bool(work_orders),
+					"work_orders": work_orders,
 					"discount_amount": flt(doc.get("discount_amount") or doc.get("additional_discount_amount") or 0),
 					"tax_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Tax" in t.description or "مالیات" in t.description]),
 					"service_amount": sum([flt(t.tax_amount) for t in getattr(doc, "taxes", []) if "Service" in t.description or "سرویس" in t.description]),
@@ -19052,7 +19137,9 @@ def get_management_modifier_groups_context():
 	_ensure_management_access()
 	price_lists, default_price_list = _management_list_selling_price_lists()
 	item_filters = {"disabled": 0} if _has_column("Item", "disabled") else {}
-	bom_filters = {"is_active": 1} if _has_column("BOM", "is_active") else {}
+	bom_filters = {"docstatus": ["<", 2]}
+	if _has_column("BOM", "is_active"):
+		bom_filters["is_active"] = 1
 	return {
 		"default_price_list": default_price_list or "",
 		"price_lists": price_lists,
@@ -24922,6 +25009,143 @@ def list_management_menu_groups(search=None):
 
 
 @frappe.whitelist()
+def list_management_menu_design_products(limit_start=0, limit_page_length=1000):
+	"""Return the compact Item fields needed by the native menu designer.
+
+	The full product-management endpoint enriches each row with stock, BOM,
+	price-list and nutrition data. Those details are useful in the catalog list
+	but make menu arrangement unnecessarily slow, so this endpoint returns only
+	menu fields and products that are active or already assigned to a menu group.
+	"""
+	_ensure_management_access()
+	offset = max(cint(limit_start), 0)
+	page_size = min(max(cint(limit_page_length) or 1000, 1), 2000)
+	group_fields = ["name", "item_group_name", "parent_item_group"]
+	for fieldname in (
+		"restaurant_is_menu_category",
+		"restaurant_is_subcategory",
+		"restaurant_slug",
+	):
+		if _has_column("Item Group", fieldname):
+			group_fields.append(fieldname)
+	group_rows = frappe.get_all(
+		"Item Group",
+		fields=group_fields,
+		ignore_permissions=True,
+		limit_page_length=2000,
+	)
+	group_by_name = {str(row.name): row for row in group_rows if row.get("name")}
+	menu_group_names = [
+		name
+		for name, row in group_by_name.items()
+		if cint(row.get("restaurant_is_menu_category") or 0)
+		or cint(row.get("restaurant_is_subcategory") or 0)
+	]
+
+	item_fields = ["name", "item_code", "item_name", "item_group", "disabled", "standard_rate"]
+	for fieldname in (
+		"image",
+		"restaurant_category",
+		"restaurant_subcategory",
+		"restaurant_enabled",
+		"restaurant_short_desc",
+		"restaurant_sort_order",
+		"restaurant_base_price",
+	):
+		if _has_column("Item", fieldname):
+			item_fields.append(fieldname)
+
+	or_filters = []
+	if _has_column("Item", "restaurant_enabled"):
+		or_filters.append(["restaurant_enabled", "=", 1])
+	for fieldname in ("restaurant_category", "restaurant_subcategory"):
+		if _has_column("Item", fieldname):
+			or_filters.append([fieldname, "!=", ""])
+	if menu_group_names and _has_column("Item", "item_group"):
+		or_filters.append(["item_group", "in", menu_group_names])
+	if not or_filters:
+		return {"products": [], "limit_start": offset, "limit_page_length": page_size, "has_more": 0}
+
+	order_by = "item_name asc, name asc"
+	if _has_column("Item", "restaurant_sort_order"):
+		order_by = "restaurant_sort_order asc, item_name asc, name asc"
+	rows = frappe.get_all(
+		"Item",
+		fields=item_fields,
+		or_filters=or_filters,
+		order_by=order_by,
+		limit_start=offset,
+		limit_page_length=page_size + 1,
+		ignore_permissions=True,
+	)
+	has_more = len(rows) > page_size
+	rows = rows[:page_size]
+
+	products = []
+	for row in rows:
+		category_name = str(row.get("restaurant_category") or "").strip()
+		subcategory_name = str(row.get("restaurant_subcategory") or "").strip()
+		item_group_name = str(row.get("item_group") or "").strip()
+		category_row = group_by_name.get(category_name)
+		subcategory_row = group_by_name.get(subcategory_name)
+		item_group_row = group_by_name.get(item_group_name)
+
+		# Some native Restaurant Items use Item.item_group instead of the
+		# optional restaurant category fields. Resolve those assignments in bulk.
+		if category_row and cint(category_row.get("restaurant_is_subcategory") or 0):
+			subcategory_name = category_name
+			category_name = str(category_row.get("parent_item_group") or "").strip()
+			category_row = group_by_name.get(category_name)
+		if not category_name and item_group_row:
+			if cint(item_group_row.get("restaurant_is_subcategory") or 0):
+				subcategory_name = item_group_name
+				category_name = str(item_group_row.get("parent_item_group") or "").strip()
+				category_row = group_by_name.get(category_name)
+			elif cint(item_group_row.get("restaurant_is_menu_category") or 0):
+				category_name = item_group_name
+				category_row = item_group_row
+			else:
+				parent_row = group_by_name.get(str(item_group_row.get("parent_item_group") or "").strip())
+				if parent_row and cint(parent_row.get("restaurant_is_subcategory") or 0):
+					subcategory_name = str(parent_row.name)
+					category_name = str(parent_row.get("parent_item_group") or "").strip()
+					category_row = group_by_name.get(category_name)
+				elif parent_row and cint(parent_row.get("restaurant_is_menu_category") or 0):
+					category_name = str(parent_row.name)
+					category_row = parent_row
+		if not subcategory_row and subcategory_name:
+			subcategory_row = group_by_name.get(subcategory_name)
+
+		product = {
+			"name": row.get("name") or "",
+			"item_code": row.get("item_code") or row.get("name") or "",
+			"item_name": row.get("item_name") or row.get("name") or "",
+			"item_group": item_group_name,
+			"disabled": cint(row.get("disabled") or 0),
+			"standard_rate": flt(row.get("standard_rate") or 0),
+			"restaurant_category": category_name,
+			"restaurant_subcategory": subcategory_name,
+			"restaurant_short_desc": row.get("restaurant_short_desc") or "",
+			"restaurant_sort_order": cint(row.get("restaurant_sort_order") or 0),
+			"restaurant_enabled": cint(row.get("restaurant_enabled") or 0),
+			"base_price": flt(row.get("restaurant_base_price") or row.get("standard_rate") or 0),
+			"image": row.get("image") or "",
+			"category_title": (category_row.get("item_group_name") or category_name) if category_row else category_name,
+			"category_slug": (category_row.get("restaurant_slug") or "") if category_row else "",
+			"subcategory_title": (subcategory_row.get("item_group_name") or subcategory_name) if subcategory_row else subcategory_name,
+			"subcategory_slug": (subcategory_row.get("restaurant_slug") or "") if subcategory_row else "",
+		}
+		products.append(product)
+
+	return {
+		"products": products,
+		"limit_start": offset,
+		"limit_page_length": page_size,
+		"has_more": has_more,
+	}
+
+
+@frappe.whitelist()
 def list_management_item_group_parents(search=None):
 	_ensure_management_access()
 	query = (search or "").strip()
@@ -25209,6 +25433,8 @@ def _serialize_builder_option(option_row, include_unavailable=False):
 	availability_status = "available"
 	unavailable_reason = ""
 	unit_rate = 0.0
+	item_price_total = 0.0
+	profit_percent = max(flt(option_row.get("price_percentage") or 0), 0)
 	conversion_factor = 1.0
 	resolved_stock_qty = 0.0
 	price_list = ""
@@ -25220,7 +25446,8 @@ def _serialize_builder_option(option_row, include_unavailable=False):
 			meta["portion_qty"],
 			uom=meta["portion_uom"],
 		)
-		price_delta = flt(price_payload.get("total_price") or 0)
+		item_price_total = flt(price_payload.get("total_price") or 0)
+		price_delta = flt(item_price_total * (1 + (profit_percent / 100)))
 		price_source = "item_price"
 		price_status = (price_payload.get("price_status") or "").strip() or "ok"
 		availability_status = (price_payload.get("availability_status") or "").strip() or "available"
@@ -25250,9 +25477,11 @@ def _serialize_builder_option(option_row, include_unavailable=False):
 		"portion_step": meta["portion_step"],
 		"price_delta": price_delta,
 		"resolved_price_delta": price_delta,
+		"item_price_total": item_price_total,
 		"base_price_delta": flt(option_row.get("base_price_delta") or 0),
-		"price_type": option_row.get("price_type") or "fixed",
-		"price_percentage": flt(option_row.get("price_percentage") or 0),
+		"price_type": "fixed" if meta["item"] else (option_row.get("price_type") or "fixed"),
+		"price_percentage": profit_percent,
+		"profit_percent": profit_percent if meta["item"] else 0,
 		"is_default": cint(option_row.get("is_default") or 0),
 		"is_available": bool(is_available),
 		"image": option_row.get("image") or "",
@@ -25409,7 +25638,9 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 				)
 			)
 
-		step_totals[step_key] += qty
+		# Stage min/max count distinct selected options. Per-option portion quantities
+		# are validated separately above and must not consume multiple stage slots.
+		step_totals[step_key] += 1
 		portion_qty = flt(option_payload.get("portion_qty") or 1)
 		portion_uom = option_payload.get("portion_uom") or option_payload.get("stock_uom") or ""
 		pricing = None
@@ -25420,6 +25651,8 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 		price_status = option_payload.get("price_status") or "ok"
 		price_list = option_payload.get("price_list") or ""
 		price_source = option_payload.get("price_source") or "legacy_manual"
+		item_price_total = 0.0
+		profit_percent = 0.0
 
 		if option_payload.get("item"):
 			requested_qty = qty * portion_qty
@@ -25433,7 +25666,11 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 					pricing.get("unavailable_reason")
 					or _("Builder option {0} is not selectable.").format(option_payload.get("option_label"))
 				)
-			total_price = flt(pricing.get("total_price") or 0)
+			item_price_total = flt(pricing.get("total_price") or 0)
+			profit_percent = flt(option_payload.get("profit_percent") if option_payload.get("profit_percent") is not None else option_payload.get("price_percentage") or 0)
+			if profit_percent < 0:
+				frappe.throw(_("Profit percentage for {0} cannot be negative.").format(option_payload.get("option_label")))
+			total_price = flt(item_price_total * (1 + (profit_percent / 100)))
 			unit_rate = flt(pricing.get("unit_rate") or 0)
 			conversion_factor = flt(pricing.get("conversion_factor") or 1)
 			resolved_stock_qty = flt(pricing.get("qty_in_stock_uom") or 0)
@@ -25462,7 +25699,7 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 					"max_multiplier": max_portions,
 					"step_multiplier": portion_step,
 					"pricing_rate": unit_rate,
-					"pricing_delta": total_price,
+					"pricing_delta": item_price_total,
 					"stock_uom": pricing.get("stock_uom") or option_payload.get("stock_uom") or "",
 					"authoring_uom": portion_uom,
 					"authoring_base_qty": portion_qty,
@@ -25479,7 +25716,14 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 			)
 			_add_nutrition_to_totals(nutrition_totals, option_nutrition, option_factor)
 		else:
-			total_price = flt(option_payload.get("base_price_delta") or option_payload.get("price_delta") or 0) * qty
+			legacy_price = flt(option_payload.get("base_price_delta") or option_payload.get("price_delta") or 0)
+			legacy_price_type = (option_payload.get("price_type") or "fixed").strip()
+			if legacy_price_type == "percentage":
+				total_price = flt(base_price_value * flt(option_payload.get("price_percentage") or 0) / 100 * qty)
+			elif legacy_price_type == "multiply":
+				total_price = flt(base_price_value * legacy_price * qty)
+			else:
+				total_price = flt(legacy_price * qty)
 
 		options_total += total_price
 		breakdown.append(
@@ -25495,6 +25739,9 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 				"stock_uom": (pricing or {}).get("stock_uom") or option_payload.get("stock_uom") or "",
 				"conversion_factor": conversion_factor,
 				"unit_rate": unit_rate,
+				"item_price_total": item_price_total,
+				"profit_percent": profit_percent,
+				"unit_sell_price": flt(total_price / qty) if qty else 0,
 				"delta": total_price,
 				"total_price": total_price,
 				"price_status": price_status,
@@ -25518,6 +25765,9 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 				"stock_uom": (pricing or {}).get("stock_uom") or option_payload.get("stock_uom") or "",
 				"conversion_factor": conversion_factor,
 				"unit_rate": unit_rate,
+				"item_price_total": item_price_total,
+				"profit_percent": profit_percent,
+				"unit_sell_price": flt(total_price / qty) if qty else 0,
 				"price_delta": total_price,
 				"total_price": total_price,
 				"price_status": price_status,
@@ -25544,23 +25794,29 @@ def _compute_builder_selection_data(item_code, selections, base_price=None, temp
 		total = flt(step_totals.get(step_payload["step_key"]) or 0)
 		min_required = flt(step_payload.get("min_select") or 0)
 		max_allowed = flt(step_payload.get("max_select") or 0)
+		if (step_payload.get("selection_mode") or "single") == "single" and total > 1 + 1e-8:
+			frappe.throw(
+				_("Builder step {0} allows only one selection.").format(
+					step_payload.get("step_title") or step_payload["step_key"],
+				)
+			)
 		if cint(step_payload.get("is_required") or 0) and total < max(min_required, 1) - 1e-8:
 			frappe.throw(
-				_("Builder step {0} requires at least {1:g} portion(s).").format(
+				_("Builder step {0} requires at least {1:g} selection(s).").format(
 					step_payload.get("step_title") or step_payload["step_key"],
 					max(min_required, 1),
 				)
 			)
 		if total < min_required - 1e-8:
 			frappe.throw(
-				_("Builder step {0} requires at least {1:g} portion(s).").format(
+				_("Builder step {0} requires at least {1:g} selection(s).").format(
 					step_payload.get("step_title") or step_payload["step_key"],
 					min_required,
 				)
 			)
 		if max_allowed > 0 and total > max_allowed + 1e-8:
 			frappe.throw(
-				_("Builder step {0} exceeds the maximum of {1:g} portions.").format(
+				_("Builder step {0} exceeds the maximum of {1:g} selections.").format(
 					step_payload.get("step_title") or step_payload["step_key"],
 					max_allowed,
 				)
@@ -26070,6 +26326,7 @@ def get_builder_template_detail(name):
 						"max_portions": serialized.get("max_portions") or 1,
 						"portion_step": serialized.get("portion_step") or 1,
 						"resolved_price_delta": serialized.get("resolved_price_delta") or 0,
+						"item_price_total": serialized.get("item_price_total") or 0,
 						"unit_rate": serialized.get("unit_rate") or 0,
 						"conversion_factor": serialized.get("conversion_factor") or 1,
 						"price_status": serialized.get("price_status") or "",
@@ -26080,6 +26337,7 @@ def get_builder_template_detail(name):
 						"base_price_delta": opt.base_price_delta or 0,
 						"price_type": opt.price_type or "fixed",
 						"price_percentage": opt.price_percentage or 0,
+						"profit_percent": serialized.get("profit_percent") or 0,
 						"is_default": bool(opt.is_default),
 						"is_available": opt.is_available != 0,
 						"max_qty": opt.max_qty or 1,
@@ -26144,6 +26402,18 @@ def get_builder_template_detail(name):
 			"status": "error",
 			"error": {"type": "ServerError", "message": str(e), "code": "SERVER_ERROR"},
 		}
+
+
+@frappe.whitelist()
+def get_builder_option_pricing_context():
+	"""Return only the default selling list and UOMs needed by the builder editor."""
+	if not frappe.has_permission("Product Builder Template", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	_price_lists, default_price_list = _management_list_selling_price_lists()
+	return {
+		"default_price_list": default_price_list or "",
+		"uom_options": _named_doc_options("UOM", label_fields=("uom_name",), limit=500),
+	}
 
 
 @frappe.whitelist()
@@ -26256,6 +26526,36 @@ def save_builder_template(template_data=None, template=None):
 
 	try:
 		steps = payload.pop("steps", None)
+		for step_index, step in enumerate(steps or [], start=1):
+			step = step or {}
+			step_title = (step.get("step_title") or _("Step {0}").format(step_index)).strip()
+			selection_mode = (step.get("selection_mode") or "single").strip()
+			min_select = flt(step.get("min_select") or 0)
+			max_select = flt(step.get("max_select") or 0)
+			if min_select < 0 or max_select < 0 or (max_select > 0 and min_select > max_select):
+				frappe.throw(_("Invalid minimum or maximum selection for {0}.").format(step_title))
+			if cint(step.get("is_required") or 0) and min_select < 1:
+				frappe.throw(_("Required builder step {0} must have a minimum of at least one selection.").format(step_title))
+			if selection_mode == "single" and (max_select != 1 or min_select > 1):
+				frappe.throw(_("Single-selection builder step {0} must allow exactly one selection at most.").format(step_title))
+			for option_index, option in enumerate(step.get("options") or [], start=1):
+				option = option or {}
+				option_title = (option.get("option_label") or _("Option {0}").format(option_index)).strip()
+				portion_qty = flt(option.get("portion_qty") or 0)
+				min_portions = flt(option.get("min_portions") or 0)
+				max_portions = flt(option.get("max_portions") or 0)
+				portion_step = flt(option.get("portion_step") or 0)
+				first_selectable = min_portions if min_portions > 0 else portion_step
+				if (
+					portion_qty <= 0
+					or min_portions < 0
+					or max_portions < max(min_portions, 1)
+					or portion_step <= 0
+					or first_selectable > max_portions
+				):
+					frappe.throw(_("Invalid quantity range or step for {0} in {1}.").format(option_title, step_title))
+				if (option.get("item") or "").strip() and flt(option.get("price_percentage") or 0) < 0:
+					frappe.throw(_("Profit percentage for {0} cannot be negative.").format(option_title))
 		step_options_by_key = {}
 		if payload.get("name"):
 			# Update existing
@@ -27313,6 +27613,47 @@ def _complete_kitchen_production(so_name):
 
 
 @frappe.whitelist()
+def get_kitchen_display_context():
+	"""Return native Item Group options and the current user's station default."""
+	_ensure_management_access()
+	item_groups = frappe.get_all(
+		"Item Group",
+		fields=["name", "parent_item_group", "is_group", "lft"],
+		order_by="lft asc, name asc",
+		ignore_permissions=True,
+	)
+	default_item_group = frappe.defaults.get_user_default("restaurant_kitchen_item_group") or ""
+	if default_item_group and not frappe.db.exists("Item Group", default_item_group):
+		default_item_group = ""
+	return {
+		"item_groups": [
+			{
+				"name": row.name,
+				"parent_item_group": row.parent_item_group or "",
+				"is_group": cint(row.is_group),
+			}
+			for row in item_groups
+			if row.parent_item_group
+		],
+		"default_item_group": default_item_group,
+	}
+
+
+@frappe.whitelist()
+def set_kitchen_display_default_group(item_group=""):
+	"""Save this user's default KDS product group without adding a parallel model."""
+	_ensure_management_access()
+	item_group = (item_group or "").strip()
+	if item_group and not frappe.db.exists("Item Group", item_group):
+		frappe.throw(_("The selected Item Group does not exist."))
+	frappe.defaults.set_user_default(
+		"restaurant_kitchen_item_group", item_group, user=frappe.session.user
+	)
+	frappe.db.commit()
+	return {"success": True, "default_item_group": item_group}
+
+
+@frappe.whitelist()
 def get_kitchen_display_orders(limit=50, date=None):
     """Get production-ready orders for kitchen display"""
     _ensure_management_access()
@@ -27449,47 +27790,6 @@ def get_kitchen_display_orders(limit=50, date=None):
         })
 
     return {"orders": orders}
-
-
-@frappe.whitelist()
-def get_kitchen_display_context():
-	"""Return native Item Group options and the current user's station default."""
-	_ensure_management_access()
-	item_groups = frappe.get_all(
-		"Item Group",
-		fields=["name", "parent_item_group", "is_group", "lft"],
-		order_by="lft asc, name asc",
-		ignore_permissions=True,
-	)
-	default_item_group = frappe.defaults.get_user_default("restaurant_kitchen_item_group") or ""
-	if default_item_group and not frappe.db.exists("Item Group", default_item_group):
-		default_item_group = ""
-	return {
-		"item_groups": [
-			{
-				"name": row.name,
-				"parent_item_group": row.parent_item_group or "",
-				"is_group": cint(row.is_group),
-			}
-			for row in item_groups
-			if row.parent_item_group
-		],
-		"default_item_group": default_item_group,
-	}
-
-
-@frappe.whitelist()
-def set_kitchen_display_default_group(item_group=""):
-	"""Save this user's default KDS product group without adding a parallel model."""
-	_ensure_management_access()
-	item_group = (item_group or "").strip()
-	if item_group and not frappe.db.exists("Item Group", item_group):
-		frappe.throw(_("The selected Item Group does not exist."))
-	frappe.defaults.set_user_default(
-		"restaurant_kitchen_item_group", item_group, user=frappe.session.user
-	)
-	frappe.db.commit()
-	return {"success": True, "default_item_group": item_group}
 
 
 @frappe.whitelist()

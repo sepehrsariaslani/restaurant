@@ -18,6 +18,8 @@
   "reference_doctype",
   "reference_name",
   "note",
+  "expiry_date",
+  "accounting_journal_entry",
   "entry_date"
  ],
  "fields": [
@@ -97,6 +99,19 @@
    "fieldname": "note",
    "fieldtype": "Small Text",
    "label": "Note"
+  },
+  {
+   "fieldname": "expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Cashback Expiry Date"
+  },
+  {
+   "fieldname": "accounting_journal_entry",
+   "fieldtype": "Link",
+   "label": "Accounting Journal Entry",
+   "options": "Journal Entry",
+   "read_only": 1
   },
   {
    "fieldname": "entry_date",
