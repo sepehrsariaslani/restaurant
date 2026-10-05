@@ -3535,6 +3535,7 @@ def sync_snapp_orders(
             result["requested_count"] = len(requested_order_ids)
             result["selected_count"] = len(rows)
             result["missing_order_ids"] = missing_order_ids
+            result["sales_orders"] = []
 
         for raw_order in rows:
             try:
@@ -3582,9 +3583,25 @@ def sync_snapp_orders(
 
                     if action == "skipped":
                         result["skipped_count"] += 1
+                    if requested_order_ids:
+                        result["sales_orders"].append(
+                            {
+                                "order_id": normalized["order_id"],
+                                "sales_order": existing,
+                                "action": action,
+                            }
+                        )
                     continue
 
                 sales_order_name, action = _create_sales_order(normalized)
+                if requested_order_ids:
+                    result["sales_orders"].append(
+                        {
+                            "order_id": normalized["order_id"],
+                            "sales_order": sales_order_name,
+                            "action": action,
+                        }
+                    )
                 if settings.get("auto_sync_invoices") and action != "cancelled" and order_is_approved(sales_order_name):
                     invoice_result = _ensure_sales_invoice_for_order(sales_order_name, normalized)
                     if invoice_result.get("status") == "created":

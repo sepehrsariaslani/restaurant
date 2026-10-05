@@ -105,6 +105,12 @@ def review_management_order(order_name="", decision="", note=""):
 	if decision not in {"approve", "reject"}:
 		frappe.throw(_("عملیات بررسی سفارش معتبر نیست."))
 
+	# Serialize review actions across POS devices. A second device must read the
+	# committed state after the first device has reviewed this Sales Order.
+	frappe.db.sql(
+		"SELECT name FROM `tabSales Order` WHERE name = %s FOR UPDATE",
+		order_name,
+	)
 	current = frappe.db.get_value("Sales Order", order_name, ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED
 	if current != ORDER_REVIEW_PENDING:
 		frappe.throw(_("این سفارش دیگر در انتظار بررسی نیست."))
