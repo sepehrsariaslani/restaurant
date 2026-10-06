@@ -142,11 +142,20 @@ def _resolve_survey_preference_customer(customer_name="", mobile=""):
 def get_management_customer_survey_preference(customer_name="", mobile=""):
 	api_club._ensure_management_access()
 	_ensure_survey_customer_preference_field()
-	customer = _resolve_survey_preference_customer(customer_name, mobile)
+	try:
+		customer = _resolve_survey_preference_customer(customer_name, mobile)
+	except (frappe.DoesNotExistError, frappe.ValidationError):
+		return {
+			"status": "success",
+			"customer": "",
+			"opt_out": 0,
+			"resolved": False,
+		}
 	return {
 		"status": "success",
 		"customer": customer,
 		"opt_out": cint(frappe.db.get_value("Customer", customer, SURVEY_OPT_OUT_FIELD) or 0),
+		"resolved": True,
 	}
 
 

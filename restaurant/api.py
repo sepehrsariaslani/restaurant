@@ -21841,6 +21841,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			continue
 		key = f"{customer_name}::{mobile}"
 		grouped[key] = {
+			"name": (doc.get("name") or "").strip(),
 			"customer_name": customer_name,
 			"mobile": mobile,
 			"group_discount_percent": group_discount_by_name.get(doc.get("customer_group"), 0),
@@ -21880,6 +21881,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			bucket = grouped.setdefault(
 				key,
 				{
+					"name": "",
 					"customer_name": customer_name,
 					"mobile": mobile,
 					"group_discount_percent": 0,
@@ -21900,6 +21902,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 			sec_bucket = grouped.setdefault(
 				sec_key,
 				{
+					"name": "",
 					"customer_name": secondary_name,
 					"mobile": "",
 					"group_discount_percent": 0,
@@ -21922,6 +21925,7 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 	return {
 		"customers": [
 			{
+				"name": row.get("name") or "",
 				"customer_name": row.get("customer_name") or "",
 				"mobile": row.get("mobile") or "",
 				"group_discount_percent": min(max(flt(row.get("group_discount_percent") or 0), 0), 50),
