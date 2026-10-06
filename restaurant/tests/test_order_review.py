@@ -20,6 +20,7 @@ class FakeReviewDB:
 
 	def __init__(self, review_status=ORDER_REVIEW_PENDING):
 		self.review_status = review_status
+		self.sales_invoice_name = ""
 		self.commits = 0
 		self.rollbacks = 0
 		self.updates = []
@@ -34,6 +35,8 @@ class FakeReviewDB:
 		return [(values,)]
 
 	def get_value(self, doctype, name, fieldname):
+		if doctype == "Sales Invoice Item":
+			return self.sales_invoice_name
 		if fieldname == ORDER_REVIEW_FIELD:
 			return self.review_status
 		return None
@@ -103,12 +106,14 @@ class OrderReviewTests(TestCase):
 
 	def test_repeating_same_approval_is_successful_and_idempotent(self):
 		database, order = self.make_context(review_status=ORDER_REVIEW_APPROVED)
+		database.sales_invoice_name = "ACC-SINV-0001"
 
 		result = api_order_review.review_management_order("SO-1", "approve")
 
 		self.assertEqual(result["status"], "success")
 		self.assertTrue(result["idempotent"])
 		self.assertEqual(result["review_status"], ORDER_REVIEW_APPROVED)
+		self.assertEqual(result["sales_invoice"], "ACC-SINV-0001")
 		self.assertEqual(order.submit_calls, 0)
 		self.assertEqual(database.commits, 0)
 
@@ -122,4 +127,4 @@ class OrderReviewTests(TestCase):
 		self.assertEqual(database.review_status, ORDER_REVIEW_PENDING)
 		self.assertEqual(database.rollbacks, 1)
 		log_error.assert_called_once()
-		self.assertIn("Food Partner order review failed", log_error.call_args.args)
+		self.assertIn("Food Partner order review failed at ثبت سفارش فروش", log_error.call_args.args)

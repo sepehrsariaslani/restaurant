@@ -90,6 +90,22 @@ def _release_coupon_reservation(order_name):
 		frappe.db.set_value("Restaurant Coupon", coupon.name, "used_count", used_count - 1, update_modified=False)
 
 
+def _existing_sales_invoice_for_order(order_name):
+	"""Return the first submitted invoice already linked to this Sales Order."""
+	try:
+		return (
+			frappe.db.get_value(
+				"Sales Invoice Item",
+				{"sales_order": order_name, "docstatus": 1},
+				"parent",
+			)
+			or ""
+		)
+	except Exception:
+		# Sites without ERPNext's invoice tables should keep review idempotency safe.
+		return ""
+
+
 @frappe.whitelist()
 def review_management_order(order_name="", decision="", note=""):
 	"""Approve or reject a pending customer-originated Sales Order."""
@@ -118,7 +134,7 @@ def review_management_order(order_name="", decision="", note=""):
 			"status": "success",
 			"order_name": order_name,
 			"review_status": current,
-			"sales_invoice": "",
+			"sales_invoice": _existing_sales_invoice_for_order(order_name),
 			"idempotent": True,
 		}
 	if current != ORDER_REVIEW_PENDING:
@@ -172,7 +188,10 @@ def review_management_order(order_name="", decision="", note=""):
 		frappe.db.commit()
 	except Exception as exc:
 		frappe.db.rollback()
-		frappe.log_error(frappe.get_traceback(), "Food Partner order review failed")
+		frappe.log_error(
+			f"مرحله: {stage}\n{frappe.get_traceback()}",
+			f"Food Partner order review failed at {stage}",
+		)
 		message = str(exc).strip() or "خطای نامشخص"
 		frappe.throw(
 			_("بررسی سفارش در مرحلهٔ {0} ناموفق بود: {1}").format(stage, message[:500]),
