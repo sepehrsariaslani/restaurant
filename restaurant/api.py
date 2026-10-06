@@ -8190,7 +8190,11 @@ def _upsert_customer_delivery_address(customer_name, normalized_info):
 	doc.address_title = normalized_info["title"]
 	doc.address_type = "Shipping"
 	doc.address_line1 = normalized_info["address_line"]
-	doc.address_line2 = _delivery_extra_line(normalized_info)
+	doc.address_line2 = (
+		normalized_info.get("address_line2")
+		if normalized_info.get("address_line2") is not None
+		else _delivery_extra_line(normalized_info)
+	)
 	doc.phone = normalized_info["phone"]
 
 	if _has_column("Address", "is_shipping_address"):
@@ -17290,6 +17294,7 @@ def get_management_order_detail(order_name, source=None):
 					"source": "web",
 					"doctype": "Sales Order",
 					"name": doc.name,
+					"customer": doc.customer or "",
 					"order_code": doc.name,
 					"customer_name": doc.customer_name,
 					"secondary_customer": doc.get("restaurant_secondary_customer") or "",
@@ -17352,6 +17357,7 @@ def get_management_order_detail(order_name, source=None):
 				"source": "web",
 				"doctype": "Restaurant Order",
 				"name": doc.name,
+				"customer": doc.get("customer") or "",
 				"order_code": doc.order_code,
 				"customer_name": doc.customer_name,
 				"mobile": doc.mobile,
@@ -21841,6 +21847,201 @@ def add_management_customer(customer_name=None, mobile=None):
 		"customer_name": frappe.db.get_value("Customer", customer, "customer_name") or name_text,
 		"mobile": mobile_text or "",
 	}
+
+
+def _management_customer_profile_payload(customer_name):
+	customer_doc = frappe.get_doc("Customer", customer_name)
+	mobile = customer_doc.get("mobile_no") or customer_doc.get("customer_primary_mobile") or ""
+	address_payload = {
+		"id": "",
+		"title": "",
+		"phone": "",
+		"address_line": "",
+		"plaque": "",
+		"unit": "",
+		"floor": "",
+		"lat": None,
+		"lng": None,
+		"is_primary": 0,
+		"video_url": "",
+	}
+	addresses = _list_customer_delivery_addresses(customer_name)
+	primary_address = next(
+		(row for row in addresses if cint(row.get("is_primary") or 0)),
+		None,
+	)
+	if primary_address:
+		address_name = primary_address.get("id")
+		if address_name and frappe.db.exists("Address", address_name):
+			address_doc = frappe.get_doc("Address", address_name)
+			address_payload.update({
+				"id": address_name,
+				"title": address_doc.get("restaurant_location_title") or address_doc.get("address_title") or "",
+				"phone": address_doc.get("phone") or "",
+				"address_line": address_doc.get("address_line1") or "",
+				"plaque": address_doc.get("restaurant_plaque") or "",
+				"unit": address_doc.get("restaurant_unit") or "",
+				"floor": address_doc.get("restaurant_floor") or "",
+				"lat": address_doc.get("restaurant_latitude") if address_doc.get("restaurant_latitude") is not None else address_doc.get("latitude"),
+				"lng": address_doc.get("restaurant_longitude") if address_doc.get("restaurant_longitude") is not None else address_doc.get("longitude"),
+				"is_primary": cint(address_doc.get("is_primary_address") or 0),
+				"video_url": address_doc.get("restaurant_guidance_video") or "",
+			})
+
+	return {
+		"customer": {
+			"name": customer_doc.name,
+			"customer_name": customer_doc.get("customer_name") or customer_doc.name,
+			"mobile": mobile,
+			"email_id": customer_doc.get("email_id") or "",
+			"customer_details": customer_doc.get("customer_details") or "",
+		},
+		"address": address_payload,
+	}
+
+
+@frappe.whitelist()
+def get_management_customer_profile(customer=None):
+	"""Return one existing Customer and its primary linked delivery address."""
+	_ensure_management_access()
+	customer_name = str(customer or "").strip()
+	if not customer_name or not frappe.db.exists("Customer", customer_name):
+		frappe.throw(_("Customer was not found."))
+	return _management_customer_profile_payload(customer_name)
+
+
+@frappe.whitelist()
+def save_management_customer_profile(customer=None, payload=None):
+	"""Update the allow-listed contact fields and primary address for a Customer."""
+	_ensure_management_access()
+	customer_name = str(customer or "").strip()
+	if not customer_name or not frappe.db.exists("Customer", customer_name):
+		frappe.throw(_("Customer was not found."))
+	profile = _parse_json(payload, {})
+	if not isinstance(profile, dict):
+		frappe.throw(_("Customer profile must be an object."))
+
+	display_name = str(profile.get("customer_name") or "").strip()
+	if not display_name:
+		frappe.throw(_("Customer name is required."))
+
+	customer_doc = frappe.get_doc("Customer", customer_name)
+	customer_doc.customer_name = display_name
+	if _has_column("Customer", "mobile_no"):
+		mobile = _ensure_mobile(profile.get("mobile"), allow_empty=True)
+		customer_doc.mobile_no = mobile
+		if _has_column("Customer", "customer_primary_mobile"):
+			customer_doc.set("customer_primary_mobile", mobile)
+	if _has_column("Customer", "email_id"):
+		customer_doc.email_id = str(profile.get("email_id") or "").strip()
+	if _has_column("Customer", "customer_details"):
+		customer_doc.customer_details = str(profile.get("customer_details") or "").strip()
+	customer_doc.save(ignore_permissions=True)
+
+	address = profile.get("address") if isinstance(profile.get("address"), dict) else {}
+	address_line = str(address.get("address_line") or "").strip()
+	address_name = str(address.get("id") or "").strip()
+	customer_addresses = _list_customer_delivery_addresses(customer_name)
+	customer_address_names = {row.get("id") for row in customer_addresses if row.get("id")}
+	primary_address_names = {
+		row.get("id")
+		for row in customer_addresses
+		if row.get("id") and cint(row.get("is_primary") or 0)
+	}
+	if address_name and address_name not in customer_address_names:
+		frappe.throw(_("Selected address does not belong to this customer."))
+	if address_name and address_name not in primary_address_names:
+		frappe.throw(_("Only the customer's primary address can be edited."))
+	if address_line and not address_name and primary_address_names:
+		frappe.throw(_("Refresh the customer profile before changing its primary address."))
+	if address_line:
+		_normalized_address = {
+			"id": address_name,
+			"title": str(address.get("title") or address.get("address_title") or display_name).strip(),
+			"phone": str(address.get("phone") or "").strip(),
+			"address_line": address_line,
+			"plaque": str(address.get("plaque") or "").strip(),
+			"unit": str(address.get("unit") or "").strip(),
+			"floor": str(address.get("floor") or "").strip(),
+			"lat": address.get("lat"),
+			"lng": address.get("lng"),
+			"is_primary": 1,
+			"video_url": str(address.get("video_url") or "").strip(),
+		}
+		skip_shared_address_update = False
+		if address_name:
+			address_doc = frappe.get_doc("Address", address_name)
+			linked_customer_names = {
+				row.get("link_name")
+				for row in (address_doc.get("links") or [])
+				if row.get("link_doctype") == "Customer" and row.get("link_name")
+			}
+			if linked_customer_names - {customer_name}:
+				requested_address = {
+					"title": str(address.get("title") or address.get("address_title") or "").strip(),
+					"phone": str(address.get("phone") or "").strip(),
+					"address_line": address_line,
+					"plaque": str(address.get("plaque") or "").strip(),
+					"unit": str(address.get("unit") or "").strip(),
+					"floor": str(address.get("floor") or "").strip(),
+					"lat": address.get("lat"),
+					"lng": address.get("lng"),
+					"video_url": str(address.get("video_url") or "").strip(),
+				}
+				current_address = {
+					"title": address_doc.get("restaurant_location_title") or address_doc.get("address_title") or "",
+					"phone": address_doc.get("phone") or "",
+					"address_line": address_doc.get("address_line1") or "",
+					"plaque": address_doc.get("restaurant_plaque") or "",
+					"unit": address_doc.get("restaurant_unit") or "",
+					"floor": address_doc.get("restaurant_floor") or "",
+					"lat": address_doc.get("restaurant_latitude") if address_doc.get("restaurant_latitude") is not None else address_doc.get("latitude"),
+					"lng": address_doc.get("restaurant_longitude") if address_doc.get("restaurant_longitude") is not None else address_doc.get("longitude"),
+					"video_url": address_doc.get("restaurant_guidance_video") or "",
+				}
+				digit_translation = str.maketrans(
+					"۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+					"01234567890123456789",
+				)
+				def _address_phone_key(value):
+					digits = "".join(character for character in str(value or "") if character.isdigit())
+					return digits.translate(digit_translation)
+
+				changed_text_fields = ("title", "address_line", "plaque", "unit", "floor", "video_url")
+				address_changed = any(
+					str(requested_address.get(key) or "").strip() != str(current_address.get(key) or "").strip()
+					for key in changed_text_fields
+				) or _address_phone_key(requested_address.get("phone")) != _address_phone_key(current_address.get("phone")) or any(
+					str(requested_address.get(key) if requested_address.get(key) is not None else "").strip()
+					!= str(current_address.get(key) if current_address.get(key) is not None else "").strip()
+					for key in ("lat", "lng")
+				)
+				if address_changed:
+					frappe.throw(_("This address is shared with another customer and cannot be edited here."))
+				skip_shared_address_update = True
+			old_extra_line = _delivery_extra_line({
+				"plaque": address_doc.get("restaurant_plaque") or "",
+				"unit": address_doc.get("restaurant_unit") or "",
+				"floor": address_doc.get("restaurant_floor") or "",
+			})
+			old_line2 = str(address_doc.get("address_line2") or "").strip()
+			if old_line2 == old_extra_line:
+				preserved_line2 = ""
+			elif old_extra_line and old_line2.startswith(old_extra_line):
+				preserved_line2 = old_line2[len(old_extra_line):].lstrip(" -")
+			else:
+				preserved_line2 = old_line2
+			new_extra_line = _delivery_extra_line(_normalized_address)
+			_normalized_address["address_line2"] = " - ".join(
+				part for part in (new_extra_line, preserved_line2) if part
+			)
+		if not skip_shared_address_update:
+			_upsert_customer_delivery_address(customer_name, _normalized_address)
+	elif address_name or any(str(address.get(key) or "").strip() for key in ("title", "phone", "plaque", "unit", "floor")):
+		frappe.throw(_("Enter the address before saving."))
+
+	frappe.db.commit()
+	return _management_customer_profile_payload(customer_name)
 
 
 @frappe.whitelist()
