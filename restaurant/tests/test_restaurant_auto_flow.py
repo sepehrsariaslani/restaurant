@@ -9,6 +9,7 @@ from restaurant.api import (
     _production_auto_settings,
     _recalculate_line,
     _run_sales_order_auto_flow,
+    _normalize_payment_method,
     _set_sales_order_payment_method,
     deliver_invoice_only,
     mark_management_order_paid,
@@ -385,6 +386,12 @@ def assert_credit_settlement_creates_non_pos_invoice_without_payment_rows():
 
 
 class TestRestaurantAutoFlow(FrappeTestCase):
+    def test_bank_transfer_is_a_first_class_pos_payment_method(self):
+        self.assertEqual(_normalize_payment_method("bank_transfer"), "bank_transfer")
+        self.assertEqual(_normalize_payment_method("حواله بانکی"), "bank_transfer")
+        self.assertEqual(_normalize_payment_method("cash"), "cash")
+        self.assertEqual(_normalize_payment_method("credit"), "credit")
+
     def test_production_auto_settings_are_normalized(self):
         values = {
             "restaurant_auto_flow_enabled": 1,

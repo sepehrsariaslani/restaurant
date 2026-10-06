@@ -50,7 +50,7 @@ ORDER_CONTEXT_TYPES = {"dine_in", "pickup", "delivery"}
 DINE_IN_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "served"]
 PICKUP_STATUS_FLOW = ["new", "confirmed", "preparing", "ready", "delivered"]
 DELIVERY_STATUS_FLOW = ["new", "confirmed", "preparing", "courier_handoff", "on_the_way", "delivered"]
-POS_PAYMENT_METHODS = {"cash", "card", "credit"}
+POS_PAYMENT_METHODS = {"cash", "card", "bank_transfer", "credit"}
 POS_PAYMENT_STATUSES = {"pending", "paid", "failed", "cancelled"}
 POS_PAYMENT_PROVIDERS = {"manual", "local_node", "webhook"}
 POS_PAYMENT_SUCCESS_TOKENS = {"success", "successful", "paid", "approved", "ok", "done"}
@@ -762,7 +762,15 @@ def _get_checkout_map_settings():
 
 
 def _normalize_payment_method(value):
-	method = (value or "cash").strip().lower()
+	method = str(value or "cash").strip().lower()
+	method = {
+		"bank": "bank_transfer",
+		"bank transfer": "bank_transfer",
+		"wire transfer": "bank_transfer",
+		"bank draft": "bank_transfer",
+		"حواله بانکی": "bank_transfer",
+		"انتقال سیم": "bank_transfer",
+	}.get(method, method)
 	if method not in POS_PAYMENT_METHODS:
 		return "cash"
 	return method
@@ -2524,12 +2532,14 @@ def _process_management_pos_payment(order_payload, payment_input):
 		"method": method,
 		"mode_of_payment": (payment_input.get("mode_of_payment") or "").strip(),
 		"provider": provider,
-		"status": "paid" if method == "cash" else "pending",
+		"status": "paid" if method in {"cash", "bank_transfer"} else "pending",
 		"reference_no": "",
 		"rrn": "",
 		"message": (
 			_("Cash payment recorded.")
 			if method == "cash"
+			else _("Bank transfer payment recorded.")
+			if method == "bank_transfer"
 			else _("Credit sale recorded. Payment will be collected later.")
 			if method == "credit"
 			else _("Card payment is pending.")
@@ -16169,7 +16179,7 @@ def _resolve_pos_mode_of_payment(method):
         if m.name.lower() == method.lower():
             return m.name
     # Try type match
-    mode_type_map = {"cash": "Cash", "card": "Bank", "credit": "Credit", "bank": "Bank"}
+    mode_type_map = {"cash": "Cash", "card": "Bank", "bank_transfer": "Bank", "credit": "Credit", "bank": "Bank"}
     expected_type = mode_type_map.get(method)
     if expected_type:
         for m in valid_modes:

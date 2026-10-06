@@ -1542,7 +1542,7 @@ def _fp_register_window_totals(start_dt, end_dt, cashier=None):
 		if order_dt and not (start_dt <= order_dt <= end_dt):
 			continue
 		method = (order.get("payment_method") or "").strip().lower()
-		if method not in {"cash", "card", "credit"}:
+		if method not in {"cash", "card", "bank_transfer", "credit"}:
 			method = "other"
 		amount = flt(order.get("grand_total"))
 		method_totals[method] += amount
@@ -1554,6 +1554,7 @@ def _fp_register_window_totals(start_dt, end_dt, cashier=None):
 		"total_sales": flt(total_sales),
 		"cash_sales": flt(method_totals.get("cash")),
 		"card_sales": flt(method_totals.get("card")),
+		"bank_transfer_sales": flt(method_totals.get("bank_transfer")),
 		"credit_sales": flt(method_totals.get("credit")),
 		"other_sales": flt(method_totals.get("other")),
 	}
@@ -1902,7 +1903,7 @@ def _fp_build_table_sales_rows(orders):
 
 def _fp_normalize_report_payment_method(order):
 	method = (order.get("payment_method") or "").strip().lower()
-	if method in {"cash", "card", "credit"}:
+	if method in {"cash", "card", "bank_transfer", "credit"}:
 		return method
 	if method:
 		return "other"
