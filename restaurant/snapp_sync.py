@@ -552,16 +552,23 @@ def _food_partner_modifier_mapping_index():
             parent_item = str(mapping.get("parent_item") or item.get("name") or "").strip()
             if not fieldname or not value or not parent_item:
                 continue
-            key = (fieldname, value)
-            index.setdefault(key, []).append(
-                {
-                    **mapping,
-                    "parent_item": parent_item,
-                    "parent_item_code": item.get("item_code") or parent_item,
-                    "parent_item_name": item.get("item_name") or parent_item,
-                    "mapping_mode": str(mapping.get("mapping_mode") or "modifier").strip() or "modifier",
-                }
-            )
+            indexed_mapping = {
+                **mapping,
+                "parent_item": parent_item,
+                "parent_item_code": item.get("item_code") or parent_item,
+                "parent_item_name": item.get("item_name") or parent_item,
+                "mapping_mode": str(mapping.get("mapping_mode") or "modifier").strip() or "modifier",
+            }
+            keys = [(fieldname, value)]
+            identity = mapping.get("identity") or {}
+            external_id = str(identity.get("external_id") or "").strip()
+            menu_item_id = str(identity.get("menu_item_id") or "").strip()
+            if external_id and external_id == menu_item_id:
+                for alias in (("external_id", external_id), ("menu_item_id", menu_item_id)):
+                    if alias not in keys:
+                        keys.append(alias)
+            for key in keys:
+                index.setdefault(key, []).append(indexed_mapping)
     return index
 
 
@@ -673,6 +680,7 @@ def save_snappfood_modifier_mapping(
     option_name="",
     mapping_mode="modifier",
     product_id="",
+    external_id="",
     variation_id="",
     product_hash_id="",
     variation_hash_id="",
@@ -692,11 +700,28 @@ def save_snappfood_modifier_mapping(
 
     identity = {
         "menu_item_id": str(menu_item_id or "").strip(),
+        "external_id": str(external_id or "").strip(),
         "variation_id": str(variation_id or "").strip(),
         "product_id": str(product_id or "").strip(),
         "product_hash_id": str(product_hash_id or "").strip(),
         "variation_hash_id": str(variation_hash_id or "").strip(),
     }
+    if mapping_mode == "item_modifier":
+        product_identity = identity["product_id"]
+        product_hash_identity = identity["product_hash_id"]
+        # An explicit variation_id is authoritative even when the provider
+        # reuses the product ID for a single/default option. Other ID fields
+        # count only when they distinguish this option from its product.
+        has_option_identity = bool(identity["variation_id"]) or any(
+            value and value != product_identity
+            for value in (identity["menu_item_id"], identity["external_id"])
+        )
+        variation_hash = identity["variation_hash_id"]
+        has_option_identity = has_option_identity or bool(
+            variation_hash and variation_hash != product_hash_identity
+        )
+        if not has_option_identity:
+            raise frappe.ValidationError("برای نگاشت کالا و Modifier، شناسهٔ منحصربه‌فرد گزینه لازم است.")
     lookup_field, lookup_value = _food_partner_mapping_lookup_key(identity)
     if not lookup_field or not lookup_value:
         raise frappe.ValidationError("شناسهٔ این گزینه در پاسخ Food Partner موجود نیست.")
@@ -1900,9 +1925,21 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
             pass
     elif not menu_rows:
         menu_rows = _build_known_menu_rows(local_items)
+    modifier_mapping_index = _food_partner_modifier_mapping_index()
     mappings = []
     for row in menu_rows:
+        mapped_modifier = _find_food_partner_modifier_mapping(row, modifier_mapping_index)
         exact = _find_mapped_local_item(row, local_items)
+        if mapped_modifier and mapped_modifier.get("mapping_mode") == "item_modifier":
+            parent_item_name = str(mapped_modifier.get("parent_item") or "").strip()
+            exact = next(
+                (item for item in local_items if str(item.get("name") or "").strip() == parent_item_name),
+                {
+                    "name": parent_item_name,
+                    "item_code": mapped_modifier.get("parent_item_code") or parent_item_name,
+                    "item_name": mapped_modifier.get("parent_item_name") or parent_item_name,
+                },
+            )
         if exact:
             suggested = exact
             match_score = 1
@@ -1931,6 +1968,7 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
             {
                 **row,
                 "mapped_item": exact,
+                "mapped_modifier": mapped_modifier,
                 "mapping_status": "Mapped" if exact else "Unmapped",
                 "suggested_item": suggested,
                 "match_score": round(match_score, 3),

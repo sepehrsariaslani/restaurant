@@ -645,6 +645,192 @@ class TestSnappSync(FrappeTestCase):
             "1c77f176-02b0-4cc1-bb84-b6860ede23ff",
         )
 
+    def test_mapping_rows_restore_distinct_modifier_mappings_for_product_variations(self):
+        local_items = [
+            {
+                "name": "BASE-1",
+                "item_code": "BASE-1",
+                "item_name": "کاسه برنجین میگو",
+            }
+        ]
+        menu_rows = [
+            {
+                "external_id": "34911711",
+                "title": "کاسه برنجین میگو پلو میکس ساده",
+                "product_id": "34911700",
+                "variation_id": "34911711",
+            },
+            {
+                "external_id": "34935660",
+                "title": "کاسه برنجین میگو پلو میکس مکزیکی",
+                "product_id": "34911700",
+                "variation_id": "34935660",
+            },
+        ]
+        modifier_index = {
+            ("variation_id", "34911711"): [
+                {
+                    "parent_item": "BASE-1",
+                    "parent_item_code": "BASE-1",
+                    "parent_item_name": "کاسه برنجین میگو",
+                    "group_name": "RICE-TYPE",
+                    "group_title": "نوع پلو",
+                    "option_name": "RICE-PLAIN",
+                    "option_label": "پلو ساده",
+                    "mapping_mode": "item_modifier",
+                }
+            ],
+            ("variation_id", "34935660"): [
+                {
+                    "parent_item": "BASE-1",
+                    "parent_item_code": "BASE-1",
+                    "parent_item_name": "کاسه برنجین میگو",
+                    "group_name": "RICE-TYPE",
+                    "group_title": "نوع پلو",
+                    "option_name": "RICE-MEXICAN",
+                    "option_label": "پلو مکزیکی",
+                    "mapping_mode": "item_modifier",
+                }
+            ],
+        }
+        with patch.object(snapp_sync, "_get_settings", return_value={}), patch.object(
+            snapp_sync, "_get_local_item_rows", return_value=local_items
+        ), patch.object(snapp_sync, "_build_known_menu_rows", return_value=menu_rows), patch.object(
+            snapp_sync, "_find_mapped_local_item", return_value={"name": "DIRECT-ITEM", "item_name": "نگاشت مستقیم"}
+        ), patch.object(
+            snapp_sync, "_food_partner_modifier_mapping_index", return_value=modifier_index
+        ), patch.object(snapp_sync, "get_sync_status", return_value={}):
+            result = get_snappfood_mapping_rows()
+
+        simple, mexican = result["menu"]
+        self.assertEqual(simple["mapping_status"], "Mapped")
+        self.assertEqual(simple["mapped_item"]["name"], "BASE-1")
+        self.assertEqual(simple["mapped_modifier"]["option_name"], "RICE-PLAIN")
+        self.assertEqual(mexican["mapping_status"], "Mapped")
+        self.assertEqual(mexican["mapped_item"]["name"], "BASE-1")
+        self.assertEqual(mexican["mapped_modifier"]["option_name"], "RICE-MEXICAN")
+
+    def test_mapping_rows_restore_modifier_by_unique_external_id_without_variation_id(self):
+        menu_row = {
+            "external_id": "OPTION-EXT-1",
+            "product_id": "PRODUCT-1",
+            "variation_id": "",
+            "title": "گزینه منوی نمونه",
+        }
+        modifier_index = {
+            ("external_id", "OPTION-EXT-1"): [
+                {
+                    "parent_item": "BASE-1",
+                    "parent_item_code": "BASE-1",
+                    "parent_item_name": "کاسه برنجین میگو",
+                    "group_name": "RICE-TYPE",
+                    "group_title": "نوع پلو",
+                    "option_name": "RICE-PLAIN",
+                    "option_label": "پلو ساده",
+                    "mapping_mode": "item_modifier",
+                }
+            ]
+        }
+        with patch.object(snapp_sync, "_get_settings", return_value={}), patch.object(
+            snapp_sync, "_get_local_item_rows", return_value=[]
+        ), patch.object(snapp_sync, "_build_known_menu_rows", return_value=[menu_row]), patch.object(
+            snapp_sync, "_find_mapped_local_item", return_value=None
+        ), patch.object(
+            snapp_sync, "_food_partner_modifier_mapping_index", return_value=modifier_index
+        ), patch.object(snapp_sync, "get_sync_status", return_value={}):
+            result = get_snappfood_mapping_rows()
+
+        mapped = result["menu"][0]
+        self.assertEqual(mapped["mapped_item"]["name"], "BASE-1")
+        self.assertEqual(mapped["mapped_modifier"]["option_name"], "RICE-PLAIN")
+        self.assertEqual(mapped["mapped_modifier"]["mapping_mode"], "item_modifier")
+
+    def test_external_menu_identity_alias_reloads_a_menu_item_modifier_mapping(self):
+        stored_mapping = {
+            "lookup_field": "menu_item_id",
+            "lookup_value": "OPTION-EXT-1",
+            "identity": {"menu_item_id": "OPTION-EXT-1", "external_id": "OPTION-EXT-1"},
+            "parent_item": "BASE-1",
+            "mapping_mode": "item_modifier",
+            "group_name": "RICE-TYPE",
+            "option_name": "RICE-PLAIN",
+        }
+        with patch.object(snapp_sync, "_has_field", return_value=True), patch.object(
+            snapp_sync.frappe,
+            "get_all",
+            return_value=[
+                {
+                    "name": "BASE-1",
+                    "item_code": "BASE-1",
+                    "item_name": "کاسه برنجین میگو",
+                    snapp_sync.FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD: json.dumps([stored_mapping]),
+                }
+            ],
+        ):
+            mapping_index = snapp_sync._food_partner_modifier_mapping_index()
+
+        mapped = snapp_sync._find_food_partner_modifier_mapping(
+            {"external_id": "OPTION-EXT-1"}, mapping_index
+        )
+        self.assertEqual(mapped["option_name"], "RICE-PLAIN")
+
+    def test_item_modifier_mapping_rejects_product_id_without_option_identity(self):
+        modifier_groups = {
+            "item_name": "کاسه برنجین میگو",
+            "groups": [
+                {
+                    "name": "RICE-TYPE",
+                    "title": "نوع پلو",
+                    "options": [{"name": "RICE-PLAIN", "label": "پلو ساده"}],
+                }
+            ],
+        }
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync, "_has_field", return_value=True
+        ), patch.object(
+            snapp_sync, "get_snappfood_modifier_groups", return_value=modifier_groups
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.object(
+            snapp_sync.frappe.db, "set_value"
+        ), patch.object(snapp_sync.frappe.db, "commit"):
+            with self.assertRaisesRegex(frappe.ValidationError, "شناسهٔ منحصربه‌فرد گزینه"):
+                snapp_sync.save_snappfood_modifier_mapping(
+                    parent_item="BASE-1",
+                    mapping_mode="item_modifier",
+                    product_id="PRODUCT-1",
+                    group_name="RICE-TYPE",
+                    option_name="RICE-PLAIN",
+                )
+
+    def test_item_modifier_mapping_accepts_explicit_variation_id_equal_to_product_id(self):
+        modifier_groups = {
+            "item_name": "کاسه برنجین میگو",
+            "groups": [
+                {
+                    "name": "RICE-TYPE",
+                    "title": "نوع پلو",
+                    "options": [{"name": "RICE-PLAIN", "label": "پلو ساده"}],
+                }
+            ],
+        }
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync, "_has_field", return_value=True
+        ), patch.object(
+            snapp_sync, "get_snappfood_modifier_groups", return_value=modifier_groups
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.object(
+            snapp_sync.frappe.db, "set_value"
+        ), patch.object(snapp_sync.frappe.db, "commit"):
+            result = snapp_sync.save_snappfood_modifier_mapping(
+                parent_item="BASE-1",
+                mapping_mode="item_modifier",
+                product_id="34911711",
+                variation_id="34911711",
+                group_name="RICE-TYPE",
+                option_name="RICE-PLAIN",
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["mapping_mode"], "item_modifier")
+
     def test_invoice_keeps_external_financial_snapshot_for_reconciliation(self):
         values = _build_sales_invoice_external_values(
             {

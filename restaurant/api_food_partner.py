@@ -29,6 +29,7 @@ def save_snappfood_modifier_mapping(payload=None):
 		option_name=payload.get("option_name") or "",
 		mapping_mode=payload.get("mapping_mode") or "modifier",
 		product_id=payload.get("product_id") or "",
+		external_id=payload.get("external_id") or "",
 		variation_id=payload.get("variation_id") or "",
 		product_hash_id=payload.get("product_hash_id") or "",
 		variation_hash_id=payload.get("variation_hash_id") or "",
