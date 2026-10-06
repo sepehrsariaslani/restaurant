@@ -19,3 +19,12 @@ test('offline POS mutation API uses the idempotent replay endpoint', () => {
   assert.match(api, /export function replayOfflinePOSMutation\(payload = \{\}\)/)
   assert.match(api, /restaurant\.api_pos_reliability\.replay_offline_pos_mutation/)
 })
+
+test('background POS API exposes invoice purge as a queued operation', () => {
+  const api = fs.readFileSync(new URL('../../restaurant/api_pos_background.py', import.meta.url), 'utf8')
+  assert.match(api, /def enqueue_pos_purge\(order_name=""\)/)
+  assert.match(api, /def run_pos_background_purge\(job_key, order_name\)/)
+  assert.match(api, /purge_management_pos_order\(order_name\)/)
+  assert.match(api, /summary = result\.get\("summary"\)/)
+  assert.match(api, /"summary": summary if isinstance\(summary, dict\) else \{\}/)
+})
