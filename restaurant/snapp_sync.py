@@ -118,6 +118,19 @@ def _scale_amount(value, multiplier):
     return flt(value or 0) * flt(multiplier or 1)
 
 
+def _food_partner_sales_amount(raw_order, amount_multiplier):
+    """Return the Partner sale amount, not the customer's already-discounted payment."""
+    return _scale_amount(
+        raw_order.get("finalAmount")
+        or raw_order.get("finalPrice")
+        or raw_order.get("totalPrice")
+        or raw_order.get("price")
+        or raw_order.get("total")
+        or raw_order.get("paidPrice"),
+        amount_multiplier,
+    )
+
+
 def _set_if_column(payload, doctype, fieldname, value):
     if _has_column(doctype, fieldname):
         payload[fieldname] = value
@@ -2298,18 +2311,11 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
         "vendor_name": cstr(raw_order.get("vendorName") or "").strip(),
         "vendor_subdomain": cstr(raw_order.get("vendorSubdomain") or "").strip(),
         "items": items,
-        "final_amount": _scale_amount(
-            raw_order.get("finalAmount")
-            or raw_order.get("finalPrice")
-            or raw_order.get("totalPrice")
-            or raw_order.get("total")
-            or raw_order.get("paidPrice")
-            or raw_order.get("price"),
-            amount_multiplier,
-        ),
-        "final_price": _scale_amount(
-            raw_order.get("finalPrice") or raw_order.get("totalPrice") or raw_order.get("paidPrice"), amount_multiplier
-        ),
+        # Food Partner's sale price is the amount to register in the local
+        # Sales Order. paidPrice is retained separately because it represents
+        # the customer's post-discount payment and can be lower.
+        "final_amount": _food_partner_sales_amount(raw_order, amount_multiplier),
+        "final_price": _food_partner_sales_amount(raw_order, amount_multiplier),
         "paid_price": _scale_amount(raw_order.get("paidPrice") or raw_order.get("paid_price"), amount_multiplier),
         "discount": resolved_discount_amount,
         "discount_amount": resolved_discount_amount,
@@ -2997,6 +3003,18 @@ def _update_existing_sales_order_lines(sales_order_name, order_payload):
     frappe.db.set_value("Sales Order", sales_order_name, totals, update_modified=False)
 
 
+def _sales_order_has_submitted_invoice(sales_order_name):
+    """Protect invoiced orders from an automatic Food Partner amount repair."""
+    if not _has_column("Sales Invoice Item", "sales_order"):
+        return False
+    return bool(
+        frappe.db.exists(
+            "Sales Invoice Item",
+            {"sales_order": sales_order_name, "docstatus": 1},
+        )
+    )
+
+
 def _sync_existing_sales_order(sales_order_name, order_payload, reconcile_lines=False):
     so_doc = frappe.get_doc("Sales Order", sales_order_name)
 
@@ -3099,8 +3117,11 @@ def _create_sales_order(order_payload):
             "qty": max(flt(line.get("qty") or 1), 1),
             "note": line.get("title") or "",
         }
-        if flt(line.get("gross_unit_price") or 0) > 0:
-            cart_item["external_unit_price"] = flt(line.get("gross_unit_price"))
+        if flt(line.get("unit_price") or 0) > 0:
+            # The imported Sales Order must use the Partner sale price. The
+            # origin/gross price is preserved on the external snapshots and
+            # must not be billed again as a second discount.
+            cart_item["external_unit_price"] = flt(line.get("unit_price"))
         if is_item_modifier_mapping:
             mapping = modifier_mapping or {}
             cart_item.setdefault("customization", {}).setdefault("selected_modifiers", []).append(
@@ -3155,8 +3176,8 @@ def _create_sales_order(order_payload):
             }
         )
 
-        modifier_gross_total = flt(
-            modifier_line.get("gross_unit_price") or modifier_line.get("unit_price") or 0
+        modifier_total = flt(
+            modifier_line.get("unit_price") or modifier_line.get("gross_unit_price") or 0
         ) * modifier_qty
         parent_gross_unit = flt(
             parent_cart_item.get("external_unit_price")
@@ -3164,12 +3185,15 @@ def _create_sales_order(order_payload):
             or parent_line.get("unit_price")
             or 0
         )
-        if modifier_gross_total > 0 or parent_gross_unit > 0:
-            parent_cart_item["external_unit_price"] = parent_gross_unit + modifier_gross_total / parent_qty
+        if modifier_total > 0 or parent_gross_unit > 0:
+            parent_cart_item["external_unit_price"] = parent_gross_unit + modifier_total / parent_qty
         parent_line.setdefault("mapped_modifier_lines", []).append(modifier_line)
 
+    # The Partner discount is already reflected in the Partner sale price.
+    # Keep its value in external fields for reconciliation, but do not subtract
+    # it from the local Sales Order a second time.
     totals = {
-        "discountAmount": flt(order_payload.get("discount_amount") or order_payload.get("discount") or 0),
+        "discountAmount": 0,
         "taxAmount": flt(order_payload.get("tax") or 0),
         "serviceAmount": flt(order_payload.get("service_cost") or order_payload.get("service_fee") or 0),
         "packagingAmount": flt(order_payload.get("packaging_cost") or 0),
@@ -3182,7 +3206,7 @@ def _create_sales_order(order_payload):
     financial_modifiers = {
         "manual_discount": 1,
         "discount_type": "fixed",
-        "discount_value": totals["discountAmount"],
+        "discount_value": 0,
         "discount_source": "food_partner",
     }
     order_context = {
@@ -3559,7 +3583,10 @@ def sync_snapp_orders(
                         action = _sync_existing_sales_order(
                             existing,
                             normalized,
-                            reconcile_lines=not bool(only_new),
+                            reconcile_lines=(
+                                not bool(only_new)
+                                or not _sales_order_has_submitted_invoice(existing)
+                            ),
                         )
                         if action == "cancelled":
                             result["cancelled_count"] += 1
@@ -3733,10 +3760,11 @@ def sync_snapp_orders_backfill(start_date, end_date=None, chunk_days=7, only_new
     return summary
 
 
-def repair_existing_snapp_orders(amount_multiplier=None, batch_size=200):
+def repair_existing_snapp_orders(amount_multiplier=None, batch_size=200, only_uninvoiced=0):
     settings = _get_settings()
     multiplier = flt(amount_multiplier if amount_multiplier is not None else settings.get("amount_multiplier") or 1)
     batch_size = max(cint(batch_size or 200), 1)
+    only_uninvoiced = cint(only_uninvoiced)
 
     rows = frappe.get_all(
         "Sales Order",
@@ -3752,11 +3780,15 @@ def repair_existing_snapp_orders(amount_multiplier=None, batch_size=200):
         "multiplier": multiplier,
         "orders_total": len(rows),
         "orders_updated": 0,
+        "orders_skipped": 0,
         "orders_failed": 0,
         "errors": [],
     }
 
     for idx, row in enumerate(rows, 1):
+        if only_uninvoiced and _sales_order_has_submitted_invoice(row["name"]):
+            result["orders_skipped"] += 1
+            continue
         try:
             raw = json.loads(row.get("restaurant_external_payload_json") or "{}")
             if not isinstance(raw, dict):
