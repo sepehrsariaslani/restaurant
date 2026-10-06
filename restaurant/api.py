@@ -15995,7 +15995,7 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 		"items_has_more": has_more,
 		"items_limit_start": offset,
 		"items_limit_page_length": page_size,
-		"categories": sorted(categories, key=lambda row: row.get("title") or ""),
+		"categories": categories,
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),
 		"pos_config": config,
