@@ -15872,9 +15872,11 @@ def set_management_pos_config(payload=None):
 
 
 @frappe.whitelist()
-def get_management_pos_boot(branch=None):
+def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 	_ensure_management_access()
 	branch = (branch or "").strip()
+	offset = max(cint(limit_start), 0)
+	page_size = min(max(cint(limit_page_length) or 300, 1), 500)
 	image_field = _core_item_image_field()
 	category_meta_map = _get_core_category_meta_map()
 	subcategory_meta_map = _get_core_subcategory_meta_map()
@@ -15899,8 +15901,11 @@ def get_management_pos_boot(branch=None):
 		fields=boot_item_fields,
 		ignore_permissions=True,
 		order_by="restaurant_sort_order asc, item_name asc",
-		limit=300,
+		limit_start=offset,
+		limit_page_length=page_size + 1,
 	)
+	has_more = len(rows) > page_size
+	rows = rows[:page_size]
 
 	# Fallback: for items with no image, get first attachment
 	item_names = [r["name"] for r in rows if not (r.get("image") or "").strip()]
@@ -15950,6 +15955,9 @@ def get_management_pos_boot(branch=None):
 	return {
 		"currency": _get_currency(),
 		"items": items,
+		"items_has_more": has_more,
+		"items_limit_start": offset,
+		"items_limit_page_length": page_size,
 		"categories": sorted(categories, key=lambda row: row.get("title") or ""),
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),
