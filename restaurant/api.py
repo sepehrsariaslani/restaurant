@@ -761,8 +761,24 @@ def _get_checkout_map_settings():
 	}
 
 
+def _is_credit_payment_mode(value):
+	mode = str(value or "").strip().lower().replace("\u200c", " ")
+	if "card" in mode or "کارت" in mode:
+		return False
+	return (
+		mode in {"credit", "اعتباری", "اعتبار", "نسیه", "on account", "charge account"}
+		or "اعتبار" in mode
+		or "نسیه" in mode
+		or mode.startswith("credit ")
+	)
+
+
 def _normalize_payment_method(value):
-	method = str(value or "cash").strip().lower()
+	method = str(value or "cash").strip().lower().replace("\u200c", " ")
+	if _is_credit_payment_mode(method):
+		return "credit"
+	if "card" in method or "کارت" in method:
+		return "card"
 	method = {
 		"bank": "bank_transfer",
 		"bank transfer": "bank_transfer",
@@ -16285,7 +16301,15 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
             "reference_no": (reference_no or payment.get("reference_no") or "").strip()
         }]
     for split in splits:
-        split["method"] = _normalize_payment_method(split.get("method") or method)
+        split_method = _normalize_payment_method(split.get("method") or method)
+        # A stale POS bundle can send method="cash" (or omit method) while
+        # mode_of_payment still identifies the explicit credit option. Credit
+        # sales are receivables, so never pass that label to ERPNext as a payment.
+        if _is_credit_payment_mode(split.get("mode_of_payment")):
+            split_method = "credit"
+        split["method"] = split_method
+        if split_method == "credit":
+            split["mode_of_payment"] = ""
     primary_method = splits[0].get("method") if splits else method
     credit_only = bool(splits) and all((split.get("method") or "") == "credit" for split in splits)
 
