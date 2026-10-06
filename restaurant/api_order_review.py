@@ -106,6 +106,27 @@ def _existing_sales_invoice_for_order(order_name):
 		return ""
 
 
+def _ensure_food_partner_sales_invoice(order_name, order):
+	"""Ensure an approved Food Partner order has its native unpaid invoice."""
+	external_source = str(order.get("restaurant_external_source") or "").strip().lower()
+	if external_source != "snapp_food":
+		return {}
+
+	from restaurant.snapp_sync import _ensure_sales_invoice_for_order
+
+	result = _ensure_sales_invoice_for_order(
+		order_name,
+		_food_partner_invoice_payload(order),
+	)
+	if not isinstance(result, dict) or not result.get("sales_invoice"):
+		reason = result.get("reason") if isinstance(result, dict) else ""
+		message = _("فاکتور فروش سفارش Food Partner ساخته نشد.")
+		if reason:
+			message = _("فاکتور فروش سفارش Food Partner ساخته نشد: {0}").format(reason)
+		frappe.throw(message, frappe.ValidationError)
+	return result
+
+
 @frappe.whitelist()
 def review_management_order(order_name="", decision="", note=""):
 	"""Approve or reject a pending customer-originated Sales Order."""
@@ -130,11 +151,31 @@ def review_management_order(order_name="", decision="", note=""):
 	current = frappe.db.get_value("Sales Order", order_name, ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED
 	target_status = ORDER_REVIEW_APPROVED if decision == "approve" else ORDER_REVIEW_REJECTED
 	if current == target_status:
+		invoice_name = _existing_sales_invoice_for_order(order_name)
+		if decision == "approve" and not invoice_name and _order_has_column("restaurant_external_source"):
+			order = frappe.get_doc("Sales Order", order_name)
+			if str(order.get("restaurant_external_source") or "").strip().lower() == "snapp_food":
+				try:
+					invoice_result = _ensure_food_partner_sales_invoice(order_name, order)
+					invoice_name = invoice_result.get("sales_invoice") or invoice_name
+					if invoice_result.get("status") == "created":
+						frappe.db.commit()
+				except Exception as exc:
+					frappe.db.rollback()
+					frappe.log_error(
+						f"{frappe.get_traceback()}",
+						"Food Partner invoice backfill failed for approved order",
+					)
+					message = str(exc).strip() or "خطای نامشخص"
+					frappe.throw(
+						_("ساخت فاکتور فروش سفارش تأییدشده ناموفق بود: {0}").format(message[:500]),
+						frappe.ValidationError,
+					)
 		return {
 			"status": "success",
 			"order_name": order_name,
 			"review_status": current,
-			"sales_invoice": _existing_sales_invoice_for_order(order_name),
+			"sales_invoice": invoice_name,
 			"idempotent": True,
 		}
 	if current != ORDER_REVIEW_PENDING:
@@ -162,18 +203,10 @@ def review_management_order(order_name="", decision="", note=""):
 			stage = "تغییر وضعیت رستوران"
 			_set_restaurant_order_status(order_name, "confirmed", force=True)
 			_append_sales_order_note(order_name, f"[ORDER REVIEW] سفارش تأیید شد توسط {frappe.session.user}.")
-			external_source = order.get("restaurant_external_source") if _order_has_column("restaurant_external_source") else ""
-			if external_source == "snapp_food":
-				from restaurant.snapp_sync import _ensure_sales_invoice_for_order, _get_settings
-
-				settings = _get_settings()
-				if settings.get("auto_sync_invoices"):
-					stage = "ثبت فاکتور Food Partner"
-					invoice_result = _ensure_sales_invoice_for_order(
-						order_name,
-						_food_partner_invoice_payload(order),
-					)
-					invoice_name = invoice_result.get("sales_invoice") or ""
+			if _order_has_column("restaurant_external_source"):
+				stage = "ثبت فاکتور Food Partner"
+				invoice_result = _ensure_food_partner_sales_invoice(order_name, order)
+				invoice_name = invoice_result.get("sales_invoice") or ""
 		else:
 			stage = "رد سفارش"
 			_set_restaurant_order_status(order_name, "cancelled", force=True)

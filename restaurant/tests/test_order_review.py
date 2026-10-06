@@ -12,6 +12,7 @@ from restaurant.order_review import (
 	ORDER_REVIEW_APPROVED,
 	ORDER_REVIEW_FIELD,
 	ORDER_REVIEW_PENDING,
+	ORDER_REVIEW_REJECTED,
 )
 
 
@@ -59,14 +60,15 @@ class FakeReviewDB:
 
 
 class ReviewOrderDouble:
-	def __init__(self, submit_error=None, docstatus=0):
+	def __init__(self, submit_error=None, docstatus=0, external_source=""):
 		self.docstatus = docstatus
 		self.flags = SimpleNamespace(ignore_permissions=False)
 		self.submit_error = submit_error
 		self.submit_calls = 0
+		self.external_source = external_source
 
 	def get(self, fieldname):
-		return "snapp_food" if fieldname == "restaurant_external_source" else ""
+		return self.external_source if fieldname == "restaurant_external_source" else ""
 
 	def submit(self):
 		self.submit_calls += 1
@@ -103,6 +105,69 @@ class OrderReviewTests(TestCase):
 		self.assertEqual(result["order_name"], "SO-1")
 		self.assertEqual(order.submit_calls, 1)
 		self.assertEqual(database.commits, 1)
+
+	def test_approving_food_partner_order_creates_invoice_even_when_auto_sync_is_disabled(self):
+		database, order = self.make_context(order=ReviewOrderDouble(external_source="snapp_food"))
+
+		with patch("restaurant.snapp_sync._get_settings", return_value={"auto_sync_invoices": False}), patch(
+			"restaurant.api_order_review._food_partner_invoice_payload",
+			return_value={"order_id": "FP-1"},
+		), patch(
+			"restaurant.snapp_sync._ensure_sales_invoice_for_order",
+			return_value={"status": "created", "sales_invoice": "ACC-SINV-0001"},
+		) as ensure_invoice:
+			result = api_order_review.review_management_order("SO-1", "approve")
+
+		ensure_invoice.assert_called_once_with("SO-1", {"order_id": "FP-1"})
+		self.assertEqual(result["sales_invoice"], "ACC-SINV-0001")
+		self.assertEqual(database.commits, 1)
+
+	def test_reapproving_food_partner_order_creates_missing_invoice(self):
+		database, order = self.make_context(
+			review_status=ORDER_REVIEW_APPROVED,
+			order=ReviewOrderDouble(docstatus=1, external_source="snapp_food"),
+		)
+
+		with patch(
+			"restaurant.api_order_review._food_partner_invoice_payload",
+			return_value={"order_id": "FP-1"},
+		), patch(
+			"restaurant.snapp_sync._ensure_sales_invoice_for_order",
+			return_value={"status": "created", "sales_invoice": "ACC-SINV-0001"},
+		) as ensure_invoice:
+			result = api_order_review.review_management_order("SO-1", "approve")
+
+		ensure_invoice.assert_called_once_with("SO-1", {"order_id": "FP-1"})
+		self.assertTrue(result["idempotent"])
+		self.assertEqual(result["sales_invoice"], "ACC-SINV-0001")
+		self.assertEqual(database.commits, 1)
+
+	def test_rejecting_food_partner_order_does_not_create_invoice(self):
+		database, order = self.make_context(order=ReviewOrderDouble(external_source="snapp_food"))
+
+		with patch("restaurant.snapp_sync._ensure_sales_invoice_for_order") as ensure_invoice:
+			result = api_order_review.review_management_order("SO-1", "reject")
+
+		ensure_invoice.assert_not_called()
+		self.assertEqual(result["review_status"], ORDER_REVIEW_REJECTED)
+		self.assertEqual(database.commits, 1)
+
+	def test_food_partner_invoice_creation_failure_rolls_back_approval(self):
+		database, order = self.make_context(order=ReviewOrderDouble(external_source="snapp_food"))
+
+		with patch("restaurant.snapp_sync._get_settings", return_value={"auto_sync_invoices": True}), patch(
+			"restaurant.api_order_review._food_partner_invoice_payload",
+			return_value={"order_id": "FP-1"},
+		), patch(
+			"restaurant.snapp_sync._ensure_sales_invoice_for_order",
+			return_value={"status": "skipped", "reason": "invoice fields are missing"},
+		):
+			with self.assertRaises(frappe.ValidationError):
+				api_order_review.review_management_order("SO-1", "approve")
+
+		self.assertEqual(database.review_status, ORDER_REVIEW_PENDING)
+		self.assertEqual(database.rollbacks, 1)
+		self.assertEqual(database.commits, 0)
 
 	def test_repeating_same_approval_is_successful_and_idempotent(self):
 		database, order = self.make_context(review_status=ORDER_REVIEW_APPROVED)
