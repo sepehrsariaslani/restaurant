@@ -419,6 +419,21 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(normalized["items"][0]["product_id"], "34788176")
         self.assertEqual(normalized["items"][0]["variation_id"], "34788176-v1")
 
+    def test_food_partner_sales_amount_does_not_fall_back_to_customer_paid_price(self):
+        normalized = normalize_snapp_order(
+            {
+                "orderId": "884984812-sales-amount",
+                "orderProducts": [{"quantity": 1, "price": 266000, "title": "کالای تست"}],
+                "price": 266000,
+                "paidPrice": 156000,
+            },
+            amount_multiplier=10,
+        )
+
+        self.assertEqual(normalized["final_amount"], 2660000)
+        self.assertEqual(normalized["final_price"], 2660000)
+        self.assertEqual(normalized["paid_price"], 1560000)
+
     def test_normalize_food_partner_line_discount_into_gross_price_and_order_discount(self):
         normalized = normalize_snapp_order(
             {
@@ -861,8 +876,8 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(payload["order_type"], "takeaway")
         self.assertEqual(payload["secondary_customer"], "")
         self.assertEqual(payload["items"][0]["item_slug"], "item-2")
-        self.assertEqual(payload["items"][0]["external_unit_price"], 200000)
-        self.assertEqual(payload["totals"]["discountAmount"], 120)
+        self.assertEqual(payload["items"][0]["external_unit_price"], 185000)
+        self.assertEqual(payload["totals"]["discountAmount"], 0)
         self.assertFalse(fake_api._create_pos_order_payload.call_args.kwargs["commit"])
 
     def test_imported_order_uses_configured_primary_and_external_secondary_customer(self):
