@@ -3202,13 +3202,15 @@ def _get_core_category_meta_map():
 	rows = frappe.get_all(
 		"Item Group",
 		filters=_core_category_filters(is_subcategory=0),
-		fields=["name", "item_group_name", "restaurant_slug"],
+		fields=["name", "item_group_name", "restaurant_slug", "restaurant_sort_order"],
 		ignore_permissions=True,
+		order_by="restaurant_sort_order asc, creation asc, name asc",
 	)
 	return {
 		row.name: {
 			"title": row.item_group_name,
 			"slug": row.restaurant_slug,
+			"sort_order": cint(row.get("restaurant_sort_order") or 0),
 		}
 		for row in rows
 	}
@@ -3220,6 +3222,7 @@ def _get_core_subcategory_meta_map():
 		filters=_core_category_filters(is_subcategory=1),
 		fields=["name", "item_group_name", "restaurant_slug", "parent_item_group", "restaurant_sort_order"],
 		ignore_permissions=True,
+		order_by="restaurant_sort_order asc, creation asc, name asc",
 	)
 	return {
 		row.name: {
@@ -15906,6 +15909,7 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 		f"{image_field} as image",
 		"restaurant_category",
 		"restaurant_subcategory",
+		"restaurant_sort_order",
 	]
 	if _has_column("Item", "restaurant_out_of_stock"):
 		boot_item_fields.append("restaurant_out_of_stock")
@@ -15916,7 +15920,7 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 		filters=_core_item_filters(branch),
 		fields=boot_item_fields,
 		ignore_permissions=True,
-		order_by="restaurant_sort_order asc, item_name asc",
+		order_by="restaurant_sort_order asc, creation asc, name asc",
 		limit_start=offset,
 		limit_page_length=page_size + 1,
 	)
@@ -15963,9 +15967,26 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 			"name": key,
 			"title": value.get("title"),
 			"slug": value.get("slug"),
+			"sort_order": value.get("sort_order", 0),
+			"restaurant_sort_order": value.get("sort_order", 0),
+			"subcategories": [],
 		}
 		for key, value in category_meta_map.items()
 	]
+	category_rows_by_name = {row["name"]: row for row in categories}
+	for subcategory_name, subcategory in subcategory_meta_map.items():
+		parent = category_rows_by_name.get(subcategory.get("category"))
+		if not parent:
+			continue
+		parent["subcategories"].append(
+			{
+				"name": subcategory_name,
+				"title": subcategory.get("title"),
+				"slug": subcategory.get("slug"),
+				"sort_order": subcategory.get("sort_order", 0),
+				"restaurant_sort_order": subcategory.get("sort_order", 0),
+			}
+		)
 	config = get_management_pos_config()
 	print_brand_settings = _management_get_print_brand_settings()
 	return {
