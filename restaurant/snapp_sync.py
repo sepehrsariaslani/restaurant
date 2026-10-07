@@ -588,6 +588,7 @@ def _find_food_partner_modifier_mapping(identity, mapping_index=None):
             row.get("bom_name"),
             row.get("ingredient_key"),
             row.get("alternative_item"),
+            json.dumps(row.get("customization") or {}, ensure_ascii=False, sort_keys=True),
         ): row
         for row in matches
     }
@@ -687,7 +688,7 @@ def get_snappfood_bom_alternatives(item_name=""):
     item_doc = frappe.get_doc("Item", item_name)
     item_slug = str(item_doc.get("restaurant_slug") or "").strip()
     if not item_slug:
-        return {"status": "success", "item": item_name, "item_name": item_doc.get("item_name") or item_name, "boms": []}
+        return {"status": "success", "item": item_name, "item_name": item_doc.get("item_name") or item_name, "item_slug": "", "boms": []}
 
     bom_rows = frappe.get_all(
         "BOM",
@@ -746,6 +747,7 @@ def get_snappfood_bom_alternatives(item_name=""):
         "status": "success",
         "item": item_name,
         "item_name": item_doc.get("item_name") or item_name,
+        "item_slug": item_slug,
         "primary_bom_name": primary_bom_name,
         "boms": boms,
     }
@@ -766,13 +768,14 @@ def save_snappfood_modifier_mapping(
     bom_name="",
     ingredient_key="",
     alternative_item="",
+    customization=None,
 ):
     """Persist a Food Partner identity as a BOM option on its native base Item."""
     parent_item = str(parent_item or "").strip()
     group_name = str(group_name or "").strip()
     option_name = str(option_name or "").strip()
     mapping_mode = str(mapping_mode or "modifier").strip().lower()
-    if mapping_mode not in {"modifier", "item_modifier", "item_alternative"}:
+    if mapping_mode not in {"modifier", "item_modifier", "item_alternative", "item_customization"}:
         mapping_mode = "modifier"
     if not parent_item or not frappe.db.exists("Item", parent_item):
         raise frappe.ValidationError("کالای اصلی Modifier معتبر نیست.")
@@ -787,7 +790,7 @@ def save_snappfood_modifier_mapping(
         "product_hash_id": str(product_hash_id or "").strip(),
         "variation_hash_id": str(variation_hash_id or "").strip(),
     }
-    if mapping_mode in {"item_modifier", "item_alternative"}:
+    if mapping_mode in {"item_modifier", "item_alternative", "item_customization"}:
         product_identity = identity["product_id"]
         product_hash_identity = identity["product_hash_id"]
         # An explicit variation_id is authoritative even when the provider
@@ -812,6 +815,7 @@ def save_snappfood_modifier_mapping(
     selected_bom = None
     selected_ingredient = None
     selected_alternative = None
+    saved_customization = {}
     context = {"item_name": frappe.db.get_value("Item", parent_item, "item_name") or parent_item}
     if mapping_mode == "item_alternative":
         bom_name = str(bom_name or "").strip()
@@ -833,6 +837,43 @@ def save_snappfood_modifier_mapping(
         )
         if not selected_bom or not selected_ingredient or not selected_alternative:
             raise frappe.ValidationError("BOM یا جایگزین انتخاب‌شده برای مادهٔ این کالا معتبر نیست.")
+    elif mapping_mode == "item_customization":
+        customization = customization if isinstance(customization, dict) else {}
+        customization_bom_name = str(customization.get("bom_name") or bom_name or "").strip()
+        bom_context = get_snappfood_bom_alternatives(parent_item)
+        selected_bom = next(
+            (row for row in bom_context.get("boms") or [] if row.get("name") == customization_bom_name),
+            None,
+        )
+        if not selected_bom:
+            raise frappe.ValidationError("فرمول BOM انتخاب‌شده برای این کالا معتبر نیست.")
+        selected_choices = []
+        raw_choices = customization.get("selected_alternatives") or []
+        if not isinstance(raw_choices, list):
+            raise frappe.ValidationError("ساختار جایگزین‌های انتخاب‌شده معتبر نیست.")
+        for choice in raw_choices:
+            if not isinstance(choice, dict):
+                continue
+            ingredient_key = str(choice.get("ingredient_key") or "").strip()
+            alternative_item = str(choice.get("alternative_item") or "").strip()
+            ingredient = next(
+                (row for row in selected_bom.get("ingredients") or [] if row.get("key") == ingredient_key),
+                None,
+            )
+            alternative = next(
+                (
+                    row for row in (ingredient or {}).get("alternatives") or []
+                    if row.get("alternative_item") == alternative_item
+                ),
+                None,
+            )
+            if not ingredient or not alternative:
+                raise frappe.ValidationError("یکی از جایگزین‌های انتخاب‌شده برای فرمول این کالا معتبر نیست.")
+            selected_choices.append({"ingredient_key": ingredient_key, "alternative_item": alternative_item})
+        saved_customization = {
+            "bom_name": selected_bom.get("name") or "",
+            "selected_alternatives": selected_choices,
+        }
     else:
         context = get_snappfood_modifier_groups(parent_item)
         selected_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
@@ -906,6 +947,7 @@ def save_snappfood_modifier_mapping(
             "ingredient_item": selected_ingredient.get("ingredient_item") if selected_ingredient else "",
             "alternative_item": selected_alternative.get("alternative_item") if selected_alternative else "",
             "alternative_label": selected_alternative.get("item_name") if selected_alternative else "",
+            "customization": saved_customization,
         }
     )
     frappe.db.set_value(
@@ -931,6 +973,7 @@ def save_snappfood_modifier_mapping(
         "ingredient_label": selected_ingredient.get("label") if selected_ingredient else "",
         "alternative_item": selected_alternative.get("alternative_item") if selected_alternative else "",
         "alternative_label": selected_alternative.get("item_name") if selected_alternative else "",
+        "customization": saved_customization,
     }
 
 
@@ -961,10 +1004,13 @@ def _build_snapp_order_preview(
         }
         mapped_modifier = _find_food_partner_modifier_mapping(mapping_identity, modifier_mapping_index)
         is_item_modifier_mapping = bool(
-            mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_alternative"}
+            mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_alternative", "item_customization"}
         )
         is_item_alternative_mapping = bool(
             mapped_modifier and mapped_modifier.get("mapping_mode") == "item_alternative"
+        )
+        is_item_customization_mapping = bool(
+            mapped_modifier and mapped_modifier.get("mapping_mode") == "item_customization"
         )
         mapped_item = (
             {
@@ -1001,7 +1047,7 @@ def _build_snapp_order_preview(
                         "option_label": mapped_modifier.get("option_label") or mapped_modifier.get("option_name") or "",
                         "mapping_mode": mapped_modifier.get("mapping_mode") or "modifier",
                     }
-                    if mapped_modifier and not is_item_alternative_mapping
+                    if mapped_modifier and not is_item_alternative_mapping and not is_item_customization_mapping
                     else None
                 ),
                 "mapped_alternative": (
@@ -1018,6 +1064,17 @@ def _build_snapp_order_preview(
                         "alternative_label": mapped_modifier.get("alternative_label") or mapped_modifier.get("alternative_item") or "",
                     }
                     if is_item_alternative_mapping
+                    else None
+                ),
+                "mapped_customization": (
+                    {
+                        "parent_item": mapped_modifier.get("parent_item") or "",
+                        "parent_item_code": mapped_modifier.get("parent_item_code") or mapped_modifier.get("parent_item") or "",
+                        "parent_item_name": mapped_modifier.get("parent_item_name") or mapped_modifier.get("parent_item") or "",
+                        "mapping_mode": "item_customization",
+                        "customization": mapped_modifier.get("customization") or {},
+                    }
+                    if is_item_customization_mapping
                     else None
                 ),
             }
@@ -1735,6 +1792,7 @@ def fetch_snapp_menu(settings=None):
 def _local_item_fields():
     fields = ["name", "item_code", "item_name", "disabled"]
     for fieldname in (
+        "restaurant_slug",
         "custom_snapp_code",
         "restaurant_external_menu_item_id",
         "restaurant_external_product_id",
@@ -2070,7 +2128,7 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
     for row in menu_rows:
         mapped_modifier = _find_food_partner_modifier_mapping(row, modifier_mapping_index)
         exact = _find_mapped_local_item(row, local_items)
-        if mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_alternative"}:
+        if mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_alternative", "item_customization"}:
             parent_item_name = str(mapped_modifier.get("parent_item") or "").strip()
             exact = next(
                 (item for item in local_items if str(item.get("name") or "").strip() == parent_item_name),
@@ -2109,10 +2167,13 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
                 **row,
                 "mapped_item": exact,
                 "mapped_modifier": mapped_modifier
-                if mapped_modifier and mapped_modifier.get("mapping_mode") != "item_alternative"
+                if mapped_modifier and mapped_modifier.get("mapping_mode") not in {"item_alternative", "item_customization"}
                 else None,
                 "mapped_alternative": mapped_modifier
                 if mapped_modifier and mapped_modifier.get("mapping_mode") == "item_alternative"
+                else None,
+                "mapped_customization": mapped_modifier
+                if mapped_modifier and mapped_modifier.get("mapping_mode") == "item_customization"
                 else None,
                 "mapping_status": "Mapped" if exact else "Unmapped",
                 "suggested_item": suggested,
@@ -3275,10 +3336,13 @@ def _create_sales_order(order_payload):
     for line in source_items:
         modifier_mapping = _find_food_partner_modifier_mapping(line, modifier_mapping_index)
         is_item_modifier_mapping = bool(
-            modifier_mapping and modifier_mapping.get("mapping_mode") in {"item_modifier", "item_alternative"}
+            modifier_mapping and modifier_mapping.get("mapping_mode") in {"item_modifier", "item_alternative", "item_customization"}
         )
         is_item_alternative_mapping = bool(
             modifier_mapping and modifier_mapping.get("mapping_mode") == "item_alternative"
+        )
+        is_item_customization_mapping = bool(
+            modifier_mapping and modifier_mapping.get("mapping_mode") == "item_customization"
         )
         item_code = str(modifier_mapping.get("parent_item") or "").strip() if modifier_mapping else _resolve_item_code(line)
         if modifier_mapping and not frappe.db.exists("Item", item_code):
@@ -3321,6 +3385,19 @@ def _create_sales_order(order_payload):
                         "alternative_item": mapping.get("alternative_item"),
                     }
                 )
+            elif is_item_customization_mapping:
+                saved_customization = mapping.get("customization") or {}
+                if not isinstance(saved_customization, dict) or not saved_customization.get("bom_name"):
+                    raise frappe.ValidationError("انتخاب‌های BOM برای این گزینه کامل نیست؛ آن را دوباره ثبت کنید.")
+                customization["bom_name"] = saved_customization.get("bom_name")
+                customization["selected_alternatives"] = [
+                    {
+                        "ingredient_key": choice.get("ingredient_key"),
+                        "alternative_item": choice.get("alternative_item"),
+                    }
+                    for choice in saved_customization.get("selected_alternatives") or []
+                    if isinstance(choice, dict) and choice.get("ingredient_key") and choice.get("alternative_item")
+                ]
             else:
                 customization.setdefault("selected_modifiers", []).append(
                     {
