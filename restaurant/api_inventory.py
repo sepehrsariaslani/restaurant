@@ -21,6 +21,8 @@ Provided features (on top of the already existing BOM/production pipeline):
 """
 
 import json
+import re
+import secrets
 from html import escape as html_escape
 
 import frappe
@@ -37,6 +39,13 @@ from restaurant.api import (
 	_management_resolve_item_name,
 	_management_get_print_brand_settings,
 	_table_columns_from_rows,
+)
+from restaurant.production_inventory_helpers import (
+	_inv_branch_production_work_order_names,
+	_inv_build_production_correction_rows,
+	_inv_correction_rows_match,
+	_inv_merge_branch_production_settings,
+	_inv_summarize_correction_rows,
 )
 
 
@@ -62,6 +71,10 @@ __all__ = [
 	"_inv_ensure_ops_ready",
 	# boot
 	"get_management_inventory_boot",
+	"get_management_branch_production_settings",
+	"save_management_branch_production_settings",
+	"get_management_production_warehouse_correction_preview",
+	"apply_management_production_warehouse_correction",
 	# material requests
 	"list_management_material_requests",
 	"get_management_material_request",
@@ -164,6 +177,320 @@ MATERIAL_REQUEST_STATUS_LABELS = {
 ORDER_LOSS_KINDS = ["اوت شده", "خسارت", "مرجوعی به انبار"]
 
 INVENTORY_MODULE_ERRORS = _("Restaurant Inventory")
+BRANCH_PRODUCTION_SETTINGS_DOCTYPE = "Restaurant Branch Production Settings"
+PRODUCTION_CORRECTION_CACHE_PREFIX = "restaurant-production-warehouse-correction:"
+PRODUCTION_CORRECTION_TTL_SECONDS = 3600
+
+
+def _inv_production_settings_payload(doc):
+	return {
+		"branch": doc.get("branch") or "DEFAULT",
+		"company": doc.get("company") or "",
+		"is_active": cint(doc.get("is_active")),
+		"raw_warehouse": doc.get("raw_warehouse") or "",
+		"kitchen_wip_warehouse": doc.get("kitchen_wip_warehouse") or "",
+		"finished_goods_warehouse": doc.get("finished_goods_warehouse") or "",
+	}
+
+
+def _inv_get_production_settings_doc(branch="DEFAULT", require_active=False):
+	if not frappe.db.exists("DocType", BRANCH_PRODUCTION_SETTINGS_DOCTYPE):
+		frappe.throw(_("تنظیمات مسیر انبار تولید در سیستم موجود نیست."))
+	branch = str(branch or "DEFAULT").strip() or "DEFAULT"
+	name = frappe.db.get_value(BRANCH_PRODUCTION_SETTINGS_DOCTYPE, {"branch": branch}, "name")
+	if not name:
+		frappe.throw(_("تنظیمات تولید برای شعبهٔ {0} پیدا نشد.").format(branch))
+	doc = frappe.get_doc(BRANCH_PRODUCTION_SETTINGS_DOCTYPE, name)
+	if require_active and not cint(doc.is_active):
+		frappe.throw(_("تنظیمات تولید این شعبه غیرفعال است."))
+	return doc
+
+
+def _inv_validate_production_warehouse(warehouse, company, label):
+	warehouse = str(warehouse or "").strip()
+	if not warehouse:
+		frappe.throw(_("برای «{0}» باید انبار انتخاب شود.").format(label))
+	row = frappe.db.get_value(
+		"Warehouse", warehouse, ["company", "disabled", "is_group"], as_dict=True
+	)
+	if not row:
+		frappe.throw(_("انبار «{0}» پیدا نشد.").format(warehouse))
+	if row.company != company:
+		frappe.throw(_("انبار «{0}» متعلق به شرکت انتخاب‌شده نیست.").format(warehouse))
+	if cint(row.disabled) or cint(row.is_group):
+		frappe.throw(_("انبار «{0}» باید فعال و غیرگروهی باشد.").format(warehouse))
+	return warehouse
+
+
+def _inv_require_doctype_permission(doctype, permission_type, label):
+	if not frappe.has_permission(doctype, ptype=permission_type):
+		frappe.throw(
+			_("برای {0} مجوز کافی ندارید.").format(label),
+			frappe.PermissionError,
+		)
+
+
+@frappe.whitelist()
+def get_management_branch_production_settings(branch="DEFAULT"):
+	"""Read a branch's native production warehouse routing."""
+	_ensure_management_access()
+	return _inv_production_settings_payload(_inv_get_production_settings_doc(branch))
+
+
+@frappe.whitelist(methods=["POST"])
+def save_management_branch_production_settings(payload=None):
+	"""Update only the editable routing fields on the native branch settings."""
+	_ensure_management_access()
+	payload = _inv_parse_payload(payload)
+	branch = str(payload.get("branch") or "DEFAULT").strip() or "DEFAULT"
+	name = frappe.db.get_value(BRANCH_PRODUCTION_SETTINGS_DOCTYPE, {"branch": branch}, "name")
+	_inv_require_doctype_permission(
+		BRANCH_PRODUCTION_SETTINGS_DOCTYPE,
+		"write" if name else "create",
+		_("تنظیم مسیر تولید"),
+	)
+	if name:
+		doc = frappe.get_doc(BRANCH_PRODUCTION_SETTINGS_DOCTYPE, name)
+		current = _inv_production_settings_payload(doc)
+	else:
+		current = {"branch": branch, "company": str(payload.get("company") or "").strip(), "is_active": 1}
+		if not current["company"]:
+			frappe.throw(_("شرکت تنظیمات تولید مشخص نشده است."))
+		doc = frappe.new_doc(BRANCH_PRODUCTION_SETTINGS_DOCTYPE)
+
+	settings = _inv_merge_branch_production_settings(current, payload)
+	company = str(current.get("company") or "").strip()
+	if not company or not frappe.db.exists("Company", company):
+		frappe.throw(_("شرکت تنظیمات تولید معتبر نیست."))
+	for key, label in (
+		("raw_warehouse", _("انبار مواد اولیه")),
+		("kitchen_wip_warehouse", _("انبار کالای در جریان")),
+		("finished_goods_warehouse", _("انبار محصول نهایی")),
+	):
+		settings[key] = _inv_validate_production_warehouse(settings.get(key), company, label)
+
+	doc.branch = branch
+	doc.company = company
+	doc.is_active = cint(settings.get("is_active", 1))
+	doc.raw_warehouse = settings["raw_warehouse"]
+	doc.kitchen_wip_warehouse = settings["kitchen_wip_warehouse"]
+	doc.finished_goods_warehouse = settings["finished_goods_warehouse"]
+	doc.save()
+	return _inv_production_settings_payload(doc)
+
+
+def _inv_current_production_correction_rows(settings):
+	"""Read current positive bins for products produced into a non-target warehouse."""
+	company = settings.company
+	target_warehouse = _inv_validate_production_warehouse(
+		settings.finished_goods_warehouse, company, _("انبار محصول نهایی")
+	)
+	tickets = frappe.get_all(
+		"Restaurant Production Ticket",
+		filters={"company": company, "branch": settings.branch},
+		fields=["name", "company", "branch", "work_order"],
+		limit_page_length=100000,
+	)
+	ticket_names = sorted({row.name for row in tickets if row.name})
+	linked_work_orders = []
+	if ticket_names and _has_column("Work Order", "restaurant_production_ticket"):
+		linked_work_orders = frappe.get_all(
+			"Work Order",
+			filters={
+				"company": company,
+				"docstatus": 1,
+				"restaurant_production_ticket": ["in", ticket_names],
+			},
+			fields=["name", "company", "docstatus", "restaurant_production_ticket"],
+			limit_page_length=100000,
+		)
+	work_order_names = _inv_branch_production_work_order_names(
+		tickets, linked_work_orders, settings.branch, company
+	)
+	if not work_order_names:
+		return []
+	work_orders = frappe.get_all(
+		"Work Order",
+		filters={"name": ["in", work_order_names], "company": company, "docstatus": 1},
+		fields=["production_item", "fg_warehouse"],
+		limit_page_length=100000,
+	)
+	produced_warehouses = {}
+	for work_order in work_orders:
+		item_code = str(work_order.get("production_item") or "").strip()
+		source = str(work_order.get("fg_warehouse") or "").strip()
+		if item_code and source and source != target_warehouse:
+			produced_warehouses.setdefault(item_code, set()).add(source)
+	if not produced_warehouses:
+		return []
+
+	item_codes = sorted(produced_warehouses)
+	sources = sorted({warehouse for values in produced_warehouses.values() for warehouse in values})
+	bin_rows = frappe.get_all(
+		"Bin",
+		filters={"warehouse": ["in", sources], "item_code": ["in", item_codes]},
+		fields=["item_code", "warehouse", "actual_qty"],
+		limit_page_length=100000,
+	)
+	active_sources = sorted({row.warehouse for row in bin_rows if flt(row.actual_qty) > 0})
+	if not active_sources:
+		return []
+	warehouse_rows = frappe.get_all(
+		"Warehouse",
+		filters={"name": ["in", active_sources]},
+		fields=["name", "company", "disabled", "is_group"],
+		limit_page_length=len(active_sources),
+	)
+	valid_sources = {
+		row.name
+		for row in warehouse_rows
+		if row.company == company and not cint(row.disabled) and not cint(row.is_group)
+	}
+	invalid_sources = sorted(set(active_sources) - valid_sources)
+	if invalid_sources:
+		frappe.throw(
+			_("انبارهای مبدأ تولید باید فعال و متعلق به همان شرکت باشند: {0}").format(
+				", ".join(invalid_sources)
+			)
+		)
+	store_rows = frappe.get_all(
+		"Bin",
+		filters={"warehouse": target_warehouse, "item_code": ["in", item_codes]},
+		fields=["item_code", "actual_qty"],
+		limit_page_length=100000,
+	)
+	item_rows = frappe.get_all(
+		"Item",
+		filters={"name": ["in", item_codes]},
+		fields=["name", "item_name", "stock_uom"],
+		limit_page_length=len(item_codes),
+	)
+	return _inv_build_production_correction_rows(
+		produced_warehouses=produced_warehouses,
+		balances={(row.item_code, row.warehouse): flt(row.actual_qty) for row in bin_rows},
+		item_uoms={row.name: row.stock_uom for row in item_rows},
+		item_names={row.name: row.item_name for row in item_rows},
+		store_balances={row.item_code: flt(row.actual_qty) for row in store_rows},
+		target_warehouse=target_warehouse,
+	)
+
+
+@frappe.whitelist()
+def get_management_production_warehouse_correction_preview(branch="DEFAULT"):
+	"""Create a short-lived, read-only snapshot for a reviewed native transfer."""
+	_ensure_management_access()
+	settings = _inv_get_production_settings_doc(branch, require_active=True)
+	rows = _inv_current_production_correction_rows(settings)
+	token = secrets.token_urlsafe(32)
+	frappe.cache().set_value(
+		f"{PRODUCTION_CORRECTION_CACHE_PREFIX}{token}",
+		{
+			"branch": settings.branch,
+			"company": settings.company,
+			"target_warehouse": settings.finished_goods_warehouse,
+			"rows": rows,
+			"user": frappe.session.user,
+		},
+		expires_in_sec=PRODUCTION_CORRECTION_TTL_SECONDS,
+	)
+	return {
+		"preview_token": token,
+		"branch": settings.branch,
+		"target_warehouse": settings.finished_goods_warehouse,
+		"rows": rows,
+		"summary_by_uom": _inv_summarize_correction_rows(rows),
+	}
+
+
+def _inv_create_production_correction_entry(*, company, token, rows, target_warehouse):
+	entry = frappe.new_doc("Stock Entry")
+	entry.stock_entry_type = "Material Transfer"
+	entry.purpose = "Material Transfer"
+	entry.company = company
+	entry.to_warehouse = target_warehouse
+	entry.remarks = f"اصلاح مانده تولید به انبار محصول نهایی [restaurant-production-correction:{token}]"
+	for item in rows:
+		row = entry.append("items", {})
+		row.item_code = item["item_code"]
+		row.qty = flt(item["qty_to_transfer"])
+		row.uom = item["stock_uom"]
+		row.stock_uom = item["stock_uom"]
+		row.conversion_factor = 1
+		row.transfer_qty = flt(item["qty_to_transfer"])
+		row.s_warehouse = item["source_warehouse"]
+		row.t_warehouse = target_warehouse
+	entry.insert()
+	entry.submit()
+	frappe.db.commit()
+	return entry
+
+
+def _inv_apply_production_warehouse_correction_locked(token):
+	marker = f"[restaurant-production-correction:{token}]"
+	existing = frappe.get_all(
+		"Stock Entry",
+		filters={"remarks": ["like", f"%{marker}%"]},
+		fields=["name", "docstatus"],
+		limit_page_length=1,
+	)
+	if existing:
+		if cint(existing[0].docstatus) == 1:
+			return {"status": "already_applied", "stock_entry": existing[0].name}
+		frappe.throw(_("سند انتقال {0} با همین پیش‌نمایش وجود دارد و نیاز به بررسی دارد.").format(existing[0].name))
+
+	preview = frappe.cache().get_value(f"{PRODUCTION_CORRECTION_CACHE_PREFIX}{token}")
+	if isinstance(preview, str):
+		try:
+			preview = json.loads(preview)
+		except (TypeError, ValueError):
+			preview = None
+	if not isinstance(preview, dict) or preview.get("user") != frappe.session.user:
+		frappe.throw(_("پیش‌نمایش منقضی یا نامعتبر است؛ دوباره پیش‌نمایش بگیرید."))
+	settings = _inv_get_production_settings_doc(preview.get("branch"), require_active=True)
+	if settings.company != preview.get("company") or settings.finished_goods_warehouse != preview.get("target_warehouse"):
+		frappe.throw(_("تنظیم مقصد تولید پس از پیش‌نمایش تغییر کرده است؛ دوباره پیش‌نمایش بگیرید."))
+	current_rows = _inv_current_production_correction_rows(settings)
+	if not _inv_correction_rows_match(preview.get("rows"), current_rows):
+		frappe.throw(_("موجودی پس از پیش‌نمایش تغییر کرده است؛ انتقال انجام نشد و باید دوباره پیش‌نمایش بگیرید."))
+	if not current_rows:
+		frappe.throw(_("ماندهٔ مثبتی برای انتقال وجود ندارد."))
+
+	entry = _inv_create_production_correction_entry(
+		company=settings.company,
+		token=token,
+		rows=current_rows,
+		target_warehouse=settings.finished_goods_warehouse,
+	)
+	return {"status": "success", "stock_entry": entry.name, "rows": current_rows}
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_management_production_warehouse_correction(preview_token):
+	"""Post only the exact unchanged snapshot previously previewed by this user."""
+	_ensure_management_access()
+	_inv_require_doctype_permission("Stock Entry", "create", _("سند انتقال انبار"))
+	_inv_require_doctype_permission("Stock Entry", "submit", _("ثبت سند انتقال انبار"))
+	token = str(preview_token or "").strip()
+	if not re.fullmatch(r"[A-Za-z0-9_-]{32,100}", token):
+		frappe.throw(_("پیش‌نمایش انتقال معتبر نیست؛ دوباره پیش‌نمایش بگیرید."))
+	lock = frappe.cache().lock(
+		f"{PRODUCTION_CORRECTION_CACHE_PREFIX}apply:{token}:lock",
+		timeout=300,
+		blocking_timeout=5,
+	)
+	try:
+		acquired = bool(lock.acquire())
+	except Exception:
+		acquired = False
+	if not acquired:
+		frappe.throw(_("ثبت همین انتقال در حال انجام است؛ چند لحظه بعد سند را بررسی کنید."))
+	try:
+		return _inv_apply_production_warehouse_correction_locked(token)
+	finally:
+		try:
+			lock.release()
+		except Exception:
+			pass
 
 
 # ---------------------------------------------------------------------------
