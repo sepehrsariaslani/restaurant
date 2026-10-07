@@ -527,6 +527,24 @@ def _food_partner_mapping_lookup_key(identity):
     return "", ""
 
 
+def _has_unique_food_partner_product_identity(product_id):
+    product_id = str(product_id or "").strip()
+    if not product_id:
+        return False
+    menu_rows = fetch_snapp_menu().get("items") or []
+    matching_rows = [
+        row
+        for row in menu_rows
+        if str(row.get("product_id") or "").strip() == product_id
+    ]
+    return (
+        len(matching_rows) == 1
+        and str(matching_rows[0].get("external_id") or "").strip() == product_id
+        and not str(matching_rows[0].get("variation_id") or "").strip()
+        and not str(matching_rows[0].get("variation_hash_id") or "").strip()
+    )
+
+
 def _food_partner_modifier_mapping_index():
     if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
         return {}
@@ -766,6 +784,7 @@ def save_snappfood_modifier_mapping(
     bom_name="",
     ingredient_key="",
     alternative_item="",
+    product_level_identity=False,
 ):
     """Persist a Food Partner identity as a BOM option on its native base Item."""
     parent_item = str(parent_item or "").strip()
@@ -787,6 +806,7 @@ def save_snappfood_modifier_mapping(
         "product_hash_id": str(product_hash_id or "").strip(),
         "variation_hash_id": str(variation_hash_id or "").strip(),
     }
+    has_explicit_product_identity = False
     if mapping_mode in {"item_modifier", "item_alternative"}:
         product_identity = identity["product_id"]
         product_hash_identity = identity["product_hash_id"]
@@ -801,7 +821,20 @@ def save_snappfood_modifier_mapping(
         has_option_identity = has_option_identity or bool(
             variation_hash and variation_hash != product_hash_identity
         )
-        if not has_option_identity:
+        product_level_identity_requested = (
+            product_level_identity is True
+            and mapping_mode in {"item_modifier", "item_alternative"}
+            and bool(product_identity)
+            and identity["external_id"] == product_identity
+            and identity["menu_item_id"] == product_identity
+            and not identity["variation_id"]
+            and not variation_hash
+        )
+        if product_level_identity_requested:
+            has_explicit_product_identity = _has_unique_food_partner_product_identity(product_identity)
+            if not has_explicit_product_identity:
+                raise frappe.ValidationError("شناسهٔ محصول فقط برای یک گزینهٔ منوی یکتا قابل استفاده است.")
+        if not has_option_identity and not has_explicit_product_identity:
             raise frappe.ValidationError("برای نگاشت کالا و Modifier، شناسهٔ منحصربه‌فرد گزینه لازم است.")
     lookup_field, lookup_value = _food_partner_mapping_lookup_key(identity)
     if not lookup_field or not lookup_value:
@@ -889,6 +922,7 @@ def save_snappfood_modifier_mapping(
             "lookup_field": lookup_field,
             "lookup_value": lookup_value,
             "identity": identity,
+            "product_level_identity": bool(has_explicit_product_identity),
             "parent_item": parent_item,
             "mapping_mode": mapping_mode,
             "group_name": group_name if selected_group else "",
@@ -921,6 +955,7 @@ def save_snappfood_modifier_mapping(
         "parent_item": parent_item,
         "parent_item_name": context.get("item_name") or parent_item,
         "mapping_mode": mapping_mode,
+        "product_level_identity": bool(has_explicit_product_identity),
         "group_name": group_name if selected_group else "",
         "group_title": (selected_group.get("title") or group_name) if selected_group else "",
         "option_name": option_name if selected_option else "",

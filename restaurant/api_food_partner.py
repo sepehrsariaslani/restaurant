@@ -46,4 +46,5 @@ def save_snappfood_modifier_mapping(payload=None):
 		bom_name=payload.get("bom_name") or "",
 		ingredient_key=payload.get("ingredient_key") or "",
 		alternative_item=payload.get("alternative_item") or "",
+		product_level_identity=payload.get("product_level_identity"),
 	)

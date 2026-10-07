@@ -944,6 +944,128 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(result["ingredient_key"], "قهوه روبوستا")
         self.assertEqual(result["alternative_item"], "ARABICA")
 
+    def test_item_alternative_mapping_accepts_only_an_explicit_product_level_identity(self):
+        bom_options = {
+            "boms": [
+                {
+                    "name": "BOM-LATTE-ALT",
+                    "title": "BOM-LATTE-ALT",
+                    "ingredients": [
+                        {
+                            "key": "قهوه روبوستا",
+                            "label": "قهوه روبوستا",
+                            "alternatives": [{"alternative_item": "ARABICA", "item_name": "قهوه عربیکا"}],
+                        }
+                    ],
+                }
+            ]
+        }
+        saved_value = Mock()
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync.frappe.db, "get_value", return_value="لته"
+        ), patch.object(snapp_sync, "_has_field", return_value=True), patch.object(
+            snapp_sync, "get_snappfood_bom_alternatives", return_value=bom_options
+        ), patch.object(
+            snapp_sync,
+            "fetch_snapp_menu",
+            return_value={"items": [{"product_id": "LATTE-1", "external_id": "LATTE-1", "variation_id": ""}]},
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.object(
+            snapp_sync.frappe.db, "set_value", saved_value
+        ), patch.object(snapp_sync.frappe.db, "commit"):
+            identity = {
+                "parent_item": "LATTE",
+                "mapping_mode": "item_alternative",
+                "product_id": "LATTE-1",
+                "external_id": "LATTE-1",
+                "menu_item_id": "LATTE-1",
+                "bom_name": "BOM-LATTE-ALT",
+                "ingredient_key": "قهوه روبوستا",
+                "alternative_item": "ARABICA",
+            }
+            with self.assertRaisesRegex(frappe.ValidationError, "شناسهٔ منحصربه‌فرد گزینه"):
+                snapp_sync.save_snappfood_modifier_mapping(**identity)
+            with self.assertRaisesRegex(frappe.ValidationError, "شناسهٔ منحصربه‌فرد گزینه"):
+                snapp_sync.save_snappfood_modifier_mapping(
+                    **identity,
+                    product_level_identity="false",
+                )
+
+            result = snapp_sync.save_snappfood_modifier_mapping(
+                **identity,
+                product_level_identity=True,
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["mapping_mode"], "item_alternative")
+        self.assertEqual(result["alternative_item"], "ARABICA")
+        stored_mappings = json.loads(saved_value.call_args.args[3])
+        self.assertEqual(stored_mappings[0]["lookup_field"], "menu_item_id")
+        self.assertEqual(stored_mappings[0]["lookup_value"], "LATTE-1")
+        self.assertEqual(stored_mappings[0]["identity"]["external_id"], "LATTE-1")
+        self.assertEqual(stored_mappings[0]["identity"]["menu_item_id"], "LATTE-1")
+        self.assertTrue(stored_mappings[0]["product_level_identity"])
+
+    def test_product_level_identity_is_rejected_when_menu_has_multiple_rows_for_product(self):
+        bom_options = {
+            "boms": [{
+                "name": "BOM-LATTE-ALT",
+                "ingredients": [{
+                    "key": "قهوه روبوستا",
+                    "alternatives": [{"alternative_item": "ARABICA", "item_name": "قهوه عربیکا"}],
+                }],
+            }]
+        }
+        save_value = Mock()
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync.frappe.db, "get_value", return_value="لته"
+        ), patch.object(snapp_sync, "_has_field", return_value=True), patch.object(
+            snapp_sync,
+            "fetch_snapp_menu",
+            return_value={"items": [
+                {"product_id": "LATTE-1", "external_id": "LATTE-1", "variation_id": ""},
+                {"product_id": "LATTE-1", "external_id": "LATTE-2", "variation_id": ""},
+            ]},
+        ), patch.object(
+            snapp_sync, "get_snappfood_bom_alternatives", return_value=bom_options
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.object(
+            snapp_sync.frappe.db, "set_value", save_value
+        ), patch.object(snapp_sync.frappe.db, "commit"):
+            with self.assertRaisesRegex(frappe.ValidationError, "منوی یکتا"):
+                snapp_sync.save_snappfood_modifier_mapping(
+                    parent_item="LATTE",
+                    mapping_mode="item_alternative",
+                    product_id="LATTE-1",
+                    external_id="LATTE-1",
+                    menu_item_id="LATTE-1",
+                    product_level_identity=True,
+                    bom_name="BOM-LATTE-ALT",
+                    ingredient_key="قهوه روبوستا",
+                    alternative_item="ARABICA",
+                )
+
+        save_value.assert_not_called()
+
+    def test_food_partner_mapping_api_forwards_product_level_identity(self):
+        from restaurant.api_food_partner import save_snappfood_modifier_mapping as save_mapping_api
+
+        payload = {
+            "parent_item": "LATTE",
+            "mapping_mode": "item_alternative",
+            "product_id": "LATTE-1",
+            "external_id": "LATTE-1",
+            "menu_item_id": "LATTE-1",
+            "product_level_identity": True,
+        }
+        with patch("restaurant.api._ensure_management_access"), patch.object(
+            snapp_sync,
+            "save_snappfood_modifier_mapping",
+            return_value={"status": "success"},
+        ) as save_native:
+            result = save_mapping_api(payload=payload)
+
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(save_native.call_args.kwargs["product_level_identity"])
+
     def test_item_alternative_mapping_rejects_an_unavailable_bom_choice(self):
         with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
             snapp_sync, "_has_field", return_value=True
