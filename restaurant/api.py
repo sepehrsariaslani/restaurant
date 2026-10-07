@@ -6787,6 +6787,7 @@ def _get_modifier_source_bom_doc(menu_item_doc, primary_bom_doc=None):
 
 def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=None, primary_bom_doc=None):
 	"""Resolve a BOM-variant modifier to the BOM selected in the POS sheet."""
+	customization = customization if isinstance(customization, dict) else {}
 	primary_bom_doc = primary_bom_doc or _get_bom_doc(menu_item_doc)
 	groups = modifier_groups or []
 	group_map = {
@@ -6799,6 +6800,22 @@ def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=
 		for group in groups
 		if str(group.get("title") or "").strip()
 	}
+	explicit_bom_name = str(customization.get("bom_name") or "").strip()
+	explicit_bom_doc = None
+	if explicit_bom_name:
+		if not frappe.db.exists("BOM", explicit_bom_name):
+			frappe.throw(_("BOM انتخاب‌شده پیدا نشد: {0}").format(explicit_bom_name))
+		explicit_bom_meta = frappe.db.get_value(
+			"BOM", explicit_bom_name, ["item", "docstatus", "is_active"], as_dict=True
+		) or {}
+		valid_items = {str(menu_item_doc.name or "").strip(), str(menu_item_doc.item_code or "").strip()}
+		if (
+			explicit_bom_meta.get("item") not in valid_items
+			or cint(explicit_bom_meta.get("docstatus") or 0) != 1
+			or not cint(explicit_bom_meta.get("is_active") or 0)
+		):
+			frappe.throw(_("BOM انتخاب‌شده برای این محصول معتبر نیست: {0}").format(explicit_bom_name))
+		explicit_bom_doc = frappe.get_doc("BOM", explicit_bom_name)
 	for selected in _normalize_selected_modifiers((customization or {}).get("selected_modifiers")):
 		raw_group = str(selected.get("group") or "").strip()
 		group_name = raw_group if raw_group in group_map else group_title_map.get(raw_group)
@@ -6826,7 +6843,11 @@ def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=
 			or not cint(bom_meta.get("is_active") or 0)
 		):
 			frappe.throw(_("BOM گونه انتخاب‌شده برای این محصول معتبر نیست: {0}").format(option_name))
+		if explicit_bom_doc and explicit_bom_doc.name != bom_name:
+			frappe.throw(_("BOM صریح انتخاب‌شده با گونهٔ انتخاب‌شده یکسان نیست: {0}").format(option_name))
 		return frappe.get_doc("BOM", bom_name)
+	if explicit_bom_doc:
+		return explicit_bom_doc
 	return primary_bom_doc
 
 
@@ -9742,6 +9763,7 @@ def _refresh_item_nutrition_from_bom(item_code):
 
 
 def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0):
+	customization = customization if isinstance(customization, dict) else {}
 	variant_doc = _resolve_variant_item_for_customization(menu_doc, customization or {})
 	if variant_doc:
 		menu_doc = variant_doc
@@ -10341,6 +10363,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		"ingredient_adjustments": normalized_adjustments,
 		"selected_modifiers": normalized_selected_modifiers,
 		"selected_alternatives": normalized_selected_alternatives,
+		"bom_name": selected_bom_doc.name if selected_bom_doc else "",
 		"nutrition": nutrition_line_payload,
 		"nutrition_totals": _normalize_nutrition_totals(nutrition_line_totals),
 		"variant_fixed_attributes": (customization.get("variant_fixed_attributes") or {}),

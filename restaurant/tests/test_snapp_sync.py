@@ -34,6 +34,7 @@ from restaurant.snapp_sync import (
     _normalize_bearer_token,
     fetch_snapp_orders,
     get_snappfood_mapping_rows,
+    get_snappfood_bom_alternatives,
     save_snappfood_item_mapping,
     _map_order_type,
     _map_status,
@@ -830,6 +831,193 @@ class TestSnappSync(FrappeTestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["mapping_mode"], "item_modifier")
+
+    def test_food_partner_bom_alternatives_follow_pos_item_detail_contract(self):
+        from restaurant import api
+
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync.frappe, "get_doc", return_value={"restaurant_slug": "latte-slug", "item_name": "لته"}
+        ), patch.object(
+            api,
+            "_get_core_item_detail",
+            return_value={
+                "bom_name": "BOM-LATTE-ALT",
+                "ingredients": [
+                    {
+                        "key": "قهوه روبوستا",
+                        "customer_label": "قهوه روبوستا",
+                        "ingredient_item": "ROBUSTA",
+                        "alternative_options": [
+                            {"alternative_item": "ARABICA", "item_name": "قهوه عربیکا", "is_selectable": 1},
+                            {"alternative_item": "UNAVAILABLE", "item_name": "ناموجود", "is_selectable": 0},
+                        ],
+                    },
+                    {"key": "شیر", "alternative_options": []},
+                ],
+            },
+        ), patch.object(
+            snapp_sync.frappe, "get_all", return_value=[{"name": "BOM-LATTE-ALT", "is_default": 0}]
+        ):
+            result = get_snappfood_bom_alternatives("LATTE")
+
+        self.assertEqual(result["item"], "LATTE")
+        self.assertEqual(result["boms"][0]["name"], "BOM-LATTE-ALT")
+        self.assertEqual(result["boms"][0]["ingredients"][0]["key"], "قهوه روبوستا")
+        self.assertEqual(
+            result["boms"][0]["ingredients"][0]["alternatives"],
+            [{"alternative_item": "ARABICA", "item_name": "قهوه عربیکا", "is_selectable": 1}],
+        )
+
+    def test_mapping_rows_restore_food_partner_bom_alternative_selection(self):
+        menu_row = {
+            "external_id": "LATTE-ARABICA",
+            "product_id": "LATTE-PRODUCT",
+            "variation_id": "LATTE-ARABICA",
+            "title": "لته عربیکا",
+        }
+        mapping = {
+            "parent_item": "LATTE",
+            "parent_item_code": "LATTE",
+            "parent_item_name": "لته",
+            "mapping_mode": "item_alternative",
+            "bom_name": "BOM-LATTE-ALT",
+            "ingredient_key": "قهوه روبوستا",
+            "alternative_item": "ARABICA",
+        }
+        with patch.object(snapp_sync, "_get_settings", return_value={}), patch.object(
+            snapp_sync, "_get_local_item_rows", return_value=[]
+        ), patch.object(snapp_sync, "_build_known_menu_rows", return_value=[menu_row]), patch.object(
+            snapp_sync, "_food_partner_modifier_mapping_index", return_value={
+                ("variation_id", "LATTE-ARABICA"): [mapping]
+            }
+        ), patch.object(snapp_sync, "get_sync_status", return_value={}):
+            result = get_snappfood_mapping_rows()
+
+        mapped = result["menu"][0]
+        self.assertEqual(mapped["mapping_status"], "Mapped")
+        self.assertEqual(mapped["mapped_item"]["name"], "LATTE")
+        self.assertIsNone(mapped["mapped_modifier"])
+        self.assertEqual(mapped["mapped_alternative"]["bom_name"], "BOM-LATTE-ALT")
+        self.assertEqual(mapped["mapped_alternative"]["alternative_item"], "ARABICA")
+
+    def test_item_alternative_mapping_validates_and_persists_exact_bom_choice(self):
+        bom_options = {
+            "boms": [
+                {
+                    "name": "BOM-LATTE-ALT",
+                    "title": "BOM-LATTE-ALT",
+                    "ingredients": [
+                        {
+                            "key": "قهوه روبوستا",
+                            "label": "قهوه روبوستا",
+                            "alternatives": [{"alternative_item": "ARABICA", "item_name": "قهوه عربیکا"}],
+                        }
+                    ],
+                }
+            ]
+        }
+        identity = {
+            "product_id": "LATTE-PRODUCT",
+            "variation_id": "LATTE-ARABICA",
+            "external_id": "",
+        }
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync, "_has_field", return_value=True
+        ), patch.object(
+            snapp_sync, "get_snappfood_bom_alternatives", return_value=bom_options
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.object(
+            snapp_sync.frappe.db, "set_value"
+        ), patch.object(snapp_sync.frappe.db, "commit"):
+            result = snapp_sync.save_snappfood_modifier_mapping(
+                parent_item="LATTE",
+                mapping_mode="item_alternative",
+                product_id=identity["product_id"],
+                variation_id=identity["variation_id"],
+                bom_name="BOM-LATTE-ALT",
+                ingredient_key="قهوه روبوستا",
+                alternative_item="ARABICA",
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["mapping_mode"], "item_alternative")
+        self.assertEqual(result["bom_name"], "BOM-LATTE-ALT")
+        self.assertEqual(result["ingredient_key"], "قهوه روبوستا")
+        self.assertEqual(result["alternative_item"], "ARABICA")
+
+    def test_item_alternative_mapping_rejects_an_unavailable_bom_choice(self):
+        with patch.object(snapp_sync.frappe.db, "exists", return_value=True), patch.object(
+            snapp_sync, "_has_field", return_value=True
+        ), patch.object(snapp_sync, "get_snappfood_bom_alternatives", return_value={"boms": []}):
+            with self.assertRaisesRegex(frappe.ValidationError, "BOM یا جایگزین"):
+                snapp_sync.save_snappfood_modifier_mapping(
+                    parent_item="LATTE",
+                    mapping_mode="item_alternative",
+                    variation_id="LATTE-ARABICA",
+                    bom_name="BOM-OTHER",
+                    ingredient_key="قهوه روبوستا",
+                    alternative_item="ARABICA",
+                )
+
+    def test_food_partner_alternative_mapping_imports_one_native_pos_line(self):
+        order_payload = {
+            "order_id": "ORDER-LATTE-1",
+            "customer_name": "مشتری تست",
+            "mobile": "09120000000",
+            "external_customer_id": "customer-latte",
+            "order_type": "takeaway",
+            "address": "",
+            "note": "",
+            "status": "confirmed",
+            "items": [
+                {
+                    "title": "لته عربیکا",
+                    "qty": 2,
+                    "unit_price": 250000,
+                    "product_id": "LATTE-PRODUCT",
+                    "variation_id": "LATTE-ARABICA",
+                }
+            ],
+        }
+        mapping = {
+            "parent_item": "LATTE",
+            "parent_item_name": "لته",
+            "mapping_mode": "item_alternative",
+            "bom_name": "BOM-LATTE-ALT",
+            "ingredient_key": "قهوه روبوستا",
+            "ingredient_label": "قهوه روبوستا",
+            "alternative_item": "ARABICA",
+            "alternative_label": "قهوه عربیکا",
+        }
+        fake_api = types.ModuleType("restaurant.api")
+        fake_api._create_pos_order_payload = Mock(return_value={"order_id": "SO-LATTE-1"})
+        fake_api._set_restaurant_order_status = Mock()
+        fake_api._append_sales_order_note = Mock()
+        fake_db = SimpleNamespace(
+            exists=Mock(return_value=True),
+            get_value=Mock(side_effect=lambda doctype, value, *args, **kwargs: "latte-slug" if doctype == "Item" else "مشتری تست"),
+        )
+        with patch.object(snapp_sync.frappe, "db", fake_db), patch(
+            "restaurant.snapp_sync._ensure_customer", return_value="CUST-LATTE"
+        ), patch("restaurant.snapp_sync._get_settings", return_value={}), patch(
+            "restaurant.snapp_sync._food_partner_modifier_mapping_index",
+            return_value={("variation_id", "LATTE-ARABICA"): [mapping]},
+        ), patch("restaurant.snapp_sync._apply_sales_order_external_fields"), patch(
+            "restaurant.snapp_sync._has_column", return_value=False
+        ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
+            sys.modules, {"restaurant.api": fake_api}
+        ):
+            result = _create_sales_order(order_payload)
+
+        self.assertEqual(result, ("SO-LATTE-1", "created"))
+        pos_payload = fake_api._create_pos_order_payload.call_args.args[0]
+        self.assertEqual(len(pos_payload["items"]), 1)
+        self.assertEqual(pos_payload["items"][0]["item_slug"], "latte-slug")
+        self.assertEqual(pos_payload["items"][0]["external_unit_price"], 250000)
+        self.assertEqual(pos_payload["items"][0]["customization"]["bom_name"], "BOM-LATTE-ALT")
+        self.assertEqual(
+            pos_payload["items"][0]["customization"]["selected_alternatives"],
+            [{"ingredient_key": "قهوه روبوستا", "alternative_item": "ARABICA"}],
+        )
 
     def test_invoice_keeps_external_financial_snapshot_for_reconciliation(self):
         values = _build_sales_invoice_external_values(

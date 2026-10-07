@@ -585,6 +585,9 @@ def _find_food_partner_modifier_mapping(identity, mapping_index=None):
             row.get("group_name"),
             row.get("option_name"),
             row.get("mapping_mode") or "modifier",
+            row.get("bom_name"),
+            row.get("ingredient_key"),
+            row.get("alternative_item"),
         ): row
         for row in matches
     }
@@ -673,6 +676,81 @@ def get_snappfood_modifier_groups(item_name=""):
     }
 
 
+def get_snappfood_bom_alternatives(item_name=""):
+    """Return the active BOM ingredient alternatives exposed by native POS."""
+    item_name = str(item_name or "").strip()
+    if not item_name or not frappe.db.exists("Item", item_name):
+        raise frappe.ValidationError("کالای پایه برای انتخاب جایگزین BOM معتبر نیست.")
+
+    from restaurant import api
+
+    item_doc = frappe.get_doc("Item", item_name)
+    item_slug = str(item_doc.get("restaurant_slug") or "").strip()
+    if not item_slug:
+        return {"status": "success", "item": item_name, "item_name": item_doc.get("item_name") or item_name, "boms": []}
+
+    bom_rows = frappe.get_all(
+        "BOM",
+        filters={"item": item_name, "docstatus": 1, "is_active": 1},
+        fields=["name", "is_default", "modified"],
+        order_by="is_default desc, modified desc, name asc",
+        ignore_permissions=True,
+    )
+    boms = []
+    primary_bom_name = ""
+    for bom_row in bom_rows or []:
+        bom_name = str(bom_row.get("name") or "").strip()
+        if not bom_name:
+            continue
+        detail = api._get_core_item_detail(item_slug, bom_name=bom_name)
+        if str(detail.get("bom_name") or "").strip() != bom_name:
+            continue
+        primary_bom_name = primary_bom_name or str(detail.get("primary_bom_name") or "").strip()
+        ingredients = []
+        for ingredient in detail.get("ingredients") or []:
+            alternatives = [
+                {
+                    "alternative_item": str(option.get("alternative_item") or "").strip(),
+                    "item_name": str(option.get("item_name") or option.get("alternative_item") or "").strip(),
+                    "is_selectable": cint(option.get("is_selectable") if option.get("is_selectable") is not None else 1),
+                }
+                for option in ingredient.get("alternative_options") or []
+                if str(option.get("alternative_item") or "").strip()
+                and cint(option.get("is_selectable") if option.get("is_selectable") is not None else 1) == 1
+                and not cint(option.get("disabled") or option.get("is_disabled") or 0)
+            ]
+            if not alternatives:
+                continue
+            ingredient_key = str(ingredient.get("key") or ingredient.get("name") or "").strip()
+            if not ingredient_key:
+                continue
+            ingredients.append(
+                {
+                    "key": ingredient_key,
+                    "label": str(ingredient.get("customer_label") or ingredient.get("name") or ingredient_key).strip(),
+                    "ingredient_item": str(ingredient.get("ingredient_item") or "").strip(),
+                    "alternatives": alternatives,
+                }
+            )
+        if ingredients:
+            boms.append(
+                {
+                    "name": bom_name,
+                    "title": bom_name,
+                    "is_default": cint(bom_row.get("is_default") or 0),
+                    "ingredients": ingredients,
+                }
+            )
+
+    return {
+        "status": "success",
+        "item": item_name,
+        "item_name": item_doc.get("item_name") or item_name,
+        "primary_bom_name": primary_bom_name,
+        "boms": boms,
+    }
+
+
 def save_snappfood_modifier_mapping(
     item_name="",
     parent_item="",
@@ -685,13 +763,16 @@ def save_snappfood_modifier_mapping(
     product_hash_id="",
     variation_hash_id="",
     menu_item_id="",
+    bom_name="",
+    ingredient_key="",
+    alternative_item="",
 ):
     """Persist a Food Partner identity as a BOM option on its native base Item."""
     parent_item = str(parent_item or "").strip()
     group_name = str(group_name or "").strip()
     option_name = str(option_name or "").strip()
     mapping_mode = str(mapping_mode or "modifier").strip().lower()
-    if mapping_mode not in {"modifier", "item_modifier"}:
+    if mapping_mode not in {"modifier", "item_modifier", "item_alternative"}:
         mapping_mode = "modifier"
     if not parent_item or not frappe.db.exists("Item", parent_item):
         raise frappe.ValidationError("کالای اصلی Modifier معتبر نیست.")
@@ -706,7 +787,7 @@ def save_snappfood_modifier_mapping(
         "product_hash_id": str(product_hash_id or "").strip(),
         "variation_hash_id": str(variation_hash_id or "").strip(),
     }
-    if mapping_mode == "item_modifier":
+    if mapping_mode in {"item_modifier", "item_alternative"}:
         product_identity = identity["product_id"]
         product_hash_identity = identity["product_hash_id"]
         # An explicit variation_id is authoritative even when the provider
@@ -726,14 +807,41 @@ def save_snappfood_modifier_mapping(
     if not lookup_field or not lookup_value:
         raise frappe.ValidationError("شناسهٔ این گزینه در پاسخ Food Partner موجود نیست.")
 
-    context = get_snappfood_modifier_groups(parent_item)
-    selected_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
-    selected_option = next(
-        (row for row in (selected_group or {}).get("options") or [] if row.get("name") == option_name),
-        None,
-    )
-    if not selected_group or not selected_option:
-        raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی فرمول فعال این کالا موجود نیست.")
+    selected_group = None
+    selected_option = None
+    selected_bom = None
+    selected_ingredient = None
+    selected_alternative = None
+    context = {"item_name": frappe.db.get_value("Item", parent_item, "item_name") or parent_item}
+    if mapping_mode == "item_alternative":
+        bom_name = str(bom_name or "").strip()
+        ingredient_key = str(ingredient_key or "").strip()
+        alternative_item = str(alternative_item or "").strip()
+        bom_context = get_snappfood_bom_alternatives(parent_item)
+        selected_bom = next((row for row in bom_context.get("boms") or [] if row.get("name") == bom_name), None)
+        selected_ingredient = next(
+            (row for row in (selected_bom or {}).get("ingredients") or [] if row.get("key") == ingredient_key),
+            None,
+        )
+        selected_alternative = next(
+            (
+                row
+                for row in (selected_ingredient or {}).get("alternatives") or []
+                if row.get("alternative_item") == alternative_item
+            ),
+            None,
+        )
+        if not selected_bom or not selected_ingredient or not selected_alternative:
+            raise frappe.ValidationError("BOM یا جایگزین انتخاب‌شده برای مادهٔ این کالا معتبر نیست.")
+    else:
+        context = get_snappfood_modifier_groups(parent_item)
+        selected_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
+        selected_option = next(
+            (row for row in (selected_group or {}).get("options") or [] if row.get("name") == option_name),
+            None,
+        )
+        if not selected_group or not selected_option:
+            raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی فرمول فعال این کالا موجود نیست.")
 
     all_items = frappe.get_all(
         "Item",
@@ -783,14 +891,21 @@ def save_snappfood_modifier_mapping(
             "identity": identity,
             "parent_item": parent_item,
             "mapping_mode": mapping_mode,
-            "group_name": group_name,
-            "group_title": selected_group.get("title") or group_name,
-            "option_name": option_name,
-            "option_label": selected_option.get("label") or option_name,
-            "option_qty": flt(selected_option.get("option_qty") or 1),
-            "min_qty": flt(selected_option.get("min_qty") or 0),
-            "max_qty": flt(selected_option.get("max_qty") or 0),
-            "qty_step": flt(selected_option.get("qty_step") or 1),
+            "group_name": group_name if selected_group else "",
+            "group_title": (selected_group.get("title") or group_name) if selected_group else "",
+            "option_name": option_name if selected_option else "",
+            "option_label": (selected_option.get("label") or option_name) if selected_option else "",
+            "option_qty": flt(selected_option.get("option_qty") or 1) if selected_option else 1,
+            "min_qty": flt(selected_option.get("min_qty") or 0) if selected_option else 0,
+            "max_qty": flt(selected_option.get("max_qty") or 0) if selected_option else 0,
+            "qty_step": flt(selected_option.get("qty_step") or 1) if selected_option else 1,
+            "bom_name": selected_bom.get("name") if selected_bom else "",
+            "bom_title": selected_bom.get("title") if selected_bom else "",
+            "ingredient_key": selected_ingredient.get("key") if selected_ingredient else "",
+            "ingredient_label": selected_ingredient.get("label") if selected_ingredient else "",
+            "ingredient_item": selected_ingredient.get("ingredient_item") if selected_ingredient else "",
+            "alternative_item": selected_alternative.get("alternative_item") if selected_alternative else "",
+            "alternative_label": selected_alternative.get("item_name") if selected_alternative else "",
         }
     )
     frappe.db.set_value(
@@ -806,10 +921,16 @@ def save_snappfood_modifier_mapping(
         "parent_item": parent_item,
         "parent_item_name": context.get("item_name") or parent_item,
         "mapping_mode": mapping_mode,
-        "group_name": group_name,
-        "group_title": selected_group.get("title") or group_name,
-        "option_name": option_name,
-        "option_label": selected_option.get("label") or option_name,
+        "group_name": group_name if selected_group else "",
+        "group_title": (selected_group.get("title") or group_name) if selected_group else "",
+        "option_name": option_name if selected_option else "",
+        "option_label": (selected_option.get("label") or option_name) if selected_option else "",
+        "bom_name": selected_bom.get("name") if selected_bom else "",
+        "bom_title": selected_bom.get("title") if selected_bom else "",
+        "ingredient_key": selected_ingredient.get("key") if selected_ingredient else "",
+        "ingredient_label": selected_ingredient.get("label") if selected_ingredient else "",
+        "alternative_item": selected_alternative.get("alternative_item") if selected_alternative else "",
+        "alternative_label": selected_alternative.get("item_name") if selected_alternative else "",
     }
 
 
@@ -840,7 +961,10 @@ def _build_snapp_order_preview(
         }
         mapped_modifier = _find_food_partner_modifier_mapping(mapping_identity, modifier_mapping_index)
         is_item_modifier_mapping = bool(
-            mapped_modifier and mapped_modifier.get("mapping_mode") == "item_modifier"
+            mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_alternative"}
+        )
+        is_item_alternative_mapping = bool(
+            mapped_modifier and mapped_modifier.get("mapping_mode") == "item_alternative"
         )
         mapped_item = (
             {
@@ -877,7 +1001,23 @@ def _build_snapp_order_preview(
                         "option_label": mapped_modifier.get("option_label") or mapped_modifier.get("option_name") or "",
                         "mapping_mode": mapped_modifier.get("mapping_mode") or "modifier",
                     }
-                    if mapped_modifier
+                    if mapped_modifier and not is_item_alternative_mapping
+                    else None
+                ),
+                "mapped_alternative": (
+                    {
+                        "parent_item": mapped_modifier.get("parent_item") or "",
+                        "parent_item_code": mapped_modifier.get("parent_item_code") or mapped_modifier.get("parent_item") or "",
+                        "parent_item_name": mapped_modifier.get("parent_item_name") or mapped_modifier.get("parent_item") or "",
+                        "mapping_mode": "item_alternative",
+                        "bom_name": mapped_modifier.get("bom_name") or "",
+                        "bom_title": mapped_modifier.get("bom_title") or mapped_modifier.get("bom_name") or "",
+                        "ingredient_key": mapped_modifier.get("ingredient_key") or "",
+                        "ingredient_label": mapped_modifier.get("ingredient_label") or mapped_modifier.get("ingredient_key") or "",
+                        "alternative_item": mapped_modifier.get("alternative_item") or "",
+                        "alternative_label": mapped_modifier.get("alternative_label") or mapped_modifier.get("alternative_item") or "",
+                    }
+                    if is_item_alternative_mapping
                     else None
                 ),
             }
@@ -1930,7 +2070,7 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
     for row in menu_rows:
         mapped_modifier = _find_food_partner_modifier_mapping(row, modifier_mapping_index)
         exact = _find_mapped_local_item(row, local_items)
-        if mapped_modifier and mapped_modifier.get("mapping_mode") == "item_modifier":
+        if mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_alternative"}:
             parent_item_name = str(mapped_modifier.get("parent_item") or "").strip()
             exact = next(
                 (item for item in local_items if str(item.get("name") or "").strip() == parent_item_name),
@@ -1968,7 +2108,12 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
             {
                 **row,
                 "mapped_item": exact,
-                "mapped_modifier": mapped_modifier,
+                "mapped_modifier": mapped_modifier
+                if mapped_modifier and mapped_modifier.get("mapping_mode") != "item_alternative"
+                else None,
+                "mapped_alternative": mapped_modifier
+                if mapped_modifier and mapped_modifier.get("mapping_mode") == "item_alternative"
+                else None,
                 "mapping_status": "Mapped" if exact else "Unmapped",
                 "suggested_item": suggested,
                 "match_score": round(match_score, 3),
@@ -3130,7 +3275,10 @@ def _create_sales_order(order_payload):
     for line in source_items:
         modifier_mapping = _find_food_partner_modifier_mapping(line, modifier_mapping_index)
         is_item_modifier_mapping = bool(
-            modifier_mapping and modifier_mapping.get("mapping_mode") == "item_modifier"
+            modifier_mapping and modifier_mapping.get("mapping_mode") in {"item_modifier", "item_alternative"}
+        )
+        is_item_alternative_mapping = bool(
+            modifier_mapping and modifier_mapping.get("mapping_mode") == "item_alternative"
         )
         item_code = str(modifier_mapping.get("parent_item") or "").strip() if modifier_mapping else _resolve_item_code(line)
         if modifier_mapping and not frappe.db.exists("Item", item_code):
@@ -3162,13 +3310,25 @@ def _create_sales_order(order_payload):
             cart_item["external_unit_price"] = flt(line.get("unit_price"))
         if is_item_modifier_mapping:
             mapping = modifier_mapping or {}
-            cart_item.setdefault("customization", {}).setdefault("selected_modifiers", []).append(
-                {
-                    "group": mapping.get("group_name") or "",
-                    "option": mapping.get("option_name") or "",
-                    "qty": max(flt(mapping.get("option_qty") or 1), 0.0001),
-                }
-            )
+            customization = cart_item.setdefault("customization", {})
+            if is_item_alternative_mapping:
+                if not mapping.get("bom_name") or not mapping.get("ingredient_key") or not mapping.get("alternative_item"):
+                    raise frappe.ValidationError("نگاشت جایگزین BOM برای این گزینه کامل نیست؛ آن را دوباره ثبت کنید.")
+                customization["bom_name"] = mapping.get("bom_name")
+                customization.setdefault("selected_alternatives", []).append(
+                    {
+                        "ingredient_key": mapping.get("ingredient_key"),
+                        "alternative_item": mapping.get("alternative_item"),
+                    }
+                )
+            else:
+                customization.setdefault("selected_modifiers", []).append(
+                    {
+                        "group": mapping.get("group_name") or "",
+                        "option": mapping.get("option_name") or "",
+                        "qty": max(flt(mapping.get("option_qty") or 1), 0.0001),
+                    }
+                )
         cart_items.append(cart_item)
         resolved_line["cart_item"] = cart_item
 

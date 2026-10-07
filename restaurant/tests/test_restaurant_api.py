@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -8,7 +9,8 @@ from restaurant.api import (
 	_build_ticket_components,
 	_ensure_customer,
 	_extract_qty_map_from_ticket,
-	_recalculate_line,
+    _recalculate_line,
+    _resolve_selected_bom_variant,
 	_sync_work_order_required_items,
 	compute_builder_price,
 	get_customer_checkout_profile,
@@ -304,6 +306,41 @@ class TestRestaurantAPI(FrappeTestCase):
         menu_item.db_set("default_bom", bom.name, update_modified=False)
         if frappe.db.has_column("Item", "restaurant_requires_bom"):
             menu_item.db_set("restaurant_requires_bom", 1, update_modified=False)
+
+        alternative_bom = frappe.get_doc(
+            {
+                "doctype": "BOM",
+                "item": menu_item.item_code,
+                "company": cls.company,
+                "currency": frappe.db.get_value("Company", cls.company, "default_currency"),
+                "conversion_rate": 1,
+                "quantity": 1,
+                "is_default": 0,
+                "is_active": 1,
+                "items": [
+                    {
+                        "item_code": cls.raw_item_code,
+                        "qty": 1,
+                        "uom": cls.uom,
+                        "rate": 100000,
+                        "restaurant_customer_label": "مرغ گریل",
+                        "restaurant_is_included_by_default": 1,
+                        "restaurant_can_remove": 1,
+                        "restaurant_is_required": 0,
+                        "restaurant_is_editable_qty": 1,
+                        "allow_alternative_item": 1,
+                        "restaurant_min_multiplier": 0,
+                        "restaurant_max_multiplier": 3,
+                        "restaurant_step_multiplier": 0.5,
+                        "restaurant_extra_when_added": 0,
+                    }
+                ],
+            }
+        )
+        alternative_bom.insert(ignore_permissions=True)
+        alternative_bom.submit()
+        cls.alternative_bom_name = alternative_bom.name
+        cls._remember_cleanup_doc("BOM", alternative_bom.name)
 
         if frappe.db.exists("DocType", "Restaurant Branch Production Settings"):
             settings_name = frappe.db.get_value("Restaurant Branch Production Settings", {"branch": "DEFAULT"}, "name")
@@ -926,6 +963,114 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertEqual(int(ingredient.get("is_replaceable") or 0), 1)
         alternatives = ingredient.get("alternative_options") or []
         self.assertTrue(any(row.get("alternative_item") == self.alternative_item_code for row in alternatives))
+
+    def test_recalculate_line_uses_explicit_active_bom_for_ingredient_alternative(self):
+        price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
+        set_management_product_price(
+            {
+                "item_name": self.raw_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 12000,
+            }
+        )
+        set_management_product_price(
+            {
+                "item_name": self.alternative_item_code,
+                "price_list": price_list.name,
+                "price_list_rate": 18000,
+            }
+        )
+        line_calc = _recalculate_line(
+            frappe.get_doc("Item", self.menu_item),
+            1,
+            {
+                "bom_name": self.alternative_bom_name,
+                "ingredient_adjustments": [],
+                "selected_alternatives": [
+                    {"ingredient_key": "مرغ گریل", "alternative_item": self.alternative_item_code}
+                ],
+                "selected_modifiers": [],
+            },
+            branch_markup_percent=0,
+        )
+
+        self.assertEqual(line_calc["pricing_breakdown"]["selected_bom"], self.alternative_bom_name)
+        self.assertEqual(line_calc["normalized_customization"]["bom_name"], self.alternative_bom_name)
+        self.assertEqual(
+            line_calc["normalized_customization"]["selected_alternatives"][0]["alternative_item"],
+            self.alternative_item_code,
+        )
+
+    def test_explicit_bom_variant_rejects_a_bom_from_another_item(self):
+        menu_item = SimpleNamespace(name="MENU-1", item_code="MENU-1")
+        primary_bom = SimpleNamespace(name="BOM-PRIMARY")
+        with patch("restaurant.api.frappe.db.exists", return_value=True), patch(
+            "restaurant.api.frappe.db.get_value",
+            return_value={"item": "OTHER-ITEM", "docstatus": 1, "is_active": 1},
+        ):
+            with self.assertRaisesRegex(frappe.ValidationError, "BOM انتخاب‌شده برای این محصول معتبر نیست"):
+                _resolve_selected_bom_variant(
+                    menu_item,
+                    {"bom_name": "BOM-FOREIGN"},
+                    modifier_groups=[],
+                    primary_bom_doc=primary_bom,
+                )
+
+    def test_explicit_foreign_bom_is_rejected_even_when_a_bom_modifier_is_selected(self):
+        menu_item = SimpleNamespace(name="MENU-1", item_code="MENU-1")
+        primary_bom = SimpleNamespace(name="BOM-PRIMARY")
+        modifier_groups = [
+            {
+                "group_name": "RECIPE",
+                "options": [
+                    {"name": "RECIPE-OPTION", "action_type": "bom_variant", "alternative_bom": "BOM-VARIANT"}
+                ],
+            }
+        ]
+        with patch("restaurant.api.frappe.db.exists", return_value=True), patch(
+            "restaurant.api.frappe.db.get_value",
+            side_effect=lambda _doctype, name, *_args, **_kwargs: {
+                "item": "MENU-1" if name == "BOM-VARIANT" else "OTHER-ITEM",
+                "docstatus": 1,
+                "is_active": 1,
+            },
+        ), patch("restaurant.api.frappe.get_doc", return_value=SimpleNamespace(name="BOM-VARIANT")):
+            with self.assertRaisesRegex(frappe.ValidationError, "BOM انتخاب‌شده برای این محصول معتبر نیست"):
+                _resolve_selected_bom_variant(
+                    menu_item,
+                    {
+                        "bom_name": "BOM-FOREIGN",
+                        "selected_modifiers": [{"group": "RECIPE", "option": "RECIPE-OPTION"}],
+                    },
+                    modifier_groups=modifier_groups,
+                    primary_bom_doc=primary_bom,
+                )
+
+    def test_explicit_bom_must_match_the_selected_bom_variant_modifier(self):
+        menu_item = SimpleNamespace(name="MENU-1", item_code="MENU-1")
+        primary_bom = SimpleNamespace(name="BOM-PRIMARY")
+        modifier_groups = [
+            {
+                "group_name": "RECIPE",
+                "options": [
+                    {"name": "RECIPE-OPTION", "action_type": "bom_variant", "alternative_bom": "BOM-VARIANT"}
+                ],
+            }
+        ]
+        with patch("restaurant.api.frappe.db.exists", return_value=True), patch(
+            "restaurant.api.frappe.db.get_value",
+            return_value={"item": "MENU-1", "docstatus": 1, "is_active": 1},
+        ), patch("restaurant.api.frappe.get_doc", side_effect=lambda _doctype, name: SimpleNamespace(name=name)):
+            with self.assertRaisesRegex(frappe.ValidationError, "با گونهٔ انتخاب‌شده یکسان نیست"):
+                _resolve_selected_bom_variant(
+                    menu_item,
+                    {
+                        "bom_name": "BOM-OTHER",
+                        "selected_modifiers": [{"group": "RECIPE", "option": "RECIPE-OPTION"}],
+                    },
+                    modifier_groups=modifier_groups,
+                    primary_bom_doc=primary_bom,
+                )
 
     def test_get_item_detail_resolves_alternative_price_delta_from_default_item_price(self):
         price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
