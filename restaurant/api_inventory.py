@@ -3343,11 +3343,15 @@ def get_management_waste_loss_report(date_from="", date_to="", warehouse=""):
 		as_dict=True,
 	)
 
-	loss_rows = frappe.get_all(
-		ORDER_LOSS_DOCTYPE,
-		filters={"entry_date": ["between", [date_from, date_to]]},
-		fields=["loss_kind", "COUNT(*) AS count", "SUM(amount) AS amount"],
-		group_by="loss_kind",
+	loss_rows = frappe.db.sql(
+		f"""
+		SELECT loss_kind, COUNT(name) AS count, COALESCE(SUM(amount), 0) AS amount
+		FROM `tab{ORDER_LOSS_DOCTYPE}`
+		WHERE entry_date BETWEEN %(date_from)s AND %(date_to)s
+		GROUP BY loss_kind
+		""",
+		{"date_from": date_from, "date_to": date_to},
+		as_dict=True,
 	)
 
 	out_rows = [
