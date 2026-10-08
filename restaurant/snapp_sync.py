@@ -18,14 +18,15 @@ from restaurant.order_review import (
 	order_is_approved,
 )
 from restaurant.food_partner_duplicates import (
+    MANUAL_DUPLICATE_SOURCE,
     assign_manual_duplicates,
+    claim_manual_duplicate_order,
     find_manual_duplicate,
     has_comparable_partner_items,
 )
 
 
 SNAPP_SOURCE = "snapp_food"
-SNAPP_MANUAL_DUPLICATE_SOURCE = "snapp_food_manual_duplicate"
 DEFAULT_API_BASE_URL = "https://api.prod.snapp-store.com"
 DEFAULT_ORIGIN_URL = ""
 DEFAULT_HOST_DOMAIN = ""
@@ -1168,7 +1169,7 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
                     ["name", "restaurant_external_source"],
                     as_dict=True,
                 ) or {}
-                if existing_order_row.get("restaurant_external_source") == SNAPP_MANUAL_DUPLICATE_SOURCE:
+                if existing_order_row.get("restaurant_external_source") == MANUAL_DUPLICATE_SOURCE:
                     existing_manual_duplicate = existing_order_row.get("name") or ""
                 else:
                     existing_order = existing_order_row.get("name") or ""
@@ -3921,7 +3922,7 @@ def sync_snapp_orders(
                 existing_record = existing_sales_orders_by_external_id.get(normalized["order_id"]) or {}
                 existing = existing_record.get("name")
 
-                if existing and existing_record.get("restaurant_external_source") == SNAPP_MANUAL_DUPLICATE_SOURCE:
+                if existing and existing_record.get("restaurant_external_source") == MANUAL_DUPLICATE_SOURCE:
                     result["skipped_count"] += 1
                     result["manual_duplicates_skipped_count"] += 1
                     if requested_order_ids:
@@ -3984,27 +3985,24 @@ def sync_snapp_orders(
 
                 manual_duplicate_sales_order = manual_duplicate_sales_orders.get(normalized["order_id"])
                 if manual_duplicate_sales_order:
-                    frappe.db.set_value(
-                        "Sales Order",
+                    claimed = claim_manual_duplicate_order(
+                        frappe.db,
                         manual_duplicate_sales_order,
-                        {
-                            "restaurant_external_source": SNAPP_MANUAL_DUPLICATE_SOURCE,
-                            "restaurant_external_order_id": normalized["order_id"],
-                            "restaurant_external_bill_number": normalized.get("bill_number") or "",
-                        },
-                        update_modified=False,
+                        normalized["order_id"],
+                        normalized.get("bill_number") or "",
                     )
-                    result["skipped_count"] += 1
-                    result["manual_duplicates_skipped_count"] += 1
-                    if requested_order_ids:
-                        result["sales_orders"].append(
-                            {
-                                "order_id": normalized["order_id"],
-                                "sales_order": manual_duplicate_sales_order,
-                                "action": "manual_duplicate",
-                            }
-                        )
-                    continue
+                    if claimed:
+                        result["skipped_count"] += 1
+                        result["manual_duplicates_skipped_count"] += 1
+                        if requested_order_ids:
+                            result["sales_orders"].append(
+                                {
+                                    "order_id": normalized["order_id"],
+                                    "sales_order": manual_duplicate_sales_order,
+                                    "action": "manual_duplicate",
+                                }
+                            )
+                        continue
 
                 sales_order_name, action = _create_sales_order(normalized)
                 if requested_order_ids:

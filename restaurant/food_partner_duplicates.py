@@ -4,6 +4,7 @@ from math import isfinite
 
 
 ITEM_QUANTITY_TOLERANCE = 0.0001
+MANUAL_DUPLICATE_SOURCE = "snapp_food_manual_duplicate"
 
 
 def _order_day(value):
@@ -143,3 +144,42 @@ def assign_manual_duplicates(partner_orders, manual_orders_by_date):
 		if manual_order:
 			assignments[order_id] = str(manual_order.get("name") or "")
 	return assignments
+
+
+def claim_manual_duplicate_order(db, sales_order_name, partner_order_id, bill_number=""):
+	"""Atomically reserve a submitted manual order for one Partner order ID."""
+	rows = db.sql(
+		"""
+		SELECT restaurant_external_source, restaurant_external_order_id
+		FROM `tabSales Order`
+		WHERE name = %s
+		FOR UPDATE
+		""",
+		(sales_order_name,),
+		as_dict=True,
+	) or []
+	if not rows:
+		return False
+
+	row = rows[0]
+	existing_source = str(row.get("restaurant_external_source") or "").strip()
+	existing_order_id = str(row.get("restaurant_external_order_id") or "").strip()
+	partner_order_id = str(partner_order_id or "").strip()
+	if not partner_order_id:
+		return False
+	if existing_source == MANUAL_DUPLICATE_SOURCE and existing_order_id == partner_order_id:
+		return True
+	if existing_source or existing_order_id:
+		return False
+
+	db.set_value(
+		"Sales Order",
+		sales_order_name,
+		{
+			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
+			"restaurant_external_order_id": partner_order_id,
+			"restaurant_external_bill_number": str(bill_number or ""),
+		},
+		update_modified=False,
+	)
+	return True
