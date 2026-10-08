@@ -192,6 +192,8 @@ def assign_manual_duplicates(partner_orders, manual_orders_by_date):
 	used_names_by_date = {}
 	assignments = {}
 	for partner_order in partner_orders or []:
+		if partner_order.get("manual_duplicate"):
+			continue
 		order_id = str(partner_order.get("order_id") or "").strip()
 		partner_day = _order_day(partner_order.get("created_at"))
 		if not order_id or not partner_day:
@@ -205,6 +207,28 @@ def assign_manual_duplicates(partner_orders, manual_orders_by_date):
 		if manual_order:
 			assignments[order_id] = str(manual_order.get("name") or "")
 	return assignments
+
+
+def mark_manual_duplicate_previews(partner_orders, manual_orders):
+	"""Mark matching previews, including Partner orders imported before a manual entry."""
+	manual_orders_by_date = {}
+	for manual_order in manual_orders or []:
+		manual_day = _order_day(
+			manual_order.get("transaction_date")
+			or manual_order.get("created_at")
+			or manual_order.get("order_date")
+		)
+		if manual_day:
+			manual_orders_by_date.setdefault(manual_day, []).append(manual_order)
+
+	assignments = assign_manual_duplicates(partner_orders, manual_orders_by_date)
+	for partner_order in partner_orders or []:
+		order_id = str(partner_order.get("order_id") or "").strip()
+		manual_order_name = assignments.get(order_id)
+		if manual_order_name:
+			partner_order["manual_duplicate"] = True
+			partner_order["manual_duplicate_sales_order"] = manual_order_name
+	return partner_orders
 
 
 def claim_manual_duplicate_order(db, sales_order_name, partner_order_id):

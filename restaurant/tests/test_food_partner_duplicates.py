@@ -7,6 +7,7 @@ from restaurant.food_partner_duplicates import (
 	claim_manual_duplicate_order,
 	find_manual_duplicate,
 	has_comparable_partner_items,
+	mark_manual_duplicate_previews,
 )
 
 
@@ -44,6 +45,22 @@ def manual_order(*, day="2026-10-08", total=250000, items=None, **extra):
 
 
 class TestFoodPartnerManualDuplicates(unittest.TestCase):
+	def test_marks_an_already_imported_partner_order_when_it_matches_a_manual_order(self):
+		preview = partner_order()
+		preview.update(already_imported=True, sales_order="SO-PARTNER-1")
+
+		mark_manual_duplicate_previews([preview], [manual_order()])
+
+		self.assertTrue(preview["manual_duplicate"])
+		self.assertEqual(preview["manual_duplicate_sales_order"], "SO-1")
+
+	def test_does_not_assign_one_manual_order_to_multiple_partner_previews(self):
+		previews = [partner_order(order_id="FP-1"), partner_order(order_id="FP-2")]
+
+		mark_manual_duplicate_previews(previews, [manual_order()])
+
+		self.assertEqual(sum(bool(row.get("manual_duplicate")) for row in previews), 1)
+
 	def test_matches_same_day_total_and_item_quantities_independent_of_row_order(self):
 		match = find_manual_duplicate(partner_order(), [manual_order()])
 

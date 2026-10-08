@@ -2,6 +2,7 @@ import base64
 import json
 import sys
 import types
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -29,6 +30,7 @@ from restaurant.snapp_sync import (
     _resolve_snapp_primary_customer,
     _resolve_snapp_order_window,
     _select_snapp_orders_for_import,
+    preview_snapp_orders,
     fetch_snapp_menu,
     fetch_snapp_menu_categories,
     _normalize_bearer_token,
@@ -1247,6 +1249,61 @@ class TestSnappSync(FrappeTestCase):
         self.assertTrue(preview["already_imported"])
         self.assertEqual(preview["sales_order"], "SO-1")
         self.assertEqual(preview["sales_invoice"], "SINV-1")
+
+    def test_preview_marks_an_existing_partner_order_that_matches_a_manual_order(self):
+        normalized = {
+            "order_id": "FP-1",
+            "created_at": "2026-10-08 13:05:00",
+            "final_amount": 250000,
+        }
+        preview = {
+            "order_id": "FP-1",
+            "created_at": normalized["created_at"],
+            "final_amount": normalized["final_amount"],
+            "external_customer_id": "SNAPP-CUSTOMER-1",
+            "customer_name": "Parisa Karimi",
+            "mobile": "09121112233",
+            "items": [{"qty": 2, "mapped_item": {"item_code": "BURGER"}}],
+            "already_imported": True,
+            "sales_order": "SO-PARTNER-1",
+            "manual_duplicate": False,
+        }
+        manual_order = {
+            "name": "SO-MANUAL-1",
+            "source": "web",
+            "docstatus": 1,
+            "created_at": "2026-10-08 13:00:00",
+            "grand_total": 250000,
+            "external_customer_id": "SNAPP-CUSTOMER-1",
+            "customer_name": "Parisa Karimi",
+            "mobile": "09121112233",
+            "items": [{"item_code": "BURGER", "qty": 2}],
+        }
+        fake_db = SimpleNamespace(
+            get_value=Mock(side_effect=[
+                {"name": "SO-PARTNER-1", "restaurant_external_source": "snapp_food"},
+                "",
+            ])
+        )
+        with patch("restaurant.snapp_sync._get_settings", return_value={"page_size": 50, "amount_multiplier": 1}), patch(
+            "restaurant.snapp_sync._resolve_snapp_order_window",
+            return_value=(datetime(2026, 10, 8), datetime(2026, 10, 8, 23, 59, 59)),
+        ), patch(
+            "restaurant.snapp_sync.fetch_snapp_orders",
+            return_value={"orders": [{"orderId": "FP-1"}], "orders_count": 1, "pages_fetched": 1},
+        ), patch("restaurant.snapp_sync._get_local_item_rows", return_value=[]), patch(
+            "restaurant.snapp_sync._food_partner_modifier_mapping_index", return_value={}
+        ), patch("restaurant.snapp_sync._manual_pos_orders_for_window", return_value=[manual_order]), patch(
+            "restaurant.snapp_sync.normalize_snapp_order", return_value=normalized
+        ), patch("restaurant.snapp_sync._build_snapp_order_preview", return_value=preview), patch(
+            "restaurant.snapp_sync._has_column",
+            side_effect=lambda doctype, fieldname: fieldname == "restaurant_external_order_id",
+        ), patch.object(snapp_sync.frappe, "db", fake_db):
+            result = preview_snapp_orders(from_date="2026-10-08", to_date="2026-10-08")
+
+        self.assertTrue(result["orders"][0]["already_imported"])
+        self.assertTrue(result["orders"][0]["manual_duplicate"])
+        self.assertEqual(result["orders"][0]["manual_duplicate_sales_order"], "SO-MANUAL-1")
 
     def test_selected_snapp_orders_are_limited_to_requested_test_rows(self):
         rows = [{"id": str(value)} for value in range(1, 6)]
