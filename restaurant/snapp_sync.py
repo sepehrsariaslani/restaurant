@@ -1125,12 +1125,73 @@ def _manual_pos_orders_for_window(start_date, end_date):
         source="web",
         review_status="all",
     )
-    return [
+    manual_orders = [
         order
         for order in orders or []
         if not str(order.get("external_source") or "").strip()
         and not str(order.get("external_order_id") or "").strip()
     ]
+    if not manual_orders:
+        return []
+
+    order_names = [str(order.get("name") or "").strip() for order in manual_orders]
+    order_names = [name for name in order_names if name]
+    if not order_names:
+        return manual_orders
+
+    sales_order_fields = ["name", "customer"]
+    has_order_external_customer_id = _has_column("Sales Order", "restaurant_external_customer_id")
+    if has_order_external_customer_id:
+        sales_order_fields.append("restaurant_external_customer_id")
+    sales_order_rows = frappe.get_all(
+        "Sales Order",
+        fields=sales_order_fields,
+        filters={"name": ["in", order_names]},
+        ignore_permissions=True,
+    )
+    sales_order_by_name = {row.name: row for row in sales_order_rows}
+
+    customer_names = {row.customer for row in sales_order_rows if row.customer}
+    has_customer_external_id = _has_column("Customer", "restaurant_external_customer_id")
+    has_mobile_no = _has_column("Customer", "mobile_no")
+    has_primary_mobile = _has_column("Customer", "customer_primary_mobile")
+    customer_fields = ["name"]
+    if has_customer_external_id:
+        customer_fields.append("restaurant_external_customer_id")
+    if has_mobile_no:
+        customer_fields.append("mobile_no")
+    if has_primary_mobile:
+        customer_fields.append("customer_primary_mobile")
+    customer_rows = (
+        frappe.get_all(
+            "Customer",
+            fields=customer_fields,
+            filters={"name": ["in", list(customer_names)]},
+            ignore_permissions=True,
+        )
+        if customer_names and len(customer_fields) > 1
+        else []
+    )
+    customer_by_name = {row.name: row for row in customer_rows}
+
+    for order in manual_orders:
+        sales_order = sales_order_by_name.get(order.get("name"))
+        customer = customer_by_name.get(sales_order.customer) if sales_order and sales_order.customer else None
+        order_external_customer_id = (
+            sales_order.get("restaurant_external_customer_id") if sales_order and has_order_external_customer_id else ""
+        )
+        customer_external_customer_id = (
+            customer.get("restaurant_external_customer_id") if customer and has_customer_external_id else ""
+        )
+        order["external_customer_id"] = order_external_customer_id or customer_external_customer_id or ""
+        if not order.get("mobile") and customer:
+            order["mobile"] = (
+                (customer.get("mobile_no") if has_mobile_no else "")
+                or (customer.get("customer_primary_mobile") if has_primary_mobile else "")
+                or ""
+            )
+
+    return manual_orders
 
 
 def preview_snapp_orders(from_date=None, to_date=None, settings=None):
