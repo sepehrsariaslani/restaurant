@@ -1,6 +1,7 @@
 """Pure matching helpers for manually entered Food Partner orders."""
 
 from math import isfinite
+from uuid import uuid4
 
 
 ITEM_QUANTITY_TOLERANCE = 0.0001
@@ -148,37 +149,53 @@ def assign_manual_duplicates(partner_orders, manual_orders_by_date):
 
 def claim_manual_duplicate_order(db, sales_order_name, partner_order_id):
 	"""Atomically reserve a submitted manual order for one Partner order ID."""
-	rows = db.sql(
-		"""
-		SELECT restaurant_external_source, restaurant_external_order_id
-		FROM `tabSales Order`
-		WHERE name = %s
-		FOR UPDATE
-		""",
-		(sales_order_name,),
-		as_dict=True,
-	) or []
-	if not rows:
-		return False
-
-	row = rows[0]
-	existing_source = str(row.get("restaurant_external_source") or "").strip()
-	existing_order_id = str(row.get("restaurant_external_order_id") or "").strip()
 	partner_order_id = str(partner_order_id or "").strip()
 	if not partner_order_id:
 		return False
-	if existing_source == MANUAL_DUPLICATE_SOURCE and existing_order_id == partner_order_id:
-		return True
-	if existing_source or existing_order_id:
-		return False
-
-	db.set_value(
-		"Sales Order",
+	savepoint = f"food_partner_duplicate_claim_{uuid4().hex}"
+	db.savepoint(savepoint)
+	try:
+		row = db.get_value(
+			"Sales Order",
 		sales_order_name,
-		{
-			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
-			"restaurant_external_order_id": partner_order_id,
-		},
-		update_modified=False,
-	)
-	return True
+			["restaurant_external_source", "restaurant_external_order_id"],
+			as_dict=True,
+			for_update=True,
+		)
+		if not row:
+			db.rollback(save_point=savepoint)
+			return False
+
+		existing_source = str(row.get("restaurant_external_source") or "").strip()
+		existing_order_id = str(row.get("restaurant_external_order_id") or "").strip()
+		if existing_source == MANUAL_DUPLICATE_SOURCE and existing_order_id == partner_order_id:
+			db.rollback(save_point=savepoint)
+			return True
+		if existing_source or existing_order_id:
+			db.rollback(save_point=savepoint)
+			return False
+
+		db.set_value(
+			"Sales Order",
+			sales_order_name,
+			{
+				"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
+				"restaurant_external_order_id": partner_order_id,
+			},
+			update_modified=False,
+		)
+		return True
+	except Exception as error:
+		db.rollback(save_point=savepoint)
+		if _is_transaction_conflict(error):
+			return False
+		raise
+
+
+def _is_transaction_conflict(error):
+	"""Recognize retryable database contention without hiding other failures."""
+	sqlstate = getattr(error, "sqlstate", None) or getattr(error, "pgcode", None)
+	if sqlstate in {"40001", "40P01"}:
+		return True
+	error_code = (getattr(error, "args", ()) or (None,))[0]
+	return error_code in {1205, 1213}

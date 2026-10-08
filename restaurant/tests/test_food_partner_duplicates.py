@@ -114,15 +114,16 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 
 	def test_manual_order_claim_uses_a_row_lock_and_sets_partner_identity(self):
 		database = Mock()
-		database.sql.return_value = [{
+		database.get_value.return_value = {
 			"restaurant_external_source": "",
 			"restaurant_external_order_id": "",
-		}]
+		}
 
 		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1")
 
 		self.assertTrue(claimed)
-		self.assertIn("FOR UPDATE", database.sql.call_args.args[0].upper())
+		database.savepoint.assert_called_once()
+		self.assertTrue(database.get_value.call_args.kwargs["for_update"])
 		database.set_value.assert_called_once_with(
 			"Sales Order",
 			"SO-1",
@@ -135,26 +136,40 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 
 	def test_manual_order_claim_cannot_overwrite_a_different_partner_identity(self):
 		database = Mock()
-		database.sql.return_value = [{
+		database.get_value.return_value = {
 			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
 			"restaurant_external_order_id": "FP-OLD",
-		}]
+		}
 
 		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-NEW")
 
 		self.assertFalse(claimed)
 		database.set_value.assert_not_called()
+		database.rollback.assert_called_once()
 
 	def test_manual_order_claim_is_idempotent_for_the_same_partner_identity(self):
 		database = Mock()
-		database.sql.return_value = [{
+		database.get_value.return_value = {
 			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
 			"restaurant_external_order_id": "FP-1",
-		}]
+		}
 
 		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1")
 
 		self.assertTrue(claimed)
+		database.set_value.assert_not_called()
+		database.rollback.assert_called_once()
+
+	def test_manual_order_claim_treats_serialization_conflicts_as_unclaimed(self):
+		database = Mock()
+		conflict = RuntimeError("serialization conflict")
+		conflict.sqlstate = "40001"
+		database.get_value.side_effect = conflict
+
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1")
+
+		self.assertFalse(claimed)
+		database.rollback.assert_called_once()
 		database.set_value.assert_not_called()
 
 	def test_does_not_treat_a_draft_sales_order_as_a_registered_manual_order(self):
