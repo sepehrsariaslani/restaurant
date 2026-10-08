@@ -91,6 +91,11 @@ def find_manual_duplicate(partner_order, manual_orders, used_order_names=None, a
 		name = str(local_order.get("name") or "").strip()
 		if not name or name in used_names:
 			continue
+		try:
+			if int(local_order.get("docstatus") or 0) != 1:
+				continue
+		except (TypeError, ValueError):
+			continue
 		if str(local_order.get("source") or "web").strip().lower() not in {"web", "restaurant"}:
 			continue
 		if str(local_order.get("external_source") or "").strip() or str(local_order.get("external_order_id") or "").strip():
