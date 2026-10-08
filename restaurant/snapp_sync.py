@@ -17,6 +17,7 @@ from restaurant.order_review import (
 	ORDER_REVIEW_REJECTED,
 	order_is_approved,
 )
+from restaurant.food_partner_duplicates import find_manual_duplicate, has_comparable_partner_items
 
 
 SNAPP_SOURCE = "snapp_food"
@@ -1072,6 +1073,9 @@ def _build_snapp_order_preview(
         "already_imported": bool(existing_order),
         "sales_order": existing_order or "",
         "sales_invoice": existing_invoice or "",
+        "manual_duplicate": False,
+        "manual_duplicate_sales_order": "",
+        "manual_duplicate_checkable": has_comparable_partner_items({"items": preview_items}),
     }
 
 
@@ -1095,6 +1099,24 @@ def _select_snapp_orders_for_import(raw_orders, order_ids, max_import=3):
     return selected, missing
 
 
+def _manual_pos_orders_for_window(start_date, end_date):
+    """Return same-window POS orders without an external order identity."""
+    from restaurant.api import _management_collect_orders
+
+    orders = _management_collect_orders(
+        date_from=start_date,
+        date_to=end_date,
+        source="web",
+        review_status="all",
+    )
+    return [
+        order
+        for order in orders or []
+        if not str(order.get("external_source") or "").strip()
+        and not str(order.get("external_order_id") or "").strip()
+    ]
+
+
 def preview_snapp_orders(from_date=None, to_date=None, settings=None):
     """Fetch a date range without writing orders, invoices, customers or items."""
     cfg = settings if settings is not None else _get_settings()
@@ -1110,6 +1132,11 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
     errors = []
     local_items = _get_local_item_rows(limit_page_length=5000, mapped_only=True)
     modifier_mapping_index = _food_partner_modifier_mapping_index()
+    manual_orders = _manual_pos_orders_for_window(
+        start_dt.strftime("%Y-%m-%d"),
+        end_dt.strftime("%Y-%m-%d"),
+    )
+    used_manual_order_names = set()
     for raw_order in fetched.get("orders") or []:
         try:
             normalized = normalize_snapp_order(
@@ -1130,15 +1157,23 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
                     {"restaurant_external_order_id": normalized["order_id"]},
                     "name",
                 ) or ""
-            previews.append(
-                _build_snapp_order_preview(
-                    normalized,
-                    existing_order,
-                    existing_invoice,
-                    local_items=local_items,
-                    modifier_mapping_index=modifier_mapping_index,
-                )
+            preview = _build_snapp_order_preview(
+                normalized,
+                existing_order,
+                existing_invoice,
+                local_items=local_items,
+                modifier_mapping_index=modifier_mapping_index,
             )
+            if not existing_order and not existing_invoice:
+                manual_duplicate = find_manual_duplicate(
+                    preview,
+                    manual_orders,
+                    used_order_names=used_manual_order_names,
+                )
+                if manual_duplicate:
+                    preview["manual_duplicate"] = True
+                    preview["manual_duplicate_sales_order"] = manual_duplicate.get("name") or ""
+            previews.append(preview)
         except Exception:
             errors.append({"order_id": _raw_snapp_order_id(raw_order), "error": frappe.get_traceback(with_context=False)})
     return {
@@ -3757,6 +3792,7 @@ def sync_snapp_orders(
         "updated_count": 0,
         "cancelled_count": 0,
         "skipped_count": 0,
+        "manual_duplicates_skipped_count": 0,
         "failed_count": 0,
         "pages_fetched": 0,
         "errors": [],
@@ -3793,6 +3829,11 @@ def sync_snapp_orders(
             result["selected_count"] = len(rows)
             result["missing_order_ids"] = missing_order_ids
             result["sales_orders"] = []
+
+        manual_orders_by_date = {}
+        used_manual_order_names_by_date = {}
+        duplicate_check_items = None
+        modifier_mapping_index = {}
 
         for raw_order in rows:
             try:
@@ -3852,6 +3893,46 @@ def sync_snapp_orders(
                             }
                         )
                     continue
+
+                order_date = normalized.get("created_at")
+                order_date_key = (
+                    get_datetime(order_date).strftime("%Y-%m-%d")
+                    if order_date
+                    else ""
+                )
+                if order_date_key and order_date_key not in manual_orders_by_date:
+                    manual_orders_by_date[order_date_key] = _manual_pos_orders_for_window(
+                        order_date_key,
+                        order_date_key,
+                    )
+                    used_manual_order_names_by_date[order_date_key] = set()
+                manual_orders = manual_orders_by_date.get(order_date_key) or []
+                if manual_orders:
+                    if duplicate_check_items is None:
+                        duplicate_check_items = _get_local_item_rows(limit_page_length=5000, mapped_only=True)
+                        modifier_mapping_index = _food_partner_modifier_mapping_index()
+                    preview = _build_snapp_order_preview(
+                        normalized,
+                        local_items=duplicate_check_items,
+                        modifier_mapping_index=modifier_mapping_index,
+                    )
+                    manual_duplicate = find_manual_duplicate(
+                        preview,
+                        manual_orders,
+                        used_order_names=used_manual_order_names_by_date[order_date_key],
+                    )
+                    if manual_duplicate:
+                        result["skipped_count"] += 1
+                        result["manual_duplicates_skipped_count"] += 1
+                        if requested_order_ids:
+                            result["sales_orders"].append(
+                                {
+                                    "order_id": normalized["order_id"],
+                                    "sales_order": manual_duplicate.get("name") or "",
+                                    "action": "manual_duplicate",
+                                }
+                            )
+                        continue
 
                 sales_order_name, action = _create_sales_order(normalized)
                 if requested_order_ids:
