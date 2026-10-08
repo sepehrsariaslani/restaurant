@@ -13917,6 +13917,7 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 				"source": "web",
 				"doctype": "Sales Order",
 				"name": row.name,
+				"docstatus": cint(row.docstatus),
 				"order_code": row.name,
 				"customer_name": row.customer_name or "POS Customer",
 				"secondary_customer": (row.restaurant_secondary_customer if hasattr(row, "restaurant_secondary_customer") else "") or "",

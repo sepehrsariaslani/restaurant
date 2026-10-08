@@ -18,6 +18,7 @@ def manual_order(*, day="2026-10-08", total=250000, items=None, **extra):
 	return {
 		"name": "SO-1",
 		"source": "web",
+		"docstatus": 1,
 		"created_at": f"{day} 13:00:00",
 		"grand_total": total,
 		"items": items if items is not None else [
@@ -77,6 +78,11 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 			partner_order(),
 			[manual_order(external_source="snapp_food", external_order_id="remote-1")],
 		)
+
+		self.assertIsNone(match)
+
+	def test_does_not_treat_a_draft_sales_order_as_a_registered_manual_order(self):
+		match = find_manual_duplicate(partner_order(), [manual_order(docstatus=0)])
 
 		self.assertIsNone(match)
 
