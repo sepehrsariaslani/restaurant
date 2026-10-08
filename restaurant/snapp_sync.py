@@ -21,8 +21,8 @@ from restaurant.food_partner_duplicates import (
     MANUAL_DUPLICATE_SOURCE,
     assign_manual_duplicates,
     claim_manual_duplicate_order,
-    find_manual_duplicate,
     has_comparable_partner_items,
+    mark_manual_duplicate_previews,
 )
 
 
@@ -1213,7 +1213,6 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
         start_dt.strftime("%Y-%m-%d"),
         end_dt.strftime("%Y-%m-%d"),
     )
-    used_manual_order_names = set()
     for raw_order in fetched.get("orders") or []:
         try:
             normalized = normalize_snapp_order(
@@ -1250,18 +1249,10 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
             if existing_manual_duplicate:
                 preview["manual_duplicate"] = True
                 preview["manual_duplicate_sales_order"] = existing_manual_duplicate
-            elif not existing_order and not existing_invoice:
-                manual_duplicate = find_manual_duplicate(
-                    preview,
-                    manual_orders,
-                    used_order_names=used_manual_order_names,
-                )
-                if manual_duplicate:
-                    preview["manual_duplicate"] = True
-                    preview["manual_duplicate_sales_order"] = manual_duplicate.get("name") or ""
             previews.append(preview)
         except Exception:
             errors.append({"order_id": _raw_snapp_order_id(raw_order), "error": frappe.get_traceback(with_context=False)})
+    mark_manual_duplicate_previews(previews, manual_orders)
     return {
         "status": "success",
         "from_date": start_dt.strftime("%Y-%m-%d"),
