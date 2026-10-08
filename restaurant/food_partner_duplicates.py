@@ -6,6 +6,18 @@ from uuid import uuid4
 
 ITEM_QUANTITY_TOLERANCE = 0.0001
 MANUAL_DUPLICATE_SOURCE = "snapp_food_manual_duplicate"
+_DIGIT_TRANSLATION = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+_GENERIC_CUSTOMER_NAMES = {
+	"guest",
+	"snappguest",
+	"snappcustomer",
+	"poscustomer",
+	"customer",
+	"مهمان",
+	"مشتری",
+	"مشتریاسنپ",
+	"کاربراسنپ",
+}
 
 
 def _order_day(value):
@@ -26,6 +38,52 @@ def _amount(value):
 	except (TypeError, ValueError):
 		return None
 	return amount if isfinite(amount) else None
+
+
+def _normalized_mobile(value):
+	digits = "".join(char for char in str(value or "").translate(_DIGIT_TRANSLATION) if char.isdigit())
+	if digits.startswith("0098") and len(digits) == 14:
+		digits = "0" + digits[4:]
+	elif digits.startswith("98") and len(digits) == 12:
+		digits = "0" + digits[2:]
+	elif len(digits) == 10 and digits.startswith("9"):
+		digits = "0" + digits
+	return digits
+
+
+def _normalized_customer_name(value):
+	text = str(value or "").strip().casefold().translate(str.maketrans({"ي": "ی", "ك": "ک", "ـ": ""}))
+	return "".join(char for char in text if char.isalnum())
+
+
+def _is_generic_customer_name(value):
+	name = _normalized_customer_name(value)
+	return name in _GENERIC_CUSTOMER_NAMES or name.startswith(
+		("snappguest", "guest", "poscustomer", "مشتریاسنپ", "کاربراسنپ")
+	)
+
+
+def _same_customer(partner_order, local_order):
+	partner_external_id = str(partner_order.get("external_customer_id") or "").strip()
+	local_external_id = str(local_order.get("external_customer_id") or "").strip()
+	if partner_external_id and local_external_id:
+		return partner_external_id == local_external_id
+
+	partner_mobile = _normalized_mobile(partner_order.get("mobile"))
+	local_mobile = _normalized_mobile(local_order.get("mobile"))
+	if partner_mobile and local_mobile:
+		return partner_mobile == local_mobile
+
+	partner_name = _normalized_customer_name(partner_order.get("customer_name"))
+	local_name = _normalized_customer_name(local_order.get("customer_name"))
+	if (
+		not partner_name
+		or _is_generic_customer_name(partner_name)
+		or not local_name
+		or _is_generic_customer_name(local_name)
+	):
+		return False
+	return partner_name == local_name
 
 
 def _item_signature(rows, *, partner=False):
@@ -72,7 +130,7 @@ def has_comparable_partner_items(partner_order):
 
 
 def find_manual_duplicate(partner_order, manual_orders, used_order_names=None, amount_tolerance=1.0):
-	"""Return one same-day manual POS order with an identical total and item mix.
+	"""Return one same-day manual POS order with the same customer, total and item mix.
 
 	When supplied, ``used_order_names`` is updated with the matched local order
 	name so a batch of similar Partner orders cannot all consume one manual row.
@@ -96,7 +154,7 @@ def find_manual_duplicate(partner_order, manual_orders, used_order_names=None, a
 		if not name or name in used_names:
 			continue
 		try:
-			if int(local_order.get("docstatus") or 0) != 1:
+			if int(local_order.get("docstatus") or 0) not in {0, 1}:
 				continue
 		except (TypeError, ValueError):
 			continue
@@ -118,6 +176,8 @@ def find_manual_duplicate(partner_order, manual_orders, used_order_names=None, a
 		if local_day != partner_day or local_total is None:
 			continue
 		if abs(partner_total - local_total) > tolerance:
+			continue
+		if not _same_customer(partner_order, local_order):
 			continue
 		if not _same_items(partner_order.get("items"), local_order.get("items")):
 			continue

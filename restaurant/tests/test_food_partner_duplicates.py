@@ -15,6 +15,9 @@ def partner_order(*, order_id="FP-1", day="2026-10-08", total=250000, items=None
 		"order_id": order_id,
 		"created_at": f"{day} 13:05:00",
 		"final_amount": total,
+		"external_customer_id": "SNAPP-CUSTOMER-1",
+		"customer_name": "Parisa Karimi",
+		"mobile": "09121112233",
 		"items": items if items is not None else [
 			{"qty": 2, "mapped_item": {"item_code": "BURGER"}},
 			{"qty": 1, "mapped_item": {"item_code": "DRINK"}},
@@ -29,6 +32,9 @@ def manual_order(*, day="2026-10-08", total=250000, items=None, **extra):
 		"docstatus": 1,
 		"created_at": f"{day} 13:00:00",
 		"grand_total": total,
+		"external_customer_id": "SNAPP-CUSTOMER-1",
+		"customer_name": "Parisa Karimi",
+		"mobile": "09121112233",
 		"items": items if items is not None else [
 			{"item_code": "DRINK", "qty": 1},
 			{"item_code": "BURGER", "qty": 2},
@@ -42,6 +48,71 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 		match = find_manual_duplicate(partner_order(), [manual_order()])
 
 		self.assertEqual(match["name"], "SO-1")
+
+	def test_does_not_match_when_snapp_customer_is_different(self):
+		match = find_manual_duplicate(
+			partner_order(),
+			[manual_order(
+				external_customer_id="SNAPP-CUSTOMER-2",
+				customer_name="Different Customer",
+				mobile="09129998877",
+			)],
+		)
+
+		self.assertIsNone(match)
+
+	def test_conflicting_snapp_customer_ids_override_matching_phone_and_name(self):
+		match = find_manual_duplicate(
+			partner_order(),
+			[manual_order(external_customer_id="SNAPP-CUSTOMER-2")],
+		)
+
+		self.assertIsNone(match)
+
+	def test_matches_same_customer_by_normalized_mobile_when_partner_id_is_unavailable(self):
+		order = partner_order()
+		order["external_customer_id"] = ""
+		order["mobile"] = "+۹۸ ۹۱۲-۱۱۱-۲۲۳۳"
+
+		match = find_manual_duplicate(order, [manual_order(external_customer_id="", mobile="09121112233")])
+
+		self.assertEqual(match["name"], "SO-1")
+
+	def test_matches_same_customer_by_name_when_mobile_and_partner_id_are_unavailable(self):
+		order = partner_order()
+		order["external_customer_id"] = ""
+		order["mobile"] = ""
+		order["customer_name"] = "علی کریمی"
+
+		match = find_manual_duplicate(
+			order,
+			[manual_order(external_customer_id="", mobile="", customer_name="علي كريمي")],
+		)
+
+		self.assertEqual(match["name"], "SO-1")
+
+	def test_does_not_match_when_customer_identity_is_missing_or_generic(self):
+		order = partner_order()
+		order.update(external_customer_id="", mobile="", customer_name="Snapp Guest")
+
+		match = find_manual_duplicate(
+			order,
+			[manual_order(external_customer_id="", mobile="", customer_name="POS Customer")],
+		)
+
+		self.assertIsNone(match)
+
+	def test_does_not_match_using_generated_snapp_guest_name_as_customer_identity(self):
+		guest_name = "Snapp Guest ID 7654"
+		order = partner_order()
+		order.update(external_customer_id="", mobile="", customer_name=guest_name)
+
+		match = find_manual_duplicate(
+			order,
+			[manual_order(external_customer_id="", mobile="", customer_name=guest_name)],
+		)
+
+		self.assertIsNone(match)
 
 	def test_does_not_match_when_final_amount_differs_by_more_than_one_unit(self):
 		match = find_manual_duplicate(partner_order(total=250002), [manual_order()])
@@ -172,10 +243,11 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 		database.rollback.assert_called_once()
 		database.set_value.assert_not_called()
 
-	def test_does_not_treat_a_draft_sales_order_as_a_registered_manual_order(self):
+	def test_matches_a_draft_manual_order_to_prevent_a_second_partner_entry(self):
 		match = find_manual_duplicate(partner_order(), [manual_order(docstatus=0)])
 
-		self.assertIsNone(match)
+		self.assertIsNotNone(match)
+		self.assertEqual(match["name"], "SO-1")
 
 	def test_does_not_match_when_partner_date_is_not_reliable(self):
 		order = partner_order()
