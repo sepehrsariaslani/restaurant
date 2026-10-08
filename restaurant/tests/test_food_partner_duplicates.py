@@ -1,7 +1,10 @@
 import unittest
+from unittest.mock import Mock
 
 from restaurant.food_partner_duplicates import (
+	MANUAL_DUPLICATE_SOURCE,
 	assign_manual_duplicates,
+	claim_manual_duplicate_order,
 	find_manual_duplicate,
 	has_comparable_partner_items,
 )
@@ -95,6 +98,65 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 		)
 
 		self.assertIsNone(match)
+
+	def test_does_not_reuse_a_manual_order_already_linked_to_a_partner_order(self):
+		match = find_manual_duplicate(
+			partner_order(),
+			[
+				manual_order(
+					external_source="snapp_food_manual_duplicate",
+					external_order_id="remote-1",
+				)
+			],
+		)
+
+		self.assertIsNone(match)
+
+	def test_manual_order_claim_uses_a_row_lock_and_sets_partner_identity(self):
+		database = Mock()
+		database.sql.return_value = [{
+			"restaurant_external_source": "",
+			"restaurant_external_order_id": "",
+		}]
+
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1", "BILL-1")
+
+		self.assertTrue(claimed)
+		self.assertIn("FOR UPDATE", database.sql.call_args.args[0].upper())
+		database.set_value.assert_called_once_with(
+			"Sales Order",
+			"SO-1",
+			{
+				"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
+				"restaurant_external_order_id": "FP-1",
+				"restaurant_external_bill_number": "BILL-1",
+			},
+			update_modified=False,
+		)
+
+	def test_manual_order_claim_cannot_overwrite_a_different_partner_identity(self):
+		database = Mock()
+		database.sql.return_value = [{
+			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
+			"restaurant_external_order_id": "FP-OLD",
+		}]
+
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-NEW", "BILL-NEW")
+
+		self.assertFalse(claimed)
+		database.set_value.assert_not_called()
+
+	def test_manual_order_claim_is_idempotent_for_the_same_partner_identity(self):
+		database = Mock()
+		database.sql.return_value = [{
+			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
+			"restaurant_external_order_id": "FP-1",
+		}]
+
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1", "BILL-1")
+
+		self.assertTrue(claimed)
+		database.set_value.assert_not_called()
 
 	def test_does_not_treat_a_draft_sales_order_as_a_registered_manual_order(self):
 		match = find_manual_duplicate(partner_order(), [manual_order(docstatus=0)])
