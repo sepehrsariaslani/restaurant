@@ -146,7 +146,7 @@ def assign_manual_duplicates(partner_orders, manual_orders_by_date):
 	return assignments
 
 
-def claim_manual_duplicate_order(db, sales_order_name, partner_order_id, bill_number=""):
+def claim_manual_duplicate_order(db, sales_order_name, partner_order_id):
 	"""Atomically reserve a submitted manual order for one Partner order ID."""
 	rows = db.sql(
 		"""
@@ -178,7 +178,6 @@ def claim_manual_duplicate_order(db, sales_order_name, partner_order_id, bill_nu
 		{
 			"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
 			"restaurant_external_order_id": partner_order_id,
-			"restaurant_external_bill_number": str(bill_number or ""),
 		},
 		update_modified=False,
 	)

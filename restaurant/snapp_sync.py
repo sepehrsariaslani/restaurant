@@ -3989,7 +3989,6 @@ def sync_snapp_orders(
                         frappe.db,
                         manual_duplicate_sales_order,
                         normalized["order_id"],
-                        normalized.get("bill_number") or "",
                     )
                     if claimed:
                         result["skipped_count"] += 1

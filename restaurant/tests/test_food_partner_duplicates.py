@@ -119,7 +119,7 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 			"restaurant_external_order_id": "",
 		}]
 
-		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1", "BILL-1")
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1")
 
 		self.assertTrue(claimed)
 		self.assertIn("FOR UPDATE", database.sql.call_args.args[0].upper())
@@ -129,7 +129,6 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 			{
 				"restaurant_external_source": MANUAL_DUPLICATE_SOURCE,
 				"restaurant_external_order_id": "FP-1",
-				"restaurant_external_bill_number": "BILL-1",
 			},
 			update_modified=False,
 		)
@@ -141,7 +140,7 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 			"restaurant_external_order_id": "FP-OLD",
 		}]
 
-		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-NEW", "BILL-NEW")
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-NEW")
 
 		self.assertFalse(claimed)
 		database.set_value.assert_not_called()
@@ -153,7 +152,7 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 			"restaurant_external_order_id": "FP-1",
 		}]
 
-		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1", "BILL-1")
+		claimed = claim_manual_duplicate_order(database, "SO-1", "FP-1")
 
 		self.assertTrue(claimed)
 		database.set_value.assert_not_called()
