@@ -1,10 +1,15 @@
 import unittest
 
-from restaurant.food_partner_duplicates import find_manual_duplicate, has_comparable_partner_items
+from restaurant.food_partner_duplicates import (
+	assign_manual_duplicates,
+	find_manual_duplicate,
+	has_comparable_partner_items,
+)
 
 
-def partner_order(*, day="2026-10-08", total=250000, items=None):
+def partner_order(*, order_id="FP-1", day="2026-10-08", total=250000, items=None):
 	return {
+		"order_id": order_id,
 		"created_at": f"{day} 13:05:00",
 		"final_amount": total,
 		"items": items if items is not None else [
@@ -73,6 +78,16 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 		self.assertEqual(first["name"], "SO-1")
 		self.assertIsNone(second)
 
+	def test_batch_assignment_stays_one_to_one_for_individually_selected_orders(self):
+		orders = [partner_order(order_id="FP-1"), partner_order(order_id="FP-2")]
+
+		assignments = assign_manual_duplicates(
+			orders,
+			{"2026-10-08": [manual_order()]},
+		)
+
+		self.assertEqual(assignments, {"FP-1": "SO-1"})
+
 	def test_does_not_match_an_order_that_already_has_an_external_identity(self):
 		match = find_manual_duplicate(
 			partner_order(),
@@ -85,6 +100,12 @@ class TestFoodPartnerManualDuplicates(unittest.TestCase):
 		match = find_manual_duplicate(partner_order(), [manual_order(docstatus=0)])
 
 		self.assertIsNone(match)
+
+	def test_does_not_match_when_partner_date_is_not_reliable(self):
+		order = partner_order()
+		order["manual_duplicate_date_checkable"] = False
+
+		self.assertIsNone(find_manual_duplicate(order, [manual_order()]))
 
 	def test_accepts_item_modifier_mapped_to_its_parent_item(self):
 		match = find_manual_duplicate(

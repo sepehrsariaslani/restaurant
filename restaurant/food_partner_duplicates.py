@@ -75,6 +75,8 @@ def find_manual_duplicate(partner_order, manual_orders, used_order_names=None, a
 	When supplied, ``used_order_names`` is updated with the matched local order
 	name so a batch of similar Partner orders cannot all consume one manual row.
 	"""
+	if partner_order.get("manual_duplicate_date_checkable") is False:
+		return None
 	partner_day = _order_day(partner_order.get("created_at"))
 	partner_total = _amount(partner_order.get("final_amount"))
 	partner_items = _item_signature(partner_order.get("items"), partner=True)
@@ -121,3 +123,23 @@ def find_manual_duplicate(partner_order, manual_orders, used_order_names=None, a
 		used_names.add(name)
 		return local_order
 	return None
+
+
+def assign_manual_duplicates(partner_orders, manual_orders_by_date):
+	"""Assign at most one manual order to each matching Partner order in a full batch."""
+	used_names_by_date = {}
+	assignments = {}
+	for partner_order in partner_orders or []:
+		order_id = str(partner_order.get("order_id") or "").strip()
+		partner_day = _order_day(partner_order.get("created_at"))
+		if not order_id or not partner_day:
+			continue
+		used_names = used_names_by_date.setdefault(partner_day, set())
+		manual_order = find_manual_duplicate(
+			partner_order,
+			(manual_orders_by_date or {}).get(partner_day) or [],
+			used_order_names=used_names,
+		)
+		if manual_order:
+			assignments[order_id] = str(manual_order.get("name") or "")
+	return assignments
