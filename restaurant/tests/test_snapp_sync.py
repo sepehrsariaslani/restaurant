@@ -1540,7 +1540,7 @@ class TestSnappSync(FrappeTestCase):
         fake_api = types.ModuleType("restaurant.api")
         fake_api.settle_pos_order = Mock(return_value={"sales_invoice": "SI-1"})
         fake_db = SimpleNamespace(get_value=Mock(return_value=None), set_value=Mock())
-        with patch("restaurant.snapp_sync._has_column", return_value=True), patch.object(
+        with patch("restaurant.order_review.require_order_approved"), patch("restaurant.snapp_sync._has_column", return_value=True), patch.object(
             snapp_sync.frappe, "db", fake_db
         ), patch.object(snapp_sync.frappe, "get_all", return_value=[]), patch.dict(
             sys.modules, {"restaurant.api": fake_api}
