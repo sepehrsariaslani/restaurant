@@ -1603,7 +1603,8 @@ class TestSnappSync(FrappeTestCase):
             "external_state": "DELIVERED",
         }
         fake_db = SimpleNamespace(
-            get_value=Mock(return_value="SO-1"),
+            get_value=Mock(return_value={"name": "SO-1", "restaurant_external_source": "snapp_food"}),
+            exists=Mock(return_value=True),
             commit=Mock(),
         )
         with patch(
