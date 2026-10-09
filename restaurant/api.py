@@ -397,6 +397,30 @@ def _get_item_tag_titles(item_name):
 	return titles
 
 
+def _get_item_tag_titles_for_items(item_names):
+	"""Read POS item tags in one query while preserving each item's tag order."""
+	names = tuple(str(name).strip() for name in (item_names or []) if str(name).strip())
+	if not names or not _item_tag_tables_ready():
+		return {}
+	try:
+		rows = frappe.db.sql(
+			"""SELECT links.parent, tags.title
+			FROM `tabRestaurant Item Tag Link` links
+			JOIN `tabRestaurant Item Tag` tags ON tags.name = links.tag
+			WHERE links.parent IN %(names)s AND links.parentfield = 'restaurant_item_tag_table'
+			ORDER BY links.parent, links.idx""",
+			{"names": names},
+			as_dict=True,
+		)
+	except Exception:
+		return None
+	titles_by_item = {}
+	for row in rows:
+		if row.get("title"):
+			titles_by_item.setdefault(row.parent, []).append(str(row.title))
+	return titles_by_item
+
+
 def _serialize_item_tag_links(item_doc):
 	"""Return management tag rows from the optional child table or legacy tag text."""
 	item_name = ""
@@ -3664,7 +3688,7 @@ def _resolve_modifier_option_pricing(option_row=None, price_list=None):
 	return payload
 
 
-def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None):
+def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None, price_list=None, tag_titles=None):
 	category_meta_map = category_meta_map or {}
 	subcategory_meta_map = subcategory_meta_map or {}
 	legacy_category = str(row.get("restaurant_category") or getattr(row, "restaurant_category", "") or "").strip()
@@ -3683,7 +3707,7 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		category_title = category_meta.get("title")
 		subcategory_value = legacy_subcategory
 		subcategory_title = subcategory_meta.get("title")
-	item_price = _get_default_item_price_rate(row)
+	item_price = _get_default_item_price_rate(row, price_list=price_list)
 	base_price = (
 		item_price if item_price is not None else (flt(row.restaurant_base_price) or flt(row.standard_rate))
 	)
@@ -3743,7 +3767,7 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None)
 		"restaurant_customize_button_label": row.get("restaurant_customize_button_label") or "",
 		"restaurant_allow_direct_add": cint(row.get("restaurant_allow_direct_add") or 0),
 		"tags": _split_tags(getattr(row, "restaurant_item_tags", None))
-		or _get_item_tag_titles(getattr(row, "name", None)),
+		or (tag_titles if tag_titles is not None else _get_item_tag_titles(getattr(row, "name", None))),
 		"coming_soon": cint(getattr(row, "restaurant_coming_soon", 0)),
 		"calendar_date": _date_value_to_iso(getattr(row, "restaurant_calendar_date", None)),
 		"kitchen_ticket": cint(getattr(row, "restaurant_kitchen_ticket", 1)),
@@ -16046,12 +16070,16 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, i
 		if not (r.get("image") or "").strip() and r["name"] in attachment_map:
 			r["image"] = attachment_map[r["name"]]
 
+	default_price_list = _get_default_selling_price_list_name()
+	tag_titles_by_item = _get_item_tag_titles_for_items([row["name"] for row in rows])
 	items = []
 	for row in rows:
 		serialized = _serialize_core_item(
 			row,
 			category_meta_map=category_meta_map,
 			subcategory_meta_map=subcategory_meta_map,
+			price_list=default_price_list,
+			tag_titles=tag_titles_by_item.get(row["name"], []) if tag_titles_by_item is not None else None,
 		)
 		serialized["out_of_stock"] = cint(row.get("restaurant_out_of_stock") or 0)
 		serialized["packaging_price"] = flt(row.get("restaurant_packaging_price") or 0)

@@ -35,7 +35,9 @@ class PosBootPageTests(unittest.TestCase):
             "_get_core_subcategory_meta_map": lambda: {},
             "_has_column": lambda *args: False,
             "_core_item_filters": lambda *args: {},
-            "_serialize_core_item": lambda row, **kwargs: {"name": row["name"]},
+            "_serialize_core_item": lambda row, **kwargs: {"name": row["name"], "price_list_used": kwargs.get("price_list"), "tags_loaded": kwargs.get("tag_titles")},
+            "_get_default_selling_price_list_name": expensive("price_list", "Standard Selling"),
+            "_get_item_tag_titles_for_items": expensive("tags", {"ITEM-1": ["ویژه"]}),
             "get_management_pos_config": expensive("config", {}),
             "_management_get_print_brand_settings": expensive("print", {}),
             "_management_pos_payment_boot": expensive("payment", {}),
@@ -49,11 +51,11 @@ class PosBootPageTests(unittest.TestCase):
     def test_later_pages_skip_expensive_configuration(self):
         boot, calls = self._boot()
         result = boot(limit_start=300, items_only=1)
-        self.assertEqual(result["items"], [{"name": "ITEM-1", "out_of_stock": 0, "packaging_price": 0.0}])
+        self.assertEqual(result["items"], [{"name": "ITEM-1", "price_list_used": "Standard Selling", "tags_loaded": ["ویژه"], "out_of_stock": 0, "packaging_price": 0.0}])
         self.assertEqual(result["items_limit_start"], 300)
         self.assertFalse(result["items_has_more"])
         self.assertNotIn("categories", result)
-        self.assertEqual(calls, [])
+        self.assertEqual(calls, ["price_list", "tags"])
 
     def test_first_page_keeps_complete_boot_contract(self):
         boot, calls = self._boot()
@@ -62,7 +64,29 @@ class PosBootPageTests(unittest.TestCase):
         self.assertIn("categories", result)
         self.assertIn("payment", result)
         self.assertIn("pos_config", result)
-        self.assertEqual(set(calls), {"config", "print", "payment", "profile", "currency"})
+        self.assertEqual(set(calls), {"price_list", "tags", "config", "print", "payment", "profile", "currency"})
+
+    def test_item_tags_are_fetched_in_one_ordered_query(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_get_item_tag_titles_for_items")
+        calls = []
+
+        class Row(dict):
+            __getattr__ = dict.get
+
+        def query(sql, params, **kwargs):
+            calls.append((sql, params, kwargs))
+            return [Row(parent="A", title="ویژه"), Row(parent="A", title="تند"), Row(parent="B", title="جدید")]
+
+        namespace = {"frappe": types.SimpleNamespace(db=types.SimpleNamespace(sql=query)), "_item_tag_tables_ready": lambda: True}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(source), "exec"), namespace)
+        result = namespace["_get_item_tag_titles_for_items"](["A", "B"])
+        self.assertEqual(result, {"A": ["ویژه", "تند"], "B": ["جدید"]})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], {"names": ("A", "B")})
+        namespace["frappe"].db.sql = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable"))
+        self.assertIsNone(namespace["_get_item_tag_titles_for_items"](["A"]))
 
 
 if __name__ == "__main__":
