@@ -492,15 +492,12 @@ _SAVEABLE_CLUB_SETTINGS = [
 	"restaurant_cashback_expiry_days",
 	"restaurant_club_company",
 	"restaurant_discount_expense_account",
-	"restaurant_cashback_expense_account",
-	"restaurant_wallet_liability_account",
 	"restaurant_wallet_charge_enabled",
 	"restaurant_wallet_charge_bank_name",
 	"restaurant_wallet_charge_account_holder",
 	"restaurant_wallet_charge_iban",
 	"restaurant_wallet_charge_card_number",
 	"restaurant_wallet_charge_instructions",
-	"restaurant_wallet_mode_of_payment",
 	"restaurant_referral_referrer_reward",
 	"restaurant_points_enabled",
 	"restaurant_points_rial_per_point",
@@ -1084,7 +1081,7 @@ def get_my_referral_profile(customer_token=None):
 			order_by="customer_name asc",
 			limit_page_length=1000,
 		)
-	wallet = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer}, ["cashback_balance"], as_dict=True) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]) else None
+	wallet = frappe.db.get_value("Customer Wallet", {"company": _wallet_company(), "customer": customer}, ["cashback_balance"], as_dict=True) if frappe.db.exists("DocType", "Customer Wallet") else None
 	return {
 		"referral_code": code,
 		"old_code": frappe.db.get_value("Customer", customer, "restaurant_referral_code_alias") or "",
@@ -1153,11 +1150,11 @@ def _club_customer_stats_batch(customer_names):
 
 def _club_wallet_map(customer_names):
 	names = [name for name in set(customer_names or []) if name]
-	if not names or not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]):
+	if not names or not frappe.db.exists("DocType", "Customer Wallet"):
 		return {}
 	rows = frappe.get_all(
-		CLUB_DOCTYPES["wallet"],
-		filters={"customer": ["in", names]},
+		"Customer Wallet",
+		filters={"company": _wallet_manager_company(), "customer": ["in", names]},
 		fields=["customer", "name", "balance", "total_charged", "total_spent", "status"],
 	)
 	return {row["customer"]: row for row in rows}
@@ -1184,9 +1181,10 @@ def get_management_club_boot():
 
 	wallet_balance = 0.0
 	wallets_count = 0
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]) and _has_column(CLUB_DOCTYPES["wallet"], "balance"):
+	if frappe.db.exists("DocType", "Customer Wallet"):
 		row = frappe.db.sql(
-			"SELECT COUNT(*) AS count, COALESCE(SUM(balance),0) AS balance FROM `tabRestaurant Customer Wallet`",
+			"SELECT COUNT(*) AS count, COALESCE(SUM(balance),0) AS balance FROM `tabCustomer Wallet` WHERE company = %s",
+			(_wallet_manager_company(),),
 			as_dict=True,
 		)
 		wallets_count = cint(row[0].get("count")) if row else 0
@@ -2537,38 +2535,60 @@ def redeem_management_points(payload=None):
 	if not customer or not frappe.db.exists("Customer", customer):
 		frappe.throw(_("مشتری یافت نشد."))
 	points = cint(payload.get("points") or 0)
-	return _redeem_points_core(customer, points)
+	return _redeem_points_core(customer, points, payload.get("request_key"))
 
 
-def _redeem_points_core(customer, points):
+def _redeem_points_core(customer, points, request_key=None):
 	settings = _club_club_settings()
 	if not settings["points_enabled"]:
 		frappe.throw(_("سیستم امتیازدهی غیرفعال است."))
+	request_key = str(request_key or "").strip()
+	if not request_key or len(request_key) > 140:
+		frappe.throw(_("کلید یکتای تبدیل امتیاز معتبر نیست."))
 	points = cint(points)
 	if points <= 0:
 		frappe.throw(_("تعداد امتیاز باید بزرگ‌تر از صفر باشد."))
 	if settings["points_min_redeem"] > 0 and points < settings["points_min_redeem"]:
 		frappe.throw(_("حداقل امتیاز قابل استفاده {0} امتیاز است.").format(settings["points_min_redeem"]))
-	balance = _club_points_balance(customer)
-	if points > balance:
-		frappe.throw(_("موجودی امتیاز کافی نیست (موجودی: {0}).").format(balance))
 	amount = flt(points * flt(settings["points_rial_value"]), 2)
 	if amount <= 0:
 		frappe.throw(_("ارزش ریالی امتیاز تنظیم نشده است."))
+	# Lock the Customer row before checking points so simultaneous conversions
+	# cannot both consume the same balance.
+	frappe.db.sql("select name from `tabCustomer` where name=%s for update", customer)
+	wallet = _club_get_or_create_wallet(customer)
+	request_source_key = _wallet_idempotency_source_key(wallet.company, customer, request_key)
+	wallet_note = _("تبدیل {0} امتیاز به اعتبار کیف پول").format(points)
+	existing_name = frappe.db.get_value("Customer Wallet Transaction", {"source_key": request_source_key}, "name")
+	if existing_name:
+		existing = frappe.get_doc("Customer Wallet Transaction", existing_name)
+		if existing.customer != customer or existing.kind != "تبدیل امتیاز" or flt(existing.amount, 2) != flt(amount, 2) or existing.note != wallet_note:
+			frappe.throw(_("کلید تبدیل امتیاز قبلاً با اطلاعات دیگری استفاده شده است."), frappe.ValidationError)
+		wallet = frappe.get_doc("Customer Wallet", existing.wallet)
+		return {
+			"status": "success",
+			"points_used": points,
+			"amount_credited": amount,
+			"points_balance": _club_points_balance(customer),
+			"wallet_balance": flt(wallet.balance),
+		}
+	balance = _club_points_balance(customer)
+	if points > balance:
+		frappe.throw(_("موجودی امتیاز کافی نیست (موجودی: {0}).").format(balance))
 	_club_point_entry(
 		customer=customer,
 		points=-points,
 		kind="تبدیل به اعتبار",
 		note=_("تبدیل {0} امتیاز به {1} ریال اعتبار").format(points, amount),
 	)
-	wallet = _club_get_or_create_wallet(customer)
 	_club_wallet_txn(
 		wallet=wallet,
 		customer=customer,
 		kind="تبدیل امتیاز",
 		direction="واریز",
 		amount=amount,
-		note=_("تبدیل {0} امتیاز به اعتبار کیف پول").format(points),
+		note=wallet_note,
+		idempotency_key=request_key,
 	)
 	frappe.db.commit()
 	return {
@@ -2576,7 +2596,7 @@ def _redeem_points_core(customer, points):
 		"points_used": points,
 		"amount_credited": amount,
 		"points_balance": _club_points_balance(customer),
-		"wallet_balance": flt(frappe.db.get_value(CLUB_DOCTYPES["wallet"], wallet, "balance")),
+		"wallet_balance": flt(wallet.balance),
 	}
 
 
@@ -2598,7 +2618,7 @@ def adjust_management_points(payload=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def redeem_my_points(mobile="", points=0, customer_token=None):
+def redeem_my_points(mobile="", points=0, customer_token=None, request_key=""):
 	"""تبدیل امتیاز به اعتبار توسط خود مشتری از داشبورد مشتری."""
 	settings = _club_club_settings()
 	if not settings["club_enabled"] or not settings["points_enabled"]:
@@ -2611,7 +2631,7 @@ def redeem_my_points(mobile="", points=0, customer_token=None):
 	if requested_mobile and requested_mobile != verified_mobile:
 		frappe.throw(_("شماره همراه با حساب واردشده مطابقت ندارد."), frappe.PermissionError)
 	customer = identity["customer"]
-	return _redeem_points_core(customer, cint(points))
+	return _redeem_points_core(customer, cint(points), request_key)
 
 
 def club_apply_fulfillment_effects(so_name):
@@ -2637,11 +2657,11 @@ def get_customer_club_summary(customer_name):
 	out["points_rial_value"] = flt(settings["points_rial_value"])
 	out["points_min_redeem"] = cint(settings["points_min_redeem"])
 	out["points_expiry_days"] = cint(settings["points_expiry_days"])
-	out["wallet_mode_of_payment"] = settings.get("wallet_mode_of_payment") or ""
-	if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]):
-		wallet_name = frappe.db.get_value(CLUB_DOCTYPES["wallet"], {"customer": customer_name}, "name")
+	out["wallet_mode_of_payment"] = _club_wallet_mode_of_payment()
+	if frappe.db.exists("DocType", "Customer Wallet"):
+		wallet_name = frappe.db.get_value("Customer Wallet", {"company": settings.get("company") or _wallet_company(), "customer": customer_name}, "name")
 		if wallet_name:
-			wallet = _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet_name))
+			wallet = frappe.get_doc("Customer Wallet", wallet_name)
 			out["wallet_balance"] = flt(wallet.get("balance") or 0)
 			out["withdrawable_balance"] = flt(wallet.get("withdrawable_balance") or 0)
 			out["cashback_balance"] = flt(wallet.get("cashback_balance") or 0)
@@ -2862,7 +2882,7 @@ def get_my_wallet(customer_token=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def request_my_wallet_charge(customer_token=None, amount=0, payment_reference="", note=""):
+def request_my_wallet_charge(customer_token=None, amount=0, payment_reference="", note="", request_key=""):
 	"""Create a pending manual top-up request; never credit before staff approval."""
 	from restaurant.customer_account import _require_customer
 	from restaurant.wallet_rules import validate_wallet_charge_amount, wallet_charge_request_status
@@ -3760,9 +3780,7 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 	"""
 	try:
 		settings = _club_club_settings()
-		if not settings["club_enabled"]:
-			return
-		if not frappe.db.exists("DocType", CLUB_DOCTYPES["wallet"]):
+		if not frappe.db.exists("DocType", "Customer Wallet"):
 			return
 		customer = frappe.db.get_value("Sales Order", so_name, "customer") if frappe.db.exists("Sales Order", so_name) else ""
 		if not customer:
@@ -3770,31 +3788,33 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 		grand_total = flt(frappe.db.get_value("Sales Order", so_name, "grand_total"))
 
 		# 1) Wallet payment deduction — only when the wallet Mode of Payment was used
-		if settings["wallet_mode_of_payment"] and _club_wallet_mode_match(splits, payment_breakdown, settings["wallet_mode_of_payment"]):
+		wallet_mode = _club_wallet_mode_of_payment()
+		wallet_enabled = _accounts_wallet_enabled()
+		if wallet_mode and _club_wallet_mode_match(splits, payment_breakdown, wallet_mode):
 			wallet_amount = 0.0
 			wallet_rows = payment_breakdown if payment_breakdown else splits
 			for row in wallet_rows or []:
-				if (row.get("mode_of_payment") or "").strip() == settings["wallet_mode_of_payment"]:
+				if (row.get("mode_of_payment") or "").strip() == wallet_mode:
 					wallet_amount += flt(row.get("amount") or row.get("paid_amount") or 0)
 			if wallet_amount > 0:
 				wallet = _club_get_or_create_wallet(customer)
 				frappe.db.sql(
-					"select name from `tabRestaurant Customer Wallet` where name = %s for update",
+					"select name from `tabCustomer Wallet` where name = %s for update",
 					wallet.name,
 				)
-				wallet = _club_reconcile_wallet_buckets(frappe.get_doc(CLUB_DOCTYPES["wallet"], wallet.name))
+				wallet = frappe.get_doc("Customer Wallet", wallet.name)
 				prior_payments = frappe.get_all(
-					CLUB_DOCTYPES["wallet_txn"],
-					filters={"reference_name": so_name, "kind": "پرداخت", "customer": customer},
+					"Customer Wallet Transaction",
+				filters={"company": settings.get("company") or _wallet_company(), "reference_name": so_name, "kind": "پرداخت", "customer": customer},
 					fields=["amount"],
 					ignore_permissions=True,
 				)
 				remaining = max(wallet_amount - sum(flt(row.get("amount") or 0) for row in prior_payments), 0)
 				if remaining > 0.009:
-					if _has_column(CLUB_DOCTYPES["wallet"], "withdrawable_balance") and _has_column(
-						CLUB_DOCTYPES["wallet"], "cashback_balance"
+					if _has_column("Customer Wallet", "withdrawable_balance") and _has_column(
+						"Customer Wallet", "cashback_balance"
 					):
-						from restaurant.wallet_rules import allocate_wallet_payment
+						from accounts.wallet_rules import allocate_wallet_payment
 
 						cash_used, cashback_used = allocate_wallet_payment(
 							wallet.get("withdrawable_balance"), wallet.get("cashback_balance"), remaining
@@ -3825,7 +3845,7 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 		credited = _has_column("Sales Order", "restaurant_cashback_credited") and cint(
 			frappe.db.get_value("Sales Order", so_name, "restaurant_cashback_credited")
 		)
-		if settings["cashback_percent"] > 0 and not credited:
+		if wallet_enabled and settings["club_enabled"] and settings["cashback_percent"] > 0 and not credited:
 			if grand_total >= settings["cashback_min_order"] or settings["cashback_min_order"] <= 0:
 				cashback = flt(grand_total * settings["cashback_percent"] / 100.0, 2)
 				frappe.db.savepoint("restaurant_cashback_award")
@@ -3853,10 +3873,13 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 					raise
 
 		# 3) Loyalty points earn on settled/fulfilled amount
-		_club_process_points_earning(so_name)
-		_club_process_coach_commission(so_name)
+		if settings["club_enabled"]:
+			_club_process_points_earning(so_name)
+			if wallet_enabled:
+				_club_process_coach_commission(so_name)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Restaurant club settle effects failed")
+		raise
 
 
 # ---------------------------------------------------------------------------
@@ -3867,17 +3890,19 @@ def club_apply_settle_effects(so_name, splits=None, payment_breakdown=None):
 @frappe.whitelist()
 def get_management_referral_summary():
 	_ensure_management_access()
+	company = _wallet_manager_company()
 	if not _has_column("Customer", "restaurant_referral_code"):
 		return {"ambassadors": 0, "referrals": 0, "rewards_paid": 0.0, "top": []}
 	ambassadors = frappe.db.count("Customer", [["restaurant_referral_code", "!=", ""]]) or 0
 	referrals = frappe.db.count("Customer", [["restaurant_referred_by", "!=", ""]]) or 0
 	reward_row = frappe.db.sql(
 		"""
-		SELECT COALESCE(SUM(amount),0) AS amount FROM `tabRestaurant Wallet Transaction`
-		WHERE kind = 'پاداش معرف'
+		SELECT COALESCE(SUM(amount),0) AS amount FROM `tabCustomer Wallet Transaction`
+		WHERE company = %s AND kind = 'پاداش معرف' AND direction = 'واریز'
 		""",
+		(company,),
 		as_dict=True,
-	) if frappe.db.exists("DocType", CLUB_DOCTYPES["wallet_txn"]) else []
+	) if frappe.db.exists("DocType", "Customer Wallet Transaction") else []
 	rewards_paid = flt(reward_row[0].get("amount")) if reward_row else 0.0
 	top = frappe.db.sql(
 		"""
@@ -3948,33 +3973,44 @@ def _club_process_referral_reward(so_name):
 	)[0][0])
 	if prev:
 		return False
-	already = frappe.db.exists(CLUB_DOCTYPES["wallet_txn"], {"reference_name": so_name, "kind": "پاداش معرف"})
+	from accounts.wallet_service import TRANSACTION as ACCOUNTS_WALLET_TRANSACTION
+	company = _wallet_company()
+	already = frappe.db.exists(ACCOUNTS_WALLET_TRANSACTION, {
+		"company": company,
+		"reference_name": so_name,
+		"kind": "پاداش معرف",
+	})
 	if already:
 		return False
-	wallet_referrer = _club_get_or_create_wallet(referrer)
-	if settings["referral_referrer_reward"] > 0:
-		_club_wallet_txn(
-			wallet=wallet_referrer,
-			customer=referrer,
-			kind="پاداش معرف",
-			direction="واریز",
-			amount=settings["referral_referrer_reward"],
-			note=_("پاداش معرفی {0} (سفارش {1})").format(customer, so_name),
-			reference_doctype="Sales Order",
-			reference_name=so_name,
-		)
-	if settings["referral_referee_reward"] > 0:
-		wallet_referee = _club_get_or_create_wallet(customer)
-		_club_wallet_txn(
-			wallet=wallet_referee,
-			customer=customer,
-			kind="پاداش معرف",
-			direction="واریز",
-			amount=settings["referral_referee_reward"],
-			note=_("پاداش عضویت با کد معرف (سفارش {0})").format(so_name),
-			reference_doctype="Sales Order",
-			reference_name=so_name,
-		)
+	frappe.db.savepoint("restaurant_referral_wallet_award")
+	try:
+		wallet_referrer = _club_get_or_create_wallet(referrer)
+		if settings["referral_referrer_reward"] > 0:
+			_club_wallet_txn(
+				wallet=wallet_referrer,
+				customer=referrer,
+				kind="پاداش معرف",
+				direction="واریز",
+				amount=settings["referral_referrer_reward"],
+				note=_("پاداش معرفی {0} (سفارش {1})").format(customer, so_name),
+				reference_doctype="Sales Order",
+				reference_name=so_name,
+			)
+		if settings["referral_referee_reward"] > 0:
+			wallet_referee = _club_get_or_create_wallet(customer)
+			_club_wallet_txn(
+				wallet=wallet_referee,
+				customer=customer,
+				kind="پاداش معرف",
+				direction="واریز",
+				amount=settings["referral_referee_reward"],
+				note=_("پاداش عضویت با کد معرف (سفارش {0})").format(so_name),
+				reference_doctype="Sales Order",
+				reference_name=so_name,
+			)
+	except Exception:
+		frappe.db.rollback(save_point="restaurant_referral_wallet_award")
+		raise
 	if _has_column("Customer", "restaurant_referred_by") and not frappe.db.get_value("Customer", customer, "restaurant_referred_by"):
 		frappe.db.set_value("Customer", customer, {
 			"restaurant_referred_by": referrer,
@@ -4525,7 +4561,7 @@ def get_management_wallet_report(date_from=None, date_to=None):
 		frappe.throw(_("بازهٔ تاریخ گزارش معتبر نیست."))
 	params = {"date_from": date_from, "date_to": add_days(date_to, 1)}
 	base = """
-		FROM `tabRestaurant Wallet Transaction`
+		FROM `tabCustomer Wallet Transaction`
 		WHERE entry_date >= %(date_from)s AND entry_date < %(date_to)s
 	"""
 	rows = frappe.db.sql(
@@ -4638,8 +4674,10 @@ def get_management_wallet_report(date_from=None, date_to=None):
 @frappe.whitelist()
 def get_management_report_wallet_summary(date_from=None, date_to=None):
 	_ensure_management_access()
+	company = _wallet_manager_company()
 	wallets = frappe.get_all(
-		CLUB_DOCTYPES["wallet"],
+		"Customer Wallet",
+		filters={"company": company},
 		fields=["customer", "balance", "total_charged", "total_spent", "total_rewards"],
 		limit_page_length=500,
 	)
@@ -4678,16 +4716,17 @@ def get_management_report_wallet_summary(date_from=None, date_to=None):
 @frappe.whitelist()
 def get_management_report_credit_transactions(date_from=None, date_to=None):
 	_ensure_management_access()
+	company = _wallet_manager_company()
 	date_to = str(date_to or today())
 	date_from = str(date_from or add_days(date_to, -29))
 	rows = frappe.db.sql(
 		"""
 		SELECT customer, kind, direction, SUM(amount) AS amount, COUNT(*) AS count
-		FROM `tabRestaurant Wallet Transaction`
-		WHERE entry_date BETWEEN %(df)s AND %(dt)s + INTERVAL 1 DAY
+		FROM `tabCustomer Wallet Transaction`
+		WHERE company = %(company)s AND posting_at BETWEEN %(df)s AND %(dt)s + INTERVAL 1 DAY
 		GROUP BY customer, kind, direction
 		""",
-		{"df": date_from, "dt": date_to},
+		{"company": company, "df": date_from, "dt": date_to},
 		as_dict=True,
 	)
 	out = []
@@ -5029,6 +5068,478 @@ def save_management_coupon(payload=None):
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "success", "coupon": doc.name}
+
+
+# ---------------------------------------------------------------------------
+# Accounts wallet ownership adapters
+# ---------------------------------------------------------------------------
+
+
+def _accounts_wallet_context():
+	from accounts import wallet_service
+
+	settings = _club_club_settings()
+	club_company = settings.get("company") or ""
+	web_company = ""
+	if frappe.db.exists("DocType", "Restaurant Web Settings"):
+		web_company = frappe.db.get_single_value("Restaurant Web Settings", "restaurant_club_company") or ""
+	if club_company and web_company and club_company != web_company:
+		frappe.throw(_("شرکت باشگاه رستوران و شرکت کیف پول حسابیار با هم مطابقت ندارند."))
+	company = club_company or web_company or wallet_service.get_restaurant_company()
+	return wallet_service, company
+
+
+def _accounts_wallet_company():
+	"""Resolve a POS company without failing unrelated Restaurant orders on setup."""
+	from accounts.wallet_service import SETTINGS
+
+	settings = _club_club_settings()
+	club_company = settings.get("company") or ""
+	web_company = ""
+	if frappe.db.exists("DocType", "Restaurant Web Settings"):
+		web_company = frappe.db.get_single_value("Restaurant Web Settings", "restaurant_club_company") or ""
+	if club_company and web_company and club_company != web_company:
+		return ""
+	company = club_company or web_company
+	if company:
+		return company
+	configured = frappe.get_all(SETTINGS, pluck="company", limit_page_length=2)
+	if len(configured) == 1:
+		return configured[0]
+	return ""
+
+
+def _club_wallet_mode_of_payment():
+	"""POS wallet tender is configured in the Accounts-owned company settings."""
+	company = _accounts_wallet_company()
+	legacy_mode = _club_club_settings().get("wallet_mode_of_payment") or ""
+	if not company:
+		return legacy_mode
+	from accounts.wallet_service import SETTINGS
+	if not frappe.db.exists(SETTINGS, {"company": company}):
+		return legacy_mode
+	return frappe.db.get_value(SETTINGS, {"company": company}, "pos_mode_of_payment") or legacy_mode
+
+
+def _accounts_wallet_enabled():
+	company = _accounts_wallet_company()
+	if not company:
+		return False
+	from accounts.wallet_service import SETTINGS
+	return bool(frappe.db.get_value(SETTINGS, {"company": company}, "enabled"))
+
+
+def _club_get_or_create_wallet(customer_name):
+	service, company = _accounts_wallet_context()
+	return service.ensure_wallet(company, customer_name)
+
+
+def _club_reconcile_wallet_buckets(wallet):
+	"""Kept as a compatibility shim; Accounts now owns ledger snapshots."""
+	return wallet
+
+
+def _wallet_idempotency_source_key(company, customer, request_key):
+	identity = f"{company}:{customer}:{str(request_key or '').strip()}"
+	return "restaurant-idempotency:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+def _club_wallet_txn(*, wallet, customer, kind, direction, amount, note="", reference_doctype="", reference_name="", bucket=None, expiry_date=None, idempotency_key=None):
+	from accounts.wallet_service import ensure_wallet, record_event
+
+	bucket = bucket or ("کش‌بک" if kind in {"کش‌بک", "پاداش معرف", "کمیسیون مربی", "بازگشت کمیسیون مربی", "تبدیل امتیاز", "انقضای کش‌بک"} else "کیف پول")
+	company = wallet.get("company") or _wallet_company()
+	wallet = ensure_wallet(company, customer)
+	accounting = "none"
+	expense_field = None
+	if kind in {"کش‌بک", "انقضای کش‌بک"}:
+		accounting, expense_field = "reward", "cashback_expense_account"
+	elif kind == "پاداش معرف":
+		accounting, expense_field = "reward", "referral_expense_account"
+	elif kind in {"کمیسیون مربی", "بازگشت کمیسیون مربی"}:
+		accounting, expense_field = "reward", "coach_commission_expense_account"
+	elif kind == "تبدیل امتیاز":
+		accounting, expense_field = "reward", "points_conversion_expense_account"
+	key = _wallet_idempotency_source_key(company, customer, idempotency_key) if idempotency_key else ""
+	if not key and reference_name:
+		identity = f"{company}:{reference_doctype}:{reference_name}:{customer}:{kind}:{bucket}:{direction}"
+		key = "restaurant:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+	result = record_event(
+		company=company,
+		customer=customer,
+		kind=kind,
+		direction=direction,
+		amount=amount,
+		bucket="اعتبار خرید" if bucket in {"کش‌بک", "اعتبار خرید"} else "قابل برداشت",
+		posting_at=now_datetime(),
+		source_key=key or None,
+		reference_doctype=reference_doctype or "",
+		reference_name=reference_name or "",
+		note=note or "",
+		accounting=accounting,
+		expense_field=expense_field,
+		expiry_date=expiry_date,
+	)
+	updated = result["wallet"]
+	for field in ("balance", "withdrawable_balance", "cashback_balance", "reserved_balance", "total_charged", "total_spent", "total_rewards"):
+		wallet.set(field, updated.get(field))
+	return result["transaction"]
+
+
+def _club_post_cashback_journal(txn, *, reverse=False):
+	if txn.get("journal_entry") or txn.get("accounting_journal_entry"):
+		return txn.get("journal_entry") or txn.get("accounting_journal_entry")
+	if txn.get("legacy_record"):
+		return ""
+	return ""
+
+
+def _club_expire_due_cashback(customer=None):
+	"""Expire remaining purchase credit through the shared Accounts ledger."""
+	if not _accounts_wallet_enabled():
+		return 0
+	from accounts.wallet_service import TRANSACTION
+
+	company = _wallet_company()
+	filters = {"company": company, "bucket": "اعتبار خرید", "direction": "واریز", "expiry_date": ["is", "set"]}
+	if customer:
+		filters["customer"] = customer
+	credits = frappe.get_all(TRANSACTION, filters=filters, fields=["name", "wallet", "customer", "amount", "expiry_date", "posting_at"], order_by="posting_at asc, creation asc", limit_page_length=10000, ignore_permissions=True)
+	due_date = getdate(today())
+	if not credits:
+		return 0
+	all_rows = frappe.get_all(TRANSACTION, filters={"company": company, "bucket": "اعتبار خرید"}, fields=["name", "wallet", "customer", "kind", "direction", "amount", "expiry_date", "posting_at", "reference_name"], order_by="posting_at asc, creation asc", limit_page_length=100000, ignore_permissions=True)
+	lots = {}
+	expired = 0
+	for row in all_rows:
+		if row.direction == "واریز":
+			lots[row.name] = {"wallet": row.wallet, "customer": row.customer, "remaining": flt(row.amount), "expiry_date": row.expiry_date}
+		elif row.direction == "برداشت":
+			left = flt(row.amount)
+			for lot in lots.values():
+				if lot["wallet"] != row.wallet or left <= 0:
+					continue
+				used = min(lot["remaining"], left)
+				lot["remaining"] -= used
+				left -= used
+	for row in credits:
+		lot = lots.get(row.name)
+		if not lot or not row.expiry_date or getdate(row.expiry_date) > due_date or lot["remaining"] <= 0.009:
+			continue
+		wallet = _club_get_or_create_wallet(row.customer)
+		amount = min(flt(lot["remaining"], 2), flt(wallet.cashback_balance or 0))
+		if amount <= 0.009:
+			continue
+		_club_wallet_txn(wallet=wallet, customer=row.customer, kind="انقضای کش‌بک", direction="برداشت", amount=amount, bucket="کش‌بک", note=_("انقضای اعتبار کش‌بک {0}").format(row.name), reference_doctype=TRANSACTION, reference_name=row.name)
+		expired += 1
+	return expired
+
+
+def _wallet_company():
+	return _accounts_wallet_context()[1]
+
+
+def _wallet_manager_company():
+	_ensure_management_access()
+	company = _wallet_company()
+	from accounts.wallet_service import _require_company_access
+	_require_company_access(company)
+	return company
+
+
+def _request_payload(doc):
+	data = doc.as_dict() if hasattr(doc, "as_dict") else dict(doc)
+	return {
+		"name": data.get("name"), "amount": flt(data.get("amount") or 0),
+		"status": data.get("status") or "در انتظار بررسی",
+		"payment_reference": data.get("payment_reference") or "", "note": data.get("note") or "",
+		"review_note": data.get("review_note") or "", "bank_iban": data.get("bank_iban") or "",
+		"account_holder": data.get("account_holder") or "", "reserved_amount": flt(data.get("reserved_amount") or 0),
+		"creation": str(data.get("requested_at") or data.get("creation") or ""),
+		"requested_at": str(data.get("requested_at") or data.get("creation") or ""),
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_my_wallet(customer_token=None):
+	from restaurant.customer_account import _require_customer
+	from accounts.wallet_api import wallet_for_customer
+
+	identity = _require_customer(customer_token)
+	customer = identity["customer"]
+	company = _wallet_company()
+	wallet = wallet_for_customer(company, customer)
+	request_rows = frappe.get_all("Customer Wallet Request", filters={"company": company, "customer": customer}, fields=["name", "request_type", "amount", "reserved_amount", "status", "payment_reference", "bank_iban", "account_holder", "note", "review_note", "requested_at", "creation"], order_by="requested_at desc, creation desc", limit_page_length=50, ignore_permissions=True)
+	return {
+		"wallet": {"balance": flt(wallet.get("balance") or 0), "withdrawable_balance": flt(wallet.get("withdrawable_balance") or 0), "cashback_balance": flt(wallet.get("cashback_balance") or 0), "reserved_balance": flt(wallet.get("reserved_balance") or 0), "available_balance": flt(wallet.get("available_balance") or 0), "status": wallet.get("status") or "فعال"},
+		"transactions": [{**row, "entry_date": str(row.get("posting_at") or ""), "amount": flt(row.get("amount") or 0)} for row in wallet.get("transactions", [])],
+		"withdrawal_requests": [_request_payload(row) for row in request_rows if row.request_type == "برداشت"],
+		"charge_requests": [_request_payload(row) for row in request_rows if row.request_type == "شارژ"],
+		"charge": {"enabled": _club_club_settings()["wallet_charge_enabled"] and _accounts_wallet_enabled(), "bank_name": _club_club_settings()["wallet_charge_bank_name"], "account_holder": _club_club_settings()["wallet_charge_account_holder"], "iban": _club_club_settings()["wallet_charge_iban"], "card_number": _club_club_settings()["wallet_charge_card_number"], "instructions": _club_club_settings()["wallet_charge_instructions"]},
+		"rules": {"cashback_percent": _club_club_settings()["cashback_percent"], "cashback_min_order": _club_club_settings()["cashback_min_order"], "club_enabled": _club_club_settings()["club_enabled"]},
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def request_my_wallet_charge(customer_token=None, amount=0, payment_reference="", note="", request_key=""):
+	from restaurant.customer_account import _require_customer
+	from restaurant.wallet_rules import validate_wallet_charge_amount
+	from accounts.wallet_api import request_for_customer
+
+	identity = _require_customer(customer_token)
+	if not cint(_club_club_settings()["wallet_charge_enabled"]) or not _accounts_wallet_enabled():
+		frappe.throw(_("درخواست شارژ کیف پول در حال حاضر غیرفعال است."))
+	try:
+		amount = validate_wallet_charge_amount(amount)
+	except ValueError as exc:
+		frappe.throw(_(str(exc)))
+	payment_reference = str(payment_reference or "").strip()
+	note = str(note or "").strip()[:240]
+	if len(payment_reference) > 120:
+		frappe.throw(_("شماره پیگیری بیش از حد طولانی است."))
+	request = request_for_customer(company=_wallet_company(), customer=identity["customer"], request_type="شارژ", amount=amount, note=note, payment_reference=payment_reference, source_name=request_key or frappe.generate_hash(length=24))
+	return {"success": True, "request": _request_payload(request)}
+
+
+@frappe.whitelist(allow_guest=True)
+def submit_my_wallet_charge_reference(customer_token=None, request_name="", payment_reference="", note=""):
+	from restaurant.customer_account import _require_customer
+	from accounts.wallet_api import submit_charge_reference_for_customer
+
+	identity = _require_customer(customer_token)
+	request = submit_charge_reference_for_customer(request_name, identity["customer"], payment_reference, note=note)
+	return {"success": True, "request": _request_payload(request)}
+
+
+@frappe.whitelist(allow_guest=True)
+def request_my_wallet_withdrawal(customer_token=None, amount=0, bank_iban="", account_holder="", note="", request_key=""):
+	from restaurant.customer_account import _require_customer
+	from restaurant.wallet_rules import normalize_iranian_iban
+	from accounts.wallet_api import request_for_customer
+
+	identity = _require_customer(customer_token)
+	if not _accounts_wallet_enabled():
+		frappe.throw(_("کیف پول شرکت در حال حاضر غیرفعال است."))
+	iban = normalize_iranian_iban(bank_iban)
+	account_holder = str(account_holder or "").strip()
+	amount = flt(amount, 2)
+	if amount <= 0 or not iban or not account_holder or len(account_holder) > 140:
+		frappe.throw(_("مبلغ، شماره شبا و نام صاحب حساب را به‌درستی وارد کنید."))
+	request = request_for_customer(company=_wallet_company(), customer=identity["customer"], request_type="برداشت", amount=amount, bank_iban=iban, account_holder=account_holder, note=str(note or "")[:240], source_name=request_key or frappe.generate_hash(length=24))
+	return {"success": True, "request": _request_payload(request), "wallet": get_my_wallet(customer_token).get("wallet")}
+
+
+@frappe.whitelist()
+def list_management_wallets(search="", limit=100, offset=0):
+	company = _wallet_manager_company()
+	from accounts.wallet_service import list_wallets
+	result = list_wallets(company=company, search=search, limit=limit, offset=offset)
+	for row in result["wallets"]:
+		row["wallet"] = row["name"]
+	return {"wallets": result["wallets"], "count": result["total"]}
+
+
+@frappe.whitelist()
+def get_management_wallet_detail(customer=""):
+	company = _wallet_manager_company()
+	wallet_name = frappe.db.get_value("Customer Wallet", {"company": company, "customer": customer}, "name")
+	if not wallet_name:
+		frappe.throw(_("کیف پول مشتری پیدا نشد."))
+	from accounts.wallet_api import wallet_detail
+	return {"wallet": wallet_detail(wallet_name=wallet_name), "transactions": frappe.get_all("Customer Wallet Transaction", filters={"wallet": wallet_name}, fields=["name", "kind", "bucket", "direction", "amount", "balance_after", "posting_at", "reference_doctype", "reference_name", "journal_entry", "reconciliation_status"], order_by="posting_at desc", limit_page_length=100, ignore_permissions=True), "points": {"balance": _club_points_balance(customer)}, "point_entries": list_management_point_entries(customer=customer, limit=20).get("entries", [])}
+
+
+@frappe.whitelist()
+def list_management_wallet_transactions(search="", customer="", kind="", direction="", date_from="", date_to="", limit=100, offset=0):
+	company = _wallet_manager_company()
+	filters = {"company": company}
+	if customer:
+		filters["customer"] = customer
+	if kind:
+		filters["kind"] = kind
+	if direction in {"واریز", "برداشت"}:
+		filters["direction"] = direction
+	if date_from and date_to:
+		filters["posting_at"] = ["between", [date_from, f"{date_to} 23:59:59"]]
+	elif date_from:
+		filters["posting_at"] = [">=", date_from]
+	elif date_to:
+		filters["posting_at"] = ["<=", f"{date_to} 23:59:59"]
+	rows = frappe.get_all("Customer Wallet Transaction", filters=filters, fields=["name", "wallet", "company", "customer", "kind", "bucket", "direction", "amount", "balance_after", "withdrawable_after", "cashback_after", "reference_doctype", "reference_name", "note", "posting_at", "journal_entry", "accounting_journal_entry", "expiry_date", "legacy_record", "reconciliation_status"], order_by="posting_at desc, creation desc", limit_start=max(cint(offset), 0), limit_page_length=min(max(cint(limit) or 100, 1), 500), ignore_permissions=True)
+	needle = str(search or "").strip().casefold()
+	for row in rows:
+		row["entry_date"] = str(row.get("posting_at") or "")
+		row["customer_name"] = frappe.db.get_value("Customer", row.customer, "customer_name") or row.customer
+	if needle:
+		rows = [row for row in rows if needle in str(row.customer).casefold() or needle in str(row.kind).casefold() or needle in str(row.reference_name).casefold()]
+	return {"transactions": rows, "total": frappe.db.count("Customer Wallet Transaction", filters)}
+
+
+@frappe.whitelist()
+def list_management_wallet_withdrawal_requests(status="", limit=100, offset=0):
+	_wallet_manager_company()
+	return _list_wallet_requests("برداشت", status, limit, offset)
+
+
+@frappe.whitelist()
+def list_management_wallet_charge_requests(status="", limit=100, offset=0):
+	_wallet_manager_company()
+	return _list_wallet_requests("شارژ", status, limit, offset)
+
+
+def _list_wallet_requests(request_type, status, limit, offset):
+	filters = {"company": _wallet_company(), "request_type": request_type}
+	if status:
+		filters["status"] = status
+	rows = frappe.get_all("Customer Wallet Request", filters=filters, fields=["name", "customer", "amount", "status", "payment_reference", "bank_iban", "account_holder", "reserved_amount", "note", "review_note", "requested_at", "creation", "wallet_transaction", "journal_entry"], order_by="requested_at desc, creation desc", limit_start=max(cint(offset), 0), limit_page_length=min(max(cint(limit) or 100, 1), 400), ignore_permissions=True)
+	for row in rows:
+		row["customer_name"] = frappe.db.get_value("Customer", row.customer, "customer_name") or row.customer
+	return {"requests": rows, "count": len(rows)}
+
+
+def _find_wallet_request(request_name, request_type):
+	name = frappe.db.get_value("Customer Wallet Request", {"name": request_name, "company": _wallet_company(), "request_type": request_type}, "name")
+	if not name:
+		name = frappe.db.get_value("Customer Wallet Request", {"source_name": request_name, "company": _wallet_company(), "request_type": request_type}, "name")
+	if not name:
+		frappe.throw(_("درخواست کیف پول پیدا نشد."))
+	return name
+
+
+@frappe.whitelist()
+def review_management_wallet_withdrawal_request(request_name="", action="", payment_reference="", note=""):
+	_wallet_manager_company()
+	from accounts.wallet_service import review_request
+	name = _find_wallet_request(request_name, "برداشت")
+	result = review_request(name, "pay" if action in {"paid", "pay"} else "reject", payment_reference=payment_reference, note=note)
+	return {"success": True, "request": _request_payload(result)}
+
+
+@frappe.whitelist()
+def review_management_wallet_charge_request(request_name="", action="", payment_reference="", note=""):
+	_wallet_manager_company()
+	from accounts.wallet_service import review_request
+	name = _find_wallet_request(request_name, "شارژ")
+	result = review_request(name, "approve" if action in {"approve", "approved"} else "reject", payment_reference=payment_reference, note=note)
+	return {"success": True, "request": _request_payload(result)}
+
+
+def _submit_manual_wallet_operation(payload):
+	_wallet_manager_company()
+	doc = frappe.get_doc({"doctype": "Customer Wallet Operation", **payload})
+	doc.insert(ignore_permissions=True)
+	doc.submit()
+	return doc
+
+
+@frappe.whitelist()
+def charge_management_wallet(payload=None):
+	data = _club_parse_json(payload, {})
+	doc = _submit_manual_wallet_operation({"company": _wallet_company(), "operation_type": "شارژ", "customer": data.get("customer"), "amount": flt(data.get("amount")), "bucket": "قابل برداشت", "posting_date": data.get("posting_date") or today(), "counter_account": data.get("counter_account"), "note": data.get("note") or ""})
+	return {"status": "success", "txn": doc.wallet_transaction, "journal_entry": doc.journal_entry}
+
+
+@frappe.whitelist()
+def transfer_management_wallet(payload=None):
+	data = _club_parse_json(payload, {})
+	doc = _submit_manual_wallet_operation({"company": _wallet_company(), "operation_type": "انتقال", "customer": data.get("from_customer"), "to_customer": data.get("to_customer"), "amount": flt(data.get("amount")), "bucket": "قابل برداشت", "posting_date": data.get("posting_date") or today(), "note": data.get("note") or ""})
+	return {"status": "success", "txn": doc.wallet_transaction, "counter_txn": doc.counter_wallet_transaction}
+
+
+@frappe.whitelist()
+def adjust_management_wallet(payload=None):
+	data = _club_parse_json(payload, {})
+	amount = flt(data.get("amount"))
+	direction = data.get("direction") or ("واریز" if amount >= 0 else "برداشت")
+	doc = _submit_manual_wallet_operation({"company": _wallet_company(), "operation_type": "تعدیل", "customer": data.get("customer"), "amount": abs(amount), "direction": direction, "bucket": "قابل برداشت", "posting_date": data.get("posting_date") or today(), "note": data.get("note") or ""})
+	return {"status": "success", "txn": doc.wallet_transaction, "journal_entry": doc.journal_entry}
+
+
+@frappe.whitelist()
+def grant_management_cashback(payload=None):
+	_wallet_manager_company()
+	data = _club_parse_json(payload, {})
+	request_key = str(data.get("request_key") or "").strip()
+	if not request_key or len(request_key) > 140:
+		frappe.throw(_("کلید یکتای ثبت کش‌بک معتبر نیست."))
+	wallet = _club_get_or_create_wallet(data.get("customer"))
+	expiry = data.get("expiry_date") or None
+	txn = _club_wallet_txn(wallet=wallet, customer=wallet.customer, kind="کش‌بک", direction="واریز", amount=flt(data.get("amount")), bucket="کش‌بک", expiry_date=expiry, note=data.get("note") or "", idempotency_key=request_key)
+	return {"status": "success", "txn": txn.name, "journal_entry": txn.get("journal_entry"), "balance": flt(frappe.db.get_value("Customer Wallet", wallet.name, "balance"))}
+
+
+@frappe.whitelist()
+def get_management_wallet_report(date_from=None, date_to=None):
+	company = _wallet_manager_company()
+	_club_expire_due_cashback()
+	date_to = getdate(date_to or today())
+	date_from = getdate(date_from or add_days(date_to, -29))
+	if date_from > date_to:
+		frappe.throw(_("بازهٔ تاریخ گزارش معتبر نیست."))
+	params = {"company": company, "start": date_from, "end": add_days(date_to, 1)}
+	base = " FROM `tabCustomer Wallet Transaction` WHERE company = %(company)s AND posting_at >= %(start)s AND posting_at < %(end)s "
+	by_kind = frappe.db.sql(
+		"SELECT kind, bucket, direction, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount" + base + " GROUP BY kind, bucket, direction",
+		params, as_dict=True,
+	)
+	summary = {"transactions": sum(cint(row.count) for row in by_kind), "cashback_granted": 0, "cashback_used": 0, "cashback_expired": 0, "wallet_charged": 0, "wallet_used": 0, "discount_expense": 0, "discount_invoices": 0}
+	for row in by_kind:
+		amount = flt(row.amount)
+		if row.bucket == "اعتبار خرید" and row.direction == "واریز":
+			summary["cashback_granted"] += amount
+		if row.bucket == "اعتبار خرید" and row.direction == "برداشت" and row.kind == "پرداخت":
+			summary["cashback_used"] += amount
+		if row.kind == "انقضای کش‌بک":
+			summary["cashback_expired"] += amount
+		if row.bucket == "قابل برداشت" and row.kind == "شارژ" and row.direction == "واریز":
+			summary["wallet_charged"] += amount
+		if row.bucket == "قابل برداشت" and row.kind == "پرداخت" and row.direction == "برداشت":
+			summary["wallet_used"] += amount
+	by_customer = frappe.db.sql(
+		"""SELECT customer,
+			COALESCE(SUM(CASE WHEN bucket = 'اعتبار خرید' AND direction = 'واریز' THEN amount ELSE 0 END), 0) AS granted,
+			COALESCE(SUM(CASE WHEN bucket = 'اعتبار خرید' AND direction = 'برداشت' AND kind = 'پرداخت' THEN amount ELSE 0 END), 0) AS used,
+			COALESCE(SUM(CASE WHEN kind = 'انقضای کش‌بک' THEN amount ELSE 0 END), 0) AS expired,
+			COUNT(*) AS transactions""" + base + " GROUP BY customer ORDER BY granted DESC LIMIT 100",
+		params, as_dict=True,
+	)
+	for row in by_customer:
+		row["customer_name"] = frappe.db.get_value("Customer", row.customer, "customer_name") or row.customer
+		for key in ("granted", "used", "expired"):
+			row[key] = flt(row.get(key), 2)
+		row["transactions"] = cint(row.get("transactions"))
+	discount_invoices = []
+	club_settings = _club_club_settings()
+	discount_account = club_settings.get("discount_expense_account")
+	if discount_account and frappe.db.exists("DocType", "Sales Invoice") and _has_column("Sales Invoice", "additional_discount_account"):
+		invoice_filters = {"docstatus": 1, "additional_discount_account": discount_account, "posting_date": ["between", [str(date_from), str(date_to)]]}
+		if company and _has_column("Sales Invoice", "company"):
+			invoice_filters["company"] = company
+		fields = ["name", "customer", "posting_date", "grand_total"]
+		has_discount_amount = _has_column("Sales Invoice", "discount_amount")
+		has_additional_discount = _has_column("Sales Invoice", "additional_discount_amount")
+		fields.extend(field for field, exists in (("discount_amount", has_discount_amount), ("additional_discount_amount", has_additional_discount)) if exists)
+		discount_invoices = frappe.get_all("Sales Invoice", filters=invoice_filters, fields=fields, order_by="posting_date desc, name desc", limit_page_length=500)
+		for invoice in discount_invoices:
+			invoice["customer_name"] = frappe.db.get_value("Customer", invoice.customer, "customer_name") or invoice.customer
+			invoice["discount"] = flt(invoice.get("additional_discount_amount") or invoice.get("discount_amount") or 0)
+		discount_parts = []
+		if has_additional_discount:
+			discount_parts.append("NULLIF(COALESCE(additional_discount_amount, 0), 0)")
+		if has_discount_amount:
+			discount_parts.append("discount_amount")
+		discount_expression = "COALESCE(" + ", ".join(discount_parts + ["0"]) + ")"
+		company_clause = "AND company = %(company)s" if company and _has_column("Sales Invoice", "company") else ""
+		discount_summary = frappe.db.sql(
+			"SELECT COUNT(*) AS count, COALESCE(SUM(" + discount_expression + "), 0) AS amount FROM `tabSales Invoice` WHERE docstatus = 1 AND additional_discount_account = %(account)s AND posting_date BETWEEN %(date_from)s AND %(date_to)s " + company_clause,
+			{"account": discount_account, "date_from": date_from, "date_to": date_to, **({"company": company} if company_clause else {})},
+			as_dict=True,
+		)
+		if discount_summary:
+			summary["discount_invoices"] = cint(discount_summary[0].count)
+			summary["discount_expense"] = flt(discount_summary[0].amount, 2)
+	page = list_management_wallet_transactions(date_from=str(date_from), date_to=str(date_to), limit=100, offset=0)
+	return {"date_from": str(date_from), "date_to": str(date_to), "summary": {key: flt(value, 2) if key != "transactions" and key != "discount_invoices" else cint(value) if key == "transactions" or key == "discount_invoices" else value for key, value in summary.items()}, "by_customer": by_customer, "by_kind": by_kind, "transactions": page.get("transactions", []), "discount_invoices": discount_invoices}
 
 
 # ---------------------------------------------------------------------------
