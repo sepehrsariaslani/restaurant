@@ -7,6 +7,43 @@ from types import SimpleNamespace
 
 
 class PosSettleDeliverTests(unittest.TestCase):
+    def test_delivery_lock_skips_cancelled_orders(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_lock_pos_sales_order")
+        calls = []
+        row = SimpleNamespace(name="SO-1", docstatus=1, status="To Deliver and Bill")
+        namespace = {
+            "frappe": SimpleNamespace(db=SimpleNamespace(sql=lambda query, name, **kwargs: calls.append((query, name)) or [row])),
+            "cint": int,
+        }
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(source), "exec"), namespace)
+        lock = namespace["_lock_pos_sales_order"]
+        self.assertTrue(lock("SO-1"))
+        self.assertIn("FOR UPDATE", calls[0][0])
+        row.status = "Cancelled"
+        self.assertFalse(lock("SO-1"))
+        self.assertTrue(lock("SO-1", require_active=False))
+
+    def test_background_delivery_and_purge_lock_the_same_sales_order(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+        self.assertTrue("_lock_pos_sales_order" in functions)
+        for name in ("_background_deliver_pos_order", "_background_production_and_delivery", "purge_management_pos_order"):
+            calls = [
+                node.func.id for node in ast.walk(functions[name])
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            ]
+            self.assertIn("_lock_pos_sales_order", calls, name)
+        purge = functions["purge_management_pos_order"]
+        top_level_calls = [
+            node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+            for statement in purge.body for node in ast.walk(statement)
+            if isinstance(node, ast.Call) and (isinstance(node.func, ast.Name) or isinstance(node.func, ast.Attribute))
+        ]
+        self.assertLess(top_level_calls.index("commit"), top_level_calls.index("_lock_pos_sales_order"))
+
     def _action(self, fail_delivery=False):
         source = Path(__file__).resolve().parents[1] / "api.py"
         tree = ast.parse(source.read_text())
@@ -63,6 +100,7 @@ class PosSettleDeliverTests(unittest.TestCase):
         )
         namespace = {
             "frappe": frappe,
+            "_lock_pos_sales_order": lambda *args: True,
             "_create_production_for_sales_order": lambda *args: {"production_tickets": []},
             "_create_delivery_note_for_sales_order": fail_delivery,
             "_set_restaurant_order_status": lambda *args, **kwargs: statuses.append(args),
@@ -109,6 +147,7 @@ class PosSettleDeliverTests(unittest.TestCase):
         )
         namespace = {
             "frappe": frappe,
+            "_lock_pos_sales_order": lambda *args: True,
             "_create_production_for_sales_order": lambda *args: {"production_tickets": []},
             "_create_delivery_note_for_sales_order": fail_delivery,
             "_set_restaurant_order_status": lambda *args, **kwargs: statuses.append(args),

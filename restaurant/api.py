@@ -16763,8 +16763,28 @@ def deliver_invoice_only(order_name):
     frappe.db.commit()
     return result
 
+def _lock_pos_sales_order(so_name, require_active=True):
+    """Serialize delivery and purge on the same Sales Order row."""
+    rows = frappe.db.sql(
+        "SELECT name, docstatus, status FROM `tabSales Order` WHERE name = %s FOR UPDATE",
+        so_name,
+        as_dict=True,
+    )
+    if not rows:
+        return False
+    if require_active and (
+        cint(rows[0].docstatus) != 1
+        or str(rows[0].status or "").strip().lower() in {"cancelled", "closed"}
+    ):
+        return False
+    return True
+
+
 def _background_deliver_pos_order(so_name, previous_status=""):
     frappe.db.commit()
+    if not _lock_pos_sales_order(so_name):
+        frappe.db.rollback()
+        return
     try:
         so_doc = frappe.get_doc("Sales Order", so_name)
         ticket_names = []
@@ -16938,6 +16958,9 @@ def produce_and_deliver_pos_order(order_name):
 
 def _background_production_and_delivery(so_name):
     frappe.db.commit()
+    if not _lock_pos_sales_order(so_name):
+        frappe.db.rollback()
+        return
     try:
         so_doc = frappe.get_doc("Sales Order", so_name)
         # 1. Delivery Note
@@ -17237,6 +17260,11 @@ def purge_management_pos_order(order_name):
 
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name or not frappe.db.exists("Sales Order", so_name):
+		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	# Discard an older read snapshot, then wait for any in-flight delivery to
+	# finish before collecting dependent invoices, notes and stock documents.
+	frappe.db.commit()
+	if not _lock_pos_sales_order(so_name, require_active=False):
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
 
 	summary = {
