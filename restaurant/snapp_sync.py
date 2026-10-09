@@ -1194,10 +1194,23 @@ def _manual_pos_orders_for_window(start_date, end_date):
     return manual_orders
 
 
-def preview_snapp_orders(from_date=None, to_date=None, settings=None):
-    """Fetch a date range without writing orders, invoices, customers or items."""
-    cfg = settings if settings is not None else _get_settings()
-    start_dt, end_dt = _resolve_snapp_order_window(from_date, to_date)
+def _fetch_preview_remote_orders(start_dt, end_dt, cfg, force_refresh=False):
+    """Reuse only the remote report; local import and duplicate flags stay live."""
+    cacheable = (end_dt.date() - start_dt.date()).days == 0
+    identity = json.dumps(
+        [start_dt.isoformat(), end_dt.isoformat(), cfg.get("vendor_id"), cfg.get("report_url"), cfg.get("page_size"), cfg.get("token")],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    cache_key = "restaurant:snapp:preview:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    if cacheable and not cint(force_refresh):
+        try:
+            cached = frappe.cache.get_value(cache_key, expires=True, use_local_cache=False)
+            if isinstance(cached, dict) and isinstance(cached.get("orders"), list):
+                return cached
+        except Exception:
+            pass
+
     fetched = fetch_snapp_orders(
         from_datetime=start_dt,
         to_datetime=end_dt,
@@ -1205,6 +1218,19 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
         max_pages=MAX_PAGES,
         settings=cfg,
     )
+    if cacheable and isinstance(fetched, dict) and len(fetched.get("orders") or []) <= 500:
+        try:
+            frappe.cache.set_value(cache_key, fetched, expires_in_sec=15)
+        except Exception:
+            pass
+    return fetched
+
+
+def preview_snapp_orders(from_date=None, to_date=None, settings=None, force_refresh=False):
+    """Fetch a date range without writing orders, invoices, customers or items."""
+    cfg = settings if settings is not None else _get_settings()
+    start_dt, end_dt = _resolve_snapp_order_window(from_date, to_date)
+    fetched = _fetch_preview_remote_orders(start_dt, end_dt, cfg, force_refresh=force_refresh)
     previews = []
     errors = []
     local_items = _get_local_item_rows(limit_page_length=5000, mapped_only=True)

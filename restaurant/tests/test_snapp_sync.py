@@ -45,6 +45,34 @@ from restaurant.snapp_sync import (
 
 
 class TestSnappSync(FrappeTestCase):
+    def test_preview_reuses_remote_batch_but_manual_refresh_fetches_again(self):
+        values = {}
+        expiries = []
+        def save_cached(key, value, expires_in_sec=None):
+            values[key] = value
+            expiries.append(expires_in_sec)
+        cache = SimpleNamespace(
+            get_value=lambda key, **kwargs: values.get(key),
+            set_value=save_cached,
+        )
+        fetched = {"orders": [], "orders_count": 0, "pages_fetched": 1}
+        with patch.object(snapp_sync.frappe, "cache", cache), patch(
+            "restaurant.snapp_sync._resolve_snapp_order_window",
+            return_value=(datetime(2026, 10, 9), datetime(2026, 10, 9, 23, 59, 59)),
+        ), patch("restaurant.snapp_sync.fetch_snapp_orders", return_value=fetched) as remote, patch(
+            "restaurant.snapp_sync._get_local_item_rows", return_value=[]
+        ) as local, patch(
+            "restaurant.snapp_sync._food_partner_modifier_mapping_index", return_value={}
+        ), patch("restaurant.snapp_sync._manual_pos_orders_for_window", return_value=[]):
+            settings = {"page_size": 50, "token": "private", "vendor_id": "vendor"}
+            preview_snapp_orders("2026-10-09", "2026-10-09", settings=settings)
+            preview_snapp_orders("2026-10-09", "2026-10-09", settings=settings)
+            preview_snapp_orders("2026-10-09", "2026-10-09", settings=settings, force_refresh=1)
+
+        self.assertEqual(remote.call_count, 2)
+        self.assertEqual(local.call_count, 3)
+        self.assertEqual(expiries, [15, 15])
+
     def test_normalize_bearer_header_value_before_request(self):
         self.assertEqual(_normalize_bearer_token(" Bearer abc123 "), "abc123")
 

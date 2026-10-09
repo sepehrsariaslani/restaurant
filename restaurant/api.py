@@ -24526,13 +24526,13 @@ def run_snapp_sync_today(only_new=1):
 
 
 @frappe.whitelist()
-def preview_snappfood_orders(from_date=None, to_date=None):
+def preview_snappfood_orders(from_date=None, to_date=None, force_refresh=0):
 	"""Preview a selected date range without creating any ERP documents."""
 	_ensure_management_access()
 	from restaurant.snapp_sync import preview_snapp_orders
 
 	try:
-		return preview_snapp_orders(from_date=from_date, to_date=to_date)
+		return preview_snapp_orders(from_date=from_date, to_date=to_date, force_refresh=force_refresh)
 	except frappe.ValidationError as exc:
 		return {"status": "error", "error": str(exc), "orders": []}
 
