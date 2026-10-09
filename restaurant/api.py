@@ -13720,6 +13720,19 @@ def _management_work_orders_by_sales_order(sales_order_names):
 	return {order_name: list(rows.values()) for order_name, rows in work_orders_by_order.items()}
 
 
+def _management_invoice_outstanding_maps(si_items, si_docs):
+	invoice_outstanding = {doc.name: flt(doc.outstanding_amount) for doc in si_docs}
+	invoices_by_order = defaultdict(set)
+	for item in si_items:
+		if item.parent in invoice_outstanding and item.sales_order:
+			invoices_by_order[item.sales_order].add(item.parent)
+	outstanding_by_order = {
+		order_name: sum(invoice_outstanding[invoice_name] for invoice_name in invoice_names)
+		for order_name, invoice_names in invoices_by_order.items()
+	}
+	return outstanding_by_order, invoices_by_order
+
+
 def _management_fetch_web_orders(
 	date_from=None,
 	date_to=None,
@@ -13950,13 +13963,8 @@ def _management_fetch_web_orders(
 		si_items = frappe.get_all("Sales Invoice Item", filters={"sales_order": ["in", parent_names], "docstatus": 1}, fields=["parent", "sales_order"], ignore_permissions=True)
 		if si_items:
 			si_names = list({si.parent for si in si_items})
-			si_docs = frappe.get_all("Sales Invoice", filters={"name": ["in", si_names]}, fields=["name", "outstanding_amount"], ignore_permissions=True)
-			si_outstanding = {doc.name: flt(doc.outstanding_amount) for doc in si_docs}
-			for si_item in si_items:
-				sales_invoice_map.setdefault(si_item.sales_order, set()).add(si_item.parent)
-				if si_item.sales_order not in outstanding_map:
-					outstanding_map[si_item.sales_order] = 0.0
-				outstanding_map[si_item.sales_order] += si_outstanding.get(si_item.parent, 0.0)
+			si_docs = frappe.get_all("Sales Invoice", filters={"name": ["in", si_names], "docstatus": 1}, fields=["name", "outstanding_amount"], ignore_permissions=True)
+			outstanding_map, sales_invoice_map = _management_invoice_outstanding_maps(si_items, si_docs)
 
 	delivery_exists_map = {}
 	delivery_notes_map = {}
