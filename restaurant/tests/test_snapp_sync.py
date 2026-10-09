@@ -71,7 +71,7 @@ class TestSnappSync(FrappeTestCase):
 
         self.assertEqual(remote.call_count, 2)
         self.assertEqual(local.call_count, 3)
-        self.assertEqual(expiries, [15, 15])
+        self.assertEqual(expiries, [45, 45])
 
     def test_normalize_bearer_header_value_before_request(self):
         self.assertEqual(_normalize_bearer_token(" Bearer abc123 "), "abc123")

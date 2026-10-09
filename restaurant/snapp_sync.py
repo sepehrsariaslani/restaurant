@@ -1220,7 +1220,7 @@ def _fetch_preview_remote_orders(start_dt, end_dt, cfg, force_refresh=False):
     )
     if cacheable and isinstance(fetched, dict) and len(fetched.get("orders") or []) <= 500:
         try:
-            frappe.cache.set_value(cache_key, fetched, expires_in_sec=15)
+            frappe.cache.set_value(cache_key, fetched, expires_in_sec=45)
         except Exception:
             pass
     return fetched
