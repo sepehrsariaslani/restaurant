@@ -13743,6 +13743,7 @@ def _management_fetch_web_orders(
 	customer_search=None,
 	summary_only=False,
 	order_names=None,
+	include_items=True,
 ):
 	if not frappe.db.exists("DocType", "Sales Order"):
 		return []
@@ -13917,7 +13918,7 @@ def _management_fetch_web_orders(
 	items_by_parent = defaultdict(list)
 	has_item_customization = _has_column("Sales Order Item", "restaurant_customization_json")
 	has_item_pricing_breakdown = _has_column("Sales Order Item", "restaurant_pricing_breakdown_json")
-	if parent_names and frappe.db.exists("DocType", "Sales Order Item"):
+	if include_items and parent_names and frappe.db.exists("DocType", "Sales Order Item"):
 		item_fields = ["parent", "item_code", "item_name", "qty", "rate", "amount", "base_amount"]
 		if has_item_customization:
 			item_fields.append("restaurant_customization_json")
@@ -17431,7 +17432,7 @@ def list_management_open_invoices(date=None, search=None, limit_start=0, limit_p
 	page_names = [row.name for row in names[:page_size]]
 	if not page_names:
 		return {"orders": [], "has_more": False, "next_offset": offset}
-	rows = _management_fetch_web_orders(order_names=page_names, review_status="all")
+	rows = _management_fetch_web_orders(order_names=page_names, review_status="all", include_items=False)
 	rows_by_name = {row["name"]: row for row in rows}
 	return {
 		"orders": [rows_by_name[name] for name in page_names if name in rows_by_name],

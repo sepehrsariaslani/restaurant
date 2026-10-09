@@ -21,6 +21,7 @@ class PosOpenInvoiceTests(unittest.TestCase):
 
         def details(**kwargs):
             detailed_names.extend(kwargs["order_names"])
+            self.assertFalse(kwargs["include_items"])
             return [{"name": name, "outstanding_amount": 100} for name in kwargs["order_names"]]
 
         namespace = {
