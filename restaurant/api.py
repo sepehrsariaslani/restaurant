@@ -13742,6 +13742,7 @@ def _management_fetch_web_orders(
 	customer_names=None,
 	customer_search=None,
 	summary_only=False,
+	order_names=None,
 ):
 	if not frappe.db.exists("DocType", "Sales Order"):
 		return []
@@ -13750,6 +13751,10 @@ def _management_fetch_web_orders(
 	start_dt, end_dt = _management_datetime_bounds(date_from=date_from, date_to=date_to)
 	has_transaction_date = _has_column("Sales Order", "transaction_date")
 	filters = {"docstatus": ["<", 2]}
+	if order_names is not None:
+		if not order_names:
+			return []
+		filters["name"] = ["in", list(order_names)]
 	if date_from or date_to:
 		if has_transaction_date:
 			filters["transaction_date"] = ["between", [start_date, end_date]]
@@ -17373,6 +17378,66 @@ def list_management_pos_orders(date_from=None, date_to=None, status=None, cashie
 		cashier=cashier,
 	)
 	return {"orders": orders}
+
+
+@frappe.whitelist()
+def list_management_open_invoices(date=None, search=None, limit_start=0, limit_page_length=100):
+	"""Page unpaid Sales Orders across dates before loading their display details."""
+	_ensure_management_access()
+	offset = max(cint(limit_start or 0), 0)
+	page_size = min(max(cint(limit_page_length or 100), 1), 100)
+	params = {"limit": page_size + 1, "offset": offset}
+	conditions = ["so.docstatus = 1"]
+	if date:
+		date_column = "so.transaction_date" if _has_column("Sales Order", "transaction_date") else "DATE(so.creation)"
+		conditions.append(f"{date_column} = %(date)s")
+		params["date"] = str(date).strip()
+	search_text = " ".join(str(search or "").strip().split())
+	if search_text:
+		search_columns = ["so.name", "so.customer_name"]
+		if _has_column("Sales Order", "restaurant_customer_mobile"):
+			search_columns.append("so.restaurant_customer_mobile")
+		if _has_column("Sales Order", "restaurant_secondary_customer"):
+			search_columns.append("so.restaurant_secondary_customer")
+		conditions.append("(" + " OR ".join(f"{column} LIKE %(search)s" for column in search_columns) + ")")
+		params["search"] = f"%{search_text}%"
+	payment_status = "LOWER(COALESCE(so.restaurant_payment_status, ''))" if _has_column("Sales Order", "restaurant_payment_status") else "''"
+	restaurant_status = "LOWER(COALESCE(so.restaurant_status, ''))" if _has_column("Sales Order", "restaurant_status") else "''"
+	conditions.append(f"""(
+		EXISTS (
+			SELECT 1 FROM `tabSales Invoice Item` sii
+			JOIN `tabSales Invoice` si ON si.name = sii.parent
+			WHERE sii.sales_order = so.name AND sii.docstatus = 1
+				AND si.docstatus = 1 AND si.outstanding_amount > 0.5
+		)
+		OR (
+			NOT EXISTS (
+				SELECT 1 FROM `tabSales Invoice Item` sii
+				JOIN `tabSales Invoice` si ON si.name = sii.parent
+				WHERE sii.sales_order = so.name AND sii.docstatus = 1 AND si.docstatus = 1
+			)
+			AND so.grand_total > 0.5
+			AND {payment_status} NOT IN ('paid', 'settled')
+			AND {restaurant_status} NOT IN ('paid', 'settled', 'cancelled', 'canceled')
+		)
+	)""")
+	names = frappe.db.sql(
+		"SELECT so.name FROM `tabSales Order` so WHERE " + " AND ".join(conditions)
+		+ " ORDER BY so.creation DESC, so.name DESC LIMIT %(limit)s OFFSET %(offset)s",
+		params,
+		as_dict=True,
+	)
+	has_more = len(names) > page_size
+	page_names = [row.name for row in names[:page_size]]
+	if not page_names:
+		return {"orders": [], "has_more": False, "next_offset": offset}
+	rows = _management_fetch_web_orders(order_names=page_names, review_status="all")
+	rows_by_name = {row["name"]: row for row in rows}
+	return {
+		"orders": [rows_by_name[name] for name in page_names if name in rows_by_name],
+		"has_more": has_more,
+		"next_offset": offset + len(page_names),
+	}
 
 
 @frappe.whitelist()
