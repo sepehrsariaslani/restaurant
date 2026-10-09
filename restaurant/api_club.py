@@ -372,6 +372,11 @@ def _club_ensure_settings_fields():
 
 
 def _club_ensure_ops_ready():
+	# Sales Order and Sales Invoice hooks can call this several times during one
+	# cashier action. Provision the same Custom Fields once per request, after
+	# all checks succeed, so a failed provisioning attempt remains retryable.
+	if getattr(frappe.local, "_restaurant_club_ops_ready", False):
+		return
 	_club_ensure_customer_fields()
 	_club_ensure_sales_order_fields()
 	_club_ensure_settings_fields()
@@ -383,6 +388,7 @@ def _club_ensure_ops_ready():
 		],
 		anchor_candidates=["cashback_balance", "withdrawable_balance"],
 	)
+	frappe.local._restaurant_club_ops_ready = True
 
 
 # ---------------------------------------------------------------------------
