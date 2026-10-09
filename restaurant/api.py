@@ -13696,7 +13696,16 @@ def _management_work_orders_by_sales_order(sales_order_names):
 	return {order_name: list(rows.values()) for order_name, rows in work_orders_by_order.items()}
 
 
-def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cashier=None, review_status=None):
+def _management_fetch_web_orders(
+	date_from=None,
+	date_to=None,
+	status=None,
+	cashier=None,
+	review_status=None,
+	customer_names=None,
+	customer_search=None,
+	summary_only=False,
+):
 	if not frappe.db.exists("DocType", "Sales Order"):
 		return []
 
@@ -13713,6 +13722,18 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		filters["owner"] = cashier
 
 	has_mobile = _has_column("Sales Order", "restaurant_customer_mobile")
+	has_secondary_customer = _has_column("Sales Order", "restaurant_secondary_customer")
+	or_filters = {}
+	customer_names = sorted({str(name or "").strip() for name in customer_names or [] if str(name or "").strip()})
+	if customer_names:
+		or_filters["customer"] = ["in", customer_names]
+	search_text = " ".join(str(customer_search or "").strip().lower().split())
+	if search_text:
+		or_filters["customer_name"] = ["like", f"%{search_text}%"]
+		if has_mobile:
+			or_filters["restaurant_customer_mobile"] = ["like", f"%{search_text}%"]
+		if has_secondary_customer:
+			or_filters["restaurant_secondary_customer"] = ["like", f"%{search_text}%"]
 	has_order_type = _has_column("Sales Order", "restaurant_order_type")
 	has_note = _has_column("Sales Order", "restaurant_note")
 	has_payment_method = _has_column("Sales Order", "restaurant_payment_method")
@@ -13772,13 +13793,16 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 		fields.append("restaurant_secondary_customer")
 
 	order_by = "transaction_date desc, creation desc" if has_transaction_date else "creation desc"
-	rows = frappe.get_all(
-		"Sales Order",
-		fields=fields,
-		filters=filters,
-		order_by=order_by,
-		ignore_permissions=True,
-	)
+	get_all_kwargs = {
+		"doctype": "Sales Order",
+		"fields": fields,
+		"filters": filters,
+		"order_by": order_by,
+		"ignore_permissions": True,
+	}
+	if or_filters:
+		get_all_kwargs["or_filters"] = or_filters
+	rows = frappe.get_all(**get_all_kwargs)
 
 	mobile_by_customer = {}
 	if not has_mobile:
@@ -13804,6 +13828,48 @@ def _management_fetch_web_orders(date_from=None, date_to=None, status=None, cash
 					or (row.get("customer_primary_mobile") if has_primary_mobile else "")
 					or ""
 				)
+
+	if summary_only:
+		normalized_status = (status or "").strip().lower()
+		normalized_review_filter = (review_status or "").strip().lower()
+		summaries = []
+		for row in rows:
+			order_review_status = (row.get(ORDER_REVIEW_FIELD) if has_review_status else "") or ORDER_REVIEW_APPROVED
+			if normalized_review_filter in {"pending", "pending_review"} and order_review_status != ORDER_REVIEW_PENDING:
+				continue
+			if normalized_review_filter in {"rejected", "reject"} and order_review_status != ORDER_REVIEW_REJECTED:
+				continue
+			if normalized_review_filter in {"approved", "normal"} and order_review_status in {
+				ORDER_REVIEW_PENDING,
+				ORDER_REVIEW_REJECTED,
+			}:
+				continue
+			if not normalized_review_filter and order_review_status in {ORDER_REVIEW_PENDING, ORDER_REVIEW_REJECTED}:
+				continue
+
+			order_status = _core_order_status(row)
+			if normalized_status and order_status != normalized_status:
+				continue
+			created_at = (
+				_management_business_datetime(
+					date_value=row.get("transaction_date") if has_transaction_date else None,
+					fallback_datetime=row.get("creation"),
+				)
+				or row.get("creation")
+			)
+			summaries.append(
+				{
+					"source": "web",
+					"customer_name": row.get("customer_name") or "POS Customer",
+					"secondary_customer": row.get("restaurant_secondary_customer") or "",
+					"mobile": (row.get("restaurant_customer_mobile") if has_mobile else "")
+					or mobile_by_customer.get(row.get("customer"), ""),
+					"status": order_status,
+					"grand_total": flt(row.get("grand_total") or row.get("total") or row.get("net_total")),
+					"created_at": _json_safe_datetime(created_at),
+				}
+			)
+		return summaries
 
 	parent_names = [row.name for row in rows]
 	items_by_parent = defaultdict(list)
@@ -22099,8 +22165,10 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		"fields": fields,
 		"filters": filters,
 		"ignore_permissions": True,
-		"limit_page_length": 5000
+		"limit_page_length": 100 if search_text else 5000,
 	}
+	if search_text:
+		get_all_kwargs["order_by"] = "customer_name asc"
 	if or_filters:
 		get_all_kwargs["or_filters"] = or_filters
 	customer_docs = frappe.get_all(**get_all_kwargs)
@@ -22140,7 +22208,13 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		name_key_map[customer_name.lower()] = key
 
 	# Fetch orders for stats
-	orders = _management_fetch_web_orders(date_from=date_from, date_to=date_to)
+	orders = _management_fetch_web_orders(
+		date_from=date_from,
+		date_to=date_to,
+		customer_names=[doc.get("name") for doc in customer_docs] if search_text else None,
+		customer_search=search_text,
+		summary_only=bool(search_text),
+	)
 	for order in orders:
 		if not _is_revenue_order(order):
 			continue
