@@ -16900,9 +16900,11 @@ def _background_production_and_delivery(so_name):
         so_doc = frappe.get_doc("Sales Order", so_name)
         # 1. Delivery Note
         dn_name = None
+        delivery_error = None
         try:
             dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
-        except Exception:
+        except Exception as exc:
+            delivery_error = exc
             frappe.log_error(frappe.get_traceback(), "CreateAndSettle DN Error Background")
 
         # 2. Production
@@ -16946,17 +16948,17 @@ def _background_production_and_delivery(so_name):
                 except: pass
                 
         # 3. Retry Delivery Note if it failed earlier
-        if not dn_name:
+        if not dn_name and delivery_error:
             try:
-                _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
-            except Exception:
-                pass
+                dn_name = _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
+            except Exception as exc:
+                raise RuntimeError(f"Delivery Note failed after production: {exc}") from exc
                 
         _set_restaurant_order_status(so_name, "delivered", force=True)
         frappe.db.commit()
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "CreateAndSettle Background Production Error")
-        _append_sales_order_note(so_name, f"[ERROR] Production failed: {str(e)[:100]}")
+        _append_sales_order_note(so_name, f"[ERROR] Delivery or production failed: {str(e)[:100]}")
         frappe.db.commit()
 
 @frappe.whitelist()

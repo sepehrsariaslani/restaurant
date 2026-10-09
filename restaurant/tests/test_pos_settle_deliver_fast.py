@@ -88,6 +88,54 @@ class PosSettleDeliverTests(unittest.TestCase):
             self.assertIn("restaurant-pos-deliver-", ast.unparse(keywords["job_id"]))
             self.assertIn("previous_status", keywords)
 
+    def test_create_and_settle_background_failure_keeps_order_undelivered(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_background_production_and_delivery")
+        fn.decorator_list = []
+        statuses = []
+        notes = []
+        attempts = []
+
+        def fail_delivery(*args, **kwargs):
+            attempts.append(args)
+            raise RuntimeError("delivery note failed")
+
+        frappe = SimpleNamespace(
+            db=SimpleNamespace(commit=lambda: None, exists=lambda *args: False),
+            get_doc=lambda *args: SimpleNamespace(),
+            get_traceback=lambda: "traceback",
+            log_error=lambda *args: None,
+        )
+        namespace = {
+            "frappe": frappe,
+            "_create_production_for_sales_order": lambda *args: {"production_tickets": []},
+            "_create_delivery_note_for_sales_order": fail_delivery,
+            "_set_restaurant_order_status": lambda *args, **kwargs: statuses.append(args),
+            "_append_sales_order_note": lambda *args: notes.append(args),
+        }
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(source), "exec"), namespace)
+        namespace["_background_production_and_delivery"]("SO-1")
+        self.assertEqual(len(attempts), 2)
+        self.assertNotIn(("SO-1", "delivered"), statuses)
+        self.assertIn("Delivery", notes[0][1])
+
+        attempts.clear()
+        statuses.clear()
+        notes.clear()
+
+        def deliver_on_retry(*args, **kwargs):
+            attempts.append(args)
+            if len(attempts) == 1:
+                raise RuntimeError("stock not ready")
+            return "DN-1"
+
+        namespace["_create_delivery_note_for_sales_order"] = deliver_on_retry
+        namespace["_background_production_and_delivery"]("SO-2")
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(statuses, [("SO-2", "delivered")])
+        self.assertEqual(notes, [])
+
 
 if __name__ == "__main__":
     unittest.main()
