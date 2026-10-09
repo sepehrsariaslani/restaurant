@@ -21,7 +21,8 @@ def _lock(doctype, name):
 
 
 def _coach_commission_txn_exists(api_club, reference_doctype, reference_name):
-	return bool(frappe.db.exists(api_club.CLUB_DOCTYPES["wallet_txn"], {
+	return bool(frappe.db.exists("Customer Wallet Transaction", {
+		"company": api_club._wallet_company(),
 		"reference_doctype": reference_doctype,
 		"reference_name": reference_name,
 		"kind": "کمیسیون مربی",
@@ -30,12 +31,12 @@ def _coach_commission_txn_exists(api_club, reference_doctype, reference_name):
 
 def _consume_recovery_due(api_club, wallet, coach, reference_doctype, reference_name):
 	wallet_name = wallet.name if hasattr(wallet, "name") else wallet
-	due = flt(frappe.db.get_value(api_club.CLUB_DOCTYPES["wallet"], wallet_name, "restaurant_coach_recovery_due") or 0)
+	due = flt(frappe.db.get_value("Customer Wallet", wallet_name, "restaurant_coach_recovery_due") or 0)
 	if due <= 0:
 		return
 	# The input may be the stale wallet object used by the immediately preceding
 	# commission credit, so reload after that credit before recovering debt.
-	wallet_doc = frappe.get_doc(api_club.CLUB_DOCTYPES["wallet"], wallet_name)
+	wallet_doc = frappe.get_doc("Customer Wallet", wallet_name)
 	available = flt(wallet_doc.get("cashback_balance") or 0)
 	recovery = min(due, available)
 	if recovery <= 0:
@@ -69,7 +70,7 @@ def _consume_recovery_due(api_club, wallet, coach, reference_doctype, reference_
 			applied = min(remaining, flt(row.restaurant_coach_recovery_due or 0))
 			frappe.db.set_value(doctype, row.name, "restaurant_coach_recovery_due", max(flt(row.restaurant_coach_recovery_due or 0) - applied, 0), update_modified=False)
 			remaining -= applied
-	frappe.db.set_value(api_club.CLUB_DOCTYPES["wallet"], wallet_name, "restaurant_coach_recovery_due", max(due - recovery, 0), update_modified=False)
+	frappe.db.set_value("Customer Wallet", wallet_name, "restaurant_coach_recovery_due", max(due - recovery, 0), update_modified=False)
 
 
 def _credit(api_club, doctype, name, customer, coach, amount):
@@ -142,7 +143,7 @@ def _reverse(api_club, doctype, name, coach, commission, previous, credited, tar
 		return {"amount": due, "credited": False, "cashback_debit": 0.0, "recovery_due": 0.0}
 	wallet = api_club._club_get_or_create_wallet(coach)
 	wallet_name = wallet.name if hasattr(wallet, "name") else wallet
-	wallet_doc = wallet if hasattr(wallet, "name") else frappe.get_doc(api_club.CLUB_DOCTYPES["wallet"], wallet_name)
+	wallet_doc = wallet if hasattr(wallet, "name") else frappe.get_doc("Customer Wallet", wallet_name)
 	available = flt(wallet_doc.get("cashback_balance") or 0)
 	debit = min(available, due)
 	if debit > 0:
@@ -160,8 +161,8 @@ def _reverse(api_club, doctype, name, coach, commission, previous, credited, tar
 	remaining = due - debit
 	if remaining > 0:
 		field = "restaurant_coach_recovery_due"
-		current_due = flt(frappe.db.get_value(api_club.CLUB_DOCTYPES["wallet"], wallet_name, field) or 0)
-		frappe.db.set_value(api_club.CLUB_DOCTYPES["wallet"], wallet_name, field, current_due + remaining, update_modified=False)
+		current_due = flt(frappe.db.get_value("Customer Wallet", wallet_name, field) or 0)
+		frappe.db.set_value("Customer Wallet", wallet_name, field, current_due + remaining, update_modified=False)
 		if frappe.db.has_column(doctype, field):
 			current_source_due = flt(frappe.db.get_value(doctype, name, field) or 0)
 			frappe.db.set_value(doctype, name, field, current_source_due + remaining, update_modified=False)
@@ -359,8 +360,8 @@ def _restore_sales_invoice_return(api_club, doc):
 			frappe.db.set_value(doctype, name, "restaurant_coach_recovery_due", max(flt(origin.restaurant_coach_recovery_due or 0) - origin_due, 0), update_modified=False)
 			wallet_doc = api_club._club_get_or_create_wallet(origin.restaurant_coach_customer)
 			wallet_name = wallet_doc.name
-			wallet_due = flt(frappe.db.get_value(api_club.CLUB_DOCTYPES["wallet"], wallet_name, "restaurant_coach_recovery_due") or 0)
-			frappe.db.set_value(api_club.CLUB_DOCTYPES["wallet"], wallet_name, "restaurant_coach_recovery_due", max(wallet_due - origin_due, 0), update_modified=False)
+			wallet_due = flt(frappe.db.get_value("Customer Wallet", wallet_name, "restaurant_coach_recovery_due") or 0)
+			frappe.db.set_value("Customer Wallet", wallet_name, "restaurant_coach_recovery_due", max(wallet_due - origin_due, 0), update_modified=False)
 		already_recovered = max(entry_due - origin_due, 0)
 		refund = min(amount, flt(entry.get("cashback_debit") or 0) + already_recovered)
 		if refund > 0:

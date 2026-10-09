@@ -5,6 +5,14 @@ app_description = "This app is for managing resturants and coffee shops in Iran"
 app_email = "Sepehr.sariaslani@gmail.com"
 app_license = "mit"
 
+# Customer wallet balances, accounting and request workflows are owned by
+# Accounts. Restaurant consumes that service for POS and loyalty events.
+required_apps = ["erpnext", "accounts"]
+
+after_migrate = [
+	"restaurant.api_club._club_ensure_ops_ready",
+]
+
 # Apps
 # ------------------
 

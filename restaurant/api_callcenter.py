@@ -199,7 +199,10 @@ def _cc_customer_profile(customer):
 
 	# Wallet balance
 	try:
-		wallet_balance = frappe.db.get_value("Restaurant Customer Wallet", {"customer": customer}, "balance")
+		from restaurant.api_club import _wallet_company
+
+		company = _wallet_company()
+		wallet_balance = frappe.db.get_value("Customer Wallet", {"company": company, "customer": customer}, "balance") if company else 0
 		profile["wallet_balance"] = flt(wallet_balance)
 	except Exception:
 		pass

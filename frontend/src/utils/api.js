@@ -3886,8 +3886,30 @@ export function getMyWallet() {
 	return callRestaurantAPI("get_my_wallet", { customer_token: customerEditToken() });
 }
 
+function walletRequestKey(kind, payload) {
+	const material = JSON.stringify({ customer_token: customerEditToken(), payload });
+	let hash = 2166136261;
+	for (let index = 0; index < material.length; index += 1) {
+		hash = Math.imul(hash ^ material.charCodeAt(index), 16777619);
+	}
+	const storageKey = `restaurant-wallet-request:${kind}:${(hash >>> 0).toString(16)}`;
+	let requestKey = "";
+	try { requestKey = String(window.sessionStorage?.getItem(storageKey) || ""); } catch (_) {}
+	if (!requestKey) {
+		requestKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		try { window.sessionStorage?.setItem(storageKey, requestKey); } catch (_) {}
+	}
+	return {
+		requestKey,
+		clear() { try { window.sessionStorage?.removeItem(storageKey); } catch (_) {} },
+	};
+}
+
 export function requestMyWalletCharge({ amount = 0, payment_reference = "", note = "" } = {}) {
-	return callRestaurantAPI("request_my_wallet_charge", { customer_token: customerEditToken(), amount, payment_reference, note });
+	const payload = { amount, payment_reference, note };
+	const key = walletRequestKey("charge", payload);
+	return callRestaurantAPI("request_my_wallet_charge", { customer_token: customerEditToken(), ...payload, request_key: key.requestKey })
+		.then((result) => { key.clear(); return result; });
 }
 
 export function submitMyWalletChargeReference({ request_name = "", payment_reference = "", note = "" } = {}) {
@@ -3895,7 +3917,10 @@ export function submitMyWalletChargeReference({ request_name = "", payment_refer
 }
 
 export function requestMyWalletWithdrawal({ amount = 0, bank_iban = "", account_holder = "", note = "" } = {}) {
-	return callRestaurantAPI("request_my_wallet_withdrawal", { customer_token: customerEditToken(), amount, bank_iban, account_holder, note });
+	const payload = { amount, bank_iban, account_holder, note };
+	const key = walletRequestKey("withdrawal", payload);
+	return callRestaurantAPI("request_my_wallet_withdrawal", { customer_token: customerEditToken(), ...payload, request_key: key.requestKey })
+		.then((result) => { key.clear(); return result; });
 }
 
 export function listManagementWalletChargeRequests({ status = "", limit = 100, offset = 0 } = {}) {
@@ -4155,7 +4180,10 @@ export function listManagementPointEntries({ customer = "", kind = "", date_from
 }
 
 export function redeemManagementPoints(payload = {}) {
-	return callRestaurantAPI("redeem_management_points", { payload });
+	const body = { ...payload };
+	const key = walletRequestKey("points-redemption-management", body);
+	return callRestaurantAPI("redeem_management_points", { payload: { ...body, request_key: key.requestKey } })
+		.then((result) => { key.clear(); return result; });
 }
 
 export function adjustManagementPoints(payload = {}) {
@@ -4163,7 +4191,10 @@ export function adjustManagementPoints(payload = {}) {
 }
 
 export function redeemMyPoints({ mobile = "", points = 0 } = {}) {
-	return callRestaurantAPI("redeem_my_points", { mobile, points, customer_token: customerEditToken() });
+	const body = { mobile, points };
+	const key = walletRequestKey("points-redemption-customer", body);
+	return callRestaurantAPI("redeem_my_points", { ...body, request_key: key.requestKey, customer_token: customerEditToken() })
+		.then((result) => { key.clear(); return result; });
 }
 
 // ---------------------------------------------------------------------------
