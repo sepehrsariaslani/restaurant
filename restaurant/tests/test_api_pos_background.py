@@ -122,6 +122,34 @@ class BackgroundWorkerOutcomeTests(unittest.TestCase):
         self.assertEqual(state["status"], "failed")
         self.assertEqual(states[-1]["status"], "failed")
 
+    def test_purge_retries_once_after_transient_database_lock_timeout(self):
+        states = []
+        calls = []
+
+        class Legacy:
+            def purge_management_pos_order(self, order_name):
+                calls.append(order_name)
+                if len(calls) == 1:
+                    return {
+                        "status": "partial_success",
+                        "summary": {"errors": ["Sales Order: (1205, 'Lock wait timeout exceeded')"]},
+                    }
+                return {"status": "success", "summary": {"deleted": 1}}
+
+        old_legacy = bg._legacy_api
+        old_set_state = bg._set_job_state
+        try:
+            bg._legacy_api = lambda: Legacy()
+            bg._set_job_state = lambda state: states.append(dict(state)) or state
+            state = bg.run_pos_background_purge("job-1", "SO-1")
+        finally:
+            bg._legacy_api = old_legacy
+            bg._set_job_state = old_set_state
+
+        self.assertEqual(calls, ["SO-1", "SO-1"])
+        self.assertEqual(state["status"], "done")
+        self.assertEqual(states[-1]["status"], "done")
+
 
 if __name__ == "__main__":
     unittest.main()

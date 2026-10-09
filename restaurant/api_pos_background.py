@@ -330,6 +330,30 @@ def run_pos_background_purge(job_key, order_name):
         result_status = str(result.get("status") or "").strip().lower()
         if result_status == "partial_success":
             errors = ((result.get("summary") or {}).get("errors") or [])
+            if not isinstance(errors, (list, tuple)):
+                errors = [errors]
+            transient_lock_markers = (
+                "1205",
+                "1213",
+                "lock wait timeout",
+                "deadlock found",
+            )
+            has_transient_lock_error = any(
+                marker in str(error).lower()
+                for error in errors
+                for marker in transient_lock_markers
+            )
+            if has_transient_lock_error:
+                # Purge commits successful cancellations even when one dependent
+                # document hit a transient DB lock. Re-read and retry once so
+                # those already-cancelled documents are skipped on the next pass.
+                result = legacy.purge_management_pos_order(order_name)
+                if not isinstance(result, dict):
+                    result = {}
+                result_status = str(result.get("status") or "").strip().lower()
+
+        if result_status == "partial_success":
+            errors = ((result.get("summary") or {}).get("errors") or [])
             detail = "; ".join(str(error) for error in errors[:3])
             error = _("Invoice cleanup completed partially.")
             if detail:
