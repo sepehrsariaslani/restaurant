@@ -16643,6 +16643,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
                 result["payment_entries"] = payment_entries
                 
             si_outstanding = flt(frappe.db.get_value("Sales Invoice", si_doc.name, "outstanding_amount"))
+            result["outstanding_amount"] = si_outstanding
             if si_outstanding <= 0.1:
                 frappe.db.set_value("Sales Invoice", si_doc.name, "status", "Paid", update_modified=False)
                 current_restaurant_status = (
@@ -16666,7 +16667,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
         {
             "method": primary_method,
             "provider": (payment.get("provider") or "manual").strip().lower() or "manual",
-            "status": "paid" if flt(getattr(si_doc, "outstanding_amount", 0) or 0) <= 0.1 else "pending",
+            "status": "paid" if si_outstanding <= 0.1 else "pending",
             "reference_no": (reference_no or payment.get("reference_no") or "").strip(),
             "rrn": (rrn or payment.get("rrn") or "").strip(),
             "provider_payload": payment.get("provider_payload") or {},
