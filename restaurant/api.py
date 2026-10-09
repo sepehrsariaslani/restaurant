@@ -17271,9 +17271,10 @@ def purge_management_pos_order(order_name):
 		"cleaned_records": {},
 		"errors": []
 	}
+	purge_state = {"transaction_rolled_back": False}
 
 	def _cancel_and_delete(doctype, names):
-		if not names:
+		if purge_state["transaction_rolled_back"] or not names:
 			return
 		if doctype not in summary["cleaned_records"]:
 			summary["cleaned_records"][doctype] = []
@@ -17299,8 +17300,23 @@ def purge_management_pos_order(order_name):
 			except Exception as e:
 				# Frappe writes docstatus=2 before running cancellation hooks. Roll
 				# back this document's writes before recording a partial cleanup.
-				frappe.db.rollback(save_point=savepoint)
-				summary["errors"].append(f"Failed to clean {doctype} {name}: {str(e)}")
+				rollback_error = None
+				try:
+					frappe.db.rollback(save_point=savepoint)
+				except Exception as rollback_exc:
+					if "deadlock found when trying to get lock" not in str(e).lower():
+						raise
+					# InnoDB has already rolled back the whole transaction for a
+					# deadlock, so the savepoint no longer exists. Return a retryable
+					# partial result without issuing more writes in this transaction.
+					purge_state["transaction_rolled_back"] = True
+					rollback_error = str(rollback_exc)
+				detail = str(e)
+				if rollback_error:
+					detail = f"{detail}; savepoint rollback unavailable: {rollback_error}"
+				summary["errors"].append(f"Failed to clean {doctype} {name}: {detail}")
+				if purge_state["transaction_rolled_back"]:
+					break
 
 	# 1. Gather dependent docs
 	tickets = frappe.get_all("Restaurant Production Ticket", filters={"sales_order": so_name}, pluck="name", ignore_permissions=True) if frappe.db.exists("DocType", "Restaurant Production Ticket") else []
@@ -17343,11 +17359,18 @@ def purge_management_pos_order(order_name):
 	_cancel_and_delete("Restaurant Production Ticket", tickets)
 	_cancel_and_delete("Restaurant POS Payment Log", pos_logs)
 
-	if _has_column("Sales Order", "restaurant_status") and frappe.db.exists("Sales Order", so_name):
+	if not purge_state["transaction_rolled_back"] and _has_column("Sales Order", "restaurant_status") and frappe.db.exists("Sales Order", so_name):
 		frappe.db.set_value("Sales Order", so_name, "restaurant_status", "cancelled", update_modified=False)
 	
 	# Finally Sales Order
-	_cancel_and_delete("Sales Order", [so_name])
+	if not purge_state["transaction_rolled_back"]:
+		_cancel_and_delete("Sales Order", [so_name])
+	if purge_state["transaction_rolled_back"]:
+		return {
+			"status": "partial_success",
+			"order_name": so_name,
+			"summary": summary
+		}
 
 	frappe.db.commit()
 	if summary["errors"]:

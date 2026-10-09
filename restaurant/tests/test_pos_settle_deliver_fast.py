@@ -76,7 +76,7 @@ class PosSettleDeliverTests(unittest.TestCase):
             delete_doc=lambda *args, **kwargs: None,
         )
         summary = {"cleaned_records": {}, "errors": []}
-        namespace = {"frappe": frappe, "summary": summary}
+        namespace = {"frappe": frappe, "summary": summary, "purge_state": {"transaction_rolled_back": False}}
         exec(compile(ast.Module(body=[cancel_and_delete], type_ignores=[]), str(source), "exec"), namespace)
 
         namespace["_cancel_and_delete"]("Sales Invoice", ["SI-1"])
@@ -84,6 +84,87 @@ class PosSettleDeliverTests(unittest.TestCase):
         self.assertEqual(document.docstatus, 1)
         self.assertEqual(rollback_calls, ["pos_purge_savepoint-1"])
         self.assertIn("1205", summary["errors"][0])
+
+    def test_purge_preserves_deadlock_error_when_database_invalidates_savepoint(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        purge = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "purge_management_pos_order")
+        cancel_and_delete = next(
+            node for node in purge.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_cancel_and_delete"
+        )
+        document = SimpleNamespace(docstatus=1, flags=SimpleNamespace())
+        cancel_calls = []
+
+        def cancel():
+            cancel_calls.append(document.name)
+            raise RuntimeError("(1213, 'Deadlock found when trying to get lock')")
+
+        document.name = "SI-1"
+        document.cancel = cancel
+        db = SimpleNamespace(
+            savepoint=lambda name: None,
+            rollback=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("SAVEPOINT does not exist")),
+            exists=lambda *args: True,
+        )
+        frappe = SimpleNamespace(
+            db=db,
+            get_doc=lambda doctype, name: document,
+            generate_hash=lambda **kwargs: "savepoint-1",
+            delete_doc=lambda *args, **kwargs: None,
+        )
+        summary = {"cleaned_records": {}, "errors": []}
+        purge_state = {"transaction_rolled_back": False}
+        namespace = {"frappe": frappe, "summary": summary, "purge_state": purge_state}
+        exec(compile(ast.Module(body=[cancel_and_delete], type_ignores=[]), str(source), "exec"), namespace)
+
+        namespace["_cancel_and_delete"]("Sales Invoice", ["SI-1", "SI-2"])
+
+        self.assertEqual(cancel_calls, ["SI-1"])
+        self.assertTrue(purge_state["transaction_rolled_back"])
+        self.assertIn("Deadlock found when trying to get lock", summary["errors"][0])
+
+    def test_purge_returns_retryable_partial_result_after_a_deadlock(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        purge = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "purge_management_pos_order")
+        purge.decorator_list = []
+        commits = []
+
+        def get_all(doctype, **kwargs):
+            return ["SI-1"] if doctype == "Sales Invoice Item" else []
+
+        def cancel():
+            raise RuntimeError("(1213, 'Deadlock found when trying to get lock')")
+
+        document = SimpleNamespace(docstatus=1, flags=SimpleNamespace(), cancel=cancel)
+        db = SimpleNamespace(
+            commit=lambda: commits.append("commit"),
+            exists=lambda doctype, name: True,
+            savepoint=lambda name: None,
+            rollback=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("SAVEPOINT does not exist")),
+        )
+        frappe = SimpleNamespace(
+            db=db,
+            get_all=get_all,
+            get_doc=lambda *args: document,
+            generate_hash=lambda **kwargs: "savepoint-1",
+            delete_doc=lambda *args, **kwargs: None,
+        )
+        namespace = {
+            "frappe": frappe,
+            "_ensure_management_access": lambda: None,
+            "_resolve_sales_order_name": lambda name: name,
+            "_lock_pos_sales_order": lambda *args, **kwargs: True,
+            "_has_column": lambda *args: True,
+        }
+        exec(compile(ast.Module(body=[purge], type_ignores=[]), str(source), "exec"), namespace)
+
+        result = namespace["purge_management_pos_order"]("SO-1")
+
+        self.assertEqual(result["status"], "partial_success")
+        self.assertIn("Deadlock found when trying to get lock", result["summary"]["errors"][0])
+        self.assertEqual(commits, ["commit"])
 
     def _action(self, fail_delivery=False):
         source = Path(__file__).resolve().parents[1] / "api.py"

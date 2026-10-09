@@ -150,6 +150,32 @@ class BackgroundWorkerOutcomeTests(unittest.TestCase):
         self.assertEqual(state["status"], "done")
         self.assertEqual(states[-1]["status"], "done")
 
+    def test_purge_retries_once_after_a_deadlock_during_document_cancellation(self):
+        calls = []
+
+        class Legacy:
+            def purge_management_pos_order(self, order_name):
+                calls.append(order_name)
+                if len(calls) == 1:
+                    return {
+                        "status": "partial_success",
+                        "summary": {"errors": ["Sales Invoice: (1213, 'Deadlock found when trying to get lock')"]},
+                    }
+                return {"status": "success", "summary": {"deleted": 1}}
+
+        old_legacy = bg._legacy_api
+        old_set_state = bg._set_job_state
+        try:
+            bg._legacy_api = lambda: Legacy()
+            bg._set_job_state = lambda state: state
+            state = bg.run_pos_background_purge("job-deadlock", "SO-DEADLOCK")
+        finally:
+            bg._legacy_api = old_legacy
+            bg._set_job_state = old_set_state
+
+        self.assertEqual(calls, ["SO-DEADLOCK", "SO-DEADLOCK"])
+        self.assertEqual(state["status"], "done")
+
     def test_purge_does_not_retry_when_a_document_name_contains_a_lock_error_number(self):
         calls = []
 
