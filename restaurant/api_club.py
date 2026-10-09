@@ -19,6 +19,7 @@ import random
 import re
 import secrets
 from datetime import timedelta
+from pathlib import Path
 
 import frappe
 from frappe import _
@@ -32,6 +33,9 @@ from restaurant.api import (
 	_has_column,
 	_table_columns_from_rows,
 )
+
+
+_CLUB_OPS_CACHE_VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
 
 __all__ = [
 	"CLUB_REPORT_KEYS",
@@ -377,6 +381,14 @@ def _club_ensure_ops_ready():
 	# all checks succeed, so a failed provisioning attempt remains retryable.
 	if getattr(frappe.local, "_restaurant_club_ops_ready", False):
 		return
+	cache_key = f"restaurant:club:ops-ready:{frappe.local.site}:{_CLUB_OPS_CACHE_VERSION}"
+	try:
+		if frappe.cache.get_value(cache_key):
+			frappe.local._restaurant_club_ops_ready = True
+			return
+	except Exception:
+		# Redis availability must not prevent schema checks or checkout.
+		pass
 	_club_ensure_customer_fields()
 	_club_ensure_sales_order_fields()
 	_club_ensure_settings_fields()
@@ -389,6 +401,16 @@ def _club_ensure_ops_ready():
 		anchor_candidates=["cashback_balance", "withdrawable_balance"],
 	)
 	frappe.local._restaurant_club_ops_ready = True
+
+	def cache_after_commit():
+		try:
+			frappe.cache.set_value(cache_key, 1, expires_in_sec=60)
+		except Exception:
+			pass
+
+	# A failed checkout can roll back newly provisioned Custom Fields. Only
+	# publish the shared marker after its database transaction commits.
+	frappe.db.after_commit.add(cache_after_commit)
 
 
 # ---------------------------------------------------------------------------
