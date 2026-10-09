@@ -3688,7 +3688,7 @@ def _resolve_modifier_option_pricing(option_row=None, price_list=None):
 	return payload
 
 
-def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None, price_list=None, tag_titles=None):
+def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None, price_list=None, tag_titles=None, price_override=None, skip_price_lookup=False):
 	category_meta_map = category_meta_map or {}
 	subcategory_meta_map = subcategory_meta_map or {}
 	legacy_category = str(row.get("restaurant_category") or getattr(row, "restaurant_category", "") or "").strip()
@@ -3707,7 +3707,7 @@ def _serialize_core_item(row, category_meta_map=None, subcategory_meta_map=None,
 		category_title = category_meta.get("title")
 		subcategory_value = legacy_subcategory
 		subcategory_title = subcategory_meta.get("title")
-	item_price = _get_default_item_price_rate(row, price_list=price_list)
+	item_price = price_override if skip_price_lookup else _get_default_item_price_rate(row, price_list=price_list)
 	base_price = (
 		item_price if item_price is not None else (flt(row.restaurant_base_price) or flt(row.standard_rate))
 	)
@@ -16008,6 +16008,30 @@ def set_management_pos_config(payload=None):
 
 
 
+def _get_pos_boot_item_price_map(item_names, price_list):
+	"""Read unique menu prices together; ambiguous prices use the existing lookup."""
+	if not item_names or not price_list:
+		return {}
+	rows = frappe.get_all(
+		"Item Price",
+		filters={"item_code": ["in", item_names], "price_list": price_list, "selling": 1},
+		fields=["item_code", "price_list_rate"],
+		ignore_permissions=True,
+		limit_page_length=10000,
+	)
+	rates = {}
+	seen = set()
+	duplicates = set()
+	for row in rows:
+		item_code = row.get("item_code")
+		if item_code in seen:
+			duplicates.add(item_code)
+		seen.add(item_code)
+		if item_code not in duplicates and row.get("price_list_rate") not in (None, ""):
+			rates[item_code] = flt(row.get("price_list_rate"))
+	return {item_code: rate for item_code, rate in rates.items() if item_code not in duplicates}
+
+
 @frappe.whitelist()
 def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, items_only=0):
 	_ensure_management_access()
@@ -16071,6 +16095,7 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, i
 			r["image"] = attachment_map[r["name"]]
 
 	default_price_list = _get_default_selling_price_list_name()
+	price_rates = _get_pos_boot_item_price_map([row["name"] for row in rows], default_price_list)
 	tag_titles_by_item = _get_item_tag_titles_for_items([row["name"] for row in rows])
 	items = []
 	for row in rows:
@@ -16080,6 +16105,8 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, i
 			subcategory_meta_map=subcategory_meta_map,
 			price_list=default_price_list,
 			tag_titles=tag_titles_by_item.get(row["name"], []) if tag_titles_by_item is not None else None,
+			price_override=price_rates.get(row["name"]),
+			skip_price_lookup=row["name"] in price_rates,
 		)
 		serialized["out_of_stock"] = cint(row.get("restaurant_out_of_stock") or 0)
 		serialized["packaging_price"] = flt(row.get("restaurant_packaging_price") or 0)

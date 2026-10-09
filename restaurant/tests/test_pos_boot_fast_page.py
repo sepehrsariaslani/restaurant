@@ -37,6 +37,7 @@ class PosBootPageTests(unittest.TestCase):
             "_core_item_filters": lambda *args: {},
             "_serialize_core_item": lambda row, **kwargs: {"name": row["name"], "price_list_used": kwargs.get("price_list"), "tags_loaded": kwargs.get("tag_titles")},
             "_get_default_selling_price_list_name": expensive("price_list", "Standard Selling"),
+            "_get_pos_boot_item_price_map": lambda names, price_list: {},
             "_get_item_tag_titles_for_items": expensive("tags", {"ITEM-1": ["ویژه"]}),
             "get_management_pos_config": expensive("config", {}),
             "_management_get_print_brand_settings": expensive("print", {}),
@@ -87,6 +88,28 @@ class PosBootPageTests(unittest.TestCase):
         self.assertEqual(calls[0][1], {"names": ("A", "B")})
         namespace["frappe"].db.sql = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable"))
         self.assertIsNone(namespace["_get_item_tag_titles_for_items"](["A"]))
+
+    def test_boot_price_map_reads_unique_item_prices_in_one_query(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_get_pos_boot_item_price_map")
+        calls = []
+
+        def get_all(doctype, **kwargs):
+            calls.append((doctype, kwargs))
+            return [
+                {"item_code": "A", "price_list_rate": 25},
+                {"item_code": "B", "price_list_rate": 30},
+                {"item_code": "B", "price_list_rate": 40},
+            ]
+
+        namespace = {"frappe": types.SimpleNamespace(get_all=get_all), "flt": float}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(source), "exec"), namespace)
+        result = namespace["_get_pos_boot_item_price_map"](["A", "B"], "Standard Selling")
+        self.assertEqual(result, {"A": 25.0})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "Item Price")
+        self.assertEqual(calls[0][1]["filters"]["item_code"], ["in", ["A", "B"]])
 
     def test_broad_customer_search_caps_dropdown_results(self):
         source = Path(__file__).resolve().parents[1] / "api.py"
