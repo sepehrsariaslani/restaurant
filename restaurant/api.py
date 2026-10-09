@@ -16721,7 +16721,7 @@ def deliver_invoice_only(order_name):
     frappe.db.commit()
     return result
 
-def _background_deliver_pos_order(so_name):
+def _background_deliver_pos_order(so_name, previous_status=""):
     frappe.db.commit()
     try:
         so_doc = frappe.get_doc("Sales Order", so_name)
@@ -16773,15 +16773,17 @@ def _background_deliver_pos_order(so_name):
                 if ticket.get("status") != "completed":
                     ticket.db_set("status", "completed", update_modified=False)
 
-        try:
-            _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
-        except Exception:
-            pass
+        _create_delivery_note_for_sales_order(so_name, submit_doc=True, allow_negative_stock=True)
 
         _set_restaurant_order_status(so_name, "delivered", force=True)
         frappe.db.commit()
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Background Deliver POS Order Error")
+        if previous_status:
+            try:
+                _set_restaurant_order_status(so_name, previous_status, force=True)
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Restore POS Order Status Error")
         _append_sales_order_note(so_name, f"[ERROR] Delivery failed: {str(e)[:100]}")
         frappe.db.commit()
 
@@ -16820,10 +16822,13 @@ def deliver_pos_order(order_name):
             "restaurant.api._background_deliver_pos_order",
             queue="short",
             so_name=so_name,
+            previous_status=status,
+            job_id=f"restaurant-pos-deliver-{so_name}",
+            deduplicate=True,
             now=frappe.flags.in_test
         )
     except Exception:
-        _background_deliver_pos_order(so_name)
+        _background_deliver_pos_order(so_name, previous_status=status)
 
     return result
 
@@ -16877,10 +16882,13 @@ def produce_and_deliver_pos_order(order_name):
             "restaurant.api._background_deliver_pos_order",
             queue="short",
             so_name=so_name,
+            previous_status=status,
+            job_id=f"restaurant-pos-deliver-{so_name}",
+            deduplicate=True,
             now=frappe.flags.in_test
         )
     except Exception:
-        _background_deliver_pos_order(so_name)
+        _background_deliver_pos_order(so_name, previous_status=status)
 
     return result
 
