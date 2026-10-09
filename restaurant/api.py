@@ -15985,7 +15985,7 @@ def set_management_pos_config(payload=None):
 
 
 @frappe.whitelist()
-def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
+def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, items_only=0):
 	_ensure_management_access()
 	branch = (branch or "").strip()
 	offset = max(cint(limit_start), 0)
@@ -16056,6 +16056,14 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 		serialized["out_of_stock"] = cint(row.get("restaurant_out_of_stock") or 0)
 		serialized["packaging_price"] = flt(row.get("restaurant_packaging_price") or 0)
 		items.append(serialized)
+	item_page = {
+		"items": items,
+		"items_has_more": has_more,
+		"items_limit_start": offset,
+		"items_limit_page_length": page_size,
+	}
+	if cint(items_only):
+		return item_page
 	categories = [
 		{
 			"name": key,
@@ -16085,10 +16093,7 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300):
 	print_brand_settings = _management_get_print_brand_settings()
 	return {
 		"currency": _get_currency(),
-		"items": items,
-		"items_has_more": has_more,
-		"items_limit_start": offset,
-		"items_limit_page_length": page_size,
+		**item_page,
 		"categories": categories,
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),
