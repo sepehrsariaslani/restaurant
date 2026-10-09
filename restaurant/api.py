@@ -17281,6 +17281,8 @@ def purge_management_pos_order(order_name):
 		for name in set(names):
 			if not frappe.db.exists(doctype, name):
 				continue
+			savepoint = f"pos_purge_{frappe.generate_hash(length=8)}"
+			frappe.db.savepoint(savepoint)
 			try:
 				doc = frappe.get_doc(doctype, name)
 				if doc.docstatus == 1:
@@ -17295,6 +17297,9 @@ def purge_management_pos_order(order_name):
 				else:
 					summary["cleaned_records"][doctype].append(f"{name} (Cancelled)")
 			except Exception as e:
+				# Frappe writes docstatus=2 before running cancellation hooks. Roll
+				# back this document's writes before recording a partial cleanup.
+				frappe.db.rollback(save_point=savepoint)
 				summary["errors"].append(f"Failed to clean {doctype} {name}: {str(e)}")
 
 	# 1. Gather dependent docs

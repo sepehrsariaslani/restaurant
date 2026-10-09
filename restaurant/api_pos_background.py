@@ -333,10 +333,8 @@ def run_pos_background_purge(job_key, order_name):
             if not isinstance(errors, (list, tuple)):
                 errors = [errors]
             transient_lock_markers = (
-                "1205",
-                "1213",
-                "lock wait timeout",
-                "deadlock found",
+                "lock wait timeout exceeded",
+                "deadlock found when trying to get lock",
             )
             has_transient_lock_error = any(
                 marker in str(error).lower()

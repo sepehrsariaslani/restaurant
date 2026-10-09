@@ -150,6 +150,58 @@ class BackgroundWorkerOutcomeTests(unittest.TestCase):
         self.assertEqual(state["status"], "done")
         self.assertEqual(states[-1]["status"], "done")
 
+    def test_purge_does_not_retry_when_a_document_name_contains_a_lock_error_number(self):
+        calls = []
+
+        class Legacy:
+            def purge_management_pos_order(self, order_name):
+                calls.append(order_name)
+                return {
+                    "status": "partial_success",
+                    "summary": {
+                        "errors": [
+                            "Failed to clean Sales Invoice ACC-SINV-1205: ValidationError: cancellation blocked"
+                        ]
+                    },
+                }
+
+        old_legacy = bg._legacy_api
+        old_set_state = bg._set_job_state
+        try:
+            bg._legacy_api = lambda: Legacy()
+            bg._set_job_state = lambda state: state
+            state = bg.run_pos_background_purge("job-2", "SO-2")
+        finally:
+            bg._legacy_api = old_legacy
+            bg._set_job_state = old_set_state
+
+        self.assertEqual(calls, ["SO-2"])
+        self.assertEqual(state["status"], "failed")
+
+    def test_purge_retries_a_transient_lock_timeout_only_once(self):
+        calls = []
+
+        class Legacy:
+            def purge_management_pos_order(self, order_name):
+                calls.append(order_name)
+                return {
+                    "status": "partial_success",
+                    "summary": {"errors": ["Lock wait timeout exceeded; try restarting transaction"]},
+                }
+
+        old_legacy = bg._legacy_api
+        old_set_state = bg._set_job_state
+        try:
+            bg._legacy_api = lambda: Legacy()
+            bg._set_job_state = lambda state: state
+            state = bg.run_pos_background_purge("job-3", "SO-3")
+        finally:
+            bg._legacy_api = old_legacy
+            bg._set_job_state = old_set_state
+
+        self.assertEqual(calls, ["SO-3", "SO-3"])
+        self.assertEqual(state["status"], "failed")
+
 
 if __name__ == "__main__":
     unittest.main()

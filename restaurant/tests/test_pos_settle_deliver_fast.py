@@ -44,6 +44,47 @@ class PosSettleDeliverTests(unittest.TestCase):
         ]
         self.assertLess(top_level_calls.index("commit"), top_level_calls.index("_lock_pos_sales_order"))
 
+    def test_purge_rolls_back_a_document_when_cancel_hook_fails(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        purge = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "purge_management_pos_order")
+        cancel_and_delete = next(
+            node for node in purge.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_cancel_and_delete"
+        )
+        document = SimpleNamespace(docstatus=1, flags=SimpleNamespace())
+        savepoints = {}
+        rollback_calls = []
+
+        def savepoint(name):
+            savepoints[name] = document.docstatus
+
+        def rollback(*, save_point):
+            rollback_calls.append(save_point)
+            document.docstatus = savepoints[save_point]
+
+        def cancel():
+            document.docstatus = 2
+            raise RuntimeError("(1205, 'Lock wait timeout exceeded')")
+
+        document.cancel = cancel
+        db = SimpleNamespace(savepoint=savepoint, rollback=rollback, exists=lambda *args: True)
+        frappe = SimpleNamespace(
+            db=db,
+            get_doc=lambda *args: document,
+            generate_hash=lambda **kwargs: "savepoint-1",
+            delete_doc=lambda *args, **kwargs: None,
+        )
+        summary = {"cleaned_records": {}, "errors": []}
+        namespace = {"frappe": frappe, "summary": summary}
+        exec(compile(ast.Module(body=[cancel_and_delete], type_ignores=[]), str(source), "exec"), namespace)
+
+        namespace["_cancel_and_delete"]("Sales Invoice", ["SI-1"])
+
+        self.assertEqual(document.docstatus, 1)
+        self.assertEqual(rollback_calls, ["pos_purge_savepoint-1"])
+        self.assertIn("1205", summary["errors"][0])
+
     def _action(self, fail_delivery=False):
         source = Path(__file__).resolve().parents[1] / "api.py"
         tree = ast.parse(source.read_text())
