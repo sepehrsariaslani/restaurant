@@ -16827,6 +16827,21 @@ def deliver_pos_order(order_name):
 
     return result
 
+
+@frappe.whitelist()
+def settle_and_deliver_pos_order(order_name, payment=None, reference_no=None, rrn=None):
+    """Settle an existing order and start delivery in one cashier request."""
+    settled = settle_pos_order(order_name, payment=payment, reference_no=reference_no, rrn=rrn)
+    try:
+        delivery = deliver_pos_order(order_name)
+    except Exception as cause:
+        return {**settled, "delivery_error": str(cause)}
+    return {
+        **settled,
+        "delivery_note": delivery.get("delivery_note") or "",
+        "delivery_status": delivery.get("status") or "",
+    }
+
 @frappe.whitelist()
 def produce_and_deliver_pos_order(order_name):
     _ensure_management_access()
