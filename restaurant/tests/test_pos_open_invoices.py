@@ -17,6 +17,8 @@ class PosOpenInvoiceTests(unittest.TestCase):
 
         def sql(query, params, **kwargs):
             queries.append((query, params))
+            if "COUNT(*)" in query:
+                return [SimpleNamespace(total_count=6612)]
             return [SimpleNamespace(name=name) for name in ("SO-1", "SO-2", "SO-3")]
 
         def details(**kwargs):
@@ -38,6 +40,10 @@ class PosOpenInvoiceTests(unittest.TestCase):
         self.assertEqual(detailed_names, ["SO-1", "SO-2"])
         self.assertEqual(queries[0][1]["limit"], 3)
         self.assertEqual(queries[0][1]["offset"], 10)
+        self.assertIsNone(result["total_count"])
+        first_page = namespace["list_management_open_invoices"](limit_start=0, limit_page_length=2)
+        self.assertEqual(first_page["total_count"], 6612)
+        self.assertIn("COUNT(*)", queries[-1][0])
 
 
 if __name__ == "__main__":

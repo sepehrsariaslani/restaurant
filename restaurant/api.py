@@ -17456,16 +17456,24 @@ def list_management_open_invoices(date=None, search=None, limit_start=0, limit_p
 		params,
 		as_dict=True,
 	)
+	total_count = None
+	if offset == 0:
+		total_count = frappe.db.sql(
+			"SELECT COUNT(*) AS total_count FROM `tabSales Order` so WHERE " + " AND ".join(conditions),
+			params,
+			as_dict=True,
+		)[0].total_count
 	has_more = len(names) > page_size
 	page_names = [row.name for row in names[:page_size]]
 	if not page_names:
-		return {"orders": [], "has_more": False, "next_offset": offset}
+		return {"orders": [], "has_more": False, "next_offset": offset, "total_count": total_count}
 	rows = _management_fetch_web_orders(order_names=page_names, review_status="all", include_items=False)
 	rows_by_name = {row["name"]: row for row in rows}
 	return {
 		"orders": [rows_by_name[name] for name in page_names if name in rows_by_name],
 		"has_more": has_more,
 		"next_offset": offset + len(page_names),
+		"total_count": total_count,
 	}
 
 
