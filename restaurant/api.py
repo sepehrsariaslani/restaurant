@@ -17309,6 +17309,8 @@ def purge_management_pos_order(order_name):
 					# InnoDB has already rolled back the whole transaction for a
 					# deadlock, so the savepoint no longer exists. Return a retryable
 					# partial result without issuing more writes in this transaction.
+					# Full Frappe rollback also clears callbacks and cached values.
+					frappe.db.rollback()
 					purge_state["transaction_rolled_back"] = True
 					rollback_error = str(rollback_exc)
 				detail = str(e)

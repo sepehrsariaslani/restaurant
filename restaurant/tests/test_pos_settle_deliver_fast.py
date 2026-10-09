@@ -95,6 +95,7 @@ class PosSettleDeliverTests(unittest.TestCase):
         )
         document = SimpleNamespace(docstatus=1, flags=SimpleNamespace())
         cancel_calls = []
+        rollback_calls = []
 
         def cancel():
             cancel_calls.append(document.name)
@@ -102,11 +103,12 @@ class PosSettleDeliverTests(unittest.TestCase):
 
         document.name = "SI-1"
         document.cancel = cancel
-        db = SimpleNamespace(
-            savepoint=lambda name: None,
-            rollback=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("SAVEPOINT does not exist")),
-            exists=lambda *args: True,
-        )
+        def rollback(*, save_point=None):
+            if save_point:
+                raise RuntimeError("SAVEPOINT does not exist")
+            rollback_calls.append("full")
+
+        db = SimpleNamespace(savepoint=lambda name: None, rollback=rollback, exists=lambda *args: True)
         frappe = SimpleNamespace(
             db=db,
             get_doc=lambda doctype, name: document,
@@ -123,6 +125,7 @@ class PosSettleDeliverTests(unittest.TestCase):
         self.assertEqual(cancel_calls, ["SI-1"])
         self.assertTrue(purge_state["transaction_rolled_back"])
         self.assertIn("Deadlock found when trying to get lock", summary["errors"][0])
+        self.assertEqual(rollback_calls, ["full"])
 
     def test_purge_returns_retryable_partial_result_after_a_deadlock(self):
         source = Path(__file__).resolve().parents[1] / "api.py"
@@ -130,6 +133,12 @@ class PosSettleDeliverTests(unittest.TestCase):
         purge = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "purge_management_pos_order")
         purge.decorator_list = []
         commits = []
+        rollback_calls = []
+        callbacks = {
+            "before_commit": ["old before commit"],
+            "after_commit": ["old after commit"],
+            "value_cache": {"Sales Invoice": "stale value"},
+        }
 
         def get_all(doctype, **kwargs):
             return ["SI-1"] if doctype == "Sales Invoice Item" else []
@@ -138,11 +147,19 @@ class PosSettleDeliverTests(unittest.TestCase):
             raise RuntimeError("(1213, 'Deadlock found when trying to get lock')")
 
         document = SimpleNamespace(docstatus=1, flags=SimpleNamespace(), cancel=cancel)
+        def rollback(*, save_point=None):
+            if save_point:
+                raise RuntimeError("SAVEPOINT does not exist")
+            rollback_calls.append("full")
+            callbacks["before_commit"].clear()
+            callbacks["after_commit"].clear()
+            callbacks["value_cache"].clear()
+
         db = SimpleNamespace(
             commit=lambda: commits.append("commit"),
             exists=lambda doctype, name: True,
             savepoint=lambda name: None,
-            rollback=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("SAVEPOINT does not exist")),
+            rollback=rollback,
         )
         frappe = SimpleNamespace(
             db=db,
@@ -165,6 +182,8 @@ class PosSettleDeliverTests(unittest.TestCase):
         self.assertEqual(result["status"], "partial_success")
         self.assertIn("Deadlock found when trying to get lock", result["summary"]["errors"][0])
         self.assertEqual(commits, ["commit"])
+        self.assertEqual(rollback_calls, ["full"])
+        self.assertEqual(callbacks, {"before_commit": [], "after_commit": [], "value_cache": {}})
 
     def _action(self, fail_delivery=False):
         source = Path(__file__).resolve().parents[1] / "api.py"
