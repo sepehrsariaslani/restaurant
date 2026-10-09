@@ -22317,6 +22317,8 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 		key=lambda row: (flt(row.get("total_spent")), cint(row.get("orders_count"))),
 		reverse=True,
 	)
+	if search_text:
+		rows = rows[:100]
 	return {
 		"customers": [
 			{

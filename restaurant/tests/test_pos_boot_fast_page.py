@@ -88,6 +88,30 @@ class PosBootPageTests(unittest.TestCase):
         namespace["frappe"].db.sql = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable"))
         self.assertIsNone(namespace["_get_item_tag_titles_for_items"](["A"]))
 
+    def test_broad_customer_search_caps_dropdown_results(self):
+        source = Path(__file__).resolve().parents[1] / "api.py"
+        tree = ast.parse(source.read_text())
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "list_management_customers")
+        fn.decorator_list = []
+        orders = [
+            {"customer_name": f"Customer {index}", "mobile": f"09{index:09d}", "grand_total": index}
+            for index in range(250)
+        ]
+        namespace = {
+            "frappe": types.SimpleNamespace(get_all=lambda **kwargs: []),
+            "_ensure_management_access": lambda: None,
+            "_has_column": lambda *args: False,
+            "_management_fetch_web_orders": lambda **kwargs: orders,
+            "_is_revenue_order": lambda order: True,
+            "_json_safe_datetime": lambda value: value,
+            "flt": lambda value: float(value or 0),
+            "cint": lambda value: int(value or 0),
+        }
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(source), "exec"), namespace)
+        search = namespace["list_management_customers"]
+        self.assertEqual(len(search(search="09")["customers"]), 100)
+        self.assertEqual(len(search()["customers"]), 250)
+
 
 if __name__ == "__main__":
     unittest.main()
