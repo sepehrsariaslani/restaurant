@@ -66,10 +66,9 @@ test('POS wallet tender validates against the Accounts wallet and ledger', () =>
   const validator = backend.slice(start, end)
 
   assert.match(validator, /_club_wallet_mode_of_payment\(\)/)
-  assert.match(validator, /`tabCustomer Wallet`/)
-  assert.match(validator, /get_doc\("Customer Wallet"/)
-  assert.match(validator, /Customer Wallet Settings/)
-  assert.match(validator, /settings\.pos_mode_of_payment != wallet_mode/)
+  assert.match(validator, /from accounts\.wallet_service import validate_pos_tender/)
+  assert.match(validator, /validate_pos_tender\(/)
+  assert.doesNotMatch(validator, /`tabCustomer Wallet`|get_doc\("Customer Wallet"|Customer Wallet Settings|withdrawable_balance|cashback_balance/)
   assert.doesNotMatch(validator, /Restaurant Customer Wallet/)
 })
 
