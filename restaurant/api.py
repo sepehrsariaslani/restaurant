@@ -16418,8 +16418,9 @@ def _set_sales_order_payment_method(so_name, method):
 
 
 def _validate_pos_wallet_tender(so_name, splits):
-    """Check and lock customer wallet funds before a wallet tender is booked."""
+    """Ask Accounts to validate and lock funds before a wallet tender is booked."""
     from restaurant import api_club
+    from accounts.wallet_service import validate_pos_tender
 
     wallet_mode = api_club._club_wallet_mode_of_payment()
     if not wallet_mode:
@@ -16432,30 +16433,16 @@ def _validate_pos_wallet_tender(so_name, splits):
     if wallet_amount <= 0:
         return
     company = api_club._accounts_wallet_company()
-    settings = frappe.db.get_value(
-        "Customer Wallet Settings",
-        {"company": company},
-        ["enabled", "pos_mode_of_payment"],
-        as_dict=True,
-    ) if company else None
-    if not settings or not cint(settings.enabled) or settings.pos_mode_of_payment != wallet_mode:
-        frappe.throw(_("روش پرداخت کیف پول باید در تنظیمات فعال حسابیار به حساب بدهی متصل باشد."))
     customer = frappe.db.get_value("Sales Order", so_name, "customer")
     if not customer:
         frappe.throw(_("برای پرداخت با کیف پول، مشتری سفارش مشخص نیست."))
     api_club._club_expire_due_cashback(customer)
-    wallet = api_club._club_get_or_create_wallet(customer)
-    frappe.db.sql(
-        "select name from `tabCustomer Wallet` where name = %s for update",
-        wallet.name,
+    validate_pos_tender(
+        company=company,
+        customer=customer,
+        mode_of_payment=wallet_mode,
+        amount=wallet_amount,
     )
-    wallet = frappe.get_doc("Customer Wallet", wallet.name)
-    if wallet.get("status") != "فعال":
-        frappe.throw(_("کیف پول این مشتری مسدود است."))
-    available = max(flt(wallet.get("withdrawable_balance") or 0) - flt(wallet.get("reserved_balance") or 0), 0)
-    available += flt(wallet.get("cashback_balance") or 0)
-    if wallet_amount > available + 0.009:
-        frappe.throw(_("موجودی کیف پول برای این پرداخت کافی نیست."))
 
 @frappe.whitelist()
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, commit=True):
