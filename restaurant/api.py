@@ -17268,6 +17268,7 @@ def purge_management_pos_order(order_name):
 
 	summary = {
 		"cleaned_records": {},
+		"preserved_records": {},
 		"errors": []
 	}
 	purge_state = {"transaction_rolled_back": False}
@@ -17315,6 +17316,12 @@ def purge_management_pos_order(order_name):
 				detail = str(e)
 				if rollback_error:
 					detail = f"{detail}; savepoint rollback unavailable: {rollback_error}"
+				if doctype == "Delivery Note":
+					from erpnext.stock.stock_ledger import NegativeStockError
+
+					if isinstance(e, NegativeStockError):
+						summary["preserved_records"].setdefault(doctype, []).append(name)
+						continue
 				summary["errors"].append(f"Failed to clean {doctype} {name}: {detail}")
 				if purge_state["transaction_rolled_back"]:
 					break
