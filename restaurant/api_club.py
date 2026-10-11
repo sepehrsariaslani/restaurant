@@ -2661,14 +2661,15 @@ def get_customer_club_summary(customer_name):
 	try:
 		out["wallet_mode_of_payment"] = _club_wallet_mode_of_payment()
 		wallet_company = _accounts_wallet_company()
-		out["wallet_enabled"] = bool(wallet_company and _accounts_wallet_enabled())
-		if out["wallet_enabled"] and frappe.db.exists("DocType", "Customer Wallet"):
+		wallet_configured = bool(wallet_company and _accounts_wallet_enabled())
+		if wallet_configured and frappe.db.exists("DocType", "Customer Wallet"):
 			wallet_name = frappe.db.get_value("Customer Wallet", {"company": wallet_company, "customer": customer_name}, "name")
 			if wallet_name:
 				wallet = frappe.get_doc("Customer Wallet", wallet_name)
 				out["wallet_balance"] = flt(wallet.get("balance") or 0)
 				out["withdrawable_balance"] = flt(wallet.get("withdrawable_balance") or 0)
 				out["cashback_balance"] = flt(wallet.get("cashback_balance") or 0)
+				out["wallet_enabled"] = out["wallet_balance"] > 0.009
 	except Exception:
 		# Wallet data is optional for the POS customer summary.
 		out.update({
