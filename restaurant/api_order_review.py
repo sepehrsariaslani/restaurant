@@ -127,6 +127,20 @@ def _ensure_food_partner_sales_invoice(order_name, order):
 	return result
 
 
+def _ensure_food_partner_production_and_delivery(order_name):
+	"""Run the existing production and Delivery Note flow for an approved Food Partner order."""
+	from restaurant.api import deliver_invoice_only
+
+	result = deliver_invoice_only(order_name)
+	auto_flow = result.get("auto_flow") or {}
+	errors = auto_flow.get("errors") or []
+	return {
+		"fulfillment_status": "partial" if errors else "success",
+		"delivery_note": result.get("delivery_note") or auto_flow.get("delivery_note") or "",
+		"production_errors": errors,
+	}
+
+
 @frappe.whitelist()
 def review_management_order(order_name="", decision="", note=""):
 	"""Approve or reject a pending customer-originated Sales Order."""
@@ -152,23 +166,26 @@ def review_management_order(order_name="", decision="", note=""):
 	target_status = ORDER_REVIEW_APPROVED if decision == "approve" else ORDER_REVIEW_REJECTED
 	if current == target_status:
 		invoice_name = _existing_sales_invoice_for_order(order_name)
-		if decision == "approve" and not invoice_name and _order_has_column("restaurant_external_source"):
+		fulfillment_result = {}
+		if decision == "approve" and _order_has_column("restaurant_external_source"):
 			order = frappe.get_doc("Sales Order", order_name)
 			if str(order.get("restaurant_external_source") or "").strip().lower() == "snapp_food":
 				try:
-					invoice_result = _ensure_food_partner_sales_invoice(order_name, order)
-					invoice_name = invoice_result.get("sales_invoice") or invoice_name
-					if invoice_result.get("status") == "created":
-						frappe.db.commit()
+					if not invoice_name:
+						invoice_result = _ensure_food_partner_sales_invoice(order_name, order)
+						invoice_name = invoice_result.get("sales_invoice") or invoice_name
+					fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
 				except Exception as exc:
 					frappe.db.rollback()
 					frappe.log_error(
 						f"{frappe.get_traceback()}",
-						"Food Partner invoice backfill failed for approved order",
+						"Food Partner fulfillment backfill failed for approved order",
 					)
 					message = str(exc).strip() or "خطای نامشخص"
 					frappe.throw(
-						_("ساخت فاکتور فروش سفارش تأییدشده ناموفق بود: {0}").format(message[:500]),
+						_("تکمیل فاکتور، تولید و حوالهٔ سفارش تأییدشده ناموفق بود: {0}").format(
+							message[:500]
+						),
 						frappe.ValidationError,
 					)
 		return {
@@ -177,6 +194,7 @@ def review_management_order(order_name="", decision="", note=""):
 			"review_status": current,
 			"sales_invoice": invoice_name,
 			"idempotent": True,
+			**fulfillment_result,
 		}
 	if current != ORDER_REVIEW_PENDING:
 		frappe.throw(_("این سفارش دیگر در انتظار بررسی نیست."))
@@ -184,6 +202,7 @@ def review_management_order(order_name="", decision="", note=""):
 	now = now_datetime()
 	stage = "ثبت وضعیت بررسی"
 	invoice_name = ""
+	fulfillment_result = {}
 	try:
 		updates = {ORDER_REVIEW_FIELD: target_status}
 		if _order_has_column("restaurant_order_reviewed_by"):
@@ -204,9 +223,12 @@ def review_management_order(order_name="", decision="", note=""):
 			_set_restaurant_order_status(order_name, "confirmed", force=True)
 			_append_sales_order_note(order_name, f"[ORDER REVIEW] سفارش تأیید شد توسط {frappe.session.user}.")
 			if _order_has_column("restaurant_external_source"):
-				stage = "ثبت فاکتور Food Partner"
-				invoice_result = _ensure_food_partner_sales_invoice(order_name, order)
-				invoice_name = invoice_result.get("sales_invoice") or ""
+				if str(order.get("restaurant_external_source") or "").strip().lower() == "snapp_food":
+					stage = "ثبت فاکتور Food Partner"
+					invoice_result = _ensure_food_partner_sales_invoice(order_name, order)
+					invoice_name = invoice_result.get("sales_invoice") or ""
+					stage = "ثبت تولید و حوالهٔ تحویل Food Partner"
+					fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
 		else:
 			stage = "رد سفارش"
 			_set_restaurant_order_status(order_name, "cancelled", force=True)
@@ -236,4 +258,5 @@ def review_management_order(order_name="", decision="", note=""):
 		"order_name": order_name,
 		"review_status": target_status,
 		"sales_invoice": invoice_name,
+		**fulfillment_result,
 	}
