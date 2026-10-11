@@ -106,6 +106,20 @@ def _existing_sales_invoice_for_order(order_name):
 		return ""
 
 
+def _ensure_food_partner_production_and_delivery(order_name):
+	"""Run the existing production and Delivery Note flow for an approved Food Partner order."""
+	from restaurant.api import deliver_invoice_only
+
+	result = deliver_invoice_only(order_name)
+	auto_flow = result.get("auto_flow") or {}
+	errors = auto_flow.get("errors") or []
+	return {
+		"fulfillment_status": "partial" if errors else "success",
+		"delivery_note": result.get("delivery_note") or auto_flow.get("delivery_note") or "",
+		"production_errors": errors,
+	}
+
+
 @frappe.whitelist()
 def review_management_order(order_name="", decision="", note=""):
 	"""Approve or reject a pending customer-originated Sales Order."""
@@ -130,12 +144,30 @@ def review_management_order(order_name="", decision="", note=""):
 	current = frappe.db.get_value("Sales Order", order_name, ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED
 	target_status = ORDER_REVIEW_APPROVED if decision == "approve" else ORDER_REVIEW_REJECTED
 	if current == target_status:
+		fulfillment_result = {}
+		if decision == "approve" and _order_has_column("restaurant_external_source"):
+			order = frappe.get_doc("Sales Order", order_name)
+			if str(order.get("restaurant_external_source") or "").strip().lower() == "snapp_food":
+				try:
+					fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
+				except Exception as exc:
+					frappe.db.rollback()
+					frappe.log_error(
+						f"{frappe.get_traceback()}",
+						"Food Partner fulfillment backfill failed for approved order",
+					)
+					message = str(exc).strip() or "خطای نامشخص"
+					frappe.throw(
+						_("ساخت تولید و حوالهٔ سفارش تأییدشده ناموفق بود: {0}").format(message[:500]),
+						frappe.ValidationError,
+					)
 		return {
 			"status": "success",
 			"order_name": order_name,
 			"review_status": current,
 			"sales_invoice": _existing_sales_invoice_for_order(order_name),
 			"idempotent": True,
+			**fulfillment_result,
 		}
 	if current != ORDER_REVIEW_PENDING:
 		frappe.throw(_("این سفارش دیگر در انتظار بررسی نیست."))
@@ -143,6 +175,7 @@ def review_management_order(order_name="", decision="", note=""):
 	now = now_datetime()
 	stage = "ثبت وضعیت بررسی"
 	invoice_name = ""
+	fulfillment_result = {}
 	try:
 		updates = {ORDER_REVIEW_FIELD: target_status}
 		if _order_has_column("restaurant_order_reviewed_by"):
@@ -174,6 +207,8 @@ def review_management_order(order_name="", decision="", note=""):
 						_food_partner_invoice_payload(order),
 					)
 					invoice_name = invoice_result.get("sales_invoice") or ""
+				stage = "ثبت تولید و حوالهٔ تحویل Food Partner"
+				fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
 		else:
 			stage = "رد سفارش"
 			_set_restaurant_order_status(order_name, "cancelled", force=True)
@@ -203,4 +238,5 @@ def review_management_order(order_name="", decision="", note=""):
 		"order_name": order_name,
 		"review_status": target_status,
 		"sales_invoice": invoice_name,
+		**fulfillment_result,
 	}
