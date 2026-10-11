@@ -2652,21 +2652,32 @@ def get_customer_club_summary(customer_name):
 	if not customer_name or not frappe.db.exists("Customer", customer_name):
 		return out
 	settings = _club_club_settings()
-	_club_expire_due_cashback(customer_name)
 	out["points_enabled"] = settings["points_enabled"]
 	out["points_rial_value"] = flt(settings["points_rial_value"])
 	out["points_min_redeem"] = cint(settings["points_min_redeem"])
 	out["points_expiry_days"] = cint(settings["points_expiry_days"])
-	out["wallet_mode_of_payment"] = _club_wallet_mode_of_payment()
-	wallet_company = _accounts_wallet_company()
-	out["wallet_enabled"] = bool(wallet_company and _accounts_wallet_enabled())
-	if out["wallet_enabled"] and frappe.db.exists("DocType", "Customer Wallet"):
-		wallet_name = frappe.db.get_value("Customer Wallet", {"company": wallet_company, "customer": customer_name}, "name")
-		if wallet_name:
-			wallet = frappe.get_doc("Customer Wallet", wallet_name)
-			out["wallet_balance"] = flt(wallet.get("balance") or 0)
-			out["withdrawable_balance"] = flt(wallet.get("withdrawable_balance") or 0)
-			out["cashback_balance"] = flt(wallet.get("cashback_balance") or 0)
+	# Summary reads must not expire credits or create wallet transactions. The
+	# scheduled expiry sweep handles those mutations independently of POS display.
+	try:
+		out["wallet_mode_of_payment"] = _club_wallet_mode_of_payment()
+		wallet_company = _accounts_wallet_company()
+		out["wallet_enabled"] = bool(wallet_company and _accounts_wallet_enabled())
+		if out["wallet_enabled"] and frappe.db.exists("DocType", "Customer Wallet"):
+			wallet_name = frappe.db.get_value("Customer Wallet", {"company": wallet_company, "customer": customer_name}, "name")
+			if wallet_name:
+				wallet = frappe.get_doc("Customer Wallet", wallet_name)
+				out["wallet_balance"] = flt(wallet.get("balance") or 0)
+				out["withdrawable_balance"] = flt(wallet.get("withdrawable_balance") or 0)
+				out["cashback_balance"] = flt(wallet.get("cashback_balance") or 0)
+	except Exception:
+		# Wallet data is optional for the POS customer summary.
+		out.update({
+			"wallet_balance": 0.0,
+			"withdrawable_balance": 0.0,
+			"cashback_balance": 0.0,
+			"wallet_enabled": False,
+			"wallet_mode_of_payment": "",
+		})
 	if frappe.db.exists("DocType", CLUB_DOCTYPES["point_entry"]):
 		info = _club_points_map([customer_name]).get(customer_name, {})
 		out["points_balance"] = cint(info.get("balance", 0))
