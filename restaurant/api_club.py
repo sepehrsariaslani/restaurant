@@ -2870,7 +2870,7 @@ def get_my_wallet(customer_token=None):
 			"balance": flt(wallet.get("balance") or 0) if wallet else 0,
 			"withdrawable_balance": flt(wallet.get("withdrawable_balance") or 0) if wallet else 0,
 			"cashback_balance": flt(wallet.get("cashback_balance") or 0) if wallet else 0,
-			"status": wallet.get("status") or "فعال" if wallet else "فعال",
+			"status": (wallet.get("status") or "فعال") if wallet else "فعال",
 		},
 		"transactions": [
 			{**row, "amount": flt(row.get("amount") or 0), "balance_after": flt(row.get("balance_after") or 0), "entry_date": str(row.get("entry_date") or "")}
@@ -5276,20 +5276,67 @@ def _request_payload(doc):
 @frappe.whitelist(allow_guest=True)
 def get_my_wallet(customer_token=None):
 	from restaurant.customer_account import _require_customer
-	from accounts.wallet_api import wallet_for_customer
+	from accounts.wallet_service import REQUEST, TRANSACTION, WALLET
 
 	identity = _require_customer(customer_token)
 	customer = identity["customer"]
-	company = _wallet_company()
-	wallet = wallet_for_customer(company, customer)
-	request_rows = frappe.get_all("Customer Wallet Request", filters={"company": company, "customer": customer}, fields=["name", "request_type", "amount", "reserved_amount", "status", "payment_reference", "bank_iban", "account_holder", "note", "review_note", "requested_at", "creation"], order_by="requested_at desc, creation desc", limit_page_length=50, ignore_permissions=True)
+	try:
+		company = _accounts_wallet_company()
+		wallet_enabled = bool(company and _accounts_wallet_enabled())
+	except Exception:
+		company = ""
+		wallet_enabled = False
+
+	wallet = None
+	transactions = []
+	request_rows = []
+	if company:
+		try:
+			if frappe.db.exists("DocType", WALLET):
+				wallet_name = frappe.db.get_value(WALLET, {"company": company, "customer": customer}, "name")
+				if wallet_name:
+					wallet = frappe.get_doc(WALLET, wallet_name)
+					if frappe.db.exists("DocType", TRANSACTION):
+						transactions = frappe.get_all(
+							TRANSACTION,
+							filters={"wallet": wallet.name},
+							fields=["name", "kind", "bucket", "direction", "amount", "posting_at", "balance_after", "note"],
+							order_by="posting_at desc, creation desc",
+							limit_page_length=100,
+							ignore_permissions=True,
+						)
+			if frappe.db.exists("DocType", REQUEST):
+				request_rows = frappe.get_all(
+					REQUEST,
+					filters={"company": company, "customer": customer},
+					fields=["name", "request_type", "amount", "reserved_amount", "status", "payment_reference", "bank_iban", "account_holder", "note", "review_note", "requested_at", "creation"],
+					order_by="requested_at desc, creation desc",
+					limit_page_length=50,
+					ignore_permissions=True,
+				)
+		except Exception:
+			# Wallet details are optional; an unavailable ledger must not break the customer page.
+			wallet = None
+			transactions = []
+			request_rows = []
+
+	club_settings = _club_club_settings()
+	reserved_balance = flt(wallet.get("reserved_balance") or 0) if wallet else 0.0
 	return {
-		"wallet": {"balance": flt(wallet.get("balance") or 0), "withdrawable_balance": flt(wallet.get("withdrawable_balance") or 0), "cashback_balance": flt(wallet.get("cashback_balance") or 0), "reserved_balance": flt(wallet.get("reserved_balance") or 0), "available_balance": flt(wallet.get("available_balance") or 0), "status": wallet.get("status") or "فعال"},
-		"transactions": [{**row, "entry_date": str(row.get("posting_at") or ""), "amount": flt(row.get("amount") or 0)} for row in wallet.get("transactions", [])],
+		"wallet_enabled": wallet_enabled,
+		"wallet": {
+			"balance": flt(wallet.get("balance") or 0) if wallet else 0.0,
+			"withdrawable_balance": flt(wallet.get("withdrawable_balance") or 0) if wallet else 0.0,
+			"cashback_balance": flt(wallet.get("cashback_balance") or 0) if wallet else 0.0,
+			"reserved_balance": reserved_balance,
+			"available_balance": max(flt(wallet.get("withdrawable_balance") or 0) - reserved_balance, 0) if wallet else 0.0,
+			"status": wallet.get("status") or "فعال" if wallet else "فعال",
+		},
+		"transactions": [{**row, "entry_date": str(row.get("posting_at") or ""), "amount": flt(row.get("amount") or 0)} for row in transactions],
 		"withdrawal_requests": [_request_payload(row) for row in request_rows if row.request_type == "برداشت"],
 		"charge_requests": [_request_payload(row) for row in request_rows if row.request_type == "شارژ"],
-		"charge": {"enabled": _club_club_settings()["wallet_charge_enabled"] and _accounts_wallet_enabled(), "bank_name": _club_club_settings()["wallet_charge_bank_name"], "account_holder": _club_club_settings()["wallet_charge_account_holder"], "iban": _club_club_settings()["wallet_charge_iban"], "card_number": _club_club_settings()["wallet_charge_card_number"], "instructions": _club_club_settings()["wallet_charge_instructions"]},
-		"rules": {"cashback_percent": _club_club_settings()["cashback_percent"], "cashback_min_order": _club_club_settings()["cashback_min_order"], "club_enabled": _club_club_settings()["club_enabled"]},
+		"charge": {"enabled": bool(club_settings["wallet_charge_enabled"] and wallet_enabled), "bank_name": club_settings["wallet_charge_bank_name"], "account_holder": club_settings["wallet_charge_account_holder"], "iban": club_settings["wallet_charge_iban"], "card_number": club_settings["wallet_charge_card_number"], "instructions": club_settings["wallet_charge_instructions"]},
+		"rules": {"cashback_percent": club_settings["cashback_percent"], "cashback_min_order": club_settings["cashback_min_order"], "club_enabled": club_settings["club_enabled"]},
 	}
 
 
