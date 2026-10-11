@@ -24205,6 +24205,7 @@ def save_snappfood_integration_config(payload=None):
 		"snapp_lookback_minutes",
 		"snapp_amount_multiplier",
 		"snapp_auto_sync_invoices",
+		"snapp_auto_sync_production_delivery",
 		"snapp_require_item_mapping",
 		"snapp_default_customer",
 	}
@@ -24231,6 +24232,7 @@ def save_snappfood_integration_config(payload=None):
 			"snapp_bearer_token",
 		)
 	frappe.db.commit()
+	frappe.clear_cache(doctype="Restaurant Web Settings")
 	from restaurant.snapp_sync import get_sync_status
 
 	return get_sync_status()

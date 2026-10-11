@@ -106,6 +106,17 @@ def _existing_sales_invoice_for_order(order_name):
 		return ""
 
 
+def _food_partner_auto_production_delivery_enabled():
+	"""Read the optional automation setting without blocking invoice approval."""
+	fieldname = "snapp_auto_sync_production_delivery"
+	try:
+		if not frappe.get_meta("Restaurant Web Settings").has_field(fieldname):
+			return False
+		return bool(cint(frappe.db.get_single_value("Restaurant Web Settings", fieldname) or 0))
+	except Exception:
+		return False
+
+
 def _ensure_food_partner_production_and_delivery(order_name):
 	"""Run the existing production and Delivery Note flow for an approved Food Partner order."""
 	from restaurant.api import deliver_invoice_only
@@ -149,7 +160,8 @@ def review_management_order(order_name="", decision="", note=""):
 			order = frappe.get_doc("Sales Order", order_name)
 			if str(order.get("restaurant_external_source") or "").strip().lower() == "snapp_food":
 				try:
-					fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
+					if _food_partner_auto_production_delivery_enabled():
+						fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
 				except Exception as exc:
 					frappe.db.rollback()
 					frappe.log_error(
@@ -207,8 +219,9 @@ def review_management_order(order_name="", decision="", note=""):
 						_food_partner_invoice_payload(order),
 					)
 					invoice_name = invoice_result.get("sales_invoice") or ""
-				stage = "ثبت تولید و حوالهٔ تحویل Food Partner"
-				fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
+				if _food_partner_auto_production_delivery_enabled():
+					stage = "ثبت تولید و حوالهٔ تحویل Food Partner"
+					fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
 		else:
 			stage = "رد سفارش"
 			_set_restaurant_order_status(order_name, "cancelled", force=True)

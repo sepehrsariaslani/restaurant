@@ -40,6 +40,7 @@ _REQUIRED_SCHEMA_FIELDS = {
         "snapp_report_url",
         "snapp_menu_api_base_url",
         "snapp_auto_sync_invoices",
+        "snapp_auto_sync_production_delivery",
         "snapp_require_item_mapping",
         "snapp_default_customer",
     ),
@@ -336,6 +337,11 @@ def _get_settings():
         "auto_sync_invoices": bool(cint(settings_doc.get("snapp_auto_sync_invoices") or 0))
         if _has_field("Restaurant Web Settings", "snapp_auto_sync_invoices")
         else False,
+        "auto_sync_production_delivery": bool(
+            cint(settings_doc.get("snapp_auto_sync_production_delivery") or 0)
+        )
+        if _has_field("Restaurant Web Settings", "snapp_auto_sync_production_delivery")
+        else False,
         "require_item_mapping": bool(cint(settings_doc.get("snapp_require_item_mapping") or 0))
         if _has_field("Restaurant Web Settings", "snapp_require_item_mapping")
         else False,
@@ -365,6 +371,7 @@ def get_sync_status():
         "amount_multiplier": settings.get("amount_multiplier") or DEFAULT_AMOUNT_MULTIPLIER,
         "vendor_id": settings.get("vendor_id") or "",
         "auto_sync_invoices": settings.get("auto_sync_invoices", False),
+        "auto_sync_production_delivery": settings.get("auto_sync_production_delivery", False),
         "require_item_mapping": settings.get("require_item_mapping", False),
         "default_customer": settings.get("default_customer") or "",
         "schema_ready": schema_status["ready"],
