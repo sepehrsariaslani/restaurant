@@ -4,14 +4,15 @@
 
 **Goal:** When a Food Partner order is approved in POS Operations, automatically create its production and Delivery Note along with the existing Sales Invoice flow.
 
-**Architecture:** Keep the current approval endpoint and invoice creation path. For approved snapp_food Sales Orders, reuse Restaurant's existing deliver_invoice_only operation, return its Delivery Note and production outcome, and update the POS confirmation toast. Leave other order sources and rejection unchanged.
+**Architecture:** Keep the current approval endpoint and invoice creation path. Add a persisted Food Partner setting and a toggle to the integration settings page. When enabled, approved snapp_food Sales Orders reuse Restaurant's existing deliver_invoice_only operation; return its Delivery Note and production outcome, and update the POS confirmation toast. Leave invoice behavior, other order sources, and rejection unchanged.
 
 **Tech Stack:** Python, Frappe, Vue 3.
 
 ## Global Constraints
 
-- Only approved orders whose source is snapp_food use the additional fulfillment flow.
-- No separate button or new Food Partner setting is added.
+- Only approved orders whose source is snapp_food use the additional fulfillment flow, and only when its setting is enabled.
+- Add a Food Partner setting for automatic production and Delivery Note creation; its initial value is off.
+- No per-order action button is added.
 - Use the existing production and delivery flow, preserve its duplicate protection, and leave the Sales Invoice open.
 - Submitted delivery follows the existing flow's delivered order status.
 - Partial production errors must be surfaced in the POS response and must not be reported as full success.
@@ -44,8 +45,8 @@ def _ensure_food_partner_production_and_delivery(order_name):
 	}
 ```
 
-- [x] In the pending approval path, after the Sales Order is submitted and its Food Partner Sales Invoice is ensured, call the helper only when `restaurant_external_source` equals `snapp_food`; add a distinct stage label before the call so terminal failures remain identifiable.
-- [x] In the already-approved idempotent path, ensure a missing invoice as today, then run the same helper for snapp_food orders so a retry can finish missing production or delivery without duplicating completed documents.
+- [x] In the pending approval path, after the Sales Order is submitted and its Food Partner Sales Invoice is ensured, call the helper only when `restaurant_external_source` equals `snapp_food`; add a distinct stage label before the call so terminal failures remain identifiable. This call is now gated by the new setting.
+- [x] In the already-approved idempotent path, ensure a missing invoice as today, then run the same helper for snapp_food orders so a retry can finish missing production or delivery without duplicating completed documents, when the setting is enabled.
 - [x] Include the helper fields in both approval responses. Keep rejection and non-Food Partner response shapes unchanged.
 - [x] Commit only this file with a Persian message that describes the automatic fulfillment behavior and its reason.
 
@@ -72,3 +73,18 @@ def _ensure_food_partner_production_and_delivery(order_name):
 - [x] Confirm the backend only starts fulfillment for snapp_food approval, the idempotent path retries missing fulfillment, and reject/non-Food Partner paths are unchanged.
 - [x] Confirm the POS reports partial production errors as a warning and does not claim full success.
 - [x] Confirm each code commit contains only its intended file and all unrelated working changes remain untouched.
+
+### Task 4: Add the automatic production and delivery setting
+
+**Files:**
+- Modify: `restaurant/patches/v2_22/ensure_food_partner_approval_fulfillment_setting.py`
+- Modify: `restaurant/patches.txt`
+- Modify: `restaurant/snapp_sync.py`
+- Modify: `restaurant/api.py`
+- Modify: `restaurant/api_order_review.py`
+- Modify: Accounts `frontend/src/pages/restaurant/RestaurantFoodPartnerPage.vue`
+
+- [x] Persist the setting as an off-by-default Restaurant Web Settings field and expose it through status and save APIs.
+- [x] Show the switch on the Food Partner connection settings page beside the existing automation switches.
+- [x] Gate production and Delivery Note creation in both approval paths on the persisted setting; if the field is absent or unreadable, leave the invoice path working and treat fulfillment as off.
+- [x] Review both worktrees, run `git diff --check`, and commit the backend and UI changes with Persian messages.
