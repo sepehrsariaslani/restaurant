@@ -2648,7 +2648,7 @@ def club_apply_fulfillment_effects(so_name):
 
 def get_customer_club_summary(customer_name):
 	"""Guest-dashboard enrichment: wallet balance, points balance and loyalty tier."""
-	out = {"wallet_balance": 0.0, "withdrawable_balance": 0.0, "cashback_balance": 0.0, "points_balance": 0, "loyalty_tier": "", "points_enabled": False, "points_rial_value": 0.0, "points_min_redeem": 0, "points_expiry_days": 0}
+	out = {"wallet_balance": 0.0, "withdrawable_balance": 0.0, "cashback_balance": 0.0, "wallet_enabled": False, "points_balance": 0, "loyalty_tier": "", "points_enabled": False, "points_rial_value": 0.0, "points_min_redeem": 0, "points_expiry_days": 0}
 	if not customer_name or not frappe.db.exists("Customer", customer_name):
 		return out
 	settings = _club_club_settings()
@@ -2658,8 +2658,10 @@ def get_customer_club_summary(customer_name):
 	out["points_min_redeem"] = cint(settings["points_min_redeem"])
 	out["points_expiry_days"] = cint(settings["points_expiry_days"])
 	out["wallet_mode_of_payment"] = _club_wallet_mode_of_payment()
-	if frappe.db.exists("DocType", "Customer Wallet"):
-		wallet_name = frappe.db.get_value("Customer Wallet", {"company": settings.get("company") or _wallet_company(), "customer": customer_name}, "name")
+	wallet_company = _accounts_wallet_company()
+	out["wallet_enabled"] = bool(wallet_company and _accounts_wallet_enabled())
+	if out["wallet_enabled"] and frappe.db.exists("DocType", "Customer Wallet"):
+		wallet_name = frappe.db.get_value("Customer Wallet", {"company": wallet_company, "customer": customer_name}, "name")
 		if wallet_name:
 			wallet = frappe.get_doc("Customer Wallet", wallet_name)
 			out["wallet_balance"] = flt(wallet.get("balance") or 0)

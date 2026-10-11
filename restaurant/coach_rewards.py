@@ -194,6 +194,9 @@ def sales_order_on_update(doc, method=None):
 
 def sales_order_on_cancel(doc, method=None):
 	try:
+		api_club = _club()
+		if not api_club._accounts_wallet_enabled():
+			return
 		reverse_sales_order(doc.name)
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Restaurant coach Sales Order reversal failed")
@@ -384,6 +387,8 @@ def _restore_sales_invoice_return(api_club, doc):
 def sales_invoice_on_cancel(doc, method=None):
 	try:
 		api_club = _club()
+		if not api_club._accounts_wallet_enabled():
+			return
 		if cint(doc.get("is_return")):
 			_restore_sales_invoice_return(api_club, doc)
 			return
