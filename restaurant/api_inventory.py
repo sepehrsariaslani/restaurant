@@ -26,7 +26,7 @@ import secrets
 from html import escape as html_escape
 
 import frappe
-from restaurant.role_permissions import require_capability
+from restaurant.role_permissions import assigned_pos_profiles, require_capability
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, today
 
@@ -36,6 +36,7 @@ from restaurant.api import (
 	_ensure_management_access,
 	_get_currency,
 	_has_column,
+	_item_uom_conversion_details_to_stock,
 	_item_uom_conversion_to_stock,
 	_management_resolve_item_name,
 	_management_get_print_brand_settings,
@@ -79,6 +80,7 @@ __all__ = [
 	# material requests
 	"list_management_material_requests",
 	"get_management_material_request",
+	"get_management_material_request_options",
 	"save_management_material_request",
 	"update_management_material_request_status",
 	"create_management_purchase_from_material_request",
@@ -1125,8 +1127,8 @@ def _inv_material_request_status_label(status):
 	return MATERIAL_REQUEST_STATUS_LABELS.get(str(status or "").strip().lower(), str(status or "ثبت‌شده"))
 
 
-def _inv_material_request_item_payload(row):
-	return {
+def _inv_material_request_item_payload(row, include_financials=True):
+	payload = {
 		"idx": cint(row.get("idx") or 0),
 		"item_code": row.get("item_code") or "",
 		"item_name": row.get("item_name") or row.get("item_code") or "",
@@ -1137,13 +1139,15 @@ def _inv_material_request_item_payload(row):
 		"conversion_factor": flt(row.get("conversion_factor") or 1),
 		"warehouse": row.get("warehouse") or "",
 		"schedule_date": str(row.get("schedule_date") or ""),
-		"rate": flt(row.get("rate")),
-		"amount": flt(row.get("amount")),
 		"ordered_qty": flt(row.get("ordered_qty")),
 	}
+	if include_financials:
+		payload["rate"] = flt(row.get("rate"))
+		payload["amount"] = flt(row.get("amount"))
+	return payload
 
 
-def _inv_material_request_payload(doc, include_items=True):
+def _inv_material_request_payload(doc, include_items=True, include_financials=True):
 	status = _inv_material_request_status(doc)
 	payload = {
 		"name": doc.name,
@@ -1164,7 +1168,10 @@ def _inv_material_request_payload(doc, include_items=True):
 		"items": [],
 	}
 	if include_items:
-		items = [_inv_material_request_item_payload(row) for row in (doc.get("items") or [])]
+		items = [
+			_inv_material_request_item_payload(row, include_financials=include_financials)
+			for row in (doc.get("items") or [])
+		]
 		payload["items"] = items
 		payload["item_count"] = len(items)
 		payload["total_qty"] = flt(sum(flt(row.get("qty")) for row in items))
@@ -1198,15 +1205,209 @@ def _inv_material_request_purchases(request_name):
 	]
 
 
+def _inv_is_cashier_material_request_user():
+	roles = set(frappe.get_roles(frappe.session.user))
+	return "Restaurant Cashier" in roles and not roles.intersection(
+		{"Restaurant Manager", "System Manager", "Administrator"}
+	)
+
+
+def _inv_cashier_material_request_context():
+	"""Return only the active raw warehouse(s) linked to the user's POS Profiles."""
+	profile_names = sorted(assigned_pos_profiles())
+	if not profile_names:
+		frappe.throw(
+			_("برای ثبت درخواست مواد، ابتدا یک POS Profile به حساب صندوق‌دار تخصیص دهید."),
+			frappe.PermissionError,
+		)
+
+	warehouses = {}
+	branches = set()
+	profile_warehouses = {}
+	for profile_name in profile_names:
+		profile = frappe.get_doc("POS Profile", profile_name)
+		if cint(profile.get("disabled")):
+			continue
+		company = str(profile.get("company") or "").strip()
+		branch = str(profile.get("restaurant_branch") or "").strip() if _has_column("POS Profile", "restaurant_branch") else ""
+		if branch:
+			branches.add(branch)
+
+		production_settings = None
+		if frappe.db.exists("DocType", BRANCH_PRODUCTION_SETTINGS_DOCTYPE):
+			if branch:
+				settings_name = frappe.db.get_value(
+					BRANCH_PRODUCTION_SETTINGS_DOCTYPE, {"branch": branch}, "name"
+				)
+				if settings_name:
+					candidate = frappe.get_doc(BRANCH_PRODUCTION_SETTINGS_DOCTYPE, settings_name)
+					if cint(candidate.get("is_active")) and (not company or candidate.get("company") == company):
+						production_settings = candidate
+			if not production_settings and company:
+				candidates = frappe.get_all(
+					BRANCH_PRODUCTION_SETTINGS_DOCTYPE,
+					filters={"company": company, "is_active": 1},
+					fields=["name", "branch"],
+					order_by="branch asc",
+					limit_page_length=100,
+					ignore_permissions=True,
+				)
+				if branch:
+					candidates = [row for row in candidates if row.get("branch") == branch]
+				elif len(candidates) > 1:
+					company_branch = [row for row in candidates if row.get("branch") == company]
+					candidates = company_branch or candidates
+				if len(candidates) == 1:
+					production_settings = frappe.get_doc(BRANCH_PRODUCTION_SETTINGS_DOCTYPE, candidates[0].name)
+		if not company and production_settings:
+			company = str(production_settings.get("company") or "").strip()
+
+		warehouse = str(
+			(production_settings.get("raw_warehouse") if production_settings else "")
+			or profile.get("warehouse")
+			or profile.get("set_warehouse")
+			or ""
+		).strip()
+		if not warehouse:
+			continue
+		warehouse_row = frappe.db.get_value(
+			"Warehouse", warehouse, ["company", "disabled", "is_group"], as_dict=True
+		)
+		if not warehouse_row or cint(warehouse_row.disabled) or cint(warehouse_row.is_group):
+			continue
+		warehouse_company = str(warehouse_row.company or "").strip()
+		if company and warehouse_company != company:
+			continue
+		company = company or warehouse_company
+		if not company:
+			continue
+		warehouse_branch = str((production_settings.get("branch") if production_settings else "") or branch or "").strip()
+		if warehouse_branch:
+			branches.add(warehouse_branch)
+		warehouse_context = warehouses.setdefault(warehouse, {"company": company, "branches": set()})
+		if warehouse_branch:
+			warehouse_context["branches"].add(warehouse_branch)
+		profile_warehouses[profile_name] = warehouse
+
+	if not warehouses:
+		frappe.throw(
+			_("برای POS Profile تخصیص‌یافته، انبار مواد اولیهٔ فعال تنظیم نشده است."),
+			frappe.PermissionError,
+		)
+
+	try:
+		default_profile = str(frappe.defaults.get_user_default("pos_profile") or "").strip()
+	except Exception:
+		default_profile = ""
+	default_warehouse = profile_warehouses.get(default_profile) or sorted(warehouses)[0]
+	return {"warehouses": warehouses, "branches": branches, "default_warehouse": default_warehouse}
+
+
+def _inv_material_request_options_payload(*, cashier=False, search="", limit=500):
+	limit = min(max(cint(limit) or 500, 1), 500)
+	search = str(search or "").strip()
+	context = _inv_cashier_material_request_context() if cashier else None
+	fields = ["name", "item_name", "item_group", "stock_uom", "disabled", "is_stock_item"]
+	for fieldname in ("restaurant_enabled", "restaurant_raw_material", "restaurant_branch"):
+		if _has_column("Item", fieldname):
+			fields.append(fieldname)
+
+	filters = {"is_stock_item": 1, "disabled": 0}
+	if cashier and context["branches"] and _has_column("Item", "restaurant_branch"):
+		filters["restaurant_branch"] = ["in", sorted(context["branches"] | {""})]
+	or_filters = None
+	if search:
+		like = f"%{search}%"
+		or_filters = {"name": ["like", like], "item_name": ["like", like]}
+	items = frappe.get_all(
+		"Item",
+		filters=filters,
+		or_filters=or_filters,
+		fields=fields,
+		order_by="item_name asc",
+		limit_page_length=limit,
+		ignore_permissions=True,
+	)
+	items = [row for row in items if _inv_item_is_raw_material(row)]
+	if cashier and _has_column("Item", "restaurant_branch"):
+		allowed_branches = context["branches"]
+		items = [
+			row for row in items
+			if not str(row.get("restaurant_branch") or "").strip()
+			or str(row.get("restaurant_branch") or "").strip() in allowed_branches
+		]
+	item_options = [
+		{
+			"name": row.get("name"),
+			"item_name": row.get("item_name") or row.get("name"),
+			"stock_uom": row.get("stock_uom") or "",
+			"branch": str(row.get("restaurant_branch") or "").strip(),
+		}
+		for row in items
+	]
+
+	uom_filters = {"enabled": 1} if _has_column("UOM", "enabled") else {}
+	uoms = frappe.get_all(
+		"UOM",
+		filters=uom_filters,
+		fields=["name"],
+		order_by="name asc",
+		limit_page_length=500,
+		ignore_permissions=True,
+	) if frappe.db.exists("DocType", "UOM") else []
+	if cashier:
+		warehouse_names = sorted(context["warehouses"])
+		warehouse_rows = [
+			{
+				"name": name,
+				"warehouse_name": name,
+				"branches": sorted(context["warehouses"][name]["branches"]),
+			}
+			for name in warehouse_names
+		]
+		default_warehouse = context["default_warehouse"]
+	else:
+		warehouse_rows = frappe.get_all(
+			"Warehouse",
+			filters={"is_group": 0, "disabled": 0},
+			fields=["name", "warehouse_name"],
+			order_by="name asc",
+			limit_page_length=1000,
+			ignore_permissions=True,
+		)
+		settings = _inv_get_inventory_settings()
+		default_warehouse = settings.get("default_warehouse") or (warehouse_rows[0].name if warehouse_rows else "")
+
+	return {
+		"items": item_options,
+		"uoms": [row.name for row in uoms if row.get("name")],
+		"warehouses": warehouse_rows,
+		"default_warehouse": default_warehouse,
+		"cashier": bool(cashier),
+	}
+
+
 @frappe.whitelist()
-@require_capability("inventory_read")
+@require_capability("material_request_write")
+def get_management_material_request_options(search="", limit=500):
+	_ensure_management_access()
+	return _inv_material_request_options_payload(
+		cashier=_inv_is_cashier_material_request_user(), search=search, limit=limit
+	)
+
+
+@frappe.whitelist()
+@require_capability("material_request_read")
 def list_management_material_requests(status="", search="", date_from="", date_to="", limit=50, offset=0):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", MATERIAL_REQUEST_DOCTYPE):
 		return {"requests": [], "count": 0, "doctype_available": False}
+	cashier = _inv_is_cashier_material_request_user()
 	limit = min(max(cint(limit) or 50, 1), 200)
 	offset = max(cint(offset) or 0, 0)
 	filters = {}
+	if cashier:
+		filters["owner"] = frappe.session.user
 	status_key = str(status or "").strip().lower()
 	if status_key == "draft":
 		filters["docstatus"] = 0
@@ -1215,10 +1416,12 @@ def list_management_material_requests(status="", search="", date_from="", date_t
 	elif status_key:
 		filters["docstatus"] = 1
 		filters["status"] = status
-	if date_from:
+	if date_from and date_to:
+		filters["transaction_date"] = ["between", [getdate(date_from), getdate(date_to)]]
+	elif date_from:
 		filters["transaction_date"] = [">=", getdate(date_from)]
-	if date_to:
-		filters["transaction_date"] = ["between", [getdate(date_from or date_to), getdate(date_to)]]
+	elif date_to:
+		filters["transaction_date"] = ["<=", getdate(date_to)]
 
 	rows = frappe.get_all(
 		MATERIAL_REQUEST_DOCTYPE,
@@ -1235,7 +1438,7 @@ def list_management_material_requests(status="", search="", date_from="", date_t
 	search_text = str(search or "").strip().lower()
 	result = []
 	for row in rows:
-		payload = _inv_material_request_payload(row, include_items=False)
+		payload = _inv_material_request_payload(row, include_items=False, include_financials=not cashier)
 		if search_text:
 			if search_text not in str(row.name or "").lower() and search_text not in str(row.get("company") or "").lower():
 				child_match = frappe.db.exists(
@@ -1250,39 +1453,47 @@ def list_management_material_requests(status="", search="", date_from="", date_t
 				if not child_match:
 					continue
 		# Keep list queries light, but expose a useful item preview.
-			child_rows = frappe.get_all(
-				MATERIAL_REQUEST_ITEM_DOCTYPE,
-				filters={"parent": row.name},
-				fields=["item_code", "item_name", "qty", "uom", "stock_uom"],
-				order_by="idx asc",
-				limit_page_length=4,
-				ignore_permissions=True,
-			)
-			payload["items_preview"] = [_inv_material_request_item_payload(child) for child in child_rows]
-			payload["item_count"] = frappe.db.count(MATERIAL_REQUEST_ITEM_DOCTYPE, {"parent": row.name}) or 0
-			payload["total_qty"] = flt(
-				frappe.db.sql(
-					f"SELECT COALESCE(SUM(qty),0) FROM `tab{MATERIAL_REQUEST_ITEM_DOCTYPE}` WHERE parent=%s",
-					(row.name,),
-				)[0][0]
-			)
-		payload["purchase_orders"] = _inv_material_request_purchases(row.name)
+		child_rows = frappe.get_all(
+			MATERIAL_REQUEST_ITEM_DOCTYPE,
+			filters={"parent": row.name},
+			fields=["item_code", "item_name", "qty", "uom", "stock_uom"],
+			order_by="idx asc",
+			limit_page_length=4,
+			ignore_permissions=True,
+		)
+		payload["items_preview"] = [_inv_material_request_item_payload(child, include_financials=False) for child in child_rows]
+		payload["item_count"] = frappe.db.count(MATERIAL_REQUEST_ITEM_DOCTYPE, {"parent": row.name}) or 0
+		payload["total_qty"] = flt(
+			frappe.db.sql(
+				f"SELECT COALESCE(SUM(qty),0) FROM `tab{MATERIAL_REQUEST_ITEM_DOCTYPE}` WHERE parent=%s",
+				(row.name,),
+			)[0][0]
+		)
+		if not cashier:
+			payload["purchase_orders"] = _inv_material_request_purchases(row.name)
 		result.append(payload)
 	return {"requests": result, "count": len(result), "doctype_available": True}
 
 
+def _inv_assert_cashier_material_request_owner(doc):
+	if _inv_is_cashier_material_request_user() and doc.get("owner") != frappe.session.user:
+		frappe.throw(_("این درخواست مواد به حساب شما تعلق ندارد."), frappe.PermissionError)
+
+
 @frappe.whitelist()
-@require_capability("inventory_read")
+@require_capability("material_request_read")
 def get_management_material_request(name=""):
 	_ensure_management_access()
 	name = str(name or "").strip()
 	if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
 		frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name or "-"))
 	doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
-	return {
-		"request": _inv_material_request_payload(doc),
-		"purchase_orders": _inv_material_request_purchases(name),
-	}
+	cashier = _inv_is_cashier_material_request_user()
+	_inv_assert_cashier_material_request_owner(doc)
+	result = {"request": _inv_material_request_payload(doc, include_financials=not cashier)}
+	if not cashier:
+		result["purchase_orders"] = _inv_material_request_purchases(name)
+	return result
 
 
 def _inv_set_doc_field(doc, fieldname, value):
@@ -1291,38 +1502,46 @@ def _inv_set_doc_field(doc, fieldname, value):
 
 
 @frappe.whitelist()
-@require_capability("inventory_read")
+@require_capability("material_request_write")
 def save_management_material_request(payload=None):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", MATERIAL_REQUEST_DOCTYPE):
 		frappe.throw(_("داکتایپ Material Request در ERPNext فعال نیست."))
 	data = _inv_parse_payload(payload)
+	cashier = _inv_is_cashier_material_request_user()
+	cashier_context = _inv_cashier_material_request_context() if cashier else None
 	name = str(data.get("name") or "").strip()
 	if name:
 		if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
 			frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name))
 		doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
+		_inv_assert_cashier_material_request_owner(doc)
 		if cint(doc.docstatus) != 0:
 			frappe.throw(_("فقط درخواست‌های پیش‌نویس قابل ویرایش هستند."))
 	else:
 		doc = frappe.new_doc(MATERIAL_REQUEST_DOCTYPE)
 
-	company = str(data.get("company") or _inv_default_company() or "").strip()
+	if cashier:
+		requested_warehouse = str(data.get("set_warehouse") or cashier_context["default_warehouse"]).strip()
+		warehouse_context = cashier_context["warehouses"].get(requested_warehouse)
+		if not warehouse_context:
+			frappe.throw(_("انبار انتخاب‌شده به POS Profile تخصیص‌یافتهٔ شما تعلق ندارد."), frappe.PermissionError)
+		set_warehouse = requested_warehouse
+		company = warehouse_context["company"]
+	else:
+		company = str(data.get("company") or _inv_default_company() or "").strip()
+		set_warehouse = _inv_resolve_warehouse(data.get("set_warehouse"))
 	if not company:
 		frappe.throw(_("شرکت پیش‌فرض برای درخواست مواد مشخص نشده است."))
 	transaction_date = data.get("transaction_date") or today()
 	schedule_date = data.get("schedule_date") or transaction_date
-	_inv_set_doc_field(doc, "material_request_type", str(data.get("material_request_type") or "Purchase"))
+	_inv_set_doc_field(doc, "material_request_type", "Purchase" if cashier else str(data.get("material_request_type") or "Purchase"))
 	_inv_set_doc_field(doc, "company", company)
-	_inv_set_doc_field(doc, "requested_by", str(data.get("requested_by") or frappe.session.user or "").strip())
+	requested_by = frappe.session.user if cashier else str(data.get("requested_by") or frappe.session.user or "").strip()
+	_inv_set_doc_field(doc, "requested_by", requested_by)
 	_inv_set_doc_field(doc, "transaction_date", transaction_date)
 	_inv_set_doc_field(doc, "schedule_date", schedule_date)
 
-	# ERPNext requires a warehouse on every stock-item row. The old form left
-	# the destination empty when no warehouse had been configured in settings,
-	# which made the standard validation fail with HTTP 417. Prefer the value
-	# sent by the form, then the configured/default leaf warehouse.
-	set_warehouse = _inv_resolve_warehouse(data.get("set_warehouse"))
 	if not set_warehouse:
 		frappe.throw(_("برای ثبت درخواست مواد، یک انبار مقصد انتخاب کنید."))
 	_inv_set_doc_field(doc, "set_warehouse", set_warehouse)
@@ -1334,15 +1553,37 @@ def save_management_material_request(payload=None):
 	for line in _inv_normalize_list(data.get("items")):
 		item_code = _inv_clean_item_code(line.get("item_code"))
 		qty = flt(line.get("qty"))
+		if cashier and (not item_code or qty <= 0 or not frappe.db.exists("Item", item_code)):
+			frappe.throw(_("مادهٔ انتخاب‌شده یا مقدار آن معتبر نیست."))
 		if not item_code or qty <= 0 or not frappe.db.exists("Item", item_code):
 			continue
-		meta = frappe.db.get_value("Item", item_code, ["item_name", "stock_uom"], as_dict=True) or {}
+		item_fields = ["item_name", "stock_uom", "disabled", "is_stock_item"]
+		for fieldname in ("restaurant_enabled", "restaurant_raw_material", "restaurant_branch"):
+			if _has_column("Item", fieldname):
+				item_fields.append(fieldname)
+		meta = frappe.db.get_value("Item", item_code, item_fields, as_dict=True) or {}
+		if cashier:
+			if cint(meta.get("disabled")) or not _inv_item_is_raw_material(meta):
+				frappe.throw(_("فقط مادهٔ اولیهٔ فعال را می‌توان درخواست کرد."))
+			item_branch = str(meta.get("restaurant_branch") or "").strip()
+			allowed_branches = warehouse_context["branches"]
+			if item_branch and item_branch not in allowed_branches:
+				frappe.throw(_("این ماده برای شعبهٔ انبار انتخاب‌شده در دسترس نیست."), frappe.PermissionError)
 		uom = str(line.get("uom") or meta.get("stock_uom") or "").strip()
 		# Always resolve the ERPNext conversion for the selected UOM. The
 		# frontend sends the default factor as a convenience, but a cashier may
 		# change the UOM before saving the request.
-		factor = flt(_item_uom_conversion_to_stock(item_code, uom) or 0)
+		conversion_details = _item_uom_conversion_details_to_stock(item_code, uom) if cashier else {}
+		if cashier and not cint(conversion_details.get("has_conversion")):
+			frappe.throw(_("واحد انتخاب‌شده برای ماده معتبر نیست."))
+		factor = flt(
+			conversion_details.get("factor")
+			if cashier
+			else (_item_uom_conversion_to_stock(item_code, uom) or 0)
+		)
 		if factor <= 0:
+			if cashier:
+				frappe.throw(_("واحد انتخاب‌شده برای ماده معتبر نیست."))
 			factor = flt(line.get("conversion_factor") or 1)
 		row = doc.append("items", {})
 		_inv_set_doc_field(row, "item_code", item_code)
@@ -1352,11 +1593,11 @@ def save_management_material_request(payload=None):
 		_inv_set_doc_field(row, "uom", uom)
 		_inv_set_doc_field(row, "stock_uom", meta.get("stock_uom") or uom)
 		_inv_set_doc_field(row, "conversion_factor", factor)
-		row_warehouse = _inv_resolve_warehouse(line.get("warehouse"), set_warehouse)
+		row_warehouse = set_warehouse if cashier else _inv_resolve_warehouse(line.get("warehouse"), set_warehouse)
 		_inv_set_doc_field(row, "warehouse", row_warehouse or set_warehouse)
 		_inv_set_doc_field(row, "schedule_date", line.get("schedule_date") or schedule_date)
-		_inv_set_doc_field(row, "rate", flt(line.get("rate") or 0))
-		_inv_set_doc_field(row, "amount", flt(line.get("amount") or 0))
+		_inv_set_doc_field(row, "rate", 0 if cashier else flt(line.get("rate") or 0))
+		_inv_set_doc_field(row, "amount", 0 if cashier else flt(line.get("amount") or 0))
 		valid_rows += 1
 
 	if not valid_rows:
@@ -1370,11 +1611,11 @@ def save_management_material_request(payload=None):
 	if cint(data.get("submit") or 0) == 1 and cint(doc.docstatus) == 0:
 		doc.submit()
 	frappe.db.commit()
-	return {"status": "success", "request": _inv_material_request_payload(doc)}
+	return {"status": "success", "request": _inv_material_request_payload(doc, include_financials=not cashier)}
 
 
 @frappe.whitelist()
-@require_capability("inventory_read")
+@require_capability("material_request_write")
 def update_management_material_request_status(payload=None):
 	_ensure_management_access()
 	data = _inv_parse_payload(payload)
@@ -1383,6 +1624,10 @@ def update_management_material_request_status(payload=None):
 	if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, name):
 		frappe.throw(_("درخواست مواد یافت نشد: {0}").format(name or "-"))
 	doc = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, name)
+	cashier = _inv_is_cashier_material_request_user()
+	_inv_assert_cashier_material_request_owner(doc)
+	if cashier and action not in {"submit", "ثبت", "ثبت نهایی"}:
+		frappe.throw(_("صندوق‌دار فقط می‌تواند درخواست پیش‌نویس خودش را ثبت نهایی کند."), frappe.PermissionError)
 	doc.flags.ignore_permissions = True
 	if action in {"submit", "ثبت", "ثبت نهایی"} and cint(doc.docstatus) == 0:
 		doc.submit()
@@ -1391,7 +1636,7 @@ def update_management_material_request_status(payload=None):
 	else:
 		frappe.throw(_("عملیات وضعیت درخواست مواد مجاز نیست."))
 	frappe.db.commit()
-	return {"status": "success", "request": _inv_material_request_payload(doc)}
+	return {"status": "success", "request": _inv_material_request_payload(doc, include_financials=not cashier)}
 
 
 @frappe.whitelist()
@@ -1482,7 +1727,7 @@ body {{ direction: rtl; margin: 0; font-family: '{font_family}', Peyda, Tahoma, 
 
 
 @frappe.whitelist()
-@require_capability("inventory_read")
+@require_capability("material_request_read")
 def get_management_material_request_print(name=""):
 	_ensure_management_access()
 	result = get_management_material_request(name)

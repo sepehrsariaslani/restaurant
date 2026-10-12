@@ -1,5 +1,5 @@
 <template>
-  <InventorySectionShell title="درخواست مواد" subtitle="لیست نیازهای ثبت‌شده و انتقال به خرید">
+  <InventorySectionShell title="درخواست مواد" :subtitle="canManagePurchases ? 'لیست نیازها و انتقال به فرایند خرید' : 'ثبت و پیگیری درخواست مواد خودتان برای بررسی مدیر'">
     <template #actions><button type="button" class="primary-btn" @click="openDetail('new')">+ درخواست جدید</button></template>
     <ManagementSurfaceCard title="لیست درخواست‌های مواد" subtitle="برای مشاهده جزئیات هر درخواست، کارت یا ردیف را انتخاب کنید.">
       <div class="inventory-toolbar">
@@ -18,25 +18,26 @@
         <template #cell-total_qty="{ value }">{{ qty(value) }}</template>
         <template #cell-schedule_date="{ value }">{{ formatPersianDate(value) }}</template>
         <template #cell-purchase="{ row }">{{ row.purchase_orders?.length ? 'خرید ایجاد شده' : '—' }}</template>
-        <template #card="{ row }"><div class="card-head"><strong>{{ row.name }}</strong><span :class="['status-pill', statusClass(row.status)]">{{ row.status_label }}</span></div><small class="sub">درخواست: {{ formatPersianDate(row.transaction_date) }} • نیاز: {{ formatPersianDate(row.schedule_date) }}</small><div class="card-meta"><span>{{ qty(row.item_count) }} قلم • {{ qty(row.total_qty) }} مقدار</span><span>{{ row.set_warehouse || 'همه انبارها' }}</span></div><small class="sub">{{ row.purchase_orders?.length ? 'پیش‌نویس خرید متصل دارد' : 'برای جزئیات لمس کنید' }}</small></template>
+        <template #card="{ row }"><div class="card-head"><strong>{{ row.name }}</strong><span :class="['status-pill', statusClass(row.status)]">{{ row.status_label }}</span></div><small class="sub">درخواست: {{ formatPersianDate(row.transaction_date) }} • نیاز: {{ formatPersianDate(row.schedule_date) }}</small><div class="card-meta"><span>{{ qty(row.item_count) }} قلم • {{ qty(row.total_qty) }} مقدار</span><span>{{ row.set_warehouse || 'انبار تخصیص‌یافته' }}</span></div><small v-if="canManagePurchases" class="sub">{{ row.purchase_orders?.length ? 'پیش‌نویس خرید متصل دارد' : 'برای جزئیات لمس کنید' }}</small></template>
       </InventoryResponsiveList>
     </ManagementSurfaceCard>
   </InventorySectionShell>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import InventoryResponsiveList from '@/components/management/inventory/InventoryResponsiveList.vue'
 import InventorySectionShell from '@/components/management/inventory/InventorySectionShell.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { formatPersianDate } from '@/utils/persianDate'
-import { listManagementMaterialRequests } from '@/utils/api'
+import { getManagementSessionProfile, listManagementMaterialRequests } from '@/utils/api'
 
 const requests = ref([])
 const loading = ref(false)
 const error = ref('')
+const canManagePurchases = ref(false)
 const filters = reactive({ status: '', search: '', date_from: '', date_to: '' })
 const statusOptions = [
   { value: '', label: 'همه وضعیت‌ها' },
@@ -45,20 +46,20 @@ const statusOptions = [
   { value: 'ordered', label: 'خرید کامل' },
   { value: 'cancelled', label: 'لغوشده' },
 ]
-const columns = [
+const baseColumns = [
   { key: 'name', label: 'شماره' },
   { key: 'status_label', label: 'وضعیت' },
   { key: 'items', label: 'اقلام' },
   { key: 'total_qty', label: 'مقدار' },
   { key: 'schedule_date', label: 'تاریخ نیاز' },
-  { key: 'purchase', label: 'خرید' },
 ]
+const columns = computed(() => canManagePurchases.value ? [...baseColumns, { key: 'purchase', label: 'خرید' }] : baseColumns)
 function qty(value) { return Number(value || 0).toLocaleString('fa-IR', { maximumFractionDigits: 3 }) }
 function statusClass(status) { return ['ordered', 'partially ordered'].includes(String(status || '').toLowerCase()) ? 'ok' : ['cancelled', 'stopped'].includes(String(status || '').toLowerCase()) ? 'danger' : '' }
 function openDetail(name) { window.location.href = name === 'new' ? '/management/inventory/requests/detail?new=1' : `/management/inventory/requests/detail?name=${encodeURIComponent(name.name || name)}` }
 function openRow(row) { openDetail(row.name) }
 async function load() { loading.value = true; error.value = ''; try { const payload = await listManagementMaterialRequests({ ...filters, limit: 50 }); requests.value = payload.requests || [] } catch (err) { error.value = err.message || 'دریافت درخواست‌ها ناموفق بود.' } finally { loading.value = false } }
-onMounted(load)
+onMounted(async () => { const profile = await getManagementSessionProfile(); canManagePurchases.value = Boolean(profile?.is_admin || profile?.roles?.includes('Restaurant Manager')); await load() })
 </script>
 
 <style scoped>

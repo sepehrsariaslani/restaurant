@@ -46,6 +46,8 @@ CAPABILITY_ROLES = {
 	"catalog_write": frozenset({"Restaurant Manager"}),
 	"inventory_read": frozenset({"Restaurant Manager"}),
 	"inventory_write": frozenset({"Restaurant Manager"}),
+	"material_request_read": frozenset({"Restaurant Manager", "Restaurant Cashier"}),
+	"material_request_write": frozenset({"Restaurant Manager", "Restaurant Cashier"}),
 	"restaurant_settings": frozenset({"Restaurant Manager"}),
 	"restaurant_reports": frozenset({"Restaurant Manager", "Restaurant Supervisor"}),
 }

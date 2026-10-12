@@ -69,7 +69,7 @@
           <template #cell-item_code="{ row }">
             <SearchableDropdown
               v-model="row.item_code"
-              allow-item-create
+              :allow-item-create="!isCashier"
               :disabled="editorLoading"
               :item-create-defaults="{ opening_warehouse: form.set_warehouse }"
               :options="materialOptions"
@@ -157,7 +157,7 @@
         </div>
 
         <p v-if="request.note" class="note">{{ request.note }}</p>
-        <div v-if="purchases.length" class="linked-purchases">
+        <div v-if="isManager && purchases.length" class="linked-purchases">
           <strong>سفارش‌های خرید مرتبط</strong>
           <ManagementSmartDataTable
             :columns="linkedPurchaseColumns"
@@ -178,7 +178,7 @@
             ثبت نهایی
           </button>
           <button
-            v-if="request.docstatus === 1"
+            v-if="isManager && request.docstatus === 1"
             type="button"
             class="primary-btn"
             @click="createPurchase"
@@ -186,7 +186,7 @@
           >
             {{ purchaseSaving ? 'در حال ساخت...' : 'ایجاد پیش‌نویس خرید' }}
           </button>
-          <button v-if="request.docstatus === 1" type="button" class="tertiary-btn danger" @click="changeStatus('cancel')">
+          <button v-if="isManager && request.docstatus === 1" type="button" class="tertiary-btn danger" @click="changeStatus('cancel')">
             لغو درخواست
           </button>
           <button type="button" class="secondary-btn" @click="printRequest">چاپ فیش</button>
@@ -207,8 +207,10 @@ import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import { formatPersianDate } from '@/utils/persianDate'
 import {
   createManagementPurchaseFromMaterialRequest,
+  getManagementMaterialRequestOptions,
   getManagementMaterialRequest,
   getManagementMaterialRequestPrint,
+  getManagementSessionProfile,
   listManagementRawMaterials,
   listManagementUOMs,
   listManagementWarehouses,
@@ -221,6 +223,8 @@ const requestName = params.get('name') || ''
 const isNew = params.get('new') === '1' || !requestName
 const request = ref(null)
 const purchases = ref([])
+const isCashier = ref(true)
+const isManager = ref(false)
 const boot = ref(null)
 const editing = ref(isNew)
 const loading = ref(true)
@@ -241,10 +245,17 @@ const form = reactive({
 const uoms = ref([])
 
 const materialOptions = computed(() =>
-  (boot.value?.materials || []).map((item) => ({
+  (boot.value?.materials || [])
+    .filter((item) => {
+      if (!isCashier.value) return true
+      const branch = String(item.branch || '').trim()
+      if (!branch) return true
+      return (boot.value?.warehouse_branches?.[form.set_warehouse] || []).includes(branch)
+    })
+    .map((item) => ({
     value: item.name,
     label: `${item.item_name || item.name} (${item.name})`,
-  })),
+    })),
 )
 const uomOptions = computed(() => uoms.value.map((value) => ({ value, label: value })))
 const warehouseOptions = computed(() => (boot.value?.leaf_warehouses || []).map((value) => ({ value, label: value })))
@@ -315,7 +326,18 @@ function removeLine(index) {
 
 function syncLineWarehouses() {
   form.items.forEach((line) => {
-    if (!line.warehouse) line.warehouse = form.set_warehouse
+    if (isCashier.value) line.warehouse = form.set_warehouse
+    else if (!line.warehouse) line.warehouse = form.set_warehouse
+    if (isCashier.value && line.item_code) {
+      const item = (boot.value?.materials || []).find((row) => row.name === line.item_code)
+      const branch = String(item?.branch || '').trim()
+      const allowedBranches = boot.value?.warehouse_branches?.[form.set_warehouse] || []
+      if (branch && !allowedBranches.includes(branch)) {
+        line.item_code = ''
+        line.uom = ''
+        line.stock_uom = ''
+      }
+    }
   })
 }
 
@@ -371,25 +393,41 @@ async function loadEditorContext() {
   editorLoading.value = true
   error.value = ''
   try {
-    const [materialsPayload, uomPayload, warehousePayload] = await Promise.all([
-      listManagementRawMaterials({ limit: 500, include_all_stock: 1, options_only: 1 }),
-      listManagementUOMs({ limit: 500 }),
-      listManagementWarehouses({ options_only: 1 }),
-    ])
-    const warehouseRows = warehousePayload?.warehouses || []
-    const leafWarehouses = warehousePayload?.leaf_warehouses?.length
-      ? warehousePayload.leaf_warehouses
-      : warehouseRows
-          .filter((row) => Number(row?.is_group || 0) !== 1 && Number(row?.disabled || 0) !== 1)
-          .map((row) => row.name || row.warehouse_name)
-          .filter(Boolean)
+    let materials = []
+    let leafWarehouses = []
+    let warehouseBranches = {}
+    let defaultWarehouseName = ''
+    if (isCashier.value) {
+      const options = await getManagementMaterialRequestOptions({ limit: 500 })
+      materials = options?.items || []
+      leafWarehouses = (options?.warehouses || []).map((row) => row.name || row.warehouse_name).filter(Boolean)
+      warehouseBranches = Object.fromEntries((options?.warehouses || []).map((row) => [row.name || row.warehouse_name, row.branches || []]))
+      defaultWarehouseName = options?.default_warehouse || ''
+      uoms.value = options?.uoms || []
+    } else {
+      const [materialsPayload, uomPayload, warehousePayload] = await Promise.all([
+        listManagementRawMaterials({ limit: 500, include_all_stock: 1, options_only: 1 }),
+        listManagementUOMs({ limit: 500 }),
+        listManagementWarehouses({ options_only: 1 }),
+      ])
+      const warehouseRows = warehousePayload?.warehouses || []
+      leafWarehouses = warehousePayload?.leaf_warehouses?.length
+        ? warehousePayload.leaf_warehouses
+        : warehouseRows
+            .filter((row) => Number(row?.is_group || 0) !== 1 && Number(row?.disabled || 0) !== 1)
+            .map((row) => row.name || row.warehouse_name)
+            .filter(Boolean)
+      materials = materialsPayload?.items || []
+      defaultWarehouseName = warehousePayload?.default_warehouse || ''
+      uoms.value = uomPayload?.uoms || []
+    }
 
     boot.value = {
-      materials: materialsPayload?.items || [],
+      materials,
       leaf_warehouses: leafWarehouses,
-      settings: { default_warehouse: warehousePayload?.default_warehouse || '' },
+      warehouse_branches: warehouseBranches,
+      settings: { default_warehouse: defaultWarehouseName },
     }
-    uoms.value = uomPayload?.uoms || []
     if (!form.set_warehouse) form.set_warehouse = defaultWarehouse(boot.value)
     syncLineWarehouses()
     editorReady.value = true
@@ -405,6 +443,9 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
+    const profile = await getManagementSessionProfile()
+    isManager.value = Boolean(profile?.is_admin || profile?.roles?.includes('Restaurant Manager'))
+    isCashier.value = !isManager.value && Boolean(profile?.roles?.includes('Restaurant Cashier'))
     if (isNew) {
       await loadEditorContext()
     } else {
@@ -454,7 +495,11 @@ async function save(submit) {
       submit: submit ? 1 : 0,
     })
     if (submit) {
-      await openPurchaseFromRequest(result.request)
+      if (isManager.value) {
+        await openPurchaseFromRequest(result.request)
+      } else {
+        window.location.href = `/management/inventory/requests/detail?name=${encodeURIComponent(result.request.name)}`
+      }
       return
     }
     message.value = 'پیش‌نویس ذخیره شد.'
@@ -489,12 +534,14 @@ async function changeStatus(action) {
   try {
     const result = await updateManagementMaterialRequestStatus({ name: request.value.name, action })
     if (action === 'submit') {
-      await openPurchaseFromRequest(result.request)
-      return
+      if (isManager.value) {
+        await openPurchaseFromRequest(result.request)
+        return
+      }
     }
     request.value = result.request
     editing.value = false
-    message.value = 'درخواست لغو شد.'
+    message.value = action === 'submit' ? 'درخواست برای بررسی مدیر ارسال شد.' : 'درخواست لغو شد.'
   } catch (err) {
     error.value = err.message || 'تغییر وضعیت ناموفق بود.'
   }

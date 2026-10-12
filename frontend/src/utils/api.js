@@ -3642,6 +3642,10 @@ export function getManagementMaterialRequest(name = "") {
 	return callRestaurantAPI("get_management_material_request", { name });
 }
 
+export function getManagementMaterialRequestOptions({ search = "", limit = 500 } = {}) {
+	return callRestaurantAPI("get_management_material_request_options", { search, limit });
+}
+
 export function saveManagementMaterialRequest(payload = {}) {
 	return callRestaurantAPI("save_management_material_request", { payload });
 }

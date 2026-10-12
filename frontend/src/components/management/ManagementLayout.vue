@@ -293,7 +293,7 @@ const RESTAURANT_ROLE_NAVIGATION = {
 		"management-couriers", "management-orders", "management-kitchen", "management-tables",
 		"management-reports", "management-report",
 	]),
-	"Restaurant Cashier": new Set(["management-pos", "management-register", "management-orders"]),
+	"Restaurant Cashier": new Set(["management-pos", "management-register", "management-orders", "management-material-requests"]),
 	"Restaurant Waiter": new Set(["management-reservations", "management-tables"]),
 	"Restaurant Chef": new Set(["management-kitchen"]),
 };
@@ -354,6 +354,7 @@ function currentPageNavigationKey() {
 	}
 	if (page.startsWith("management-user")) return "management-users";
 	if (page.startsWith("management-order")) return "management-orders";
+	if (page.startsWith("management-material-request")) return "management-material-requests";
 	if (page.startsWith("management-reservation")) return "management-reservations";
 	if (page.startsWith("management-courier")) return "management-couriers";
 	if (page.startsWith("management-table")) return "management-tables";
