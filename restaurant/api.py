@@ -28,6 +28,14 @@ from restaurant.order_review import (
 	require_order_approved,
 	should_require_customer_order_review,
 )
+from restaurant.role_permissions import (
+	assigned_pos_profiles,
+	RESTAURANT_ROLE_IDS,
+	require_capability,
+	require_restaurant_capability,
+	require_restaurant_staff_user,
+	require_pos_profile_access,
+)
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
 	add_days,
@@ -1214,6 +1222,9 @@ def _serialize_pos_profile_detail(profile_name):
 	allow_discount_change = _pick_profile_bool(
 		payload, ("allow_discount_change", "allow_user_to_edit_discount")
 	)
+	tax_rate_percent = _pos_profile_simple_tax_rate(
+		_pick_first_profile_value(payload, ("taxes_and_charges", "taxes_and_charges_template"), "")
+	)
 	ignore_pricing_rule = _pick_profile_bool(payload, ("ignore_pricing_rule",))
 	update_stock = _pick_profile_bool(payload, ("update_stock",))
 	allow_negative_stock = _pick_profile_bool(payload, ("allow_negative_stock",))
@@ -1240,6 +1251,7 @@ def _serialize_pos_profile_detail(profile_name):
 		"disabled": disabled,
 		"allow_rate_change": allow_rate_change,
 		"allow_discount_change": allow_discount_change,
+		"tax_rate_percent": tax_rate_percent,
 		"ignore_pricing_rule": ignore_pricing_rule,
 		"update_stock": update_stock,
 		"allow_negative_stock": allow_negative_stock,
@@ -1376,10 +1388,60 @@ def _management_pos_profile_payload(profile_name=None, include_profiles=True):
 	}
 
 
+def _management_restaurant_manager_pos_profile_payload(profile_name=None):
+	"""Return only POS assignment data to a limited Restaurant Manager."""
+	if not frappe.db.exists("DocType", "POS Profile"):
+		return {"current_user": frappe.session.user, "active_profile": "", "active_source": "none", "profiles": [], "profile": {}, "opening_shift": {}, "options": {"users": []}, "is_restaurant_manager": True}
+
+	payload = _management_pos_profile_payload(profile_name=profile_name, include_profiles=True)
+	profiles = [
+		{
+			"name": row.get("name") or "",
+			"title": row.get("title") or row.get("name") or "",
+			"active": bool(row.get("active")),
+			"has_open_shift": bool(row.get("has_open_shift")),
+		}
+		for row in (payload.get("profiles") or [])
+	]
+	active_name = str(payload.get("active_profile") or "").strip()
+	profile = {}
+	if active_name and frappe.db.exists("POS Profile", active_name):
+		profile = {
+			"name": active_name,
+			"title": next((row["title"] for row in profiles if row["name"] == active_name), active_name),
+			"users": [
+				user
+				for user in (_serialize_pos_profile_detail(active_name).get("users") or [])
+				if require_restaurant_staff_user(user)
+			],
+		}
+	options = payload.get("options") or {}
+	staff_users = [
+		row for row in (options.get("users") or [])
+		if require_restaurant_staff_user(str(row.get("value") or ""))
+	]
+	shift = payload.get("opening_shift") or {}
+	return {
+		"current_user": frappe.session.user,
+		"active_profile": active_name,
+		"active_source": payload.get("active_source") or "fallback",
+		"profiles": profiles,
+		"profile": profile,
+		"opening_shift": {"name": shift.get("name") or "", "opened_at": shift.get("opened_at"), "status": shift.get("status") or ""},
+		"options": {"users": staff_users},
+		"is_restaurant_manager": True,
+	}
+
+
 def _management_pos_profile_summary():
 	payload = _management_pos_profile_payload(include_profiles=False)
 	profile = payload.get("profile") or {}
 	shift = payload.get("opening_shift") or {}
+	roles = set(frappe.get_roles(frappe.session.user))
+	restaurant_controls = bool(
+		roles.intersection({"Restaurant Manager", "Restaurant Cashier"})
+		and not roles.intersection({"System Manager", "Administrator"})
+	)
 	return {
 		"name": profile.get("name") or "",
 		"title": profile.get("title") or profile.get("name") or "",
@@ -1387,12 +1449,46 @@ def _management_pos_profile_summary():
 		"warehouse": profile.get("warehouse") or "",
 		"selling_price_list": profile.get("selling_price_list") or "",
 		"currency": profile.get("currency") or _get_currency(),
+		"restaurant_controls": restaurant_controls,
+		"allow_discount_change": bool(profile.get("allow_discount_change")) if restaurant_controls else True,
+		"allow_order_management": bool(
+			"Restaurant Manager" in roles
+			or roles.intersection({"System Manager", "Administrator"})
+			or not roles.intersection(RESTAURANT_ROLE_IDS)
+		),
+		"tax_rate_percent": profile.get("tax_rate_percent") if restaurant_controls else None,
 		"has_open_shift": bool(shift.get("name")),
 		"shift_name": shift.get("name") or "",
 		"shift_opened_at": shift.get("opened_at"),
 		"shift_status": shift.get("status") or "",
-		"payments": profile.get("payments") or [],
+		"payments": [
+			{"mode_of_payment": row.get("mode_of_payment") or "", "type": row.get("type") or ""}
+			for row in (profile.get("payments") or [])
+		],
 	}
+
+
+def _pos_profile_simple_tax_rate(template_name):
+	"""Return a frontend preview rate when the POS tax template is simple."""
+	template_name = str(template_name or "").strip()
+	if not template_name or not frappe.db.exists("Sales Taxes and Charges Template", template_name):
+		return 0
+
+	try:
+		template = frappe.get_doc("Sales Taxes and Charges Template", template_name)
+		rows = list(template.get("taxes") or [])
+		if not rows:
+			return 0
+		if any(
+			str(row.get("charge_type") or "") != "On Net Total"
+			or str(row.get("add_deduct_tax") or "Add") == "Deduct"
+			or cint(row.get("included_in_print_rate") or 0)
+			for row in rows
+		):
+			return None
+		return sum(flt(row.get("rate") or 0) for row in rows)
+	except Exception:
+		return None
 
 
 def _resolve_doc_fieldname(doc, candidates):
@@ -5466,7 +5562,34 @@ def _normalize_order_context_payload(order_context=None, order_type="takeaway"):
 	ctx["org_member"] = (ctx.get("org_member") or "").strip()
 	ctx["org_access_code"] = (ctx.get("org_access_code") or "").strip()
 	ctx["organization"] = (ctx.get("organization") or "").strip()
+	ctx["pos_profile"] = (ctx.get("pos_profile") or "").strip()
 	return ctx
+
+
+def _restaurant_pos_financial_policy(order_context):
+	roles = set(frappe.get_roles(frappe.session.user))
+	protected = bool(
+		roles.intersection({"Restaurant Manager", "Restaurant Cashier"})
+		and not roles.intersection({"System Manager", "Administrator"})
+	)
+	policy = {"protected": protected, "allow_discount_change": False, "tax_template": ""}
+	if not protected:
+		return policy
+
+	profile_name = str((order_context or {}).get("pos_profile") or "").strip()
+	if not profile_name:
+		frappe.throw(_("برای ثبت سفارش رستوران باید یک POS Profile انتخاب شود."), frappe.PermissionError)
+	require_pos_profile_access(profile_name, capability="pos_sell")
+	profile = frappe.get_doc("POS Profile", profile_name)
+	profile_data = profile.as_dict()
+	policy["allow_discount_change"] = _pick_profile_bool(
+		profile_data, ("allow_discount_change", "allow_user_to_edit_discount")
+	)
+	policy["tax_template"] = str(
+		_pick_first_profile_value(profile_data, ("taxes_and_charges", "taxes_and_charges_template"), "")
+		or ""
+	).strip()
+	return policy
 
 
 def _create_sales_order(
@@ -5489,6 +5612,7 @@ def _create_sales_order(
 	requires_review=False,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
+	pos_financial_policy = _restaurant_pos_financial_policy(order_context)
 	company = _resolve_order_company(order_context)
 	if not company:
 		frappe.throw(_("Default company is not configured."))
@@ -5525,6 +5649,8 @@ def _create_sales_order(
 		doc_payload["restaurant_customer_mobile"] = mobile
 	if _has_column("Sales Order", "restaurant_order_type"):
 		doc_payload["restaurant_order_type"] = order_type
+	if _has_column("Sales Order", "restaurant_pos_profile"):
+		doc_payload["restaurant_pos_profile"] = order_context.get("pos_profile") or None
 	if _has_column("Sales Order", "restaurant_delivery_address"):
 		doc_payload["restaurant_delivery_address"] = address
 	if _has_column("Sales Order", "restaurant_note"):
@@ -5857,6 +5983,8 @@ def _create_sales_order(
 		financial_modifiers,
 		group_percent=configured_group_discount_percent,
 	)
+	if pos_financial_policy["protected"] and not pos_financial_policy["allow_discount_change"]:
+		manual_discount_active = False
 	manual_discount_amount = calculate_manual_discount_amount(
 		subtotal,
 		manual_discount_type,
@@ -5917,15 +6045,39 @@ def _create_sales_order(
 			"coach_customer": coach_terms.get("coach") or "",
 		})
 				
-	# Apply Service Charge & Taxes & Tip
+	# Apply Service Charge & Taxes & Tip. Restaurant POS roles use the
+	# assigned profile's tax template and server-side packaging settings.
 	doc_payload["taxes"] = []
 	tax_acc = frappe.db.get_value("Account", {"account_type": "Tax", "company": company}, "name")
 	if not tax_acc:
 		tax_acc = frappe.db.get_value("Account", {"is_group": 0, "company": company}, "name")
-		
+
 	totals_data = totals or {}
-	pos_tax = flt(totals_data.get("taxAmount") or financial_modifiers.get("tax_amount") or 0)
-	if pos_tax > 0 and tax_acc:
+	pos_tax = 0
+	if pos_financial_policy["protected"]:
+		tax_template = pos_financial_policy.get("tax_template") or ""
+		if tax_template:
+			if not _has_column("Sales Order", "taxes_and_charges"):
+				frappe.throw(_("POS Profile tax templates are not supported by Sales Order."), frappe.ValidationError)
+			try:
+				from erpnext.controllers.accounts_controller import get_taxes_and_charges
+
+				doc_payload["taxes_and_charges"] = tax_template
+				template_rows = get_taxes_and_charges("Sales Taxes and Charges Template", tax_template)
+				doc_payload["taxes"] = [
+					row.as_dict() if hasattr(row, "as_dict") else dict(row)
+					for row in (template_rows or [])
+				]
+				preview_doc = frappe.get_doc(doc_payload)
+				preview_doc.calculate_taxes_and_totals()
+				pos_tax = flt(preview_doc.total_taxes_and_charges or 0)
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), "Restaurant POS tax template calculation failed")
+				frappe.throw(_("محاسبهٔ مالیات از قالب POS انجام نشد. تنظیمات قالب مالیاتی را بررسی کنید."), frappe.ValidationError)
+	else:
+		pos_tax = flt(totals_data.get("taxAmount") or financial_modifiers.get("tax_amount") or 0)
+
+	if pos_tax > 0 and tax_acc and not pos_financial_policy["protected"]:
 		doc_payload["taxes"].append({
 			"charge_type": "Actual",
 			"account_head": tax_acc,
@@ -5933,7 +6085,7 @@ def _create_sales_order(
 			"tax_amount": pos_tax,
 		})
 		
-	pos_service = flt(totals_data.get("serviceAmount") or 0)
+	pos_service = 0 if pos_financial_policy["protected"] else flt(totals_data.get("serviceAmount") or 0)
 	if pos_service > 0 and tax_acc:
 		doc_payload["taxes"].append({
 			"charge_type": "Actual",
@@ -5942,7 +6094,7 @@ def _create_sales_order(
 			"tax_amount": pos_service,
 		})
 		
-	pos_tip = flt(totals_data.get("tipAmount") or financial_modifiers.get("tip_amount") or 0)
+	pos_tip = 0 if pos_financial_policy["protected"] else flt(totals_data.get("tipAmount") or financial_modifiers.get("tip_amount") or 0)
 	if pos_tip > 0 and tax_acc:
 		doc_payload["taxes"].append({
 			"charge_type": "Actual",
@@ -5951,10 +6103,12 @@ def _create_sales_order(
 			"tax_amount": pos_tip,
 		})
 
-	pos_packaging = flt(
+	pos_packaging = 0 if pos_financial_policy["protected"] else flt(
 		totals_data.get("packagingAmount") or financial_modifiers.get("packaging_amount") or 0
 	)
-	if pos_packaging <= 0 and _caller_has_management_access():
+	if (pos_packaging <= 0 or pos_financial_policy["protected"]) and (
+		pos_financial_policy["protected"] or _caller_has_management_access()
+	):
 		# Auto-compute the packaging fee only for staff/POS orders. Web (guest)
 		# checkouts must never get a fee they could not see before payment.
 		try:
@@ -11563,8 +11717,9 @@ def create_table_reservation(payload=None, **kwargs):
 
 
 @frappe.whitelist()
+@require_capability("table_read")
 def get_management_tables():
-	_ensure_management_site_settings_access()
+	_ensure_management_access()
 
 	tables = []
 	if _restaurant_doctype_exists("Restaurant Table"):
@@ -11653,8 +11808,9 @@ def get_management_tables():
 
 
 @frappe.whitelist()
+@require_capability("table_manage")
 def create_management_table(payload=None, **kwargs):
-	_ensure_management_site_settings_access()
+	_ensure_management_access()
 	data = _parse_json(payload, {}) if payload is not None else {}
 	if not isinstance(data, dict):
 		data = {}
@@ -11699,8 +11855,9 @@ def create_management_table(payload=None, **kwargs):
 
 
 @frappe.whitelist()
+@require_capability("table_manage")
 def delete_management_table(name=None, **kwargs):
-	_ensure_management_site_settings_access()
+	_ensure_management_access()
 	table_name = (name or kwargs.get("name") or "").strip()
 	if not table_name or not frappe.db.exists("Restaurant Table", table_name):
 		frappe.throw(_("Table not found."))
@@ -11718,8 +11875,9 @@ def delete_management_table(name=None, **kwargs):
 
 
 @frappe.whitelist()
+@require_capability("table_manage")
 def update_management_table(payload=None, **kwargs):
-	_ensure_management_site_settings_access()
+	_ensure_management_access()
 	data = _parse_json(payload, {}) if payload is not None else {}
 	if not isinstance(data, dict):
 		data = {}
@@ -11763,8 +11921,9 @@ def update_management_table(payload=None, **kwargs):
 
 
 @frappe.whitelist()
+@require_capability("reservation_write")
 def update_management_table_reservation(payload=None, **kwargs):
-	_ensure_management_site_settings_access()
+	_ensure_management_access()
 	data = _parse_json(payload, {}) if payload is not None else {}
 	if not isinstance(data, dict):
 		data = {}
@@ -11817,8 +11976,9 @@ def update_management_table_reservation(payload=None, **kwargs):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def update_management_table_session(payload=None, **kwargs):
-	_ensure_management_site_settings_access()
+	_ensure_management_access()
 	data = _parse_json(payload, {}) if payload is not None else {}
 	if not isinstance(data, dict):
 		data = {}
@@ -12546,6 +12706,7 @@ def sync_work_order_required_items_from_ticket(doc, method=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def sync_order_work_orders(order_name):
 	_ensure_management_access()
 
@@ -12691,6 +12852,7 @@ def sync_order_work_orders(order_name):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def run_management_order_auto_flow(order_name, trigger="manual", payment_status=None, force=1):
 	_ensure_management_access()
 	so_name = _resolve_sales_order_name(order_name)
@@ -12708,12 +12870,14 @@ def run_management_order_auto_flow(order_name, trigger="manual", payment_status=
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_production_auto_settings():
 	_ensure_management_access()
 	return _production_auto_settings()
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_production_auto_settings(payload=None):
 	_ensure_management_access()
 	data = _parse_json(payload, {})
@@ -12753,12 +12917,14 @@ def set_management_production_auto_settings(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_pos_shift_settings():
 	_ensure_management_access()
 	return _pos_shift_settings()
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_pos_shift_settings(payload=None):
 	_ensure_management_access()
 	data = _parse_json(payload, {})
@@ -12817,12 +12983,17 @@ def set_management_pos_shift_settings(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_pos_profile(profile_name=None):
 	_ensure_management_access()
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Manager" in roles and not roles.intersection({"System Manager", "Administrator"}):
+		return _management_restaurant_manager_pos_profile_payload(profile_name=profile_name)
 	return _management_pos_profile_payload(profile_name=profile_name, include_profiles=True)
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_pos_profile(payload=None):
 	_ensure_management_access()
 	data = _parse_json(payload, {})
@@ -12846,15 +13017,57 @@ def set_management_pos_profile(payload=None):
 		pass
 
 	frappe.db.commit()
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Manager" in roles and not roles.intersection({"System Manager", "Administrator"}):
+		return _management_restaurant_manager_pos_profile_payload(profile_name=profile_name)
 	return _management_pos_profile_payload(profile_name=profile_name, include_profiles=True)
 
 
 @frappe.whitelist()
+@require_capability("pos_profile_assign_users")
 def set_management_pos_profile_settings(payload=None):
 	_ensure_management_access()
 	data = _parse_json(payload, {})
 	if not isinstance(data, dict):
 		frappe.throw(_("Invalid payload format."))
+	roles = set(frappe.get_roles(frappe.session.user))
+	limited_restaurant_manager = "Restaurant Manager" in roles and not roles.intersection({"System Manager", "Administrator"})
+	if limited_restaurant_manager:
+		unexpected_keys = set(data) - {"profile_name", "active_profile", "users"}
+		if unexpected_keys:
+			frappe.throw(_("مدیر رستوران فقط می‌تواند کاربران مجاز POS را تغییر دهد."), frappe.PermissionError)
+		users = data.get("users")
+		if not isinstance(users, list):
+			frappe.throw(_("فهرست کاربران POS معتبر نیست."), frappe.ValidationError)
+		profile_name = (data.get("profile_name") or data.get("active_profile") or "").strip()
+		if not profile_name or not frappe.db.exists("POS Profile", profile_name):
+			frappe.throw(_("POS Profile not found."))
+		doc = frappe.get_doc("POS Profile", profile_name)
+		user_table = _resolve_doc_fieldname(doc, ("applicable_for_users", "users", "allowed_users"))
+		if not user_table:
+			frappe.throw(_("این POS Profile فهرست کاربران قابل تخصیص ندارد."), frappe.ValidationError)
+		field_meta = doc.meta.get_field(user_table)
+		child_meta = frappe.get_meta(field_meta.options) if field_meta and field_meta.options else None
+		user_field = _resolve_meta_fieldname(child_meta, ("user", "default_user")) if child_meta else ""
+		if not user_field:
+			frappe.throw(_("فیلد کاربر در POS Profile پیدا نشد."), frappe.ValidationError)
+		requested_users = []
+		for value in users:
+			user = str(value or "").strip()
+			if user and user not in requested_users:
+				if not require_restaurant_staff_user(user):
+					frappe.throw(_("فقط کارکنانی که یکی از نقش‌های رستوران دارند قابل تخصیص هستند."), frappe.ValidationError)
+				requested_users.append(user)
+		preserved_users = [
+			str(row.get(user_field) or "").strip()
+			for row in (doc.get(user_table) or [])
+			if str(row.get(user_field) or "").strip()
+			and not require_restaurant_staff_user(str(row.get(user_field) or "").strip())
+		]
+		_apply_pos_profile_user_rows(doc, user_table, list(dict.fromkeys(preserved_users + requested_users)))
+		doc.save(ignore_permissions=True)
+		frappe.db.commit()
+		return _management_restaurant_manager_pos_profile_payload(profile_name=profile_name)
 
 	profile_name = (data.get("profile_name") or data.get("active_profile") or "").strip()
 	if not profile_name:
@@ -13003,8 +13216,76 @@ def _ensure_management_access():
 		frappe.throw(_("Please login to access management pages."), frappe.PermissionError)
 
 	roles = set(frappe.get_roles(frappe.session.user))
+	if getattr(frappe.flags, "restaurant_api_capability_checked", False) and roles.intersection(RESTAURANT_ROLE_IDS):
+		return
+	if getattr(frappe.flags, "restaurant_finance_access_checked", False) and roles.intersection({"System Manager", "Administrator", "Accounts Manager"}):
+		return
 	if not roles.intersection(MANAGEMENT_ALLOWED_ROLES):
 		frappe.throw(_("You don't have permission to access management pages."), frappe.PermissionError)
+
+
+def _require_pos_order_owner(order_name):
+	"""Keep cashier order actions and order details on orders they created."""
+	roles = set(frappe.get_roles(frappe.session.user))
+	if (
+		"Restaurant Cashier" not in roles
+		or "Restaurant Manager" in roles
+		or roles.intersection({"System Manager", "Administrator"})
+	):
+		return
+
+	resolved_name = _resolve_sales_order_name(order_name) or str(order_name or "").strip()
+	if not resolved_name or not frappe.db.exists("Sales Order", resolved_name):
+		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	owner = frappe.db.get_value("Sales Order", resolved_name, "owner")
+	if owner != frappe.session.user:
+		frappe.throw(_("این سفارش به حساب شما تعلق ندارد."), frappe.PermissionError)
+	if _has_column("Sales Order", "restaurant_pos_profile"):
+		profile_name = str(frappe.db.get_value("Sales Order", resolved_name, "restaurant_pos_profile") or "").strip()
+		if profile_name:
+			require_pos_profile_access(profile_name, capability="pos_sell")
+		else:
+			_resolve_restaurant_pos_profile()
+	else:
+		_resolve_restaurant_pos_profile()
+
+
+def _resolve_restaurant_pos_profile(profile_name=None):
+	"""Resolve a Restaurant POS order profile and enforce cashier assignment."""
+	roles = set(frappe.get_roles(frappe.session.user))
+	profile_name = str(profile_name or "").strip()
+	assigned = assigned_pos_profiles() if "Restaurant Cashier" in roles else set()
+	if not profile_name:
+		default_profile = _get_pos_profile_user_default()
+		if (
+			default_profile
+			and not cint(frappe.db.get_value("POS Profile", default_profile, "disabled") or 0)
+			and ("Restaurant Cashier" not in roles or "Restaurant Manager" in roles or default_profile in assigned)
+		):
+			profile_name = default_profile
+		elif assigned:
+			active_assigned = [
+				name for name in assigned
+				if not cint(frappe.db.get_value("POS Profile", name, "disabled") or 0)
+			]
+			profile_name = sorted(active_assigned or assigned)[0]
+		elif "Restaurant Manager" in roles and not roles.intersection({"System Manager", "Administrator"}):
+			active_profiles = frappe.get_all(
+				"POS Profile",
+				filters={"disabled": 0} if _has_column("POS Profile", "disabled") else {},
+				fields=["name"],
+				order_by="modified desc, name asc",
+				ignore_permissions=True,
+				limit_page_length=1,
+			)
+			profile_name = str(active_profiles[0].get("name") or "").strip() if active_profiles else ""
+	if "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"}):
+		if not profile_name:
+			frappe.throw(_("برای ثبت سفارش POS یک پروفایل تخصیص‌یافته لازم است."), frappe.PermissionError)
+		require_pos_profile_access(profile_name, capability="pos_sell")
+	elif profile_name:
+		require_pos_profile_access(profile_name, capability="pos_sell")
+	return profile_name
 
 
 def _ensure_management_theme_access():
@@ -13012,6 +13293,8 @@ def _ensure_management_theme_access():
 	if frappe.session.user == "Administrator":
 		return
 	roles = set(frappe.get_roles(frappe.session.user))
+	if getattr(frappe.flags, "restaurant_api_capability", None) == "restaurant_settings" and "Restaurant Manager" in roles:
+		return
 	if not roles.intersection(MANAGEMENT_THEME_ALLOWED_ROLES):
 		frappe.throw(_("You don't have permission to change theme settings."), frappe.PermissionError)
 
@@ -13021,6 +13304,8 @@ def _ensure_management_site_settings_access():
 	if frappe.session.user == "Administrator":
 		return
 	roles = set(frappe.get_roles(frappe.session.user))
+	if getattr(frappe.flags, "restaurant_api_capability", None) == "restaurant_settings" and "Restaurant Manager" in roles:
+		return
 	if not roles.intersection(MANAGEMENT_SITE_SETTINGS_ALLOWED_ROLES):
 		frappe.throw(
 			_("You don't have permission to change website content settings."), frappe.PermissionError
@@ -13376,6 +13661,7 @@ def get_management_theme_settings():
 
 
 @frappe.whitelist()
+@require_capability("restaurant_settings")
 def set_management_theme_settings(payload=None):
 	_ensure_management_theme_access()
 	data = _parse_json(payload, {})
@@ -13389,12 +13675,14 @@ def set_management_theme_settings(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_settings")
 def get_management_site_settings():
 	_ensure_management_site_settings_access()
 	return _management_site_settings_payload()
 
 
 @frappe.whitelist()
+@require_capability("restaurant_settings")
 def set_management_site_settings(payload=None, **kwargs):
 	_ensure_management_site_settings_access()
 	try:
@@ -13788,6 +14076,7 @@ def _management_fetch_web_orders(
 	has_external_bill_number = _has_column("Sales Order", "restaurant_external_bill_number")
 	has_external_state = _has_column("Sales Order", "restaurant_external_state")
 	has_external_payment_method = _has_column("Sales Order", "restaurant_external_payment_method")
+	has_pos_profile = _has_column("Sales Order", "restaurant_pos_profile")
 	has_review_status = _has_column("Sales Order", ORDER_REVIEW_FIELD)
 
 	fields = [
@@ -13832,6 +14121,8 @@ def _management_fetch_web_orders(
 		fields.append("restaurant_status")
 	if has_review_status:
 		fields.append(ORDER_REVIEW_FIELD)
+	if has_pos_profile:
+		fields.append("restaurant_pos_profile")
 	if _has_column("Sales Order", "restaurant_secondary_customer"):
 		fields.append("restaurant_secondary_customer")
 
@@ -14050,6 +14341,7 @@ def _management_fetch_web_orders(
 				"external_bill_number": row.restaurant_external_bill_number if has_external_bill_number else "",
 				"external_state": row.restaurant_external_state if has_external_state else "",
 				"external_payment_method": row.restaurant_external_payment_method if has_external_payment_method else "",
+				"pos_profile": row.get("restaurant_pos_profile") if has_pos_profile else "",
 				"table": (row.restaurant_table or "") if has_restaurant_table else "",
 				"items": items_by_parent.get(row.name, []),
 			}
@@ -15757,6 +16049,7 @@ def _management_dashboard_nutrition_snapshot(orders):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_dashboard(date_from=None, date_to=None, branch=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -15780,6 +16073,7 @@ def get_management_dashboard(date_from=None, date_to=None, branch=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_pos_hardware_status():
 	_ensure_management_access()
 	settings = _get_pos_payment_settings()
@@ -15820,6 +16114,7 @@ def get_management_pos_hardware_status():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def list_management_pos_payment_logs(date_from=None, date_to=None, status=None, limit=50):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", "Restaurant POS Payment Log"):
@@ -15867,6 +16162,7 @@ def list_management_pos_payment_logs(date_from=None, date_to=None, status=None, 
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def report_management_pos_hardware_event(
 	event_type, severity, message, payload=None, related_order=None, source="pos"
 ):
@@ -15900,9 +16196,14 @@ def _management_print_item_group_options():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_pos_config():
 	"""Get POS default configuration (order mode defaults, place presets)."""
 	_ensure_management_access()
+	return _management_pos_config_payload()
+
+
+def _management_pos_config_payload():
 	raw = frappe.defaults.get_global_default("restaurant_pos_defaults") or "{}"
 	if isinstance(raw, str):
 		raw = raw.strip()
@@ -15960,6 +16261,7 @@ def get_management_pos_config():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_pos_config(payload=None):
 	"""Save POS default configuration for the current user/operator."""
 	_ensure_management_access()
@@ -16018,7 +16320,7 @@ def set_management_pos_config(payload=None):
 
 	frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
 	frappe.db.commit()
-	return {"status": "success", "config": get_management_pos_config()}
+	return {"status": "success", "config": _management_pos_config_payload()}
 
 
 
@@ -16047,6 +16349,7 @@ def _get_pos_boot_item_price_map(item_names, price_list):
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, items_only=0):
 	_ensure_management_access()
 	branch = (branch or "").strip()
@@ -16158,14 +16461,62 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, i
 				"restaurant_sort_order": subcategory.get("sort_order", 0),
 			}
 		)
-	config = get_management_pos_config()
+	config = _management_pos_config_payload()
 	print_brand_settings = _management_get_print_brand_settings()
+	profile_summary = _management_pos_profile_summary()
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"}):
+		assigned = sorted(assigned_pos_profiles())
+		if not assigned:
+			frappe.throw(_("هیچ POS Profile فعالی به حساب شما تخصیص داده نشده است."), frappe.PermissionError)
+		current_profile = str(profile_summary.get("name") or "").strip()
+		active_profile = current_profile if current_profile in assigned else assigned[0]
+		require_pos_profile_access(active_profile, capability="pos_sell")
+		profile_detail = _serialize_pos_profile_detail(active_profile)
+		shift = _collect_open_pos_shift()
+		profile_summary = {
+			"name": active_profile,
+			"title": profile_detail.get("title") or active_profile,
+			"company": profile_detail.get("company") or "",
+			"warehouse": profile_detail.get("warehouse") or "",
+			"selling_price_list": profile_detail.get("selling_price_list") or "",
+			"currency": profile_detail.get("currency") or _get_currency(),
+			"restaurant_controls": True,
+			"allow_discount_change": bool(profile_detail.get("allow_discount_change")),
+			"allow_order_management": False,
+			"tax_rate_percent": profile_detail.get("tax_rate_percent"),
+			"has_open_shift": bool(shift.get("name") and shift.get("pos_profile") == active_profile),
+			"shift_name": shift.get("name") if shift.get("pos_profile") == active_profile else "",
+			"shift_opened_at": shift.get("opened_at") if shift.get("pos_profile") == active_profile else None,
+			"shift_status": shift.get("status") if shift.get("pos_profile") == active_profile else "",
+			"payments": [
+				{"mode_of_payment": row.get("mode_of_payment") or "", "type": row.get("type") or ""}
+				for row in (profile_detail.get("payments") or [])
+			],
+		}
+		payment_boot = _management_pos_payment_boot()
+	else:
+		payment_boot = _management_pos_payment_boot()
+	if roles.intersection({"Restaurant Manager", "Restaurant Cashier"}) and not roles.intersection({"System Manager", "Administrator"}):
+		config["payment_options"] = [
+			{"mode_of_payment": row.get("mode_of_payment") or "", "type": row.get("type") or ""}
+			for row in (config.get("payment_options") or [])
+		]
+		payment_boot = {
+			"enabled": payment_boot.get("enabled"),
+			"provider": payment_boot.get("provider"),
+			"default_method": payment_boot.get("default_method"),
+			"default_option": payment_boot.get("default_option"),
+			"terminal_id": payment_boot.get("terminal_id") or "",
+			"supports_card": payment_boot.get("supports_card"),
+			"scale": payment_boot.get("scale") or {},
+		}
 	return {
 		"currency": _get_currency(),
 		**item_page,
 		"categories": categories,
-		"payment": _management_pos_payment_boot(),
-		"pos_profile": _management_pos_profile_summary(),
+		"payment": payment_boot,
+		"pos_profile": profile_summary,
 		"pos_config": config,
 		"packaging": {
 			"enabled": cint(_get_single_setting("Restaurant Web Settings", "restaurant_packaging_enabled", 0))
@@ -16218,6 +16569,9 @@ def _create_pos_order_payload(payload, commit=True, requires_review=False):
     order_context = _parse_json(payload.get("order_context"), {})
     if not isinstance(order_context, dict):
         order_context = {}
+    pos_profile = _resolve_restaurant_pos_profile(payload.get("pos_profile") or order_context.get("pos_profile"))
+    if pos_profile:
+        order_context["pos_profile"] = pos_profile
     waiter = (payload.get("waiter") or "").strip()
     waiter_name = (payload.get("waiter_name") or "").strip()
     if waiter and not order_context.get("waiter"):
@@ -16267,6 +16621,7 @@ def _create_pos_order_payload(payload, commit=True, requires_review=False):
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def create_pos_order(payload):
     # ثبت سفارش: فقط SO بساز (بدون تولید، بدون پرداخت)
     _ensure_management_access()
@@ -16274,6 +16629,7 @@ def create_pos_order(payload):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def produce_pos_order(order_name):
     # شروع تولید: Auto Flow (WO + SE) برا کالاهای BOM دار
     _ensure_management_access()
@@ -16298,6 +16654,7 @@ def produce_pos_order(order_name):
     }
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def create_and_pay_pos_order(payload):
     """ثبت + تسویه: SO ساخته میشه بعد SI + Payment یکجا (بدون تولید)"""
     _ensure_management_access()
@@ -16327,6 +16684,7 @@ def create_and_pay_pos_order(payload):
     }
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def create_management_order_proforma(order_name):
     """ساخت پیش‌فاکتور (Quotation) از روی سفارش — برای گارسون/صندوق."""
     _ensure_management_access()
@@ -16445,6 +16803,7 @@ def _validate_pos_wallet_tender(so_name, splits):
     )
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, commit=True):
     _ensure_management_access()
     if not order_name:
@@ -16452,6 +16811,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    _require_pos_order_owner(so_name)
     require_order_approved(so_name)
         
     # Check if order is already invoiced
@@ -16727,6 +17087,7 @@ def settle_pos_order(order_name, payment=None, reference_no=None, rrn=None, comm
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def deliver_invoice_only(order_name):
     """فقط رسید تحویل بزن بدون تغییر وضعیت (فاکتور باز میمونه)"""
     _ensure_management_access()
@@ -16735,6 +17096,7 @@ def deliver_invoice_only(order_name):
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    _require_pos_order_owner(so_name)
     
     result = {"sales_order": so_name}
     try:
@@ -16849,6 +17211,7 @@ def _background_deliver_pos_order(so_name, previous_status=""):
         frappe.db.commit()
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def deliver_pos_order(order_name):
     _ensure_management_access()
     if not order_name:
@@ -16856,6 +17219,7 @@ def deliver_pos_order(order_name):
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    _require_pos_order_owner(so_name)
 
     status = _core_order_status(frappe.get_doc("Sales Order", so_name))
     if status == "delivered":
@@ -16895,6 +17259,7 @@ def deliver_pos_order(order_name):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def settle_and_deliver_pos_order(order_name, payment=None, reference_no=None, rrn=None):
     """Settle an existing order and start delivery in one cashier request."""
     settled = settle_pos_order(order_name, payment=payment, reference_no=reference_no, rrn=rrn)
@@ -16909,6 +17274,7 @@ def settle_and_deliver_pos_order(order_name, payment=None, reference_no=None, rr
     }
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def produce_and_deliver_pos_order(order_name):
     _ensure_management_access()
     if not order_name:
@@ -16952,8 +17318,6 @@ def produce_and_deliver_pos_order(order_name):
         _background_deliver_pos_order(so_name, previous_status=status)
 
     return result
-
-@frappe.whitelist()
 
 def _background_production_and_delivery(so_name):
     frappe.db.commit()
@@ -17026,6 +17390,7 @@ def _background_production_and_delivery(so_name):
         frappe.db.commit()
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def create_and_settle_pos_order(payload):
     # تسویه و تحویل: SO + SI + Payment (Sync) -> Production + DN (Background)
     _ensure_management_access()
@@ -17066,11 +17431,13 @@ def create_and_settle_pos_order(payload):
     }
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def create_management_pos_order(payload):
 	_ensure_management_access()
 	payload = _parse_json(payload, {})
 	if not isinstance(payload, dict):
 		payload = {}
+	pos_profile = _resolve_restaurant_pos_profile(payload.get("pos_profile"))
 
 	customer_name = (payload.get("customer_name") or "POS Customer").strip()
 	mobile = (payload.get("mobile") or "").strip()
@@ -17088,6 +17455,7 @@ def create_management_pos_order(payload):
 			address=address,
 			note=note,
 			include_service_items=1,
+			order_context={"pos_profile": pos_profile} if pos_profile else {},
 		)
 
 	try:
@@ -17182,6 +17550,7 @@ def _manual_management_payment_result(
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def mark_management_order_paid(
 	order_name, reference_no=None, rrn=None, provider_payload=None,
 	payment_method=None, mode_of_payment=None,
@@ -17191,6 +17560,7 @@ def mark_management_order_paid(
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	_require_pos_order_owner(so_name)
 	require_order_approved(so_name)
 
 	payment_result = _manual_management_payment_result(
@@ -17218,12 +17588,14 @@ def mark_management_order_paid(
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def complete_management_order(order_name, reference_no=None, rrn=None, provider_payload=None):
 	_ensure_management_access()
 
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	_require_pos_order_owner(so_name)
 	require_order_approved(so_name)
 
 	payment_result = _manual_management_payment_result(
@@ -17252,6 +17624,7 @@ def complete_management_order(order_name, reference_no=None, rrn=None, provider_
 @frappe.whitelist()
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def purge_management_pos_order(order_name):
 	_ensure_management_access()
 	if not order_name:
@@ -17396,6 +17769,7 @@ def purge_management_pos_order(order_name):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def void_management_pos_order(order_name, reason=None):
 	_ensure_management_access()
 	if not order_name:
@@ -17433,8 +17807,14 @@ def void_management_pos_order(order_name, reason=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_read")
 def list_management_pos_orders(date_from=None, date_to=None, status=None, cashier=None):
 	_ensure_management_access()
+	roles = set(frappe.get_roles(frappe.session.user))
+	cashier_limited = "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"})
+	active_profile = _resolve_restaurant_pos_profile() if cashier_limited else ""
+	if cashier_limited:
+		cashier = frappe.session.user
 	orders = _management_collect_orders(
 		date_from=date_from,
 		date_to=date_to,
@@ -17442,10 +17822,13 @@ def list_management_pos_orders(date_from=None, date_to=None, status=None, cashie
 		source="web",
 		cashier=cashier,
 	)
+	if cashier_limited:
+		orders = [row for row in orders if row.get("pos_profile") == active_profile]
 	return {"orders": orders}
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def list_management_open_invoices(date=None, search=None, limit_start=0, limit_page_length=100):
 	"""Page unpaid Sales Orders across dates before loading their display details."""
 	_ensure_management_access()
@@ -17453,6 +17836,15 @@ def list_management_open_invoices(date=None, search=None, limit_start=0, limit_p
 	page_size = min(max(cint(limit_page_length or 100), 1), 100)
 	params = {"limit": page_size + 1, "offset": offset}
 	conditions = ["so.docstatus = 1"]
+	roles = set(frappe.get_roles(frappe.session.user))
+	cashier_limited = "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"})
+	if cashier_limited:
+		active_profile = _resolve_restaurant_pos_profile()
+		conditions.append("so.owner = %(cashier)s")
+		params["cashier"] = frappe.session.user
+		if _has_column("Sales Order", "restaurant_pos_profile"):
+			conditions.append("so.restaurant_pos_profile = %(pos_profile)s")
+			params["pos_profile"] = active_profile
 	if date:
 		date_column = "so.transaction_date" if _has_column("Sales Order", "transaction_date") else "DATE(so.creation)"
 		conditions.append(f"{date_column} = %(date)s")
@@ -17514,8 +17906,15 @@ def list_management_open_invoices(date=None, search=None, limit_start=0, limit_p
 
 
 @frappe.whitelist()
+@require_capability("pos_read")
 def list_management_orders(date_from=None, date_to=None, status=None, source=None, cashier=None, search=None, review_status=None):
 	_ensure_management_access()
+	roles = set(frappe.get_roles(frappe.session.user))
+	cashier_limited = "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"})
+	active_profile = _resolve_restaurant_pos_profile() if cashier_limited else ""
+	if cashier_limited:
+		cashier = frappe.session.user
+		source = "web"
 	orders = _management_collect_orders(
 		date_from=date_from,
 		date_to=date_to,
@@ -17525,16 +17924,22 @@ def list_management_orders(date_from=None, date_to=None, status=None, source=Non
 		search=search,
 		review_status=review_status,
 	)
+	if cashier_limited:
+		orders = [row for row in orders if row.get("pos_profile") == active_profile]
 	return {"orders": orders}
 
 
 @frappe.whitelist()
+@require_capability("pos_read")
 def get_management_order_detail(order_name, source=None):
 	_ensure_management_access()
 	if not order_name:
 		frappe.throw(_("Order name is required."))
 
 	source = (source or "").strip().lower()
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"}) and source in {"table", "tables"}:
+		frappe.throw(_("نقش صندوق‌دار به سفارش‌های سالن دسترسی ندارد."), frappe.PermissionError)
 	if source in {"", "web", "restaurant"}:
 		so_name = None
 		if frappe.db.exists("Sales Order", order_name):
@@ -17542,6 +17947,7 @@ def get_management_order_detail(order_name, source=None):
 
 
 		if so_name:
+			_require_pos_order_owner(so_name)
 			doc = frappe.get_doc("Sales Order", so_name)
 			has_item_customization = _has_column("Sales Order Item", "restaurant_customization_json")
 			sales_invoice_names = []
@@ -17739,6 +18145,7 @@ def get_management_order_detail(order_name, source=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_sell")
 def update_management_order(order_name, payment_method=None, note=None, customer_name=None, mobile=None, secondary_customer=None):
 	_ensure_management_access()
 	if not order_name:
@@ -17747,6 +18154,7 @@ def update_management_order(order_name, payment_method=None, note=None, customer
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name:
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	_require_pos_order_owner(so_name)
 
 	updates = {}
 	if payment_method is not None:
@@ -17803,6 +18211,7 @@ def update_management_order(order_name, payment_method=None, note=None, customer
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def create_management_return_order(order_name, reason=None):
     """ساخت فاکتور برگشتی کامل: SI برگشتی + DN برگشتی + کنسل WO (بدون SO جدید)"""
     _ensure_management_access()
@@ -22534,14 +22943,13 @@ def list_management_customers(search=None, date_from=None, date_to=None):
 	}
 
 
-def _serialize_management_courier(row, vehicle_count_map=None):
+def _serialize_management_courier(row, vehicle_count_map=None, include_access_code=True):
 	vehicle_count_map = vehicle_count_map or {}
-	return {
+	payload = {
 		"name": row.get("name") or "",
 		"courier_name": (row.get("courier_name") or "").strip(),
 		"courier_code": (row.get("courier_code") or "").strip(),
 		"mobile": (row.get("mobile") or "").strip(),
-		"access_code": (row.get("access_code") or "").strip(),
 		"vehicle_type": (row.get("vehicle_type") or "").strip(),
 		"plate_number": (row.get("plate_number") or "").strip(),
 		"zone": (row.get("zone") or "").strip(),
@@ -22551,6 +22959,9 @@ def _serialize_management_courier(row, vehicle_count_map=None):
 		"vehicle_count": cint(vehicle_count_map.get(row.get("name")) or 0),
 		"modified": _json_safe_datetime(row.get("modified")),
 	}
+	if include_access_code:
+		payload["access_code"] = (row.get("access_code") or "").strip()
+	return payload
 
 
 def _serialize_management_courier_vehicle(row, courier_map=None):
@@ -22635,6 +23046,7 @@ def _list_management_courier_options(active_only=True):
 
 
 @frappe.whitelist()
+@require_capability("courier_read")
 def list_management_couriers(search=None, active_only=None):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", "Restaurant Courier"):
@@ -22677,8 +23089,17 @@ def list_management_couriers(search=None, active_only=None):
 		limit_page_length=1000,
 	)
 	vehicle_count_map = _management_courier_vehicle_count_map()
+	roles = set(frappe.get_roles(frappe.session.user))
+	include_access_code = not (
+		"Restaurant Supervisor" in roles
+		and "Restaurant Manager" not in roles
+		and not roles.intersection({"System Manager", "Administrator"})
+	)
 	return {
-		"couriers": [_serialize_management_courier(row, vehicle_count_map) for row in rows],
+		"couriers": [
+			_serialize_management_courier(row, vehicle_count_map, include_access_code=include_access_code)
+			for row in rows
+		],
 		"summary": _management_courier_summary(),
 	}
 
@@ -23140,6 +23561,7 @@ def get_management_customer_detail(mobile=None, customer_name=None, date_from=No
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_sales_summary(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23163,6 +23585,7 @@ def get_management_report_sales_summary(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_sales_trend(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23181,6 +23604,7 @@ def get_management_report_sales_trend(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_sales_hourly(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23202,6 +23626,7 @@ def get_management_report_sales_hourly(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_top_products(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23223,6 +23648,7 @@ def get_management_report_top_products(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_product_mix(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23248,6 +23674,7 @@ def get_management_report_product_mix(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_order_status(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23266,6 +23693,7 @@ def get_management_report_order_status(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_channel_split(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23284,6 +23712,7 @@ def get_management_report_channel_split(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_cashier_performance(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23302,6 +23731,7 @@ def get_management_report_cashier_performance(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_cancellations(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -23323,6 +23753,7 @@ def get_management_report_cancellations(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_modifier_usage(date_from=None, date_to=None):
 	_ensure_management_access()
 	web_orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="web")
@@ -23341,11 +23772,23 @@ def get_management_report_modifier_usage(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_bi_report(report_key, date_from=None, date_to=None, compare_mode="previous_window"):
 	_ensure_management_access()
 	normalized_key = (report_key or "").strip().lower()
 	if not normalized_key:
 		frappe.throw(_("Report key is required."))
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Supervisor" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"}):
+		supervisor_reports = {
+			"sales-summary", "sales-trend", "sales-hourly", "top-products", "product-mix",
+			"order-status", "channel-split", "cashier-performance", "cancellations",
+			"modifier-usage", "category-sales", "table-sales", "payment-methods", "product-sales",
+			"shift-sales", "courier-performance", "waiter-performance", "kitchen-performance",
+			"branch-performance",
+		}
+		if normalized_key not in supervisor_reports:
+			frappe.throw(_("این گزارش برای نقش سرپرست در دسترس نیست."), frappe.PermissionError)
 
 	dispatch = {
 		"sales-summary": get_management_report_sales_summary,
@@ -23945,6 +24388,7 @@ def place_table_order(qr_token, items, note=None):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def create_management_table_order_from_pos(table_name, items, note=None):
 	_ensure_management_access()
 	_ensure_table_service_ready()
@@ -24047,6 +24491,7 @@ def get_table_session_state(qr_token):
 
 
 @frappe.whitelist()
+@require_capability("table_read")
 def get_table_overview():
 	_ensure_table_service_ready()
 	tables = frappe.get_all(
@@ -24138,6 +24583,7 @@ def get_table_overview():
 
 
 @frappe.whitelist()
+@require_capability("table_read")
 def get_table_detail(table_name):
 	_ensure_table_service_ready()
 	if not table_name:
@@ -24177,6 +24623,7 @@ def get_table_detail(table_name):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def assign_table_session_customer(
 	table_name, customer_name=None, mobile=None, customer_type=None, guest_count=None
 ):
@@ -24235,6 +24682,7 @@ def _set_table_order_status(order_name, target_status, allowed_from):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def confirm_table_order(order_name):
 	order_doc = _set_table_order_status(order_name, "confirmed", {"pending"})
 	return {
@@ -24244,6 +24692,7 @@ def confirm_table_order(order_name):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def serve_table_order(order_name):
 	order_doc = _set_table_order_status(order_name, "served", {"confirmed"})
 	return {
@@ -24253,6 +24702,7 @@ def serve_table_order(order_name):
 
 
 @frappe.whitelist()
+@require_capability("table_pay")
 def pay_table_order(order_name):
 	order_doc = _set_table_order_status(order_name, "paid", {"confirmed", "served"})
 	return {
@@ -24275,6 +24725,7 @@ def _find_table_order_item(order_doc, row_name=None, menu_item=None):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def update_table_order_item(
 	order_name, row_name=None, menu_item=None, quantity=None, quantity_delta=None, note=None
 ):
@@ -24356,6 +24807,7 @@ def update_table_order_item(
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def move_table_session(session_name, target_table):
 	_ensure_management_access()
 	_ensure_table_service_ready()
@@ -24444,6 +24896,7 @@ def move_table_session(session_name, target_table):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def merge_table_sessions(source_session, target_table):
 	"""Move all orders/requests from source_session into the active session of target_table."""
 	_ensure_management_access()
@@ -24524,6 +24977,7 @@ def resolve_table_request(request_name):
 
 
 @frappe.whitelist()
+@require_capability("table_write")
 def close_table_session(session_name):
 	_ensure_table_service_ready()
 	if not session_name:
@@ -27938,6 +28392,11 @@ def _build_bom_operations(bom_doc):
 
 _RESTAURANT_STAFF_ROLES = frozenset(
 	[
+		"Restaurant Manager",
+		"Restaurant Supervisor",
+		"Restaurant Cashier",
+		"Restaurant Waiter",
+		"Restaurant Chef",
 		"Employee",
 		"Chef",
 		"Item Manager",
@@ -27946,6 +28405,16 @@ _RESTAURANT_STAFF_ROLES = frozenset(
 		"Manufacturing Manager",
 		"System Manager",
 		"Stock User",
+	]
+)
+
+_RESTAURANT_ASSIGNABLE_ROLES = frozenset(
+	[
+		"Restaurant Manager",
+		"Restaurant Supervisor",
+		"Restaurant Cashier",
+		"Restaurant Waiter",
+		"Restaurant Chef",
 	]
 )
 
@@ -27980,10 +28449,22 @@ def _is_restaurant_admin(user=None):
 	return bool(_user_roles(user) & _RESTAURANT_ADMIN_ROLES)
 
 
+def _is_restaurant_manager(user=None):
+	"""Restaurant Managers may administer staff accounts, never system roles."""
+	if not user:
+		user = frappe.session.user
+	return "Restaurant Manager" in _user_roles(user)
+
+
+def _can_manage_restaurant_users(user=None):
+	return _is_restaurant_admin(user) or _is_restaurant_manager(user)
+
+
 @frappe.whitelist()
 def list_management_users(search=None):
-	if not _is_restaurant_admin():
-		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	if not _can_manage_restaurant_users():
+		frappe.throw(_("Only Restaurant Managers and system administrators can manage users."), frappe.PermissionError)
+	limited_manager = _is_restaurant_manager() and not _is_restaurant_admin()
 	search_text = (search or "").strip().lower()
 	filters = {}
 	rows = frappe.get_all(
@@ -27999,23 +28480,42 @@ def list_management_users(search=None):
 		role_map[row.name] = [r.role for r in frappe.get_all("Has Role", filters={"parent": row.name}, fields=["role"], ignore_permissions=True)]
 	result = []
 	for row in rows:
+		user_roles = set(role_map.get(row.name, []))
+		if limited_manager and (
+			row.get("user_type") != "System User"
+			or not user_roles.intersection(_RESTAURANT_ASSIGNABLE_ROLES)
+			or user_roles.intersection(_RESTAURANT_ADMIN_ROLES)
+		):
+			continue
 		if search_text and search_text not in " ".join(str(row.get(k) or "").lower() for k in ("name", "full_name", "email", "mobile_no")):
 			continue
-		result.append({**row, "roles": sorted(role_map.get(row.name, []))})
-	roles = frappe.get_all("Role", filters={"disabled": 0}, pluck="name", order_by="name asc", ignore_permissions=True)
+		visible_roles = user_roles.intersection(_RESTAURANT_ASSIGNABLE_ROLES) if limited_manager else user_roles
+		result.append({**row, "roles": sorted(visible_roles)})
+	roles = (
+		sorted(role for role in _RESTAURANT_ASSIGNABLE_ROLES if frappe.db.exists("Role", role) and not frappe.db.get_value("Role", role, "disabled"))
+		if limited_manager
+		else frappe.get_all("Role", filters={"disabled": 0}, pluck="name", order_by="name asc", ignore_permissions=True)
+	)
 	return {"users": result, "roles": roles}
 
 
 @frappe.whitelist()
 def save_management_user(payload=None):
-	if not _is_restaurant_admin():
-		frappe.throw(_("Only administrators can manage users."), frappe.PermissionError)
+	if not _can_manage_restaurant_users():
+		frappe.throw(_("Only Restaurant Managers and system administrators can manage users."), frappe.PermissionError)
+	limited_manager = _is_restaurant_manager() and not _is_restaurant_admin()
 	data = _parse_json(payload, {})
 	if not isinstance(data, dict):
 		frappe.throw(_("Invalid user payload."))
 	user_name = (data.get("name") or data.get("email") or "").strip()
 	if user_name and frappe.db.exists("User", user_name):
 		doc = frappe.get_doc("User", user_name)
+		if limited_manager:
+			if doc.name in {frappe.session.user, "Administrator"} or doc.user_type != "System User":
+				frappe.throw(_("مدیر رستوران فقط می‌تواند حساب کارکنان سامانه را ویرایش کند."), frappe.PermissionError)
+			current_roles = _user_roles(doc.name)
+			if not current_roles.intersection(_RESTAURANT_ASSIGNABLE_ROLES) or current_roles.intersection(_RESTAURANT_ADMIN_ROLES):
+				frappe.throw(_("این حساب در محدودهٔ کارکنان رستوران شما نیست."), frappe.PermissionError)
 		if doc.name == frappe.session.user and not cint(data.get("enabled", 1)):
 			frappe.throw(_("You cannot disable your own account."))
 	else:
@@ -28025,24 +28525,35 @@ def save_management_user(payload=None):
 		doc = frappe.new_doc("User")
 		doc.email = email
 		doc.user_type = "System User"
+		if limited_manager:
+			doc.send_welcome_email = 0
 	for fieldname in ("email", "full_name", "mobile_no", "user_type"):
 		if fieldname in data and data.get(fieldname) is not None:
 			doc.set(fieldname, str(data.get(fieldname)).strip())
 	doc.enabled = 1 if data.get("enabled", 1) else 0
+	if limited_manager and doc.user_type != "System User":
+		frappe.throw(_("مدیر رستوران فقط می‌تواند حساب کاربری از نوع System User بسازد."), frappe.PermissionError)
 	password = str(data.get("new_password") or "")
 	if password:
 		doc.new_password = password
 	requested_roles = data.get("roles") if isinstance(data.get("roles"), list) else []
 	allowed_roles = set(frappe.get_all("Role", filters={"disabled": 0}, pluck="name", ignore_permissions=True))
 	requested_roles = [str(role).strip() for role in requested_roles if str(role).strip() in allowed_roles]
-	if not requested_roles:
+	if limited_manager:
+		if not requested_roles or not set(requested_roles).issubset(_RESTAURANT_ASSIGNABLE_ROLES):
+			frappe.throw(_("برای این حساب حداقل یک نقش معتبر رستورانی انتخاب کنید."), frappe.ValidationError)
+		current_roles = _user_roles(doc.name) if frappe.db.exists("User", doc.name) else set()
+		preserved_roles = current_roles - _RESTAURANT_ASSIGNABLE_ROLES
+		requested_roles = sorted(preserved_roles | set(requested_roles))
+	elif not requested_roles:
 		requested_roles = ["Desk User"] if "Desk User" in allowed_roles else []
 	doc.set("roles", [])
 	for role in requested_roles:
 		doc.append("roles", {"role": role})
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
-	return {"success": True, "user": {"name": doc.name, "email": doc.email, "full_name": doc.full_name, "enabled": cint(doc.enabled), "roles": requested_roles}}
+	visible_roles = sorted(set(requested_roles) & _RESTAURANT_ASSIGNABLE_ROLES) if limited_manager else requested_roles
+	return {"success": True, "user": {"name": doc.name, "email": doc.email, "full_name": doc.full_name, "enabled": cint(doc.enabled), "roles": visible_roles}}
 
 
 @frappe.whitelist()
@@ -28213,6 +28724,7 @@ def _complete_kitchen_production(so_name):
 
 
 @frappe.whitelist()
+@require_capability("kitchen_read")
 def get_kitchen_display_context():
 	"""Return native Item Group options and the current user's station default."""
 	_ensure_management_access()
@@ -28240,6 +28752,7 @@ def get_kitchen_display_context():
 
 
 @frappe.whitelist()
+@require_capability("kitchen_write")
 def set_kitchen_display_default_group(item_group=""):
 	"""Save this user's default KDS product group without adding a parallel model."""
 	_ensure_management_access()
@@ -28253,10 +28766,25 @@ def set_kitchen_display_default_group(item_group=""):
 	return {"success": True, "default_item_group": item_group}
 
 
+def _ensure_restaurant_kitchen_order(order_name):
+	has_order_type = _has_column("Sales Order", "restaurant_order_type")
+	has_restaurant_status = _has_column("Sales Order", "restaurant_status")
+	order_type = str(frappe.db.get_value("Sales Order", order_name, "restaurant_order_type") or "").strip() if has_order_type else ""
+	status = str(frappe.db.get_value("Sales Order", order_name, "restaurant_status") or "").strip().lower() if has_restaurant_status else ""
+	if order_type in (ORDER_TYPES | ORDER_CONTEXT_TYPES) or status in {"new", "confirmed", "preparing", "ready", "delivered"}:
+		return
+	frappe.throw(_("این سفارش در صف آشپزخانهٔ رستوران قرار ندارد."), frappe.PermissionError)
+
+
 @frappe.whitelist()
+@require_capability("kitchen_read")
 def get_kitchen_display_orders(limit=50, date=None):
     """Get production-ready orders for kitchen display"""
     _ensure_management_access()
+    roles = set(frappe.get_roles(frappe.session.user))
+    kitchen_only = "Restaurant Chef" in roles and not roles.intersection(
+        {"Restaurant Manager", "Restaurant Supervisor", "System Manager", "Administrator"}
+    )
     limit = cint(limit) or 100
     orders = []
     
@@ -28282,6 +28810,8 @@ def get_kitchen_display_orders(limit=50, date=None):
     so_fields = ["name", "customer_name", "customer", "transaction_date", "creation"]
     if has_order_type:
         so_fields.append("restaurant_order_type")
+    if has_restaurant_status:
+        so_fields.append("restaurant_status")
     if has_review_status:
         so_fields.append(ORDER_REVIEW_FIELD)
     has_kitchen_timestamps = _has_column("Sales Order", "restaurant_kitchen_started_at") and _has_column("Sales Order", "restaurant_kitchen_ready_at")
@@ -28295,6 +28825,17 @@ def get_kitchen_display_orders(limit=50, date=None):
         limit=limit,
         ignore_permissions=True,
     )
+    rows = [
+        row for row in rows
+        if (
+            (has_order_type and str(row.get("restaurant_order_type") or "").strip() in (ORDER_TYPES | ORDER_CONTEXT_TYPES))
+            or (
+                has_restaurant_status
+                and str(row.get("restaurant_status") or "").strip().lower()
+                in {"new", "confirmed", "preparing", "ready", "delivered"}
+            )
+        )
+    ]
     sales_order_names = [row.name for row in rows]
     tickets_by_order_item = {}
     if has_prod_ticket and sales_order_names:
@@ -28346,26 +28887,30 @@ def get_kitchen_display_orders(limit=50, date=None):
         for item in so_items:
             meta = item_meta.get(item.item_code) or {}
             ticket = tickets_by_order_item.get((so_name, item.name))
-            items.append({
+            item_payload = {
                 "row_name": item.name,
                 "item_code": item.item_code,
                 "title": item.item_name,
                 "description": item.description or "",
                 "qty": flt(item.qty),
-                "rate": flt(item.rate),
                 "note": item.restaurant_note if has_restaurant_note else "",
                 "image": meta.get("image") or "",
                 "prep_time_mins": cint(meta.get("restaurant_prep_time_mins") or 0),
-                "vendor": meta.get("restaurant_vendor") or "",
                 "item_group": meta.get("item_group") or "",
-                "production_ticket": ticket.name if ticket else "",
                 "production_status": ticket.status if ticket else "",
-                "work_order": ticket.work_order if ticket else "",
-            })
+            }
+            if not kitchen_only:
+                item_payload.update({
+                    "rate": flt(item.rate),
+                    "vendor": meta.get("restaurant_vendor") or "",
+                    "production_ticket": ticket.name if ticket else "",
+                    "work_order": ticket.work_order if ticket else "",
+                })
+            items.append(item_payload)
         
         if has_prod_ticket:
             tickets = frappe.get_all("Restaurant Production Ticket",
-                fields=["name", "menu_item", "qty", "status", "work_order"],
+                fields=["menu_item", "qty", "status"] if kitchen_only else ["name", "menu_item", "qty", "status", "work_order"],
                 filters={"sales_order": so_name},
                 ignore_permissions=True
             )
@@ -28378,7 +28923,6 @@ def get_kitchen_display_orders(limit=50, date=None):
         orders.append({
             "name": so_name,
             "order_code": order_code,
-            "customer_name": so.customer_name or "POS Customer",
             "status": status,
             "channel": channel or "حضوری",
             "items": items,
@@ -28388,20 +28932,28 @@ def get_kitchen_display_orders(limit=50, date=None):
             "kitchen_started_at": str(so.get("restaurant_kitchen_started_at") or "") if has_kitchen_timestamps else "",
             "kitchen_ready_at": str(so.get("restaurant_kitchen_ready_at") or "") if has_kitchen_timestamps else "",
         })
+        if not kitchen_only:
+            orders[-1]["customer_name"] = so.customer_name or "POS Customer"
 
     return {"orders": orders}
 
 
 @frappe.whitelist()
+@require_capability("kitchen_write")
 def update_kitchen_order_status(order_name, status):
     """Update kitchen order status"""
     _ensure_management_access()
+    if status == "delivered":
+        require_restaurant_capability("kitchen_close")
+    if status not in {"preparing", "ready", "delivered"}:
+        frappe.throw(_("Kitchen status is not supported."), frappe.ValidationError)
     if not order_name or not status:
         frappe.throw(_("Order name and status are required."))
     
     so_name = _resolve_sales_order_name(order_name)
     if not so_name or not frappe.db.exists("Sales Order", so_name):
         frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+    _ensure_restaurant_kitchen_order(so_name)
     require_order_approved(so_name)
     
     # 1. Execute strictly stage-separated canonical backend action flows FIRST.
@@ -28442,6 +28994,7 @@ def update_kitchen_order_status(order_name, status):
 
 
 @frappe.whitelist()
+@require_capability("kitchen_write")
 def update_kitchen_order_item_status(order_name, sales_order_item, status="ready"):
 	"""Complete only the selected Sales Order Item's native production ticket."""
 	_ensure_management_access()
@@ -28453,6 +29006,7 @@ def update_kitchen_order_item_status(order_name, sales_order_item, status="ready
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name or not frappe.db.exists("Sales Order", so_name):
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	_ensure_restaurant_kitchen_order(so_name)
 	require_order_approved(so_name)
 	if frappe.db.get_value("Sales Order Item", sales_order_item, "parent") != so_name:
 		frappe.throw(_("The selected item does not belong to this order."))

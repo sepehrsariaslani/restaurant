@@ -94,6 +94,12 @@
 					<p class="auth-gate-title">در حال بروزرسانی نشست کاربر...</p>
 					<p class="auth-card-muted">کمی صبر کنید.</p>
 				</div>
+				<div v-else-if="!canAccessCurrentPage" class="management-workspace">
+					<div class="auth-gate-card" role="alert">
+						<p class="auth-gate-title">دسترسی به این بخش برای نقش شما فعال نیست.</p>
+						<p class="auth-card-muted">از مدیر رستوران بخواهید دسترسی مناسب را برای حساب شما تنظیم کند.</p>
+					</div>
+				</div>
 				<div v-else class="management-workspace" :class="{ 'management-workspace--fullbleed': isPosPage || isKitchenPage }">
 					<slot />
 				</div>
@@ -187,6 +193,12 @@
 						<p class="auth-card-muted">کمی صبر کنید.</p>
 					</section>
 
+					<div v-else-if="!canAccessCurrentPage" class="management-workspace">
+						<div class="auth-gate-card" role="alert">
+							<p class="auth-gate-title">دسترسی به این بخش برای نقش شما فعال نیست.</p>
+							<p class="auth-card-muted">از مدیر رستوران بخواهید دسترسی مناسب را برای حساب شما تنظیم کند.</p>
+						</div>
+					</div>
 					<div v-else class="management-workspace" :class="{ 'management-workspace--fullbleed': isPosPage || isKitchenPage }">
 						<slot />
 					</div>
@@ -259,6 +271,33 @@ const MOBILE_PRIMARY_LINK_KEYS = [
 	"management-reports",
 ];
 
+const RESTAURANT_ROLE_NAVIGATION = {
+	"Restaurant Manager": new Set([
+		"management-dashboard", "management-pos", "management-sales-dashboard", "management-pos-profile", "management-pos-defaults",
+		"management-register", "management-inventory", "management-material-requests",
+		"management-inventory-materials", "management-inventory-purchase", "management-inventory-documents",
+		"management-inventory-warehouses", "management-inventory-movements", "management-inventory-ledger",
+		"management-inventory-reorder", "management-inventory-production", "management-inventory-losses",
+		"management-inventory-count", "management-inventory-costs", "management-club",
+		"management-collaboration-requests", "management-coaches", "management-surveys",
+		"management-cost-control", "management-reservations", "management-call-center", "management-branches",
+		"management-snappfood", "management-couriers", "management-orders", "management-kitchen",
+		"management-products", "management-modifier-groups", "management-menu-design", "management-variant-builder",
+		"management-builder-templates", "management-menu-groups", "management-boms", "management-customers",
+		"management-users", "management-tables", "management-reports", "management-report",
+		"management-print-formats", "management-home-builder", "management-blog", "management-site-settings",
+		"management-settings", "management-design-system",
+	]),
+	"Restaurant Supervisor": new Set([
+		"management-dashboard", "management-sales-dashboard", "management-register", "management-reservations",
+		"management-couriers", "management-orders", "management-kitchen", "management-tables",
+		"management-reports", "management-report",
+	]),
+	"Restaurant Cashier": new Set(["management-pos", "management-register", "management-orders"]),
+	"Restaurant Waiter": new Set(["management-reservations", "management-tables"]),
+	"Restaurant Chef": new Set(["management-kitchen"]),
+};
+
 const props = defineProps({
 	page: {
 		type: String,
@@ -291,6 +330,46 @@ const authProfile = ref({
 	is_staff: false,
 	is_admin: false,
 	roles: [],
+});
+
+const restaurantRoleKeys = Object.keys(RESTAURANT_ROLE_NAVIGATION);
+const hasRestaurantScopedRole = computed(() =>
+	(authProfile.value?.roles || []).some((role) => restaurantRoleKeys.includes(role)),
+);
+const restaurantRoleNavigationKeys = computed(() => {
+	const roles = authProfile.value?.roles || [];
+	return new Set(roles.flatMap((role) => [...(RESTAURANT_ROLE_NAVIGATION[role] || [])]));
+});
+
+function currentPageNavigationKey() {
+	const page = String(props.page || "");
+	if (page === "management-settings") {
+		const pathname = String(window.location.pathname || "");
+		if (/^\/management\/(users|user-access|user_access|user)(\/|$)/.test(pathname)) return "management-users";
+		if (/^\/management\/(pos-profile|pos_profile)(\/|$)/.test(pathname)) return "management-pos-profile";
+		if (/^\/management\/(pos-defaults|pos_defaults)(\/|$)/.test(pathname)) return "management-pos-defaults";
+		if (/^\/management\/print[-_]formats?(\/|$)/.test(pathname)) return "management-print-formats";
+		if (pathname === "/management/settings" || pathname === "/management/settings/") return "management-settings-root";
+		return "management-settings";
+	}
+	if (page.startsWith("management-user")) return "management-users";
+	if (page.startsWith("management-order")) return "management-orders";
+	if (page.startsWith("management-reservation")) return "management-reservations";
+	if (page.startsWith("management-courier")) return "management-couriers";
+	if (page.startsWith("management-table")) return "management-tables";
+	if (page.startsWith("management-kitchen")) return "management-kitchen";
+	if (page.startsWith("management-inventory") || page.startsWith("management-material")) return "management-inventory";
+	if (page.startsWith("management-product")) return "management-products";
+	if (page.startsWith("management-menu-group")) return "management-menu-groups";
+	if (page.startsWith("management-bom")) return "management-boms";
+	if (page.startsWith("management-report")) return "management-reports";
+	return page;
+}
+
+const canAccessCurrentPage = computed(() => {
+	if (authProfile.value?.is_admin || !hasRestaurantScopedRole.value) return true;
+	if (props.page === "management-login") return true;
+	return restaurantRoleNavigationKeys.value.has(currentPageNavigationKey());
 });
 
 const navLinks = computed(() => {
@@ -768,7 +847,14 @@ const navLinks = computed(() => {
 		"management-site-settings",
 		"management-snappfood",
 	]);
-	const visibleLinks = links.filter((link) => !settingsChildKeys.has(link.key));
+	const scopedLinks = hasRestaurantScopedRole.value && !authProfile.value?.is_admin
+		? links.filter((link) => restaurantRoleNavigationKeys.value.has(link.key))
+		: links;
+	const visibleLinks = scopedLinks
+		.filter((link) => !settingsChildKeys.has(link.key))
+		.map((link) => link.key === "management-settings" && authProfile.value?.roles?.includes("Restaurant Manager")
+			? { ...link, url: "/management/users" }
+			: link);
 
 	// Hide BOM/formula section from non-staff users
 	if (!isStaff) {

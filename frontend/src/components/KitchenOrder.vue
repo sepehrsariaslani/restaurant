@@ -66,7 +66,7 @@
         <Check :size="16" />
         <span>آماده شد</span>
       </button>
-      <button v-if="type === 'ready'" class="ko-btn ko-btn-ready" @click.stop="$emit('action')">
+      <button v-if="type === 'ready' && allowClose" class="ko-btn ko-btn-ready" @click.stop="$emit('action')">
         <CheckCheck :size="16" />
         <span>تحویل مشتری</span>
       </button>
@@ -80,7 +80,8 @@ import { Clock, UserRound, CornerDownLeft, Play, Check, CheckCheck, Layers, Time
 
 const props = defineProps({
   order: { type: Object, required: true },
-  type: { type: String, default: 'new' }
+  type: { type: String, default: 'new' },
+  allowClose: { type: Boolean, default: true },
 })
 
 defineEmits(['action'])
@@ -405,4 +406,3 @@ const prepTiming = computed(() => {
 
 .icon-sm { opacity: 0.8; }
 </style>
-

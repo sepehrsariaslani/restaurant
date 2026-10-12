@@ -37,7 +37,7 @@
         </div>
 
         <a
-          v-if="activeProfile?.name"
+          v-if="activeProfile?.name && !isRestaurantManager"
           class="secondary-btn"
           :href="`/app/pos-profile/${encodeURIComponent(activeProfile.name)}`"
           target="_blank"
@@ -67,9 +67,9 @@
               <span class="tag" v-if="profile.has_open_shift">شیفت باز</span>
               <span class="tag warning" v-else-if="profile.disabled">غیرفعال</span>
             </div>
-            <small v-if="profile.company">شرکت: {{ profile.company }}</small>
-            <small v-if="profile.warehouse">انبار: {{ profile.warehouse }}</small>
-            <small>ارز: {{ profile.currency || 'IRR' }}</small>
+            <small v-if="!isRestaurantManager && profile.company">شرکت: {{ profile.company }}</small>
+            <small v-if="!isRestaurantManager && profile.warehouse">انبار: {{ profile.warehouse }}</small>
+            <small v-if="!isRestaurantManager">ارز: {{ profile.currency || 'IRR' }}</small>
           </button>
         </div>
       </ManagementSurfaceCard>
@@ -81,7 +81,7 @@
         <p class="muted" v-if="!activeProfile?.name">برای نمایش جزئیات، یک پروفایل انتخاب کنید.</p>
 
         <template v-else>
-          <div class="edit-grid">
+          <div v-if="!isRestaurantManager" class="edit-grid">
             <label>
               عنوان POS
               <input v-model.trim="profileForm.title" class="input" type="text" />
@@ -195,7 +195,7 @@
             </label>
           </div>
 
-          <div class="detail-box">
+          <div v-if="!isRestaurantManager" class="detail-box">
             <strong>قابلیت‌ها</strong>
             <div class="capabilities controls">
               <label class="check-row"><input v-model="profileForm.allow_rate_change" type="checkbox" /> تغییر نرخ</label>
@@ -219,7 +219,7 @@
             </div>
           </div>
 
-          <div class="detail-box">
+          <div v-if="!isRestaurantManager" class="detail-box">
             <header class="detail-head">
               <strong>روش‌های پرداخت</strong>
               <button type="button" class="secondary-btn" @click="addPaymentRow">افزودن روش پرداخت</button>
@@ -245,21 +245,30 @@
           </div>
 
           <div class="detail-box">
-            <strong>کاربران مجاز</strong>
+            <strong>{{ isRestaurantManager ? 'کارکنان مجاز برای استفاده از POS' : 'کاربران مجاز' }}</strong>
+            <div v-if="isRestaurantManager" class="staff-user-list">
+              <label v-for="user in staffUsers" :key="user.value" class="staff-user-option">
+                <input v-model="selectedUsers" type="checkbox" :value="user.value" />
+                <span>{{ user.label || user.value }}</span>
+                <small dir="ltr">{{ user.value }}</small>
+              </label>
+              <p v-if="!staffUsers.length" class="muted">کاربر فعالی با نقش رستورانی پیدا نشد.</p>
+            </div>
             <textarea
+              v-else
               v-model="usersText"
               class="input users-textarea"
               rows="4"
               placeholder="ایمیل کاربران را با ویرگول یا خط جدید جدا کنید"
             ></textarea>
-            <small class="muted">برای مثال: user1@example.com, user2@example.com</small>
+            <small v-if="!isRestaurantManager" class="muted">برای مثال: user1@example.com, user2@example.com</small>
           </div>
 
           <div class="edit-actions">
             <button class="primary-btn" type="button" :disabled="saving || !activeProfileName" @click="saveProfileSettings(false)">
-              {{ saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات POS' }}
+              {{ saving ? 'در حال ذخیره...' : (isRestaurantManager ? 'ذخیره کارکنان مجاز' : 'ذخیره تنظیمات POS') }}
             </button>
-            <button class="secondary-btn" type="button" :disabled="saving || !activeProfileName" @click="saveProfileSettings(true)">
+            <button v-if="!isRestaurantManager" class="secondary-btn" type="button" :disabled="saving || !activeProfileName" @click="saveProfileSettings(true)">
               ذخیره + ثبت به عنوان POS پیش فرض
             </button>
           </div>
@@ -283,6 +292,7 @@ const saving = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const currentUser = ref('')
+const isRestaurantManager = ref(false)
 const activeSource = ref('fallback')
 const activeProfileName = ref('')
 const profiles = ref([])
@@ -291,6 +301,7 @@ const openingShift = ref(null)
 const lookups = ref({})
 const paymentRows = ref([])
 const usersText = ref('')
+const selectedUsers = ref([])
 const profileForm = reactive({
   title: '',
   company: '',
@@ -335,6 +346,7 @@ function optionList(key) {
   const rows = lookups.value?.[key]
   return Array.isArray(rows) ? rows : []
 }
+const staffUsers = computed(() => optionList('users'))
 
 function applyProfileToForm(profile) {
   const source = profile && typeof profile === 'object' ? profile : {}
@@ -366,10 +378,13 @@ function applyProfileToForm(profile) {
       }))
     : []
   usersText.value = Array.isArray(source.users) ? source.users.join(', ') : ''
+  const availableUsers = new Set(staffUsers.value.map((row) => String(row.value || '')))
+  selectedUsers.value = (Array.isArray(source.users) ? source.users : []).filter((user) => availableUsers.has(String(user)))
 }
 
 function applyPayload(payload) {
   currentUser.value = String(payload?.current_user || '')
+  isRestaurantManager.value = Boolean(payload?.is_restaurant_manager)
   activeSource.value = String(payload?.active_source || 'fallback')
   profiles.value = Array.isArray(payload?.profiles) ? payload.profiles : []
   activeProfileName.value = String(payload?.active_profile || '')
@@ -454,6 +469,7 @@ async function saveProfileSettings(setDefault = false) {
   try {
     const payload = await setManagementPOSProfileSettings({
       profile_name: activeProfileName.value,
+      ...(isRestaurantManager.value ? { users: [...selectedUsers.value] } : {
       settings: {
         title: profileForm.title,
         company: profileForm.company,
@@ -484,6 +500,7 @@ async function saveProfileSettings(setDefault = false) {
         .filter((row) => row.mode_of_payment),
       users: normalizeUsers(usersText.value),
       set_default: setDefault ? 1 : 0,
+      }),
     })
     applyPayload(payload || {})
     successMessage.value = setDefault

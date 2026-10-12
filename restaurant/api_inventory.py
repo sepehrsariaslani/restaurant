@@ -26,6 +26,7 @@ import secrets
 from html import escape as html_escape
 
 import frappe
+from restaurant.role_permissions import require_capability
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, today
 
@@ -224,6 +225,9 @@ def _inv_validate_production_warehouse(warehouse, company, label):
 
 def _inv_require_doctype_permission(doctype, permission_type, label):
 	if not frappe.has_permission(doctype, ptype=permission_type):
+		roles = set(frappe.get_roles(frappe.session.user))
+		if getattr(frappe.flags, "restaurant_api_capability_checked", False) and "Restaurant Manager" in roles:
+			return True
 		frappe.throw(
 			_("برای {0} مجوز کافی ندارید.").format(label),
 			frappe.PermissionError,
@@ -231,6 +235,7 @@ def _inv_require_doctype_permission(doctype, permission_type, label):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_branch_production_settings(branch="DEFAULT"):
 	"""Read a branch's native production warehouse routing."""
 	_ensure_management_access()
@@ -238,6 +243,7 @@ def get_management_branch_production_settings(branch="DEFAULT"):
 
 
 @frappe.whitelist(methods=["POST"])
+@require_capability("inventory_read")
 def save_management_branch_production_settings(payload=None):
 	"""Update only the editable routing fields on the native branch settings."""
 	_ensure_management_access()
@@ -376,6 +382,7 @@ def _inv_current_production_correction_rows(settings):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_production_warehouse_correction_preview(branch="DEFAULT"):
 	"""Create a short-lived, read-only snapshot for a reviewed native transfer."""
 	_ensure_management_access()
@@ -465,6 +472,7 @@ def _inv_apply_production_warehouse_correction_locked(token):
 
 
 @frappe.whitelist(methods=["POST"])
+@require_capability("inventory_read")
 def apply_management_production_warehouse_correction(preview_token):
 	"""Post only the exact unchanged snapshot previously previewed by this user."""
 	_ensure_management_access()
@@ -940,6 +948,7 @@ def _inv_safe_execute(fn, error_prefix):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_inventory_boot():
 	"""KPIs and option payloads for the inventory dashboard."""
 	_ensure_management_access()
@@ -1029,6 +1038,7 @@ def get_management_inventory_boot():
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_uoms(search="", limit=100):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", "UOM"):
@@ -1043,6 +1053,7 @@ def list_management_uoms(search="", limit=100):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def create_management_inventory_item(payload=None):
 	"""Create a stock item from an item picker and optionally open its stock."""
 	_ensure_management_access()
@@ -1188,6 +1199,7 @@ def _inv_material_request_purchases(request_name):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_material_requests(status="", search="", date_from="", date_to="", limit=50, offset=0):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", MATERIAL_REQUEST_DOCTYPE):
@@ -1260,6 +1272,7 @@ def list_management_material_requests(status="", search="", date_from="", date_t
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_material_request(name=""):
 	_ensure_management_access()
 	name = str(name or "").strip()
@@ -1278,6 +1291,7 @@ def _inv_set_doc_field(doc, fieldname, value):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_material_request(payload=None):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", MATERIAL_REQUEST_DOCTYPE):
@@ -1360,6 +1374,7 @@ def save_management_material_request(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def update_management_material_request_status(payload=None):
 	_ensure_management_access()
 	data = _inv_parse_payload(payload)
@@ -1380,6 +1395,7 @@ def update_management_material_request_status(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def create_management_purchase_from_material_request(payload=None):
 	_ensure_management_access()
 	data = _inv_parse_payload(payload)
@@ -1466,6 +1482,7 @@ body {{ direction: rtl; margin: 0; font-family: '{font_family}', Peyda, Tahoma, 
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_material_request_print(name=""):
 	_ensure_management_access()
 	result = get_management_material_request(name)
@@ -1478,6 +1495,7 @@ def get_management_material_request_print(name=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_raw_materials(search="", include_inactive=0, limit=100, offset=0, include_all_stock=0, options_only=0):
 	"""List raw materials with live stock quantity and value.
 
@@ -1596,6 +1614,7 @@ def list_management_raw_materials(search="", include_inactive=0, limit=100, offs
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_raw_material_detail(item_code=""):
 	"""Single material detail: stock per warehouse + latest movements."""
 	_ensure_management_access()
@@ -1752,6 +1771,7 @@ def _inv_upsert_raw_material(payload):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_raw_material(payload=None):
 	"""Create or update a raw material (unlimited registry)."""
 	_ensure_management_access()
@@ -1767,6 +1787,7 @@ def save_management_raw_material(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_warehouses(options_only=0):
 	"""All warehouses with quantity/value aggregates.
 
@@ -1830,6 +1851,7 @@ def list_management_warehouses(options_only=0):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_warehouse(payload=None):
 	"""Create or update a warehouse."""
 	_ensure_management_access()
@@ -1863,6 +1885,7 @@ def save_management_warehouse(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def delete_management_warehouse(name=""):
 	"""Delete a warehouse (or disable it when ledger data exists)."""
 	_ensure_management_access()
@@ -1897,6 +1920,7 @@ def delete_management_warehouse(name=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_stock_overview(warehouse="", search="", only_materials=0, limit=400, offset=0):
 	"""Live stock levels: quantity and value per item (optionally per warehouse)."""
 	_ensure_management_access()
@@ -1983,6 +2007,7 @@ def get_management_stock_overview(warehouse="", search="", only_materials=0, lim
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_product_inventory(item_name="", date_from="", date_to="", warehouse="", limit=200):
 	"""Return native Bin and Stock Ledger data for one Item."""
 	_ensure_management_access()
@@ -2157,6 +2182,7 @@ def get_management_product_inventory(item_name="", date_from="", date_to="", war
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_product_stock_ledger(
 	item_name="", date_from="", date_to="", warehouse="", search="", limit=50, offset=0
 ):
@@ -2271,6 +2297,7 @@ def get_management_product_stock_ledger(
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def create_management_stock_movement(payload=None):
 	"""Manual stock in/out/transfer plus waste & damage posting."""
 	_ensure_management_access()
@@ -2336,6 +2363,7 @@ def create_management_stock_movement(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_stock_movements(
 	date_from="",
 	date_to="",
@@ -2533,6 +2561,7 @@ def _inv_sync_erpnext_purchase_order_status(doc, target_status):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_suppliers(search="", limit=100, offset=0):
 	_ensure_management_access()
 	search = (search or "").strip()
@@ -2551,6 +2580,7 @@ def list_management_suppliers(search="", limit=100, offset=0):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_supplier(payload=None):
 	_ensure_management_access()
 	payload = _inv_parse_payload(payload)
@@ -2641,6 +2671,7 @@ def _inv_po_doc_payload(doc, include_items=True):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_purchase_orders(status="", search="", limit=50, offset=0):
 	_ensure_management_access()
 	limit = min(max(cint(limit) or 50, 1), 200)
@@ -2682,6 +2713,7 @@ def list_management_purchase_orders(status="", search="", limit=50, offset=0):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_purchase_order(name=""):
 	_ensure_management_access()
 	name = (name or "").strip()
@@ -2691,6 +2723,7 @@ def get_management_purchase_order(name=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_purchase_order(payload=None):
 	"""Create or update a draft purchase order for raw materials."""
 	_ensure_management_access()
@@ -2764,6 +2797,7 @@ def save_management_purchase_order(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_purchase_order_progress(payload=None):
 	"""Persist per-item purchase rates without changing the order workflow.
 
@@ -2802,6 +2836,7 @@ def save_management_purchase_order_progress(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def update_management_purchase_order_status(payload=None):
 	"""Send or cancel a purchase order."""
 	_ensure_management_access()
@@ -2832,6 +2867,7 @@ def update_management_purchase_order_status(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def receive_management_purchase_order(payload=None):
 	"""Receive (partially or fully) against a purchase order → Material Receipt."""
 	_ensure_management_access()
@@ -2919,6 +2955,7 @@ def receive_management_purchase_order(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_reorder_alerts(warehouse="", limit=200):
 	"""Materials at or below their reorder point, grouped per warehouse."""
 	_ensure_management_access()
@@ -2980,6 +3017,7 @@ def get_management_reorder_alerts(warehouse="", limit=200):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def create_management_purchase_from_alerts(payload=None):
 	"""Turn reorder alerts into draft purchase orders (grouped per default supplier)."""
 	_ensure_management_access()
@@ -3020,6 +3058,7 @@ def create_management_purchase_from_alerts(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_production_plan(date_from="", date_to=""):
 	"""Required raw materials vs. live stock for pending production tickets."""
 	_ensure_management_access()
@@ -3113,6 +3152,7 @@ def get_management_production_plan(date_from="", date_to=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def create_management_production_entry(payload=None):
 	"""Manual production: consume recipe materials and book the finished product."""
 	_ensure_management_access()
@@ -3186,6 +3226,7 @@ def create_management_production_entry(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def save_management_order_loss(payload=None):
 	"""Log an out/damage/return-to-stock event tied to an order."""
 	_ensure_management_access()
@@ -3259,6 +3300,7 @@ def save_management_order_loss(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_order_losses(date_from="", date_to="", loss_kind="", limit=100, offset=0):  # noqa: A002
 	_ensure_management_access()
 	filters = {}
@@ -3304,6 +3346,7 @@ def list_management_order_losses(date_from="", date_to="", loss_kind="", limit=1
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_waste_loss_report(date_from="", date_to="", warehouse=""):
 	"""Waste/damage valuation + order-loss summary for a period."""
 	_ensure_management_access()
@@ -3388,6 +3431,7 @@ def get_management_waste_loss_report(date_from="", date_to="", warehouse=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_reconciliation_context(warehouse="", search=""):
 	"""System quantities for a warehouse to seed a physical count worksheet."""
 	_ensure_management_access()
@@ -3445,6 +3489,7 @@ def get_management_reconciliation_context(warehouse="", search=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def submit_management_stock_reconciliation(payload=None):
 	"""Submit a Stock Reconciliation and return counted-vs-system differences."""
 	_ensure_management_access()
@@ -3521,6 +3566,7 @@ def submit_management_stock_reconciliation(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def list_management_stock_reconciliations(limit=30):
 	_ensure_management_access()
 	rows = frappe.get_all(
@@ -3546,6 +3592,7 @@ def list_management_stock_reconciliations(limit=30):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_stock_reconciliation(name=""):
 	_ensure_management_access()
 	name = (name or "").strip()
@@ -3585,6 +3632,7 @@ def get_management_stock_reconciliation(name=""):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_product_cost_report(search="", limit=200):
 	"""Live unit cost for products with an active recipe (BOM)."""
 	_ensure_management_access()
@@ -3738,6 +3786,7 @@ def _inv_valuation_rows():
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_report_inventory_valuation(date_from=None, date_to=None):
 	_ensure_management_access()
 	rows = _inv_valuation_rows()
@@ -3803,6 +3852,7 @@ def _inv_movement_rows(date_from, date_to):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_report_stock_movements(date_from=None, date_to=None):
 	_ensure_management_access()
 	rows = _inv_movement_rows(date_from, date_to)
@@ -3867,6 +3917,7 @@ def _inv_waste_report_rows(date_from, date_to):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_report_inventory_waste(date_from=None, date_to=None):
 	_ensure_management_access()
 	rows = _inv_waste_report_rows(date_from, date_to)
@@ -4097,6 +4148,7 @@ def _inv_normalize_import_headers(header_row):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def export_management_materials_excel(search=""):
 	"""Export raw materials (with stock + reorder info) as an .xlsx file."""
 	_ensure_management_access()
@@ -4200,6 +4252,7 @@ def _inv_import_material_record(record, update_existing=1, dry_run=0):
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def import_management_materials_excel(
 	file_url=None, file_name=None, update_existing=1, dry_run=0
 ):
@@ -4309,6 +4362,7 @@ def _inv_alert_summary():
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_inventory_alerts_summary():
 	"""Lightweight KPIs for the dashboard inventory widget."""
 	_ensure_management_access()
@@ -4392,6 +4446,7 @@ body {{ direction: rtl; margin: 0; font-family: '{font_family}', Peyda, Tahoma, 
 
 
 @frappe.whitelist()
+@require_capability("inventory_read")
 def get_management_inventory_purchase_print(name=""):
 	"""Printable branded HTML for a purchase order."""
 	_ensure_management_access()

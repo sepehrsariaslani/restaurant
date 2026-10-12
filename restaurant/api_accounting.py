@@ -12,6 +12,7 @@ bottom of ``api.py``) and called as ``/api/method/restaurant.api.<endpoint>``.
 """
 
 import frappe
+from restaurant.role_permissions import require_finance_admin
 from frappe import _
 from frappe.utils import cint, flt, today
 
@@ -113,6 +114,7 @@ def _acc_payment_totals(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_finance_admin
 def get_management_accounting_boot():
 	_ensure_management_access()
 	oko = frappe.db.exists("DocType", "GL Entry")
@@ -164,6 +166,7 @@ def get_management_accounting_boot():
 
 
 @frappe.whitelist()
+@require_finance_admin
 def get_management_report_receipt_payment_balance(date_from=None, date_to=None):
 	_ensure_management_access()
 	rows = []

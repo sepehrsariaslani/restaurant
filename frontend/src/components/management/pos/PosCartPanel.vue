@@ -145,7 +145,7 @@
 
 			<!-- Discount group: amount + coupon code -->
 			<div class="fin-group">
-				<div class="fin-row">
+				<div class="fin-row" v-if="allowManualDiscount">
 					<div class="fin-control">
 						<AmountPercentToggle
 							:model-value="financial.discountType === 'percent' ? 'percent' : 'fixed'"
@@ -172,6 +172,7 @@
 						</button>
 					</div>
 				</div>
+				<p v-else class="fin-discount-hint">تخفیف دستی در تنظیمات این پروفایل صندوق غیرفعال است.</p>
 				<div v-if="Number(groupDiscountPercent || 0) > 0" class="fin-discount-hint">
 					<span v-if="!financial.manualDiscountActive">
 						تخفیف گروه مشتری: {{ toPersianNumber(Number(groupDiscountPercent || 0)) }}٪
@@ -192,7 +193,7 @@
 			</div>
 
 			<!-- Service + Tax group -->
-			<div class="fin-group">
+			<div v-if="!restaurantOperator" class="fin-group">
 				<div class="fin-row">
 					<div class="fin-control">
 						<AmountPercentToggle
@@ -237,6 +238,7 @@
 					</div>
 				</div>
 			</div>
+			<p v-else class="fin-discount-hint">مالیات از قالب پروفایل POS محاسبه می‌شود؛ تغییر دستی مالیات و حق سرویس در دسترس نیست.</p>
 
 		</div>
 
@@ -304,6 +306,7 @@
 					</span>
 				</button>
 				<button
+					v-if="allowOrderManagement"
 					type="button"
 					class="settle-btn-custom"
 					:disabled="submitting || !cartLines.length || orderMode === 'dine_in'"
@@ -571,6 +574,18 @@ const props = defineProps({
 	financial: {
 		type: Object,
 		default: () => ({}),
+	},
+	restaurantOperator: {
+		type: Boolean,
+		default: false,
+	},
+	allowManualDiscount: {
+		type: Boolean,
+		default: true,
+	},
+	allowOrderManagement: {
+		type: Boolean,
+		default: true,
 	},
 	groupDiscountPercent: {
 		type: Number,

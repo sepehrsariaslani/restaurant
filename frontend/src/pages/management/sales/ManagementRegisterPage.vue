@@ -8,7 +8,7 @@
 
     <nav class="tabs-bar">
       <button
-        v-for="tab in tabs"
+        v-for="tab in visibleTabs"
         :key="tab.key"
         type="button"
         :class="['tab-btn', { active: activeTab === tab.key }]"
@@ -17,6 +17,7 @@
         {{ tab.label }}
       </button>
     </nav>
+    <p v-if="roleLoadFailed" class="error">دریافت سطح دسترسی کاربر ناموفق بود. صفحه را دوباره بارگذاری کنید.</p>
 
     <!-- ======================= تسویه و بستن صندوق ======================= -->
     <section v-if="activeTab === 'closing'" class="tab-body">
@@ -54,7 +55,7 @@
         </template>
       </ManagementSurfaceCard>
 
-      <ManagementSurfaceCard title="بستن صندوق" subtitle="شمارش وجوه، ثبت اختتامیه و چاپ گزارش">
+      <ManagementSurfaceCard v-if="canOperateRegister" title="بستن صندوق" subtitle="شمارش وجوه، ثبت اختتامیه و چاپ گزارش">
         <div class="form-grid">
           <label>
             موجودی اولیه صندوق
@@ -97,6 +98,10 @@
           </p>
           <div class="receipt-html" v-html="lastClosingResult.receipt_html"></div>
         </div>
+      </ManagementSurfaceCard>
+
+      <ManagementSurfaceCard v-else title="نمای مشاهده‌ای صندوق" subtitle="سرپرست می‌تواند وضعیت و سوابق اختتامیه را بررسی کند.">
+        <p class="muted">ثبت یا بستن صندوق برای نقش سرپرست فعال نیست.</p>
       </ManagementSurfaceCard>
 
       <ManagementSurfaceCard title="سوابق اختتامیه" subtitle="آخرین تسویه‌های ثبت‌شده صندوق">
@@ -348,6 +353,7 @@ import {
   getManagementPrintFontSettings,
   getManagementRegisterClosingDetail,
   getManagementRegisterClosingSummary,
+  getManagementSessionProfile,
   getManagementWorkShifts,
   listManagementCombos,
   listManagementProducts,
@@ -359,7 +365,7 @@ import {
 } from '@/utils/api'
 import { formatMoney as formatMoneyUtil } from '@/utils/format'
 
-const tabs = [
+const allTabs = [
   { key: 'closing', label: 'تسویه و بستن صندوق' },
   { key: 'shifts', label: 'شیفت‌های کاری' },
   { key: 'packaging', label: 'بسته‌بندی' },
@@ -368,8 +374,24 @@ const tabs = [
 ]
 const activeTab = ref('closing')
 const currency = ref('IRR')
+const userRoles = ref([])
+const isAdmin = ref(false)
+const rolesReady = ref(false)
+const roleLoadFailed = ref(false)
+const hasRestaurantRole = computed(() => userRoles.value.some((role) => [
+  'Restaurant Manager', 'Restaurant Supervisor', 'Restaurant Cashier', 'Restaurant Waiter', 'Restaurant Chef',
+].includes(role)))
+const isRestaurantManager = computed(() => userRoles.value.includes('Restaurant Manager'))
+const isRestaurantSupervisor = computed(() => userRoles.value.includes('Restaurant Supervisor') && !userRoles.value.includes('Restaurant Cashier') && !isRestaurantManager.value && !isAdmin.value)
+const canOperateRegister = computed(() => rolesReady.value && !roleLoadFailed.value && !isRestaurantSupervisor.value)
+const visibleTabs = computed(() => {
+  if (!rolesReady.value || roleLoadFailed.value) return []
+  if (isAdmin.value || !hasRestaurantRole.value || isRestaurantManager.value) return allTabs
+  return allTabs.filter((tab) => tab.key === 'closing')
+})
 
 function setActiveTab(key) {
+  if (!visibleTabs.value.some((tab) => tab.key === key)) return
   activeTab.value = key
   if (key === 'closing') loadClosingTab()
   else if (key === 'shifts') loadShifts()
@@ -757,7 +779,20 @@ const loadingAny = computed(
 )
 
 onMounted(() => {
-  loadClosingTab()
+  getManagementSessionProfile()
+    .then((profile) => {
+      if (profile?.is_guest) {
+        roleLoadFailed.value = true
+        return
+      }
+      userRoles.value = Array.isArray(profile?.roles) ? profile.roles : []
+      isAdmin.value = Boolean(profile?.is_admin)
+    })
+    .catch(() => { roleLoadFailed.value = true })
+    .finally(() => {
+      rolesReady.value = true
+      loadClosingTab()
+    })
 })
 </script>
 
