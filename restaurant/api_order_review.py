@@ -22,6 +22,13 @@ def _order_has_column(fieldname):
 
 def validate_sales_order_submission(doc, method=None):
 	"""Keep a pending or rejected order out of native submitted workflows."""
+	if (
+		doc.flags.get("food_partner_external_cancellation")
+		and doc.get("restaurant_external_source") == "snapp_food"
+		and doc.get("restaurant_external_order_id")
+		and (doc.get("restaurant_status") or "").strip().lower() == "cancelled"
+	):
+		return
 	status = doc.get(ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED
 	if status in {ORDER_REVIEW_PENDING, ORDER_REVIEW_REJECTED}:
 		frappe.throw(_("ابتدا سفارش را بررسی و تأیید کنید."))

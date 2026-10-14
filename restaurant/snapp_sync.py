@@ -37,6 +37,7 @@ DEFAULT_REPORT_URL = "https://snappfood.ir/vms/v3/restaurant/report"
 DEFAULT_MENU_API_BASE_URL = "https://apigw.snappfood.ir"
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
+FOOD_PARTNER_CANCELLATION_LOOKBACK_DAYS = 3
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
 FALLBACK_GUEST_NAME = "Snapp Guest"
 FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD = "restaurant_food_partner_modifier_mappings"
@@ -2493,9 +2494,13 @@ def _map_order_type(order_type, delivery_type):
 
 
 def _map_status(history_state, last_state):
-    text = str(history_state or "").strip().lower()
-    if "cancel" in text or "reject" in text:
+    if isinstance(history_state, (list, tuple, set)):
+        status_texts = [str(value or "").strip().lower() for value in history_state]
+    else:
+        status_texts = [str(history_state or "").strip().lower()]
+    if any("cancel" in text or "reject" in text for text in status_texts):
         return "cancelled"
+    text = next((value for value in status_texts if value), "")
     if "deliver" in text:
         return "delivered"
     if "ready" in text:
@@ -2619,6 +2624,22 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
     discount_from_item_total = max(gross_items_total - reported_net_items_total, 0) if reported_net_items_total else 0
     resolved_discount_amount = max(line_discount_total, reported_discount, discount_from_item_total)
 
+    status_candidates = [
+        raw_order.get("orderHistoryState"),
+        raw_order.get("externalStatusLabel"),
+        raw_order.get("status"),
+        raw_order.get("bikerStatusV2"),
+    ]
+    cancellation_state = next(
+        (
+            str(value).strip()
+            for value in status_candidates
+            if value and any(token in str(value).strip().lower() for token in ("cancel", "reject"))
+        ),
+        "",
+    )
+    external_state = cancellation_state or next((str(value).strip() for value in status_candidates if value), "")
+
     return {
         "order_id": order_id,
         "bill_number": str(
@@ -2629,17 +2650,9 @@ def normalize_snapp_order(raw_order, amount_multiplier=1):
             or ""
         ).strip(),
         "offline_bill_number": str(raw_order.get("offlineBillNumber") or "").strip(),
-        "external_state": str(
-            raw_order.get("orderHistoryState")
-            or raw_order.get("externalStatusLabel")
-            or raw_order.get("status")
-            or ""
-        ).strip(),
+        "external_state": external_state,
         "last_state": cint(raw_order.get("lastState") or raw_order.get("externalStatusCode") or 0),
-        "status": _map_status(
-            raw_order.get("orderHistoryState") or raw_order.get("externalStatusLabel") or raw_order.get("status"),
-            raw_order.get("lastState") or raw_order.get("externalStatusCode"),
-        ),
+        "status": _map_status(status_candidates, raw_order.get("lastState") or raw_order.get("externalStatusCode")),
         "order_type": _map_order_type(raw_order.get("orderType"), raw_order.get("deliveryType") or raw_order.get("expeditionType")),
         "delivery_type": str(raw_order.get("deliveryType") or raw_order.get("expeditionType") or "").strip(),
         "payment_method": str(raw_order.get("paymentMethod") or raw_order.get("payment_type_raw") or raw_order.get("paymentTypeRaw") or "").strip(),
@@ -3371,6 +3384,248 @@ def _sales_order_has_submitted_invoice(sales_order_name):
     )
 
 
+def _linked_document_names(doctype, filters, pluck="name"):
+    if not frappe.db.exists("DocType", doctype):
+        return []
+    return frappe.get_all(
+        doctype,
+        filters=filters,
+        pluck=pluck,
+        limit_page_length=1000,
+        ignore_permissions=True,
+    )
+
+
+def _active_document_names(doctype, names):
+    names = sorted({name for name in names if name})
+    if not names or not frappe.db.exists("DocType", doctype):
+        return []
+    return frappe.get_all(
+        doctype,
+        filters={"name": ["in", names], "docstatus": ["<", 2]},
+        fields=["name", "docstatus"],
+        order_by="creation desc",
+        limit_page_length=1000,
+        ignore_permissions=True,
+    )
+
+
+def _log_food_partner_cancellation_error(order_id, message):
+    title = f"Food Partner cancellation {order_id}"[:140]
+    message = cstr(message or "Unknown cancellation error")[:60000]
+    try:
+        recent_cutoff = now_datetime() - timedelta(hours=24)
+        recent = frappe.get_all(
+            "Error Log",
+            filters={"title": title, "creation": [">=", recent_cutoff]},
+            fields=["name"],
+            order_by="creation desc",
+            limit_page_length=1,
+            ignore_permissions=True,
+        )
+        if recent and _has_column("Error Log", "error"):
+            frappe.db.set_value("Error Log", recent[0].name, "error", message, update_modified=True)
+            return
+    except Exception:
+        pass
+    frappe.log_error(message=message, title=title)
+
+
+def _cancel_or_delete_linked_document(doctype, name):
+    doc = frappe.get_doc(doctype, name)
+    docstatus = cint(doc.get("docstatus") or 0)
+    if docstatus == 2:
+        return "already_cancelled"
+    if docstatus == 0:
+        frappe.delete_doc(doctype, name, ignore_permissions=True)
+        return "deleted_draft"
+
+    doc.flags.ignore_permissions = True
+    doc.cancel()
+    return "cancelled"
+
+
+def _attempt_food_partner_document_cancellation(order_id, doctype, name):
+    savepoint = "fp_cancel_" + hashlib.sha1(f"{doctype}:{name}".encode("utf-8")).hexdigest()[:12]
+    frappe.db.savepoint(savepoint)
+    try:
+        return _cancel_or_delete_linked_document(doctype, name), None
+    except Exception:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        trace = frappe.get_traceback(with_context=False)
+        _log_food_partner_cancellation_error(order_id, f"لغو {doctype} {name} ناموفق بود:\n{trace}")
+        return "failed", trace.splitlines()[-1] if trace else "Unknown cancellation error"
+
+
+def _cancel_food_partner_order_documents(sales_order_name, order_id):
+    """Cancel or remove linked ERP documents in dependency order, preserving submitted records."""
+    invoice_names = []
+    if _has_column("Sales Invoice Item", "sales_order"):
+        invoice_names.extend(
+            _linked_document_names(
+                "Sales Invoice Item", {"sales_order": sales_order_name}, pluck="parent"
+            )
+        )
+    if _has_column("Sales Invoice", "restaurant_external_order_id"):
+        invoice_filters = {"restaurant_external_order_id": order_id}
+        if _has_column("Sales Invoice", "restaurant_external_source"):
+            invoice_filters["restaurant_external_source"] = SNAPP_SOURCE
+        invoice_names.extend(_linked_document_names("Sales Invoice", invoice_filters))
+    invoices = _active_document_names("Sales Invoice", invoice_names)
+
+    delivery_note_names = []
+    if _has_column("Delivery Note Item", "against_sales_order"):
+        delivery_note_names.extend(
+            _linked_document_names(
+                "Delivery Note Item", {"against_sales_order": sales_order_name}, pluck="parent"
+            )
+        )
+    delivery_notes = _active_document_names("Delivery Note", delivery_note_names)
+
+    work_order_names = _linked_document_names("Work Order", {"sales_order": sales_order_name})
+    work_orders = _active_document_names("Work Order", work_order_names)
+    work_order_set = set(work_order_names)
+
+    job_card_names = []
+    if work_order_set and _has_column("Job Card", "work_order"):
+        job_card_names = _linked_document_names("Job Card", {"work_order": ["in", sorted(work_order_set)]})
+    job_cards = _active_document_names("Job Card", job_card_names)
+    job_card_to_work_order = {
+        name: frappe.db.get_value("Job Card", name, "work_order") for name in job_card_names
+    }
+
+    stock_entry_names = []
+    if work_order_set and _has_column("Stock Entry", "work_order"):
+        stock_entry_names.extend(
+            _linked_document_names("Stock Entry", {"work_order": ["in", sorted(work_order_set)]})
+        )
+    job_card_set = set(job_card_names)
+    if job_card_set and _has_column("Stock Entry", "job_card"):
+        stock_entry_names.extend(
+            _linked_document_names("Stock Entry", {"job_card": ["in", sorted(job_card_set)]})
+        )
+    stock_entries = _active_document_names("Stock Entry", stock_entry_names)
+
+    errors = []
+    invoice_failed = False
+    for row in invoices:
+        _, error = _attempt_food_partner_document_cancellation(order_id, "Sales Invoice", row.name)
+        if error:
+            invoice_failed = True
+            errors.append({"doctype": "Sales Invoice", "name": row.name, "error": error})
+
+    if invoice_failed:
+        for row in delivery_notes:
+            errors.append(
+                {
+                    "doctype": "Delivery Note",
+                    "name": row.name,
+                    "error": "وابستگی به فاکتوری که لغو آن ناموفق بود؛ در اجرای بعدی دوباره بررسی می‌شود.",
+                }
+            )
+    else:
+        for row in delivery_notes:
+            _, error = _attempt_food_partner_document_cancellation(order_id, "Delivery Note", row.name)
+            if error:
+                errors.append({"doctype": "Delivery Note", "name": row.name, "error": error})
+
+    failed_work_orders = set()
+    for row in stock_entries:
+        stock_entry = frappe.get_doc("Stock Entry", row.name)
+        related_work_order = stock_entry.get("work_order") or job_card_to_work_order.get(stock_entry.get("job_card"))
+        _, error = _attempt_food_partner_document_cancellation(order_id, "Stock Entry", row.name)
+        if error:
+            if related_work_order:
+                failed_work_orders.add(related_work_order)
+            errors.append({"doctype": "Stock Entry", "name": row.name, "error": error})
+
+    failed_job_cards = set()
+    for row in job_cards:
+        if job_card_to_work_order.get(row.name) in failed_work_orders:
+            failed_job_cards.add(row.name)
+            continue
+        _, error = _attempt_food_partner_document_cancellation(order_id, "Job Card", row.name)
+        if error:
+            failed_job_cards.add(row.name)
+            related_work_order = job_card_to_work_order.get(row.name)
+            if related_work_order:
+                failed_work_orders.add(related_work_order)
+            errors.append({"doctype": "Job Card", "name": row.name, "error": error})
+
+    for row in work_orders:
+        if row.name in failed_work_orders:
+            continue
+        _, error = _attempt_food_partner_document_cancellation(order_id, "Work Order", row.name)
+        if error:
+            failed_work_orders.add(row.name)
+            errors.append({"doctype": "Work Order", "name": row.name, "error": error})
+
+    production_failed = bool(failed_work_orders or failed_job_cards)
+    if not production_failed:
+        ticket_names = _linked_document_names(
+            "Restaurant Production Ticket", {"sales_order": sales_order_name}
+        )
+        for name in ticket_names:
+            _, error = _attempt_food_partner_document_cancellation(
+                order_id, "Restaurant Production Ticket", name
+            )
+            if error:
+                errors.append({"doctype": "Restaurant Production Ticket", "name": name, "error": error})
+
+    return {"errors": errors}
+
+
+def _cancel_food_partner_sales_order(sales_order_name, order_payload):
+	lock = frappe.cache().lock(
+		f"food-partner-cancellation:{frappe.local.site}:{sales_order_name}",
+		timeout=300,
+		blocking_timeout=0,
+	)
+	try:
+		acquired = bool(lock.acquire())
+	except Exception:
+		acquired = False
+	if not acquired:
+		return {"status": "in_progress"}
+
+	try:
+		order_id = str(order_payload.get("order_id") or "").strip()
+		so_doc = frappe.get_doc("Sales Order", sales_order_name)
+		if so_doc.get("restaurant_external_source") != SNAPP_SOURCE:
+			raise frappe.ValidationError(f"Sales Order {sales_order_name} is not linked to Food Partner.")
+		if str(so_doc.get("restaurant_external_order_id") or "").strip() != order_id:
+			raise frappe.ValidationError(f"Food Partner order {order_id} does not match Sales Order {sales_order_name}.")
+		if cint(so_doc.docstatus) == 2:
+			_cancel_food_partner_order_documents(sales_order_name, order_id)
+			raise frappe.ValidationError(
+				f"Sales Order {sales_order_name} is already cancelled in ERP and cannot be closed through the native path."
+			)
+
+		if cint(so_doc.docstatus) == 0:
+			so_doc.flags.ignore_permissions = True
+			so_doc.flags.food_partner_external_cancellation = True
+			so_doc.submit()
+
+		if cint(so_doc.docstatus) != 1:
+			raise frappe.ValidationError(f"Sales Order {sales_order_name} was not submitted for cancellation handling.")
+		if so_doc.status != "Closed":
+			so_doc.update_status("Closed")
+
+		if _has_column("Sales Order", "restaurant_status"):
+			frappe.db.set_value(
+				"Sales Order", sales_order_name, "restaurant_status", "cancelled", update_modified=False
+			)
+		return _cancel_food_partner_order_documents(sales_order_name, order_id)
+	finally:
+		try:
+			lock.release()
+		except Exception:
+			pass
+
+
 def _sync_existing_sales_order(sales_order_name, order_payload, reconcile_lines=False):
     so_doc = frappe.get_doc("Sales Order", sales_order_name)
 
@@ -3406,13 +3661,17 @@ def _sync_existing_sales_order(sales_order_name, order_payload, reconcile_lines=
     for fieldname, value in updates.items():
         frappe.db.set_value("Sales Order", sales_order_name, fieldname, value, update_modified=False)
 
-    if reconcile_lines and so_doc.docstatus == 1:
+    if reconcile_lines and so_doc.docstatus == 1 and order_payload["status"] != "cancelled":
         _update_existing_sales_order_lines(sales_order_name, order_payload)
 
     if order_payload["status"] == "cancelled":
-        if so_doc.docstatus == 1:
-            so_doc.flags.ignore_permissions = True
-            so_doc.cancel()
+        try:
+            _cancel_food_partner_sales_order(sales_order_name, order_payload)
+        except Exception:
+            _log_food_partner_cancellation_error(
+                order_payload.get("order_id"), frappe.get_traceback(with_context=False)
+            )
+            raise
         return "cancelled"
     return "updated"
 
@@ -3686,10 +3945,13 @@ def _create_sales_order(order_payload):
         force=True,
     )
     if order_payload["status"] == "cancelled":
-        so_doc = frappe.get_doc("Sales Order", so_name)
-        if so_doc.docstatus == 1:
-            so_doc.flags.ignore_permissions = True
-            so_doc.cancel()
+        try:
+            _cancel_food_partner_sales_order(so_name, order_payload)
+        except Exception:
+            _log_food_partner_cancellation_error(
+                order_payload.get("order_id"), frappe.get_traceback(with_context=False)
+            )
+            raise
         return so_name, "cancelled"
     return so_name, "created"
 
@@ -4061,6 +4323,18 @@ def sync_snapp_orders(
                         )
                     continue
 
+                if existing and existing_record.get("restaurant_external_source") != SNAPP_SOURCE:
+                    result["skipped_count"] += 1
+                    if requested_order_ids:
+                        result["sales_orders"].append(
+                            {
+                                "order_id": normalized["order_id"],
+                                "sales_order": existing,
+                                "action": "external_source_conflict",
+                            }
+                        )
+                    continue
+
                 manual_duplicate_sales_order = manual_duplicate_sales_orders.get(normalized["order_id"])
                 if manual_duplicate_sales_order:
                     claimed = claim_manual_duplicate_order(
@@ -4137,6 +4411,91 @@ def sync_snapp_orders(
             "status": "error",
             "trigger": trigger,
             "reason": trace.splitlines()[-1] if trace else "Unknown error",
+        }
+
+
+def reconcile_snapp_order_cancellations(trigger="scheduler", settings=None):
+    """Recheck recent Food Partner cancellations without importing other old orders."""
+    settings = settings if settings is not None else _get_settings()
+    if settings.get("reason"):
+        return {"status": "skipped", "reason": settings["reason"]}
+    if not settings.get("enabled"):
+        return {"status": "skipped", "reason": "Food Partner sync is disabled."}
+    schema_status = _get_schema_status()
+    if not schema_status["ready"]:
+        return {
+            "status": "skipped",
+            "reason": "Food Partner integration fields are not migrated.",
+            "schema_missing": schema_status["missing"],
+        }
+    if not settings.get("token") or not settings.get("vendor_id"):
+        return {"status": "skipped", "reason": "Food Partner API credentials are incomplete."}
+
+    end_dt = now_datetime()
+    start_dt = end_dt - timedelta(days=FOOD_PARTNER_CANCELLATION_LOOKBACK_DAYS)
+    result = {
+        "status": "success",
+        "trigger": trigger,
+        "from_datetime": get_datetime_str(start_dt),
+        "to_datetime": get_datetime_str(end_dt),
+        "fetched_count": 0,
+        "cancelled_count": 0,
+        "failed_count": 0,
+        "pages_fetched": 0,
+        "errors": [],
+    }
+
+    try:
+        fetched = fetch_snapp_orders(
+            from_datetime=start_dt,
+            to_datetime=end_dt,
+            page_size=settings.get("page_size") or DEFAULT_PAGE_SIZE,
+            max_pages=MAX_PAGES,
+            settings=settings,
+        )
+        result["fetched_count"] = cint(fetched.get("orders_count") or 0)
+        result["pages_fetched"] = cint(fetched.get("pages_fetched") or 0)
+        for raw_order in fetched.get("orders") or []:
+            order_id = _raw_snapp_order_id(raw_order)
+            try:
+                normalized = normalize_snapp_order(
+                    raw_order,
+                    amount_multiplier=settings.get("amount_multiplier") or 1,
+                )
+                if normalized.get("status") != "cancelled":
+                    continue
+
+                sales_order_name = frappe.db.get_value(
+                    "Sales Order",
+                    {
+                        "restaurant_external_order_id": normalized["order_id"],
+                        "restaurant_external_source": SNAPP_SOURCE,
+                    },
+                    "name",
+                )
+                if not sales_order_name:
+                    continue
+
+                _sync_existing_sales_order(sales_order_name, normalized, reconcile_lines=False)
+                result["cancelled_count"] += 1
+            except Exception:
+                result["failed_count"] += 1
+                trace = frappe.get_traceback(with_context=False)
+                result["errors"].append({"order_id": order_id, "error": trace.splitlines()[-1] if trace else "Unknown error"})
+                _log_food_partner_cancellation_error(order_id or "unknown", trace)
+
+        if result["failed_count"]:
+            result["status"] = "partial"
+        frappe.db.commit()
+        return result
+    except Exception:
+        trace = frappe.get_traceback(with_context=False)
+        _log_food_partner_cancellation_error("reconciliation", trace)
+        frappe.db.commit()
+        return {
+            **result,
+            "status": "error",
+            "reason": trace.splitlines()[-1] if trace else "Unknown reconciliation error",
         }
 
 
