@@ -2636,6 +2636,8 @@ def redeem_my_points(mobile="", points=0, customer_token=None, request_key=""):
 
 def club_apply_fulfillment_effects(so_name):
 	"""کش‌بک + امتیاز برای سفارش‌های آنلاین هنگام تحویل — idempotent."""
+	if getattr(frappe.flags, "skip_unpaid_foodpartner_fulfillment_rewards", False):
+		return
 	try:
 		club_apply_settle_effects(so_name, None, None)
 	except Exception:
