@@ -3412,19 +3412,30 @@ def _active_document_names(doctype, names):
 
 def _log_food_partner_cancellation_error(order_id, message):
     title = f"Food Partner cancellation {order_id}"[:140]
-    message = cstr(message or "Unknown cancellation error")[:60000]
+    message = cstr(message or "Unknown cancellation error")[:12000]
     try:
-        recent_cutoff = now_datetime() - timedelta(hours=24)
-        recent = frappe.get_all(
+        existing_logs = frappe.get_all(
             "Error Log",
-            filters={"title": title, "creation": [">=", recent_cutoff]},
+            filters={"title": title},
             fields=["name"],
             order_by="creation desc",
             limit_page_length=1,
             ignore_permissions=True,
         )
-        if recent and _has_column("Error Log", "error"):
-            frappe.db.set_value("Error Log", recent[0].name, "error", message, update_modified=True)
+        if existing_logs and _has_column("Error Log", "error"):
+            error_log_name = existing_logs[0].name
+            existing_message = cstr(frappe.db.get_value("Error Log", error_log_name, "error") or "")
+            if message in existing_message:
+                return
+            entry = f"[{get_datetime_str(now_datetime())}]\n{message}"
+            combined_message = f"{existing_message}\n\n{entry}".strip()
+            frappe.db.set_value(
+                "Error Log",
+                error_log_name,
+                "error",
+                combined_message[-60000:],
+                update_modified=True,
+            )
             return
     except Exception:
         pass
