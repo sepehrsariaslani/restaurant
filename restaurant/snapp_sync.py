@@ -4096,6 +4096,51 @@ def _ensure_sales_invoice_for_order(sales_order_name, order_payload):
     return {"status": "created", "sales_invoice": invoice_name, "payment_method": payment_method}
 
 
+def _auto_deliver_invoiced_snapp_order(sales_order_name, order_payload, sync_result):
+    """Run delivery-only fulfillment after a fresh delivered Partner status."""
+    if str(order_payload.get("status") or "").strip().lower() != "delivered":
+        return
+    if not sales_order_name or not order_is_approved(sales_order_name):
+        return
+
+    sync_result.setdefault("auto_deliveries_completed_count", 0)
+    sync_result.setdefault("auto_delivery_failed_count", 0)
+    try:
+        from restaurant.api_food_partner import _complete_delivered_snappfood_order
+
+        fulfillment = _complete_delivered_snappfood_order(
+            sales_order_name,
+            order_payload.get("order_id"),
+            order_payload.get("status"),
+        )
+    except Exception:
+        error = frappe.get_traceback(with_context=False)
+        sync_result["failed_count"] += 1
+        sync_result["auto_delivery_failed_count"] += 1
+        sync_result["errors"].append({
+            "order_id": order_payload.get("order_id") or "",
+            "stage": "auto_delivery",
+            "error": error,
+        })
+        frappe.log_error(error, f"Food Partner Auto Delivery ({sales_order_name})")
+        return
+
+    if fulfillment.get("status") == "success":
+        sync_result["auto_deliveries_completed_count"] += 1
+        return
+
+    message = frappe.as_json(fulfillment, indent=2)
+    sync_result["failed_count"] += 1
+    sync_result["auto_delivery_failed_count"] += 1
+    sync_result["errors"].append({
+        "order_id": order_payload.get("order_id") or "",
+        "stage": "auto_delivery",
+        "outcome": fulfillment.get("outcome") or "delivery_failed",
+        "error": fulfillment.get("error") or fulfillment.get("message") or "Food Partner delivery failed.",
+    })
+    frappe.log_error(message, f"Food Partner Auto Delivery ({sales_order_name})")
+
+
 def _notify_new_order(sales_order_name, order_payload):
     if not frappe.db.exists("DocType", "Notification Log"):
         return
@@ -4165,6 +4210,8 @@ def sync_snapp_orders(
         "fetched_count": 0,
         "created_count": 0,
         "invoices_created_count": 0,
+        "auto_deliveries_completed_count": 0,
+        "auto_delivery_failed_count": 0,
         "updated_count": 0,
         "cancelled_count": 0,
         "skipped_count": 0,
@@ -4313,6 +4360,7 @@ def sync_snapp_orders(
                             if invoice_result.get("status") == "created":
                                 result.setdefault("invoices_created_count", 0)
                                 result["invoices_created_count"] += 1
+                            _auto_deliver_invoiced_snapp_order(existing, normalized, result)
                         except Exception:
                             result["failed_count"] += 1
                             result["errors"].append(
@@ -4380,6 +4428,7 @@ def sync_snapp_orders(
                     if invoice_result.get("status") == "created":
                         result.setdefault("invoices_created_count", 0)
                         result["invoices_created_count"] += 1
+                    _auto_deliver_invoiced_snapp_order(sales_order_name, normalized, result)
                 _notify_new_order(sales_order_name, normalized)
                 if action == "cancelled":
                     result["cancelled_count"] += 1
