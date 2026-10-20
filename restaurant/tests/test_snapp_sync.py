@@ -202,13 +202,21 @@ class TestSnappSync(FrappeTestCase):
                     "products": [
                         {
                             "id": 37382933,
-                            "fields": {"title": {"value": "کاسه نودل آسیایی"}, "price": {"value": 410000}},
+                            "hashId": "p_noodles",
+                            "fields": {
+                                "title": {"value": "کاسه نودل آسیایی"},
+                                "price": {"value": 410000},
+                                "description": {"value": "توضیح محصول ساده"},
+                            },
                             "variations": [],
                         },
                         {
                             "id": 36485633,
                             "hashId": "p_club",
-                            "fields": {"title": {"value": "کلاب بوقلمون دودی"}},
+                            "fields": {
+                                "title": {"value": "کلاب بوقلمون دودی"},
+                                "description": {"value": "توضیح مشترک محصول"},
+                            },
                             "variations": [
                                 {
                                     "id": 36485634,
@@ -242,6 +250,9 @@ class TestSnappSync(FrappeTestCase):
         simple = next(row for row in result["items"] if row["title"] == "کاسه نودل آسیایی")
         self.assertEqual(simple["product_id"], "37382933")
         self.assertEqual(simple["variation_id"], "")
+        self.assertEqual(simple["status_id"], "37382933")
+        self.assertEqual(simple["product_hash_id"], "p_noodles")
+        self.assertEqual(simple["description"], "توضیح محصول ساده")
         self.assertEqual(simple["category_id"], "2642322")
         variation = next(row for row in result["items"] if row["variation_id"] == "36485634")
         self.assertEqual(variation["external_id"], "36485634")
@@ -250,7 +261,8 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(variation["variation_hash_id"], "v_club_regular")
         self.assertEqual(variation["product_title"], "کلاب بوقلمون دودی")
         self.assertEqual(variation["variation_title"], "کلاب بوقلمون دودی تست جو")
-        self.assertEqual(variation["description"], "با سبزی تازه")
+        self.assertEqual(variation["description"], "توضیح مشترک محصول")
+        self.assertEqual(variation["status_id"], "36485634")
         self.assertIs(variation["active"], True)
         fake_db.commit.assert_called_once()
 
@@ -272,7 +284,50 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(request.call_args.kwargs["json"], {"description": "توضیح تازه"})
         self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer secret")
 
-    def test_food_partner_status_update_uses_v4_bulk_contract(self):
+    def test_food_partner_product_description_update_uses_current_product_endpoint(self):
+        response = Mock(status_code=200, ok=True)
+        response.json.return_value = {"status": True}
+        settings = {
+            "token": "secret",
+            "vendor_id": "466275",
+            "menu_api_base_url": "https://apigw.snappfood.ir",
+        }
+        with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ) as request:
+            result = snapp_sync.update_snappfood_product_description("p_club", "توضیح محصول")
+
+        self.assertEqual(result, {"status": "success", "product_hash_id": "p_club", "description": "توضیح محصول"})
+        self.assertEqual(
+            request.call_args.args[0],
+            "https://apigw.snappfood.ir/vendor-menu/v3/vendors/466275/products/p_club",
+        )
+        self.assertEqual(request.call_args.kwargs["files"], {"description": (None, "توضیح محصول")})
+        self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer secret")
+
+    def test_food_partner_product_description_rejects_partner_validation_failures(self):
+        response = Mock(status_code=200, ok=True)
+        response.json.return_value = {"status": False, "message": "توضیحات نیازمند بررسی است."}
+        settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
+        with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ), self.assertRaises(snapp_sync.frappe.ValidationError):
+            snapp_sync.update_snappfood_product_description("p_club", "توضیح محصول")
+
+    def test_food_partner_product_description_surfaces_field_validation_reason(self):
+        response = Mock(status_code=422, ok=False)
+        response.json.return_value = {
+            "status": False,
+            "message": "Unprocessable Entity",
+            "data": [{"type": "request_validation", "property_path": "[description]", "message": "این فیلد انتظار نمی‌رفت."}],
+        }
+        settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
+        with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ), self.assertRaisesRegex(snapp_sync.frappe.ValidationError, "این فیلد انتظار نمی‌رفت"):
+            snapp_sync.update_snappfood_product_description("p_club", "توضیح محصول")
+
+    def test_food_partner_menu_item_status_update_uses_v4_bulk_contract(self):
         response = Mock(status_code=200, ok=True)
         response.json.return_value = {"success": True}
         settings = {
@@ -283,14 +338,24 @@ class TestSnappSync(FrappeTestCase):
         with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
             "restaurant.snapp_sync.requests.post", return_value=response
         ) as request:
-            result = snapp_sync.set_snappfood_variation_status("36485634", 0)
+            result = snapp_sync.set_snappfood_menu_item_status("37382933", 1)
 
-        self.assertEqual(result, {"status": "success", "variation_id": "36485634", "active": False})
+        self.assertEqual(result, {"status": "success", "item_id": "37382933", "active": True})
         self.assertEqual(request.call_args.args[0], "https://apigw.snappfood.ir/vendor-menu/v4/vendors/466275/variations/status/bulk")
         self.assertEqual(
             request.call_args.kwargs["json"],
-            {"ids": ["36485634"], "status": "IN_ACTIVE", "disable_until_next_shift": False},
+            {"ids": ["37382933"], "status": "ACTIVE", "disable_until_next_shift": False},
         )
+
+    def test_food_partner_legacy_variation_status_keeps_its_response_shape(self):
+        response = Mock(status_code=200, ok=True)
+        response.json.return_value = {"success": True}
+        settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
+        with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ):
+            result = snapp_sync.set_snappfood_variation_status("36485634", 0)
+        self.assertEqual(result, {"status": "success", "variation_id": "36485634", "active": False})
 
     def test_product_group_mapping_uses_parent_id_and_clears_single_variation_aliases(self):
         fake_db = SimpleNamespace(

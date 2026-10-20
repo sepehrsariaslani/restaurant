@@ -16,6 +16,15 @@ def get_snappfood_menu_products():
 
 
 @frappe.whitelist()
+def update_snappfood_product_description(product_hash_id="", description=""):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import update_snappfood_product_description as _update_description
+
+	_ensure_management_access()
+	return _update_description(product_hash_id=product_hash_id, description=description)
+
+
+@frappe.whitelist()
 def update_snappfood_variation_description(variation_id="", description=""):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import update_snappfood_variation_description as _update_description
@@ -31,6 +40,15 @@ def set_snappfood_variation_status(variation_id="", active=None):
 
 	_ensure_management_access()
 	return _set_status(variation_id=variation_id, active=active)
+
+
+@frappe.whitelist()
+def set_snappfood_menu_item_status(item_id="", active=None):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import set_snappfood_menu_item_status as _set_status
+
+	_ensure_management_access()
+	return _set_status(item_id=item_id, active=active)
 
 
 @frappe.whitelist()

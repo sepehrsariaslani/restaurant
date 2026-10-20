@@ -1021,6 +1021,7 @@ def _extract_current_food_partner_menu_entries(payload):
             product_id = str(product.get("id") or "").strip()
             product_hash_id = str(product.get("hashId") or "").strip()
             product_title = str(_food_partner_field_value(product, "title") or "").strip()
+            product_description = _food_partner_field_value(product, "description")
             if variations:
                 variants = [(variation, True) for variation in variations if isinstance(variation, dict)]
             else:
@@ -1040,6 +1041,7 @@ def _extract_current_food_partner_menu_entries(payload):
                         "variationTitle": str(_food_partner_field_value(variation, "title") or "").strip()
                         if is_variation
                         else "",
+                        "statusId": variation_id or product_id,
                         "title": _food_partner_field_value(variation, "title")
                         or _food_partner_field_value(product, "title")
                         or "",
@@ -1047,9 +1049,11 @@ def _extract_current_food_partner_menu_entries(payload):
                         if _food_partner_field_value(variation, "price") is not None
                         else (_food_partner_field_value(product, "price") or 0),
                         "status": variation.get("status") or product.get("status") or "",
-                        "description": _food_partner_field_value(variation, "description")
-                        if is_variation
-                        else _food_partner_field_value(product, "description"),
+                        # Food Partner stores the description on the product, even
+                        # when the visible menu row is one of its variations.
+                        "description": product_description
+                        if product_description is not None
+                        else _food_partner_field_value(variation, "description"),
                         "active": _food_partner_variation_active(variation if is_variation else product),
                         "disabledUntil": variation.get("disabledUntil")
                         or variation.get("disabled_until")
@@ -1539,6 +1543,13 @@ def fetch_snapp_menu(settings=None):
                 ).strip(),
                 "product_id": product_id,
                 "variation_id": variation_id,
+                "status_id": str(
+                    entry.get("statusId")
+                    or entry.get("status_id")
+                    or variation_id
+                    or product_id
+                    or ""
+                ).strip(),
                 "product_hash_id": str(entry.get("productHashId") or entry.get("product_hash_id") or "").strip(),
                 "variation_hash_id": str(entry.get("variationHashId") or entry.get("variation_hash_id") or "").strip(),
                 "product_title": str(
@@ -1625,11 +1636,14 @@ def _snapp_menu_mutation_error(response, payload):
         return None if getattr(response, "ok", False) else f"درخواست تغییر منو با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
 
     candidates = [payload.get("message"), payload.get("code"), payload.get("status")]
+    nested_details = []
     pending = [payload.get("error"), payload.get("errors"), payload.get("reason"), payload.get("data")]
     while pending:
         value = pending.pop()
         if isinstance(value, dict):
-            candidates.extend((value.get("message"), value.get("code"), value.get("reason")))
+            details = (value.get("message"), value.get("code"), value.get("reason"))
+            candidates.extend(details)
+            nested_details.extend(item for item in details if item not in (None, ""))
             pending.extend(value.get(key) for key in ("error", "errors", "data", "details") if key in value)
         elif isinstance(value, list):
             pending.extend(value)
@@ -1641,9 +1655,19 @@ def _snapp_menu_mutation_error(response, payload):
     if (
         not getattr(response, "ok", False)
         or payload.get("success") is False
-        or str(payload.get("status") or "").lower() in {"error", "failed", "rejected"}
+        or payload.get("status") is False
+        or str(payload.get("status") or "").strip().lower() in {"false", "error", "failed", "rejected"}
     ):
-        detail = next((str(value).strip() for value in candidates if value not in (None, "")), "")
+        detail = next(
+            (
+                str(value).strip()
+                for value in nested_details
+                if str(value).strip().lower() not in {"unprocessable entity", "bad request"}
+            ),
+            "",
+        )
+        if not detail:
+            detail = next((str(value).strip() for value in candidates if value not in (None, "")), "")
         return detail or f"درخواست تغییر منو با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
     return None
 
@@ -1651,6 +1675,40 @@ def _snapp_menu_mutation_error(response, payload):
 def get_snappfood_menu_products():
     """Fetch only menu rows for the Food Partner management view."""
     return fetch_snapp_menu()
+
+
+def update_snappfood_product_description(product_hash_id, description):
+    """Update the shared product description through the current Partner API."""
+    cfg = _require_snapp_menu_settings()
+    product_hash_id = str(product_hash_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", product_hash_id):
+        raise frappe.ValidationError("شناسه محصول Food Partner معتبر نیست.")
+    description = str(description or "")
+    if len(description) > 256:
+        raise frappe.ValidationError("توضیحات حداکثر می‌تواند ۲۵۶ نویسه باشد.")
+
+    url = (
+        f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}"
+        f"/vendor-menu/v3/vendors/{cfg['vendor_id']}/products/{product_hash_id}"
+    )
+    try:
+        # The Partner UI submits changed product fields as multipart form data.
+        response = requests.post(
+            url,
+            headers=_snapp_menu_headers(cfg),
+            files={"description": (None, description)},
+            timeout=30,
+        )
+        try:
+            payload = response.json()
+        except (TypeError, ValueError):
+            payload = None
+        error = _snapp_menu_mutation_error(response, payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با API توضیحات محصول Food Partner برقرار نشد.") from exc
+    return {"status": "success", "product_hash_id": product_hash_id, "description": description}
 
 
 def update_snappfood_variation_description(variation_id, description):
@@ -1680,10 +1738,10 @@ def update_snappfood_variation_description(variation_id, description):
     return {"status": "success", "variation_id": variation_id, "description": description}
 
 
-def set_snappfood_variation_status(variation_id, active):
+def set_snappfood_menu_item_status(item_id, active):
     cfg = _require_snapp_menu_settings()
-    variation_id = str(variation_id or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", variation_id):
+    item_id = str(item_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", item_id):
         raise frappe.ValidationError("شناسه گزینهٔ Food Partner معتبر نیست.")
     active_value = _food_partner_boolean(active)
     if active_value is None:
@@ -1694,7 +1752,7 @@ def set_snappfood_variation_status(variation_id, active):
         f"/vendor-menu/v4/vendors/{cfg['vendor_id']}/variations/status/bulk"
     )
     payload = {
-        "ids": [variation_id],
+        "ids": [item_id],
         "status": "ACTIVE" if active_value else "IN_ACTIVE",
         "disable_until_next_shift": False,
     }
@@ -1709,7 +1767,17 @@ def set_snappfood_variation_status(variation_id, active):
             raise frappe.ValidationError(error)
     except requests.RequestException as exc:
         raise frappe.ValidationError("ارتباط با API وضعیت منوی Food Partner برقرار نشد.") from exc
-    return {"status": "success", "variation_id": variation_id, "active": active_value}
+    return {"status": "success", "item_id": item_id, "active": active_value}
+
+
+def set_snappfood_variation_status(variation_id, active):
+    """Backward-compatible variation status facade."""
+    result = set_snappfood_menu_item_status(variation_id, active)
+    return {
+        "status": result["status"],
+        "variation_id": str(variation_id or "").strip(),
+        "active": result["active"],
+    }
 
 
 def _local_item_fields():
