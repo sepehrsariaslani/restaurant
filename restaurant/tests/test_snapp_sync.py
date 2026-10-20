@@ -139,6 +139,41 @@ class TestSnappSync(FrappeTestCase):
         self.assertNotIn("token", json.dumps(result))
         self.assertNotIn("must-not-return", json.dumps(result))
 
+    def test_discover_vendor_id_from_a_single_account_vendor(self):
+        user_payload = {
+            "data": {
+                "relationships": {"vendorUsers": {"data": [{"id": "466275", "type": "vendorUser"}]}},
+            },
+            "included": [
+                {"id": "466275", "type": "vendorUser", "attributes": {"title": "فروشگاه نمونه"}},
+            ],
+        }
+
+        vendor_id = snapp_sync._discover_snappfood_vendor_id("not-a-jwt", user_payload=user_payload)
+
+        self.assertEqual(vendor_id, "466275")
+
+    def test_vendor_discovery_requires_selection_when_account_has_multiple_vendors(self):
+        user_payload = {
+            "data": {
+                "relationships": {
+                    "vendorUsers": {
+                        "data": [
+                            {"id": "466275", "type": "vendorUser"},
+                            {"id": "733194", "type": "vendorUser"},
+                        ]
+                    }
+                },
+            },
+            "included": [
+                {"id": "466275", "type": "vendorUser", "attributes": {}},
+                {"id": "733194", "type": "vendorUser", "attributes": {}},
+            ],
+        }
+
+        with self.assertRaises(frappe.ValidationError):
+            snapp_sync._discover_snappfood_vendor_id("not-a-jwt", user_payload=user_payload)
+
     def test_menu_auth_failure_becomes_user_facing_validation_error(self):
         response = Mock(status_code=401, reason="Unauthorized")
         response.raise_for_status.side_effect = requests.HTTPError(
