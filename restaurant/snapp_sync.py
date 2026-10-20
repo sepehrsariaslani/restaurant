@@ -30,6 +30,7 @@ DEFAULT_LOOKBACK_MINUTES = 180
 DEFAULT_AMOUNT_MULTIPLIER = 10
 DEFAULT_REPORT_URL = "https://snappfood.ir/vms/v3/restaurant/report"
 DEFAULT_MENU_API_BASE_URL = "https://apigw.snappfood.ir"
+DEFAULT_VENDOR_ACCOUNT_API_BASE_URL = "https://vendor.snappfood.ir"
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
@@ -340,17 +341,52 @@ def _get_settings():
     }
 
 
+def _food_partner_token_metadata(token):
+    token = _normalize_bearer_token(token)
+    if not token:
+        return {"hint": "", "username": "", "expires_at": ""}
+
+    metadata = {"hint": f"••••{token[-4:]}", "username": "", "expires_at": ""}
+    parts = token.split(".")
+    if len(parts) != 3:
+        return metadata
+    try:
+        encoded_payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(encoded_payload.encode("ascii")))
+    except (binascii.Error, ValueError, UnicodeError, json.JSONDecodeError):
+        return metadata
+    if not isinstance(claims, dict):
+        return metadata
+
+    metadata["username"] = str(claims.get("username") or "").strip()[:120]
+    try:
+        expiry = int(claims.get("exp") or 0)
+        if expiry > 0:
+            metadata["expires_at"] = datetime.fromtimestamp(expiry, tz=timezone.utc).isoformat(timespec="minutes")
+    except (OverflowError, OSError, TypeError, ValueError):
+        pass
+    return metadata
+
+
 def get_sync_status():
     settings = _get_settings()
     if settings.get("reason"):
         return {**settings, "schema_ready": False, "schema_missing": []}
 
     schema_status = _get_schema_status()
+    token_metadata = _food_partner_token_metadata(settings.get("token"))
+    order_access_token_metadata = _food_partner_token_metadata(settings.get("access_token"))
 
     return {
         "enabled": settings["enabled"],
         "has_token": bool(settings["token"]),
         "has_order_access_token": bool(settings.get("access_token")),
+        "token_hint": token_metadata["hint"],
+        "token_username": token_metadata["username"],
+        "token_expires_at": token_metadata["expires_at"],
+        "order_access_token_hint": order_access_token_metadata["hint"],
+        "order_access_token_username": order_access_token_metadata["username"],
+        "order_access_token_expires_at": order_access_token_metadata["expires_at"],
         "api_base_url": settings["api_base_url"],
         "report_url": settings.get("report_url") or DEFAULT_REPORT_URL,
         "menu_api_base_url": settings.get("menu_api_base_url") or DEFAULT_MENU_API_BASE_URL,
@@ -374,6 +410,143 @@ def get_sync_status():
         "last_error_message": frappe.db.get_single_value("Restaurant Web Settings", "snapp_last_error_message")
         if _has_field("Restaurant Web Settings", "snapp_last_error_message")
         else None,
+    }
+
+
+def _food_partner_account_request(url, token):
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "authorization": f"Bearer {_normalize_bearer_token(token)}",
+                "user-agent": "Mozilla/5.0",
+            },
+            timeout=25,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.HTTPError as exc:
+        status_code = getattr(exc.response, "status_code", None)
+        if status_code in (401, 403):
+            message = "توکن Food Partner برای دریافت اطلاعات حساب پذیرفته نشد."
+        else:
+            message = f"دریافت اطلاعات حساب Food Partner با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+        raise frappe.ValidationError(message) from exc
+    except (requests.RequestException, TypeError, ValueError) as exc:
+        raise frappe.ValidationError("ارتباط با سرویس اطلاعات حساب Food Partner برقرار نشد.") from exc
+    if not isinstance(payload, dict):
+        raise frappe.ValidationError("پاسخ اطلاعات حساب Food Partner قابل خواندن نیست.")
+    return payload
+
+
+def _food_partner_json_api_record_attributes(record):
+    if not isinstance(record, dict):
+        return {}
+    attributes = record.get("attributes")
+    return attributes if isinstance(attributes, dict) else {}
+
+
+def _food_partner_json_api_display(value):
+    if isinstance(value, dict):
+        value = value.get("title") or value.get("name") or value.get("value") or ""
+    if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        return str(value).strip()
+    return ""
+
+
+def get_snappfood_account_info(settings=None):
+    """Read the authenticated user's and selected vendor's safe profile fields."""
+    cfg = settings or _get_settings()
+    token = _normalize_bearer_token(cfg.get("token"))
+    vendor_id = str(cfg.get("vendor_id") or "").strip()
+    if not token:
+        raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", vendor_id):
+        raise frappe.ValidationError("شناسه فروشنده Food Partner معتبر نیست.")
+
+    user_payload = _food_partner_account_request(
+        f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/user/vendors", token
+    )
+    user_record = user_payload.get("data") if isinstance(user_payload.get("data"), dict) else {}
+    user_attributes = _food_partner_json_api_record_attributes(user_record)
+    user_name = str(user_attributes.get("name") or "").strip()
+    if not user_name:
+        user_name = " ".join(
+            str(user_attributes.get(key) or "").strip()
+            for key in ("firstName", "lastName")
+            if str(user_attributes.get(key) or "").strip()
+        )
+
+    relationships = user_record.get("relationships") if isinstance(user_record.get("relationships"), dict) else {}
+    vendor_user_refs = relationships.get("vendorUsers") if isinstance(relationships.get("vendorUsers"), dict) else {}
+    vendor_user_refs = vendor_user_refs.get("data") if isinstance(vendor_user_refs.get("data"), list) else []
+    included = user_payload.get("included") if isinstance(user_payload.get("included"), list) else []
+    included_by_id = {
+        (str(record.get("type") or ""), str(record.get("id") or "")): record
+        for record in included
+        if isinstance(record, dict)
+    }
+    vendor_user_records = []
+    for reference in vendor_user_refs:
+        if not isinstance(reference, dict):
+            continue
+        record = included_by_id.get((str(reference.get("type") or ""), str(reference.get("id") or "")))
+        if record:
+            vendor_user_records.append(record)
+    if not vendor_user_records:
+        vendor_user_records = [
+            record for record in included
+            if isinstance(record, dict) and str(record.get("type") or "").lower() == "vendoruser"
+        ]
+
+    def vendor_identity(record):
+        attrs = _food_partner_json_api_record_attributes(record)
+        return {
+            str(record.get("id") or "").strip(),
+            str(attrs.get("code") or "").strip(),
+            str(attrs.get("uid") or "").strip(),
+            str(attrs.get("vendorId") or attrs.get("vendor_id") or "").strip(),
+        }
+
+    selected_vendor_record = next(
+        (record for record in vendor_user_records if vendor_id in vendor_identity(record)),
+        vendor_user_records[0] if len(vendor_user_records) == 1 else None,
+    )
+    selected_vendor_attributes = _food_partner_json_api_record_attributes(selected_vendor_record)
+    profile_payload = _food_partner_account_request(
+        f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/vendor-registration/vendor/{vendor_id}", token
+    )
+    profile_record = profile_payload.get("data") if isinstance(profile_payload.get("data"), dict) else {}
+    profile_attributes = _food_partner_json_api_record_attributes(profile_record)
+
+    def first_display(*values):
+        return next((display for display in (_food_partner_json_api_display(value) for value in values) if display), "")
+
+    vendor = {
+        "vendor_id": vendor_id,
+        "title": first_display(profile_attributes.get("title"), selected_vendor_attributes.get("title")),
+        "english_title": first_display(profile_attributes.get("englishTitle")),
+        "address": first_display(profile_attributes.get("address"), selected_vendor_attributes.get("address")),
+        "phone": first_display(profile_attributes.get("phoneNumber"), selected_vendor_attributes.get("customerPhone")),
+        "postal_code": first_display(profile_attributes.get("postalCode")),
+        "status": first_display(profile_attributes.get("status"), selected_vendor_attributes.get("status")),
+        "city": first_display(selected_vendor_attributes.get("city")),
+        "expedition_type": first_display(profile_attributes.get("expeditionType"), selected_vendor_attributes.get("expeditionType")),
+        "account_access_active": selected_vendor_attributes.get("isActive") if isinstance(selected_vendor_attributes.get("isActive"), bool) else None,
+        "has_delivery": bool(profile_attributes.get("hasVendorDelivery") or selected_vendor_attributes.get("hasVendorDelivery")),
+    }
+    return {
+        "status": "success",
+        "user": {
+            "name": user_name,
+            "username": str(user_attributes.get("username") or "").strip(),
+            "mobile": first_display(user_attributes.get("cellphone")),
+            "email": first_display(user_attributes.get("email")),
+        },
+        "vendor": vendor,
+        "vendors_count": len(vendor_user_refs),
+        "token": _food_partner_token_metadata(token),
     }
 
 

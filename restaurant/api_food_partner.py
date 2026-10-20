@@ -65,6 +65,15 @@ def test_snappfood_order_access():
 
 
 @frappe.whitelist()
+def get_snappfood_account_info():
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import get_snappfood_account_info as _get_account_info
+
+	_ensure_management_access()
+	return _get_account_info()
+
+
+@frappe.whitelist()
 def accept_snappfood_order(order_id="", preparation_minutes=None):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import accept_snappfood_order as _accept_order

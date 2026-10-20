@@ -86,6 +86,59 @@ class TestSnappSync(FrappeTestCase):
             "466275",
         )
 
+    def test_food_partner_token_metadata_masks_token_and_reads_expiry(self):
+        payload = base64.urlsafe_b64encode(
+            json.dumps({"username": "vmo466275", "exp": 1793626313}).encode("utf-8")
+        ).decode("ascii").rstrip("=")
+        token = f"header.{payload}.very-secret-signature"
+
+        metadata = snapp_sync._food_partner_token_metadata(token)
+
+        self.assertEqual(metadata["hint"], "••••ture")
+        self.assertEqual(metadata["username"], "vmo466275")
+        self.assertTrue(metadata["expires_at"].startswith("2026-11-02T"))
+        self.assertNotIn("very-secret-signature", json.dumps(metadata))
+
+    def test_food_partner_account_info_returns_allowlisted_user_and_vendor_fields(self):
+        user_payload = {
+            "data": {
+                "id": "user-1",
+                "type": "user",
+                "attributes": {"name": "نام حساب", "username": "vmo466275", "cellphone": "09120000000", "email": "user@example.test"},
+                "relationships": {"vendorUsers": {"data": [{"id": "466275", "type": "vendorUser"}]}},
+            },
+            "included": [
+                {
+                    "id": "466275",
+                    "type": "vendorUser",
+                    "attributes": {"code": "466275", "title": "فروشگاه نمونه", "status": "ACTIVE", "isActive": True, "token": "must-not-return"},
+                }
+            ],
+        }
+        vendor_payload = {
+            "data": {
+                "id": "466275",
+                "type": "vendor",
+                "attributes": {"title": "فروشگاه نمونه", "address": "نشانی نمونه", "phoneNumber": "02100000000", "postalCode": "1234567890", "status": "ACTIVE"},
+            },
+            "included": [],
+        }
+        settings = {"token": "header.payload.signature", "vendor_id": "466275"}
+        with patch(
+            "restaurant.snapp_sync._food_partner_account_request",
+            side_effect=[user_payload, vendor_payload],
+        ) as request:
+            result = snapp_sync.get_snappfood_account_info(settings=settings)
+
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(result["user"]["username"], "vmo466275")
+        self.assertEqual(result["vendor"]["vendor_id"], "466275")
+        self.assertEqual(result["vendor"]["title"], "فروشگاه نمونه")
+        self.assertTrue(result["vendor"]["account_access_active"])
+        self.assertEqual(result["vendors_count"], 1)
+        self.assertNotIn("token", json.dumps(result))
+        self.assertNotIn("must-not-return", json.dumps(result))
+
     def test_menu_auth_failure_becomes_user_facing_validation_error(self):
         response = Mock(status_code=401, reason="Unauthorized")
         response.raise_for_status.side_effect = requests.HTTPError(
