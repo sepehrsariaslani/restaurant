@@ -28,6 +28,7 @@ from restaurant.order_review import (
 	require_order_approved,
 	should_require_customer_order_review,
 )
+from restaurant.pos_print_config import clean_management_pos_print_profiles
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
 	add_days,
@@ -5444,6 +5445,7 @@ def _create_sales_order(
 	secondary_customer="",
 	coach_referral_customer="",
 	requires_review=False,
+	offline_price_map=None,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5557,6 +5559,17 @@ def _create_sales_order(
 		line_calc = _recalculate_line(
 			menu_doc, cart_line.get("qty"), customization, branch_markup_percent=markup_percent
 		)
+		if isinstance(offline_price_map, dict) and menu_doc.name in offline_price_map:
+			saved_rate = flt(cart_line.get("offline_unit_price"))
+			signed_floor = flt(offline_price_map.get(menu_doc.name))
+			if saved_rate < signed_floor - 0.01:
+				frappe.throw(_("The saved offline sale price is below the signed menu price."))
+			line_calc = dict(line_calc)
+			line_calc["unit_price"] = saved_rate
+			line_calc["line_total"] = saved_rate * flt(line_calc.get("qty") or 1)
+			pricing_breakdown = dict(line_calc.get("pricing_breakdown") or {})
+			pricing_breakdown.update({"unit_price": line_calc["unit_price"], "line_total": line_calc["line_total"]})
+			line_calc["pricing_breakdown"] = pricing_breakdown
 		# Food Partner sends both the net selling price and the original price.
 		# Keep the original unit price on the native line and let the imported
 		# order-level discount produce the net total. This is restricted to the
@@ -12226,6 +12239,7 @@ def place_order(
 		secondary_customer=(secondary_customer or "").strip(),
 		coach_referral_customer=coach_referral_customer,
 		requires_review=(should_require_customer_order_review() or bool(cint(requires_review))),
+		offline_price_map=getattr(frappe.local, "_restaurant_pos_offline_price_map", None),
 	)
 
 
@@ -15781,8 +15795,7 @@ def get_management_pos_config():
 			)
 		]
 	print_profiles = config.get("print_profiles") or []
-	if not isinstance(print_profiles, list):
-		print_profiles = []
+	clean_print_profiles = clean_management_pos_print_profiles(print_profiles)
 	defaults = {
 		"default_order_mode": config.get("default_order_mode", "dine_in"),
 		"default_customers": config.get(
@@ -15800,9 +15813,10 @@ def get_management_pos_config():
 		"default_delivery_courier": default_delivery_courier,
 		"default_payment_option": (config.get("default_payment_option") or "").strip(),
 		"default_payment_method": _normalize_payment_method(config.get("default_payment_method") or "cash"),
+		"auto_print_on_submit": cint(config.get("auto_print_on_submit", 1)),
 		"payment_options": payment_options,
 		"delivery_couriers": delivery_couriers,
-		"print_profiles": print_profiles,
+		"print_profiles": clean_print_profiles,
 		"print_item_groups": _management_print_item_group_options(),
 	}
 	return defaults
@@ -15839,31 +15853,11 @@ def set_management_pos_config(payload=None):
 	):
 		if key in data:
 			current[key] = data[key]
+	if "auto_print_on_submit" in data:
+		current["auto_print_on_submit"] = cint(data.get("auto_print_on_submit"))
 
 	if "print_profiles" in data:
-		profiles = data.get("print_profiles") or []
-		clean_profiles = []
-		if isinstance(profiles, list):
-			for profile in profiles:
-				if not isinstance(profile, dict):
-					continue
-				label = (profile.get("label") or "").strip()
-				kind = (profile.get("kind") or "").strip().lower()
-				if kind not in ("customer", "kitchen", "bar"):
-					kind = "kitchen"
-				item_groups = profile.get("item_groups") or []
-				if not isinstance(item_groups, list):
-					item_groups = []
-				item_groups = [str(g).strip() for g in item_groups if str(g).strip()]
-				clean_profiles.append({
-					"label": label or ("چاپ مشتری" if kind == "customer" else "چاپ آشپزخانه"),
-					"kind": kind,
-					"printer_name": (profile.get("printer_name") or "").strip(),
-					"item_groups": item_groups,
-					"show_prices": cint(profile.get("show_prices", 1 if kind == "customer" else 0)),
-					"enabled": cint(profile.get("enabled", 1)),
-				})
-		current["print_profiles"] = clean_profiles
+		current["print_profiles"] = clean_management_pos_print_profiles(data.get("print_profiles") or [])
 
 	frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
 	frappe.db.commit()

@@ -1,8 +1,12 @@
 """Reliability-focused management POS endpoints."""
 
 import copy
+import base64
+import hashlib
+import hmac
 import json
 import re
+import time
 
 import frappe
 from frappe import _
@@ -29,6 +33,58 @@ AUTO_RETRY_OFFLINE_MUTATION_TYPES = {
     "manual_payment_claim",
     "invoice_settlement_claim",
 }
+
+
+def _offline_price_secret():
+    config = getattr(frappe, "conf", None)
+    secret = config.get("encryption_key") if isinstance(config, dict) else getattr(config, "encryption_key", None)
+    return str(secret or "").encode("utf-8")
+
+
+def _sign_offline_price_snapshot(items, branch="", company="", user=None):
+    secret = _offline_price_secret()
+    if not secret:
+        frappe.throw(_("Offline POS price snapshots are unavailable because the site encryption key is not configured."))
+    prices = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        price = flt(item.get("base_price"))
+        for key in (item.get("name"), item.get("item_code"), item.get("slug")):
+            key = str(key or "").strip()
+            if key:
+                prices[key] = price
+    payload = {
+        "version": 1,
+        "user": str(user or getattr(getattr(frappe, "session", None), "user", "") or ""),
+        "company": str(company or ""),
+        "branch": str(branch or ""),
+        "issued_at": int(time.time()),
+        "prices": prices,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    signature = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{encoded}.{signature}"
+
+
+def _verify_offline_price_snapshot(token, user=None):
+    secret = _offline_price_secret()
+    try:
+        encoded, signature = str(token or "").split(".", 1)
+        expected = hmac.new(secret, encoded.encode("ascii"), hashlib.sha256).hexdigest()
+        if not secret or not hmac.compare_digest(signature, expected):
+            return None
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        payload = json.loads(raw.decode("utf-8"))
+        if payload.get("version") != 1 or not isinstance(payload.get("prices"), dict):
+            return None
+        current_user = str(user or getattr(getattr(frappe, "session", None), "user", "") or "")
+        if not current_user or payload.get("user") != current_user:
+            return None
+        return payload
+    except Exception:
+        return None
 
 
 def _legacy_api():
@@ -91,6 +147,11 @@ def _replay_offline_payment_claim(payload):
     mode_of_payment = payment.get("mode_of_payment") or data.get("mode_of_payment") or ""
     reference_no = payment.get("reference_no") or data.get("reference_no") or ""
     rrn = payment.get("rrn") or data.get("rrn") or ""
+    method_key = str(payment_method or "").strip().lower()
+    if method_key not in {"cash", "card"}:
+        frappe.throw(_("Offline payment claims support cash or a confirmed card-terminal payment only."))
+    if method_key == "card" and not (str(reference_no or "").strip() or str(rrn or "").strip()):
+        frappe.throw(_("A confirmed card-terminal payment requires a receipt reference or RRN."))
     result = legacy.mark_management_order_paid(
         order_name=order_name,
         payment_method=payment_method,
@@ -212,6 +273,21 @@ def replay_offline_pos_mutation(payload=None):
             "client_mutation_key": client_mutation_key,
             "result": _parse_payload(existing.result_json),
         }
+
+    if mutation_type == "table_add_items":
+        snapshot = _verify_offline_price_snapshot(mutation["payload"].get("offline_price_snapshot"))
+        if not snapshot:
+            frappe.throw(_("The offline price snapshot is invalid or belongs to another user. Please review the order."))
+        signed_prices = snapshot.get("prices") or {}
+        for item in mutation["payload"].get("items") or []:
+            if not isinstance(item, dict):
+                frappe.throw(_("The offline table order contains an invalid item."))
+            item_keys = [str(item.get(key) or "").strip() for key in ("item_code", "item_slug")]
+            signed_key = next((key for key in item_keys if key in signed_prices), "")
+            if not signed_key or "unit_price" not in item:
+                frappe.throw(_("The offline table order contains an item without a signed sale price."))
+            if flt(item.get("unit_price")) < flt(signed_prices[signed_key]) - 0.01:
+                frappe.throw(_("The saved table sale price is below the signed menu price."))
 
     try:
         result = _dispatch_offline_pos_mutation(mutation_type, mutation["payload"])
@@ -406,7 +482,7 @@ def _management_unavailable_items(branch=""):
 
 
 @frappe.whitelist()
-def get_management_pos_boot_reliable(branch=None):
+def get_management_pos_boot_reliable(branch=None, limit_start=0, limit_page_length=1000, items_only=0, **kwargs):
     legacy = _legacy_api()
     legacy._ensure_management_access()
     normalized_branch = (branch or "").strip()
@@ -418,6 +494,12 @@ def get_management_pos_boot_reliable(branch=None):
     result["items"] = _merge_pos_items(
         payload.get("items") or [],
         _management_unavailable_items(normalized_branch),
+    )
+    profile = result.get("pos_profile") if isinstance(result.get("pos_profile"), dict) else {}
+    result["offline_price_snapshot"] = _sign_offline_price_snapshot(
+        result["items"],
+        branch=normalized_branch or profile.get("branch") or profile.get("restaurant_branch") or "",
+        company=profile.get("company") or result.get("company") or "",
     )
     return result
 
@@ -441,7 +523,42 @@ def replay_offline_pos_order(payload=None):
             "client_order_key": client_order_key,
         }
 
+    snapshot = _verify_offline_price_snapshot(data.get("offline_price_snapshot"))
+    if not snapshot:
+        frappe.throw(_("The offline price snapshot is invalid or belongs to another user. Please review the order."))
+    items = data.get("items") if isinstance(data.get("items"), list) else []
+    offline_prices = snapshot.get("prices") or {}
+    for item in items:
+        if not isinstance(item, dict):
+            frappe.throw(_("The offline order contains an invalid item."))
+        item_keys = [str(item.get(key) or "").strip() for key in ("item_code", "item_slug")]
+        signed_key = next((key for key in item_keys if key in offline_prices), "")
+        if not signed_key:
+            frappe.throw(_("The offline order contains an item missing from its signed price snapshot."))
+        if item.get("unit_price") in (None, ""):
+            frappe.throw(_("The offline order is missing its saved sale price."))
+        if flt(item.get("unit_price")) < flt(offline_prices[signed_key]) - 0.01:
+            frappe.throw(_("The saved sale price is below the signed menu price. Please review the order."))
+        item["offline_unit_price"] = flt(item.get("unit_price"))
+
     data["client_order_key"] = client_order_key
+    order_context = data.get("order_context")
+    if not isinstance(order_context, dict):
+        order_context = {}
+    snapshot_branch = str(snapshot.get("branch") or "").strip()
+    snapshot_company = str(snapshot.get("company") or "").strip()
+    requested_branch = str(order_context.get("branch") or data.get("branch") or "").strip()
+    if requested_branch and snapshot_branch and requested_branch != snapshot_branch:
+        frappe.throw(_("The offline order branch does not match its saved price snapshot."))
+    if snapshot_branch:
+        order_context["branch"] = snapshot_branch
+    if snapshot_company:
+        order_context["company"] = snapshot_company
+        if legacy._resolve_order_company(order_context) != snapshot_company:
+            frappe.throw(_("The offline order company does not match its saved price snapshot."))
+    data["order_context"] = order_context
+    previous_price_map = getattr(frappe.local, "_restaurant_pos_offline_price_map", None)
+    frappe.local._restaurant_pos_offline_price_map = offline_prices
     try:
         result = legacy._create_pos_order_payload(data, commit=False)
         order_id = _extract_order_id(result)
@@ -471,6 +588,14 @@ def replay_offline_pos_order(payload=None):
                 "client_order_key": client_order_key,
             }
         raise
+    finally:
+        if previous_price_map is None:
+            try:
+                delattr(frappe.local, "_restaurant_pos_offline_price_map")
+            except AttributeError:
+                pass
+        else:
+            frappe.local._restaurant_pos_offline_price_map = previous_price_map
 
 
 def _set_item_field_if_available(legacy, item_doc, fieldname, value):
