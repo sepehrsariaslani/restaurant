@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import json
 import re
+from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1652,10 +1653,14 @@ def _snapp_menu_mutation_error(response, payload):
     for candidate in candidates:
         if str(candidate or "").strip().upper() == "REJECTED_BY_MAX_PRICE":
             return "اسنپ‌فود این تغییر را به‌دلیل محدودیت قیمت رد کرد؛ قیمت این گزینه را در پنل بررسی کنید."
+    nested_data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    business_errors = payload.get("errors") or nested_data.get("errors")
     if (
         not getattr(response, "ok", False)
         or payload.get("success") is False
         or payload.get("status") is False
+        or nested_data.get("status") is False
+        or bool(business_errors)
         or str(payload.get("status") or "").strip().lower() in {"false", "error", "failed", "rejected"}
     ):
         detail = next(
@@ -1677,15 +1682,86 @@ def get_snappfood_menu_products():
     return fetch_snapp_menu()
 
 
-def update_snappfood_product_description(product_hash_id, description):
-    """Update the shared product description through the current Partner API."""
+def _food_partner_decimal(value, label):
+    text = str(value or "").strip()
+    digit_map = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+    text = text.translate(digit_map).replace("٬", "").replace(",", "").replace(" ", "")
+    try:
+        amount = Decimal(text)
+    except (InvalidOperation, ValueError):
+        raise frappe.ValidationError(f"{label} معتبر نیست.")
+    if not amount.is_finite() or amount < 1000 or amount > 999999999:
+        raise frappe.ValidationError(f"{label} باید بین ۱٬۰۰۰ و ۹۹۹٬۹۹۹٬۹۹۹ تومان باشد.")
+    return format(amount.normalize(), "f")
+
+
+def _food_partner_product_update_fields(fields):
+    if not isinstance(fields, dict) or not fields:
+        raise frappe.ValidationError("برای ویرایش محصول، حداقل یک تغییر معتبر وارد کنید.")
+
+    allowed_fields = {"title", "description", "menuCategoryId", "menuCategoryTitle", "price", "variations"}
+    unknown_fields = set(fields) - allowed_fields
+    if unknown_fields:
+        raise frappe.ValidationError("یکی از فیلدهای ویرایش محصول پشتیبانی نمی‌شود.")
+
+    form_fields = {}
+    if "title" in fields:
+        title = str(fields.get("title") or "").strip()
+        if not title or len(title) > 64:
+            raise frappe.ValidationError("نام محصول باید بین ۱ تا ۶۴ نویسه باشد.")
+        form_fields["product[title]"] = (None, title)
+    if "description" in fields:
+        description = str(fields.get("description") or "")
+        if len(description) > 256:
+            raise frappe.ValidationError("توضیحات حداکثر می‌تواند ۲۵۶ نویسه باشد.")
+        form_fields["product[description]"] = (None, description)
+    if "menuCategoryId" in fields:
+        category_id = str(fields.get("menuCategoryId") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", category_id):
+            raise frappe.ValidationError("شناسه دسته‌بندی Food Partner معتبر نیست.")
+        category_title = str(fields.get("menuCategoryTitle") or "").strip()
+        if not category_title or len(category_title) > 64:
+            raise frappe.ValidationError("عنوان دسته‌بندی باید بین ۱ تا ۶۴ نویسه باشد.")
+        form_fields["product[menuCategoryId]"] = (None, category_id)
+        form_fields["product[menuCategoryTitle]"] = (None, category_title)
+    elif "menuCategoryTitle" in fields:
+        raise frappe.ValidationError("برای تغییر نام گروه، شناسهٔ دسته‌بندی هم لازم است.")
+    if "price" in fields:
+        form_fields["product[price]"] = (None, _food_partner_decimal(fields.get("price"), "قیمت محصول"))
+
+    if "variations" in fields:
+        variations = fields.get("variations")
+        if not isinstance(variations, list) or not variations or len(variations) > 30:
+            raise frappe.ValidationError("فهرست گزینه‌های محصول معتبر نیست.")
+        for index, variation in enumerate(variations):
+            if not isinstance(variation, dict):
+                raise frappe.ValidationError("اطلاعات یکی از گزینه‌های محصول معتبر نیست.")
+            variation_hash_id = str(variation.get("hashId") or variation.get("variation_hash_id") or "").strip()
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", variation_hash_id):
+                raise frappe.ValidationError("شناسه یکی از گزینه‌های Food Partner معتبر نیست.")
+            variation_fields = {"hashId", "variation_hash_id", "title", "price"}
+            if set(variation) - variation_fields or not ({"title", "price"} & set(variation)):
+                raise frappe.ValidationError("تغییر هر گزینه فقط می‌تواند شامل عنوان یا قیمت باشد.")
+            prefix = f"product[variations][{index}]"
+            form_fields[f"{prefix}[action]"] = (None, "update")
+            form_fields[f"{prefix}[hashId]"] = (None, variation_hash_id)
+            if "title" in variation:
+                variation_title = str(variation.get("title") or "").strip()
+                if not variation_title or len(variation_title) > 64:
+                    raise frappe.ValidationError("عنوان گزینه باید بین ۱ تا ۶۴ نویسه باشد.")
+                form_fields[f"{prefix}[title]"] = (None, variation_title)
+            if "price" in variation:
+                form_fields[f"{prefix}[price]"] = (None, _food_partner_decimal(variation.get("price"), "قیمت گزینه"))
+    return form_fields
+
+
+def update_snappfood_product(product_hash_id, fields):
+    """Submit supported product edits using the Partner web editor's multipart contract."""
     cfg = _require_snapp_menu_settings()
     product_hash_id = str(product_hash_id or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", product_hash_id):
         raise frappe.ValidationError("شناسه محصول Food Partner معتبر نیست.")
-    description = str(description or "")
-    if len(description) > 256:
-        raise frappe.ValidationError("توضیحات حداکثر می‌تواند ۲۵۶ نویسه باشد.")
+    form_fields = _food_partner_product_update_fields(fields)
 
     url = (
         f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}"
@@ -1696,7 +1772,7 @@ def update_snappfood_product_description(product_hash_id, description):
         response = requests.post(
             url,
             headers=_snapp_menu_headers(cfg),
-            files={"description": (None, description)},
+            files=form_fields,
             timeout=30,
         )
         try:
@@ -1707,8 +1783,78 @@ def update_snappfood_product_description(product_hash_id, description):
         if error:
             raise frappe.ValidationError(error)
     except requests.RequestException as exc:
-        raise frappe.ValidationError("ارتباط با API توضیحات محصول Food Partner برقرار نشد.") from exc
-    return {"status": "success", "product_hash_id": product_hash_id, "description": description}
+        raise frappe.ValidationError("ارتباط با API ویرایش محصول Food Partner برقرار نشد.") from exc
+    return {"status": "success", "product_hash_id": product_hash_id}
+
+
+def update_snappfood_product_description(product_hash_id, description):
+    """Backward-compatible product-description update facade."""
+    result = update_snappfood_product(product_hash_id, {"description": str(description or "")})
+    return {**result, "description": str(description or "")}
+
+
+def create_snappfood_product(payload):
+    """Create a product through the current Partner web form contract."""
+    cfg = _require_snapp_menu_settings()
+    if not isinstance(payload, dict):
+        raise frappe.ValidationError("اطلاعات محصول جدید معتبر نیست.")
+
+    allowed_fields = {"title", "description", "category_id", "category_title", "price", "variations"}
+    if set(payload) - allowed_fields:
+        raise frappe.ValidationError("یکی از فیلدهای محصول جدید پشتیبانی نمی‌شود.")
+
+    title = str(payload.get("title") or "").strip()
+    description = str(payload.get("description") or "")
+    category_id = str(payload.get("category_id") or "").strip()
+    category_title = str(payload.get("category_title") or "").strip()
+    if not title or len(title) > 64:
+        raise frappe.ValidationError("نام محصول باید بین ۱ تا ۶۴ نویسه باشد.")
+    if len(description) > 256:
+        raise frappe.ValidationError("توضیحات حداکثر می‌تواند ۲۵۶ نویسه باشد.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", category_id):
+        raise frappe.ValidationError("دسته‌بندی محصول را از فهرست Food Partner انتخاب کنید.")
+    if not category_title or len(category_title) > 64:
+        raise frappe.ValidationError("عنوان دسته‌بندی محصول معتبر نیست.")
+
+    form_fields = {
+        "description": (None, description),
+        "suggestionDetails[productTitle]": (None, "none"),
+        "suggestionDetails[description]": (None, "none"),
+        "suggestionDetails[categoryTitle]": (None, "none"),
+        "menuCategoryId": (None, category_id),
+        "menuCategoryTitle": (None, category_title),
+        "productTitle": (None, title),
+    }
+    variations = payload.get("variations")
+    if variations:
+        if not isinstance(variations, list) or len(variations) > 30:
+            raise frappe.ValidationError("فهرست گزینه‌های محصول معتبر نیست.")
+        for index, variation in enumerate(variations):
+            if not isinstance(variation, dict) or set(variation) - {"title", "price"}:
+                raise frappe.ValidationError("اطلاعات یکی از گزینه‌های محصول معتبر نیست.")
+            variation_title = str(variation.get("title") or "").strip()
+            if not variation_title or len(variation_title) > 64:
+                raise frappe.ValidationError("عنوان هر گزینه باید بین ۱ تا ۶۴ نویسه باشد.")
+            prefix = f"variations[{index}]"
+            form_fields[f"{prefix}[title]"] = (None, variation_title)
+            form_fields[f"{prefix}[price]"] = (None, _food_partner_decimal(variation.get("price"), "قیمت گزینه"))
+            form_fields[f"{prefix}[suggestionDetails][variationTitle]"] = (None, "none")
+    else:
+        form_fields["price"] = (None, _food_partner_decimal(payload.get("price"), "قیمت محصول"))
+
+    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendors/{cfg['vendor_id']}/products"
+    try:
+        response = requests.post(url, headers=_snapp_menu_headers(cfg), files=form_fields, timeout=30)
+        try:
+            response_payload = response.json()
+        except (TypeError, ValueError):
+            response_payload = None
+        error = _snapp_menu_mutation_error(response, response_payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با API افزودن محصول Food Partner برقرار نشد.") from exc
+    return {"status": "success", "title": title, "category_id": category_id}
 
 
 def update_snappfood_variation_description(variation_id, description):
