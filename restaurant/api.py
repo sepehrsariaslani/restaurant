@@ -28,6 +28,7 @@ from restaurant.order_review import (
 	require_order_approved,
 	should_require_customer_order_review,
 )
+from restaurant.pos_print_config import clean_management_pos_print_profiles
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
 	add_days,
@@ -15794,8 +15795,7 @@ def get_management_pos_config():
 			)
 		]
 	print_profiles = config.get("print_profiles") or []
-	if not isinstance(print_profiles, list):
-		print_profiles = []
+	clean_print_profiles = clean_management_pos_print_profiles(print_profiles)
 	defaults = {
 		"default_order_mode": config.get("default_order_mode", "dine_in"),
 		"default_customers": config.get(
@@ -15813,9 +15813,10 @@ def get_management_pos_config():
 		"default_delivery_courier": default_delivery_courier,
 		"default_payment_option": (config.get("default_payment_option") or "").strip(),
 		"default_payment_method": _normalize_payment_method(config.get("default_payment_method") or "cash"),
+		"auto_print_on_submit": cint(config.get("auto_print_on_submit", 1)),
 		"payment_options": payment_options,
 		"delivery_couriers": delivery_couriers,
-		"print_profiles": print_profiles,
+		"print_profiles": clean_print_profiles,
 		"print_item_groups": _management_print_item_group_options(),
 	}
 	return defaults
@@ -15852,31 +15853,11 @@ def set_management_pos_config(payload=None):
 	):
 		if key in data:
 			current[key] = data[key]
+	if "auto_print_on_submit" in data:
+		current["auto_print_on_submit"] = cint(data.get("auto_print_on_submit"))
 
 	if "print_profiles" in data:
-		profiles = data.get("print_profiles") or []
-		clean_profiles = []
-		if isinstance(profiles, list):
-			for profile in profiles:
-				if not isinstance(profile, dict):
-					continue
-				label = (profile.get("label") or "").strip()
-				kind = (profile.get("kind") or "").strip().lower()
-				if kind not in ("customer", "kitchen", "bar"):
-					kind = "kitchen"
-				item_groups = profile.get("item_groups") or []
-				if not isinstance(item_groups, list):
-					item_groups = []
-				item_groups = [str(g).strip() for g in item_groups if str(g).strip()]
-				clean_profiles.append({
-					"label": label or ("چاپ مشتری" if kind == "customer" else "چاپ آشپزخانه"),
-					"kind": kind,
-					"printer_name": (profile.get("printer_name") or "").strip(),
-					"item_groups": item_groups,
-					"show_prices": cint(profile.get("show_prices", 1 if kind == "customer" else 0)),
-					"enabled": cint(profile.get("enabled", 1)),
-				})
-		current["print_profiles"] = clean_profiles
+		current["print_profiles"] = clean_management_pos_print_profiles(data.get("print_profiles") or [])
 
 	frappe.defaults.set_global_default("restaurant_pos_defaults", json.dumps(current, ensure_ascii=False))
 	frappe.db.commit()
