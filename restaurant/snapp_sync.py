@@ -973,6 +973,30 @@ def _food_partner_field_value(record, fieldname):
     return value
 
 
+def _food_partner_boolean(value):
+    """Return a boolean for explicit Food Partner status values, otherwise None."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"1", "true", "yes", "active", "enabled", "available"}:
+        return True
+    if normalized in {"0", "false", "no", "in_active", "inactive", "disabled", "unavailable"}:
+        return False
+    return None
+
+
+def _food_partner_variation_active(record):
+    explicit = _food_partner_field_value(record, "active")
+    if explicit is None:
+        explicit = _food_partner_field_value(record, "isActive")
+    parsed = _food_partner_boolean(explicit)
+    if parsed is not None:
+        return parsed
+    return _food_partner_boolean(record.get("status") if isinstance(record, dict) else None)
+
+
 def _extract_current_food_partner_menu_entries(payload):
     """Normalize the current category -> product -> variation menu response."""
     data = payload.get("data") if isinstance(payload, dict) else None
@@ -1023,6 +1047,14 @@ def _extract_current_food_partner_menu_entries(payload):
                         if _food_partner_field_value(variation, "price") is not None
                         else (_food_partner_field_value(product, "price") or 0),
                         "status": variation.get("status") or product.get("status") or "",
+                        "description": _food_partner_field_value(variation, "description")
+                        if is_variation
+                        else _food_partner_field_value(product, "description"),
+                        "active": _food_partner_variation_active(variation if is_variation else product),
+                        "disabledUntil": variation.get("disabledUntil")
+                        or variation.get("disabled_until")
+                        or product.get("disabledUntil")
+                        or product.get("disabled_until"),
                         "_category_id": category_id,
                         "_category_title": category_title,
                         "_food_partner_menu_v2": 1,
@@ -1361,6 +1393,7 @@ def fetch_snapp_menu_categories(settings=None):
     headers = {
         "accept": "application/json, text/plain, */*",
         "authorization": f"Bearer {cfg['token']}",
+        "backoffice-authorization": "true",
         "vendor-authorization": "true",
         "user-agent": "Mozilla/5.0",
     }
@@ -1446,6 +1479,7 @@ def fetch_snapp_menu(settings=None):
     headers = {
         "accept": "application/json, text/plain, */*",
         "authorization": f"Bearer {cfg['token']}",
+        "backoffice-authorization": "true",
         "vendor-authorization": "true",
         "user-agent": "Mozilla/5.0",
     }
@@ -1546,12 +1580,136 @@ def fetch_snapp_menu(settings=None):
                 ).strip(),
                 "price": flt(entry.get("price") or entry.get("variationPrice") or entry.get("variation_price") or 0),
                 "status": str(entry.get("status") or "").strip(),
+                "description": str(entry.get("description") or "").strip(),
+                "active": _food_partner_variation_active(entry),
+                "disabled_until": entry.get("disabledUntil") or entry.get("disabled_until") or "",
             }
         )
     if _has_field("Restaurant Web Settings", "snapp_last_menu_sync_at"):
         _set_single_if_exists("Restaurant Web Settings", "snapp_last_menu_sync_at", get_datetime_str(now_datetime()))
     frappe.db.commit()
     return {"status": "success", "count": len(rows), "items": rows}
+
+
+def _require_snapp_menu_settings(settings=None):
+    cfg = settings or _get_settings()
+    if not cfg.get("token"):
+        raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
+    vendor_id = str(cfg.get("vendor_id") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", vendor_id):
+        raise frappe.ValidationError("شناسه فروشنده Food Partner معتبر نیست.")
+    cfg["vendor_id"] = vendor_id
+    return cfg
+
+
+def _snapp_menu_headers(cfg):
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "authorization": f"Bearer {cfg['token']}",
+        "vendor-authorization": "true",
+        "user-agent": "Mozilla/5.0",
+    }
+    if cfg.get("host_domain"):
+        headers["hostdomain"] = cfg["host_domain"]
+    if cfg.get("origin_url"):
+        headers["origin"] = cfg["origin_url"]
+        headers["referer"] = f"{cfg['origin_url'].rstrip('/')}/"
+    return headers
+
+
+def _snapp_menu_mutation_error(response, payload):
+    status_code = getattr(response, "status_code", None)
+    if status_code in (401, 403):
+        return "توکن Food Partner معتبر نیست یا دسترسی تغییر منو رد شد."
+    if not isinstance(payload, dict):
+        return None if getattr(response, "ok", False) else f"درخواست تغییر منو با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+
+    candidates = [payload.get("message"), payload.get("code"), payload.get("status")]
+    pending = [payload.get("error"), payload.get("errors"), payload.get("reason"), payload.get("data")]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            candidates.extend((value.get("message"), value.get("code"), value.get("reason")))
+            pending.extend(value.get(key) for key in ("error", "errors", "data", "details") if key in value)
+        elif isinstance(value, list):
+            pending.extend(value)
+        elif value not in (None, ""):
+            candidates.append(value)
+    for candidate in candidates:
+        if str(candidate or "").strip().upper() == "REJECTED_BY_MAX_PRICE":
+            return "اسنپ‌فود این تغییر را به‌دلیل محدودیت قیمت رد کرد؛ قیمت این گزینه را در پنل بررسی کنید."
+    if (
+        not getattr(response, "ok", False)
+        or payload.get("success") is False
+        or str(payload.get("status") or "").lower() in {"error", "failed", "rejected"}
+    ):
+        detail = next((str(value).strip() for value in candidates if value not in (None, "")), "")
+        return detail or f"درخواست تغییر منو با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+    return None
+
+
+def get_snappfood_menu_products():
+    """Fetch only menu rows for the Food Partner management view."""
+    return fetch_snapp_menu()
+
+
+def update_snappfood_variation_description(variation_id, description):
+    cfg = _require_snapp_menu_settings()
+    variation_id = str(variation_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", variation_id):
+        raise frappe.ValidationError("شناسه گزینهٔ Food Partner معتبر نیست.")
+    description = str(description or "")
+    if len(description) > 256:
+        raise frappe.ValidationError("توضیحات حداکثر می‌تواند ۲۵۶ نویسه باشد.")
+
+    url = (
+        f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}"
+        f"/vendor-menu/v1/vendor/product/product-variation/{variation_id}"
+    )
+    try:
+        response = requests.patch(url, headers=_snapp_menu_headers(cfg), json={"description": description}, timeout=30)
+        try:
+            payload = response.json()
+        except (TypeError, ValueError):
+            payload = None
+        error = _snapp_menu_mutation_error(response, payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با API توضیحات Food Partner برقرار نشد.") from exc
+    return {"status": "success", "variation_id": variation_id, "description": description}
+
+
+def set_snappfood_variation_status(variation_id, active):
+    cfg = _require_snapp_menu_settings()
+    variation_id = str(variation_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", variation_id):
+        raise frappe.ValidationError("شناسه گزینهٔ Food Partner معتبر نیست.")
+    active_value = _food_partner_boolean(active)
+    if active_value is None:
+        raise frappe.ValidationError("وضعیت جدید گزینهٔ Food Partner معتبر نیست.")
+
+    url = (
+        f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}"
+        f"/vendor-menu/v4/vendors/{cfg['vendor_id']}/variations/status/bulk"
+    )
+    payload = {
+        "ids": [variation_id],
+        "status": "ACTIVE" if active_value else "IN_ACTIVE",
+        "disable_until_next_shift": False,
+    }
+    try:
+        response = requests.post(url, headers=_snapp_menu_headers(cfg), json=payload, timeout=30)
+        try:
+            response_payload = response.json()
+        except (TypeError, ValueError):
+            response_payload = None
+        error = _snapp_menu_mutation_error(response, response_payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با API وضعیت منوی Food Partner برقرار نشد.") from exc
+    return {"status": "success", "variation_id": variation_id, "active": active_value}
 
 
 def _local_item_fields():

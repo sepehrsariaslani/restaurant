@@ -1427,6 +1427,18 @@ export function getSnappfoodCategories() {
 	return callRestaurantAPI("get_snappfood_categories", {});
 }
 
+export function getSnappfoodMenuProducts() {
+	return callRestaurantAPI("get_snappfood_menu_products", {});
+}
+
+export function updateSnappfoodVariationDescription({ variation_id = "", description = "" } = {}) {
+	return callRestaurantAPI("update_snappfood_variation_description", { variation_id, description });
+}
+
+export function setSnappfoodVariationStatus({ variation_id = "", active = null } = {}) {
+	return callRestaurantAPI("set_snappfood_variation_status", { variation_id, active });
+}
+
 export function saveSnappfoodItemMapping(payload = {}) {
 	return callRestaurantAPI("save_snappfood_item_mapping", { payload });
 }

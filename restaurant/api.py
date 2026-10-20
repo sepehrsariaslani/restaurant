@@ -24255,6 +24255,33 @@ def get_snappfood_categories():
 
 
 @frappe.whitelist()
+def get_snappfood_menu_products():
+	_ensure_management_access()
+	from restaurant.snapp_sync import get_snappfood_menu_products as _get_menu_products
+
+	try:
+		return _get_menu_products()
+	except frappe.ValidationError as exc:
+		return {"status": "error", "error": str(exc), "count": 0, "items": []}
+
+
+@frappe.whitelist()
+def update_snappfood_variation_description(variation_id="", description=""):
+	_ensure_management_access()
+	from restaurant.snapp_sync import update_snappfood_variation_description as _update_description
+
+	return _update_description(variation_id=variation_id, description=description)
+
+
+@frappe.whitelist()
+def set_snappfood_variation_status(variation_id="", active=None):
+	_ensure_management_access()
+	from restaurant.snapp_sync import set_snappfood_variation_status as _set_status
+
+	return _set_status(variation_id=variation_id, active=active)
+
+
+@frappe.whitelist()
 def save_snappfood_item_mapping(payload=None):
 	_ensure_management_access()
 	payload = _parse_json(payload, {})

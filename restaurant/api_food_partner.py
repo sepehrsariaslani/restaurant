@@ -4,6 +4,36 @@ import frappe
 
 
 @frappe.whitelist()
+def get_snappfood_menu_products():
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import get_snappfood_menu_products as _get_menu_products
+
+	_ensure_management_access()
+	try:
+		return _get_menu_products()
+	except frappe.ValidationError as exc:
+		return {"status": "error", "error": str(exc), "count": 0, "items": []}
+
+
+@frappe.whitelist()
+def update_snappfood_variation_description(variation_id="", description=""):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import update_snappfood_variation_description as _update_description
+
+	_ensure_management_access()
+	return _update_description(variation_id=variation_id, description=description)
+
+
+@frappe.whitelist()
+def set_snappfood_variation_status(variation_id="", active=None):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import set_snappfood_variation_status as _set_status
+
+	_ensure_management_access()
+	return _set_status(variation_id=variation_id, active=active)
+
+
+@frappe.whitelist()
 def get_snappfood_modifier_groups(item_name=""):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import get_snappfood_modifier_groups as _get_modifier_groups
