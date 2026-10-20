@@ -383,7 +383,7 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(result, {"status": "success", "title": "کاسه برنج و مرغ", "category_id": "2642322"})
         self.assertEqual(
             request.call_args.args[0],
-            "https://apigw.snappfood.ir/vendor-menu/v2/vendors/466275/products",
+            "https://apigw.snappfood.ir/vendor-menu/v1/vendor/product/product-variation",
         )
         self.assertEqual(
             request.call_args.kwargs["files"],
@@ -401,6 +401,7 @@ class TestSnappSync(FrappeTestCase):
             },
         )
         self.assertEqual(request.call_args.kwargs["headers"]["vendor-authorization"], "true")
+        self.assertEqual(request.call_args.kwargs["headers"]["backoffice-authorization"], "true")
 
     def test_food_partner_product_creation_rejects_empty_or_invalid_price(self):
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
@@ -408,7 +409,93 @@ class TestSnappSync(FrappeTestCase):
             snapp_sync.frappe.ValidationError
         ):
             snapp_sync.create_snappfood_product(
-                {"title": "محصول نمونه", "category_id": "2642322", "category_title": "غذا", "price": "نامعتبر"}
+                {
+                    "title": "محصول نمونه",
+                    "description": "ترکیبات دقیق محصول نمونه",
+                    "category_id": "2642322",
+                    "category_title": "غذا",
+                    "price": "نامعتبر",
+                }
+            )
+
+    def test_food_partner_product_creation_requires_a_real_description(self):
+        settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
+        with patch("restaurant.snapp_sync._get_settings", return_value=settings), self.assertRaises(
+            snapp_sync.frappe.ValidationError
+        ):
+            snapp_sync.create_snappfood_product(
+                {
+                    "title": "محصول نمونه",
+                    "description": "  ",
+                    "category_id": "2642322",
+                    "category_title": "غذا",
+                    "price": "125000",
+                }
+            )
+
+    def test_food_partner_product_creation_sends_compressed_jpeg_with_review_fields(self):
+        response = Mock(status_code=201, ok=True)
+        response.json.return_value = {"status": True}
+        settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
+        image_data = base64.b64encode(b"small-jpeg-image").decode("ascii")
+        with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ) as request:
+            snapp_sync.create_snappfood_product(
+                {
+                    "title": "محصول نمونه",
+                    "description": "ترکیبات دقیق محصول نمونه",
+                    "category_id": "2642322",
+                    "category_title": "غذا",
+                    "price": "125000",
+                    "image_data_url": f"data:image/jpeg;base64,{image_data}",
+                }
+            )
+
+        self.assertEqual(
+            request.call_args.kwargs["files"]["images[0]"],
+            ("uploadedImage.jpg", b"small-jpeg-image", "image/jpeg"),
+        )
+
+    def test_food_partner_accept_payload_matches_partner_preparation_contract(self):
+        cfg = {"vendor_id": "466275"}
+        raw_order = {
+            "id": "order-123",
+            "confirmationFlowVersion": "v2",
+            "expeditionType": "DELIVERY",
+            "deliveryPrice": 12000,
+            "packingPrice": 5000,
+            "vendorMinPreparationTime": 15,
+            "vendorMaxPreparationTime": 60,
+        }
+
+        result = snapp_sync._food_partner_accept_payload(raw_order, 30, cfg)
+
+        self.assertEqual(result["flow_version"], "v2")
+        self.assertEqual(
+            result["payload"],
+            {
+                "orderId": "order-123",
+                "deliveryTime": 30,
+                "packingPrice": 5000,
+                "deliveryPrice": 12000,
+                "riderPickupTime": 0,
+                "delta": 0,
+            },
+        )
+
+    def test_food_partner_accept_payload_respects_fixed_preparation_time(self):
+        with self.assertRaises(snapp_sync.frappe.ValidationError):
+            snapp_sync._food_partner_accept_payload(
+                {
+                    "id": "order-123",
+                    "expeditionType": "PICKUP",
+                    "vendorMinPreparationTime": 20,
+                    "vendorMaxPreparationTime": 60,
+                    "isMinPrepTimeChangeable": False,
+                },
+                30,
+                {"vendor_id": "466275"},
             )
 
     def test_food_partner_menu_item_status_update_uses_v4_bulk_contract(self):

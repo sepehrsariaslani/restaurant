@@ -47,6 +47,42 @@ def create_snappfood_product(payload=None):
 
 
 @frappe.whitelist()
+def get_snappfood_live_orders():
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import get_snappfood_live_orders as _get_live_orders
+
+	_ensure_management_access()
+	return _get_live_orders()
+
+
+@frappe.whitelist()
+def test_snappfood_order_access():
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import test_snappfood_order_access as _test_order_access
+
+	_ensure_management_access()
+	return _test_order_access()
+
+
+@frappe.whitelist()
+def accept_snappfood_order(order_id="", preparation_minutes=None):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import accept_snappfood_order as _accept_order
+
+	_ensure_management_access()
+	return _accept_order(order_id=order_id, preparation_minutes=preparation_minutes)
+
+
+@frappe.whitelist()
+def mark_snappfood_order_ready(order_id=""):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import mark_snappfood_order_ready as _mark_ready
+
+	_ensure_management_access()
+	return _mark_ready(order_id=order_id)
+
+
+@frappe.whitelist()
 def update_snappfood_variation_description(variation_id="", description=""):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import update_snappfood_variation_description as _update_description

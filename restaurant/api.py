@@ -24202,6 +24202,14 @@ def save_snappfood_integration_config(payload=None):
 			token,
 			"snapp_bearer_token",
 		)
+	access_token = _normalize_bearer_token(payload.get("snapp_access_token") or "")
+	if access_token and _has_doctype_field("Restaurant Web Settings", "snapp_access_token"):
+		set_encrypted_password(
+			"Restaurant Web Settings",
+			"Restaurant Web Settings",
+			access_token,
+			"snapp_access_token",
+		)
 	frappe.db.commit()
 	from restaurant.snapp_sync import get_sync_status
 

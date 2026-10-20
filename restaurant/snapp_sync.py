@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import json
 import re
+import uuid
 from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta, timezone
@@ -304,6 +305,11 @@ def _get_settings():
         token = _normalize_bearer_token(
             settings_doc.get_password("snapp_bearer_token", raise_exception=False) or ""
         )
+    access_token = ""
+    if _has_field("Restaurant Web Settings", "snapp_access_token"):
+        access_token = _normalize_bearer_token(
+            settings_doc.get_password("snapp_access_token", raise_exception=False) or ""
+        )
 
     enabled = cint(settings_doc.get("snapp_sync_enabled")) if _has_field("Restaurant Web Settings", "snapp_sync_enabled") else 0
     return {
@@ -312,6 +318,7 @@ def _get_settings():
         "origin_url": (settings_doc.get("snapp_origin_url") or DEFAULT_ORIGIN_URL).strip(),
         "host_domain": (settings_doc.get("snapp_hostdomain") or DEFAULT_HOST_DOMAIN).strip(),
         "token": token,
+        "access_token": access_token,
         "page_size": max(1, min(cint(settings_doc.get("snapp_page_size") or DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE)),
         "lookback_minutes": max(5, cint(settings_doc.get("snapp_lookback_minutes") or DEFAULT_LOOKBACK_MINUTES)),
         "amount_multiplier": flt(settings_doc.get("snapp_amount_multiplier") or DEFAULT_AMOUNT_MULTIPLIER),
@@ -343,6 +350,7 @@ def get_sync_status():
     return {
         "enabled": settings["enabled"],
         "has_token": bool(settings["token"]),
+        "has_order_access_token": bool(settings.get("access_token")),
         "api_base_url": settings["api_base_url"],
         "report_url": settings.get("report_url") or DEFAULT_REPORT_URL,
         "menu_api_base_url": settings.get("menu_api_base_url") or DEFAULT_MENU_API_BASE_URL,
@@ -465,6 +473,391 @@ def fetch_snapp_orders(from_datetime=None, to_datetime=None, page_size=None, max
         "orders_count": len(all_orders),
         "orders": all_orders,
     }
+
+
+_FOOD_PARTNER_LIVE_STATUS_LABELS = {
+    "56": "سفارش جدید",
+    "714": "در انتظار پذیرش",
+    "61": "دریافت‌شده",
+    "713": "بازشده",
+    "42": "پذیرفته‌شده",
+    "51": "درخواست تغییر ثبت شده",
+    "54": "لغوشده",
+    "71": "در انتظار پرداخت",
+    "WAITING_FOR_CONFIRMATION": "در حال تأیید",
+    "CONFIRMATION_TIMEOUT": "تأیید نیازمند تلاش دوباره",
+    "EDITED": "ویرایش‌شده",
+}
+_FOOD_PARTNER_ACCEPTABLE_ORDER_STATUSES = {
+    "56",
+    "714",
+    "61",
+    "713",
+    "NEW_ORDER",
+    "SENT",
+    "RECEIVED",
+    "OPENED",
+    "CONFIRMATION_TIMEOUT",
+}
+_FOOD_PARTNER_ACCEPTED_ORDER_STATUSES = {"42", "ACCEPTED"}
+_FOOD_PARTNER_LIVE_ORDER_STATUSES = (
+    _FOOD_PARTNER_ACCEPTABLE_ORDER_STATUSES
+    | _FOOD_PARTNER_ACCEPTED_ORDER_STATUSES
+    | {"61", "713", "51", "71", "WAITING_FOR_CONFIRMATION", "CONFIRMATION_TIMEOUT", "EDITED"}
+)
+
+
+def _food_partner_order_status_code(raw_order):
+    value = (
+        raw_order.get("statusCode")
+        or raw_order.get("externalStatusCode")
+        or raw_order.get("lastState")
+        or raw_order.get("status")
+        or ""
+    )
+    return str(value).strip().upper()
+
+
+def _find_food_partner_token(payload, token_name):
+    wanted = str(token_name or "").replace("_", "").lower()
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if str(key).replace("_", "").lower() == wanted and isinstance(value, str) and value.strip():
+                return _normalize_bearer_token(value)
+        for value in payload.values():
+            found = _find_food_partner_token(value, token_name)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for value in payload:
+            found = _find_food_partner_token(value, token_name)
+            if found:
+                return found
+    return ""
+
+
+def _get_food_partner_order_tokens(settings=None):
+    cfg = settings or _get_settings()
+    access_token = _normalize_bearer_token(cfg.get("access_token"))
+    if not access_token:
+        raise frappe.ValidationError(
+            "برای پذیرش سفارش، توکن دسترسی حساب Food Partner را در تنظیمات اتصال وارد کنید."
+        )
+    try:
+        response = requests.get(
+            "https://snappfood.ir/vms/v1/user/ordering-tokens",
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "authorization": f"Bearer {access_token}",
+                "user-agent": "Mozilla/5.0",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.HTTPError as exc:
+        status_code = getattr(exc.response, "status_code", None)
+        if status_code in (401, 403):
+            message = "توکن دسترسی حساب Food Partner برای عملیات سفارش پذیرفته نشد؛ آن را بررسی یا دوباره وارد کنید."
+        else:
+            message = f"دریافت دسترسی امن سفارش با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+        raise frappe.ValidationError(message) from exc
+    except (requests.RequestException, TypeError, ValueError) as exc:
+        raise frappe.ValidationError("ارتباط امن با سرویس سفارش Food Partner برقرار نشد.") from exc
+
+    ordering_token = _find_food_partner_token(payload, "orderingToken")
+    vendor_token = _find_food_partner_token(payload, "vendorToken")
+    if not ordering_token:
+        raise frappe.ValidationError("سرویس Food Partner توکن عملیات سفارش را برنگرداند؛ اتصال را بررسی کنید.")
+    if not vendor_token:
+        vendor_token = _normalize_bearer_token(cfg.get("token"))
+    return {"ordering_token": ordering_token, "vendor_token": vendor_token}
+
+
+def test_snappfood_order_access():
+    """Verify order-action credentials without reading or changing an order."""
+    tokens = _get_food_partner_order_tokens()
+    return {
+        "status": "success",
+        "order_actions_ready": bool(tokens.get("ordering_token")),
+    }
+
+
+def _fetch_food_partner_recent_orders(settings=None):
+    cfg = settings or _get_settings()
+    now = now_datetime()
+    fetched = fetch_snapp_orders(
+        from_datetime=now - timedelta(hours=24),
+        to_datetime=now,
+        page_size=min(cint(cfg.get("page_size") or DEFAULT_PAGE_SIZE), 100),
+        max_pages=10,
+        settings=cfg,
+    )
+    return cfg, fetched.get("orders") or []
+
+
+def _find_food_partner_live_order(order_id, settings=None):
+    order_id = str(order_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", order_id):
+        raise frappe.ValidationError("شناسه سفارش Food Partner معتبر نیست.")
+    cfg, rows = _fetch_food_partner_recent_orders(settings=settings)
+    raw_order = next((row for row in rows if _raw_snapp_order_id(row) == order_id), None)
+    if not raw_order:
+        raise frappe.ValidationError("سفارش در فهرست تازهٔ Food Partner پیدا نشد؛ فهرست را تازه کنید.")
+    raw_vendor_id = str(raw_order.get("vendorId") or raw_order.get("vendor_id") or "").strip()
+    if raw_vendor_id and raw_vendor_id != str(cfg.get("vendor_id") or "").strip():
+        raise frappe.ValidationError("این سفارش به شناسه فروشندهٔ تنظیم‌شده تعلق ندارد.")
+    return cfg, raw_order
+
+
+def _food_partner_live_order_preview(raw_order, cfg):
+    normalized = normalize_snapp_order(raw_order, amount_multiplier=cfg.get("amount_multiplier") or 1)
+    status_code = _food_partner_order_status_code(raw_order)
+    expedition_type = str(raw_order.get("expeditionType") or raw_order.get("deliveryType") or "").strip().upper()
+    changeable_value = raw_order.get("isMinPrepTimeChangeable")
+    is_prep_changeable = changeable_value not in (False, 0, "0", "false", "False")
+    min_minutes = max(1, min(cint(raw_order.get("vendorMinPreparationTime") or 5), 240))
+    max_minutes = cint(raw_order.get("vendorMaxPreparationTime") or raw_order.get("vendorMaxDeliveryTime") or 120)
+    if max_minutes < min_minutes:
+        max_minutes = min_minutes
+    items = []
+    for item in normalized.get("items") or []:
+        toppings = item.get("toppings") or []
+        topping_names = []
+        for topping in toppings if isinstance(toppings, list) else []:
+            if isinstance(topping, dict):
+                name = topping.get("title") or topping.get("name") or topping.get("productName")
+            else:
+                name = topping
+            if name:
+                topping_names.append(str(name).strip())
+        items.append(
+            {
+                "title": item.get("title") or "محصول",
+                "qty": flt(item.get("qty") or 0),
+                "unit_price": flt(item.get("unit_price") or 0),
+                "toppings": topping_names,
+            }
+        )
+
+    already_ready = any(
+        raw_order.get(key) is True
+        for key in ("foodIsReady", "hasOrderAlreadyBeenAnnouncedReady", "food_is_ready")
+    )
+    return {
+        "order_id": normalized["order_id"],
+        "bill_number": normalized.get("bill_number") or "",
+        "customer_name": normalized.get("customer_name") or FALLBACK_GUEST_NAME,
+        "mobile": normalized.get("mobile") or "",
+        "address": normalized.get("address") or "",
+        "note": normalized.get("note") or "",
+        "created_at": get_datetime_str(normalized.get("created_at")) if normalized.get("created_at") else "",
+        "order_type": normalized.get("order_type") or "",
+        "expedition_type": expedition_type,
+        "status_code": status_code,
+        "status_label": (
+            "آمادهٔ ارسال"
+            if already_ready
+            else _FOOD_PARTNER_LIVE_STATUS_LABELS.get(status_code, normalized.get("status") or "وضعیت نامشخص")
+        ),
+        "final_amount": flt(normalized.get("final_amount") or 0),
+        "items": items,
+        "is_prep_time_changeable": is_prep_changeable,
+        "min_preparation_minutes": min_minutes,
+        "max_preparation_minutes": min(max_minutes, 240),
+        "preparation_minutes": max(min_minutes, min(cint(raw_order.get("vendorMinPreparationTime") or 30), max_minutes)),
+        "can_accept": status_code in _FOOD_PARTNER_ACCEPTABLE_ORDER_STATUSES,
+        "can_mark_ready": status_code in _FOOD_PARTNER_ACCEPTED_ORDER_STATUSES and not already_ready,
+    }
+
+
+def get_snappfood_live_orders():
+    """Read recent order states for the management screen; never stores raw payloads."""
+    cfg, rows = _fetch_food_partner_recent_orders()
+    orders = []
+    for raw_order in rows:
+        status_code = _food_partner_order_status_code(raw_order)
+        if status_code not in _FOOD_PARTNER_LIVE_ORDER_STATUSES:
+            continue
+        try:
+            orders.append(_food_partner_live_order_preview(raw_order, cfg))
+        except Exception:
+            # Keep one malformed report row from hiding other actionable orders.
+            continue
+    orders.sort(key=lambda order: order.get("created_at") or "", reverse=True)
+    return {
+        "status": "success",
+        "fetched_count": len(rows),
+        "orders": orders,
+        "has_order_access_token": bool(cfg.get("access_token")),
+    }
+
+
+def _food_partner_accept_payload(raw_order, preparation_minutes, cfg):
+    expedition_type = str(raw_order.get("expeditionType") or raw_order.get("deliveryType") or "").strip().upper()
+    is_delivery = expedition_type == "DELIVERY"
+    is_express = expedition_type in {"ZF_EXPRESS", "EXPRESS"} or bool(raw_order.get("onDemandExpressTripV2"))
+    minutes = cint(preparation_minutes)
+    min_minutes = max(1, min(cint(raw_order.get("vendorMinPreparationTime") or 1), 240))
+    max_minutes = cint(raw_order.get("vendorMaxPreparationTime") or raw_order.get("vendorMaxDeliveryTime") or 240)
+    max_minutes = max(min_minutes, min(max_minutes, 240))
+    if minutes < min_minutes or minutes > max_minutes:
+        raise frappe.ValidationError(f"زمان آماده‌سازی باید بین {min_minutes} تا {max_minutes} دقیقه باشد.")
+    if raw_order.get("isMinPrepTimeChangeable") is False and minutes != min_minutes:
+        raise frappe.ValidationError(f"برای این سفارش زمان قابل تغییر نیست و باید {min_minutes} دقیقه ثبت شود.")
+
+    delivery_price = flt(raw_order.get("deliveryPrice") or raw_order.get("deliveryCost") or 0)
+    packing_price = flt(raw_order.get("packingPrice") or raw_order.get("packagingCost") or 0)
+    order_id = _raw_snapp_order_id(raw_order)
+    if str(raw_order.get("confirmationFlowVersion") or "").lower() == "v1":
+        return {
+            "order_id": order_id,
+            "flow_version": "v1",
+            "fields": {
+                "addressId": raw_order.get("addressId") or "",
+                "orderId": order_id,
+                "vendorId": raw_order.get("vendorId") or cfg.get("vendor_id") or "",
+                "subscription": raw_order.get("subscription") or "",
+                "appVersion": "3.14.1",
+                "deviceType": "VTS-PWA-ELECTRON",
+                "riderPickupTime": 0 if is_delivery else minutes,
+                "deliveryTime": 0 if is_express else minutes,
+                "deliveryPrice": delivery_price,
+                "packingPrice": packing_price,
+                "delta": 0,
+            },
+        }
+
+    payload = {
+        "orderId": order_id,
+        "deliveryTime": 0 if is_express else minutes,
+        "packingPrice": packing_price,
+        "deliveryPrice": delivery_price,
+        "riderPickupTime": 0 if is_delivery else minutes,
+        "delta": 0,
+    }
+    if raw_order.get("subscription"):
+        payload["subscription"] = raw_order.get("subscription")
+    return {"order_id": order_id, "flow_version": "v2", "payload": payload}
+
+
+def _food_partner_order_mutation_error(response, payload):
+    return _snapp_menu_mutation_error(response, payload)
+
+
+def accept_snappfood_order(order_id, preparation_minutes):
+    cfg, raw_order = _find_food_partner_live_order(order_id)
+    status_code = _food_partner_order_status_code(raw_order)
+    if status_code not in _FOOD_PARTNER_ACCEPTABLE_ORDER_STATUSES:
+        raise frappe.ValidationError("این سفارش دیگر در وضعیت قابل‌پذیرش نیست؛ فهرست سفارش‌ها را تازه کنید.")
+    accept_data = _food_partner_accept_payload(raw_order, preparation_minutes, cfg)
+    tokens = _get_food_partner_order_tokens(cfg)
+    vendor_token = tokens.get("vendor_token") or cfg.get("token")
+    if not vendor_token:
+        raise frappe.ValidationError("توکن Food Partner برای بررسی سفارش تنظیم نشده است.")
+
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "authorization": f"Bearer {vendor_token}",
+        "content-type": "application/json",
+        "user-agent": "Mozilla/5.0",
+    }
+    try:
+        validation = requests.post(
+            "https://snappfood.ir/vms/v3/order/validate-accept",
+            headers=headers,
+            json={"orderId": accept_data["order_id"]},
+            timeout=20,
+        )
+        try:
+            validation_payload = validation.json()
+        except (TypeError, ValueError):
+            validation_payload = None
+        error = _food_partner_order_mutation_error(validation, validation_payload)
+        if error:
+            raise frappe.ValidationError(error)
+
+        if accept_data["flow_version"] == "v1":
+            fields = {
+                f"context[data][{key}]": (None, str(value))
+                for key, value in accept_data["fields"].items()
+            }
+            response = requests.post(
+                "https://vmsapi.zoodfood.com/job",
+                params={"job": "vms_accept_order"},
+                headers={
+                    "authorization": f"Bearer {tokens['ordering_token']}",
+                    "x-client-version": "VTS-PWA-ELECTRON",
+                    "x-correlational-id": str(uuid.uuid4()),
+                    "user-agent": "Mozilla/5.0",
+                },
+                files=fields,
+                timeout=25,
+            )
+        else:
+            response = requests.post(
+                "https://vmsapi.zoodfood.com/api/v1/vendor-orders/actions/accept",
+                headers={
+                    "authorization": f"Bearer {tokens['ordering_token']}",
+                    "content-type": "application/json",
+                    "x-device-type": "VTS-PWA-ELECTRON",
+                    "x-app-version": "3.14.1",
+                    "user-agent": "Mozilla/5.0",
+                },
+                json=accept_data["payload"],
+                timeout=25,
+            )
+        try:
+            payload = response.json()
+        except (TypeError, ValueError):
+            payload = None
+        error = _food_partner_order_mutation_error(response, payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با سرویس پذیرش سفارش Food Partner برقرار نشد.") from exc
+    return {
+        "status": "success",
+        "order_id": accept_data["order_id"],
+        "preparation_minutes": cint(preparation_minutes),
+    }
+
+
+def _food_partner_response_data(payload):
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    return data if isinstance(data, dict) else payload
+
+
+def mark_snappfood_order_ready(order_id):
+    cfg, raw_order = _find_food_partner_live_order(order_id)
+    if _food_partner_order_status_code(raw_order) not in _FOOD_PARTNER_ACCEPTED_ORDER_STATUSES:
+        raise frappe.ValidationError("فقط سفارش پذیرفته‌شده را می‌توان آمادهٔ ارسال اعلام کرد.")
+    headers = _snapp_menu_headers(cfg)
+    encoded_order_id = requests.utils.quote(str(order_id), safe="")
+    status_url = f"https://snappfood.ir/vms/v1/order/{encoded_order_id}/validateIfFoodAlreadyIsReady"
+    ready_url = f"https://snappfood.ir/food-partner/order/v1/{encoded_order_id}/food-is-ready"
+    try:
+        check_response = requests.get(status_url, headers=headers, timeout=20)
+        check_response.raise_for_status()
+        check_payload = check_response.json()
+        check_data = _food_partner_response_data(check_payload)
+        if "hasOrderAlreadyBeenAnnouncedReady" not in check_data:
+            raise frappe.ValidationError("وضعیت آماده‌بودن سفارش از Food Partner دریافت نشد.")
+        if check_data.get("hasOrderAlreadyBeenAnnouncedReady"):
+            return {"status": "already_ready", "order_id": str(order_id)}
+        response = requests.post(ready_url, headers=headers, timeout=25)
+        try:
+            payload = response.json()
+        except (TypeError, ValueError):
+            payload = None
+        error = _food_partner_order_mutation_error(response, payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با سرویس آماده‌سازی سفارش Food Partner برقرار نشد.") from exc
+    return {"status": "success", "order_id": str(order_id)}
 
 
 def _resolve_snapp_order_window(from_date=None, to_date=None):
@@ -1799,18 +2192,26 @@ def create_snappfood_product(payload):
     if not isinstance(payload, dict):
         raise frappe.ValidationError("اطلاعات محصول جدید معتبر نیست.")
 
-    allowed_fields = {"title", "description", "category_id", "category_title", "price", "variations"}
+    allowed_fields = {
+        "title",
+        "description",
+        "category_id",
+        "category_title",
+        "price",
+        "variations",
+        "image_data_url",
+    }
     if set(payload) - allowed_fields:
         raise frappe.ValidationError("یکی از فیلدهای محصول جدید پشتیبانی نمی‌شود.")
 
     title = str(payload.get("title") or "").strip()
-    description = str(payload.get("description") or "")
+    description = str(payload.get("description") or "").strip()
     category_id = str(payload.get("category_id") or "").strip()
     category_title = str(payload.get("category_title") or "").strip()
     if not title or len(title) > 64:
         raise frappe.ValidationError("نام محصول باید بین ۱ تا ۶۴ نویسه باشد.")
-    if len(description) > 256:
-        raise frappe.ValidationError("توضیحات حداکثر می‌تواند ۲۵۶ نویسه باشد.")
+    if not description or len(description) > 256:
+        raise frappe.ValidationError("توضیحات واقعی و دقیق محصول را وارد کنید؛ متن حداکثر ۲۵۶ نویسه باشد.")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", category_id):
         raise frappe.ValidationError("دسته‌بندی محصول را از فهرست Food Partner انتخاب کنید.")
     if not category_title or len(category_title) > 64:
@@ -1825,6 +2226,18 @@ def create_snappfood_product(payload):
         "menuCategoryTitle": (None, category_title),
         "productTitle": (None, title),
     }
+    image_data_url = str(payload.get("image_data_url") or "").strip()
+    if image_data_url:
+        match = re.fullmatch(r"data:image/jpeg;base64,([A-Za-z0-9+/]+={0,2})", image_data_url)
+        if not match or len(image_data_url) > 3_000_000:
+            raise frappe.ValidationError("تصویر محصول معتبر نیست یا حجم آن بیش از اندازه است.")
+        try:
+            image_bytes = base64.b64decode(match.group(1), validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise frappe.ValidationError("تصویر محصول قابل خواندن نیست.") from exc
+        if not image_bytes or len(image_bytes) > 2_000_000:
+            raise frappe.ValidationError("حجم تصویر محصول باید حداکثر ۲ مگابایت باشد.")
+        form_fields["images[0]"] = ("uploadedImage.jpg", image_bytes, "image/jpeg")
     variations = payload.get("variations")
     if variations:
         if not isinstance(variations, list) or len(variations) > 30:
@@ -1842,9 +2255,10 @@ def create_snappfood_product(payload):
     else:
         form_fields["price"] = (None, _food_partner_decimal(payload.get("price"), "قیمت محصول"))
 
-    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendors/{cfg['vendor_id']}/products"
+    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v1/vendor/product/product-variation"
     try:
-        response = requests.post(url, headers=_snapp_menu_headers(cfg), files=form_fields, timeout=30)
+        headers = {**_snapp_menu_headers(cfg), "backoffice-authorization": "true"}
+        response = requests.post(url, headers=headers, files=form_fields, timeout=30)
         try:
             response_payload = response.json()
         except (TypeError, ValueError):
