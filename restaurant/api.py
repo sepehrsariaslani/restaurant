@@ -5434,6 +5434,7 @@ def _create_sales_order(
 	secondary_customer="",
 	coach_referral_customer="",
 	requires_review=False,
+	offline_price_map=None,
 ):
 	order_context = _normalize_order_context_payload(order_context, order_type=order_type)
 	company = _resolve_order_company(order_context)
@@ -5547,6 +5548,17 @@ def _create_sales_order(
 		line_calc = _recalculate_line(
 			menu_doc, cart_line.get("qty"), customization, branch_markup_percent=markup_percent
 		)
+		if isinstance(offline_price_map, dict) and menu_doc.name in offline_price_map:
+			saved_rate = flt(cart_line.get("offline_unit_price"))
+			signed_floor = flt(offline_price_map.get(menu_doc.name))
+			if saved_rate < signed_floor - 0.01:
+				frappe.throw(_("The saved offline sale price is below the signed menu price."))
+			line_calc = dict(line_calc)
+			line_calc["unit_price"] = saved_rate
+			line_calc["line_total"] = saved_rate * flt(line_calc.get("qty") or 1)
+			pricing_breakdown = dict(line_calc.get("pricing_breakdown") or {})
+			pricing_breakdown.update({"unit_price": line_calc["unit_price"], "line_total": line_calc["line_total"]})
+			line_calc["pricing_breakdown"] = pricing_breakdown
 		# Food Partner sends both the net selling price and the original price.
 		# Keep the original unit price on the native line and let the imported
 		# order-level discount produce the net total. This is restricted to the
@@ -12216,6 +12228,7 @@ def place_order(
 		secondary_customer=(secondary_customer or "").strip(),
 		coach_referral_customer=coach_referral_customer,
 		requires_review=(should_require_customer_order_review() or bool(cint(requires_review))),
+		offline_price_map=getattr(frappe.local, "_restaurant_pos_offline_price_map", None),
 	)
 
 
