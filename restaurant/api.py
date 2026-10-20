@@ -17134,6 +17134,39 @@ def list_management_orders(date_from=None, date_to=None, status=None, source=Non
 
 
 @frappe.whitelist()
+def list_management_open_invoices(date=None, search=None, limit_start=0, limit_page_length=100):
+	"""Return paginated POS orders that still have an outstanding balance."""
+	_ensure_management_access()
+	start = max(cint(limit_start), 0)
+	page_size = max(1, min(cint(limit_page_length) or 100, 100))
+	selected_date = str(date or "").strip() or None
+	orders = _management_collect_orders(
+		date_from=selected_date,
+		date_to=selected_date,
+		source="web",
+		search=search,
+		review_status="approved",
+	)
+
+	open_orders = []
+	for order in orders:
+		status = str(order.get("status") or "").strip().lower()
+		if status in {"cancelled", "canceled", "cancel"}:
+			continue
+		if flt(order.get("outstanding_amount")) > 0.5:
+			open_orders.append(order)
+
+	page = open_orders[start : start + page_size]
+	next_offset = start + len(page)
+	return {
+		"orders": page,
+		"total_count": len(open_orders),
+		"next_offset": next_offset,
+		"has_more": next_offset < len(open_orders),
+	}
+
+
+@frappe.whitelist()
 def get_management_order_detail(order_name, source=None):
 	_ensure_management_access()
 	if not order_name:
