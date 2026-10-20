@@ -1110,6 +1110,22 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(end_dt.strftime("%H:%M:%S"), "23:59:59")
         self.assertEqual((end_dt.date() - start_dt.date()).days, 0)
 
+    def test_snappfood_preview_accepts_frontend_force_refresh_hint(self):
+        import restaurant.api as restaurant_api
+
+        expected = {"status": "success", "orders": []}
+        with patch.object(restaurant_api, "_ensure_management_access"), patch(
+            "restaurant.snapp_sync.preview_snapp_orders", return_value=expected
+        ) as preview:
+            result = restaurant_api.preview_snappfood_orders(
+                from_date="2026-10-21",
+                to_date="2026-10-21",
+                force_refresh=1,
+            )
+
+        self.assertEqual(result, expected)
+        preview.assert_called_once_with(from_date="2026-10-21", to_date="2026-10-21")
+
     def test_snapp_order_preview_keeps_import_and_customer_context(self):
         preview = _build_snapp_order_preview(
             {

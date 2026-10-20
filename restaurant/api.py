@@ -24094,8 +24094,9 @@ def run_snapp_sync_today(only_new=1):
 
 
 @frappe.whitelist()
-def preview_snappfood_orders(from_date=None, to_date=None):
+def preview_snappfood_orders(from_date=None, to_date=None, force_refresh=0):
 	"""Preview a selected date range without creating any ERP documents."""
+	# ``force_refresh`` is a frontend cache hint; accept it without forwarding it.
 	_ensure_management_access()
 	from restaurant.snapp_sync import preview_snapp_orders
 
