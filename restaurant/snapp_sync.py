@@ -582,7 +582,6 @@ def get_snappfood_account_info(settings=None):
         },
         "vendor": vendor,
         "vendors_count": len(vendor_user_refs),
-        "token": _food_partner_token_metadata(token),
     }
 
 
