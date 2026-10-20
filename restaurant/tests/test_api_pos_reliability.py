@@ -10,6 +10,9 @@ frappe = types.ModuleType('frappe')
 frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn) if args == () else args[0]
 frappe._ = lambda value: value
 frappe.db = types.SimpleNamespace()
+frappe.conf = types.SimpleNamespace(encryption_key='offline-test-secret')
+frappe.session = types.SimpleNamespace(user='cashier@example.com')
+frappe.local = types.SimpleNamespace()
 sys.modules.setdefault('frappe', frappe)
 utils = types.ModuleType('frappe.utils')
 utils.cint = lambda value: int(value or 0)
@@ -37,6 +40,21 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(payload['client_mutation_key'], 'mutation-table-1')
         self.assertEqual(payload['type'], 'table_add_items')
         self.assertEqual(payload['payload']['table_name'], 'TABLE-1')
+
+    def test_offline_price_snapshot_is_signed_to_user_and_catalog(self):
+        token = reliability._sign_offline_price_snapshot(
+            [{'name': 'ITEM-1', 'slug': 'tea', 'base_price': 125000}],
+            branch='BRANCH-1',
+            company='COMPANY-1',
+        )
+        verified = reliability._verify_offline_price_snapshot(token)
+        self.assertEqual(verified['user'], 'cashier@example.com')
+        self.assertEqual(verified['branch'], 'BRANCH-1')
+        self.assertEqual(verified['company'], 'COMPANY-1')
+        self.assertEqual(verified['prices']['ITEM-1'], 125000.0)
+        self.assertEqual(verified['prices']['tea'], 125000.0)
+        self.assertIsNone(reliability._verify_offline_price_snapshot(token + 'x'))
+        self.assertIsNone(reliability._verify_offline_price_snapshot(token, user='another@example.com'))
 
     def test_retries_only_previous_payment_claims_marked_for_review(self):
         self.assertTrue(reliability._should_retry_offline_mutation('manual_payment_claim', 'needs_attention'))
