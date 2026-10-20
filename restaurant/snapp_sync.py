@@ -456,6 +456,69 @@ def _food_partner_json_api_display(value):
     return ""
 
 
+def _food_partner_vendor_user_records(user_payload):
+    user_record = user_payload.get("data") if isinstance(user_payload.get("data"), dict) else {}
+    relationships = user_record.get("relationships") if isinstance(user_record.get("relationships"), dict) else {}
+    vendor_users = relationships.get("vendorUsers") if isinstance(relationships.get("vendorUsers"), dict) else {}
+    references = vendor_users.get("data") if isinstance(vendor_users.get("data"), list) else []
+    included = user_payload.get("included") if isinstance(user_payload.get("included"), list) else []
+    included_by_id = {
+        (str(record.get("type") or ""), str(record.get("id") or "")): record
+        for record in included
+        if isinstance(record, dict)
+    }
+    records = []
+    for reference in references:
+        if not isinstance(reference, dict):
+            continue
+        record = included_by_id.get((str(reference.get("type") or ""), str(reference.get("id") or "")))
+        if record:
+            records.append(record)
+    if not records:
+        records = [
+            record
+            for record in included
+            if isinstance(record, dict) and str(record.get("type") or "").lower() == "vendoruser"
+        ]
+    return user_record, references, records
+
+
+def _food_partner_vendor_identity(record):
+    attributes = _food_partner_json_api_record_attributes(record)
+    return {
+        str(record.get("id") or "").strip(),
+        str(attributes.get("code") or "").strip(),
+        str(attributes.get("uid") or "").strip(),
+        str(attributes.get("vendorId") or attributes.get("vendor_id") or "").strip(),
+    }
+
+
+def _discover_snappfood_vendor_id(token, user_payload=None):
+    """Resolve a vendor ID from the token claims or its authenticated vendor list."""
+    token = _normalize_bearer_token(token)
+    if not token:
+        raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
+    payload = user_payload or _food_partner_account_request(
+        f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/user/vendors", token
+    )
+    _user_record, _references, records = _food_partner_vendor_user_records(payload)
+    token_vendor_id = _extract_vendor_id_from_token(token)
+    if token_vendor_id and re.fullmatch(r"[A-Za-z0-9_-]{1,80}", token_vendor_id):
+        if not records or any(token_vendor_id in _food_partner_vendor_identity(record) for record in records):
+            return token_vendor_id
+    if len(records) == 1:
+        record = records[0]
+        attributes = _food_partner_json_api_record_attributes(record)
+        vendor_id = str(
+            attributes.get("vendorId") or attributes.get("vendor_id") or record.get("id") or ""
+        ).strip()
+        if re.fullmatch(r"[A-Za-z0-9_-]{1,80}", vendor_id):
+            return vendor_id
+    if records:
+        raise frappe.ValidationError("چند فروشگاه به این حساب متصل است؛ شناسهٔ فروشگاه موردنظر را وارد کنید.")
+    raise frappe.ValidationError("برای این حساب فروشگاه قابل تشخیصی پیدا نشد؛ شناسهٔ فروشنده را وارد کنید.")
+
+
 def get_snappfood_account_info(settings=None):
     """Read the authenticated user's and selected vendor's safe profile fields."""
     cfg = settings or _get_settings()
@@ -463,13 +526,16 @@ def get_snappfood_account_info(settings=None):
     vendor_id = str(cfg.get("vendor_id") or "").strip()
     if not token:
         raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", vendor_id):
-        raise frappe.ValidationError("شناسه فروشنده Food Partner معتبر نیست.")
 
     user_payload = _food_partner_account_request(
         f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/user/vendors", token
     )
-    user_record = user_payload.get("data") if isinstance(user_payload.get("data"), dict) else {}
+    user_record, vendor_user_refs, vendor_user_records = _food_partner_vendor_user_records(user_payload)
+    if not vendor_id:
+        vendor_id = _discover_snappfood_vendor_id(token, user_payload=user_payload)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", vendor_id):
+        raise frappe.ValidationError("شناسه فروشنده Food Partner معتبر نیست.")
+
     user_attributes = _food_partner_json_api_record_attributes(user_record)
     user_name = str(user_attributes.get("name") or "").strip()
     if not user_name:
@@ -479,39 +545,8 @@ def get_snappfood_account_info(settings=None):
             if str(user_attributes.get(key) or "").strip()
         )
 
-    relationships = user_record.get("relationships") if isinstance(user_record.get("relationships"), dict) else {}
-    vendor_user_refs = relationships.get("vendorUsers") if isinstance(relationships.get("vendorUsers"), dict) else {}
-    vendor_user_refs = vendor_user_refs.get("data") if isinstance(vendor_user_refs.get("data"), list) else []
-    included = user_payload.get("included") if isinstance(user_payload.get("included"), list) else []
-    included_by_id = {
-        (str(record.get("type") or ""), str(record.get("id") or "")): record
-        for record in included
-        if isinstance(record, dict)
-    }
-    vendor_user_records = []
-    for reference in vendor_user_refs:
-        if not isinstance(reference, dict):
-            continue
-        record = included_by_id.get((str(reference.get("type") or ""), str(reference.get("id") or "")))
-        if record:
-            vendor_user_records.append(record)
-    if not vendor_user_records:
-        vendor_user_records = [
-            record for record in included
-            if isinstance(record, dict) and str(record.get("type") or "").lower() == "vendoruser"
-        ]
-
-    def vendor_identity(record):
-        attrs = _food_partner_json_api_record_attributes(record)
-        return {
-            str(record.get("id") or "").strip(),
-            str(attrs.get("code") or "").strip(),
-            str(attrs.get("uid") or "").strip(),
-            str(attrs.get("vendorId") or attrs.get("vendor_id") or "").strip(),
-        }
-
     selected_vendor_record = next(
-        (record for record in vendor_user_records if vendor_id in vendor_identity(record)),
+        (record for record in vendor_user_records if vendor_id in _food_partner_vendor_identity(record)),
         vendor_user_records[0] if len(vendor_user_records) == 1 else None,
     )
     selected_vendor_attributes = _food_partner_json_api_record_attributes(selected_vendor_record)

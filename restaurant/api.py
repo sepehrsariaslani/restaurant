@@ -24180,6 +24180,15 @@ def save_snappfood_integration_config(payload=None):
 		"snapp_require_item_mapping",
 		"snapp_default_customer",
 	}
+	from restaurant.snapp_sync import _discover_snappfood_vendor_id, _extract_vendor_id_from_token, _normalize_bearer_token
+
+	token = _normalize_bearer_token(payload.get("snapp_bearer_token") or "")
+	vendor_id = str(payload.get("snapp_vendor_id") or "").strip()
+	if not vendor_id and token:
+		vendor_id = _extract_vendor_id_from_token(token)
+		if not vendor_id:
+			vendor_id = _discover_snappfood_vendor_id(token)
+
 	# Update only the integration fields.  Calling ``doc.save()`` here would
 	# validate unrelated legacy links on this Single DocType (for example an
 	# old default currency) and prevent the Food Partner connection from being
@@ -24187,12 +24196,6 @@ def save_snappfood_integration_config(payload=None):
 	for fieldname in allowed:
 		if fieldname in payload and _has_doctype_field("Restaurant Web Settings", fieldname):
 			frappe.db.set_single_value("Restaurant Web Settings", fieldname, payload.get(fieldname))
-	from restaurant.snapp_sync import _extract_vendor_id_from_token, _normalize_bearer_token
-
-	token = _normalize_bearer_token(payload.get("snapp_bearer_token") or "")
-	vendor_id = str(payload.get("snapp_vendor_id") or "").strip()
-	if not vendor_id and token:
-		vendor_id = _extract_vendor_id_from_token(token)
 	if vendor_id and _has_doctype_field("Restaurant Web Settings", "snapp_vendor_id"):
 		frappe.db.set_single_value("Restaurant Web Settings", "snapp_vendor_id", vendor_id)
 	if token and _has_doctype_field("Restaurant Web Settings", "snapp_bearer_token"):
