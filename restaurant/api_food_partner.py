@@ -16,23 +16,23 @@ def get_snappfood_menu_products():
 
 
 @frappe.whitelist()
-def update_snappfood_product_description(product_hash_id="", description=""):
+def update_snappfood_product_description(product_id="", product_hash_id="", description=""):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import update_snappfood_product_description as _update_description
 
 	_ensure_management_access()
-	return _update_description(product_hash_id=product_hash_id, description=description)
+	return _update_description(product_id=product_id or product_hash_id, description=description)
 
 
 @frappe.whitelist()
-def update_snappfood_product(product_hash_id="", payload=None):
+def update_snappfood_product(product_id="", product_hash_id="", payload=None):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import update_snappfood_product as _update_product
 
 	_ensure_management_access()
 	if isinstance(payload, str):
 		payload = frappe.parse_json(payload or "{}")
-	return _update_product(product_hash_id=product_hash_id, fields=payload)
+	return _update_product(product_id=product_id or product_hash_id, fields=payload)
 
 
 @frappe.whitelist()
