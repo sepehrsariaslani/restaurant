@@ -72,7 +72,7 @@
 | جزئیات محصول مشتری | `/item` | API منوی رستوران | gallery، nutrition، customization و cart | مرجع تثبیت‌شده |
 | دیزاین سیستم | `/management/design-system` | token/catalog محلی، fixture بی‌خطر | تب‌های تم، آیکون، کامپوننت، پترن و تمپلیت | Navbar، App resolver، Frappe page/context و route rule تراز شده؛ با bundle فعال روی `veederakht` تأیید شد |
 | سفارش‌ها | `/management/orders` | ERPNext Sales Order/Invoice + فیلدهای Restaurant | `ManagementListView` → جزئیات انتخاب‌شده → پرداخت/تکمیل/پیک | تراز شده در این مرحله؛ تست source موفق |
-| اتصال Food Partner | `/management/snappfood` | Food Partner report/menu API + ERPNext Item/Customer/Sales Order/Sales Invoice | تنظیمات اتصال و نگاشت؛ سفارش‌ها در همان POS و لیست سفارش‌ها | اتصال، نگاشت کالا، همگام‌سازی امروز؛ بدون بخش فاکتور موازی | کد و قراردادها تراز شده؛ migrate/build و تست احراز‌شدهٔ API باقی است |
+| اتصال Food Partner | `/management/snappfood` | Food Partner report/menu API + ERPNext Item/Customer/Sales Order/Sales Invoice | تنظیمات و نگاشت مستقل؛ ورود سفارش از مسیر بومی POS | تنظیمات/نگاشت فعال است؛ پنل Hesabyar Accounts برای CRUD منو و سفارش زنده روی `veederakht` فعال و آزموده شده؛ عملیات پذیرش به توکن دسترسی سفارش نیاز دارد؛ تغییر زندهٔ منو یا سفارش انجام نشده است |
 | پیک‌ها | `/management/couriers` | Restaurant courier/vehicle | فهرست پیک → فرم جزئیات چسبان → fleet/rules | تراز شده در این مرحله؛ تست source موفق |
 | صفت‌های کالا | `/management/product?variant_studio=1` | ERPNext Item Attribute | فهرست قابل جستجو → ویرایشگر صفت | تراز شده در این مرحله؛ تست source موفق |
 | کاربران و دسترسی | `/management/users` | ERPNext User/Role | native access surface با shell مشترک | مالکیت حفظ شده؛ بررسی دیداری بعدی |
@@ -97,7 +97,7 @@
 - منو و گروه‌های منو: `pages/management/catalog/ManagementMenuDesignerPage.vue`، `pages/management/catalog/ManagementMenuGroupsPage.vue`، `pages/management/catalog/ManagementMenuGroupDetailPage.vue`
 - modifierها: `pages/management/catalog/ManagementModifierGroupsPage.vue`
 - POS و پیش‌فرض‌های POS: `pages/management/sales/ManagementPosPage.vue`، `pages/management/sales/ManagementPosProfilePage.vue`، `pages/management/sales/ManagementPosDefaultsPage.vue`
-- اتصال Food Partner: `pages/management/settings/ManagementSnappfoodPage.vue`؛ فقط تنظیمات/نگاشت مستقل است و سفارش و فاکتور از مسیر native POS می‌گذرد.
+- اتصال Food Partner: `pages/management/settings/ManagementSnappfoodPage.vue` برای تنظیمات/نگاشت مستقل است؛ پنل عملیاتی Hesabyar Accounts در `accounts/frontend/src/pages/restaurant/RestaurantFoodPartnerPage.vue` و APIهای `restaurant.api_food_partner` و `restaurant.snapp_sync` نمایش و ویرایش منو، افزودن محصول و کنترل وضعیت را پوشش می‌دهد. ورود سفارش همچنان از POS و اسناد بومی ERPNext انجام می‌شود. فهرست سفارش‌های زنده و دکمه‌های پذیرش/آماده‌تحویل در پنل Accounts هستند؛ پذیرش زنده بدون توکن دسترسی سفارش ممکن نیست.
 - ثبت سفارش/صندوق: `pages/management/sales/ManagementRegisterPage.vue`
 - شعبه‌ها، رزرو و مرکز تماس: `pages/management/operations/ManagementBranchesPage.vue`، `pages/management/customers/ManagementReservationsPage.vue`، `pages/management/customers/ManagementCallCenterPage.vue`
 
