@@ -646,6 +646,60 @@ class TestSnappSync(FrappeTestCase):
             result = snapp_sync.set_snappfood_variation_status("36485634", 0)
         self.assertEqual(result, {"status": "success", "variation_id": "36485634", "active": False})
 
+    def test_food_partner_ready_action_validates_then_announces_ready(self):
+        cfg = {"token": "read-token", "vendor_id": "466275"}
+        order = {"statusCode": "42"}
+        check_response = Mock(status_code=200, ok=True)
+        check_response.json.return_value = {"data": {"hasOrderAlreadyBeenAnnouncedReady": False}}
+        ready_response = Mock(status_code=200, ok=True)
+        ready_response.json.return_value = {"success": True}
+        with patch(
+            "restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)
+        ), patch("restaurant.snapp_sync._snapp_menu_headers", return_value={"authorization": "stub"}), patch(
+            "restaurant.snapp_sync.requests.get", return_value=check_response
+        ) as request_get, patch("restaurant.snapp_sync.requests.post", return_value=ready_response) as request_post:
+            result = snapp_sync.mark_snappfood_order_ready("order-123")
+
+        self.assertEqual(result, {"status": "success", "order_id": "order-123"})
+        self.assertEqual(
+            request_get.call_args.args[0],
+            "https://snappfood.ir/vms/v1/order/order-123/validateIfFoodAlreadyIsReady",
+        )
+        self.assertEqual(
+            request_post.call_args.args[0],
+            "https://snappfood.ir/food-partner/order/v1/order-123/food-is-ready",
+        )
+
+    def test_food_partner_ready_action_does_not_repeat_an_existing_ready_announcement(self):
+        cfg = {"token": "read-token", "vendor_id": "466275"}
+        order = {"statusCode": "42"}
+        check_response = Mock(status_code=200, ok=True)
+        check_response.json.return_value = {"data": {"hasOrderAlreadyBeenAnnouncedReady": True}}
+        with patch(
+            "restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)
+        ), patch("restaurant.snapp_sync._snapp_menu_headers", return_value={"authorization": "stub"}), patch(
+            "restaurant.snapp_sync.requests.get", return_value=check_response
+        ), patch("restaurant.snapp_sync.requests.post") as request_post:
+            result = snapp_sync.mark_snappfood_order_ready("order-123")
+
+        self.assertEqual(result, {"status": "already_ready", "order_id": "order-123"})
+        request_post.assert_not_called()
+
+    def test_food_partner_accept_requires_order_access_token_before_mutation(self):
+        cfg = {"token": "read-token", "access_token": "", "vendor_id": "466275"}
+        order = {"statusCode": "56"}
+        with patch(
+            "restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)
+        ), patch(
+            "restaurant.snapp_sync._food_partner_accept_payload",
+            return_value={"order_id": "order-123", "flow_version": "v2", "payload": {}},
+        ), patch("restaurant.snapp_sync.requests.post") as request_post, self.assertRaisesRegex(
+            snapp_sync.frappe.ValidationError, "توکن دسترسی حساب Food Partner"
+        ):
+            snapp_sync.accept_snappfood_order("order-123", 25)
+
+        request_post.assert_not_called()
+
     def test_product_group_mapping_uses_parent_id_and_clears_single_variation_aliases(self):
         fake_db = SimpleNamespace(
             exists=Mock(return_value=True),
