@@ -87,6 +87,14 @@
 | مرکز تماس | `/management/call-center` | Restaurant call log و Customer context | تماس‌های اخیر با فهرست مشترک، وضعیت فارسی و عملیات پاسخ/پایان | در ماژول مشتریان و ارتباط؛ تست source موفق |
 | گزارش‌های مدیریتی | `/management/reports` و `/management/reports/:key` | API گزارش Restaurant/ERPNext | فهرست گزارش، فیلتر بازه، KPI، نمودار و جدول با عنوان فارسی | همهٔ کلیدهای فهرست به wrapper/API متصل و گزارش‌های نماینده با browser smoke تأیید شدند |
 
+### بررسی APK اندروید Food Partner 4.1.2.00
+
+- بررسی آفلاین DEX و annotationهای Retrofit نشان می‌دهد برنامه برای `ACCESS_TOKEN` و `ORDERS_ACCESS_TOKEN` ذخیره‌سازی جدا دارد و ارائه‌دهندهٔ توکن، توکن سفارش را جدا از توکن PubSub مدیریت می‌کند. این با پاسخ ۴۰۳ مسیر `ordering-tokens` برای توکن فعلی هم‌خوان است، اما به‌تنهایی علت ۴۰۳ را ثابت نمی‌کند.
+- ارتباط زندهٔ APK رشتهٔ `wss://br.snappfood.ir:8085/mqtt` را برای WebSocket و `tcp://tcpmobile.zoodfood.com:1885` را نیز برای MQTT دارد. رشتهٔ `/vms/vendor/rx/` در `MQTTService` دیده شد؛ نقش دقیق آن از این بررسی محدود مشخص نشد.
+- متد Retrofit با نام `ackOrder`، `POST` فرم‌کدگذاری‌شده با `@FieldMap` و URL ورودی `@Url` است؛ annotationهایش headerهای `correlational-id-header` و `x-client-version` را ثبت می‌کنند. نام header اول با `x-correlational-id` در backend فعلی فرق دارد و باید با قرارداد مجاز API تطبیق داده شود. فراخوانی برنامه میزبان `https://vmsapi.zoodfood.com` را با مسیر `AppConfig.getAck().getPath()` ترکیب می‌کند. مسیر نهایی از تنظیمات زمان اجرا می‌آید و از APK به‌تنهایی قابل تعیین قطعی نیست.
+- بنابراین URL پذیرش ثابت فعلی در `restaurant/snapp_sync.py` را نباید بدون تطبیق با تنظیمات و پاسخ API معادل قرارداد Native APK فرض کرد. رابط فهرست سفارش و اقدام‌ها در Hesabyar موجود است، اما دسترسی زنده به فهرست و پذیرش/آماده‌تحویل هنوز تأیید نشده؛ هیچ درخواست تغییردهنده‌ای روی سفارش واقعی ارسال نشده است.
+- این یافته‌ها از DEX و annotationهای همان نسخهٔ APK استخراج شده‌اند، نه decompile کامل با JADX. مخزن عمومی [Snappfood Docs](https://github.com/snappfood/Docs) فقط معرفی مستندات API را نشان داد و در این بررسی قرارداد قابل استفادهٔ سفارش فروشنده از آن به دست نیامد.
+
 ## صفحات Restaurant-specific
 
 این صفحات منبع دادهٔ اختصاصی Restaurant دارند و باید از `ManagementPageScaffold`، `ManagementSurfaceCard`، توکن‌های semantic و در صورت وجود schema پایدار از `ManagementListView` استفاده کنند:
