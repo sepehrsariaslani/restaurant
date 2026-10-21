@@ -157,12 +157,12 @@ def set_snappfood_variation_status(variation_id="", active=None):
 
 
 @frappe.whitelist()
-def set_snappfood_menu_item_status(item_id="", active=None):
+def set_snappfood_menu_item_status(item_id="", active=None, disable_until_next_shift=False):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import set_snappfood_menu_item_status as _set_status
 
 	_ensure_management_access()
-	return _set_status(item_id=item_id, active=active)
+	return _set_status(item_id=item_id, active=active, disable_until_next_shift=disable_until_next_shift)
 
 
 @frappe.whitelist()

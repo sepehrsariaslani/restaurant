@@ -173,6 +173,7 @@ class TestFoodPartnerMenuManagement(FrappeTestCase):
 
         with (
             patch.object(snapp_sync, "_require_snapp_menu_settings", return_value=config),
+            patch.object(snapp_sync, "fetch_snapp_menu", return_value={"items": [{"product_id": "product-1", "active": True}]}),
             patch.object(snapp_sync.requests, "post", return_value=response) as post_request,
         ):
             result = snapp_sync.set_snappfood_menu_item_status(item_id="product-1", active=0)

@@ -2081,7 +2081,17 @@ def _food_partner_variation_active(record):
     parsed = _food_partner_boolean(explicit)
     if parsed is not None:
         return parsed
-    return _food_partner_boolean(record.get("status") if isinstance(record, dict) else None)
+    status = record.get("status") if isinstance(record, dict) else None
+    return _food_partner_boolean(status.get("active") if isinstance(status, dict) else status)
+
+
+def _food_partner_disabled_until(record):
+    status = record.get("status") if isinstance(record, dict) else None
+    return (
+        record.get("disabledUntil") or record.get("disabled_until")
+        or (status.get("disabledUntil") if isinstance(status, dict) else "")
+        or ""
+    )
 
 
 def _extract_current_food_partner_menu_entries(payload):
@@ -2163,10 +2173,9 @@ def _extract_current_food_partner_menu_entries(payload):
                             ),
                         },
                         "active": _food_partner_variation_active(variation if is_variation else product),
-                        "disabledUntil": variation.get("disabledUntil")
-                        or variation.get("disabled_until")
-                        or product.get("disabledUntil")
-                        or product.get("disabled_until"),
+                        "disabledUntil": _food_partner_disabled_until(variation)
+                        or _food_partner_disabled_until(product),
+                        "is_virtual": bool(variation.get("isVirtual") or product.get("isVirtual")),
                         "_category_id": category_id,
                         "_category_title": category_title,
                         "_food_partner_menu_v2": 1,
@@ -2595,7 +2604,39 @@ def _match_local_item_by_title(title, local_items):
     return matches[0] if len(matches) == 1 else None
 
 
-def fetch_snapp_menu(settings=None):
+def _food_partner_menu_availability(cfg):
+    """The decomposed v2 catalog omits temporary availability; read the VMS view."""
+    try:
+        response = requests.get(
+            f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/vendor/menu",
+            params={"vendorId": cfg["vendor_id"]},
+            headers=_snapp_partner_web_headers(cfg), timeout=30,
+        )
+        payload = _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("وضعیت موجودی Food Partner دریافت نشد؛ منو را دوباره دریافت کنید.") from exc
+    included = payload.get("included") if isinstance(payload, dict) else None
+    if not isinstance(included, list):
+        raise frappe.ValidationError("قالب پاسخ موجودی Food Partner معتبر نیست.")
+    result = {}
+    for record in included:
+        if not isinstance(record, dict) or record.get("type") != "productVariation":
+            continue
+        attributes = record.get("attributes") or {}
+        if not isinstance(attributes, dict):
+            continue
+        active = _food_partner_boolean(attributes.get("active"))
+        if active is None or "disabledUntil" not in attributes:
+            continue
+        result[str(record.get("id") or "")] = {
+            "active": active, "disabled_until": attributes.get("disabledUntil") or "",
+            "availability_verified": True,
+            "availability_in_review": attributes.get("isNewProduct") is True and attributes.get("isReviewed") is not True,
+        }
+    return result
+
+
+def fetch_snapp_menu(settings=None, include_availability=False):
     cfg = settings or _get_settings()
     if not cfg.get("token"):
         raise frappe.ValidationError("توکن Food Partner تنظیم نشده است.")
@@ -2723,12 +2764,29 @@ def fetch_snapp_menu(settings=None):
                 "field_reviews": entry.get("field_reviews") or {},
                 "active": _food_partner_variation_active(entry),
                 "disabled_until": entry.get("disabledUntil") or entry.get("disabled_until") or "",
+                "is_virtual": bool(entry.get("is_virtual") or entry.get("isVirtual")),
             }
         )
+    availability_error = ""
+    if include_availability:
+        try:
+            availability = _food_partner_menu_availability(cfg)
+        except frappe.ValidationError as exc:
+            availability = {}
+            availability_error = str(exc)
+        for row in rows:
+            state = availability.get(row["status_id"])
+            row["availability_verified"] = False
+            if state:
+                row.update(state)
+                row["status"] = "ACTIVE" if row["active"] else "IN_ACTIVE"
     if _has_field("Restaurant Web Settings", "snapp_last_menu_sync_at"):
         _set_single_if_exists("Restaurant Web Settings", "snapp_last_menu_sync_at", get_datetime_str(now_datetime()))
     frappe.db.commit()
-    return {"status": "success", "count": len(rows), "items": rows}
+    result = {"status": "success", "count": len(rows), "items": rows}
+    if availability_error:
+        result["availability_error"] = availability_error
+    return result
 
 
 def _require_snapp_menu_settings(settings=None):
@@ -2787,7 +2845,7 @@ def _snapp_menu_mutation_error(response, payload):
             details = (value.get("message"), value.get("code"), value.get("reason"))
             candidates.extend(details)
             nested_details.extend(item for item in details if item not in (None, ""))
-            pending.extend(value.get(key) for key in ("error", "errors", "data", "details") if key in value)
+            pending.extend(value.get(key) for key in ("error", "errors", "data", "details", "reason") if key in value)
         elif isinstance(value, list):
             pending.extend(value)
         elif value not in (None, ""):
@@ -2821,7 +2879,7 @@ def _snapp_menu_mutation_error(response, payload):
 
 def get_snappfood_menu_products():
     """Read the menu with exact native Item identities for its modifier editor."""
-    result = fetch_snapp_menu()
+    result = fetch_snapp_menu(include_availability=True)
     local_items = _get_local_item_rows(mapped_only=True)
     for row in result.get("items") or []:
         mapped_item = _find_mapped_local_item(row, local_items)
@@ -3330,7 +3388,7 @@ def update_snappfood_variation_description(variation_id, description):
     return {"status": "success", "variation_id": variation_id, "description": description}
 
 
-def set_snappfood_menu_item_status(item_id, active):
+def set_snappfood_menu_item_status(item_id, active, disable_until_next_shift=False):
     cfg = _require_snapp_menu_settings()
     item_id = str(item_id or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", item_id):
@@ -3338,6 +3396,22 @@ def set_snappfood_menu_item_status(item_id, active):
     active_value = _food_partner_boolean(active)
     if active_value is None:
         raise frappe.ValidationError("وضعیت جدید گزینهٔ Food Partner معتبر نیست.")
+    temporary = _food_partner_boolean(disable_until_next_shift)
+    if temporary is None or (temporary and active_value):
+        raise frappe.ValidationError("ناموجودی تا نوبت بعد فقط برای درخواست ناموجودکردن معتبر است.")
+
+    menu = fetch_snapp_menu(settings=cfg, include_availability=True)
+    current = next((row for row in menu.get("items") or [] if str(
+        row.get("status_id") or row.get("variation_id") or row.get("product_id") or ""
+    ) == item_id), None)
+    if not current:
+        raise frappe.ValidationError("گزینه در منوی فعلی Food Partner پیدا نشد؛ منو را دوباره دریافت کنید.")
+    if current.get("active") not in (True, False) or current.get("is_virtual") or current.get("availability_in_review") or current.get("availability_verified") is False:
+        raise frappe.ValidationError("وضعیت این گزینه برای تغییر موجودی آماده نیست؛ منو را دوباره دریافت کنید.")
+    if _food_partner_review_is_pending((current.get("field_reviews") or {}).get("price") or {}, current.get("price")):
+        raise frappe.ValidationError("قیمت این گزینه در انتظار بررسی Food Partner است؛ تغییر موجودی پس از تعیین نتیجه ممکن است.")
+    if temporary and not current.get("active"):
+        raise frappe.ValidationError("برای ناموجودی تا نوبت بعد، ابتدا گزینهٔ غیرفعال را موجود کنید.")
 
     url = (
         f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}"
@@ -3346,7 +3420,7 @@ def set_snappfood_menu_item_status(item_id, active):
     payload = {
         "ids": [item_id],
         "status": "ACTIVE" if active_value else "IN_ACTIVE",
-        "disable_until_next_shift": False,
+        "disable_until_next_shift": temporary,
     }
     try:
         response = requests.post(url, headers=_snapp_menu_headers(cfg), json=payload, timeout=30)
@@ -3355,11 +3429,22 @@ def set_snappfood_menu_item_status(item_id, active):
         except (TypeError, ValueError):
             response_payload = None
         error = _snapp_menu_mutation_error(response, response_payload)
+        results = response_payload.get("data") if isinstance(response_payload, dict) else None
+        if not error and isinstance(results, list):
+            failed = next((row for row in results if isinstance(row, dict) and (
+                row.get("success") is False or row.get("status") is False or row.get("reason")
+                or str(row.get("status") or "").lower() in {"error", "failed", "rejected"}
+            )), None)
+            if failed:
+                error = _snapp_menu_mutation_error(response, {"success": False, "data": failed})
         if error:
             raise frappe.ValidationError(error)
     except requests.RequestException as exc:
         raise frappe.ValidationError("ارتباط با API وضعیت منوی Food Partner برقرار نشد.") from exc
-    return {"status": "success", "item_id": item_id, "active": active_value}
+    result = {"status": "success", "item_id": item_id, "active": active_value}
+    if temporary:
+        result["disable_until_next_shift"] = True
+    return result
 
 
 def set_snappfood_variation_status(variation_id, active):

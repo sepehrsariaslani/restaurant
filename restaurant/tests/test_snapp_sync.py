@@ -680,6 +680,8 @@ class TestSnappSync(FrappeTestCase):
             "menu_api_base_url": "https://apigw.snappfood.ir",
         }
         with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.fetch_snapp_menu", return_value={"items": [{"status_id": "37382933", "active": False}]}
+        ), patch(
             "restaurant.snapp_sync.requests.post", return_value=response
         ) as request:
             result = snapp_sync.set_snappfood_menu_item_status("37382933", 1)
@@ -696,6 +698,8 @@ class TestSnappSync(FrappeTestCase):
         response.json.return_value = {"success": True}
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
         with patch("restaurant.snapp_sync._get_settings", return_value=settings), patch(
+            "restaurant.snapp_sync.fetch_snapp_menu", return_value={"items": [{"variation_id": "36485634", "active": True}]}
+        ), patch(
             "restaurant.snapp_sync.requests.post", return_value=response
         ):
             result = snapp_sync.set_snappfood_variation_status("36485634", 0)
