@@ -24418,11 +24418,18 @@ def create_snappfood_item_from_mapping(payload=None):
 	payload = _parse_json(payload, {})
 	if not isinstance(payload, dict):
 		payload = {}
-	from restaurant.snapp_sync import create_snappfood_item_from_mapping as _create_item
+	from restaurant.snapp_sync import create_snappfood_item_from_mapping as _create_item, _food_partner_native_item_rate
+
+	# Explicit menu prices are Toman; legacy callers' `price` remains native currency.
+	price = (
+		_food_partner_native_item_rate(payload["price_toman"])
+		if "price_toman" in payload
+		else payload.get("price") or 0
+	)
 
 	return _create_item(
 		title=payload.get("title") or "",
-		price=payload.get("price") or 0,
+		price=price,
 		product_id=payload.get("product_id") or "",
 		variation_id=payload.get("variation_id") or "",
 		product_hash_id=payload.get("product_hash_id") or "",
@@ -24430,6 +24437,7 @@ def create_snappfood_item_from_mapping(payload=None):
 		menu_item_id=payload.get("menu_item_id") or "",
 		product_title=payload.get("product_title") or "",
 		map_product_group=bool(cint(payload.get("map_product_group"))),
+		description=payload.get("description") or "",
 	)
 
 

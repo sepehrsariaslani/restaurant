@@ -2907,6 +2907,20 @@ def _food_partner_decimal(value, label):
     return format(amount.normalize(), "f")
 
 
+def _food_partner_native_item_rate(price_toman, settings=None):
+    """Convert a menu's explicit Toman price once at the native Item boundary."""
+    amount = Decimal(_food_partner_decimal(price_toman, "قیمت محصول"))
+    cfg = settings if settings is not None else _get_settings()
+    try:
+        multiplier = Decimal(str(cfg.get("amount_multiplier", DEFAULT_AMOUNT_MULTIPLIER)))
+    except (InvalidOperation, ValueError, TypeError):
+        raise frappe.ValidationError("ضریب تبدیل مبلغ Food Partner معتبر نیست.")
+    if not multiplier.is_finite() or multiplier <= 0:
+        raise frappe.ValidationError("ضریب تبدیل مبلغ Food Partner باید مثبت و معتبر باشد.")
+    rate = amount * multiplier
+    return int(rate) if rate == rate.to_integral_value() else float(rate)
+
+
 def _food_partner_variation_patch(variation_id, fields, settings=None):
     cfg = _require_snapp_menu_settings(settings=settings)
     variation_id = str(variation_id or "").strip()
@@ -4004,7 +4018,7 @@ def auto_map_snappfood_items(create_missing=False, refresh_menu=1):
             try:
                 created = create_snappfood_item_from_mapping(
                     title=row.get("title") or "",
-                    price=row.get("price") or 0,
+                    price=_food_partner_native_item_rate(row.get("price"), mapping_rows.get("settings")),
                     product_id=row.get("product_id") or "",
                     variation_id=row.get("variation_id") or "",
                     product_hash_id=row.get("product_hash_id") or "",
@@ -4262,9 +4276,16 @@ def _default_selling_price_list(currency=None):
 
 
 def _default_uom():
-    if _has_column("UOM", "enabled"):
-        return frappe.db.get_value("UOM", {"enabled": 1}, "name") or frappe.db.get_value("UOM", {}, "name") or "Nos"
-    return frappe.db.get_value("UOM", {}, "name") or "Nos"
+    # Menu quantities count sale units; an arbitrary first UOM may be a weight.
+    has_enabled = _has_column("UOM", "enabled")
+    for name in ("Nos", "Unit", "واحد", "عدد"):
+        filters = {"name": name}
+        if has_enabled:
+            filters["enabled"] = 1
+        unit = frappe.db.get_value("UOM", filters, "name")
+        if unit:
+            return unit
+    raise frappe.ValidationError("برای ساخت کالای Food Partner، یک واحد شمارشی فعال مانند «واحد» یا «عدد» تعریف کنید.")
 
 
 def _resolve_snapp_primary_customer(settings=None):
@@ -4468,7 +4489,7 @@ def _build_snapp_item_creation_values(line, item_group, item_code):
         "is_sales_item": 1,
         "is_purchase_item": 0,
         "standard_rate": flt(line.get("unit_price") or 0),
-        "description": title,
+        "description": str(line.get("description") or title).strip(),
     }
 
 
@@ -4483,6 +4504,7 @@ def create_snappfood_item_from_mapping(
     product_title="",
     map_product_group=False,
     commit=True,
+    description="",
 ):
     """Create or map one native Item without creating an order or invoice."""
     map_product_group = bool(cint(map_product_group))
@@ -4491,6 +4513,7 @@ def create_snappfood_item_from_mapping(
         raise frappe.ValidationError("برای ساخت Item و نگاشت گزینه‌ها، شناسه محصول Food Partner لازم است.")
     line = {
         "title": str((product_title if map_product_group else "") or title or "").strip(),
+        "description": str(description or "").strip(),
         "unit_price": flt(price or 0),
         "product_id": product_id,
         "variation_id": "" if map_product_group else str(variation_id or "").strip(),
@@ -4662,6 +4685,13 @@ def _resolve_item_code(line):
             _tag_item_mapping(by_product_hash, line)
             return by_product_hash
 
+    settings = _get_settings()
+    if settings.get("require_item_mapping"):
+        # A title match is only a suggestion; strict accounts need a saved ID.
+        raise frappe.ValidationError(
+            f"کالای Food Partner نگاشت نشده است: {title} ({external_variation_id or external_product_id or external_menu_item_id or 'بدون شناسه'})"
+        )
+
     by_title = frappe.db.get_value("Item", {"item_name": title}, "name")
     if by_title:
         _tag_item_mapping(by_title, line)
@@ -4680,12 +4710,6 @@ def _resolve_item_code(line):
             if not (current_snapp_code or "").strip():
                 frappe.db.set_value("Item", item_name, "custom_snapp_code", snapp_code, update_modified=False)
         return item_name
-
-    settings = _get_settings()
-    if settings.get("require_item_mapping"):
-        raise frappe.ValidationError(
-            f"کالای Food Partner نگاشت نشده است: {title} ({external_variation_id or external_product_id or external_menu_item_id or 'بدون شناسه'})"
-        )
 
     return create_snappfood_item_from_mapping(
         title=title,
