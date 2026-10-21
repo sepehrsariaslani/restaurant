@@ -2983,6 +2983,148 @@ def update_snappfood_product_description(product_id, description):
     return {**result, "description": str(description or "")}
 
 
+def _food_partner_owned_menu_rows(item_id, cfg, parent=False):
+    item_id = str(item_id or "").strip()
+    if not re.fullmatch(r"[0-9]{1,20}", item_id):
+        raise frappe.ValidationError("شناسهٔ محصول یا گزینهٔ Food Partner معتبر نیست.")
+    rows = fetch_snapp_menu(cfg).get("items") or []
+    if parent:
+        matches = [row for row in rows if str(row.get("product_id") or "") == item_id]
+    else:
+        matches = [row for row in rows if item_id in {
+            str(row.get("status_id") or ""), str(row.get("variation_id") or ""), str(row.get("product_id") or ""),
+        }]
+    if not matches:
+        raise frappe.ValidationError("محصول یا گزینه در منوی فعلی این فروشگاه پیدا نشد؛ منو را تازه کنید.")
+    return item_id, matches
+
+
+def add_snappfood_product_variations(product_id, variations):
+    """Add options using the current portal's decomposed menu contract."""
+    cfg = _require_snapp_menu_settings()
+    if not isinstance(variations, list) or not variations or len(variations) > 30:
+        raise frappe.ValidationError("بین ۱ تا ۳۰ گزینهٔ جدید وارد کنید.")
+    submitted = []
+    titles = set()
+    for variation in variations:
+        if not isinstance(variation, dict) or set(variation) - {"title", "price"}:
+            raise frappe.ValidationError("اطلاعات گزینهٔ جدید معتبر نیست.")
+        title = str(variation.get("title") or "").strip()
+        if not title or len(title) > 64:
+            raise frappe.ValidationError("عنوان هر گزینه باید بین ۱ تا ۶۴ نویسه باشد.")
+        if title.casefold() in titles:
+            raise frappe.ValidationError("عنوان گزینه‌های جدید نباید تکراری باشد.")
+        titles.add(title.casefold())
+        submitted.append({"title": title, "price": _food_partner_decimal(variation.get("price"), "قیمت گزینه")})
+    product_id, rows = _food_partner_owned_menu_rows(product_id, cfg, parent=True)
+    existing_titles = {
+        str(value).strip().casefold()
+        for row in rows
+        for value in (row.get("variation_title"), ((row.get("field_reviews") or {}).get("variation_title") or {}).get("pending_value"))
+        if value
+    }
+    if titles & existing_titles:
+        raise frappe.ValidationError("گزینه‌ای با همین عنوان در این محصول وجود دارد؛ منو را تازه کنید.")
+    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v1/vendor/product/product-variation/add-variation"
+    try:
+        response = requests.post(url, headers=_snapp_menu_headers(cfg), json={
+            "parentId": int(product_id), "parentIdType": "productVariation", "variations": submitted,
+        }, timeout=30)
+        _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("نتیجهٔ افزودن گزینه دریافت نشد؛ پیش از ارسال دوباره، منو را تازه کنید.") from exc
+    return {"status": "success", "product_id": product_id, "submitted_count": len(submitted)}
+
+
+def _food_partner_product_images(item_id, cfg):
+    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v1/vendor/{cfg['vendor_id']}/product/images"
+    try:
+        response = requests.get(url, headers=_snapp_menu_headers(cfg), timeout=30)
+        payload = _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("تصاویر Food Partner دریافت نشد؛ دوباره دریافت کنید.") from exc
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        raise frappe.ValidationError("قالب پاسخ تصاویر Food Partner قابل خواندن نیست.")
+    images = []
+    for record in data:
+        if not isinstance(record, dict) or str(record.get("productVariationId") or "") != item_id:
+            continue
+        for image in record.get("images") or []:
+            if not isinstance(image, dict):
+                continue
+            change_id, image_id = str(image.get("changeId") or ""), str(image.get("id") or "")
+            reason = image.get("rejectReason") or {}
+            images.append({
+                "key": f"change:{change_id}" if change_id else f"image:{image_id}",
+                "image_id": image_id, "change_id": change_id,
+                "url": str(image.get("url") or "") if str(image.get("url") or "").startswith("https://") else "",
+                "status": str(image.get("status") or ""),
+                "reason": str(reason.get("title") or "") if isinstance(reason, dict) else str(reason),
+                "can_delete": image.get("userType") == "VENDOR" and bool(change_id or image_id),
+            })
+    return images
+
+
+def get_snappfood_product_images(item_id):
+    cfg = _require_snapp_menu_settings()
+    item_id, _ = _food_partner_owned_menu_rows(item_id, cfg)
+    return {"status": "success", "item_id": item_id, "images": _food_partner_product_images(item_id, cfg)}
+
+
+def _food_partner_image_bytes(image_data_url):
+    image_data_url = str(image_data_url or "").strip()
+    match = re.fullmatch(r"data:image/jpeg;base64,([A-Za-z0-9+/]+={0,2})", image_data_url)
+    if not match or len(image_data_url) > 3_000_000:
+        raise frappe.ValidationError("تصویر محصول معتبر نیست یا حجم آن بیش از اندازه است.")
+    try:
+        image_bytes = base64.b64decode(match.group(1), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise frappe.ValidationError("تصویر محصول قابل خواندن نیست.") from exc
+    if not image_bytes or len(image_bytes) > 2_000_000:
+        raise frappe.ValidationError("حجم تصویر محصول باید حداکثر ۲ مگابایت باشد.")
+    return image_bytes
+
+
+def upload_snappfood_product_image(item_id, image_data_url):
+    cfg = _require_snapp_menu_settings()
+    image_bytes = _food_partner_image_bytes(image_data_url)
+    item_id, _ = _food_partner_owned_menu_rows(item_id, cfg)
+    images = _food_partner_product_images(item_id, cfg)
+    if any(image["status"].upper() in {"PENDING", "NOT_REVIEWED"} for image in images):
+        raise frappe.ValidationError("تصویر این گزینه در انتظار بررسی است؛ تا اعلام نتیجه تصویر دیگری نفرستید.")
+    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendor/product/product-variation/image"
+    try:
+        response = requests.post(url, headers=_snapp_menu_headers(cfg), files={
+            "parentId": (None, item_id), "parentIdType": (None, "productVariation"),
+            "image": ("uploadedImage.jpg", image_bytes, "image/jpeg"),
+        }, timeout=30)
+        _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("نتیجهٔ بارگذاری تصویر دریافت نشد؛ پیش از ارسال دوباره تصاویر را بازخوانی کنید.") from exc
+    return {"status": "success", "item_id": item_id}
+
+
+def delete_snappfood_product_image(item_id, image_key):
+    cfg = _require_snapp_menu_settings()
+    item_id, _ = _food_partner_owned_menu_rows(item_id, cfg)
+    image = next((image for image in _food_partner_product_images(item_id, cfg) if image["key"] == image_key), None)
+    if not image or not image["can_delete"]:
+        raise frappe.ValidationError("تصویر قابل حذف این گزینه پیدا نشد؛ تصاویر بارگذاری‌شده توسط پشتیبانی قابل حذف نیستند.")
+    if image["change_id"]:
+        url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v1/vendor/product/image/{image['change_id']}"
+        headers = _snapp_menu_headers(cfg)
+    else:
+        url = f"{DEFAULT_PARTNER_WEB_API_BASE_URL}/vms/v1/product/{item_id}/image/{image['image_id']}"
+        headers = {**_snapp_partner_web_headers(cfg), "vendor-authorization": "true"}
+    try:
+        response = requests.delete(url, headers=headers, timeout=30)
+        _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("نتیجهٔ حذف تصویر دریافت نشد؛ تصاویر را بازخوانی کنید.") from exc
+    return {"status": "success", "item_id": item_id, "image_key": image_key}
+
+
 def create_snappfood_product(payload):
     """Create a product through the Partner product-review form contract."""
     cfg = _require_snapp_menu_settings()
@@ -3024,16 +3166,7 @@ def create_snappfood_product(payload):
     }
     image_data_url = str(payload.get("image_data_url") or "").strip()
     if image_data_url:
-        match = re.fullmatch(r"data:image/jpeg;base64,([A-Za-z0-9+/]+={0,2})", image_data_url)
-        if not match or len(image_data_url) > 3_000_000:
-            raise frappe.ValidationError("تصویر محصول معتبر نیست یا حجم آن بیش از اندازه است.")
-        try:
-            image_bytes = base64.b64decode(match.group(1), validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise frappe.ValidationError("تصویر محصول قابل خواندن نیست.") from exc
-        if not image_bytes or len(image_bytes) > 2_000_000:
-            raise frappe.ValidationError("حجم تصویر محصول باید حداکثر ۲ مگابایت باشد.")
-        form_fields["images[0]"] = ("uploadedImage.jpg", image_bytes, "image/jpeg")
+        form_fields["images[0]"] = ("uploadedImage.jpg", _food_partner_image_bytes(image_data_url), "image/jpeg")
     variations = payload.get("variations")
     if variations:
         if not isinstance(variations, list) or len(variations) > 30:
