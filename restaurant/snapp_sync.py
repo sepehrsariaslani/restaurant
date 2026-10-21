@@ -765,8 +765,13 @@ def _get_food_partner_order_tokens(settings=None):
         payload = response.json()
     except requests.HTTPError as exc:
         status_code = getattr(exc.response, "status_code", None)
-        if status_code in (401, 403):
-            message = "توکن دسترسی حساب Food Partner برای عملیات سفارش پذیرفته نشد؛ آن را بررسی یا دوباره وارد کنید."
+        if status_code == 401:
+            message = "توکن حساب Food Partner برای دریافت دسترسی سفارش معتبر شناخته نشد (HTTP 401)؛ آن را از مسیر رسمی به‌روزرسانی کنید."
+        elif status_code == 403:
+            message = (
+                "دریافت دسترسی عملیات سفارش از Food Partner رد شد (HTTP 403). "
+                "این پاسخ به‌تنهایی نامعتبر بودن توکن منو را ثابت نمی‌کند؛ دسترسی سفارش باید جداگانه فعال شود."
+            )
         else:
             message = f"دریافت دسترسی امن سفارش با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
         raise frappe.ValidationError(message) from exc

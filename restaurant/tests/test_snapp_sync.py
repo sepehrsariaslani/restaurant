@@ -191,6 +191,36 @@ class TestSnappSync(FrappeTestCase):
 
         self.assertIn("توکن Food Partner", str(context.exception))
 
+    def test_food_partner_order_token_response_keeps_order_and_menu_tokens_separate(self):
+        response = Mock(status_code=200, ok=True)
+        response.json.return_value = {"data": {"orderingToken": "order-only", "vendorToken": "vendor-only"}}
+        settings = {"token": "menu-only", "access_token": "account-only"}
+        with patch("restaurant.snapp_sync.requests.get", return_value=response) as request:
+            tokens = snapp_sync._get_food_partner_order_tokens(settings)
+
+        self.assertEqual(tokens, {"ordering_token": "order-only", "vendor_token": "vendor-only"})
+        self.assertEqual(
+            request.call_args.args[0],
+            "https://snappfood.ir/vms/v1/user/ordering-tokens",
+        )
+        self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer account-only")
+
+    def test_food_partner_order_token_forbidden_does_not_call_menu_token_invalid(self):
+        response = Mock(status_code=403)
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error", response=response
+        )
+        settings = {"token": "menu-only", "access_token": "account-only"}
+        with patch("restaurant.snapp_sync.requests.get", return_value=response):
+            with self.assertRaises(frappe.ValidationError) as context:
+                snapp_sync._get_food_partner_order_tokens(settings)
+
+        self.assertIn("دریافت دسترسی عملیات سفارش", str(context.exception))
+        self.assertIn("HTTP 403", str(context.exception))
+        self.assertIn("نامعتبر بودن توکن منو را ثابت نمی‌کند", str(context.exception))
+        self.assertNotIn("account-only", str(context.exception))
+        self.assertNotIn("menu-only", str(context.exception))
+
     def test_food_partner_menu_sends_vendor_authorization_header(self):
         response = Mock()
         response.json.return_value = {"data": []}
