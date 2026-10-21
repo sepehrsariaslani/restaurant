@@ -535,7 +535,8 @@ class TestSnappSync(FrappeTestCase):
         ):
             snapp_sync.update_snappfood_product("36485634", {"delete": True})
 
-    def test_food_partner_product_creation_uses_current_web_form_contract(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu_categories", return_value={"items": [{"category_id": "2642322", "title": "غذا", "status": "ACTIVE"}]})
+    def test_food_partner_product_creation_uses_current_web_form_contract(self, _categories):
         response = Mock(status_code=201, ok=True)
         response.json.return_value = {"status": True}
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
@@ -604,7 +605,8 @@ class TestSnappSync(FrappeTestCase):
                 }
             )
 
-    def test_food_partner_product_creation_sends_compressed_jpeg_with_review_fields(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu_categories", return_value={"items": [{"category_id": "2642322", "title": "غذا", "status": "ACTIVE"}]})
+    def test_food_partner_product_creation_sends_compressed_jpeg_with_review_fields(self, _categories):
         response = Mock(status_code=201, ok=True)
         response.json.return_value = {"status": True}
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}

@@ -195,6 +195,7 @@ class TestFoodPartnerMenuManagement(FrappeTestCase):
 
         with (
             patch.object(snapp_sync, "_require_snapp_menu_settings", return_value=config),
+            patch.object(snapp_sync, "fetch_snapp_menu_categories", return_value={"items": [{"category_id": "category-1", "title": "گروه آزمایشی", "status": "ACTIVE"}]}),
             patch.object(snapp_sync.requests, "post", return_value=response) as post_request,
         ):
             result = snapp_sync.create_snappfood_product(
@@ -226,6 +227,7 @@ class TestFoodPartnerMenuManagement(FrappeTestCase):
 
         with (
             patch.object(snapp_sync, "_require_snapp_menu_settings", return_value=config),
+            patch.object(snapp_sync, "fetch_snapp_menu", return_value={"items": [{"product_id": "product-1", "variation_id": "variation-1"}]}),
             patch.object(snapp_sync.requests, "delete", return_value=response) as delete_request,
         ):
             result = snapp_sync.delete_snappfood_product(item_id="variation-1", delete_neighbours=True)

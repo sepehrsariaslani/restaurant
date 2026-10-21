@@ -2479,6 +2479,8 @@ def _extract_menu_categories(payload):
                     {
                         "external_id": category_id,
                         "category_id": category_id,
+                        "status": str(value.get("status") or ""),
+                        "schedules": _food_partner_category_schedules(value.get("schedules")),
                         "parent_id": str(
                             first_value(value, ("parentId", "parent_id", "parentCategoryId", "parent_category_id"))
                             or ""
@@ -2493,6 +2495,15 @@ def _extract_menu_categories(payload):
 
     visit(payload)
     return categories
+
+
+def _food_partner_category_schedules(value):
+    schedules = value if isinstance(value, list) else [value] if isinstance(value, dict) else []
+    return [
+        {"start": str(row.get("start") or row.get("beginTime") or "")[:5],
+         "stop": str(row.get("stop") or row.get("endTime") or "")[:5]}
+        for row in schedules if isinstance(row, dict)
+    ]
 
 
 def fetch_snapp_menu_categories(settings=None):
@@ -2537,6 +2548,9 @@ def fetch_snapp_menu_categories(settings=None):
     except (TypeError, ValueError) as exc:
         raise frappe.ValidationError("پاسخ API گروه‌های کالای Food Partner قابل خواندن نیست.") from exc
 
+    error = _snapp_menu_mutation_error(response, payload)
+    if error:
+        raise frappe.ValidationError(error)
     items = _extract_menu_categories(payload)
     return {"status": "success", "count": len(items), "items": items}
 
@@ -2623,6 +2637,9 @@ def fetch_snapp_menu(settings=None):
         ) from exc
     except (TypeError, ValueError) as exc:
         raise frappe.ValidationError("پاسخ API منوی Food Partner قابل خواندن نیست.") from exc
+    error = _snapp_menu_mutation_error(response, payload)
+    if error:
+        raise frappe.ValidationError(error)
     rows = []
     for entry in _extract_menu_entries(payload):
         fallback_id = str(entry.get("id") or "").strip()
@@ -3125,6 +3142,49 @@ def delete_snappfood_product_image(item_id, image_key):
     return {"status": "success", "item_id": item_id, "image_key": image_key}
 
 
+def _food_partner_product_category_fields(payload, cfg):
+    create_category = _food_partner_boolean(payload.get("create_category", False))
+    if create_category is None:
+        raise frappe.ValidationError("نوع انتخاب گروه منو معتبر نیست.")
+    category_id = str(payload.get("category_id") or "").strip()
+    category_title = str(payload.get("category_title") or "").strip()
+    schedule = payload.get("category_schedule")
+    if create_category:
+        if category_id or not category_title or len(category_title) > 64:
+            raise frappe.ValidationError("برای گروه تازه فقط عنوانی بین ۱ تا ۶۴ نویسه وارد کنید.")
+        schedule_fields = {}
+        if schedule:
+            if not isinstance(schedule, dict) or set(schedule) != {"start", "stop"}:
+                raise frappe.ValidationError("زمان نمایش گروه تازه معتبر نیست.")
+            start, stop = str(schedule["start"] or ""), str(schedule["stop"] or "")
+            if not all(re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", time) for time in (start, stop)) or start >= stop:
+                raise frappe.ValidationError("ساعت شروع و پایان معتبر وارد کنید؛ پایان باید پس از شروع باشد.")
+            schedule_fields = {
+                "menuCategorySchedules[0][start]": (None, f"{start}:00"),
+                "menuCategorySchedules[0][stop]": (None, f"{stop}:00"),
+            }
+        categories = fetch_snapp_menu_categories(cfg).get("items") or []
+        if any(_normalize_mapping_text(row.get("title")) == _normalize_mapping_text(category_title) for row in categories):
+            raise frappe.ValidationError("گروهی با همین عنوان وجود دارد؛ آن را از فهرست گروه‌های موجود انتخاب کنید.")
+        return {"menuCategoryTitle": (None, category_title), **schedule_fields}
+    if schedule:
+        raise frappe.ValidationError("زمان نمایش گروه موجود با ثبت محصول تغییر نمی‌کند.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", category_id):
+        raise frappe.ValidationError("دسته‌بندی محصول را از فهرست Food Partner انتخاب کنید.")
+    categories = fetch_snapp_menu_categories(cfg).get("items") or []
+    category = next((row for row in categories if str(row.get("category_id") or row.get("external_id")) == category_id), None)
+    if not category:
+        raise frappe.ValidationError("گروه انتخاب‌شده در فهرست فعلی Food Partner پیدا نشد؛ گروه‌ها را دوباره دریافت کنید.")
+    if str(category.get("status") or "").upper() == "PENDING":
+        fields = {"menuCategoryTitle": (None, category["title"])}
+        schedules = category.get("schedules") or []
+        if schedules and schedules[0].get("start") and schedules[0].get("stop"):
+            fields["menuCategorySchedules[0][start]"] = (None, f"{schedules[0]['start']}:00")
+            fields["menuCategorySchedules[0][stop]"] = (None, f"{schedules[0]['stop']}:00")
+        return fields
+    return {"menuCategoryId": (None, category_id)}
+
+
 def create_snappfood_product(payload):
     """Create a product through the Partner product-review form contract."""
     cfg = _require_snapp_menu_settings()
@@ -3139,6 +3199,8 @@ def create_snappfood_product(payload):
         "price",
         "variations",
         "image_data_url",
+        "create_category",
+        "category_schedule",
     }
     if set(payload) - allowed_fields:
         raise frappe.ValidationError("یکی از فیلدهای محصول جدید پشتیبانی نمی‌شود.")
@@ -3151,15 +3213,12 @@ def create_snappfood_product(payload):
         raise frappe.ValidationError("نام محصول باید بین ۱ تا ۶۴ نویسه باشد.")
     if not description or len(description) > 256:
         raise frappe.ValidationError("توضیحات واقعی و دقیق محصول را وارد کنید؛ متن حداکثر ۲۵۶ نویسه باشد.")
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", category_id):
-        raise frappe.ValidationError("دسته‌بندی محصول را از فهرست Food Partner انتخاب کنید.")
     if category_title and len(category_title) > 64:
         raise frappe.ValidationError("عنوان دسته‌بندی محصول معتبر نیست.")
 
     form_fields = {
         "productTitle": (None, title),
         "description": (None, description),
-        "menuCategoryId": (None, category_id),
         "suggestionDetails[productTitle]": (None, "none"),
         "suggestionDetails[description]": (None, "none"),
         "suggestionDetails[categoryTitle]": (None, "none"),
@@ -3184,10 +3243,12 @@ def create_snappfood_product(payload):
     else:
         form_fields["price"] = (None, _food_partner_decimal(payload.get("price"), "قیمت محصول"))
 
+    form_fields.update(_food_partner_product_category_fields(payload, cfg))
+
     # Match the current Food Partner web app's multipart review form contract.
     url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendors/{cfg['vendor_id']}/products"
     try:
-        headers = _snapp_menu_headers(cfg)
+        headers = {**_snapp_menu_headers(cfg), "backoffice-authorization": "true"}
         response = requests.post(url, headers=headers, files=form_fields, timeout=30)
         try:
             response_payload = response.json()
@@ -3201,7 +3262,7 @@ def create_snappfood_product(payload):
     return {"status": "success", "title": title, "category_id": category_id}
 
 
-def delete_snappfood_product(item_id, delete_neighbours=False):
+def delete_snappfood_product(item_id, delete_neighbours=False, product_id=""):
     """Delete one Food Partner product variation, optionally including its siblings."""
     cfg = _require_snapp_menu_settings()
     item_id = str(item_id or "").strip()
@@ -3210,6 +3271,17 @@ def delete_snappfood_product(item_id, delete_neighbours=False):
     delete_neighbours_value = _food_partner_boolean(delete_neighbours)
     if delete_neighbours_value is None:
         raise frappe.ValidationError("دامنهٔ حذف محصول معتبر نیست.")
+
+    rows = fetch_snapp_menu(cfg).get("items") or []
+    target = next((row for row in rows if item_id == str(row.get("variation_id") or row.get("status_id") or row.get("product_id") or "")), None)
+    if not target:
+        raise frappe.ValidationError("گزینه در منوی فعلی Food Partner پیدا نشد؛ منو را تازه کنید.")
+    actual_product_id = str(target.get("product_id") or target.get("external_id") or "")
+    if product_id and str(product_id) != actual_product_id:
+        raise frappe.ValidationError("گزینهٔ حذف‌شده متعلق به محصول انتخاب‌شده نیست؛ منو را تازه کنید.")
+    siblings = {str(row.get("variation_id")) for row in rows if str(row.get("product_id") or "") == actual_product_id and row.get("variation_id")}
+    if not delete_neighbours_value and (not target.get("variation_id") or len(siblings) < 2):
+        raise frappe.ValidationError("برای حذف آخرین گزینه یا محصول ساده، از حذف کامل محصول استفاده کنید.")
 
     url = f"{DEFAULT_PARTNER_WEB_API_BASE_URL}/vms/v1.2/product-variation/{item_id}"
     params = {"deleteNeighbours": "true" if delete_neighbours_value else "false"}
