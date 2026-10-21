@@ -15856,9 +15856,11 @@ def set_management_pos_config(payload=None):
 
 
 @frappe.whitelist()
-def get_management_pos_boot(branch=None):
+def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, items_only=0):
 	_ensure_management_access()
 	branch = (branch or "").strip()
+	limit_start = max(cint(limit_start or 0), 0)
+	limit_page_length = min(max(cint(limit_page_length or 300), 1), 500)
 	image_field = _core_item_image_field()
 	category_meta_map = _get_core_category_meta_map()
 	subcategory_meta_map = _get_core_subcategory_meta_map()
@@ -15875,6 +15877,8 @@ def get_management_pos_boot(branch=None):
 	]
 	if _has_column("Item", "restaurant_out_of_stock"):
 		boot_item_fields.append("restaurant_out_of_stock")
+	if _has_column("Item", "restaurant_out_of_stock_until"):
+		boot_item_fields.append("restaurant_out_of_stock_until")
 	if _has_column("Item", "restaurant_packaging_price"):
 		boot_item_fields.append("restaurant_packaging_price")
 	rows = frappe.get_all(
@@ -15882,9 +15886,12 @@ def get_management_pos_boot(branch=None):
 		filters=_core_item_filters(branch),
 		fields=boot_item_fields,
 		ignore_permissions=True,
-		order_by="restaurant_sort_order asc, item_name asc",
-		limit=300,
+		order_by="restaurant_sort_order asc, item_name asc, name asc",
+		start=limit_start,
+		limit_page_length=limit_page_length + 1,
 	)
+	items_has_more = len(rows) > limit_page_length
+	rows = rows[:limit_page_length]
 
 	# Fallback: for items with no image, get first attachment
 	item_names = [r["name"] for r in rows if not (r.get("image") or "").strip()]
@@ -15920,7 +15927,17 @@ def get_management_pos_boot(branch=None):
 		)
 		serialized["out_of_stock"] = cint(row.get("restaurant_out_of_stock") or 0)
 		serialized["packaging_price"] = flt(row.get("restaurant_packaging_price") or 0)
+		if "restaurant_out_of_stock_until" in boot_item_fields:
+			serialized["out_of_stock_until"] = _date_value_to_iso(row.get("restaurant_out_of_stock_until"))
 		items.append(serialized)
+	item_page = {
+		"items": items,
+		"items_has_more": items_has_more,
+		"items_limit_start": limit_start,
+		"items_limit_page_length": limit_page_length,
+	}
+	if cint(items_only):
+		return item_page
 	categories = [
 		{
 			"name": key,
@@ -15933,7 +15950,7 @@ def get_management_pos_boot(branch=None):
 	print_brand_settings = _management_get_print_brand_settings()
 	return {
 		"currency": _get_currency(),
-		"items": items,
+		**item_page,
 		"categories": sorted(categories, key=lambda row: row.get("title") or ""),
 		"payment": _management_pos_payment_boot(),
 		"pos_profile": _management_pos_profile_summary(),

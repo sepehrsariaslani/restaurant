@@ -486,15 +486,19 @@ def get_management_pos_boot_reliable(branch=None, limit_start=0, limit_page_leng
     legacy = _legacy_api()
     legacy._ensure_management_access()
     normalized_branch = (branch or "").strip()
-    _clear_expired_out_of_stock()
-    payload = legacy.get_management_pos_boot(normalized_branch)
+    if cint(limit_start or 0) <= 0:
+        _clear_expired_out_of_stock()
+    payload = legacy.get_management_pos_boot(
+        normalized_branch,
+        limit_start=limit_start,
+        limit_page_length=limit_page_length,
+        items_only=items_only,
+    )
     if not isinstance(payload, dict):
         payload = {}
     result = dict(payload)
-    result["items"] = _merge_pos_items(
-        payload.get("items") or [],
-        _management_unavailable_items(normalized_branch),
-    )
+    if cint(items_only):
+        return result
     profile = result.get("pos_profile") if isinstance(result.get("pos_profile"), dict) else {}
     result["offline_price_snapshot"] = _sign_offline_price_snapshot(
         result["items"],

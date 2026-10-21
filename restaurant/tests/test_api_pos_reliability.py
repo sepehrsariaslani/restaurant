@@ -168,6 +168,61 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(merged[0]['title'], 'A newer')
         self.assertEqual(merged[1]['out_of_stock'], 1)
 
+    def test_reliable_boot_forwards_catalog_pagination_and_only_clears_expired_items_on_first_page(self):
+        calls = []
+        cleared = []
+
+        class Legacy:
+            def _ensure_management_access(self):
+                return None
+
+            def get_management_pos_boot(self, branch, **kwargs):
+                calls.append((branch, kwargs))
+                items = [{'name': f"ITEM-{kwargs['limit_start']}", 'base_price': 125000}]
+                if int(kwargs['items_only']):
+                    return {
+                        'items': items,
+                        'items_has_more': True,
+                        'items_limit_start': kwargs['limit_start'],
+                        'items_limit_page_length': kwargs['limit_page_length'],
+                    }
+                return {
+                    'items': items,
+                    'items_has_more': True,
+                    'items_limit_start': kwargs['limit_start'],
+                    'items_limit_page_length': kwargs['limit_page_length'],
+                    'pos_profile': {'branch': branch, 'company': 'COMPANY-1'},
+                }
+
+        original_legacy = reliability._legacy_api
+        original_clear = reliability._clear_expired_out_of_stock
+        original_sign = reliability._sign_offline_price_snapshot
+        reliability._legacy_api = lambda: Legacy()
+        reliability._clear_expired_out_of_stock = lambda: cleared.append(True)
+        reliability._sign_offline_price_snapshot = lambda *args, **kwargs: 'signed-test-snapshot'
+        try:
+            later_page = reliability.get_management_pos_boot_reliable(
+                branch='BRANCH-1', limit_start=300, limit_page_length=300, items_only=1
+            )
+            first_page = reliability.get_management_pos_boot_reliable(
+                branch='BRANCH-1', limit_start=0, limit_page_length=300, items_only=0
+            )
+        finally:
+            reliability._legacy_api = original_legacy
+            reliability._clear_expired_out_of_stock = original_clear
+            reliability._sign_offline_price_snapshot = original_sign
+
+        self.assertEqual(calls[0], ('BRANCH-1', {
+            'limit_start': 300,
+            'limit_page_length': 300,
+            'items_only': 1,
+        }))
+        self.assertEqual(calls[1][1]['limit_start'], 0)
+        self.assertEqual(later_page['items_limit_start'], 300)
+        self.assertNotIn('offline_price_snapshot', later_page)
+        self.assertEqual(first_page['offline_price_snapshot'], 'signed-test-snapshot')
+        self.assertEqual(len(cleared), 1)
+
     def test_extracts_order_id_from_legacy_result(self):
         self.assertEqual(reliability._extract_order_id({'order_id': 'SO-1'}), 'SO-1')
         self.assertEqual(reliability._extract_order_id({'name': 'SO-2'}), 'SO-2')
