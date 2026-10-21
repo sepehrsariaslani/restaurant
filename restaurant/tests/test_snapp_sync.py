@@ -324,7 +324,12 @@ class TestSnappSync(FrappeTestCase):
                             "fields": {
                                 "title": {"value": "کاسه نودل آسیایی"},
                                 "price": {"value": 410000},
-                                "description": {"value": "توضیح محصول ساده"},
+                                "description": {
+                                    "value": "توضیح محصول ساده",
+                                    "pendingValue": "توضیح پیشنهادی تازه",
+                                    "status": "PENDING",
+                                    "statusReason": None,
+                                },
                             },
                             "variations": [],
                         },
@@ -371,6 +376,9 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(simple["status_id"], "37382933")
         self.assertEqual(simple["product_hash_id"], "p_noodles")
         self.assertEqual(simple["description"], "توضیح محصول ساده")
+        self.assertEqual(simple["description_pending_value"], "توضیح پیشنهادی تازه")
+        self.assertEqual(simple["description_review_status"], "PENDING")
+        self.assertEqual(simple["description_status_reason"], "")
         self.assertEqual(simple["category_id"], "2642322")
         variation = next(row for row in result["items"] if row["variation_id"] == "36485634")
         self.assertEqual(variation["external_id"], "36485634")

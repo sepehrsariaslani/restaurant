@@ -1580,6 +1580,15 @@ def _food_partner_field_value(record, fieldname):
     return value
 
 
+def _food_partner_field_metadata(record, fieldname, metadata_name):
+    """Read review metadata attached to a Food Partner field value."""
+    fields = record.get("fields") if isinstance(record, dict) else None
+    value = fields.get(fieldname) if isinstance(fields, dict) else None
+    if not isinstance(value, dict):
+        return None
+    return value.get(metadata_name)
+
+
 def _food_partner_boolean(value):
     """Return a boolean for explicit Food Partner status values, otherwise None."""
     if isinstance(value, bool):
@@ -1629,6 +1638,9 @@ def _extract_current_food_partner_menu_entries(payload):
             product_hash_id = str(product.get("hashId") or "").strip()
             product_title = str(_food_partner_field_value(product, "title") or "").strip()
             product_description = _food_partner_field_value(product, "description")
+            product_description_pending = _food_partner_field_metadata(product, "description", "pendingValue")
+            product_description_review_status = _food_partner_field_metadata(product, "description", "status")
+            product_description_status_reason = _food_partner_field_metadata(product, "description", "statusReason")
             if variations:
                 variants = [(variation, True) for variation in variations if isinstance(variation, dict)]
             else:
@@ -1661,6 +1673,13 @@ def _extract_current_food_partner_menu_entries(payload):
                         "description": product_description
                         if product_description is not None
                         else _food_partner_field_value(variation, "description"),
+                        "description_pending_value": product_description_pending
+                        if product_description_pending is not None
+                        else _food_partner_field_metadata(variation, "description", "pendingValue"),
+                        "description_review_status": product_description_review_status
+                        or _food_partner_field_metadata(variation, "description", "status"),
+                        "description_status_reason": product_description_status_reason
+                        or _food_partner_field_metadata(variation, "description", "statusReason"),
                         "active": _food_partner_variation_active(variation if is_variation else product),
                         "disabledUntil": variation.get("disabledUntil")
                         or variation.get("disabled_until")
@@ -2199,6 +2218,9 @@ def fetch_snapp_menu(settings=None):
                 "price": flt(entry.get("price") or entry.get("variationPrice") or entry.get("variation_price") or 0),
                 "status": str(entry.get("status") or "").strip(),
                 "description": str(entry.get("description") or "").strip(),
+                "description_pending_value": str(entry.get("description_pending_value") or "").strip(),
+                "description_review_status": str(entry.get("description_review_status") or "").strip().upper(),
+                "description_status_reason": str(entry.get("description_status_reason") or "").strip(),
                 "active": _food_partner_variation_active(entry),
                 "disabled_until": entry.get("disabledUntil") or entry.get("disabled_until") or "",
             }
