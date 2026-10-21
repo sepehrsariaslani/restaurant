@@ -770,7 +770,7 @@ def _get_food_partner_order_tokens(settings=None):
         elif status_code == 403:
             message = (
                 "دریافت دسترسی عملیات سفارش از Food Partner رد شد (HTTP 403). "
-                "این پاسخ به‌تنهایی نامعتبر بودن توکن منو را ثابت نمی‌کند؛ دسترسی سفارش باید جداگانه فعال شود."
+                "این پاسخ به‌تنهایی نامعتبر بودن توکن منو را ثابت نمی‌کند؛ دسترسی سفارش را در نشست رسمی بررسی کنید."
             )
         else:
             message = f"دریافت دسترسی امن سفارش با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
@@ -779,6 +779,11 @@ def _get_food_partner_order_tokens(settings=None):
         raise frappe.ValidationError("ارتباط امن با سرویس سفارش Food Partner برقرار نشد.") from exc
 
     ordering_token = _find_food_partner_token(payload, "orderingToken")
+    if not ordering_token and isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+        # The ordering application's legacy refresh route returns data.token.
+        legacy_token = payload["data"].get("token")
+        if isinstance(legacy_token, str):
+            ordering_token = _normalize_bearer_token(legacy_token)
     vendor_token = _find_food_partner_token(payload, "vendorToken")
     if not ordering_token:
         raise frappe.ValidationError("سرویس Food Partner توکن عملیات سفارش را برنگرداند؛ اتصال را بررسی کنید.")
@@ -1407,8 +1412,31 @@ def save_snappfood_modifier_mapping(
     }
 
 
-def _food_partner_topping_groups(payload):
+def _food_partner_topping_groups(payload, selected_by_membership=False):
     """Normalize the Partner topping API response into stable group rows."""
+    if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+        included = {
+            str(row.get("id")): row
+            for row in payload.get("included") or []
+            if isinstance(row, dict)
+        }
+        records = []
+        for row in payload["data"]:
+            if not isinstance(row, dict) or not isinstance(row.get("attributes"), dict):
+                continue
+            relationships = row.get("relationships") or {}
+            toppings = relationships.get("toppings") or {}
+            references = toppings.get("data") or []
+            options = []
+            for reference in references if isinstance(references, list) else []:
+                if not isinstance(reference, dict):
+                    continue
+                option = included.get(str(reference.get("id")))
+                if option:
+                    options.append({**(option.get("attributes") or {}), "id": option.get("id")})
+            records.append({**row["attributes"], "id": row.get("id"), "toppings": options})
+        if records:
+            payload = records
     candidates = []
     queue = [payload]
     while queue:
@@ -1451,16 +1479,21 @@ def _food_partner_topping_groups(payload):
             option_id = str(option.get("id") or option.get("toppingId") or option.get("topping_id") or "").strip()
             title = str(option.get("title") or option.get("name") or "").strip()
             if option_id and title:
+                selected = next(
+                    (
+                        parsed
+                        for key in ("isActiveToppingForProduct", "is_active_topping_for_product", "selected")
+                        if (parsed := _food_partner_boolean(option.get(key))) is not None
+                    ),
+                    selected_by_membership,
+                )
                 options.append(
                     {
                         "id": option_id,
                         "title": title,
                         "price": flt(option.get("price") or 0),
-                        "selected": bool(
-                            option.get("isActiveToppingForProduct")
-                            or option.get("is_active_topping_for_product")
-                            or option.get("selected")
-                        ),
+                        "selected": selected,
+                        "being_reviewed": _food_partner_boolean(option.get("isBeingReviewed")) is True,
                     }
                 )
         group_id = str(row.get("id") or row.get("groupId") or row.get("group_id") or "").strip()
@@ -1524,7 +1557,7 @@ def get_snappfood_product_toppings(variation_id="", parent_item=""):
         raise frappe.ValidationError("دریافت افزودنی‌های Food Partner انجام نشد؛ اتصال یا مجوز منو را بررسی کنید.") from exc
 
     groups = _food_partner_topping_groups(payloads.get("groups"))
-    selected_groups = _food_partner_topping_groups(payloads.get("selected"))
+    selected_groups = _food_partner_topping_groups(payloads.get("selected"), selected_by_membership=True)
     selected_ids = {
         option["id"]
         for group in selected_groups
@@ -1533,7 +1566,7 @@ def get_snappfood_product_toppings(variation_id="", parent_item=""):
     }
     for group in groups:
         for option in group.get("options") or []:
-            option["selected"] = option["id"] in selected_ids
+            option["selected"] = option["selected"] or option["id"] in selected_ids
         group["selected"] = any(option.get("selected") for option in group.get("options") or [])
     parent_item = str(parent_item or "").strip()
     if parent_item and frappe.db.exists("Item", parent_item) and _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
@@ -1565,6 +1598,42 @@ def _food_partner_topping_price(value):
     return int(amount) if amount == amount.to_integral_value() else float(amount)
 
 
+def _save_food_partner_topping_selection(cfg, variation_id, selected_ids):
+    select_url = (
+        f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/product-topping/"
+        f"product-variation/{variation_id}/toppings"
+    )
+    try:
+        response = requests.post(
+            select_url,
+            params={"vendorId": cfg["vendor_id"]},
+            headers=_snapp_partner_web_headers(cfg),
+            json={"toppingIds": [int(value) if value.isdigit() else value for value in selected_ids]},
+            timeout=30,
+        )
+        _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ثبت وضعیت افزودنی‌های محصول در Food Partner انجام نشد.") from exc
+
+
+def set_snappfood_product_topping_selection(variation_id="", topping_ids=None):
+    """Replace this product's selection without editing shared topping definitions."""
+    topping_ids = frappe.parse_json(topping_ids) if isinstance(topping_ids, str) else topping_ids
+    if not isinstance(topping_ids, list) or len(topping_ids) > 500:
+        raise frappe.ValidationError("فهرست افزودنی‌های انتخاب‌شده معتبر نیست.")
+    selected_ids = list(dict.fromkeys(str(value).strip() for value in topping_ids))
+    context = get_snappfood_product_toppings(variation_id=variation_id)
+    groups = context.get("groups") or []
+    available = {option["id"]: option for group in groups for option in group.get("options") or []}
+    if any(value not in available for value in selected_ids):
+        raise frappe.ValidationError("یکی از افزودنی‌ها در منوی فعلی Food Partner پیدا نشد؛ وضعیت را تازه کنید.")
+    if any(available[value].get("being_reviewed") and not available[value].get("selected") for value in selected_ids):
+        raise frappe.ValidationError("افزودنی در انتظار بررسی Food Partner را نمی‌توان فعال کرد.")
+    cfg = _require_snapp_menu_settings()
+    _save_food_partner_topping_selection(cfg, context["variation_id"], selected_ids)
+    return {"status": "success", "variation_id": context["variation_id"], "selected_topping_ids": selected_ids}
+
+
 def save_snappfood_product_toppings(payload=None):
     """Publish one native Restaurant Modifier group as a Food Partner topping group."""
     payload = frappe.parse_json(payload) if isinstance(payload, str) else payload
@@ -1590,6 +1659,15 @@ def save_snappfood_product_toppings(payload=None):
     if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
         raise frappe.ValidationError("ساختار نگاشت Modifier آماده نیست؛ بروزرسانی Restaurant لازم است.")
 
+    current_groups = get_snappfood_product_toppings(variation_id).get("groups") or []
+    current_group = next((group for group in current_groups if group["id"] == partner_group_id), None)
+    if partner_group_id and not current_group:
+        raise frappe.ValidationError("دستهٔ افزودنی در Food Partner پیدا نشد؛ وضعیت را تازه کنید.")
+    if current_group and any(option.get("being_reviewed") for option in current_group.get("options") or []):
+        raise frappe.ValidationError("این دستهٔ افزودنی در انتظار بررسی Food Partner است؛ تا اعلام نتیجه دوباره ارسال نکنید.")
+    if not partner_group_id and any(_normalize_mapping_text(group["title"]) == _normalize_mapping_text(partner_title) for group in current_groups):
+        raise frappe.ValidationError("دسته‌ای با این عنوان در Food Partner موجود است؛ همان دسته را برای همگام‌سازی انتخاب کنید.")
+
     context = get_snappfood_modifier_groups(parent_item)
     native_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
     native_options = {str(row.get("name") or ""): row for row in (native_group or {}).get("options") or []}
@@ -1606,12 +1684,15 @@ def save_snappfood_product_toppings(payload=None):
             raise frappe.ValidationError("یکی از گزینه‌ها در گروه Modifier فعال کالای پایه موجود نیست.")
         seen_options.add(option_name)
         native = native_options[option_name]
+        topping_id = str(row.get("topping_id") or "").strip()
+        if topping_id and (not current_group or not any(option["id"] == topping_id for option in current_group.get("options") or [])):
+            raise frappe.ValidationError("شناسهٔ افزودنی با دستهٔ انتخاب‌شده سازگار نیست؛ وضعیت را تازه کنید.")
         option_title = str(row.get("title") or native.get("label") or option_name).strip()
         if not option_title or len(option_title) > 80:
             raise frappe.ValidationError("عنوان افزودنی باید بین ۱ تا ۸۰ نویسه باشد.")
         options.append(
             {
-                "id": str(row.get("topping_id") or "").strip(),
+                "id": topping_id,
                 "title": option_title,
                 "price": _food_partner_topping_price(row.get("price")),
                 "option_name": option_name,
@@ -1653,8 +1734,8 @@ def save_snappfood_product_toppings(payload=None):
         response_group_id = str(data.get("id") or data.get("groupId") or "").strip()
     match_groups = [
         row for row in remote_groups
-        if (response_group_id and row.get("id") == response_group_id)
-        or (not response_group_id and row.get("title") == partner_title)
+        if ((response_group_id or partner_group_id) and row.get("id") == (response_group_id or partner_group_id))
+        or (not response_group_id and not partner_group_id and row.get("title") == partner_title)
     ]
     if len(match_groups) != 1:
         raise frappe.ValidationError("دسته در Food Partner ثبت شد، اما شناسهٔ یکتای آن از پاسخ منو پیدا نشد؛ منو را تازه کنید.")
@@ -1667,31 +1748,25 @@ def save_snappfood_product_toppings(payload=None):
             candidates = [row for row in candidates if row.get("id") == option["id"]] or candidates
         if len(candidates) != 1:
             raise frappe.ValidationError(f"دسته ثبت شد، اما شناسهٔ افزودنی «{option['title']}» قابل تشخیص نیست.")
-        resolved.append({**option, "topping_id": candidates[0]["id"]})
+        resolved.append({
+            **option,
+            "topping_id": candidates[0]["id"],
+            "being_reviewed": bool(candidates[0].get("being_reviewed")),
+            "selected": bool(candidates[0].get("selected")),
+        })
 
     selected_ids = [
         option["id"]
         for group in remote_groups
         for option in group.get("options") or []
-        if option.get("selected")
+        if group["id"] != remote_group["id"] and option.get("selected")
     ]
-    selected_ids.extend(option["topping_id"] for option in resolved)
-    selected_ids = list(dict.fromkeys(selected_ids))
-    select_url = (
-        f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/product-topping/"
-        f"product-variation/{variation_id}/toppings"
+    selected_ids.extend(
+        option["topping_id"] for option in resolved
+        if not option["being_reviewed"] or option["selected"]
     )
-    try:
-        select_response = requests.post(
-            select_url,
-            params={"vendorId": cfg["vendor_id"]},
-            headers=_snapp_partner_web_headers(cfg),
-            json={"toppingIds": [int(value) if value.isdigit() else value for value in selected_ids]},
-            timeout=30,
-        )
-        _food_partner_response_payload(select_response)
-    except requests.RequestException as exc:
-        raise frappe.ValidationError("دسته افزوده شد، اما اتصال آن به گزینهٔ محصول در Food Partner کامل نشد.") from exc
+    selected_ids = list(dict.fromkeys(selected_ids))
+    _save_food_partner_topping_selection(cfg, variation_id, selected_ids)
 
     all_items = frappe.get_all(
         "Item",
@@ -1753,7 +1828,8 @@ def save_snappfood_product_toppings(payload=None):
         "variation_id": variation_id,
         "group_id": remote_group["id"],
         "group_title": partner_title,
-        "selected_topping_ids": [option["topping_id"] for option in resolved],
+        "selected_topping_ids": [option["topping_id"] for option in resolved if option["topping_id"] in selected_ids],
+        "pending_review_topping_ids": [option["topping_id"] for option in resolved if option["being_reviewed"]],
         "parent_item": parent_item,
         "group_name": group_name,
     }
@@ -2697,8 +2773,16 @@ def _snapp_menu_mutation_error(response, payload):
 
 
 def get_snappfood_menu_products():
-    """Fetch only menu rows for the Food Partner management view."""
-    return fetch_snapp_menu()
+    """Read the menu with exact native Item identities for its modifier editor."""
+    result = fetch_snapp_menu()
+    local_items = _get_local_item_rows(mapped_only=True)
+    for row in result.get("items") or []:
+        mapped_item = _find_mapped_local_item(row, local_items)
+        row["mapped_item"] = (
+            {"name": mapped_item["name"], "item_name": mapped_item.get("item_name") or mapped_item["name"]}
+            if mapped_item else None
+        )
+    return result
 
 
 def _food_partner_decimal(value, label):

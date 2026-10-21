@@ -146,6 +146,15 @@ def get_snappfood_product_toppings(variation_id="", parent_item=""):
 
 
 @frappe.whitelist()
+def set_snappfood_product_topping_selection(variation_id="", topping_ids=None):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import set_snappfood_product_topping_selection as _set_selection
+
+	_ensure_management_access()
+	return _set_selection(variation_id=variation_id, topping_ids=topping_ids)
+
+
+@frappe.whitelist()
 def save_snappfood_product_toppings(payload=None):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import save_snappfood_product_toppings as _save_product_toppings

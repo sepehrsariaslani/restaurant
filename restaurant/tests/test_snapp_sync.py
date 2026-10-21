@@ -221,6 +221,13 @@ class TestSnappSync(FrappeTestCase):
         self.assertNotIn("account-only", str(context.exception))
         self.assertNotIn("menu-only", str(context.exception))
 
+    def test_food_partner_order_refresh_accepts_legacy_data_token_without_replacing_menu_token(self):
+        response = Mock(status_code=200, ok=True)
+        response.json.return_value = {"data": {"token": "Bearer order-only"}}
+        with patch("restaurant.snapp_sync.requests.get", return_value=response):
+            tokens = snapp_sync._get_food_partner_order_tokens({"token": "menu-only", "access_token": "account-only"})
+        self.assertEqual(tokens, {"ordering_token": "order-only", "vendor_token": "menu-only"})
+
     def test_food_partner_menu_sends_vendor_authorization_header(self):
         response = Mock()
         response.json.return_value = {"data": []}
