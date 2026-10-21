@@ -2923,6 +2923,36 @@ def create_snappfood_product(payload):
     return {"status": "success", "title": title, "category_id": category_id}
 
 
+def delete_snappfood_product(item_id, delete_neighbours=False):
+    """Delete one Food Partner product variation, optionally including its siblings."""
+    cfg = _require_snapp_menu_settings()
+    item_id = str(item_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", item_id):
+        raise frappe.ValidationError("شناسه گزینهٔ Food Partner معتبر نیست.")
+    delete_neighbours_value = _food_partner_boolean(delete_neighbours)
+    if delete_neighbours_value is None:
+        raise frappe.ValidationError("دامنهٔ حذف محصول معتبر نیست.")
+
+    url = f"{DEFAULT_PARTNER_WEB_API_BASE_URL}/vms/v1.2/product-variation/{item_id}"
+    params = {"deleteNeighbours": "true" if delete_neighbours_value else "false"}
+    try:
+        response = requests.delete(url, headers=_snapp_partner_web_headers(cfg), params=params, timeout=30)
+        try:
+            response_payload = response.json()
+        except (TypeError, ValueError):
+            response_payload = None
+        error = _snapp_menu_mutation_error(response, response_payload)
+        if error:
+            raise frappe.ValidationError(error)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط با API حذف محصول Food Partner برقرار نشد.") from exc
+    return {
+        "status": "success",
+        "item_id": item_id,
+        "delete_neighbours": delete_neighbours_value,
+    }
+
+
 def update_snappfood_variation_description(variation_id, description):
     cfg = _require_snapp_menu_settings()
     variation_id = str(variation_id or "").strip()

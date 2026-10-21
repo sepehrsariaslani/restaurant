@@ -149,6 +149,26 @@ class TestFoodPartnerMenuManagement(FrappeTestCase):
         self.assertEqual(post_request.call_args.kwargs["headers"]["vendor-authorization"], "true")
         self.assertEqual(result, {"status": "success", "title": "محصول تازه", "category_id": "category-1"})
 
+    def test_delete_product_uses_the_partner_variation_delete_contract(self):
+        config = {
+            "vendor_id": "466275",
+            "token": "test-token",
+            "menu_api_base_url": "https://apigw.snappfood.ir",
+        }
+        response = Mock(status_code=200, ok=True)
+        response.json.return_value = {"success": True}
+
+        with (
+            patch.object(snapp_sync, "_require_snapp_menu_settings", return_value=config),
+            patch.object(snapp_sync.requests, "delete", return_value=response) as delete_request,
+        ):
+            result = snapp_sync.delete_snappfood_product(item_id="variation-1", delete_neighbours=True)
+
+        self.assertEqual(delete_request.call_args.args[0], "https://snappfood.ir/vms/v1.2/product-variation/variation-1")
+        self.assertEqual(delete_request.call_args.kwargs["params"], {"deleteNeighbours": "true"})
+        self.assertEqual(delete_request.call_args.kwargs["headers"]["authorization"], "Bearer test-token")
+        self.assertEqual(result, {"status": "success", "item_id": "variation-1", "delete_neighbours": True})
+
 
 def run_food_partner_menu_management_contract_check():
     checks = (
@@ -156,12 +176,14 @@ def run_food_partner_menu_management_contract_check():
         "parent and variation product edits",
         "bulk availability update",
         "new product review request",
+        "delete product with neighbor variations",
     )
     for method_name in (
         "test_simple_product_and_variation_ids_normalize_for_management",
         "test_product_edit_patches_parent_and_each_changed_variation",
         "test_product_availability_uses_the_bulk_variation_status_contract",
         "test_create_product_sends_a_review_request_to_the_partner_api",
+        "test_delete_product_uses_the_partner_variation_delete_contract",
     ):
         case = TestFoodPartnerMenuManagement(method_name)
         getattr(case, method_name)()

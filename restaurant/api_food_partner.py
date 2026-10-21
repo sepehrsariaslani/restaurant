@@ -47,6 +47,15 @@ def create_snappfood_product(payload=None):
 
 
 @frappe.whitelist()
+def delete_snappfood_product(item_id="", delete_neighbours=0):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import delete_snappfood_product as _delete_product
+
+	_ensure_management_access()
+	return _delete_product(item_id=item_id, delete_neighbours=delete_neighbours)
+
+
+@frappe.whitelist()
 def get_snappfood_live_orders():
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import get_snappfood_live_orders as _get_live_orders
