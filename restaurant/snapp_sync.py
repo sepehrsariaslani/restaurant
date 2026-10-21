@@ -2866,14 +2866,13 @@ def create_snappfood_product(payload):
         raise frappe.ValidationError("توضیحات واقعی و دقیق محصول را وارد کنید؛ متن حداکثر ۲۵۶ نویسه باشد.")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", category_id):
         raise frappe.ValidationError("دسته‌بندی محصول را از فهرست Food Partner انتخاب کنید.")
-    if not category_title or len(category_title) > 64:
+    if category_title and len(category_title) > 64:
         raise frappe.ValidationError("عنوان دسته‌بندی محصول معتبر نیست.")
 
     form_fields = {
         "productTitle": (None, title),
         "description": (None, description),
         "menuCategoryId": (None, category_id),
-        "menuCategoryTitle": (None, category_title),
         "suggestionDetails[productTitle]": (None, "none"),
         "suggestionDetails[description]": (None, "none"),
         "suggestionDetails[categoryTitle]": (None, "none"),
@@ -2907,9 +2906,10 @@ def create_snappfood_product(payload):
     else:
         form_fields["price"] = (None, _food_partner_decimal(payload.get("price"), "قیمت محصول"))
 
-    url = f"{DEFAULT_PARTNER_WEB_API_BASE_URL}/vms/v2/products/{cfg['vendor_id']}/create"
+    # Match the current Food Partner web app's multipart review form contract.
+    url = f"{cfg.get('menu_api_base_url') or DEFAULT_MENU_API_BASE_URL}/vendor-menu/v2/vendors/{cfg['vendor_id']}/products"
     try:
-        headers = _snapp_partner_web_headers(cfg)
+        headers = _snapp_menu_headers(cfg)
         response = requests.post(url, headers=headers, files=form_fields, timeout=30)
         try:
             response_payload = response.json()

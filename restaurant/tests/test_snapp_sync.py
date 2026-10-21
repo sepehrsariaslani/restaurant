@@ -540,7 +540,7 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(result, {"status": "success", "title": "کاسه برنج و مرغ", "category_id": "2642322"})
         self.assertEqual(
             request.call_args.args[0],
-            "https://snappfood.ir/vms/v2/products/466275/create",
+            "https://apigw.snappfood.ir/vendor-menu/v2/vendors/466275/products",
         )
         self.assertEqual(
             request.call_args.kwargs["files"],
@@ -548,7 +548,6 @@ class TestSnappSync(FrappeTestCase):
                 "productTitle": (None, "کاسه برنج و مرغ"),
                 "description": (None, "برنج کته با مرغ گریل‌شده و سبزیجات تازه"),
                 "menuCategoryId": (None, "2642322"),
-                "menuCategoryTitle": (None, "کاسه برنجین"),
                 "suggestionDetails[productTitle]": (None, "none"),
                 "suggestionDetails[description]": (None, "none"),
                 "suggestionDetails[categoryTitle]": (None, "none"),
@@ -558,6 +557,7 @@ class TestSnappSync(FrappeTestCase):
             },
         )
         self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer secret")
+        self.assertEqual(request.call_args.kwargs["headers"]["vendor-authorization"], "true")
 
     def test_food_partner_product_creation_rejects_empty_or_invalid_price(self):
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
