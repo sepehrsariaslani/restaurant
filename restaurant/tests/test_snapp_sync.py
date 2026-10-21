@@ -41,6 +41,9 @@ from restaurant.snapp_sync import (
 )
 
 
+PRODUCT_EDIT_MENU = {"items": [{"product_id": "36485634", "variation_id": "36485635", "product_title": "کلاب مرغ", "price": 300000}]}
+
+
 class TestSnappSync(FrappeTestCase):
     def test_normalize_bearer_header_value_before_request(self):
         self.assertEqual(_normalize_bearer_token(" Bearer abc123 "), "abc123")
@@ -417,7 +420,8 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(request.call_args.kwargs["json"], {"description": "توضیح تازه"})
         self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer secret")
 
-    def test_food_partner_product_description_update_uses_parent_variation_patch(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu", return_value=PRODUCT_EDIT_MENU)
+    def test_food_partner_product_description_update_uses_parent_variation_patch(self, _menu):
         response = Mock(status_code=200, ok=True)
         response.json.return_value = {"status": True}
         settings = {
@@ -447,7 +451,8 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(request.call_args.kwargs["json"], {"description": "توضیح محصول"})
         self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer secret")
 
-    def test_food_partner_product_description_rejects_partner_validation_failures(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu", return_value=PRODUCT_EDIT_MENU)
+    def test_food_partner_product_description_rejects_partner_validation_failures(self, _menu):
         response = Mock(status_code=200, ok=True)
         response.json.return_value = {"status": False, "message": "توضیحات نیازمند بررسی است."}
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
@@ -456,7 +461,8 @@ class TestSnappSync(FrappeTestCase):
         ), self.assertRaises(snapp_sync.frappe.ValidationError):
             snapp_sync.update_snappfood_product_description("36485634", "توضیح محصول")
 
-    def test_food_partner_product_description_surfaces_field_validation_reason(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu", return_value=PRODUCT_EDIT_MENU)
+    def test_food_partner_product_description_surfaces_field_validation_reason(self, _menu):
         response = Mock(status_code=422, ok=False)
         response.json.return_value = {
             "status": False,
@@ -469,7 +475,8 @@ class TestSnappSync(FrappeTestCase):
         ), self.assertRaisesRegex(snapp_sync.frappe.ValidationError, "این فیلد انتظار نمی‌رفت"):
             snapp_sync.update_snappfood_product_description("36485634", "توضیح محصول")
 
-    def test_food_partner_product_edit_uses_parent_and_variation_patch_contract(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu", return_value=PRODUCT_EDIT_MENU)
+    def test_food_partner_product_edit_uses_parent_and_variation_patch_contract(self, _menu):
         response = Mock(status_code=200, ok=True)
         response.json.return_value = {"status": True}
         settings = {"token": "secret", "vendor_id": "466275", "menu_api_base_url": "https://apigw.snappfood.ir"}
@@ -503,7 +510,8 @@ class TestSnappSync(FrappeTestCase):
         self.assertTrue(request.call_args_list[0].args[0].endswith("/36485634"))
         self.assertTrue(request.call_args_list[1].args[0].endswith("/36485635"))
 
-    def test_food_partner_product_edit_reports_partial_update(self):
+    @patch("restaurant.snapp_sync.fetch_snapp_menu", return_value=PRODUCT_EDIT_MENU)
+    def test_food_partner_product_edit_reports_partial_update(self, _menu):
         success = Mock(status_code=200, ok=True)
         success.json.return_value = {"status": True}
         failure = Mock(status_code=422, ok=False)

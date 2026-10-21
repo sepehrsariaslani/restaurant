@@ -2036,10 +2036,28 @@ def _food_partner_field_value(record, fieldname):
 def _food_partner_field_metadata(record, fieldname, metadata_name):
     """Read review metadata attached to a Food Partner field value."""
     fields = record.get("fields") if isinstance(record, dict) else None
-    value = fields.get(fieldname) if isinstance(fields, dict) else None
+    value = fields.get(fieldname) if isinstance(fields, dict) else record.get(fieldname) if isinstance(record, dict) else None
     if not isinstance(value, dict):
         return None
     return value.get(metadata_name)
+
+
+def _food_partner_field_review(record, fieldname):
+    return {
+        "status": str(_food_partner_field_metadata(record, fieldname, "status") or "").strip().upper(),
+        "pending_value": _food_partner_field_metadata(record, fieldname, "pendingValue"),
+        "reason": str(_food_partner_field_metadata(record, fieldname, "statusReason") or "").strip(),
+    }
+
+
+def _food_partner_review_is_pending(review, current_value=None):
+    status = str(review.get("status") or "").strip().upper()
+    if status in {"APPROVED", "REJECTED"}:
+        return False
+    proposed = review.get("pending_value")
+    return status == "PENDING" or (
+        proposed not in (None, "") and proposed != current_value and str(proposed) != str(current_value)
+    )
 
 
 def _food_partner_boolean(value):
@@ -2133,6 +2151,17 @@ def _extract_current_food_partner_menu_entries(payload):
                         or _food_partner_field_metadata(variation, "description", "status"),
                         "description_status_reason": product_description_status_reason
                         or _food_partner_field_metadata(variation, "description", "statusReason"),
+                        "field_reviews": {
+                            "product_title": _food_partner_field_review(product, "title"),
+                            "variation_title": _food_partner_field_review(variation, "title") if is_variation else {},
+                            "price": _food_partner_field_review(
+                                variation if _food_partner_field_value(variation, "price") is not None else product,
+                                "price",
+                            ),
+                            "description": _food_partner_field_review(
+                                product if product_description is not None else variation, "description"
+                            ),
+                        },
                         "active": _food_partner_variation_active(variation if is_variation else product),
                         "disabledUntil": variation.get("disabledUntil")
                         or variation.get("disabled_until")
@@ -2674,6 +2703,7 @@ def fetch_snapp_menu(settings=None):
                 "description_pending_value": str(entry.get("description_pending_value") or "").strip(),
                 "description_review_status": str(entry.get("description_review_status") or "").strip().upper(),
                 "description_status_reason": str(entry.get("description_status_reason") or "").strip(),
+                "field_reviews": entry.get("field_reviews") or {},
                 "active": _food_partner_variation_active(entry),
                 "disabled_until": entry.get("disabledUntil") or entry.get("disabled_until") or "",
             }
@@ -2885,6 +2915,36 @@ def _food_partner_product_update_fields(fields):
     return product_fields, variation_patches
 
 
+def _food_partner_validate_product_edit(product_id, product_fields, variation_patches, settings):
+    rows = fetch_snapp_menu(settings).get("items") or []
+    product_rows = [row for row in rows if str(row.get("product_id") or row.get("external_id") or "") == product_id]
+    if not product_rows:
+        raise frappe.ValidationError("محصول در منوی فعلی Food Partner پیدا نشد؛ منو را تازه کنید.")
+
+    def ensure_editable(row, field, label):
+        review = (row.get("field_reviews") or {}).get(field) or {}
+        if field == "description" and not review:
+            review = {
+                "status": row.get("description_review_status"),
+                "pending_value": row.get("description_pending_value"),
+            }
+        current_value = row.get("product_title") if field == "product_title" else row.get(field)
+        if _food_partner_review_is_pending(review, current_value):
+            raise frappe.ValidationError(f"{label} در انتظار بررسی Food Partner است؛ تا اعلام نتیجه دوباره ارسال نکنید.")
+
+    for field in product_fields:
+        review_field = "product_title" if field == "title" else field
+        label = {"title": "نام محصول", "price": "قیمت محصول", "description": "توضیحات محصول"}[field]
+        for row in product_rows:
+            ensure_editable(row, review_field, label)
+    for variation_id, patch in variation_patches:
+        row = next((row for row in product_rows if str(row.get("variation_id") or "") == variation_id), None)
+        if row is None:
+            raise frappe.ValidationError("یکی از گزینه‌ها متعلق به این محصول در منوی فعلی نیست؛ منو را تازه کنید.")
+        for field in patch:
+            ensure_editable(row, "variation_title" if field == "title" else field, "عنوان گزینه" if field == "title" else "قیمت گزینه")
+
+
 def update_snappfood_product(product_id, fields):
     """Patch the parent product fields and changed variations using Partner APIs."""
     cfg = _require_snapp_menu_settings()
@@ -2892,6 +2952,7 @@ def update_snappfood_product(product_id, fields):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", product_id):
         raise frappe.ValidationError("شناسه محصول Food Partner معتبر نیست.")
     product_fields, variation_patches = _food_partner_product_update_fields(fields)
+    _food_partner_validate_product_edit(product_id, product_fields, variation_patches, cfg)
 
     updated_fields = []
     updated_variation_ids = []
