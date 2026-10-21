@@ -1108,6 +1108,7 @@ def _raw_snapp_order_id(raw_order):
 def _food_partner_mapping_lookup_key(identity):
     identity = identity or {}
     for fieldname in (
+        "topping_id",
         "variation_id",
         "menu_item_id",
         "external_id",
@@ -1178,6 +1179,24 @@ def _find_food_partner_modifier_mapping(identity, mapping_index=None):
     return next(iter(unique.values())) if len(unique) == 1 else None
 
 
+def _find_food_partner_topping_mapping(topping_id, parent_item, mapping_index=None):
+    """Resolve a topping within its base Item, since vendor toppings can be reused."""
+    topping_id = str(topping_id or "").strip()
+    parent_item = str(parent_item or "").strip()
+    if not topping_id or not parent_item:
+        return None
+    index = mapping_index if mapping_index is not None else _food_partner_modifier_mapping_index()
+    matches = [
+        row for row in index.get(("topping_id", topping_id), [])
+        if str(row.get("parent_item") or "").strip() == parent_item
+    ]
+    unique = {
+        (row.get("group_name"), row.get("option_name"), row.get("mapping_mode") or "modifier"): row
+        for row in matches
+    }
+    return next(iter(unique.values())) if len(unique) == 1 else None
+
+
 def _remove_food_partner_modifier_mapping(identity):
     lookup_field, lookup_value = _food_partner_mapping_lookup_key(identity)
     if not lookup_field or not lookup_value or not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
@@ -1240,6 +1259,10 @@ def get_snappfood_modifier_groups(item_name=""):
             {
                 "name": group.get("group_name") or "",
                 "title": group.get("title") or group.get("group_name") or "",
+                "selection_mode": group.get("selection_mode") or "single",
+                "required": cint(group.get("required") or 0),
+                "min_select": cint(group.get("min_select") or 0),
+                "max_select": cint(group.get("max_select") or 1),
                 "options": [
                     {
                         "name": option.get("name") or "",
@@ -1271,6 +1294,7 @@ def save_snappfood_modifier_mapping(
     product_hash_id="",
     variation_hash_id="",
     menu_item_id="",
+    topping_id="",
 ):
     """Persist a Food Partner identity as a BOM option on its native base Item."""
     parent_item = str(parent_item or "").strip()
@@ -1285,6 +1309,7 @@ def save_snappfood_modifier_mapping(
         raise frappe.ValidationError("ساختار نگاشت Modifier آماده نیست؛ بروزرسانی Restaurant لازم است.")
 
     identity = {
+        "topping_id": str(topping_id or "").strip(),
         "menu_item_id": str(menu_item_id or "").strip(),
         "variation_id": str(variation_id or "").strip(),
         "product_id": str(product_id or "").strip(),
@@ -1379,6 +1404,358 @@ def save_snappfood_modifier_mapping(
         "group_title": selected_group.get("title") or group_name,
         "option_name": option_name,
         "option_label": selected_option.get("label") or option_name,
+    }
+
+
+def _food_partner_topping_groups(payload):
+    """Normalize the Partner topping API response into stable group rows."""
+    candidates = []
+    queue = [payload]
+    while queue:
+        value = queue.pop(0)
+        if isinstance(value, list):
+            if any(
+                isinstance(row, dict) and any(key in row for key in ("toppings", "list", "options"))
+                for row in value
+            ):
+                candidates = value
+                break
+            queue.extend(row for row in value if isinstance(row, (dict, list)))
+        elif isinstance(value, dict):
+            for key in ("toppingGroups", "topping_groups", "groups", "items", "data", "result"):
+                child = value.get(key)
+                if isinstance(child, list):
+                    if child and any(
+                        isinstance(row, dict) and any(k in row for k in ("toppings", "list", "options"))
+                        for row in child
+                    ):
+                        candidates = child
+                        break
+                    queue.append(child)
+                elif isinstance(child, dict):
+                    queue.append(child)
+            if candidates:
+                break
+
+    groups = []
+    for row in candidates or []:
+        if not isinstance(row, dict):
+            continue
+        raw_options = row.get("toppings") or row.get("list") or row.get("options") or []
+        if isinstance(raw_options, dict):
+            raw_options = list(raw_options.values())
+        options = []
+        for option in raw_options if isinstance(raw_options, list) else []:
+            if not isinstance(option, dict):
+                continue
+            option_id = str(option.get("id") or option.get("toppingId") or option.get("topping_id") or "").strip()
+            title = str(option.get("title") or option.get("name") or "").strip()
+            if option_id and title:
+                options.append(
+                    {
+                        "id": option_id,
+                        "title": title,
+                        "price": flt(option.get("price") or 0),
+                        "selected": bool(
+                            option.get("isActiveToppingForProduct")
+                            or option.get("is_active_topping_for_product")
+                            or option.get("selected")
+                        ),
+                    }
+                )
+        group_id = str(row.get("id") or row.get("groupId") or row.get("group_id") or "").strip()
+        title = str(row.get("title") or row.get("name") or "").strip()
+        if group_id and title:
+            groups.append(
+                {
+                    "id": group_id,
+                    "title": title,
+                    "min_limit": cint(
+                        row.get("minLimit") if row.get("minLimit") is not None else row.get("min_limit") or 0
+                    ),
+                    "max_limit": cint(
+                        row.get("maxLimit")
+                        if row.get("maxLimit") is not None
+                        else row.get("max_limit") or len(options)
+                    ),
+                    "options": options,
+                }
+            )
+    return groups
+
+
+def _food_partner_response_payload(response):
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        payload = None
+    error = _snapp_menu_mutation_error(response, payload)
+    if error:
+        raise frappe.ValidationError(error)
+    return payload
+
+
+def get_snappfood_product_toppings(variation_id="", parent_item=""):
+    """Read vendor topping groups and selections for one Food Partner variation."""
+    cfg = _require_snapp_menu_settings()
+    variation_id = str(variation_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", variation_id):
+        raise frappe.ValidationError("شناسهٔ گزینهٔ Food Partner برای افزودنی معتبر نیست.")
+    base = DEFAULT_VENDOR_ACCOUNT_API_BASE_URL
+    requests_to_make = (
+        (
+            "groups",
+            f"{base}/vms/v3/product-topping/vendor/{cfg['vendor_id']}/topping-groups",
+            {"vendorId": cfg["vendor_id"], "productVariationId": variation_id},
+        ),
+        (
+            "selected",
+            f"{base}/vms/v2/product-topping/product-variation/{variation_id}/topping-groups",
+            None,
+        ),
+    )
+    payloads = {}
+    try:
+        for key, url, params in requests_to_make:
+            headers = _snapp_menu_headers(cfg) if key == "groups" else _snapp_partner_web_headers(cfg)
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            payloads[key] = _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("دریافت افزودنی‌های Food Partner انجام نشد؛ اتصال یا مجوز منو را بررسی کنید.") from exc
+
+    groups = _food_partner_topping_groups(payloads.get("groups"))
+    selected_groups = _food_partner_topping_groups(payloads.get("selected"))
+    selected_ids = {
+        option["id"]
+        for group in selected_groups
+        for option in group.get("options") or []
+        if option.get("selected")
+    }
+    for group in groups:
+        for option in group.get("options") or []:
+            option["selected"] = option["id"] in selected_ids
+        group["selected"] = any(option.get("selected") for option in group.get("options") or [])
+    parent_item = str(parent_item or "").strip()
+    if parent_item and frappe.db.exists("Item", parent_item) and _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
+        raw_mappings = frappe.db.get_value("Item", parent_item, FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD) or "[]"
+        try:
+            mappings = json.loads(raw_mappings) if isinstance(raw_mappings, str) else raw_mappings
+        except (TypeError, ValueError):
+            mappings = []
+        option_links = {
+            str(row.get("lookup_value") or "").strip(): row
+            for row in mappings if isinstance(row, dict) and row.get("lookup_field") == "topping_id"
+        } if isinstance(mappings, list) else {}
+        for group in groups:
+            for option in group.get("options") or []:
+                mapping = option_links.get(option.get("id"))
+                if mapping:
+                    option["option_name"] = mapping.get("option_name") or ""
+                    option["modifier_group_name"] = mapping.get("group_name") or ""
+    return {"status": "success", "variation_id": variation_id, "groups": groups}
+
+
+def _food_partner_topping_price(value):
+    try:
+        amount = Decimal(str(value if value is not None else 0))
+    except (InvalidOperation, ValueError, TypeError):
+        raise frappe.ValidationError("قیمت افزودنی معتبر نیست.")
+    if not amount.is_finite() or amount < 0 or amount > 1_000_000:
+        raise frappe.ValidationError("قیمت افزودنی باید بین صفر و یک میلیون تومان باشد.")
+    return int(amount) if amount == amount.to_integral_value() else float(amount)
+
+
+def save_snappfood_product_toppings(payload=None):
+    """Publish one native Restaurant Modifier group as a Food Partner topping group."""
+    payload = frappe.parse_json(payload) if isinstance(payload, str) else payload
+    if not isinstance(payload, dict):
+        raise frappe.ValidationError("اطلاعات افزودنی معتبر نیست.")
+    cfg = _require_snapp_menu_settings()
+    variation_id = str(payload.get("variation_id") or "").strip()
+    parent_item = str(payload.get("parent_item") or "").strip()
+    group_name = str(payload.get("group_name") or "").strip()
+    partner_group_id = str(payload.get("partner_group_id") or "").strip()
+    partner_title = str(payload.get("title") or "").strip()
+    raw_options = payload.get("options")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", variation_id):
+        raise frappe.ValidationError("شناسهٔ گزینهٔ Food Partner معتبر نیست.")
+    if not parent_item or not frappe.db.exists("Item", parent_item):
+        raise frappe.ValidationError("ابتدا کالای پایهٔ حسابیار را نگاشت کنید.")
+    if partner_group_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", partner_group_id):
+        raise frappe.ValidationError("شناسهٔ دستهٔ افزودنی Food Partner معتبر نیست.")
+    if not partner_title or len(partner_title) > 80:
+        raise frappe.ValidationError("عنوان دستهٔ افزودنی باید بین ۱ تا ۸۰ نویسه باشد.")
+    if not isinstance(raw_options, list) or not raw_options or len(raw_options) > 100:
+        raise frappe.ValidationError("حداقل یک گزینه برای دستهٔ افزودنی انتخاب کنید.")
+    if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
+        raise frappe.ValidationError("ساختار نگاشت Modifier آماده نیست؛ بروزرسانی Restaurant لازم است.")
+
+    context = get_snappfood_modifier_groups(parent_item)
+    native_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
+    native_options = {str(row.get("name") or ""): row for row in (native_group or {}).get("options") or []}
+    if not native_group:
+        raise frappe.ValidationError("گروه Modifier روی فرمول فعال کالای پایه پیدا نشد.")
+
+    options = []
+    seen_options = set()
+    for row in raw_options:
+        if not isinstance(row, dict):
+            raise frappe.ValidationError("اطلاعات یکی از گزینه‌های Modifier معتبر نیست.")
+        option_name = str(row.get("option_name") or "").strip()
+        if not option_name or option_name not in native_options or option_name in seen_options:
+            raise frappe.ValidationError("یکی از گزینه‌ها در گروه Modifier فعال کالای پایه موجود نیست.")
+        seen_options.add(option_name)
+        native = native_options[option_name]
+        option_title = str(row.get("title") or native.get("label") or option_name).strip()
+        if not option_title or len(option_title) > 80:
+            raise frappe.ValidationError("عنوان افزودنی باید بین ۱ تا ۸۰ نویسه باشد.")
+        options.append(
+            {
+                "id": str(row.get("topping_id") or "").strip(),
+                "title": option_title,
+                "price": _food_partner_topping_price(row.get("price")),
+                "option_name": option_name,
+            }
+        )
+
+    minimum = cint(payload.get("min_limit") if payload.get("min_limit") is not None else native_group.get("min_select") or 0)
+    default_max = native_group.get("max_select") or len(options)
+    maximum = cint(payload.get("max_limit") if payload.get("max_limit") is not None else default_max)
+    if minimum < 0 or maximum < 1 or minimum > maximum or maximum > len(options):
+        raise frappe.ValidationError("حداقل و حداکثر انتخاب با تعداد گزینه‌های افزودنی سازگار نیست.")
+
+    group_body = {
+        **({"id": partner_group_id} if partner_group_id else {}),
+        "title": partner_title,
+        "minLimit": minimum,
+        "maxLimit": maximum,
+        "toppings": [
+            {
+                **({"id": option["id"]} if option["id"] else {}),
+                "title": option["title"],
+                "price": option["price"],
+            }
+            for option in options
+        ],
+    }
+    menu_base = cfg.get("menu_api_base_url") or DEFAULT_MENU_API_BASE_URL
+    patch_url = f"{menu_base}/vendor-menu/v1/vendor/{cfg['vendor_id']}/topping"
+    try:
+        response = requests.patch(patch_url, headers=_snapp_menu_headers(cfg), json=group_body, timeout=30)
+        patch_payload = _food_partner_response_payload(response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("ارتباط برای ثبت دستهٔ افزودنی در Food Partner برقرار نشد.") from exc
+
+    remote_groups = get_snappfood_product_toppings(variation_id).get("groups") or []
+    response_group_id = ""
+    if isinstance(patch_payload, dict):
+        data = patch_payload.get("data") if isinstance(patch_payload.get("data"), dict) else patch_payload
+        response_group_id = str(data.get("id") or data.get("groupId") or "").strip()
+    match_groups = [
+        row for row in remote_groups
+        if (response_group_id and row.get("id") == response_group_id)
+        or (not response_group_id and row.get("title") == partner_title)
+    ]
+    if len(match_groups) != 1:
+        raise frappe.ValidationError("دسته در Food Partner ثبت شد، اما شناسهٔ یکتای آن از پاسخ منو پیدا نشد؛ منو را تازه کنید.")
+    remote_group = match_groups[0]
+    remote_options = remote_group.get("options") or []
+    resolved = []
+    for option in options:
+        candidates = [row for row in remote_options if row.get("title") == option["title"]]
+        if option.get("id"):
+            candidates = [row for row in candidates if row.get("id") == option["id"]] or candidates
+        if len(candidates) != 1:
+            raise frappe.ValidationError(f"دسته ثبت شد، اما شناسهٔ افزودنی «{option['title']}» قابل تشخیص نیست.")
+        resolved.append({**option, "topping_id": candidates[0]["id"]})
+
+    selected_ids = [
+        option["id"]
+        for group in remote_groups
+        for option in group.get("options") or []
+        if option.get("selected")
+    ]
+    selected_ids.extend(option["topping_id"] for option in resolved)
+    selected_ids = list(dict.fromkeys(selected_ids))
+    select_url = (
+        f"{DEFAULT_VENDOR_ACCOUNT_API_BASE_URL}/vms/v2/product-topping/"
+        f"product-variation/{variation_id}/toppings"
+    )
+    try:
+        select_response = requests.post(
+            select_url,
+            params={"vendorId": cfg["vendor_id"]},
+            headers=_snapp_partner_web_headers(cfg),
+            json={"toppingIds": [int(value) if value.isdigit() else value for value in selected_ids]},
+            timeout=30,
+        )
+        _food_partner_response_payload(select_response)
+    except requests.RequestException as exc:
+        raise frappe.ValidationError("دسته افزوده شد، اما اتصال آن به گزینهٔ محصول در Food Partner کامل نشد.") from exc
+
+    all_items = frappe.get_all(
+        "Item",
+        fields=["name", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD],
+        filters={FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD: ["!=", ""]},
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    target_keys = {option["topping_id"] for option in resolved}
+    target_rows = []
+    for row in all_items or []:
+        raw = row.get(FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD) or "[]"
+        try:
+            existing = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            existing = []
+        if not isinstance(existing, list):
+            continue
+        retained = [
+            entry for entry in existing
+            if not (
+                isinstance(entry, dict)
+                and entry.get("lookup_field") == "topping_id"
+                and str(entry.get("lookup_value") or "").strip() in target_keys
+            )
+        ]
+        if row.get("name") == parent_item:
+            target_rows = retained
+    for option in resolved:
+        native = native_options[option["option_name"]]
+        target_rows.append(
+            {
+                "lookup_field": "topping_id",
+                "lookup_value": option["topping_id"],
+                "identity": {"topping_id": option["topping_id"]},
+                "parent_item": parent_item,
+                "mapping_mode": "modifier",
+                "group_name": group_name,
+                "group_title": native_group.get("title") or group_name,
+                "option_name": option["option_name"],
+                "option_label": native.get("label") or option["option_name"],
+                "option_qty": flt(native.get("option_qty") or 1),
+                "min_qty": flt(native.get("min_qty") or 0),
+                "max_qty": flt(native.get("max_qty") or 0),
+                "qty_step": flt(native.get("qty_step") or 1),
+                "food_partner_group_id": remote_group["id"],
+            }
+        )
+    frappe.db.set_value(
+        "Item",
+        parent_item,
+        FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD,
+        json.dumps(target_rows, ensure_ascii=False),
+        update_modified=True,
+    )
+    frappe.db.commit()
+    return {
+        "status": "success",
+        "variation_id": variation_id,
+        "group_id": remote_group["id"],
+        "group_title": partner_title,
+        "selected_topping_ids": [option["topping_id"] for option in resolved],
+        "parent_item": parent_item,
+        "group_name": group_name,
     }
 
 
@@ -4228,6 +4605,46 @@ def _create_sales_order(order_payload):
         if modifier_gross_total > 0 or parent_gross_unit > 0:
             parent_cart_item["external_unit_price"] = parent_gross_unit + modifier_gross_total / parent_qty
         parent_line.setdefault("mapped_modifier_lines", []).append(modifier_line)
+
+    for parent_line in resolved_lines:
+        if parent_line.get("is_modifier_line"):
+            continue
+        parent_cart_item = parent_line.get("cart_item")
+        if not parent_cart_item:
+            continue
+        parent_qty = max(flt(parent_line.get("qty") or 1), 1)
+        for topping in parent_line.get("toppings") or []:
+            if isinstance(topping, dict):
+                topping_id = str(
+                    topping.get("toppingId")
+                    or topping.get("topping_id")
+                    or topping.get("productToppingId")
+                    or topping.get("product_topping_id")
+                    or topping.get("productId")
+                    or topping.get("product_id")
+                    or topping.get("id")
+                    or ""
+                ).strip()
+            elif isinstance(topping, (str, int)) and str(topping).strip().isdigit():
+                topping_id = str(topping).strip()
+            else:
+                continue
+            mapping = _find_food_partner_topping_mapping(
+                topping_id,
+                parent_line.get("item_code"),
+                modifier_mapping_index,
+            )
+            if not mapping:
+                continue
+            topping_qty = max(flt(topping.get("count") or topping.get("quantity") or topping.get("qty") or 1), 1)
+            selected_qty = max(flt(mapping.get("option_qty") or 1) * topping_qty / parent_qty, 0.0001)
+            parent_cart_item.setdefault("customization", {}).setdefault("selected_modifiers", []).append(
+                {
+                    "group": mapping.get("group_name") or "",
+                    "option": mapping.get("option_name") or "",
+                    "qty": selected_qty,
+                }
+            )
 
     totals = {
         "discountAmount": flt(order_payload.get("discount_amount") or order_payload.get("discount") or 0),
