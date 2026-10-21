@@ -130,6 +130,8 @@
 | `ManagementMenuGroupDetailPage` | `/management/menu-group?name=...` | ERPNext Item Group | Scaffold/Card | فرم ایجاد/ویرایش گروه | بررسی منبع؛ payload حفظ شده |
 | `ManagementModifierGroupsPage` | `/management/modifier-groups` | Restaurant modifier groups | Scaffold | فهرست/تنظیمات تخصصی | بررسی منبع؛ editor فعلی حفظ شده |
 
+در رابط حسابیار، صفحهٔ Modifierها اکنون اتصال مستقیم گروه به Item را هم مدیریت می‌کند (`add_management_modifier_group_to_item`). پیوند در `Item.restaurant_modifier_groups` با فرزند بومی `Restaurant Menu Item Modifier` ذخیره می‌شود. resolver مشترک، گروه‌های Item و BOM را ادغام می‌کند؛ کالای بدون BOM برای افزودنی سرو به فرمول ساختگی نیاز ندارد. خروجی کاربردها شامل `items`، `boms` و شمارش یکتای کالاهاست.
+
 ### sales — فروش و سفارش
 
 | صفحه | مسیر | منبع | ترکیب UI | فهرست/جزئیات | وضعیت |

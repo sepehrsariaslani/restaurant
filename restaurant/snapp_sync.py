@@ -1332,7 +1332,7 @@ def save_snappfood_modifier_mapping(
         None,
     )
     if not selected_group or not selected_option:
-        raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی فرمول فعال این کالا موجود نیست.")
+        raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی این کالا یا فرمول فعال آن موجود نیست.")
 
     all_items = frappe.get_all(
         "Item",
@@ -1351,6 +1351,10 @@ def save_snappfood_modifier_mapping(
         mappings_by_item[row.get("name")] = [entry for entry in parsed if isinstance(entry, dict)] if isinstance(parsed, list) else []
 
     for name, mappings in mappings_by_item.items():
+        # A vendor topping is shared by many products; its native mapping is
+        # scoped to the base Item when an order is normalized.
+        if lookup_field == "topping_id" and name != parent_item:
+            continue
         retained = [
             row for row in mappings
             if not (
@@ -1672,7 +1676,7 @@ def save_snappfood_product_toppings(payload=None):
     native_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
     native_options = {str(row.get("name") or ""): row for row in (native_group or {}).get("options") or []}
     if not native_group:
-        raise frappe.ValidationError("گروه Modifier روی فرمول فعال کالای پایه پیدا نشد.")
+        raise frappe.ValidationError("گروه Modifier روی کالای پایه یا فرمول فعال آن پیدا نشد.")
 
     options = []
     seen_options = set()
@@ -3638,6 +3642,17 @@ def _find_mapped_local_item(row, local_items):
     of the external IDs, otherwise a product such as ``کره ...`` can be shown
     as mapped for a different order line such as ``کلاب ...``.
     """
+    product_id = str(row.get("product_id") or "").strip()
+    parent_matches = [
+        item for item in local_items or []
+        if product_id
+        and str(item.get("restaurant_external_product_id") or "").strip() == product_id
+        and str(item.get("restaurant_external_menu_item_id") or "").strip() == product_id
+        and not str(item.get("restaurant_external_variation_id") or "").strip()
+    ]
+    if parent_matches:
+        return parent_matches[0] if len(parent_matches) == 1 else None
+
     external_keys = (
         "external_id",
         "menu_item_id",

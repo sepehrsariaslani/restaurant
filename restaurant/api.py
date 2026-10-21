@@ -7079,7 +7079,8 @@ def _build_modifier_groups(menu_item_doc, primary_bom_doc=None):
 		primary_bom_doc=primary_bom_doc or _get_bom_doc(menu_item_doc),
 	)
 	modifier_rows = sorted(
-		(bom_doc.get("restaurant_modifier_rows") if bom_doc else []) or [],
+		list((bom_doc.get("restaurant_modifier_rows") if bom_doc else []) or [])
+		+ list(menu_item_doc.get("restaurant_modifier_groups") or []),
 		key=lambda d: cint(d.get("idx") or 0),
 	)
 
@@ -19447,16 +19448,60 @@ def get_management_modifier_group_usage(group_name):
 				for row in menu_docs
 			]
 
+	direct_links = frappe.get_all(
+		"Restaurant Menu Item Modifier",
+		filters={"modifier_group": group_name, "parenttype": "Item", "parentfield": "restaurant_modifier_groups"},
+		fields=["parent", "required", "min_select", "max_select", "sort_order"],
+		order_by="parent asc, idx asc", ignore_permissions=True, limit_page_length=10000,
+	) if frappe.db.exists("DocType", "Restaurant Menu Item Modifier") else []
+	direct_names = sorted({row.get("parent") for row in direct_links if row.get("parent")})
+	direct_items = frappe.get_all(
+		"Item", filters={"name": ["in", direct_names]}, fields=["name", "item_code", "item_name", "disabled"],
+		order_by="item_name asc", ignore_permissions=True, limit_page_length=10000,
+	) if direct_names else []
 	return {
 		"group_name": group_name,
 		"boms": serialized_boms,
+		"items": direct_items,
 		"menu_items": menu_items,
 		"summary": {
 			"boms_count": len(serialized_boms),
-			"items_count": len({row.get("item") for row in serialized_boms if row.get("item")}),
+			"items_count": len({row.get("item") for row in serialized_boms if row.get("item")} | set(direct_names)),
+			"direct_items_count": len(direct_items),
 			"menu_items_count": len(menu_items),
 		},
 	}
+
+
+@frappe.whitelist()
+def add_management_modifier_group_to_item(item_name=None, group_name=None):
+	"""Attach a native add-on group directly to an Item, with or without a BOM."""
+	_ensure_management_access()
+	item_name, group_name = (item_name or "").strip(), (group_name or "").strip()
+	if not item_name or not frappe.db.exists("Item", item_name):
+		frappe.throw(_("Select a valid Item."), frappe.DoesNotExistError)
+	if not group_name or not frappe.db.exists("Restaurant Modifier Group", group_name):
+		frappe.throw(_("Select a valid Modifier Group."), frappe.DoesNotExistError)
+	item_doc = frappe.get_doc("Item", item_name)
+	if not item_doc.meta.has_field("restaurant_modifier_groups"):
+		frappe.throw(_("Item modifier groups are not installed."), frappe.ValidationError)
+	group_doc = frappe.get_doc("Restaurant Modifier Group", group_name)
+	if not cint(group_doc.get("is_active")) or not any(cint(row.get("is_active", 1)) for row in group_doc.get("options") or []):
+		frappe.throw(_("Add an active option to this Modifier Group before linking it to an Item."), frappe.ValidationError)
+	groups, _group_map, _title_map = _build_modifier_groups(item_doc)
+	if any(group.get("group_name") == group_name for group in groups):
+		return {"status": "already_linked", "item": item_name, "group_name": group_name}
+	if any(row.get("modifier_group") == group_name for row in item_doc.get("restaurant_modifier_groups") or []):
+		return {"status": "already_linked", "item": item_name, "group_name": group_name}
+	item_doc.append("restaurant_modifier_groups", {
+		"modifier_group": group_name, "required": cint(group_doc.get("required")),
+		"min_select": cint(group_doc.get("min_select") or 0), "max_select": max(cint(group_doc.get("max_select") or 1), 1),
+		"sort_order": max([cint(row.get("sort_order") or row.get("idx") or 0) for row in item_doc.get("restaurant_modifier_groups") or []] or [0]) + 1,
+	})
+	item_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	frappe.clear_cache(doctype="Item")
+	return {"status": "linked", "item": item_name, "group_name": group_name}
 
 
 @frappe.whitelist()
