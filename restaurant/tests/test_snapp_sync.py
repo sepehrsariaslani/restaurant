@@ -194,42 +194,73 @@ class TestSnappSync(FrappeTestCase):
 
         self.assertIn("توکن Food Partner", str(context.exception))
 
-    def test_food_partner_order_token_response_keeps_order_and_menu_tokens_separate(self):
+    def test_food_partner_heimdall_refresh_keeps_scoped_tokens_separate_and_rotates_secret(self):
         response = Mock(status_code=200, ok=True)
-        response.json.return_value = {"data": {"orderingToken": "order-only", "vendorToken": "vendor-only"}}
-        settings = {"token": "menu-only", "access_token": "account-only"}
-        with patch("restaurant.snapp_sync.requests.get", return_value=response) as request:
+        response.json.return_value = {
+            "data": {
+                "order": {"accessToken": "order-access", "refreshToken": "order-refresh-next"},
+                "vendor": {"accessToken": "vendor-access", "refreshToken": "vendor-refresh"},
+                "pubsub": {"accessToken": "pubsub-access", "refreshToken": "pubsub-refresh"},
+            }
+        }
+        settings = {"token": "menu-only", "order_refresh_token": "order-refresh-old"}
+        with patch("restaurant.snapp_sync._food_partner_heimdall_client_secret", return_value="test-public-client"), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ) as request, patch("restaurant.snapp_sync._has_field", return_value=True), patch(
+            "restaurant.snapp_sync.set_encrypted_password"
+        ) as save_secret, patch("restaurant.snapp_sync.frappe.db.commit") as commit:
             tokens = snapp_sync._get_food_partner_order_tokens(settings)
 
-        self.assertEqual(tokens, {"ordering_token": "order-only", "vendor_token": "vendor-only"})
         self.assertEqual(
-            request.call_args.args[0],
-            "https://snappfood.ir/vms/v1/user/ordering-tokens",
+            tokens,
+            {
+                "ordering_token": "order-access",
+                "vendor_token": "vendor-access",
+                "order_refresh_token_rotated": True,
+            },
         )
-        self.assertEqual(request.call_args.kwargs["headers"]["authorization"], "Bearer account-only")
+        self.assertEqual(request.call_args.args[0], "https://user.snappfood.ir/v1/auth/vendor/token")
+        body = request.call_args.kwargs["json"]
+        self.assertEqual(body["data"]["scopes"], ["vmo", "vms"])
+        self.assertEqual(body["data"]["client_id"], "snappfood_vms")
+        self.assertEqual(body["grantType"], "RefreshToken")
+        self.assertEqual(body["refreshToken"], "order-refresh-old")
+        self.assertEqual(save_secret.call_args.args, ("Restaurant Web Settings", "Restaurant Web Settings", "order-refresh-next", "snapp_order_refresh_token"))
+        commit.assert_called_once()
 
-    def test_food_partner_order_token_forbidden_does_not_call_menu_token_invalid(self):
+    def test_food_partner_heimdall_rejects_access_token_without_leaking_it(self):
         response = Mock(status_code=403)
-        response.raise_for_status.side_effect = requests.HTTPError(
-            "403 Client Error", response=response
-        )
-        settings = {"token": "menu-only", "access_token": "account-only"}
-        with patch("restaurant.snapp_sync.requests.get", return_value=response):
+        response.raise_for_status.side_effect = requests.HTTPError("403 Client Error", response=response)
+        settings = {"token": "menu-only", "order_refresh_token": "refresh-secret"}
+        with patch("restaurant.snapp_sync._food_partner_heimdall_client_secret", return_value="test-public-client"), patch(
+            "restaurant.snapp_sync.requests.post", return_value=response
+        ):
             with self.assertRaises(frappe.ValidationError) as context:
                 snapp_sync._get_food_partner_order_tokens(settings)
 
-        self.assertIn("دریافت دسترسی عملیات سفارش", str(context.exception))
-        self.assertIn("HTTP 403", str(context.exception))
-        self.assertIn("نامعتبر بودن توکن منو را ثابت نمی‌کند", str(context.exception))
-        self.assertNotIn("account-only", str(context.exception))
+        self.assertIn("Refresh Token", str(context.exception))
+        self.assertNotIn("refresh-secret", str(context.exception))
         self.assertNotIn("menu-only", str(context.exception))
 
-    def test_food_partner_order_refresh_accepts_legacy_data_token_without_replacing_menu_token(self):
+    def test_food_partner_order_access_test_can_bootstrap_a_rotated_refresh_token(self):
         response = Mock(status_code=200, ok=True)
-        response.json.return_value = {"data": {"token": "Bearer order-only"}}
-        with patch("restaurant.snapp_sync.requests.get", return_value=response):
-            tokens = snapp_sync._get_food_partner_order_tokens({"token": "menu-only", "access_token": "account-only"})
-        self.assertEqual(tokens, {"ordering_token": "order-only", "vendor_token": "menu-only"})
+        response.json.return_value = {
+            "data": {
+                "order": {"accessToken": "order-access", "refreshToken": "rotated-refresh"},
+                "vendor": {"accessToken": "vendor-access", "refreshToken": "vendor-refresh"},
+                "pubsub": {"accessToken": "pubsub-access", "refreshToken": "pubsub-refresh"},
+            }
+        }
+        with patch("restaurant.snapp_sync._get_settings", return_value={"access_token": "current-account-token"}), patch(
+            "restaurant.snapp_sync._food_partner_heimdall_client_secret", return_value="test-public-client"
+        ), patch("restaurant.snapp_sync.requests.post", return_value=response), patch(
+            "restaurant.snapp_sync._has_field", return_value=True
+        ), patch("restaurant.snapp_sync.set_encrypted_password"), patch("restaurant.snapp_sync.frappe.db.commit"):
+            result = snapp_sync.test_snappfood_order_access()
+
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["order_actions_ready"])
+        self.assertTrue(result["order_refresh_token_rotated"])
 
     def test_food_partner_menu_sends_vendor_authorization_header(self):
         response = Mock()
@@ -714,7 +745,7 @@ class TestSnappSync(FrappeTestCase):
         ready_response.json.return_value = {"success": True}
         with patch(
             "restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)
-        ), patch("restaurant.snapp_sync._snapp_menu_headers", return_value={"authorization": "stub"}), patch(
+        ), patch("restaurant.snapp_sync._get_food_partner_order_tokens", return_value={"ordering_token": "order-access", "vendor_token": "vendor-access"}), patch("restaurant.snapp_sync._snapp_menu_headers", return_value={"authorization": "stub"}), patch(
             "restaurant.snapp_sync.requests.get", return_value=check_response
         ) as request_get, patch("restaurant.snapp_sync.requests.post", return_value=ready_response) as request_post:
             result = snapp_sync.mark_snappfood_order_ready("order-123")
@@ -728,6 +759,7 @@ class TestSnappSync(FrappeTestCase):
             request_post.call_args.args[0],
             "https://snappfood.ir/food-partner/order/v1/order-123/food-is-ready",
         )
+        self.assertEqual(request_get.call_args.kwargs["headers"]["authorization"], "Bearer vendor-access")
 
     def test_food_partner_ready_action_does_not_repeat_an_existing_ready_announcement(self):
         cfg = {"token": "read-token", "vendor_id": "466275"}
@@ -736,7 +768,7 @@ class TestSnappSync(FrappeTestCase):
         check_response.json.return_value = {"data": {"hasOrderAlreadyBeenAnnouncedReady": True}}
         with patch(
             "restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)
-        ), patch("restaurant.snapp_sync._snapp_menu_headers", return_value={"authorization": "stub"}), patch(
+        ), patch("restaurant.snapp_sync._get_food_partner_order_tokens", return_value={"ordering_token": "order-access", "vendor_token": "vendor-access"}), patch("restaurant.snapp_sync._snapp_menu_headers", return_value={"authorization": "stub"}), patch(
             "restaurant.snapp_sync.requests.get", return_value=check_response
         ), patch("restaurant.snapp_sync.requests.post") as request_post:
             result = snapp_sync.mark_snappfood_order_ready("order-123")
@@ -744,8 +776,52 @@ class TestSnappSync(FrappeTestCase):
         self.assertEqual(result, {"status": "already_ready", "order_id": "order-123"})
         request_post.assert_not_called()
 
+    def test_food_partner_accept_v1_uses_current_portal_ack_job_with_separate_tokens(self):
+        cfg = {"token": "menu-only", "order_refresh_token": "refresh-only", "vendor_id": "466275"}
+        order = {"statusCode": "56"}
+        validation = Mock(status_code=200, ok=True)
+        validation.json.return_value = {"success": True}
+        accepted = Mock(status_code=200, ok=True)
+        accepted.json.return_value = {"success": True}
+        with patch("restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)), patch(
+            "restaurant.snapp_sync._food_partner_accept_payload",
+            return_value={"order_id": "order-123", "flow_version": "v1", "fields": {"orderId": "order-123"}},
+        ), patch(
+            "restaurant.snapp_sync._get_food_partner_order_tokens",
+            return_value={"ordering_token": "order-access", "vendor_token": "vendor-access"},
+        ), patch("restaurant.snapp_sync.requests.post", side_effect=[validation, accepted]) as post:
+            result = snapp_sync.accept_snappfood_order("order-123", 25)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(post.call_args_list[0].args[0], "https://snappfood.ir/vms/v3/order/validate-accept")
+        self.assertEqual(post.call_args_list[0].kwargs["headers"]["authorization"], "Bearer vendor-access")
+        self.assertEqual(post.call_args_list[1].kwargs["params"], {"job": "vms_ack_order"})
+        self.assertEqual(post.call_args_list[1].kwargs["headers"]["authorization"], "Bearer order-access")
+        self.assertIn("correlational-id-header", post.call_args_list[1].kwargs["headers"])
+
+    def test_food_partner_accept_v2_uses_current_portal_ack_endpoint(self):
+        cfg = {"token": "menu-only", "order_refresh_token": "refresh-only", "vendor_id": "466275"}
+        order = {"statusCode": "56"}
+        validation = Mock(status_code=200, ok=True)
+        validation.json.return_value = {"success": True}
+        accepted = Mock(status_code=200, ok=True)
+        accepted.json.return_value = {"success": True}
+        with patch("restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)), patch(
+            "restaurant.snapp_sync._food_partner_accept_payload",
+            return_value={"order_id": "order-123", "flow_version": "v2", "payload": {"orderId": "order-123"}},
+        ), patch(
+            "restaurant.snapp_sync._get_food_partner_order_tokens",
+            return_value={"ordering_token": "order-access", "vendor_token": "vendor-access"},
+        ), patch("restaurant.snapp_sync.requests.post", side_effect=[validation, accepted]) as post:
+            result = snapp_sync.accept_snappfood_order("order-123", 25)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(post.call_args_list[1].args[0], "https://vmsapi.zoodfood.com/api/v1/vendor-orders/actions/ack")
+        self.assertEqual(post.call_args_list[1].kwargs["headers"]["authorization"], "Bearer order-access")
+        self.assertEqual(post.call_args_list[1].kwargs["headers"]["x-device-type"], "VTS-PWA-ELECTRON")
+
     def test_food_partner_accept_requires_order_access_token_before_mutation(self):
-        cfg = {"token": "read-token", "access_token": "", "vendor_id": "466275"}
+        cfg = {"token": "read-token", "access_token": "", "order_refresh_token": "", "vendor_id": "466275"}
         order = {"statusCode": "56"}
         with patch(
             "restaurant.snapp_sync._find_food_partner_live_order", return_value=(cfg, order)
@@ -753,7 +829,7 @@ class TestSnappSync(FrappeTestCase):
             "restaurant.snapp_sync._food_partner_accept_payload",
             return_value={"order_id": "order-123", "flow_version": "v2", "payload": {}},
         ), patch("restaurant.snapp_sync.requests.post") as request_post, self.assertRaisesRegex(
-            snapp_sync.frappe.ValidationError, "توکن دسترسی حساب Food Partner"
+            snapp_sync.frappe.ValidationError, "Refresh Token رسمی Food Partner"
         ):
             snapp_sync.accept_snappfood_order("order-123", 25)
 

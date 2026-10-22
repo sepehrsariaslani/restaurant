@@ -24309,6 +24309,14 @@ def save_snappfood_integration_config(payload=None):
 			access_token,
 			"snapp_access_token",
 		)
+	order_refresh_token = _normalize_bearer_token(payload.get("snapp_order_refresh_token") or "")
+	if order_refresh_token and _has_doctype_field("Restaurant Web Settings", "snapp_order_refresh_token"):
+		set_encrypted_password(
+			"Restaurant Web Settings",
+			"Restaurant Web Settings",
+			order_refresh_token,
+			"snapp_order_refresh_token",
+		)
 	frappe.db.commit()
 	from restaurant.snapp_sync import get_sync_status
 

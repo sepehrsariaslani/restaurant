@@ -108,7 +108,11 @@
 - منو و گروه‌های منو: `pages/management/catalog/ManagementMenuDesignerPage.vue`، `pages/management/catalog/ManagementMenuGroupsPage.vue`، `pages/management/catalog/ManagementMenuGroupDetailPage.vue`
 - modifierها: `pages/management/catalog/ManagementModifierGroupsPage.vue`
 - POS و پیش‌فرض‌های POS: `pages/management/sales/ManagementPosPage.vue`، `pages/management/sales/ManagementPosProfilePage.vue`، `pages/management/sales/ManagementPosDefaultsPage.vue`
-- اتصال Food Partner: `pages/management/settings/ManagementSnappfoodPage.vue` برای تنظیمات/نگاشت مستقل است؛ پنل عملیاتی Hesabyar Accounts در `accounts/frontend/src/pages/restaurant/RestaurantFoodPartnerPage.vue` و APIهای `restaurant.api_food_partner` و `restaurant.snapp_sync` نمایش و ویرایش منو، افزودن محصول و کنترل وضعیت را پوشش می‌دهد. ورود سفارش همچنان از POS و اسناد بومی ERPNext انجام می‌شود. فهرست سفارش‌های زنده و دکمه‌های پذیرش/آماده‌تحویل در پنل Accounts هستند؛ پذیرش زنده بدون توکن دسترسی سفارش ممکن نیست.
+- اتصال Food Partner: `pages/management/settings/ManagementSnappfoodPage.vue` برای تنظیمات/نگاشت مستقل است؛ پنل عملیاتی Hesabyar Accounts در `accounts/frontend/src/pages/restaurant/RestaurantFoodPartnerPage.vue` و APIهای `restaurant.api_food_partner` و `restaurant.snapp_sync` نمایش و ویرایش منو، افزودن محصول و کنترل وضعیت را پوشش می‌دهد. ورود سفارش همچنان از POS و اسناد بومی ERPNext انجام می‌شود. فهرست سفارش‌های زنده و دکمه‌های پذیرش/آماده‌تحویل در پنل Accounts هستند؛ عملیات سفارش به Refresh Token رسمی و بررسی موفق دسترسی نیاز دارد.
+
+#### به‌روزرسانی دسترسی سفارش Food Partner — ۲۰۲۶-۱۰-۲۲
+
+جریان refresh رسمی Heimdall و فیلد رمزنگاری‌شدهٔ Refresh Token به Restaurant اضافه شد. JWT فعلی حساب برای refresh با HTTP 403 رد شد؛ گزارش زنده ۱۷ سفارش داشت و مورد قابل‌پذیرشی نشان نداد. بنابراین دسترسی سفارش پس از deploy هنوز تأیید نشده و پذیرش/آماده‌تحویل زنده اجرا نشده است. برای فعال‌کردن دکمه‌ها باید Refresh Token رسمی در تنظیمات Hesabyar ذخیره و با «بررسی دسترسی سفارش» تأیید شود.
 - ثبت سفارش/صندوق: `pages/management/sales/ManagementRegisterPage.vue`
 - شعبه‌ها، رزرو و مرکز تماس: `pages/management/operations/ManagementBranchesPage.vue`، `pages/management/customers/ManagementReservationsPage.vue`، `pages/management/customers/ManagementCallCenterPage.vue`
 

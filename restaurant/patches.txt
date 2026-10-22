@@ -56,3 +56,4 @@ restaurant.patches.v2_20.ensure_order_review_fields
 restaurant.patches.v2_21.ensure_food_partner_modifier_mappings
 restaurant.patches.v2_22.ensure_food_partner_order_actions
 restaurant.patches.v2_23.ensure_item_modifier_groups
+restaurant.patches.v2_24.ensure_food_partner_order_refresh_token

@@ -2,6 +2,7 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import re
 import uuid
 from decimal import Decimal, InvalidOperation
@@ -12,6 +13,7 @@ from pathlib import Path
 import frappe
 import requests
 from frappe.utils import cint, cstr, flt, get_datetime, get_datetime_str, now_datetime, today
+from frappe.utils.password import set_encrypted_password
 from restaurant.order_review import (
 	ORDER_REVIEW_APPROVED,
 	ORDER_REVIEW_FIELD,
@@ -32,6 +34,8 @@ DEFAULT_REPORT_URL = "https://snappfood.ir/vms/v3/restaurant/report"
 DEFAULT_PARTNER_WEB_API_BASE_URL = "https://snappfood.ir"
 DEFAULT_MENU_API_BASE_URL = "https://apigw.snappfood.ir"
 DEFAULT_VENDOR_ACCOUNT_API_BASE_URL = "https://vendor.snappfood.ir"
+FOOD_PARTNER_HEIMDALL_TOKEN_URL = "https://user.snappfood.ir/v1/auth/vendor/token"
+FOOD_PARTNER_HEIMDALL_CLIENT_ID = "snappfood_vms"
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 300
 IMPORT_ITEM_GROUP = "Snapp Imported Items"
@@ -312,6 +316,11 @@ def _get_settings():
         access_token = _normalize_bearer_token(
             settings_doc.get_password("snapp_access_token", raise_exception=False) or ""
         )
+    order_refresh_token = ""
+    if _has_field("Restaurant Web Settings", "snapp_order_refresh_token"):
+        order_refresh_token = _normalize_bearer_token(
+            settings_doc.get_password("snapp_order_refresh_token", raise_exception=False) or ""
+        )
 
     enabled = cint(settings_doc.get("snapp_sync_enabled")) if _has_field("Restaurant Web Settings", "snapp_sync_enabled") else 0
     return {
@@ -321,6 +330,7 @@ def _get_settings():
         "host_domain": (settings_doc.get("snapp_hostdomain") or DEFAULT_HOST_DOMAIN).strip(),
         "token": token,
         "access_token": access_token,
+        "order_refresh_token": order_refresh_token,
         "page_size": max(1, min(cint(settings_doc.get("snapp_page_size") or DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE)),
         "lookback_minutes": max(5, cint(settings_doc.get("snapp_lookback_minutes") or DEFAULT_LOOKBACK_MINUTES)),
         "amount_multiplier": flt(settings_doc.get("snapp_amount_multiplier") or DEFAULT_AMOUNT_MULTIPLIER),
@@ -377,17 +387,21 @@ def get_sync_status():
     schema_status = _get_schema_status()
     token_metadata = _food_partner_token_metadata(settings.get("token"))
     order_access_token_metadata = _food_partner_token_metadata(settings.get("access_token"))
+    order_refresh_token_metadata = _food_partner_token_metadata(settings.get("order_refresh_token"))
 
     return {
         "enabled": settings["enabled"],
         "has_token": bool(settings["token"]),
-        "has_order_access_token": bool(settings.get("access_token")),
+        "has_order_access_token": bool(settings.get("access_token") or settings.get("order_refresh_token")),
+        "has_order_refresh_token": bool(settings.get("order_refresh_token")),
+        "order_actions_ready": False,
         "token_hint": token_metadata["hint"],
         "token_username": token_metadata["username"],
         "token_expires_at": token_metadata["expires_at"],
         "order_access_token_hint": order_access_token_metadata["hint"],
         "order_access_token_username": order_access_token_metadata["username"],
         "order_access_token_expires_at": order_access_token_metadata["expires_at"],
+        "order_refresh_token_hint": order_refresh_token_metadata["hint"],
         "api_base_url": settings["api_base_url"],
         "report_url": settings.get("report_url") or DEFAULT_REPORT_URL,
         "menu_api_base_url": settings.get("menu_api_base_url") or DEFAULT_MENU_API_BASE_URL,
@@ -744,60 +758,118 @@ def _find_food_partner_token(payload, token_name):
     return ""
 
 
-def _get_food_partner_order_tokens(settings=None):
-    cfg = settings or _get_settings()
-    access_token = _normalize_bearer_token(cfg.get("access_token"))
-    if not access_token:
+def _food_partner_heimdall_client_secret():
+    secret = str(
+        frappe.conf.get("snappfood_heimdall_client_secret")
+        or os.environ.get("SNAPPFOOD_HEIMDALL_CLIENT_SECRET")
+        or ""
+    ).strip()
+    if not secret:
         raise frappe.ValidationError(
-            "برای پذیرش سفارش، توکن دسترسی حساب Food Partner را در تنظیمات اتصال وارد کنید."
+            "تنظیم امن سرویس رسمی توکن سفارش آماده نیست؛ پیکربندی Heimdall را بررسی کنید."
         )
+    return secret
+
+
+def _food_partner_token_pair(payload, name):
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(data, dict):
+        return {}
+    pair = data.get(name) or data.get(name.lower()) or {}
+    if not isinstance(pair, dict):
+        return {}
+    access_token = pair.get("accessToken") or pair.get("access_token") or ""
+    refresh_token = pair.get("refreshToken") or pair.get("refresh_token") or ""
+    return {
+        "access_token": _normalize_bearer_token(access_token),
+        "refresh_token": _normalize_bearer_token(refresh_token),
+    }
+
+
+def _get_food_partner_order_tokens(settings=None, allow_account_token_as_refresh=False):
+    cfg = settings or _get_settings()
+    refresh_token = _normalize_bearer_token(cfg.get("order_refresh_token"))
+    if not refresh_token and allow_account_token_as_refresh:
+        # The official account token supplied in the settings may already be a
+        # refresh token. Try it once through the current portal flow, but never
+        # persist it as a refresh token unless Heimdall rotates it successfully.
+        refresh_token = _normalize_bearer_token(cfg.get("access_token"))
+    if not refresh_token:
+        raise frappe.ValidationError(
+            "برای عملیات سفارش، Refresh Token رسمی Food Partner را در تنظیمات اتصال وارد و بررسی کنید."
+        )
+
+    request_body = {
+        "data": {
+            "scopes": ["vmo", "vms"],
+            "client_id": FOOD_PARTNER_HEIMDALL_CLIENT_ID,
+            "client_secret": _food_partner_heimdall_client_secret(),
+        },
+        "grantType": "RefreshToken",
+        "refreshToken": refresh_token,
+    }
     try:
-        response = requests.get(
-            "https://snappfood.ir/vms/v1/user/ordering-tokens",
+        response = requests.post(
+            FOOD_PARTNER_HEIMDALL_TOKEN_URL,
             headers={
-                "accept": "application/json, text/plain, */*",
-                "authorization": f"Bearer {access_token}",
+                "accept": "application/json",
+                "content-type": "application/json",
                 "user-agent": "Mozilla/5.0",
             },
+            json=request_body,
             timeout=20,
         )
         response.raise_for_status()
         payload = response.json()
     except requests.HTTPError as exc:
         status_code = getattr(exc.response, "status_code", None)
-        if status_code == 401:
-            message = "توکن حساب Food Partner برای دریافت دسترسی سفارش معتبر شناخته نشد (HTTP 401)؛ آن را از مسیر رسمی به‌روزرسانی کنید."
-        elif status_code == 403:
+        if status_code in (401, 403):
             message = (
-                "دریافت دسترسی عملیات سفارش از Food Partner رد شد (HTTP 403). "
-                "این پاسخ به‌تنهایی نامعتبر بودن توکن منو را ثابت نمی‌کند؛ دسترسی سفارش را در نشست رسمی بررسی کنید."
+                "Food Partner توکن واردشده را برای تمدید دسترسی سفارش نپذیرفت؛ "
+                "مقدار Refresh Token را از نشست رسمی وارد کنید."
             )
         else:
-            message = f"دریافت دسترسی امن سفارش با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
+            message = f"تمدید دسترسی سفارش Food Partner با خطای HTTP {status_code or 'نامشخص'} روبه‌رو شد."
         raise frappe.ValidationError(message) from exc
     except (requests.RequestException, TypeError, ValueError) as exc:
-        raise frappe.ValidationError("ارتباط امن با سرویس سفارش Food Partner برقرار نشد.") from exc
+        raise frappe.ValidationError("ارتباط امن با سرویس رسمی توکن سفارش Food Partner برقرار نشد.") from exc
 
-    ordering_token = _find_food_partner_token(payload, "orderingToken")
-    if not ordering_token and isinstance(payload, dict) and isinstance(payload.get("data"), dict):
-        # The ordering application's legacy refresh route returns data.token.
-        legacy_token = payload["data"].get("token")
-        if isinstance(legacy_token, str):
-            ordering_token = _normalize_bearer_token(legacy_token)
-    vendor_token = _find_food_partner_token(payload, "vendorToken")
-    if not ordering_token:
-        raise frappe.ValidationError("سرویس Food Partner توکن عملیات سفارش را برنگرداند؛ اتصال را بررسی کنید.")
-    if not vendor_token:
-        vendor_token = _normalize_bearer_token(cfg.get("token"))
-    return {"ordering_token": ordering_token, "vendor_token": vendor_token}
+    order_pair = _food_partner_token_pair(payload, "order")
+    vendor_pair = _food_partner_token_pair(payload, "vendor")
+    if not order_pair.get("access_token") or not vendor_pair.get("access_token"):
+        raise frappe.ValidationError(
+            "پاسخ رسمی Heimdall جفت توکن سفارش و فروشنده را برنگرداند؛ دسترسی حساب را بررسی کنید."
+        )
+
+    rotated_refresh_token = order_pair.get("refresh_token")
+    if rotated_refresh_token and rotated_refresh_token != refresh_token:
+        if _has_field("Restaurant Web Settings", "snapp_order_refresh_token"):
+            set_encrypted_password(
+                "Restaurant Web Settings",
+                "Restaurant Web Settings",
+                rotated_refresh_token,
+                "snapp_order_refresh_token",
+            )
+            # Heimdall rotates refresh credentials. Persist the new one before
+            # any later order action can fail or the request can roll back.
+            frappe.db.commit()
+    return {
+        "ordering_token": order_pair["access_token"],
+        "vendor_token": vendor_pair["access_token"],
+        "order_refresh_token_rotated": bool(rotated_refresh_token and rotated_refresh_token != refresh_token),
+    }
 
 
 def test_snappfood_order_access():
-    """Verify order-action credentials without reading or changing an order."""
-    tokens = _get_food_partner_order_tokens()
+    """Verify current official order credentials without reading or changing an order."""
+    settings = _get_settings()
+    tokens = _get_food_partner_order_tokens(settings, allow_account_token_as_refresh=True)
     return {
         "status": "success",
-        "order_actions_ready": bool(tokens.get("ordering_token")),
+        "order_actions_ready": bool(tokens.get("ordering_token") and tokens.get("vendor_token")),
+        "order_refresh_token_rotated": bool(tokens.get("order_refresh_token_rotated")),
     }
 
 
@@ -907,7 +979,7 @@ def get_snappfood_live_orders():
         "status": "success",
         "fetched_count": len(rows),
         "orders": orders,
-        "has_order_access_token": bool(cfg.get("access_token")),
+        "has_order_access_token": bool(cfg.get("access_token") or cfg.get("order_refresh_token")),
     }
 
 
@@ -970,9 +1042,9 @@ def accept_snappfood_order(order_id, preparation_minutes):
         raise frappe.ValidationError("این سفارش دیگر در وضعیت قابل‌پذیرش نیست؛ فهرست سفارش‌ها را تازه کنید.")
     accept_data = _food_partner_accept_payload(raw_order, preparation_minutes, cfg)
     tokens = _get_food_partner_order_tokens(cfg)
-    vendor_token = tokens.get("vendor_token") or cfg.get("token")
+    vendor_token = tokens.get("vendor_token")
     if not vendor_token:
-        raise frappe.ValidationError("توکن Food Partner برای بررسی سفارش تنظیم نشده است.")
+        raise frappe.ValidationError("توکن فروشندهٔ Food Partner برای بررسی سفارش دریافت نشد.")
 
     headers = {
         "accept": "application/json, text/plain, */*",
@@ -1002,11 +1074,11 @@ def accept_snappfood_order(order_id, preparation_minutes):
             }
             response = requests.post(
                 "https://vmsapi.zoodfood.com/job",
-                params={"job": "vms_accept_order"},
+                params={"job": "vms_ack_order"},
                 headers={
                     "authorization": f"Bearer {tokens['ordering_token']}",
                     "x-client-version": "VTS-PWA-ELECTRON",
-                    "x-correlational-id": str(uuid.uuid4()),
+                    "correlational-id-header": str(uuid.uuid4()),
                     "user-agent": "Mozilla/5.0",
                 },
                 files=fields,
@@ -1014,7 +1086,7 @@ def accept_snappfood_order(order_id, preparation_minutes):
             )
         else:
             response = requests.post(
-                "https://vmsapi.zoodfood.com/api/v1/vendor-orders/actions/accept",
+                "https://vmsapi.zoodfood.com/api/v1/vendor-orders/actions/ack",
                 headers={
                     "authorization": f"Bearer {tokens['ordering_token']}",
                     "content-type": "application/json",
@@ -1052,7 +1124,12 @@ def mark_snappfood_order_ready(order_id):
     cfg, raw_order = _find_food_partner_live_order(order_id)
     if _food_partner_order_status_code(raw_order) not in _FOOD_PARTNER_ACCEPTED_ORDER_STATUSES:
         raise frappe.ValidationError("فقط سفارش پذیرفته‌شده را می‌توان آمادهٔ ارسال اعلام کرد.")
+    tokens = _get_food_partner_order_tokens(cfg)
+    vendor_token = tokens.get("vendor_token")
+    if not vendor_token:
+        raise frappe.ValidationError("توکن فروشندهٔ Food Partner برای اعلام آماده‌بودن سفارش دریافت نشد.")
     headers = _snapp_menu_headers(cfg)
+    headers["authorization"] = f"Bearer {vendor_token}"
     encoded_order_id = requests.utils.quote(str(order_id), safe="")
     status_url = f"https://snappfood.ir/vms/v1/order/{encoded_order_id}/validateIfFoodAlreadyIsReady"
     ready_url = f"https://snappfood.ir/food-partner/order/v1/{encoded_order_id}/food-is-ready"
