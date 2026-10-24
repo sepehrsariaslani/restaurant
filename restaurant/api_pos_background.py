@@ -52,6 +52,7 @@ def _background_job_key(order_name, action):
 
 def _build_job_state(job_key, status, order_id="", action="", result=None, error=""):
     result = result if isinstance(result, dict) else {}
+    summary = result.get("summary")
     return {
         "job_key": str(job_key or ""),
         "status": str(status or "unknown"),
@@ -59,6 +60,8 @@ def _build_job_state(job_key, status, order_id="", action="", result=None, error
         "action": str(action or ""),
         "sales_invoice": str(result.get("sales_invoice") or ""),
         "delivery_note": str(result.get("delivery_note") or ""),
+        "result_status": str(result.get("status") or ""),
+        "summary": summary if isinstance(summary, dict) else {},
         "error": str(error or "")[:500],
         "updated_at": int(time.time()),
     }
@@ -129,6 +132,28 @@ def _enqueue_worker(job_key, order_name, payment, deliver_after):
         raise
 
 
+def _enqueue_purge_worker(job_key, order_name):
+    try:
+        from frappe.utils.background_jobs import enqueue
+        enqueue(
+            "restaurant.api_pos_background.run_pos_background_purge",
+            queue="short",
+            job_name=job_key,
+            job_key=job_key,
+            order_name=order_name,
+        )
+    except Exception as exc:
+        state = _build_job_state(
+            job_key,
+            "failed",
+            order_name,
+            "purge",
+            error=str(exc),
+        )
+        _set_job_state(state)
+        raise
+
+
 def _queue_existing_order(order_name, payment=None, deliver_after=False):
     legacy = _legacy_api()
     resolved = legacy._resolve_sales_order_name(order_name)
@@ -189,6 +214,29 @@ def enqueue_pos_checkout(payload=None, deliver_after=0):
     )
     state = dict(state)
     state["order_id"] = order_id
+    return state
+
+
+@frappe.whitelist()
+def enqueue_pos_purge(order_name=""):
+    legacy = _legacy_api()
+    legacy._ensure_management_access()
+    if not str(order_name or "").strip():
+        frappe.throw(_("Order name is required."))
+
+    resolved = legacy._resolve_sales_order_name(order_name)
+    if not resolved or not frappe.db.exists("Sales Order", resolved):
+        frappe.throw(_("Sales Order not found."))
+
+    action = "purge"
+    job_key = _background_job_key(resolved, action)
+    existing = _get_job_state(job_key)
+    if existing and existing.get("status") in {"queued", "running", "done"}:
+        return existing
+
+    state = _build_job_state(job_key, "queued", resolved, action)
+    _set_job_state(state)
+    _enqueue_purge_worker(job_key, resolved)
     return state
 
 
@@ -257,6 +305,69 @@ def run_pos_background_settlement(job_key, order_name, payment=None, deliver_aft
             pass
         try:
             frappe.log_error(frappe.get_traceback(), "POS Background Settlement Error")
+        except Exception:
+            pass
+        state = _build_job_state(
+            job_key,
+            "failed",
+            order_name,
+            action,
+            error=str(exc),
+        )
+        _set_job_state(state)
+        return state
+
+
+def run_pos_background_purge(job_key, order_name):
+    legacy = _legacy_api()
+    action = "purge"
+    _set_job_state(_build_job_state(job_key, "running", order_name, action))
+    try:
+        result = legacy.purge_management_pos_order(order_name)
+        if not isinstance(result, dict):
+            result = {}
+
+        result_status = str(result.get("status") or "").strip().lower()
+        if result_status == "partial_success":
+            errors = ((result.get("summary") or {}).get("errors") or [])
+            detail = "; ".join(str(error) for error in errors[:3])
+            error = _("Invoice cleanup completed partially.")
+            if detail:
+                error = f"{error} {detail}"
+            state = _build_job_state(
+                job_key,
+                "failed",
+                order_name,
+                action,
+                result=result,
+                error=error,
+            )
+        elif result_status in {"success", "ok"}:
+            state = _build_job_state(
+                job_key,
+                "done",
+                order_name,
+                action,
+                result=result,
+            )
+        else:
+            state = _build_job_state(
+                job_key,
+                "failed",
+                order_name,
+                action,
+                result=result,
+                error=_("Invoice cleanup did not return a successful result."),
+            )
+        _set_job_state(state)
+        return state
+    except Exception as exc:
+        try:
+            frappe.db.rollback()
+        except Exception:
+            pass
+        try:
+            frappe.log_error(frappe.get_traceback(), "POS Background Purge Error")
         except Exception:
             pass
         state = _build_job_state(

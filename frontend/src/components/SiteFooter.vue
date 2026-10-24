@@ -18,6 +18,11 @@
             <a v-if="instagram" :href="instagram" target="_blank" rel="noopener noreferrer" aria-label="اینستاگرام"><Instagram :size="18" aria-hidden="true" /></a>
             <a v-if="telegram" :href="telegram" target="_blank" rel="noopener noreferrer" aria-label="تلگرام"><Send :size="18" aria-hidden="true" /></a>
           </div>
+          <div v-if="showEnamadTrustseal" class="footer-trustseal" aria-label="نماد اعتماد">
+            <a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=8041746&Code=2PT46vOdEVXChL4zRLKfLaNM6LjFqu2g">
+              <img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=8041746&Code=2PT46vOdEVXChL4zRLKfLaNM6LjFqu2g" alt="" style="cursor:pointer" code="2PT46vOdEVXChL4zRLKfLaNM6LjFqu2g">
+            </a>
+          </div>
         </div>
 
         <nav class="footer-links" aria-label="دسترسی‌های فوتر">
@@ -49,7 +54,13 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { ArrowUpLeft, Instagram, Mail, MapPin, Phone, Send, Sparkles } from 'lucide-vue-next'
+
+const showEnamadTrustseal = computed(() => {
+  const hostname = window.location.hostname.toLowerCase()
+  return hostname === 'veederakht.ir' || hostname === 'www.veederakht.ir'
+})
 
 defineProps({
   brandName: { type: String, default: '' },
@@ -77,6 +88,8 @@ defineProps({
 .footer-brand p { max-width: 29rem; margin: .6rem 0 1rem; color: var(--ds-color-text-secondary); line-height: 1.9; font-size: .88rem; }
 .footer-social { display: flex; gap: .5rem; }
 .footer-social a { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); color: var(--ds-color-action-primary); }
+.footer-trustseal { display: inline-flex; margin-top: 1rem; padding: .45rem; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-md); background: var(--ds-color-surface-raised); }
+.footer-trustseal img { display: block; width: 96px; height: auto; }
 .footer-links, .footer-contact { display: flex; flex-direction: column; align-items: flex-start; gap: .55rem; }
 .footer-grid h3 { margin: 0 0 .25rem; color: var(--ds-color-text-primary); font-size: .95rem; }
 .footer-links a, .footer-contact a, .footer-contact p { margin: 0; color: var(--ds-color-text-secondary); text-decoration: none; font-size: .86rem; line-height: 1.7; }

@@ -90,6 +90,47 @@ def _release_coupon_reservation(order_name):
 		frappe.db.set_value("Restaurant Coupon", coupon.name, "used_count", used_count - 1, update_modified=False)
 
 
+def _existing_sales_invoice_for_order(order_name):
+	"""Return the first submitted invoice already linked to this Sales Order."""
+	try:
+		return (
+			frappe.db.get_value(
+				"Sales Invoice Item",
+				{"sales_order": order_name, "docstatus": 1},
+				"parent",
+			)
+			or ""
+		)
+	except Exception:
+		# Sites without ERPNext's invoice tables should keep review idempotency safe.
+		return ""
+
+
+def _food_partner_auto_production_delivery_enabled():
+	"""Read the optional automation setting without blocking invoice approval."""
+	fieldname = "snapp_auto_sync_production_delivery"
+	try:
+		if not frappe.get_meta("Restaurant Web Settings").has_field(fieldname):
+			return False
+		return bool(cint(frappe.db.get_single_value("Restaurant Web Settings", fieldname) or 0))
+	except Exception:
+		return False
+
+
+def _ensure_food_partner_production_and_delivery(order_name):
+	"""Run the existing production and Delivery Note flow for an approved Food Partner order."""
+	from restaurant.api import deliver_invoice_only
+
+	result = deliver_invoice_only(order_name)
+	auto_flow = result.get("auto_flow") or {}
+	errors = auto_flow.get("errors") or []
+	return {
+		"fulfillment_status": "partial" if errors else "success",
+		"delivery_note": result.get("delivery_note") or auto_flow.get("delivery_note") or "",
+		"production_errors": errors,
+	}
+
+
 @frappe.whitelist()
 def review_management_order(order_name="", decision="", note=""):
 	"""Approve or reject a pending customer-originated Sales Order."""
@@ -112,54 +153,103 @@ def review_management_order(order_name="", decision="", note=""):
 		order_name,
 	)
 	current = frappe.db.get_value("Sales Order", order_name, ORDER_REVIEW_FIELD) or ORDER_REVIEW_APPROVED
+	target_status = ORDER_REVIEW_APPROVED if decision == "approve" else ORDER_REVIEW_REJECTED
+	if current == target_status:
+		fulfillment_result = {}
+		if decision == "approve" and _order_has_column("restaurant_external_source"):
+			order = frappe.get_doc("Sales Order", order_name)
+			if str(order.get("restaurant_external_source") or "").strip().lower() == "snapp_food":
+				try:
+					if _food_partner_auto_production_delivery_enabled():
+						fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
+				except Exception as exc:
+					frappe.db.rollback()
+					frappe.log_error(
+						f"{frappe.get_traceback()}",
+						"Food Partner fulfillment backfill failed for approved order",
+					)
+					message = str(exc).strip() or "خطای نامشخص"
+					frappe.throw(
+						_("ساخت تولید و حوالهٔ سفارش تأییدشده ناموفق بود: {0}").format(message[:500]),
+						frappe.ValidationError,
+					)
+		return {
+			"status": "success",
+			"order_name": order_name,
+			"review_status": current,
+			"sales_invoice": _existing_sales_invoice_for_order(order_name),
+			"idempotent": True,
+			**fulfillment_result,
+		}
 	if current != ORDER_REVIEW_PENDING:
 		frappe.throw(_("این سفارش دیگر در انتظار بررسی نیست."))
 
 	now = now_datetime()
-	updates = {
-		ORDER_REVIEW_FIELD: ORDER_REVIEW_APPROVED if decision == "approve" else ORDER_REVIEW_REJECTED,
-	}
-	if _order_has_column("restaurant_order_reviewed_by"):
-		updates["restaurant_order_reviewed_by"] = frappe.session.user
-	if _order_has_column("restaurant_order_reviewed_at"):
-		updates["restaurant_order_reviewed_at"] = now
-	if _order_has_column("restaurant_order_review_note"):
-		updates["restaurant_order_review_note"] = (note or "").strip()[:2000]
-	frappe.db.set_value("Sales Order", order_name, updates, update_modified=False)
+	stage = "ثبت وضعیت بررسی"
+	invoice_name = ""
+	fulfillment_result = {}
+	try:
+		updates = {ORDER_REVIEW_FIELD: target_status}
+		if _order_has_column("restaurant_order_reviewed_by"):
+			updates["restaurant_order_reviewed_by"] = frappe.session.user
+		if _order_has_column("restaurant_order_reviewed_at"):
+			updates["restaurant_order_reviewed_at"] = now
+		if _order_has_column("restaurant_order_review_note"):
+			updates["restaurant_order_review_note"] = (note or "").strip()[:2000]
+		frappe.db.set_value("Sales Order", order_name, updates, update_modified=False)
 
-	if decision == "approve":
-		order = frappe.get_doc("Sales Order", order_name)
-		if order.docstatus == 0:
-			order.flags.ignore_permissions = True
-			order.submit()
-		_set_restaurant_order_status(order_name, "confirmed", force=True)
-		_append_sales_order_note(order_name, f"[ORDER REVIEW] سفارش تأیید شد توسط {frappe.session.user}.")
-		external_source = order.get("restaurant_external_source") if _order_has_column("restaurant_external_source") else ""
-		invoice_name = ""
-		if external_source == "snapp_food":
-			from restaurant.snapp_sync import _ensure_sales_invoice_for_order, _get_settings
+		if decision == "approve":
+			stage = "ثبت سفارش فروش"
+			order = frappe.get_doc("Sales Order", order_name)
+			if order.docstatus == 0:
+				order.flags.ignore_permissions = True
+				order.submit()
+			stage = "تغییر وضعیت رستوران"
+			_set_restaurant_order_status(order_name, "confirmed", force=True)
+			_append_sales_order_note(order_name, f"[ORDER REVIEW] سفارش تأیید شد توسط {frappe.session.user}.")
+			external_source = order.get("restaurant_external_source") if _order_has_column("restaurant_external_source") else ""
+			if external_source == "snapp_food":
+				from restaurant.snapp_sync import _ensure_sales_invoice_for_order, _get_settings
 
-			settings = _get_settings()
-			if settings.get("auto_sync_invoices"):
-				invoice_result = _ensure_sales_invoice_for_order(
-					order_name,
-					_food_partner_invoice_payload(order),
-				)
-				invoice_name = invoice_result.get("sales_invoice") or ""
-	else:
-		_set_restaurant_order_status(order_name, "cancelled", force=True)
-		message = (note or "").strip()
-		_append_sales_order_note(
-			order_name,
-			"[ORDER REVIEW] سفارش رد شد." + (f" دلیل: {message}" if message else ""),
+				settings = _get_settings()
+				if settings.get("auto_sync_invoices"):
+					stage = "ثبت فاکتور Food Partner"
+					invoice_result = _ensure_sales_invoice_for_order(
+						order_name,
+						_food_partner_invoice_payload(order),
+					)
+					invoice_name = invoice_result.get("sales_invoice") or ""
+				if _food_partner_auto_production_delivery_enabled():
+					stage = "ثبت تولید و حوالهٔ تحویل Food Partner"
+					fulfillment_result = _ensure_food_partner_production_and_delivery(order_name)
+		else:
+			stage = "رد سفارش"
+			_set_restaurant_order_status(order_name, "cancelled", force=True)
+			message = (note or "").strip()
+			_append_sales_order_note(
+				order_name,
+				"[ORDER REVIEW] سفارش رد شد." + (f" دلیل: {message}" if message else ""),
+			)
+			_release_coupon_reservation(order_name)
+
+		stage = "ثبت نهایی تراکنش"
+		frappe.db.commit()
+	except Exception as exc:
+		frappe.db.rollback()
+		frappe.log_error(
+			f"مرحله: {stage}\n{frappe.get_traceback()}",
+			f"Food Partner order review failed at {stage}",
 		)
-		_release_coupon_reservation(order_name)
-		invoice_name = ""
+		message = str(exc).strip() or "خطای نامشخص"
+		frappe.throw(
+			_("بررسی سفارش در مرحلهٔ {0} ناموفق بود: {1}").format(stage, message[:500]),
+			frappe.ValidationError,
+		)
 
-	frappe.db.commit()
 	return {
 		"status": "success",
 		"order_name": order_name,
-		"review_status": updates[ORDER_REVIEW_FIELD],
+		"review_status": target_status,
 		"sales_invoice": invoice_name,
+		**fulfillment_result,
 	}
