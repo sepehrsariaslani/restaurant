@@ -505,6 +505,12 @@ def get_management_pos_boot_reliable(branch=None, limit_start=0, limit_page_leng
         branch=normalized_branch or profile.get("branch") or profile.get("restaurant_branch") or "",
         company=profile.get("company") or result.get("company") or "",
     )
+    profile = result.get("pos_profile") if isinstance(result.get("pos_profile"), dict) else {}
+    result["offline_price_snapshot"] = _sign_offline_price_snapshot(
+        result["items"],
+        branch=normalized_branch or profile.get("branch") or profile.get("restaurant_branch") or "",
+        company=profile.get("company") or result.get("company") or "",
+    )
     return result
 
 
