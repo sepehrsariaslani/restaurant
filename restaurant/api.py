@@ -6782,6 +6782,14 @@ def _get_modifier_source_bom_doc(menu_item_doc, primary_bom_doc=None):
 def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=None, primary_bom_doc=None):
 	"""Resolve a BOM-variant modifier to the BOM selected in the POS sheet."""
 	primary_bom_doc = primary_bom_doc or _get_bom_doc(menu_item_doc)
+	requested_bom_name = str((customization or {}).get("bom_name") or "").strip()
+	requested_bom_doc = None
+	if requested_bom_name:
+		bom_meta = frappe.db.get_value("BOM", requested_bom_name, ["item", "docstatus", "is_active"], as_dict=True) or {}
+		valid_items = {str(menu_item_doc.name or "").strip(), str(menu_item_doc.item_code or "").strip()}
+		if bom_meta.get("item") not in valid_items or cint(bom_meta.get("docstatus") or 0) != 1 or not cint(bom_meta.get("is_active") or 0):
+			frappe.throw(_("فرمول انتخاب‌شده برای این کالا معتبر یا فعال نیست."))
+		requested_bom_doc = frappe.get_doc("BOM", requested_bom_name)
 	groups = modifier_groups or []
 	group_map = {
 		str(group.get("group_name") or "").strip(): group
@@ -6820,8 +6828,10 @@ def _resolve_selected_bom_variant(menu_item_doc, customization, modifier_groups=
 			or not cint(bom_meta.get("is_active") or 0)
 		):
 			frappe.throw(_("BOM گونه انتخاب‌شده برای این محصول معتبر نیست: {0}").format(option_name))
+		if requested_bom_doc and requested_bom_doc.name != bom_name:
+			frappe.throw(_("فرمول انتخاب‌شده با گزینهٔ Modifier سازگار نیست."))
 		return frappe.get_doc("BOM", bom_name)
-	return primary_bom_doc
+	return requested_bom_doc or primary_bom_doc
 
 
 def _bom_component_price_total(bom_doc):
@@ -9373,8 +9383,9 @@ def _normalize_selected_alternatives(raw_alternatives):
 	return [{"ingredient_key": key, "alternative_item": value} for key, value in normalized.items()]
 
 
-def _normalize_ingredient_adjustments(menu_doc, customization):
-	ingredient_rows = _get_bom_ingredient_rows(menu_doc)
+def _normalize_ingredient_adjustments(menu_doc, customization, ingredient_rows=None):
+	if ingredient_rows is None:
+		ingredient_rows = _get_bom_ingredient_rows(menu_doc)
 	normalized = {}
 
 	explicit_rows = customization.get("ingredient_adjustments") or []
@@ -9808,7 +9819,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 	unit_price = base_price
 
 	ingredient_rows = _get_bom_ingredient_rows(menu_doc, bom_doc=selected_bom_doc)
-	adjustments = _normalize_ingredient_adjustments(menu_doc, customization)
+	adjustments = _normalize_ingredient_adjustments(menu_doc, customization, ingredient_rows=ingredient_rows)
 	ingredient_keys = {
 		(row.get("ingredient_name") or "").strip()
 		for row in ingredient_rows
@@ -10329,6 +10340,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 	}
 	nutrition_line_payload = _nutrition_payload_from_totals(nutrition_line_totals)
 	normalized_customization = {
+		**({"bom_name": selected_bom} if customization.get("bom_name") else {}),
 		"ingredient_adjustments": normalized_adjustments,
 		"selected_modifiers": normalized_selected_modifiers,
 		"selected_alternatives": normalized_selected_alternatives,

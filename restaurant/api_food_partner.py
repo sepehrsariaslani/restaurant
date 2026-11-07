@@ -175,6 +175,15 @@ def get_snappfood_modifier_groups(item_name=""):
 
 
 @frappe.whitelist()
+def get_snappfood_bom_alternatives(item_name=""):
+	from restaurant.api import _ensure_management_access
+	from restaurant.snapp_sync import get_snappfood_bom_alternatives as _get_bom_alternatives
+
+	_ensure_management_access()
+	return _get_bom_alternatives(item_name=item_name)
+
+
+@frappe.whitelist()
 def get_snappfood_product_toppings(variation_id="", parent_item=""):
 	from restaurant.api import _ensure_management_access
 	from restaurant.snapp_sync import get_snappfood_product_toppings as _get_product_toppings
@@ -219,6 +228,7 @@ def save_snappfood_modifier_mapping(payload=None):
 		group_name=payload.get("group_name") or "",
 		option_name=payload.get("option_name") or "",
 		mapping_mode=payload.get("mapping_mode") or "modifier",
+		customization=payload.get("customization"),
 		product_id=payload.get("product_id") or "",
 		variation_id=payload.get("variation_id") or "",
 		product_hash_id=payload.get("product_hash_id") or "",

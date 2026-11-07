@@ -1263,18 +1263,35 @@ def _food_partner_modifier_mapping_index():
 
 
 def _find_food_partner_modifier_mapping(identity, mapping_index=None):
-    fieldname, value = _food_partner_mapping_lookup_key(identity)
-    if not fieldname or not value:
-        return None
-    matches = (mapping_index if mapping_index is not None else _food_partner_modifier_mapping_index()).get(
-        (fieldname, value), []
-    )
+    identity = identity or {}
+    index = mapping_index if mapping_index is not None else _food_partner_modifier_mapping_index()
+    topping_id = str(identity.get("topping_id") or "").strip()
+    if topping_id:
+        matches = index.get(("topping_id", topping_id), [])
+    else:
+        # Food Partner can return the same option ID as variation_id in one
+        # response and menu_item_id/external_id in another. Only alias these
+        # option IDs; a parent product ID must not select a sibling option.
+        option_fields = ("variation_id", "menu_item_id", "external_id")
+        variation_id = str(identity.get("variation_id") or "").strip()
+        product_id = str(identity.get("product_id") or "").strip()
+        option_values = {str(identity.get(field) or "").strip() for field in option_fields} - {""}
+        if variation_id and variation_id != product_id:
+            option_values.discard(product_id)
+        matches = []
+        for value in option_values:
+            for field in option_fields:
+                matches.extend(index.get((field, value), []))
+        if not option_values:
+            fieldname, value = _food_partner_mapping_lookup_key(identity)
+            matches = index.get((fieldname, value), []) if fieldname and value else []
     unique = {
         (
             row.get("parent_item"),
             row.get("group_name"),
             row.get("option_name"),
             row.get("mapping_mode") or "modifier",
+            json.dumps(row.get("customization") or {}, sort_keys=True, ensure_ascii=False),
         ): row
         for row in matches
     }
@@ -1385,6 +1402,55 @@ def get_snappfood_modifier_groups(item_name=""):
     }
 
 
+def get_snappfood_bom_alternatives(item_name=""):
+    """List the active submitted recipes that POS can use for this Item."""
+    item_name = str(item_name or "").strip()
+    if not item_name or not frappe.db.exists("Item", item_name):
+        raise frappe.ValidationError("کالای پایه برای انتخاب فرمول معتبر نیست.")
+    item = frappe.get_doc("Item", item_name)
+    boms = frappe.get_all(
+        "BOM", filters={"item": item_name, "docstatus": 1, "is_active": 1},
+        fields=["name", "is_default"], order_by="is_default desc, modified desc",
+        limit_page_length=0, ignore_permissions=True,
+    )
+    return {"status": "success", "item": item_name, "item_slug": item.get("restaurant_slug") or item_name, "boms": boms}
+
+
+def _validate_food_partner_customization(parent_item, customization):
+    from restaurant import api
+
+    if isinstance(customization, str):
+        customization = frappe.parse_json(customization)
+    if not isinstance(customization, dict):
+        raise frappe.ValidationError("انتخاب‌های فرمول معتبر نیستند.")
+    bom_name = str(customization.get("bom_name") or "").strip()
+    bom_meta = frappe.db.get_value("BOM", bom_name, ["item", "docstatus", "is_active"], as_dict=True) if bom_name else None
+    if not bom_meta or bom_meta.get("item") != parent_item or cint(bom_meta.get("docstatus")) != 1 or not cint(bom_meta.get("is_active")):
+        raise frappe.ValidationError("فرمول انتخاب‌شده برای کالای پایه معتبر یا فعال نیست.")
+    choices = customization.get("selected_alternatives") or []
+    if not isinstance(choices, list):
+        raise frappe.ValidationError("فهرست مواد جایگزین معتبر نیست.")
+    item = frappe.get_doc("Item", parent_item)
+    bom = frappe.get_doc("BOM", bom_name)
+    ingredients = api._get_bom_ingredient_rows(item, bom_doc=bom)
+    normalized = []
+    seen = set()
+    for choice in choices:
+        if not isinstance(choice, dict):
+            raise frappe.ValidationError("انتخاب مادهٔ جایگزین معتبر نیست.")
+        ingredient_key = str(choice.get("ingredient_key") or "").strip()
+        alternative_item = str(choice.get("alternative_item") or "").strip()
+        matches = [row for row in ingredients if str(row.get("ingredient_name") or "").strip() == ingredient_key]
+        if not ingredient_key or ingredient_key in seen or len(matches) != 1:
+            raise frappe.ValidationError("مادهٔ انتخاب‌شده در فرمول یکتا و معتبر نیست.")
+        option = next((row for row in matches[0].get("alternative_options") or [] if row.get("alternative_item") == alternative_item), None)
+        if not option or cint(option.get("is_selectable", 1)) != 1 or cint(option.get("disabled") or 0) or cint(option.get("item_disabled") or 0):
+            raise frappe.ValidationError("مادهٔ جایگزین انتخاب‌شده برای این فرمول قابل استفاده نیست.")
+        seen.add(ingredient_key)
+        normalized.append({"ingredient_key": ingredient_key, "alternative_item": alternative_item})
+    return {"bom_name": bom_name, "selected_alternatives": normalized}
+
+
 def save_snappfood_modifier_mapping(
     item_name="",
     parent_item="",
@@ -1397,14 +1463,15 @@ def save_snappfood_modifier_mapping(
     variation_hash_id="",
     menu_item_id="",
     topping_id="",
+    customization=None,
 ):
     """Persist a Food Partner identity as a BOM option on its native base Item."""
     parent_item = str(parent_item or "").strip()
     group_name = str(group_name or "").strip()
     option_name = str(option_name or "").strip()
     mapping_mode = str(mapping_mode or "modifier").strip().lower()
-    if mapping_mode not in {"modifier", "item_modifier"}:
-        mapping_mode = "modifier"
+    if mapping_mode not in {"modifier", "item_modifier", "item_customization"}:
+        raise frappe.ValidationError("روش نگاشت معتبر نیست.")
     if not parent_item or not frappe.db.exists("Item", parent_item):
         raise frappe.ValidationError("کالای اصلی Modifier معتبر نیست.")
     if not _has_field("Item", FOOD_PARTNER_MODIFIER_MAPPINGS_FIELD):
@@ -1422,14 +1489,18 @@ def save_snappfood_modifier_mapping(
     if not lookup_field or not lookup_value:
         raise frappe.ValidationError("شناسهٔ این گزینه در پاسخ Food Partner موجود نیست.")
 
-    context = get_snappfood_modifier_groups(parent_item)
-    selected_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
-    selected_option = next(
-        (row for row in (selected_group or {}).get("options") or [] if row.get("name") == option_name),
-        None,
-    )
-    if not selected_group or not selected_option:
-        raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی این کالا یا فرمول فعال آن موجود نیست.")
+    selected_group = selected_option = {}
+    if mapping_mode == "item_customization":
+        if topping_id:
+            raise frappe.ValidationError("نگاشت فرمول برای افزودنی جداگانه مجاز نیست.")
+        customization = _validate_food_partner_customization(parent_item, customization)
+        context = {"item_name": frappe.db.get_value("Item", parent_item, "item_name") or parent_item}
+    else:
+        context = get_snappfood_modifier_groups(parent_item)
+        selected_group = next((row for row in context.get("groups") or [] if row.get("name") == group_name), None)
+        selected_option = next((row for row in (selected_group or {}).get("options") or [] if row.get("name") == option_name), None)
+        if not selected_group or not selected_option:
+            raise frappe.ValidationError("گروه یا گزینهٔ انتخاب‌شده روی این کالا یا فرمول فعال آن موجود نیست.")
 
     all_items = frappe.get_all(
         "Item",
@@ -1483,6 +1554,7 @@ def save_snappfood_modifier_mapping(
             "identity": identity,
             "parent_item": parent_item,
             "mapping_mode": mapping_mode,
+            **({"customization": customization} if mapping_mode == "item_customization" else {}),
             "group_name": group_name,
             "group_title": selected_group.get("title") or group_name,
             "option_name": option_name,
@@ -1506,6 +1578,7 @@ def save_snappfood_modifier_mapping(
         "parent_item": parent_item,
         "parent_item_name": context.get("item_name") or parent_item,
         "mapping_mode": mapping_mode,
+        **({"customization": customization} if mapping_mode == "item_customization" else {}),
         "group_name": group_name,
         "group_title": selected_group.get("title") or group_name,
         "option_name": option_name,
@@ -1963,7 +2036,7 @@ def _build_snapp_order_preview(
         }
         mapped_modifier = _find_food_partner_modifier_mapping(mapping_identity, modifier_mapping_index)
         is_item_modifier_mapping = bool(
-            mapped_modifier and mapped_modifier.get("mapping_mode") == "item_modifier"
+            mapped_modifier and mapped_modifier.get("mapping_mode") in {"item_modifier", "item_customization"}
         )
         mapped_item = (
             {
@@ -2000,9 +2073,10 @@ def _build_snapp_order_preview(
                         "option_label": mapped_modifier.get("option_label") or mapped_modifier.get("option_name") or "",
                         "mapping_mode": mapped_modifier.get("mapping_mode") or "modifier",
                     }
-                    if mapped_modifier
+                    if mapped_modifier and mapped_modifier.get("mapping_mode") != "item_customization"
                     else None
                 ),
+                "mapped_customization": mapped_modifier if mapped_modifier and mapped_modifier.get("mapping_mode") == "item_customization" else None,
             }
         )
     return {
@@ -2043,6 +2117,55 @@ def _select_snapp_orders_for_import(raw_orders, order_ids, max_import=3):
     return selected, missing
 
 
+def _snapp_order_import_state(order_id):
+    """Keep cancelled history, but never replace an order with live dependencies."""
+    order_fields = ["name", "docstatus"]
+    if _has_column("Sales Order", "restaurant_status"):
+        order_fields.append("restaurant_status")
+    orders = frappe.get_all(
+        "Sales Order", filters={"restaurant_external_order_id": order_id},
+        fields=order_fields, order_by="modified desc", ignore_permissions=True,
+        limit_page_length=0,
+    ) if _has_column("Sales Order", "restaurant_external_order_id") else []
+    active = next((row for row in orders if cint(row.get("docstatus")) != 2), None)
+    if active:
+        if str(active.get("restaurant_status") or "").lower() == "cancelled":
+            return {"existing_order": active["name"], "cancelled_order": "", "blocked": "لغو سفارش فروش قبلی کامل نشده است؛ ابتدا پاک‌سازی آن را بررسی کنید."}
+        return {"existing_order": active["name"], "cancelled_order": "", "blocked": ""}
+
+    order_names = [row["name"] for row in orders]
+    invoices = frappe.get_all(
+        "Sales Invoice", filters={"restaurant_external_order_id": order_id},
+        fields=["name", "docstatus"], ignore_permissions=True, limit_page_length=0,
+    ) if _has_column("Sales Invoice", "restaurant_external_order_id") else []
+    invoice_names = {row["name"] for row in invoices}
+    if any(cint(row.get("docstatus")) != 2 for row in invoices):
+        return {"existing_order": order_names[0] if order_names else "", "cancelled_order": "", "blocked": "فاکتور قبلی هنوز لغو نشده است."}
+
+    def linked(doctype, field, values):
+        if not values or not _has_column(doctype, field):
+            return []
+        return frappe.get_all(doctype, filters={field: ["in", list(values)]}, pluck="parent" if doctype in ("Sales Invoice Item", "Delivery Note Item", "Payment Entry Reference") else "name", ignore_permissions=True, limit_page_length=0)
+
+    def has_live(doctype, names):
+        return bool(names and frappe.db.exists(doctype, {"name": ["in", list(set(names))], "docstatus": ["!=", 2]}))
+
+    invoice_names.update(linked("Sales Invoice Item", "sales_order", order_names))
+    delivery_names = linked("Delivery Note Item", "against_sales_order", order_names)
+    work_orders = linked("Work Order", "sales_order", order_names)
+    stock_entries = linked("Stock Entry", "work_order", work_orders)
+    payments = []
+    if _has_column("Payment Entry Reference", "reference_name"):
+        for reference_type, names in (("Sales Order", order_names), ("Sales Invoice", invoice_names)):
+            if names:
+                payments.extend(frappe.get_all("Payment Entry Reference", filters={"reference_doctype": reference_type, "reference_name": ["in", list(names)]}, pluck="parent", ignore_permissions=True, limit_page_length=0))
+    checks = (("Sales Invoice", "فاکتور فروش", invoice_names), ("Delivery Note", "رسید تحویل", delivery_names), ("Work Order", "دستور کار", work_orders), ("Stock Entry", "سند انبار", stock_entries), ("Payment Entry", "سند پرداخت", payments), ("Restaurant Production Ticket", "برگهٔ تولید", linked("Restaurant Production Ticket", "sales_order", order_names)), ("Restaurant POS Payment Log", "ثبت پرداخت صندوق", linked("Restaurant POS Payment Log", "sales_order", order_names)))
+    for doctype, label, names in checks:
+        if has_live(doctype, names):
+            return {"existing_order": order_names[0] if order_names else "", "cancelled_order": "", "blocked": f"{label} وابسته هنوز لغو یا پاک‌سازی نشده است."}
+    return {"existing_order": "", "cancelled_order": order_names[0] if order_names else "", "blocked": ""}
+
+
 def preview_snapp_orders(from_date=None, to_date=None, settings=None):
     """Fetch a date range without writing orders, invoices, customers or items."""
     cfg = settings if settings is not None else _get_settings()
@@ -2064,29 +2187,26 @@ def preview_snapp_orders(from_date=None, to_date=None, settings=None):
                 raw_order,
                 amount_multiplier=cfg.get("amount_multiplier") or 1,
             )
-            existing_order = ""
+            state = _snapp_order_import_state(normalized["order_id"])
+            existing_order = state["existing_order"]
             existing_invoice = ""
-            if _has_column("Sales Order", "restaurant_external_order_id"):
-                existing_order = frappe.db.get_value(
-                    "Sales Order",
-                    {"restaurant_external_order_id": normalized["order_id"]},
-                    "name",
-                ) or ""
             if _has_column("Sales Invoice", "restaurant_external_order_id"):
                 existing_invoice = frappe.db.get_value(
                     "Sales Invoice",
-                    {"restaurant_external_order_id": normalized["order_id"]},
+                    {"restaurant_external_order_id": normalized["order_id"], "docstatus": ["!=", 2]},
                     "name",
                 ) or ""
-            previews.append(
-                _build_snapp_order_preview(
-                    normalized,
-                    existing_order,
-                    existing_invoice,
-                    local_items=local_items,
-                    modifier_mapping_index=modifier_mapping_index,
-                )
+            preview = _build_snapp_order_preview(
+                normalized,
+                existing_order,
+                existing_invoice,
+                local_items=local_items,
+                modifier_mapping_index=modifier_mapping_index,
             )
+            preview["already_imported"] = bool(existing_order or state["blocked"])
+            preview["previous_cancelled_order"] = state["cancelled_order"]
+            preview["reimport_blocked_reason"] = state["blocked"]
+            previews.append(preview)
         except Exception:
             errors.append({"order_id": _raw_snapp_order_id(raw_order), "error": frappe.get_traceback(with_context=False)})
     return {
@@ -3917,8 +4037,17 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
     elif not menu_rows:
         menu_rows = _build_known_menu_rows(local_items)
     mappings = []
+    modifier_index = _food_partner_modifier_mapping_index()
     for row in menu_rows:
-        exact = _find_mapped_local_item(row, local_items)
+        modifier = _find_food_partner_modifier_mapping(row, modifier_index)
+        if modifier and modifier.get("mapping_mode") in {"item_modifier", "item_customization"}:
+            exact = {
+                "name": modifier.get("parent_item") or "",
+                "item_code": modifier.get("parent_item_code") or modifier.get("parent_item") or "",
+                "item_name": modifier.get("parent_item_name") or modifier.get("parent_item") or "",
+            }
+        else:
+            exact = _find_mapped_local_item(row, local_items)
         if exact:
             suggested = exact
             match_score = 1
@@ -3947,6 +4076,8 @@ def get_snappfood_mapping_rows(search="", refresh_menu=0):
             {
                 **row,
                 "mapped_item": exact,
+                "mapped_modifier": modifier if modifier and modifier.get("mapping_mode") == "item_modifier" else None,
+                "mapped_customization": modifier if modifier and modifier.get("mapping_mode") == "item_customization" else None,
                 "mapping_status": "Mapped" if exact else "Unmapped",
                 "suggested_item": suggested,
                 "match_score": round(match_score, 3),
@@ -4023,15 +4154,16 @@ def save_snappfood_item_mapping(
         values["restaurant_external_mapping_status"] = "Mapped"
     if not values:
         raise frappe.ValidationError("فیلدهای اتصال اسنپ‌فود هنوز روی Item ساخته نشده‌اند.")
-    _remove_food_partner_modifier_mapping(
-        {
-            "menu_item_id": menu_item_id,
-            "variation_id": variation_id,
-            "product_id": product_id,
-            "product_hash_id": product_hash_id,
-            "variation_hash_id": variation_hash_id,
-        }
-    )
+    if not map_product_group:
+        _remove_food_partner_modifier_mapping(
+            {
+                "menu_item_id": menu_item_id,
+                "variation_id": variation_id,
+                "product_id": product_id,
+                "product_hash_id": product_hash_id,
+                "variation_hash_id": variation_hash_id,
+            }
+        )
     frappe.db.set_value("Item", item_name, values, update_modified=True)
     if commit:
         frappe.db.commit()
@@ -5118,7 +5250,7 @@ def _create_sales_order(order_payload):
     for line in source_items:
         modifier_mapping = _find_food_partner_modifier_mapping(line, modifier_mapping_index)
         is_item_modifier_mapping = bool(
-            modifier_mapping and modifier_mapping.get("mapping_mode") == "item_modifier"
+            modifier_mapping and modifier_mapping.get("mapping_mode") in {"item_modifier", "item_customization"}
         )
         item_code = str(modifier_mapping.get("parent_item") or "").strip() if modifier_mapping else _resolve_item_code(line)
         if modifier_mapping and not frappe.db.exists("Item", item_code):
@@ -5148,7 +5280,9 @@ def _create_sales_order(order_payload):
             # origin/gross price is preserved on the external snapshots and
             # must not be billed again as a second discount.
             cart_item["external_unit_price"] = flt(line.get("unit_price"))
-        if is_item_modifier_mapping:
+        if modifier_mapping and modifier_mapping.get("mapping_mode") == "item_customization":
+            cart_item["customization"] = _validate_food_partner_customization(item_code, modifier_mapping.get("customization"))
+        elif is_item_modifier_mapping:
             mapping = modifier_mapping or {}
             cart_item.setdefault("customization", {}).setdefault("selected_modifiers", []).append(
                 {
@@ -5546,7 +5680,19 @@ def _write_debug_json(payload):
         json.dump(payload, handle, ensure_ascii=False, indent=4)
 
 
-def sync_snapp_orders(
+def sync_snapp_orders(*args, **kwargs):
+    # Serialize all import entry points until their transaction is committed.
+    # A site-specific Redis lock also protects orders with no existing row.
+    lock = frappe.cache().lock(frappe.cache().make_key("food_partner_order_import"), timeout=3600, blocking_timeout=5)
+    if not lock.acquire():
+        return {"status": "error", "reason": "ورود سفارش‌های Food Partner هم‌اکنون در حال انجام است؛ کمی بعد دوباره تلاش کنید."}
+    try:
+        return _sync_snapp_orders_locked(*args, **kwargs)
+    finally:
+        lock.release()
+
+
+def _sync_snapp_orders_locked(
     trigger="scheduler",
     from_datetime=None,
     to_datetime=None,
@@ -5628,15 +5774,19 @@ def sync_snapp_orders(
             result["sales_orders"] = []
 
         for raw_order in rows:
+            frappe.db.savepoint("food_partner_order")
             try:
                 normalized = normalize_snapp_order(raw_order, amount_multiplier=settings.get("amount_multiplier") or 1)
-                existing = None
-                if _has_column("Sales Order", "restaurant_external_order_id"):
-                    existing = frappe.db.get_value(
-                        "Sales Order",
-                        {"restaurant_external_order_id": normalized["order_id"]},
-                        "name",
-                    )
+                state = _snapp_order_import_state(normalized["order_id"])
+                existing = state["existing_order"]
+                if state["blocked"]:
+                    raise frappe.ValidationError(state["blocked"])
+
+                if state["cancelled_order"] and (not requested_order_ids or normalized["status"] == "cancelled"):
+                    result["skipped_count"] += 1
+                    if requested_order_ids:
+                        result["sales_orders"].append({"order_id": normalized["order_id"], "sales_order": state["cancelled_order"], "action": "cancelled"})
+                    continue
 
                 if existing:
                     # ``only_new`` controls line reconciliation/backfill; it
@@ -5687,25 +5837,25 @@ def sync_snapp_orders(
                     continue
 
                 sales_order_name, action = _create_sales_order(normalized)
-                if requested_order_ids:
-                    result["sales_orders"].append(
-                        {
-                            "order_id": normalized["order_id"],
-                            "sales_order": sales_order_name,
-                            "action": action,
-                        }
-                    )
+                invoice_created = False
                 if settings.get("auto_sync_invoices") and action != "cancelled" and order_is_approved(sales_order_name):
                     invoice_result = _ensure_sales_invoice_for_order(sales_order_name, normalized)
-                    if invoice_result.get("status") == "created":
-                        result.setdefault("invoices_created_count", 0)
-                        result["invoices_created_count"] += 1
+                    invoice_created = invoice_result.get("status") == "created"
                 _notify_new_order(sales_order_name, normalized)
+                if invoice_created:
+                    result["invoices_created_count"] += 1
+                if requested_order_ids:
+                    result["sales_orders"].append({
+                        "order_id": normalized["order_id"],
+                        "sales_order": sales_order_name,
+                        "action": action,
+                    })
                 if action == "cancelled":
                     result["cancelled_count"] += 1
                 else:
                     result["created_count"] += 1
             except Exception:
+                frappe.db.rollback(save_point="food_partner_order")
                 result["failed_count"] += 1
                 result["errors"].append(
                     {

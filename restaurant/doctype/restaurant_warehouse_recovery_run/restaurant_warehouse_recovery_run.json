@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:WRR-{#####}",
+ "creation": "2026-10-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "branch",
+  "source_warehouse",
+  "target_warehouse",
+  "state",
+  "phase",
+  "preview_fingerprint",
+  "preview_token",
+  "requested_by",
+  "started_at",
+  "finished_at",
+  "summary_json",
+  "rows"
+ ],
+ "fields": [
+  {"fieldname": "company", "fieldtype": "Link", "label": "شرکت", "options": "Company", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "branch", "fieldtype": "Data", "label": "شعبه", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "source_warehouse", "fieldtype": "Link", "label": "انبار مبدأ", "options": "Warehouse", "reqd": 1},
+  {"fieldname": "target_warehouse", "fieldtype": "Link", "label": "انبار مقصد", "options": "Warehouse", "reqd": 1},
+  {"fieldname": "state", "fieldtype": "Select", "label": "وضعیت", "options": "Previewed\nRunning\nCompleted\nCompleted With Blocks\nFailed", "default": "Previewed", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "phase", "fieldtype": "Select", "label": "مرحله", "options": "Cancel\nAmend\nRepair Orders\nReconcile\nDone", "default": "Cancel", "reqd": 1},
+  {"fieldname": "preview_fingerprint", "fieldtype": "Data", "label": "اثر انگشت پیش‌نمایش", "reqd": 1, "read_only": 1},
+  {"fieldname": "preview_token", "fieldtype": "Data", "label": "شناسهٔ پیش‌نمایش", "reqd": 1, "read_only": 1},
+  {"fieldname": "requested_by", "fieldtype": "Link", "label": "درخواست‌کننده", "options": "User", "reqd": 1, "read_only": 1},
+  {"fieldname": "started_at", "fieldtype": "Datetime", "label": "شروع", "read_only": 1},
+  {"fieldname": "finished_at", "fieldtype": "Datetime", "label": "پایان", "read_only": 1},
+  {"fieldname": "summary_json", "fieldtype": "Long Text", "label": "خلاصهٔ اجرا", "read_only": 1},
+  {"fieldname": "rows", "fieldtype": "Table", "label": "اسناد", "options": "Restaurant Warehouse Recovery Row"}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Warehouse Recovery Run",
+ "owner": "Administrator",
+ "permissions": [
+  {"read": 1, "write": 1, "create": 1, "delete": 0, "report": 1, "role": "System Manager"},
+  {"read": 1, "write": 1, "create": 1, "delete": 0, "role": "Restaurant Manager"}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

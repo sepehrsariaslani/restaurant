@@ -481,6 +481,32 @@ def _management_unavailable_items(branch=""):
     return payload
 
 
+def _offline_pos_catalog_prices(legacy, branch=""):
+    """Sign every selectable POS item, including variants and later pages."""
+    fields = ["name", "item_code", "restaurant_slug", "restaurant_base_price", "standard_rate"]
+    parents = frappe.get_all(
+        "Item", filters=legacy._core_item_filters(branch), fields=fields,
+        ignore_permissions=True, limit_page_length=0,
+    )
+    rows = list(parents or [])
+    if legacy._has_column("Item", "variant_of"):
+        parent_names = [row.get("name") for row in rows if row.get("name")]
+        for start in range(0, len(parent_names), 200):
+            rows.extend(frappe.get_all(
+                "Item",
+                filters={"variant_of": ["in", parent_names[start:start + 200]], "disabled": 0, "restaurant_enabled": 1},
+                fields=fields, ignore_permissions=True, limit_page_length=0,
+            ) or [])
+    price_list = legacy._get_default_selling_price_list_name() or ""
+    priced = []
+    for row in rows:
+        rate = legacy._get_default_item_price_rate(row, price_list=price_list)
+        if rate is None:
+            rate = flt(row.get("restaurant_base_price")) or flt(row.get("standard_rate"))
+        priced.append({"name": row.get("name"), "item_code": row.get("item_code"), "slug": row.get("restaurant_slug"), "base_price": rate})
+    return priced
+
+
 @frappe.whitelist()
 def get_management_pos_boot_reliable(branch=None, limit_start=0, limit_page_length=1000, items_only=0, **kwargs):
     legacy = _legacy_api()
@@ -500,15 +526,10 @@ def get_management_pos_boot_reliable(branch=None, limit_start=0, limit_page_leng
     if cint(items_only):
         return result
     profile = result.get("pos_profile") if isinstance(result.get("pos_profile"), dict) else {}
+    snapshot_branch = normalized_branch or profile.get("branch") or profile.get("restaurant_branch") or ""
     result["offline_price_snapshot"] = _sign_offline_price_snapshot(
-        result["items"],
-        branch=normalized_branch or profile.get("branch") or profile.get("restaurant_branch") or "",
-        company=profile.get("company") or result.get("company") or "",
-    )
-    profile = result.get("pos_profile") if isinstance(result.get("pos_profile"), dict) else {}
-    result["offline_price_snapshot"] = _sign_offline_price_snapshot(
-        result["items"],
-        branch=normalized_branch or profile.get("branch") or profile.get("restaurant_branch") or "",
+        _offline_pos_catalog_prices(legacy, normalized_branch),
+        branch=snapshot_branch,
         company=profile.get("company") or result.get("company") or "",
     )
     return result
