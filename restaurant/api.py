@@ -6,6 +6,7 @@ import random
 import re
 import string
 import copy
+from contextlib import contextmanager
 from base64 import b64decode
 from collections import defaultdict
 from html import escape as html_escape
@@ -29,6 +30,7 @@ from restaurant.order_review import (
 	should_require_customer_order_review,
 )
 from restaurant.pos_print_config import clean_management_pos_print_profiles
+from restaurant.pos_custom_pricing import apply_custom_price_overrides
 from frappe.utils.password import set_encrypted_password
 from frappe.utils import (
 	add_days,
@@ -1348,6 +1350,7 @@ def _management_pos_profile_summary():
 		"warehouse": profile.get("warehouse") or "",
 		"selling_price_list": profile.get("selling_price_list") or "",
 		"currency": profile.get("currency") or _get_currency(),
+		"allow_rate_change": cint(profile.get("allow_rate_change") or 0),
 		"has_open_shift": bool(shift.get("name")),
 		"shift_name": shift.get("name") or "",
 		"shift_opened_at": shift.get("opened_at"),
@@ -5559,6 +5562,24 @@ def _create_sales_order(
 		line_calc = _recalculate_line(
 			menu_doc, cart_line.get("qty"), customization, branch_markup_percent=markup_percent
 		)
+		custom_price_overrides = cart_line.get("custom_price_overrides")
+		if _line_has_custom_price_overrides(cart_line):
+			if not getattr(frappe.local, "_restaurant_management_pos_custom_pricing", False):
+				frappe.throw(
+					_("Custom line prices can only be submitted from management POS."),
+					frappe.PermissionError,
+				)
+			if (
+				isinstance(offline_price_map, dict)
+				and menu_doc.name in offline_price_map
+			) or order_context.get("source") == "snapp_food":
+				frappe.throw(_("Custom line prices cannot be combined with an imported or signed offline price."))
+			try:
+				line_calc = apply_custom_price_overrides(
+					line_calc, custom_price_overrides, item_code=menu_doc.item_code
+				)
+			except ValueError as exc:
+				frappe.throw(str(exc), frappe.ValidationError)
 		if isinstance(offline_price_map, dict) and menu_doc.name in offline_price_map:
 			saved_rate = flt(cart_line.get("offline_unit_price"))
 			signed_floor = flt(offline_price_map.get(menu_doc.name))
@@ -5988,6 +6009,11 @@ def _create_sales_order(
 		setattr(so_doc, "total_commission", 0)
 
 	so_doc.insert(ignore_permissions=True)
+	if getattr(frappe.local, "_restaurant_employee_meal_idempotent_create", False) and _has_column("Sales Order", "reserve_stock"):
+		# ERPNext may auto-enable stock reservations from Stock Settings during insert.
+		# Staff meal entitlements must leave Bin and Stock Reservation Entry quantities alone.
+		frappe.db.set_value("Sales Order", so_doc.name, "reserve_stock", 0, update_modified=False)
+		so_doc.reserve_stock = 0
 
 	if _has_column("Sales Order", "restaurant_payload_json"):
 		so_doc.db_set("restaurant_payload_json", frappe.as_json(payload_snapshot))
@@ -10046,6 +10072,8 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 			selections.append(
 				{
 					"kind": selection_kind,
+					"ingredient_key": ingredient_name,
+					"item_code": selected_item_code if selected_alternative else "",
 					"label": selection_label,
 					"delta_price": delta_price,
 					"qty": 1,
@@ -10073,6 +10101,18 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 				"step_multiplier": step_multiplier,
 				"multiplier_qty": multiplier_qty if multiplier_qty > 0 else 0,
 				"pricing_rate": flt(selected_pricing.get("unit_rate") or selected_rate or 0),
+				"pricing_qty_in_stock_uom": flt(
+					selected_pricing.get("qty_in_stock_uom") or selected_component_qty
+				),
+				"base_qty_in_stock_uom": flt(
+					base_pricing.get("qty_in_stock_uom") or base_component_qty
+				),
+				"base_stock_uom": base_pricing.get("stock_uom") or row.get("qty_uom") or "",
+				"base_pricing_unit_rate": flt(base_pricing.get("unit_rate") or 0),
+				"base_pricing_total_price": flt(base_pricing.get("total_price") or 0),
+				"pricing_uom": selected_pricing.get("stock_uom")
+				or selected_pricing_uom
+				or selected_stock_uom,
 				"pricing_delta": delta_price,
 				"price_status": selected_pricing.get("price_status")
 				or base_pricing.get("price_status")
@@ -10225,6 +10265,7 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 				{
 					"ingredient_key": option_name,
 					"ingredient_label": option_label,
+					"modifier_group": group_name,
 					"item_code": option_item,
 					"item_name": frappe.db.get_value("Item", option_item, "item_name") or option_label,
 					"base_item_code": "",
@@ -10241,6 +10282,8 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 					"max_multiplier": option_max_qty * conversion_factor,
 					"step_multiplier": option_step * conversion_factor,
 					"pricing_rate": _valuation_rate_for_item(option_item),
+					"pricing_qty_in_stock_uom": selected_qty_in_stock_uom,
+					"pricing_uom": option_stock_uom or option_payload.get("option_uom") or "",
 					"pricing_delta": delta,
 					"stock_uom": option_stock_uom,
 					"authoring_uom": option_payload.get("option_uom") or "",
@@ -10271,6 +10314,12 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 				"item_code": option_item,
 				"replacement_for_item": replacement_for,
 				"alternative_bom": alternative_bom,
+				"unit_rate": flt(option_payload.get("unit_rate") or 0),
+				"pricing_qty_in_stock_uom": selected_qty_in_stock_uom,
+				"pricing_uom": option_payload.get("stock_uom")
+				or option_payload.get("option_uom")
+				or "",
+				"pricing_delta": delta,
 			}
 		)
 
@@ -10280,6 +10329,8 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 		selections.append(
 			{
 				"kind": "modifier",
+				"group": group_name,
+				"option": option_name,
 				"label": f"{group_map[group_name]['meta']['title']}: {option_label}{label_suffix}",
 				"delta_price": delta,
 				"qty": qty,
@@ -10326,6 +10377,15 @@ def _recalculate_line(menu_doc, quantity, customization, branch_markup_percent=0
 							"item_code": "",
 							"replacement_for_item": "",
 							"alternative_bom": "",
+							"unit_rate": flt(default_option.get("unit_rate") or 0),
+							"pricing_qty_in_stock_uom": (option_qty if option_qty > 0 else 1)
+							* flt(default_option.get("conversion_factor") or 1),
+							"pricing_uom": default_option.get("stock_uom")
+							or default_option.get("option_uom")
+							or "",
+							"pricing_delta": flt(default_option.get("unit_rate") or 0)
+							* (option_qty if option_qty > 0 else 1)
+							* flt(default_option.get("conversion_factor") or 1),
 						}
 					)
 		if count < cint(group["min_select"]):
@@ -12127,6 +12187,18 @@ def place_order(
 ):
 	customer_info = _parse_json(customer_info, {})
 	cart_items = _normalize_cart_items(items)
+	has_custom_price_overrides = any(_line_has_custom_price_overrides(row) for row in cart_items)
+	if has_custom_price_overrides:
+		if not getattr(frappe.local, "_restaurant_management_pos_custom_pricing", False):
+			frappe.throw(
+				_("Custom line prices can only be submitted from management POS."),
+				frappe.PermissionError,
+			)
+		if not cint((_management_pos_profile_summary() or {}).get("allow_rate_change") or 0):
+			frappe.throw(
+				_("The active POS Profile does not allow changing item rates."),
+				frappe.PermissionError,
+			)
 	order_type, resolved_delivery_mode = _resolve_order_type_and_delivery_mode(
 		order_type=order_type,
 		delivery_mode=delivery_mode,
@@ -16006,6 +16078,30 @@ def get_management_pos_boot(branch=None, limit_start=0, limit_page_length=300, i
 	}
 
 
+@contextmanager
+def _management_pos_custom_pricing():
+	"""Allow line price overrides only while a permission-checked POS endpoint runs."""
+	attribute = "_restaurant_management_pos_custom_pricing"
+	previous = getattr(frappe.local, attribute, False)
+	setattr(frappe.local, attribute, True)
+	try:
+		yield
+	finally:
+		if previous:
+			setattr(frappe.local, attribute, previous)
+		else:
+			try:
+				delattr(frappe.local, attribute)
+			except AttributeError:
+				pass
+
+
+def _line_has_custom_price_overrides(cart_line):
+	if not isinstance(cart_line, dict) or "custom_price_overrides" not in cart_line:
+		return False
+	return cart_line.get("custom_price_overrides") not in (None, "", {})
+
+
 def _create_pos_order_payload(payload, commit=True, requires_review=False):
     """Create the POS Sales Order and optionally leave the transaction open.
 
@@ -16017,6 +16113,12 @@ def _create_pos_order_payload(payload, commit=True, requires_review=False):
     payload = _parse_json(payload, {})
     if not isinstance(payload, dict):
         payload = {}
+    from restaurant.employee_meals import (
+        employee_meal_include_service_items,
+        ensure_employee_meal_entrypoint_allowed,
+    )
+
+    ensure_employee_meal_entrypoint_allowed(payload)
     customer_name = (payload.get("customer_name") or "POS Customer").strip()
     mobile = (payload.get("mobile") or "").strip()
     order_type = (payload.get("order_type") or "takeaway").strip()
@@ -16046,12 +16148,12 @@ def _create_pos_order_payload(payload, commit=True, requires_review=False):
         order_context["table"] = place
     order_context["guest_count"] = guest_count
 
-    with internal_order_creation():
+    with internal_order_creation(), _management_pos_custom_pricing():
         result = place_order(
             customer_info={"name": customer_name, "mobile": mobile},
             order_type=order_type, items=items,
             address=address, note=note,
-            include_service_items=1,
+            include_service_items=employee_meal_include_service_items(payload),
             order_context=order_context,
             financial_modifiers=financial_modifiers,
             totals=totals_payload,
@@ -16082,6 +16184,15 @@ def create_pos_order(payload):
     # ثبت سفارش: فقط SO بساز (بدون تولید، بدون پرداخت)
     _ensure_management_access()
     return _create_pos_order_payload(payload, commit=True)
+
+
+@frappe.whitelist()
+def list_management_pos_employee_meal_reservations(limit=100):
+	"""List today's unclaimed HRMS meal reservations for the active POS company."""
+	from restaurant.employee_meals import list_today_employee_meal_reservations
+	from restaurant import api as legacy
+
+	return list_today_employee_meal_reservations(legacy=legacy, limit=limit)
 
 
 @frappe.whitelist()
@@ -16826,6 +16937,8 @@ def create_management_pos_order(payload):
 	payload = _parse_json(payload, {})
 	if not isinstance(payload, dict):
 		payload = {}
+	from restaurant.employee_meals import ensure_employee_meal_entrypoint_allowed
+	ensure_employee_meal_entrypoint_allowed(payload)
 
 	customer_name = (payload.get("customer_name") or "POS Customer").strip()
 	mobile = (payload.get("mobile") or "").strip()
@@ -16835,7 +16948,7 @@ def create_management_pos_order(payload):
 	items = payload.get("items") or []
 	payment = _parse_json(payload.get("payment"), {})
 
-	with internal_order_creation():
+	with internal_order_creation(), _management_pos_custom_pricing():
 		result = place_order(
 			customer_info={"name": customer_name, "mobile": mobile},
 			order_type=order_type,
@@ -17015,6 +17128,17 @@ def purge_management_pos_order(order_name):
 	so_name = _resolve_sales_order_name(order_name)
 	if not so_name or not frappe.db.exists("Sales Order", so_name):
 		frappe.throw(_("Order not found."), frappe.DoesNotExistError)
+	employee_meal_order = frappe.get_doc("Sales Order", so_name)
+	if (
+		_has_column("Sales Order", "restaurant_employee_meal_reservation")
+		and employee_meal_order.get("restaurant_employee_meal_reservation")
+	):
+		from restaurant.employee_meals import is_employee_meal_order_delivered
+
+		if is_employee_meal_order_delivered(
+			employee_meal_order.get("restaurant_status"), employee_meal_order.get("per_delivered")
+		):
+			frappe.throw(_("Delivered employee meal orders cannot be purged."))
 
 	summary = {
 		"cleaned_records": {},
@@ -17092,6 +17216,12 @@ def purge_management_pos_order(order_name):
 	
 	# Finally Sales Order
 	_cancel_and_delete("Sales Order", [so_name])
+	if employee_meal_order.get("restaurant_employee_meal_reservation") and frappe.db.exists("Sales Order", so_name):
+		cancelled_order = frappe.get_doc("Sales Order", so_name)
+		if int(cancelled_order.docstatus or 0) == 2:
+			from restaurant.employee_meals import release_employee_meal_order
+
+			release_employee_meal_order(cancelled_order)
 
 	frappe.db.commit()
 	if summary["errors"]:
@@ -17121,9 +17251,18 @@ def void_management_pos_order(order_name, reason=None):
 
 	has_status = _has_column("Sales Order", "restaurant_status")
 	has_note = _has_column("Sales Order", "restaurant_note")
+	frappe.db.sql("select name from `tabSales Order` where name=%s for update", so_name)
 	doc = frappe.get_doc("Sales Order", so_name)
 	if _core_order_status(doc) == "delivered":
 		frappe.throw(_("Delivered orders cannot be voided."))
+	if (
+		_has_column("Sales Order", "restaurant_employee_meal_reservation")
+		and doc.get("restaurant_employee_meal_reservation")
+	):
+		from restaurant.employee_meals import is_employee_meal_order_delivered
+
+		if is_employee_meal_order_delivered(doc.get("restaurant_status"), doc.get("per_delivered")):
+			frappe.throw(_("Delivered employee meal orders cannot be voided."))
 
 	reason_text = (reason or "").strip()
 	if reason_text and has_note:
@@ -17135,6 +17274,8 @@ def void_management_pos_order(order_name, reason=None):
 		doc.cancel()
 	if has_status:
 		frappe.db.set_value("Sales Order", doc.name, "restaurant_status", "cancelled", update_modified=False)
+	from restaurant.employee_meals import release_employee_meal_order
+	release_employee_meal_order(doc)
 
 	frappe.db.commit()
 	return {

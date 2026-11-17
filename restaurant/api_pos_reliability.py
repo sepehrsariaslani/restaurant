@@ -629,6 +629,165 @@ def replay_offline_pos_order(payload=None):
             frappe.local._restaurant_pos_offline_price_map = previous_price_map
 
 
+@frappe.whitelist()
+def create_management_pos_order_reliable(payload=None):
+    """Create a management POS order once per client-generated request key.
+
+    The unique Sales Order key makes network retries safe. Price overrides still
+    pass through the regular management POS permission checks and server pricing.
+    """
+    legacy = _legacy_api()
+    legacy._ensure_management_access()
+    data = _parse_payload(payload)
+    client_order_key = _normalize_client_order_key(data.get("client_order_key"))
+    if not client_order_key:
+        frappe.throw(_("Client order key is required for POS order creation."))
+    if not _client_key_field_ready():
+        frappe.throw(_("POS reliability fields are not installed. Run bench migrate first."))
+
+    existing = _find_order_by_client_key(client_order_key)
+    if existing:
+        return {
+            "status": "existing",
+            "order_id": existing,
+            "client_order_key": client_order_key,
+        }
+
+    data["client_order_key"] = client_order_key
+    try:
+        from restaurant.employee_meals import (
+            employee_meal_creation_context,
+            link_employee_meal_order,
+            lock_and_validate_employee_meal_order,
+        )
+
+        meal_claim = lock_and_validate_employee_meal_order(
+            data, client_order_key=client_order_key, legacy=legacy
+        )
+        if meal_claim and meal_claim.get("idempotent_replay"):
+            return {
+                "status": "existing",
+                "order_id": meal_claim["order_id"],
+                "client_order_key": client_order_key,
+            }
+
+        if meal_claim:
+            with employee_meal_creation_context():
+                result = legacy._create_pos_order_payload(data, commit=False)
+        else:
+            result = legacy._create_pos_order_payload(data, commit=False)
+        order_id = _extract_order_id(result)
+        if not order_id:
+            frappe.throw(_("POS order was created without an order id."))
+        link_employee_meal_order(meal_claim, order_id)
+        frappe.db.set_value(
+            "Sales Order",
+            order_id,
+            CLIENT_ORDER_KEY_FIELD,
+            client_order_key,
+            update_modified=False,
+        )
+        frappe.db.commit()
+        return {
+            "status": "created",
+            "order_id": order_id,
+            "result": result,
+            "client_order_key": client_order_key,
+        }
+    except Exception:
+        frappe.db.rollback()
+        existing = _find_order_by_client_key(client_order_key)
+        if existing:
+            return {
+                "status": "existing",
+                "order_id": existing,
+                "client_order_key": client_order_key,
+            }
+        raise
+
+
+@frappe.whitelist()
+def preview_management_pos_order(payload=None):
+    """Calculate a read-only management POS order preview with native pricing."""
+    legacy = _legacy_api()
+    legacy._ensure_management_access()
+    data = _parse_payload(payload)
+    items = data.get("items") or []
+    if not isinstance(items, list) or not items or len(items) > 100:
+        frappe.throw(_("POS preview requires between 1 and 100 item lines."), frappe.ValidationError)
+
+    profile = legacy._management_pos_profile_summary() or {}
+    company = str(profile.get("company") or "").strip()
+    if not company or not frappe.db.exists("Company", company):
+        frappe.throw(_("An active POS Profile with a valid company is required."), frappe.ValidationError)
+    requested_company = str(data.get("company") or "").strip()
+    if requested_company and requested_company != company:
+        frappe.throw(_("POS order company must match the active POS Profile."), frappe.PermissionError)
+    has_overrides = any(
+        isinstance(row, dict) and row.get("custom_price_overrides") not in (None, "", {})
+        for row in items
+    )
+    if has_overrides and not int(profile.get("allow_rate_change") or 0):
+        frappe.throw(_("The active POS Profile does not allow changing item rates."), frappe.PermissionError)
+
+    employee_meal_preview = None
+    from restaurant.employee_meals import has_employee_meal_payload, lock_and_validate_employee_meal_order
+    if has_employee_meal_payload(data):
+        preview_key = "preview-" + hashlib.sha256(
+            f"{frappe.session.user}\0{data.get('reservation') or ''}".encode("utf-8")
+        ).hexdigest()[:48]
+        employee_meal_preview = lock_and_validate_employee_meal_order(
+            data,
+            client_order_key=preview_key,
+            legacy=legacy,
+        )
+
+    preview_items = []
+    grand_total = 0.0
+    for row in items:
+        if not isinstance(row, dict):
+            frappe.throw(_("Each POS line must be an object."), frappe.ValidationError)
+        item_doc = legacy._get_item_doc_by_payload(row)
+        customization = legacy._extract_customization(row.get("customization") or {})
+        variant_doc = legacy._resolve_variant_item_for_customization(item_doc, customization or {})
+        if variant_doc:
+            item_doc = variant_doc
+        branch = str(row.get("branch") or item_doc.get("restaurant_branch") or "DEFAULT").strip() or "DEFAULT"
+        line = legacy._recalculate_line(
+            item_doc,
+            row.get("qty"),
+            customization,
+            branch_markup_percent=legacy._get_branch_pricing_markup_percent(branch),
+        )
+        overrides = row.get("custom_price_overrides")
+        if overrides not in (None, "", {}):
+            try:
+                with legacy._management_pos_custom_pricing():
+                    line = legacy.apply_custom_price_overrides(
+                        line, overrides, item_code=item_doc.item_code or item_doc.name
+                    )
+            except ValueError as exc:
+                frappe.throw(str(exc), frappe.ValidationError)
+        preview_items.append({
+            "item_code": item_doc.item_code or item_doc.name,
+            "qty": line.get("qty"),
+            "unit_price": line.get("unit_price"),
+            "line_total": line.get("line_total"),
+            "customization": line.get("normalized_customization") or {},
+            "pricing_breakdown": line.get("pricing_breakdown") or {},
+        })
+        grand_total += flt(line.get("line_total") or 0)
+
+    return {
+        "company": company,
+        "pos_profile": profile.get("name") or "",
+        "items": preview_items,
+        "grand_total": grand_total,
+        "custom_prices_allowed": bool(int(profile.get("allow_rate_change") or 0)),
+        "employee_meal": employee_meal_preview or None,
+    }
+
+
 def _set_item_field_if_available(legacy, item_doc, fieldname, value):
     if legacy._has_column("Item", fieldname):
         item_doc.set(fieldname, value)

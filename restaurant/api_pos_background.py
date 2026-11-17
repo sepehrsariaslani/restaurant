@@ -198,7 +198,13 @@ def enqueue_pos_checkout(payload=None, deliver_after=0):
         client_key = f"pos-bg-{uuid.uuid4().hex}"
         data["client_order_key"] = client_key
 
-    replay = _reliability_api().replay_offline_pos_order(data)
+    from restaurant.employee_meals import employee_meal_checkout_route
+
+    reliability = _reliability_api()
+    if employee_meal_checkout_route(data) == "reliable":
+        replay = reliability.create_management_pos_order_reliable(data)
+    else:
+        replay = reliability.replay_offline_pos_order(data)
     order_id = str(
         (replay or {}).get("order_id")
         or ((replay or {}).get("result") or {}).get("order_id")
