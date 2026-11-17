@@ -3,9 +3,11 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import cint, flt
+from restaurant.pos_custom_pricing import apply_custom_price_overrides
 
 from restaurant.api import (
 	_build_ticket_components,
+	_management_pos_custom_pricing,
 	_ensure_customer,
 	_extract_qty_map_from_ticket,
 	_recalculate_line,
@@ -25,6 +27,7 @@ from restaurant.api import (
 	get_management_report_sales_summary,
 	get_menu_boot,
 	place_order,
+	void_management_pos_order,
 	save_customer_delivery_address,
 	save_builder_selection,
 	save_management_modifier_group,
@@ -32,6 +35,7 @@ from restaurant.api import (
 	set_management_product_price,
 	update_management_product_settings,
 )
+from restaurant.api_pos_reliability import create_management_pos_order_reliable
 from restaurant.customer_account import issue_customer_session
 
 
@@ -1378,6 +1382,22 @@ class TestRestaurantAPI(FrappeTestCase):
             )
             self.assertEqual(modifier_component.get("selected_base_qty"), 30)
             self.assertEqual(modifier_component.get("selected_multiplier"), 1)
+
+            modifier = line_calc["normalized_customization"]["selected_modifiers"][0]
+            overridden = apply_custom_price_overrides(
+                line_calc,
+                {
+                    "modifier_unit_prices": [
+                        {
+                            "group": modifier["group"],
+                            "option": modifier["option"],
+                            "unit_rate": 2500,
+                        }
+                    ]
+                },
+            )
+            self.assertEqual(overridden["pricing_breakdown"]["modifier_delta_total"], 75000)
+            self.assertEqual(overridden["pricing_breakdown"]["modifiers"][0]["unit_rate"], 2500)
         finally:
             self._restore_primary_modifier_option(original)
 
@@ -1420,6 +1440,25 @@ class TestRestaurantAPI(FrappeTestCase):
             line_calc["normalized_customization"]["selected_alternatives"][0]["alternative_item"],
             self.alternative_item_code,
         )
+        overridden = apply_custom_price_overrides(
+            line_calc,
+            {
+                "ingredient_unit_prices": [
+                    {
+                        "ingredient_key": "مرغ گریل",
+                        "item_code": self.alternative_item_code,
+                        "unit_rate": 15000,
+                    }
+                ]
+            },
+        )
+        self.assertEqual(overridden["pricing_breakdown"]["ingredient_delta_total"], 3000)
+        alternative_component = next(
+            row
+            for row in overridden["pricing_breakdown"]["ingredients"]
+            if row.get("selected_alternative_item") == self.alternative_item_code
+        )
+        self.assertEqual(alternative_component["custom_price_unit_rate"], 15000)
 
     def test_recalculate_line_uses_default_item_price_for_ingredient_quantity_delta(self):
         price_list = self._ensure_test_price_list(frappe.generate_hash(length=6).lower())
@@ -1931,6 +1970,140 @@ class TestRestaurantAPI(FrappeTestCase):
         self.assertGreater(payload["grand_total"], 0)
         self.assertIn("production_tickets", payload)
         self.assertIn("work_orders", payload)
+
+    def test_employee_meal_order_creation_skips_stock_reservation(self):
+        from restaurant.employee_meals import employee_meal_creation_context
+
+        self.assertTrue(frappe.db.has_column("Sales Order", "reserve_stock"))
+        with employee_meal_creation_context():
+            payload = place_order(
+                customer_info={"name": "تست غذای پرسنلی", "mobile": "09123456788"},
+                order_type="takeaway",
+                items=self._valid_order_items(),
+                include_service_items=0,
+                commit=False,
+            )
+
+        order = frappe.get_doc("Sales Order", payload["order_id"])
+        self.assertEqual(order.reserve_stock, 0)
+
+    def test_public_place_order_rejects_management_custom_price_overrides(self):
+        with self.assertRaises(frappe.PermissionError):
+            place_order(
+                customer_info={"name": "قیمت سفارشی مهمان", "mobile": "09120000001"},
+                order_type="takeaway",
+                items=[
+                    {
+                        "item_slug": self.no_bom_item_slug,
+                        "qty": 1,
+                        "custom_price_overrides": {"base_unit_price": 1},
+                    }
+                ],
+            )
+
+    def test_management_custom_price_is_snapshotted_on_order_line_only(self):
+        original_item_price = frappe.db.get_value("Item", self.no_bom_item_code, "standard_rate")
+        original_catalog_price = frappe.db.get_value(
+            "Item", self.no_bom_item_code, "restaurant_base_price"
+        )
+        original_item_price_rows = frappe.get_all(
+            "Item Price",
+            filters={"item_code": self.no_bom_item_code},
+            fields=["name", "price_list_rate"],
+            order_by="name asc",
+        )
+        with patch("restaurant.api._management_pos_profile_summary", return_value={"allow_rate_change": True}):
+            with _management_pos_custom_pricing():
+                payload = place_order(
+                    customer_info={"name": "قیمت سفارشی صندوق", "mobile": "09120000002"},
+                    order_type="takeaway",
+                    items=[
+                        {
+                            "item_slug": self.no_bom_item_slug,
+                            "qty": 2,
+                            "custom_price_overrides": {"base_unit_price": 123000},
+                        }
+                    ],
+                    include_service_items=0,
+                    commit=False,
+                )
+
+        order_doc = frappe.get_doc("Sales Order", payload["order_id"])
+        order_line = next(row for row in order_doc.items if row.item_code == self.no_bom_item_code)
+        self.assertEqual(order_line.rate, 123000)
+        self.assertEqual(order_line.amount, 246000)
+        self.assertEqual(frappe.db.get_value("Item", self.no_bom_item_code, "standard_rate"), original_item_price)
+        self.assertEqual(
+            frappe.db.get_value("Item", self.no_bom_item_code, "restaurant_base_price"),
+            original_catalog_price,
+        )
+        self.assertEqual(
+            frappe.get_all(
+                "Item Price",
+                filters={"item_code": self.no_bom_item_code},
+                fields=["name", "price_list_rate"],
+                order_by="name asc",
+            ),
+            original_item_price_rows,
+        )
+
+        self.assertTrue(frappe.db.has_column("Sales Order Item", "restaurant_customization_json"))
+        self.assertTrue(frappe.db.has_column("Sales Order Item", "restaurant_pricing_breakdown_json"))
+        customization = frappe.parse_json(order_line.restaurant_customization_json or "{}")
+        self.assertEqual(customization["custom_price_overrides"]["base_unit_price"], 123000)
+        self.assertEqual(customization["custom_price_overrides"]["item_code"], self.no_bom_item_code)
+        pricing = frappe.parse_json(order_line.restaurant_pricing_breakdown_json or "{}")
+        self.assertEqual(pricing["custom_price_overrides"]["base_unit_price"], 123000)
+
+    def test_custom_price_snapshot_survives_order_void_and_replayed_request(self):
+        client_order_key = f"custom-price-{frappe.generate_hash(length=12)}"
+        payload = {
+            "client_order_key": client_order_key,
+            "customer_name": "قیمت سفارشی و تکرار درخواست",
+            "mobile": "09120000004",
+            "order_type": "takeaway",
+            "items": [
+                {
+                    "item_slug": self.no_bom_item_slug,
+                    "qty": 2,
+                    "custom_price_overrides": {"base_unit_price": 123000},
+                }
+            ],
+        }
+        with patch("restaurant.api._management_pos_profile_summary", return_value={"allow_rate_change": True}):
+            created = create_management_pos_order_reliable(payload)
+        self.assertEqual(created["status"], "created")
+
+        voided = void_management_pos_order(created["order_id"], reason="test rollback path")
+        replayed = create_management_pos_order_reliable(payload)
+
+        self.assertEqual(voided["state"], "cancelled")
+        self.assertEqual(replayed["status"], "existing")
+        self.assertEqual(replayed["order_id"], created["order_id"])
+        order_doc = frappe.get_doc("Sales Order", created["order_id"])
+        order_line = next(row for row in order_doc.items if row.item_code == self.no_bom_item_code)
+        self.assertEqual(order_doc.docstatus, 2)
+        customization = frappe.parse_json(order_line.restaurant_customization_json or "{}")
+        self.assertEqual(customization["custom_price_overrides"]["item_code"], self.no_bom_item_code)
+        self.assertEqual(customization["custom_price_overrides"]["base_unit_price"], 123000)
+
+    def test_custom_price_override_requires_active_pos_rate_change_permission(self):
+        with patch("restaurant.api._management_pos_profile_summary", return_value={"allow_rate_change": False}):
+            with _management_pos_custom_pricing():
+                with self.assertRaises(frappe.PermissionError):
+                    place_order(
+                        customer_info={"name": "نرخ بدون مجوز صندوق", "mobile": "09120000003"},
+                        order_type="takeaway",
+                        items=[
+                            {
+                                "item_slug": self.no_bom_item_slug,
+                                "qty": 1,
+                                "custom_price_overrides": {"base_unit_price": 1},
+                            }
+                        ],
+                        include_service_items=0,
+                        commit=False,
+                    )
 
     def test_place_order_rejects_min_multiplier_violation(self):
         broken = self._valid_order_items()

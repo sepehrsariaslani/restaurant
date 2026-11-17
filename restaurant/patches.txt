@@ -58,3 +58,4 @@ restaurant.patches.v2_22.ensure_food_partner_approval_fulfillment_setting
 restaurant.patches.v2_23.ensure_food_partner_order_actions
 restaurant.patches.v2_24.ensure_item_modifier_groups
 restaurant.patches.v2_25.ensure_food_partner_order_refresh_token
+restaurant.patches.v2_26.ensure_employee_meal_pos_fields

@@ -29,6 +29,68 @@ class PosReliabilityHelperTests(unittest.TestCase):
         self.assertEqual(reliability._normalize_client_order_key('bad key/with spaces'), 'bad-key-with-spaces')
         self.assertEqual(reliability._normalize_client_order_key(''), '')
 
+    def test_replayed_management_order_reuses_saved_custom_pricing_order(self):
+        created_orders = []
+        order_keys = {}
+
+        class Legacy:
+            def _ensure_management_access(self):
+                return None
+
+            def _has_column(self, doctype, fieldname):
+                return doctype == 'Sales Order' and fieldname == reliability.CLIENT_ORDER_KEY_FIELD
+
+            def _create_pos_order_payload(self, payload, commit=False):
+                created_orders.append((payload, commit))
+                return {'status': 'success', 'order_id': 'SO-CUSTOM-PRICE-1'}
+
+        original_legacy = reliability._legacy_api
+        original_db_methods = {
+            name: getattr(reliability.frappe.db, name, None)
+            for name in ('get_value', 'set_value', 'commit', 'rollback')
+        }
+        reliability._legacy_api = lambda: Legacy()
+        reliability.frappe.db.get_value = lambda doctype, filters, fieldname: order_keys.get(
+            filters.get(reliability.CLIENT_ORDER_KEY_FIELD), ''
+        )
+        reliability.frappe.db.set_value = lambda doctype, name, fieldname, value, **kwargs: order_keys.__setitem__(
+            value, name
+        )
+        reliability.frappe.db.commit = lambda: None
+        reliability.frappe.db.rollback = lambda: None
+        payload = {
+            'client_order_key': 'pos-custom-1',
+            'customer_name': 'POS Customer',
+            'items': [
+                {
+                    'item_code': 'BURGER-VARIANT',
+                    'qty': 2,
+                    'custom_price_overrides': {'base_unit_price': 123000},
+                }
+            ],
+        }
+        try:
+            first = reliability.create_management_pos_order_reliable(payload)
+            replay = reliability.create_management_pos_order_reliable(payload)
+        finally:
+            reliability._legacy_api = original_legacy
+            for name, original in original_db_methods.items():
+                if original is None:
+                    delattr(reliability.frappe.db, name)
+                else:
+                    setattr(reliability.frappe.db, name, original)
+
+        self.assertEqual(first['status'], 'created')
+        self.assertEqual(first['order_id'], 'SO-CUSTOM-PRICE-1')
+        self.assertEqual(replay['status'], 'existing')
+        self.assertEqual(replay['order_id'], first['order_id'])
+        self.assertEqual(len(created_orders), 1)
+        self.assertFalse(created_orders[0][1])
+        self.assertEqual(
+            created_orders[0][0]['items'][0]['custom_price_overrides']['base_unit_price'],
+            123000,
+        )
+
     def test_normalizes_client_mutation_payload(self):
         payload = reliability._normalize_offline_pos_mutation(
             {
@@ -197,9 +259,13 @@ class PosReliabilityHelperTests(unittest.TestCase):
         original_legacy = reliability._legacy_api
         original_clear = reliability._clear_expired_out_of_stock
         original_sign = reliability._sign_offline_price_snapshot
+        original_catalog_prices = reliability._offline_pos_catalog_prices
         reliability._legacy_api = lambda: Legacy()
         reliability._clear_expired_out_of_stock = lambda: cleared.append(True)
         reliability._sign_offline_price_snapshot = lambda *args, **kwargs: 'signed-test-snapshot'
+        reliability._offline_pos_catalog_prices = lambda *args, **kwargs: [
+            {'name': 'ITEM-0', 'base_price': 125000}
+        ]
         try:
             later_page = reliability.get_management_pos_boot_reliable(
                 branch='BRANCH-1', limit_start=300, limit_page_length=300, items_only=1
@@ -211,6 +277,7 @@ class PosReliabilityHelperTests(unittest.TestCase):
             reliability._legacy_api = original_legacy
             reliability._clear_expired_out_of_stock = original_clear
             reliability._sign_offline_price_snapshot = original_sign
+            reliability._offline_pos_catalog_prices = original_catalog_prices
 
         self.assertEqual(calls[0], ('BRANCH-1', {
             'limit_start': 300,

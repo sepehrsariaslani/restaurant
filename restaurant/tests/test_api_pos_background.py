@@ -2,6 +2,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -81,6 +82,106 @@ class BackgroundHelpersTests(unittest.TestCase):
 
         self.assertEqual(payload["items"], [{"name": "ITEM-A"}])
         self.assertEqual(payload["categories"], [{"name": "Food"}])
+
+
+class BackgroundCheckoutIntegrationTests(unittest.TestCase):
+    def test_regular_offline_order_keeps_signed_snapshot_replay(self):
+        calls = []
+        payload = {
+            "client_order_key": "offline-order-1",
+            "offline_price_snapshot": "signed-catalog-snapshot",
+            "items": [{"item_code": "TEA", "unit_price": 15000, "qty": 1}],
+        }
+
+        class Legacy:
+            def _ensure_management_access(self):
+                pass
+
+        class Reliability:
+            def create_management_pos_order_reliable(self, data):
+                calls.append(("reliable", data))
+                return {"order_id": "SO-RELIABLE-1"}
+
+            def replay_offline_pos_order(self, data):
+                calls.append(("offline", data))
+                return {"order_id": "SO-OFFLINE-1"}
+
+        with patch.object(bg, "_legacy_api", return_value=Legacy()), \
+             patch.object(bg, "_reliability_api", return_value=Reliability()), \
+             patch.object(bg, "_queue_existing_order", return_value={"status": "queued"}):
+            result = bg.enqueue_pos_checkout(payload)
+
+        self.assertEqual(calls, [("offline", payload)])
+        self.assertEqual(result["order_id"], "SO-OFFLINE-1")
+
+    def test_paid_employee_meal_uses_reliable_creator_then_normal_settlement_queue(self):
+        calls = []
+        payload = {
+            "client_order_key": "meal-order-1",
+            "employee": "EMP-1",
+            "reservation": "MRV-1",
+            "payment": {"mode": "Cash", "amount": 120000},
+        }
+
+        class Legacy:
+            def _ensure_management_access(self):
+                calls.append(("access",))
+
+        class Reliability:
+            def create_management_pos_order_reliable(self, data):
+                calls.append(("reliable", data))
+                return {"status": "created", "order_id": "SO-MEAL-1"}
+
+            def replay_offline_pos_order(self, data):
+                calls.append(("offline", data))
+                return {"status": "created", "order_id": "SO-OFFLINE-1"}
+
+        queue_result = {"job_key": "job-meal-1", "status": "queued", "action": "settle-deliver"}
+
+        def queue(order_id, payment=None, deliver_after=False):
+            calls.append(("queue", order_id, payment, deliver_after))
+            return dict(queue_result)
+
+        with patch.object(bg, "_legacy_api", return_value=Legacy()), \
+             patch.object(bg, "_reliability_api", return_value=Reliability()), \
+             patch.object(bg, "_queue_existing_order", side_effect=queue):
+            result = bg.enqueue_pos_checkout(payload, deliver_after=1)
+
+        self.assertEqual(calls[0], ("access",))
+        self.assertEqual(calls[1], ("reliable", payload))
+        self.assertEqual(calls[2], ("queue", "SO-MEAL-1", payload["payment"], True))
+        self.assertEqual(result["order_id"], "SO-MEAL-1")
+        self.assertEqual(result["action"], "settle-deliver")
+
+    def test_partial_employee_meal_payload_is_rejected_without_offline_fallback(self):
+        for payload in (
+            {"client_order_key": "partial-employee", "employee": "EMP-1"},
+            {"client_order_key": "partial-reservation", "reservation": "MRV-1"},
+        ):
+            with self.subTest(payload=payload):
+                calls = []
+
+                class Legacy:
+                    def _ensure_management_access(self):
+                        pass
+
+                class Reliability:
+                    def create_management_pos_order_reliable(self, data):
+                        calls.append(("reliable", data))
+                        raise ValueError("employee and reservation are both required")
+
+                    def replay_offline_pos_order(self, data):
+                        calls.append(("offline", data))
+                        return {"order_id": "SO-OFFLINE-1"}
+
+                with patch.object(bg, "_legacy_api", return_value=Legacy()), \
+                     patch.object(bg, "_reliability_api", return_value=Reliability()), \
+                     patch.object(bg, "_queue_existing_order") as queue:
+                    with self.assertRaisesRegex(ValueError, "both required"):
+                        bg.enqueue_pos_checkout(payload)
+
+                self.assertEqual(calls, [("reliable", payload)])
+                queue.assert_not_called()
 
 
 class BackgroundWorkerOutcomeTests(unittest.TestCase):
