@@ -64,6 +64,10 @@ doctype_js = {
 	"Sales Order": "public/js/sales_order.js",
 }
 
+doctype_list_js = {
+	"Sales Order": "public/js/sales_order_list.js",
+}
+
 # Svg Icons
 # ------------------
 # include app icons in desk
@@ -373,6 +377,9 @@ scheduler_events = {
 		"*/5 * * * *": [
 			"restaurant.api_survey.run_due_survey_invitations",
 			"restaurant.activity_tracking.jobs.close_timed_out_activity_sessions",
+		],
+		"*/15 * * * *": [
+			"restaurant.snapp_sync.reconcile_snapp_order_cancellations",
 		],
 	},
 }
