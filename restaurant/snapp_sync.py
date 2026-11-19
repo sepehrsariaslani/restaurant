@@ -4352,7 +4352,6 @@ def sync_snapp_orders(
                             }
                         )
                     continue
-
                 manual_duplicate_sales_order = manual_duplicate_sales_orders.get(normalized["order_id"])
                 if manual_duplicate_sales_order:
                     claimed = claim_manual_duplicate_order(
