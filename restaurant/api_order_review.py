@@ -120,7 +120,10 @@ def _ensure_food_partner_sales_invoice(order_name, order):
 	if external_source != "snapp_food":
 		return {}
 
-	from restaurant.snapp_sync import _ensure_sales_invoice_for_order
+	from restaurant.snapp_sync import _ensure_sales_invoice_for_order, _get_settings
+
+	if not _get_settings().get("auto_sync_invoices"):
+		return {}
 
 	result = _ensure_sales_invoice_for_order(
 		order_name,

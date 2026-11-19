@@ -4,8 +4,9 @@
     <p class="error pos-inline-error" v-if="error">{{ error }}</p>
 
     <Transition name="pos-toast">
-      <div v-if="toastVisible" class="pos-toast" dir="rtl" role="status" aria-live="polite">
-        <CheckCheck :size="15" :stroke-width="2.4" />
+      <div v-if="toastVisible" class="pos-toast" :class="{ 'pos-toast--warning': toastTone === 'warning' }" dir="rtl" role="status" aria-live="polite">
+        <AlertTriangle v-if="toastTone === 'warning'" :size="15" :stroke-width="2.4" />
+        <CheckCheck v-else :size="15" :stroke-width="2.4" />
         <span>{{ toastText }}</span>
       </div>
     </Transition>
@@ -1141,7 +1142,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2, UserRound } from 'lucide-vue-next'
+import { Keyboard, ShoppingCart, Printer, Truck, CheckCheck, AlertTriangle, CreditCard, Download, X, Save, ArrowLeft, Plus, RefreshCw, Trash2, UserRound } from 'lucide-vue-next'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
 import PersianDateInput from '@/components/PersianDateInput.vue'
 import PersianNumberInput from '@/components/PersianNumberInput.vue'
@@ -1260,7 +1261,13 @@ const successMessage = ref('')
 // پیام موفقیت به‌صورت toast پایین-راست: ۲ ثانیه نمایش داده و خودکار بسته می‌شود
 const toastText = ref('')
 const toastVisible = ref(false)
+const toastTone = ref('success')
 let toastTimer = null
+let nextToastTone = 'success'
+function showPosToast(message, tone = 'success') {
+  nextToastTone = tone
+  successMessage.value = message
+}
 watch(successMessage, (msg) => {
   if (toastTimer) {
     clearTimeout(toastTimer)
@@ -1268,6 +1275,8 @@ watch(successMessage, (msg) => {
   }
   const text = String(msg || '').trim()
   if (text) {
+    toastTone.value = nextToastTone
+    nextToastTone = 'success'
     toastText.value = text
     toastVisible.value = true
     toastTimer = window.setTimeout(() => {
@@ -3267,7 +3276,7 @@ async function decideReviewOrder(order, decision) {
   reviewOrderBusy.value = orderName
   reviewOrdersError.value = ''
   try {
-    await reviewManagementOrder({ order_name: orderName, decision })
+    const result = await reviewManagementOrder({ order_name: orderName, decision })
     if (decision === 'approve') {
       const orderDate = String(order.created_at || '').slice(0, 10)
       if (/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) openInvoicesDate.value = orderDate
@@ -3276,7 +3285,23 @@ async function decideReviewOrder(order, decision) {
     await loadReviewOrders()
     if (decision === 'approve') {
       await Promise.allSettled([loadOpenInvoices(true), loadRecentOrders(true)])
-      successMessage.value = 'سفارش تأیید شد و به سفارش‌های عادی و فاکتورهای باز منتقل شد.'
+      const hasFulfillmentResult = result && (
+        Object.prototype.hasOwnProperty.call(result, 'fulfillment_status')
+        || Object.prototype.hasOwnProperty.call(result, 'delivery_note')
+        || Object.prototype.hasOwnProperty.call(result, 'production_errors')
+      )
+      if (hasFulfillmentResult) {
+        const invoiceInfo = result.sales_invoice ? ` · فاکتور ${result.sales_invoice}` : ''
+        const deliveryInfo = result.delivery_note ? ` · حواله ${result.delivery_note}` : ''
+        const productionErrorCount = Array.isArray(result.production_errors) ? result.production_errors.length : 0
+        const partial = result.fulfillment_status === 'partial'
+        const fulfillmentText = partial
+          ? `؛ تولید و تحویل کامل نشد (${productionErrorCount || 'چند'} خطا).`
+          : deliveryInfo ? ' · تولید و تحویل انجام شد.' : ' · عملیات تولید و تحویل اجرا شد.'
+        showPosToast(`سفارش تأیید شد${invoiceInfo}${deliveryInfo}${fulfillmentText}`, partial ? 'warning' : 'success')
+      } else {
+        successMessage.value = 'سفارش تأیید شد و به سفارش‌های عادی و فاکتورهای باز منتقل شد.'
+      }
     } else {
       successMessage.value = 'سفارش رد شد و از صف بررسی خارج شد.'
     }
@@ -7159,6 +7184,11 @@ onBeforeUnmount(() => {
   box-shadow: 0 12px 28px rgb(0 0 0 / 0.24);
   border: 1px solid color-mix(in srgb, #ffffff 26%, var(--mg-success, #6f7b56));
   pointer-events: none;
+}
+
+.pos-toast--warning {
+  background: var(--mg-warning, #a56a25);
+  border-color: color-mix(in srgb, #ffffff 26%, var(--mg-warning, #a56a25));
 }
 
 .pos-toast svg {

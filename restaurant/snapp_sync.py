@@ -4370,6 +4370,19 @@ def sync_snapp_orders(
                         )
                     continue
 
+                existing_source = str(existing_record.get("restaurant_external_source") or "").strip().lower()
+                if existing and existing_source != SNAPP_SOURCE:
+                    result["skipped_count"] += 1
+                    if requested_order_ids:
+                        result["sales_orders"].append(
+                            {
+                                "order_id": normalized["order_id"],
+                                "sales_order": existing,
+                                "action": "external_source_conflict",
+                            }
+                        )
+                    continue
+
                 if existing:
                     # ``only_new`` controls line reconciliation/backfill; it
                     # must not freeze the native order state. The scheduler
@@ -4418,17 +4431,6 @@ def sync_snapp_orders(
                         )
                     continue
 
-                if existing and existing_record.get("restaurant_external_source") != SNAPP_SOURCE:
-                    result["skipped_count"] += 1
-                    if requested_order_ids:
-                        result["sales_orders"].append(
-                            {
-                                "order_id": normalized["order_id"],
-                                "sales_order": existing,
-                                "action": "external_source_conflict",
-                            }
-                        )
-                    continue
                 manual_duplicate_sales_order = manual_duplicate_sales_orders.get(normalized["order_id"])
                 if manual_duplicate_sales_order:
                     claimed = claim_manual_duplicate_order(

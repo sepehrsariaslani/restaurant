@@ -20,6 +20,7 @@
         <span class="status-pill" :class="status.vendor_id ? 'is-on' : 'is-warn'">{{ status.vendor_id ? `فروشنده: ${status.vendor_id}` : 'شناسه فروشنده ناقص' }}</span>
         <span class="status-pill" :class="status.enabled ? 'is-on' : 'is-off'">{{ status.enabled ? 'همگام‌سازی فعال' : 'همگام‌سازی خاموش' }}</span>
         <span class="status-pill" :class="status.auto_sync_invoices ? 'is-on' : 'is-warn'">{{ status.auto_sync_invoices ? 'فاکتور خودکار روشن' : 'فاکتور خودکار خاموش' }}</span>
+        <span class="status-pill" :class="status.auto_sync_production_delivery ? 'is-on' : 'is-warn'">{{ status.auto_sync_production_delivery ? 'تولید و حواله خودکار روشن' : 'تولید و حواله خودکار خاموش' }}</span>
         <span class="status-pill" :class="status.require_item_mapping ? 'is-warn' : 'is-on'">{{ status.require_item_mapping ? 'نگاشت اجباری' : 'ساخت خودکار کالا' }}</span>
         <span class="status-pill" :class="status.schema_ready ? 'is-on' : 'is-warn'">{{ status.schema_ready ? 'ساختار آماده' : 'ابتدا migrate' }}</span>
       </div>
@@ -61,6 +62,7 @@
         <div class="switch-grid">
           <label class="check-row"><input v-model="form.snapp_sync_enabled" type="checkbox" /> همگام‌سازی خودکار فعال باشد</label>
           <label class="check-row"><input v-model="form.snapp_auto_sync_invoices" type="checkbox" /> برای سفارش واردشده فاکتور فروش ساخته شود</label>
+          <label class="check-row"><input v-model="form.snapp_auto_sync_production_delivery" type="checkbox" /> پس از تأیید، تولید و حوالهٔ تحویل خودکار ثبت شود</label>
           <label class="check-row"><input v-model="form.snapp_require_item_mapping" type="checkbox" /> کالای نگاشت‌نشده سفارش را متوقف کند</label>
         </div>
         <p class="security-note">این دکمه فقط پنل رسمی Partner را باز می‌کند؛ Cookie، localStorage و Header مرورگر جمع‌آوری نمی‌شود. توکن را فقط از مسیر رسمی دریافت و در همین فیلد رمزنگاری‌شده ثبت کنید.</p>
@@ -207,8 +209,8 @@ const selectedOrderIds = ref(new Set())
 const orderWindow = reactive({ from_date: '', to_date: '' })
 const mappingDrafts = reactive({})
 const tokenVisible = ref(false)
-const status = reactive({ has_token: false, vendor_id: '', enabled: false, require_item_mapping: true, auto_sync_invoices: true, schema_ready: false, schema_missing: [] })
-const form = reactive({ snapp_vendor_id: '', snapp_bearer_token: '', snapp_report_url: 'https://snappfood.ir/vms/v3/restaurant/report', snapp_menu_api_base_url: 'https://apigw.snappfood.ir', snapp_origin_url: '', snapp_hostdomain: '', snapp_page_size: 50, snapp_amount_multiplier: 10, snapp_default_customer: '', snapp_sync_enabled: false, snapp_auto_sync_invoices: true, snapp_require_item_mapping: true })
+const status = reactive({ has_token: false, vendor_id: '', enabled: false, require_item_mapping: true, auto_sync_invoices: true, auto_sync_production_delivery: false, schema_ready: false, schema_missing: [] })
+const form = reactive({ snapp_vendor_id: '', snapp_bearer_token: '', snapp_report_url: 'https://snappfood.ir/vms/v3/restaurant/report', snapp_menu_api_base_url: 'https://apigw.snappfood.ir', snapp_origin_url: '', snapp_hostdomain: '', snapp_page_size: 50, snapp_amount_multiplier: 10, snapp_default_customer: '', snapp_sync_enabled: false, snapp_auto_sync_invoices: true, snapp_auto_sync_production_delivery: false, snapp_require_item_mapping: true })
 
 const mappingItemOptions = computed(() => mappingRows.items.map((item) => ({
   value: item.name,
@@ -246,6 +248,7 @@ function applyStatus(data = {}) {
   form.snapp_default_customer = data.default_customer || ''
   form.snapp_sync_enabled = Boolean(data.enabled)
   form.snapp_auto_sync_invoices = data.auto_sync_invoices !== false
+  form.snapp_auto_sync_production_delivery = Boolean(data.auto_sync_production_delivery)
   form.snapp_require_item_mapping = data.require_item_mapping !== false
 }
 
