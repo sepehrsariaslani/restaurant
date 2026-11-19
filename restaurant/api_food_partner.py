@@ -31,6 +31,11 @@ def save_snappfood_modifier_mapping(payload=None):
 		payload = frappe.parse_json(payload or "{}")
 	if not isinstance(payload, dict):
 		payload = {}
+	customization = payload.get("customization") or {}
+	if isinstance(customization, str):
+		customization = frappe.parse_json(customization or "{}")
+	if not isinstance(customization, dict):
+		customization = {}
 	return _save_modifier_mapping(
 		item_name=payload.get("item_name") or "",
 		parent_item=payload.get("parent_item") or "",
@@ -47,4 +52,5 @@ def save_snappfood_modifier_mapping(payload=None):
 		ingredient_key=payload.get("ingredient_key") or "",
 		alternative_item=payload.get("alternative_item") or "",
 		product_level_identity=payload.get("product_level_identity"),
+		customization=customization,
 	)
