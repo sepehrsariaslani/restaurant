@@ -28,6 +28,7 @@ from html import escape as html_escape
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_datetime, getdate, now_datetime, today
+from restaurant.role_permissions import assigned_pos_profiles, require_capability, require_pos_profile_access
 
 from restaurant.api import (
 	_bi_kpi,
@@ -366,6 +367,7 @@ def _fp_normalize_item_names(item_names):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def bulk_update_management_products(item_names=None, action=None):
 	"""Bulk activate/deactivate or mark products in/out of stock."""
 	_ensure_management_access()
@@ -462,6 +464,7 @@ def _fp_resolve_native_item_group(value):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def set_management_product_kanban_field(item_name=None, field=None, value=None):
 	"""Persist a product's primary or secondary Kanban group after drag and drop."""
 	_ensure_management_access()
@@ -551,6 +554,7 @@ def _fp_log_item_version(item_name, changes):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def set_management_product_calendar_date(item_name=None, date=None):
 	"""Set (or clear) the custom calendar date of a product (calendar drag & drop)."""
 	_ensure_management_access()
@@ -583,6 +587,7 @@ def set_management_product_calendar_date(item_name=None, date=None):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def get_management_product_activity(item_name=None):
 	"""تاریخچه تغییرات (Version) و نظرات (Comment) یک محصول."""
 	_ensure_management_access()
@@ -639,6 +644,7 @@ def get_management_product_activity(item_name=None):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def add_management_product_comment(item_name=None, content=None):
 	"""ثبت نظر روی یک محصول."""
 	_ensure_management_access()
@@ -691,6 +697,7 @@ def _fp_first_barcode_map(item_names):
 
 
 @frappe.whitelist()
+@require_capability("catalog_read")
 def get_management_product_by_barcode(barcode=None):
 	"""Resolve a product for POS barcode scanners."""
 	_ensure_management_access()
@@ -816,6 +823,7 @@ def _fp_product_export_rows(category=None, include_disabled=0, item_names=None):
 
 
 @frappe.whitelist()
+@require_capability("catalog_read")
 def export_management_products_excel(category=None, include_disabled=0, item_names=None):
 	"""Export the product catalog (or the given item names) as an .xlsx file and return its URL."""
 	_ensure_management_access()
@@ -1067,6 +1075,7 @@ def _fp_import_product_record(record, update_existing=1, dry_run=0):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def import_management_products_excel(
 	file_url=None, content_base64=None, file_name=None, update_existing=1, dry_run=0
 ):
@@ -1176,6 +1185,7 @@ def _fp_assert_combo_feature():
 
 
 @frappe.whitelist()
+@require_capability("catalog_read")
 def list_management_combos(search=None):
 	_ensure_management_access()
 	_fp_assert_combo_feature()
@@ -1201,6 +1211,7 @@ def list_management_combos(search=None):
 
 
 @frappe.whitelist()
+@require_capability("catalog_read")
 def get_management_combo_detail(combo_item=None):
 	_ensure_management_access()
 	_fp_assert_combo_feature()
@@ -1212,6 +1223,7 @@ def get_management_combo_detail(combo_item=None):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def save_management_combo(payload=None):
 	"""Create or update a combo: a sellable parent item plus child products."""
 	_ensure_management_access()
@@ -1272,6 +1284,7 @@ def save_management_combo(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("catalog_write")
 def delete_management_combo(combo_item=None):
 	_ensure_management_access()
 	_fp_assert_combo_feature()
@@ -1342,6 +1355,7 @@ def fp_compute_order_packaging_fee(order_type, item_qty_map=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_packaging_settings():
 	_ensure_management_access()
 	_fp_ensure_ops_setting_fields()
@@ -1349,6 +1363,7 @@ def get_management_packaging_settings():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_packaging_settings(payload=None):
 	_ensure_management_access()
 	_fp_ensure_ops_setting_fields()
@@ -1460,6 +1475,7 @@ def _fp_shift_for_datetime(shifts, dt):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_work_shifts():
 	_ensure_management_access()
 	_fp_ensure_ops_setting_fields()
@@ -1467,6 +1483,7 @@ def get_management_work_shifts():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_work_shifts(payload=None):
 	_ensure_management_access()
 	_fp_ensure_ops_setting_fields()
@@ -1497,6 +1514,28 @@ def _fp_register_closing_available():
 	return frappe.db.exists("DocType", REGISTER_CLOSING_DOCTYPE)
 
 
+def _fp_register_pos_profile(pos_profile=None, capability="cashbox_read"):
+	roles = set(frappe.get_roles(frappe.session.user))
+	profile_name = str(pos_profile or "").strip()
+	if (
+		"Restaurant Cashier" in roles
+		and "Restaurant Manager" not in roles
+		and not roles.intersection({"System Manager", "Administrator"})
+	):
+		assigned = assigned_pos_profiles()
+		if not profile_name:
+			try:
+				default_profile = str(frappe.defaults.get_user_default("pos_profile") or "").strip()
+			except Exception:
+				default_profile = ""
+			profile_name = default_profile if default_profile in assigned else (sorted(assigned)[0] if assigned else "")
+		if not profile_name:
+			frappe.throw(_("برای حساب صندوق‌دار هیچ POS Profile تخصیص داده نشده است."), frappe.PermissionError)
+	if profile_name:
+		require_pos_profile_access(profile_name, capability=capability)
+	return profile_name
+
+
 def _fp_last_register_closing(cashier=None, pos_profile=None):
 	if not _fp_register_closing_available():
 		return None
@@ -1523,12 +1562,14 @@ def _fp_order_datetime(order):
 		return None
 
 
-def _fp_register_window_totals(start_dt, end_dt, cashier=None):
+def _fp_register_window_totals(start_dt, end_dt, cashier=None, pos_profile=None):
 	start_date = str(getdate(start_dt))
 	end_date = str(getdate(end_dt))
 	orders = _management_collect_orders(
 		date_from=start_date, date_to=end_date, source="all", cashier=cashier or None
 	)
+	if pos_profile:
+		orders = [row for row in orders if row.get("pos_profile") == pos_profile]
 
 	start_dt = get_datetime(start_dt)
 	end_dt = get_datetime(end_dt)
@@ -1562,13 +1603,6 @@ def _fp_register_window_totals(start_dt, end_dt, cashier=None):
 
 def _fp_register_window_for_user(cashier, pos_profile=None, date_from=None):
 	last_closing = _fp_last_register_closing(cashier=cashier, pos_profile=pos_profile or None)
-	if (
-		pos_profile
-		and not last_closing
-	):
-		# A brand-new register has no closing of its own yet; fall back to the
-		# cashier's latest closing on any register so windows stay continuous.
-		last_closing = _fp_last_register_closing(cashier=cashier)
 	if last_closing and last_closing.get("period_end"):
 		period_start = get_datetime(last_closing.get("period_end"))
 	elif date_from:
@@ -1580,6 +1614,7 @@ def _fp_register_window_for_user(cashier, pos_profile=None, date_from=None):
 
 
 @frappe.whitelist()
+@require_capability("cashbox_read")
 def get_management_register_closing_summary(pos_profile=None, date_from=None):
 	"""Live totals for the current open register window (before closing)."""
 	_ensure_management_access()
@@ -1587,11 +1622,11 @@ def get_management_register_closing_summary(pos_profile=None, date_from=None):
 		frappe.throw(_("Restaurant Register Closing doctype is not installed yet. Run bench migrate."))
 
 	cashier = frappe.session.user
-	pos_profile = (pos_profile or "").strip()
+	pos_profile = _fp_register_pos_profile(pos_profile, capability="cashbox_read")
 	last_closing, period_start, period_end = _fp_register_window_for_user(
 		cashier, pos_profile=pos_profile, date_from=date_from
 	)
-	totals = _fp_register_window_totals(period_start, period_end, cashier=cashier)
+	totals = _fp_register_window_totals(period_start, period_end, cashier=cashier, pos_profile=pos_profile)
 
 	shift_settings = _pos_shift_settings()
 	suggested_float = flt(
@@ -1668,6 +1703,7 @@ def _fp_register_closing_receipt_html(closing_doc, breakdown):
 
 
 @frappe.whitelist()
+@require_capability("cashbox_write")
 def close_management_register(payload=None):
 	"""Settle and close the cash register for the current cashier window."""
 	_ensure_management_access()
@@ -1679,12 +1715,12 @@ def close_management_register(payload=None):
 		frappe.throw(_("Invalid payload format."))
 
 	cashier = frappe.session.user
-	pos_profile = (data.get("pos_profile") or "").strip()
+	pos_profile = _fp_register_pos_profile(data.get("pos_profile"), capability="cashbox_write")
 	last_closing, period_start, period_end = _fp_register_window_for_user(
 		cashier, pos_profile=pos_profile, date_from=data.get("date_from")
 	)
 
-	totals = _fp_register_window_totals(period_start, period_end, cashier=cashier)
+	totals = _fp_register_window_totals(period_start, period_end, cashier=cashier, pos_profile=pos_profile)
 
 	summary = get_management_register_closing_summary(pos_profile=pos_profile)
 	opening_float = (
@@ -1751,13 +1787,18 @@ def _fp_serialize_register_closing(doc):
 
 
 @frappe.whitelist()
+@require_capability("cashbox_read")
 def list_management_register_closings(limit=20, cashier=None):
 	_ensure_management_access()
 	if not _fp_register_closing_available():
 		return {"closings": []}
 	filters = {}
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"}):
+		filters["cashier"] = frappe.session.user
 	if cashier:
-		filters["cashier"] = cashier
+		if "Restaurant Cashier" not in roles or "Restaurant Manager" in roles or roles.intersection({"System Manager", "Administrator"}):
+			filters["cashier"] = cashier
 	rows = frappe.get_all(
 		REGISTER_CLOSING_DOCTYPE,
 		filters=filters,
@@ -1771,6 +1812,7 @@ def list_management_register_closings(limit=20, cashier=None):
 
 
 @frappe.whitelist()
+@require_capability("cashbox_read")
 def get_management_register_closing_detail(name=None):
 	_ensure_management_access()
 	if not _fp_register_closing_available():
@@ -1779,6 +1821,11 @@ def get_management_register_closing_detail(name=None):
 	if not name or not frappe.db.exists(REGISTER_CLOSING_DOCTYPE, name):
 		frappe.throw(_("Register closing not found."), frappe.DoesNotExistError)
 	doc = frappe.get_doc(REGISTER_CLOSING_DOCTYPE, name)
+	roles = set(frappe.get_roles(frappe.session.user))
+	if "Restaurant Cashier" in roles and "Restaurant Manager" not in roles and not roles.intersection({"System Manager", "Administrator"}):
+		if doc.get("cashier") != frappe.session.user:
+			frappe.throw(_("این اختتامیه به حساب شما تعلق ندارد."), frappe.PermissionError)
+		_fp_register_pos_profile(doc.get("pos_profile"), capability="cashbox_read")
 	breakdown = _parse_json(doc.get("payments_breakdown_json") or "{}", {})
 	return {
 		"closing": _fp_serialize_register_closing(doc),
@@ -1998,6 +2045,7 @@ def _fp_build_shift_sales_rows(orders):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_category_sales(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -2014,6 +2062,7 @@ def get_management_report_category_sales(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_table_sales(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -2030,6 +2079,7 @@ def get_management_report_table_sales(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_payment_methods(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -2046,6 +2096,7 @@ def get_management_report_payment_methods(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_product_sales(date_from=None, date_to=None):
 	_ensure_management_access()
 	orders = _management_collect_orders(date_from=date_from, date_to=date_to, source="all")
@@ -2062,6 +2113,7 @@ def get_management_report_product_sales(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_shift_sales(date_from=None, date_to=None):
 	_ensure_management_access()
 	_fp_ensure_ops_setting_fields()
@@ -2424,12 +2476,14 @@ def _fp_print_font_payload():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_print_font_settings():
 	_ensure_management_access()
 	return _fp_print_font_payload()
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_print_font_settings(payload=None):
 	_ensure_management_access()
 	data = _parse_json(payload, {})
@@ -2487,6 +2541,7 @@ def _fp_normalize_dashboard_layout(layout):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_dashboard_layout():
 	_ensure_management_access()
 	try:
@@ -2498,6 +2553,7 @@ def get_management_dashboard_layout():
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def set_management_dashboard_layout(payload=None):
 	_ensure_management_access()
 	data = _parse_json(payload, {})

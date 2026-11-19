@@ -11,6 +11,7 @@ bottom of ``api.py``) and called as ``/api/method/restaurant.api.<endpoint>``.
 """
 
 import frappe
+from restaurant.role_permissions import require_capability
 from frappe import _
 from frappe.utils import cint, get_datetime, now_datetime, today
 
@@ -241,6 +242,7 @@ def _rsv_notify_managers(reservation, subject):
 
 
 @frappe.whitelist()
+@require_capability("reservation_read")
 def get_management_reservation_boot():
 	_ensure_management_access()
 	_rsv_ensure_ops_ready()
@@ -265,6 +267,7 @@ def get_management_reservation_boot():
 
 
 @frappe.whitelist()
+@require_capability("reservation_read")
 def list_management_reservations(date_from="", date_to="", status="", table="", search="", limit=100, offset=0):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", RESERVATION_DOCTYPE):
@@ -298,6 +301,7 @@ def list_management_reservations(date_from="", date_to="", status="", table="", 
 
 
 @frappe.whitelist()
+@require_capability("reservation_write")
 def save_management_reservation(payload=None):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", RESERVATION_DOCTYPE):
@@ -317,6 +321,7 @@ def save_management_reservation(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("reservation_write")
 def update_management_reservation_status(payload=None):
 	_ensure_management_access()
 	payload = _parse_json(payload, {})
@@ -334,6 +339,7 @@ def update_management_reservation_status(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("reservation_write")
 def delete_management_reservation(name=""):
 	_ensure_management_access()
 	name = (name or "").strip()

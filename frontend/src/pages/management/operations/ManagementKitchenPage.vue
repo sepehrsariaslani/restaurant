@@ -132,7 +132,7 @@
       <div v-if="isMobileView" class="mobile-ticket-list">
         <KitchenOrder 
           v-for="o in activeMobileList" :key="o.name" 
-          :order="o" :type="mobileTab" 
+          :order="o" :type="mobileTab" :allow-close="canCloseOrders"
           @action="handleAction(o, mobileTab)" 
         />
       </div>
@@ -150,7 +150,7 @@
             <div v-if="!colNew.length" class="lane-empty">سفارش جدیدی نیست</div>
             <KitchenOrder 
               v-for="o in colNew" :key="o.name" 
-              :order="o" type="new" 
+              :order="o" type="new" :allow-close="canCloseOrders"
               @action="acceptOrder(o)" 
             />
           </div>
@@ -166,7 +166,7 @@
             <div v-if="!colPrep.length" class="lane-empty">آیتمی در حال تولید نیست</div>
             <KitchenOrder 
               v-for="o in colPrep" :key="o.name" 
-              :order="o" type="prep" 
+              :order="o" type="prep" :allow-close="canCloseOrders"
               @action="markReady(o)" 
             />
           </div>
@@ -182,7 +182,7 @@
             <div v-if="!colReady.length" class="lane-empty">سفارشی آماده‌ی تحویل نیست</div>
             <KitchenOrder 
               v-for="o in colReady" :key="o.name" 
-              :order="o" type="ready" 
+              :order="o" type="ready" :allow-close="canCloseOrders"
               @action="closeOrder(o)" 
             />
           </div>
@@ -198,7 +198,7 @@
             <div v-if="!colClosed.length" class="lane-empty">سفارشی در تاریخچه نیست</div>
             <KitchenOrder 
               v-for="o in colClosed" :key="o.name" 
-              :order="o" type="closed" 
+              :order="o" type="closed" :allow-close="canCloseOrders"
             />
           </div>
         </div>
@@ -211,7 +211,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Search, RefreshCcw, AlertCircle, CheckCheck, Volume2, VolumeX, Calendar } from 'lucide-vue-next'
 import KitchenOrder from '@/components/KitchenOrder.vue'
-import { callRestaurantAPI } from '@/utils/api'
+import { callRestaurantAPI, getManagementSessionProfile } from '@/utils/api'
 
 // Audio setup
 let notifyAudio = null
@@ -237,6 +237,7 @@ const searchQuery = ref('')
 const filterStatus = ref('') // desktop filter
 const mobileTab = ref('new') // mobile tab filter
 const dateFilter = ref(getLocalTodayDate())
+const canCloseOrders = ref(false)
 const nowTick = ref(Date.now())
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 
@@ -411,7 +412,18 @@ function setupTimers() {
   }, 60000)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const profile = await getManagementSessionProfile()
+    if (profile?.is_guest) throw new Error('نشست کاربر معتبر نیست.')
+    const roles = Array.isArray(profile?.roles) ? profile.roles : []
+    const hasRestaurantRole = roles.some((role) => [
+      'Restaurant Manager', 'Restaurant Supervisor', 'Restaurant Cashier', 'Restaurant Waiter', 'Restaurant Chef',
+    ].includes(role))
+    canCloseOrders.value = Boolean(profile?.is_admin || !hasRestaurantRole || roles.includes('Restaurant Manager') || roles.includes('Restaurant Supervisor'))
+  } catch (_) {
+    canCloseOrders.value = false
+  }
   fetchOrders(true)
   setupTimers()
   

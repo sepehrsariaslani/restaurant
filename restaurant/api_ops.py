@@ -15,6 +15,7 @@ import json
 import math
 
 import frappe
+from restaurant.role_permissions import require_capability
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, today
 from restaurant.order_review import require_order_approved
@@ -167,6 +168,7 @@ def _ops_set_setting(fieldname, value):
 
 
 @frappe.whitelist()
+@require_capability("courier_read")
 def list_management_delivery_zones(include_inactive=0):
 	_ensure_management_access()
 	filters = {} if cint(include_inactive) else {"is_active": 1}
@@ -195,6 +197,7 @@ def list_management_delivery_zones(include_inactive=0):
 
 
 @frappe.whitelist()
+@require_capability("courier_write")
 def save_management_delivery_zone(payload=None):
 	_ensure_management_access()
 	payload = _ops_parse_payload(payload)
@@ -222,6 +225,7 @@ def save_management_delivery_zone(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("courier_write")
 def delete_management_delivery_zone(name=""):
 	_ensure_management_access()
 	name = (name or "").strip()
@@ -233,6 +237,7 @@ def delete_management_delivery_zone(name=""):
 
 
 @frappe.whitelist()
+@require_capability("courier_read")
 def check_management_delivery_point(lat=0, lng=0):
 	"""Return matching zones for a geo point (haversine on zone circles)."""
 	_ensure_management_access()
@@ -339,10 +344,11 @@ def _ops_customer_mobile(customer_name):
 
 
 @frappe.whitelist()
+@require_capability("courier_read")
 def list_management_delivery_orders(search="", limit=100):
 	"""List open native Sales Orders for courier assignment."""
 	_ensure_management_access()
-	if not frappe.has_permission("Sales Order", "read"):
+	if not frappe.has_permission("Sales Order", "read") and not getattr(frappe.flags, "restaurant_api_capability_checked", False):
 		frappe.throw(_("اجازهٔ مشاهده سفارش‌های فروش را ندارید."), frappe.PermissionError)
 	limit = min(max(cint(limit) or 100, 1), 250)
 	filters = {"docstatus": 1, "status": ["not in", ["Completed", "Closed", "Cancelled"]]}
@@ -368,6 +374,7 @@ def list_management_delivery_orders(search="", limit=100):
 
 
 @frappe.whitelist()
+@require_capability("courier_write")
 def assign_management_order_courier(payload=None):
 	"""Assign a courier to a delivery order (orders page / POS)."""
 	_ensure_management_access()
@@ -468,6 +475,7 @@ def courier_app_action(mobile="", access_code="", order_name="", action=""):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_delivery_provider_settings():
 	_ensure_management_access()
 	return {
@@ -480,6 +488,7 @@ def get_management_delivery_provider_settings():
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def set_management_delivery_provider_settings(payload=None):
 	_ensure_management_access()
 	_ops_ensure_settings_fields()
@@ -499,6 +508,7 @@ def set_management_delivery_provider_settings(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("courier_write")
 def dispatch_management_delivery_provider(payload=None):
 	"""Send a delivery request to the configured third-party courier platform."""
 	_ensure_management_access()
@@ -575,6 +585,7 @@ def dispatch_management_delivery_provider(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("courier_write")
 def optimize_management_courier_route(payload=None):
 	"""چیدمان بهینه سفارش‌های در حال ارسال یک پیک (نزدیک‌ترین همسایه).
 
@@ -651,6 +662,7 @@ def optimize_management_courier_route(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_read")
 def get_management_pos_kitchen_notifications(since=""):
 	"""Kitchen→cashier: orders that became ready since the client marker."""
 	_ensure_management_access()
@@ -859,6 +871,7 @@ def _ops_monthly_pl(year):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def list_management_budgets(fiscal_year="", period=""):
 	_ensure_management_access()
 	filters = {}
@@ -877,6 +890,7 @@ def list_management_budgets(fiscal_year="", period=""):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def save_management_budget(payload=None):
 	_ensure_management_access()
 	payload = _ops_parse_payload(payload)
@@ -903,6 +917,7 @@ def save_management_budget(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def delete_management_budget(name=""):
 	_ensure_management_access()
 	name = (name or "").strip()
@@ -914,6 +929,7 @@ def delete_management_budget(name=""):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_cost_control_boot(fiscal_year=""):
 	"""Live expense tracking + break-even inputs for the cost-control page."""
 	_ensure_management_access()
@@ -957,6 +973,7 @@ def get_management_cost_control_boot(fiscal_year=""):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def compute_management_roi(payload=None):
 	"""ROI + payback period from the current-year monthly P&L."""
 	_ensure_management_access()
@@ -989,6 +1006,7 @@ def compute_management_roi(payload=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_courier_performance(date_from=None, date_to=None):
 	_ensure_management_access()
 	date_to = str(date_to or today())
@@ -1040,6 +1058,7 @@ def get_management_report_courier_performance(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_waiter_performance(date_from=None, date_to=None):
 	"""عملکرد گارسون‌ها: سفارش‌های ثبت‌شده به نام هر گارسون."""
 	_ensure_management_access()
@@ -1088,6 +1107,7 @@ def get_management_report_waiter_performance(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("restaurant_reports")
 def get_management_report_kitchen_performance(date_from=None, date_to=None):
 	_ensure_management_access()
 	date_to = str(date_to or today())
@@ -1137,6 +1157,7 @@ def get_management_report_kitchen_performance(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_report_profit_loss(date_from=None, date_to=None):
 	_ensure_management_access()
 	year = cint(getdate(date_from).year) if date_from else cint(getdate(today()).year)
@@ -1161,6 +1182,7 @@ def get_management_report_profit_loss(date_from=None, date_to=None):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def get_management_report_breakeven(date_from=None, date_to=None):
 	_ensure_management_access()
 	year = cint(getdate(date_from).year) if date_from else cint(getdate(today()).year)

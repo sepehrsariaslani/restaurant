@@ -28,7 +28,7 @@
                 <template #cell-full_name="{ row }"><strong>{{ row.full_name || row.email }}</strong></template>
                 <template #cell-email="{ value }"><span dir="ltr">{{ value || '—' }}</span></template>
                 <template #cell-enabled="{ row }"><span :class="['status-pill', row.enabled ? 'active' : 'disabled']">{{ row.enabled ? 'فعال' : 'غیرفعال' }}</span></template>
-                <template #cell-roles="{ row }">{{ row.roles?.join('، ') || 'بدون نقش' }}</template>
+                <template #cell-roles="{ row }">{{ (row.roles || []).map(roleLabel).join('، ') || 'بدون نقش' }}</template>
                 <template #cell-actions="{ row }"><button class="secondary-btn mini-link-btn" type="button" @click.stop="openUserDetail(row)">جزئیات</button></template>
                 <template #empty>کاربری پیدا نشد.</template>
               </ManagementListView>
@@ -42,7 +42,7 @@
                 code-key="email"
                 :properties="{ enabled: true, roles: true }"
                 :property-order="['enabled', 'roles']"
-                :chip-renderers="userChipRenderers"
+              :chip-renderers="userChipRenderers"
                 :row-clickable="true"
                 @row-click="openUserDetail"
               />
@@ -74,14 +74,14 @@
           <strong>نقش‌ها و دسترسی‌ها</strong>
           <p>با انتخاب نقش، دسترسی‌های مرتبط با آن نقش در پنل فعال می‌شود.</p>
           <div class="roles-grid">
-            <label v-for="role in roles" :key="role" class="role-option"><input v-model="form.roles" type="checkbox" :value="role" />{{ role }}</label>
+          <label v-for="role in roles" :key="role" class="role-option"><input v-model="form.roles" type="checkbox" :value="role" />{{ roleLabel(role) }}</label>
           </div>
         </div>
         <label class="check-row"><input v-model="form.enabled" type="checkbox" /> کاربر فعال باشد و بتواند وارد سیستم شود</label>
         <div class="form-actions">
           <button class="primary-btn" type="button" :disabled="saving" @click="saveUser">{{ saving ? 'در حال ذخیره...' : 'ذخیره کاربر' }}</button>
           <button class="secondary-btn" type="button" @click="startNew">پاک کردن فرم</button>
-          <button v-if="form.name && form.name !== currentUser" class="danger-btn" type="button" :disabled="saving" @click="removeUser">حذف کاربر</button>
+          <button v-if="form.name && form.name !== currentUser && isAdmin" class="danger-btn" type="button" :disabled="saving" @click="removeUser">حذف کاربر</button>
         </div>
       </ManagementSurfaceCard>
     </div>
@@ -96,7 +96,7 @@ import ManagementListView from '@/components/management/ManagementListView.vue'
 import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
 import ManagementPageScaffold from '@/components/management/ManagementPageScaffold.vue'
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
-import { deleteManagementUser, listManagementUsers, saveManagementUser } from '@/utils/api'
+import { deleteManagementUser, getManagementSessionProfile, listManagementUsers, saveManagementUser } from '@/utils/api'
 import { parseQuery } from '@/utils/format'
 
 const props = defineProps({ detailOnly: { type: Boolean, default: false } })
@@ -113,7 +113,16 @@ const saving = ref(false)
 const error = ref('')
 const success = ref('')
 const currentUser = typeof window !== 'undefined' ? String(window._BOOT?.user || window._BOOT?.user_email || '').trim() : ''
+const isAdmin = ref(false)
 const form = reactive(createForm())
+
+const restaurantRoleLabels = {
+  'Restaurant Manager': 'مدیر رستوران',
+  'Restaurant Supervisor': 'سرپرست رستوران',
+  'Restaurant Cashier': 'صندوق‌دار رستوران',
+  'Restaurant Waiter': 'گارسون رستوران',
+  'Restaurant Chef': 'آشپز رستوران',
+}
 
 const userColumns = [
   { key: 'full_name', label: 'نام کاربر' },
@@ -129,8 +138,10 @@ const userViewModes = [
 ]
 const userChipRenderers = {
   enabled: (row) => ({ text: row.enabled ? 'فعال' : 'غیرفعال', cls: row.enabled ? 'chip-ok' : 'chip-danger' }),
-  roles: (row) => ({ text: row.roles?.join('، ') || 'بدون نقش', cls: '' }),
+  roles: (row) => ({ text: (row.roles || []).map(roleLabel).join('، ') || 'بدون نقش', cls: '' }),
 }
+
+function roleLabel(role) { return restaurantRoleLabels[role] || role }
 
 function createForm() {
   return { name: '', email: '', full_name: '', mobile_no: '', new_password: '', enabled: true, roles: [] }
@@ -163,6 +174,8 @@ async function removeUser() {
   finally { saving.value = false }
 }
 onMounted(async () => {
+  const profile = await getManagementSessionProfile()
+  isAdmin.value = Boolean(profile?.is_admin)
   await loadUsers()
   if (detailOnly.value && detailUserName.value) {
     const user = users.value.find((row) => String(row.name || '') === detailUserName.value || String(row.email || '') === detailUserName.value)

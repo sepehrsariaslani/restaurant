@@ -139,7 +139,7 @@
                   </div>
                 </section>
                 
-                <section class="inspection-section mt-4" v-if="isDeliveryOrder(selectedOrder.order)">
+                <section class="inspection-section mt-4" v-if="isDeliveryOrder(selectedOrder.order) && canManageCourier">
                   <h3 class="section-title">تحویل و پیک</h3>
                   <div class="courier-assign-row">
                     <SearchableDropdown
@@ -197,6 +197,7 @@
                 </button>
                 
                 <button
+                  v-if="canCreateProforma"
                   class="secondary-btn flex-1"
                   type="button"
                   :disabled="proformaBusy"
@@ -219,7 +220,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { AlertCircle, CheckCheck, ClipboardList, Clock3, CreditCard, FileText, RefreshCcw, Store, X } from 'lucide-vue-next'
 import ManagementCollectionToolbar from '@/components/management/ManagementCollectionToolbar.vue'
 import ManagementNotionListView from '@/components/management/ManagementNotionListView.vue'
@@ -227,7 +228,7 @@ import ManagementPageScaffold from '@/components/management/ManagementPageScaffo
 import ManagementSurfaceCard from '@/components/management/ManagementSurfaceCard.vue'
 import ManagementProductCollectionShell from '@/components/management/catalog/ManagementProductCollectionShell.vue'
 import SearchableDropdown from '@/components/SearchableDropdown.vue'
-import { completeManagementOrder, getManagementOrderDetail, listManagementOrders, markManagementOrderPaid, listManagementCouriers, assignManagementOrderCourier, createManagementOrderProforma } from '@/utils/api'
+import { completeManagementOrder, getManagementOrderDetail, getManagementSessionProfile, listManagementOrders, markManagementOrderPaid, listManagementCouriers, assignManagementOrderCourier, createManagementOrderProforma } from '@/utils/api'
 import { formatMoney, formatStatus, parseQuery } from '@/utils/format'
 
 const props = defineProps({
@@ -245,6 +246,19 @@ const error = ref('')
 const orders = ref([])
 const selectedOrder = ref(null)
 const currency = ref('IRR')
+const userRoles = ref([])
+const isAdmin = ref(false)
+const rolesReady = ref(false)
+const rolesFailed = ref(false)
+const hasRestaurantRole = computed(() => userRoles.value.some((role) => [
+  'Restaurant Manager', 'Restaurant Supervisor', 'Restaurant Cashier', 'Restaurant Waiter', 'Restaurant Chef',
+].includes(role)))
+const canManageCourier = computed(() => rolesReady.value && !rolesFailed.value && (
+  isAdmin.value || !hasRestaurantRole.value || userRoles.value.includes('Restaurant Manager') || userRoles.value.includes('Restaurant Supervisor')
+))
+const canCreateProforma = computed(() => rolesReady.value && !rolesFailed.value && (
+  isAdmin.value || !hasRestaurantRole.value || userRoles.value.includes('Restaurant Manager')
+))
 const updatingOrderAction = ref(false)
 const activeTab = ref('all')
 const manualPayment = reactive({
@@ -581,11 +595,20 @@ async function completeOrder(order) {
   }
 }
 
-if (isOrderDetailView.value) {
-  loadOrderDetail(detailOrderName.value, detailOrderSource.value)
-} else {
-  loadOrders()
-}
+onMounted(() => {
+  getManagementSessionProfile()
+    .then((profile) => {
+      if (profile?.is_guest) throw new Error('نشست کاربر معتبر نیست.')
+      userRoles.value = Array.isArray(profile?.roles) ? profile.roles : []
+      isAdmin.value = Boolean(profile?.is_admin)
+    })
+    .catch(() => { rolesFailed.value = true })
+    .finally(() => {
+      rolesReady.value = true
+      if (isOrderDetailView.value) loadOrderDetail(detailOrderName.value, detailOrderSource.value)
+      else loadOrders()
+    })
+})
 </script>
 
 <style scoped>

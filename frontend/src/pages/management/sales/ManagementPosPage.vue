@@ -92,6 +92,9 @@
             :payment-boot="paymentBoot"
             :payment-options="posPaymentOptions"
             :financial="financial"
+            :restaurant-operator="posProfileSummary.restaurant_controls"
+            :allow-manual-discount="posProfileSummary.allow_discount_change"
+            :allow-order-management="posProfileSummary.allow_order_management"
             :group-discount-percent="financial.groupDiscountPercent"
             :totals="totals"
             :submitting="submitting"
@@ -378,7 +381,7 @@
                     </div>
                   </div>
                   <p v-if="order.note" class="review-order-note"><strong>یادداشت:</strong> {{ order.note }}</p>
-                  <div class="review-order-actions">
+                  <div v-if="posProfileSummary.allow_order_management" class="review-order-actions">
                     <button
                       type="button"
                       class="tbl-btn success settle-btn"
@@ -463,10 +466,10 @@
                       <button type="button" class="tbl-btn" @click.stop="selectAndLoadInvoice(invoice)"><Download :size="13" /> انتخاب و بارگذاری</button>
                       <button type="button" class="tbl-btn" @click.stop="openOpenInvoiceSettlementModal(invoice, false)"><CreditCard :size="13" /> تسویه</button>
                       <template v-if="!invoice.delivery_exists">
-                        <button type="button" class="tbl-btn success settle-btn" @click.stop="openOpenInvoiceSettlementModal(invoice, true)"><CheckCheck :size="13" /> تسویه و تحویل</button>
-                        <button type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)"><Truck :size="13" /> تحویل</button>
+                        <button v-if="posProfileSummary.allow_order_management" type="button" class="tbl-btn success settle-btn" @click.stop="openOpenInvoiceSettlementModal(invoice, true)"><CheckCheck :size="13" /> تسویه و تحویل</button>
+                        <button v-if="posProfileSummary.allow_order_management" type="button" class="tbl-btn deliver-acc-btn" @click.stop="deliverFromInvoice(invoice)"><Truck :size="13" /> تحویل</button>
                       </template>
-                      <button type="button" class="tbl-btn danger" style="margin-right: auto;" @click.stop="openPurgeModalFromList(invoice)"><Trash2 :size="13" /> حذف کامل</button>
+                      <button v-if="posProfileSummary.allow_order_management" type="button" class="tbl-btn danger" style="margin-right: auto;" @click.stop="openPurgeModalFromList(invoice)"><Trash2 :size="13" /> حذف کامل</button>
                     </div>
                   </div>
                   <div class="accordion-بارگذاری" v-if="expandedInvoiceKey === invoice.invoice_key && !invoice.detail && !invoice.loadError">
@@ -547,7 +550,7 @@
                       <Truck :size="13" /> تحویل
                     </button>
                     <button
-                      v-if="order.status !== 'cancelled'"
+                      v-if="posProfileSummary.allow_order_management && order.status !== 'cancelled'"
                       type="button"
                       class="tbl-btn danger"
                       style="margin-right: auto;"
@@ -590,6 +593,9 @@
             :payment-boot="paymentBoot"
             :payment-options="posPaymentOptions"
             :financial="financial"
+            :restaurant-operator="posProfileSummary.restaurant_controls"
+            :allow-manual-discount="posProfileSummary.allow_discount_change"
+            :allow-order-management="posProfileSummary.allow_order_management"
             :group-discount-percent="financial.groupDiscountPercent"
             :totals="totals"
             :submitting="submitting"
@@ -861,10 +867,10 @@
 
             <!-- Bottom Actions -->
             <div class="od-bottom">
-              <button class="od-btn od-btn-danger" style="margin-left: auto;" @click="openPurgeModal">
+              <button v-if="posProfileSummary.allow_order_management" class="od-btn od-btn-danger" style="margin-left: auto;" @click="openPurgeModal">
                 <Trash2 :size="14" /> لغو و حذف کامل
               </button>
-              <button class="od-btn od-btn-danger" @click="openReturnInvoiceModal" v-if="['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())">
+              <button class="od-btn od-btn-danger" @click="openReturnInvoiceModal" v-if="posProfileSummary.allow_order_management && ['paid','delivered','completed'].includes(String(orderDetailModal.order.status || '').toLowerCase())">
                 فاکتور برگشتی
               </button>
               <button class="od-btn" @click="closeOrderDetailModal"><X :size="14" /> بستن</button>
@@ -1485,6 +1491,10 @@ const posProfileSummary = reactive({
   warehouse: '',
   selling_price_list: '',
   currency: 'IRR',
+  restaurant_controls: false,
+  allow_discount_change: true,
+  allow_order_management: true,
+  tax_rate_percent: null,
   payments: [],
   has_open_shift: false,
   shift_name: '',
@@ -1746,6 +1756,7 @@ const filteredRecentOrders = computed(() => {
 })
 
 function canDeliverOrder(order) {
+  if (!posProfileSummary.allow_order_management) return false
   if (!order) return false
   if (order.delivery_exists) return false
   const status = String(order.status || '').toLowerCase()
@@ -2485,6 +2496,10 @@ function setFinalAmount(value) {
   const nextTarget = Number.isFinite(amount) && amount > 0 ? amount : null
 
   if (nextTarget != null) {
+    if (posProfileSummary.restaurant_controls && nextTarget > Number(totals.value.payableAmount || 0)) {
+      error.value = 'مبلغ نهایی برای نقش رستوران نمی‌تواند از مبلغ فعلی بیشتر باشد.'
+      return
+    }
     if (financial.targetAmount == null && !financial.targetServiceSnapshot) {
       financial.targetServiceSnapshot = {
         type: financial.serviceType,
@@ -2516,6 +2531,28 @@ function applyPOSProfileSummary(summary = {}) {
   posProfileSummary.warehouse = String(summary?.warehouse || '').trim()
   posProfileSummary.selling_price_list = String(summary?.selling_price_list || '').trim()
   posProfileSummary.currency = String(summary?.currency || 'IRR').trim() || 'IRR'
+  posProfileSummary.restaurant_controls = Boolean(summary?.restaurant_controls)
+  posProfileSummary.allow_discount_change = summary?.restaurant_controls
+    ? Boolean(summary?.allow_discount_change)
+    : true
+  posProfileSummary.allow_order_management = summary?.allow_order_management !== false
+  posProfileSummary.tax_rate_percent = summary?.tax_rate_percent == null
+    ? null
+    : Math.max(Number(summary.tax_rate_percent) || 0, 0)
+  if (posProfileSummary.restaurant_controls) {
+    financial.taxType = 'percent'
+    financial.taxValue = Number(posProfileSummary.tax_rate_percent || 0)
+    financial.taxExempt = false
+    financial.serviceType = 'fixed'
+    financial.serviceValue = 0
+    financial.tipAmount = 0
+    if (!posProfileSummary.allow_discount_change) {
+      financial.discountType = 'fixed'
+      financial.discountValue = 0
+      financial.manualDiscountActive = false
+      financial.targetAmount = null
+    }
+  }
   posProfileSummary.has_open_shift = Boolean(summary?.has_open_shift)
   posProfileSummary.shift_name = String(summary?.shift_name || '').trim()
   posProfileSummary.shift_opened_at = String(summary?.shift_opened_at || '').trim()
@@ -5919,8 +5956,9 @@ async function submitPOSOrder(payNow = true, paymentMeta = {}, withProduction = 
     mobile: form.mobile || '',
     order_type: form.order_mode,
     note: buildOrderNote(),
-    customer_type: form.customer_type,
-    guest_count: form.guest_count,
+  customer_type: form.customer_type,
+  pos_profile: posProfileSummary.name || '',
+  guest_count: form.guest_count,
     place: form.place,
     waiter: form.waiter || '',
     waiter_name: form.waiter_name || '',

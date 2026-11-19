@@ -5,6 +5,7 @@ import json
 import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
+from restaurant.role_permissions import require_capability
 
 from restaurant.order_review import (
 	ORDER_REVIEW_APPROVED,
@@ -160,6 +161,7 @@ def _ensure_food_partner_production_and_delivery(order_name):
 
 
 @frappe.whitelist()
+@require_capability("pos_manage")
 def review_management_order(order_name="", decision="", note=""):
 	"""Approve or reject a pending customer-originated Sales Order."""
 	from restaurant.api import _append_sales_order_note, _ensure_management_access, _set_restaurant_order_status

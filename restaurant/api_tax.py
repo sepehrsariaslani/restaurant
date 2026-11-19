@@ -18,6 +18,7 @@ import urllib.request
 from urllib.parse import urlsplit
 
 import frappe
+from restaurant.role_permissions import require_finance_admin
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, now_datetime, today
 
@@ -145,6 +146,7 @@ def build_tax_invoice_payload(sales_invoice, settings=None):
 
 
 @frappe.whitelist()
+@require_finance_admin
 def get_management_tax_boot():
 	_ensure_management_access()
 	_tax_ensure_ops_ready()
@@ -181,12 +183,14 @@ def get_management_tax_boot():
 
 
 @frappe.whitelist()
+@require_finance_admin
 def set_management_tax_settings(payload=None):
 	_ensure_management_access()
 	return _save_tax_settings(payload)
 
 
 @frappe.whitelist()
+@require_finance_admin
 def list_management_tax_submissions(status="", date_from="", date_to="", search="", limit=50, offset=0):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", TAX_DOCTYPE):
@@ -244,6 +248,7 @@ def _tax_get_or_create_submission(si_name, payload_json):
 
 
 @frappe.whitelist()
+@require_finance_admin
 def submit_management_tax_invoice(sales_invoice=""):
 	_ensure_management_access()
 	return _submit_tax_invoice(sales_invoice)
@@ -364,6 +369,7 @@ def run_daily_tax_auto_submissions():
 
 
 @frappe.whitelist()
+@require_finance_admin
 def get_management_report_tax_reconciliation(date_from=None, date_to=None):
 	_ensure_management_access()
 	if not frappe.db.exists("DocType", "Sales Invoice"):
